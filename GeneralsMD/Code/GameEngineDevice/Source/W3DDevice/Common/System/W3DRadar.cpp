@@ -1167,13 +1167,11 @@ void W3DRadar::collectBlips( const RadarObject *listHead, Bool calcHero )
  		//
  		// objects with a local only unit priority will only appear on the radar if they
  		// are controlled by the local player, or if the local player is an observer (cause
-		// they are godlike and can see everything)
+		// they are godlike and can see everything).  A watcher with the followed player's fog on
+		// sees that player's radar, whose local units are his own
  		//
-
-
- 		if( obj->getRadarPriority() == RADAR_PRIORITY_LOCAL_UNIT_ONLY &&
- 				obj->getControllingPlayer() != ThePlayerList->getLocalPlayer() &&
-				ThePlayerList->getLocalPlayer()->isPlayerActive() )
+ 		if( obj->getRadarPriority() == RADAR_PRIORITY_LOCAL_UNIT_ONLY && viewer != NULL &&
+ 				obj->getControllingPlayer() != viewer && viewer->isPlayerActive() )
  			skip = TRUE;
 
     if ( skip )

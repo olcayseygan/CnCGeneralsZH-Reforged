@@ -1621,14 +1621,6 @@ GUI:HudCamStatePlayer
 "Screen of %ls"
 END
 
-GUI:HudCamNextFree
-"Click a player's name to see their screen"
-END
-
-GUI:HudCamNextFreeFollowed
-"Click to return: %ls"
-END
-
 // also the Director stop's explanation under the pointer
 GUI:HudCamNextDirector
 "The camera goes to the biggest fight by itself"
@@ -1636,10 +1628,6 @@ END
 
 GUI:HudCamNextDirectorFollowed
 "Following the fights of %ls"
-END
-
-GUI:HudCamNextPlayer
-"Esc or click the name again to let go"
 END
 
 GUI:HudCamNextWaiting
@@ -1709,27 +1697,25 @@ GUI:HudStandings
 "Standings"
 END
 
-// the standings' heading when no stat key is under the pointer: the order the rows are in
-GUI:HudHighestFirst
-"highest first"
+// the picked player's card beside the radar while watching: a word over each number
+GUI:ObsPanelIncome
+"Income"
 END
 
-// the standings' column head over the names
-GUI:HudPlayerHead
-"Player"
+GUI:ObsPanelUnits
+"Units"
 END
 
-// the units the standings' column head names after the stat
-GUI:HudStatUnitMoney
-"$"
+GUI:ObsPanelBuildings
+"Buildings"
 END
 
-GUI:HudStatUnitIncome
-"$/min"
+GUI:ObsPanelKills
+"Kills"
 END
 
-GUI:HudStatUnitPower
-"surplus"
+GUI:ObsPanelLosses
+"Losses"
 END
 
 // The cheat panel the console's "trainer" command opens.
@@ -3397,14 +3383,6 @@ END
 
 GUI:SummarySpent_Short
 "Spent"
-END
-
-GUI:HudCamNextFree_Short
-"Click a name to see their screen"
-END
-
-GUI:HudCamNextPlayer_Short
-"Esc or the name again lets go"
 END
 
 // the rack lever's three stops where the whole word does not fit

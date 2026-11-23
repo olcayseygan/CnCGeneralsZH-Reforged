@@ -16314,24 +16314,12 @@ GUI:HudCamStatePlayer
 "Oyuncu ekranı: %ls"
 END
 
-GUI:HudCamNextFree
-"Ekranını görmek için bir oyuncunun adına tıkla"
-END
-
-GUI:HudCamNextFreeFollowed
-"Dönmek için tıkla: %ls"
-END
-
 GUI:HudCamNextDirector
 "Kamera en büyük çatışmaya kendisi gider"
 END
 
 GUI:HudCamNextDirectorFollowed
 "Çatışmaları izlenen oyuncu: %ls"
-END
-
-GUI:HudCamNextPlayer
-"Bırakmak için Esc ya da adına tekrar tıkla"
 END
 
 GUI:HudCamNextWaiting
@@ -16394,24 +16382,24 @@ GUI:HudStandings
 "Sıralama"
 END
 
-GUI:HudHighestFirst
-"en yüksek üstte"
+GUI:ObsPanelIncome
+"Gelir"
 END
 
-GUI:HudPlayerHead
-"Oyuncu"
+GUI:ObsPanelUnits
+"Birlik"
 END
 
-GUI:HudStatUnitMoney
-"$"
+GUI:ObsPanelBuildings
+"Bina"
 END
 
-GUI:HudStatUnitIncome
-"$/dk"
+GUI:ObsPanelKills
+"Öldürme"
 END
 
-GUI:HudStatUnitPower
-"fazla"
+GUI:ObsPanelLosses
+"Kayıp"
 END
 
 GUI:CheatPanelTitle
@@ -18011,14 +17999,6 @@ END
 
 GUI:SummarySpent_Short
 "Harc."
-END
-
-GUI:HudCamNextFree_Short
-"Ekranı için oyuncu adına tıkla"
-END
-
-GUI:HudCamNextPlayer_Short
-"Bırakmak: Esc ya da ada tıkla"
 END
 
 GUI:HudCameraFree_Short

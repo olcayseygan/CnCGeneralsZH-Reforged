@@ -239,10 +239,8 @@ WindowMsgHandledType ControlBarObserverSystem( GameWindow *window, UnsignedInt m
 					TheObserverCamera.lookThrough( picked->getPlayerIndex() );
 					TheInGameUI->message( AsciiString( "CONTROLBAR:ObsLookingThrough" ), picked->getPlayerDisplayName().str() );
 
-					ObserverPlayerInfoWindow->winHide(FALSE);
-					ObserverPlayerListWindow->winHide(TRUE);
+					// the list stays, his row ringed; his numbers are the card beside it (drawObserverPanels)
 					TheControlBar->setObserverLookAtPlayer(picked);
-					TheControlBar->populateObserverInfoWindow();
 					return MSG_HANDLED;
 				}
 			}
@@ -368,17 +366,17 @@ void ControlBar::populateObserverList( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Put up the readouts of the player the bar is looking at, and take the list down - what pressing
-	* his button in the list does, reached from the selection as well. */
+/** The player the bar is looking at, reached from the selection as well.  EA's readouts window took the
+	* list's place; the card InGameUI draws beside the radar has his numbers now, so the list stays up
+	* with his row ringed and the old window stays down. */
 //-------------------------------------------------------------------------------------------------
 void ControlBar::showObserverPlayerInfo( void )
 {
 	if( ObserverPlayerInfoWindow == NULL || ObserverPlayerListWindow == NULL )
 		return;
 
-	ObserverPlayerInfoWindow->winHide( FALSE );
-	ObserverPlayerListWindow->winHide( TRUE );
-	populateObserverInfoWindow();
+	ObserverPlayerInfoWindow->winHide( TRUE );
+	ObserverPlayerListWindow->winHide( FALSE );
 }
 
 //-------------------------------------------------------------------------------------------------

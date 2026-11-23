@@ -116,6 +116,7 @@
 #include "GameClient/LaneWarEndScreen.h"
 #include "GameClient/AirliftPanel.h"
 #include "GameClient/UIStyle.h"
+#include "GameClient/DirectStrikeTheme.h"
 
 #include "GameNetwork/NetworkInterface.h"
 #include "GameNetwork/Online/OnlineQueues.h"
@@ -261,8 +262,8 @@ struct HudTray
 	* to the cameo, and inside the button's 1-pixel border.  A scheme with no tray, Classic's, leaves
 	* the border alone, as its shipped column does.  What else is the side's is the plate under every
 	* readout, a piece of its own button sheet (<side>ProHudCellPlate in ReforgedHud<side>Powers).  A
-	* sheet without the plate yet gets HudReadout_draw's solid one.  A side no build is named for, an
-	* observer's, wears America's. */
+	* sheet without the plate yet gets HudReadout_draw's solid one.  An observer wears his own bar's
+	* (ObserverPro, ReforgedHudObsPieces); a side no build is named for wears America's. */
 //-------------------------------------------------------------------------------------------------
 struct HudCellStyle
 {
@@ -436,6 +437,8 @@ static HudCellStyle hudCellStyle( void )
 		prefix = "Gla";
 	else if( side.startsWith( "Turkiye" ) )
 		prefix = "Turkiye";
+	else if( side.startsWith( "Observer" ) )
+		prefix = "Observer";
 
 	AsciiString name;
 	name.format( "%sProHudCellPlate", prefix );
@@ -2462,28 +2465,30 @@ struct SpectatorStats
 	Int losses;
 	Int rank;
 	Int power;			///< produced less consumed, negative when his base is browned out
+	Int produced;		///< the power his plants make
+	Int unitCount;	///< what the score counts: units, and the buildings EA's observer panel counted
+	Int buildingCount;
 	std::map< const ThingTemplate *, Int > units;	///< how many of each unit with a cameo he has standing
 };
 
-/** One of the rack's stat keys: the label it goes by, the unit its column head names (none where the
-	* label or the number already says it: kills and losses, "Rank 3") and the number the list is ranked by when it is picked, in the
-	* order of the keys that pick them (pickSpectatorStat). */
+/** One of the rack's stat keys: the label it goes by and the number the list is ranked by when it is
+	* picked, in the order of the keys that pick them (pickSpectatorStat).  The number says its own unit:
+	* "$14,700", "$1,200/min", "Rank 3", a power surplus green or red. */
 struct SpectatorStat
 {
 	const char *label;
-	const char *unit;
 	Int SpectatorStats::*value;
 };
 
 static const SpectatorStat SPECTATOR_STATS[] =
 {
-	{ "GUI:HudNetWorth",		"GUI:HudStatUnitMoney",		&SpectatorStats::networth },
-	{ "GUI:HudStatCash",		"GUI:HudStatUnitMoney",		&SpectatorStats::cash },
-	{ "GUI:HudStatIncome",	"GUI:HudStatUnitIncome",	&SpectatorStats::income },
-	{ "GUI:HudStatArmy",		"GUI:HudStatUnitMoney",		&SpectatorStats::army },
-	{ "GUI:HudStatKills",		NULL,											&SpectatorStats::kills },
-	{ "GUI:HudStatRank",		NULL,											&SpectatorStats::rank },
-	{ "GUI:HudStatPower",		"GUI:HudStatUnitPower",		&SpectatorStats::power }
+	{ "GUI:HudNetWorth",		&SpectatorStats::networth },
+	{ "GUI:HudStatCash",		&SpectatorStats::cash },
+	{ "GUI:HudStatIncome",	&SpectatorStats::income },
+	{ "GUI:HudStatArmy",		&SpectatorStats::army },
+	{ "GUI:HudStatKills",		&SpectatorStats::kills },
+	{ "GUI:HudStatRank",		&SpectatorStats::rank },
+	{ "GUI:HudStatPower",		&SpectatorStats::power }
 };
 enum { SPECTATOR_STAT_COUNT = ARRAY_SIZE( SPECTATOR_STATS ) };
 
@@ -2497,7 +2502,13 @@ static void addObjectStats( Object *obj, void *userData )
 	const Int cost = thing->calcCostToBuild( stats->player );
 	stats->networth += cost;
 	if( obj->isKindOf( KINDOF_STRUCTURE ) )
+	{
+		if( obj->isKindOf( KINDOF_SCORE ) || obj->isKindOf( KINDOF_SCORE_CREATE ) || obj->isKindOf( KINDOF_SCORE_DESTROY ) )
+			stats->buildingCount++;
 		return;
+	}
+	if( obj->isKindOf( KINDOF_SCORE ) )
+		stats->unitCount++;
 
 	stats->army += cost;
 	if( cost > 0 && thing->getButtonImage() != NULL )
@@ -2555,6 +2566,9 @@ static std::vector< SpectatorStats > gatherSpectatorStats( const SpectatorStat &
 		stats.losses = score->getTotalUnitsLost() + score->getTotalBuildingsLost();
 		stats.rank = player->getRankLevel();
 		stats.power = player->getEnergy()->getProduction() - player->getEnergy()->getConsumption();
+		stats.produced = player->getEnergy()->getProduction();
+		stats.unitCount = 0;
+		stats.buildingCount = 0;
 		player->iterateObjects( addObjectStats, &stats );
 
 		for( size_t earlier = 0; earlier < players.size() && stats.team < 0; earlier++ )
@@ -3093,12 +3107,11 @@ static Bool rackOverHead( const ICoord2D &mouse, const RackPlace &at )
 	return rackInside( mouse, at.x + rackPx( RACK_WELL_LEFT ), at.standings + rackPx( RACK_HEAD_TOP ), at.right, at.rows );
 }
 
-/// the player's colour, opaque: the tint the lens, the meter and the name take
+/// the player's colour as his units show it, opaque: the tint the lens, the meter and the name take.
+/// The house colour itself is the texture's tint, and a dark red or navy name was lost on the rack's steel
 static Color rackColour( const Player *player )
 {
-	UnsignedByte red, green, blue, alpha;
-	GameGetColorComponents( clientPlayerColor( player ), &red, &green, &blue, &alpha );
-	return GameMakeColor( red, green, blue, 255 );
+	return readableHouseColor( clientPlayerColor( player ) );
 }
 
 /// where a follow tab's visible body starts past its piece's left, by its state: idle, the pointer
@@ -3121,7 +3134,7 @@ static UnicodeString rackValueText( Int stat, const SpectatorStats &stats )
 	else if( field == &SpectatorStats::income )
 		text.format( TheGameText->fetch( "GUI:HudStatIncomeValue" ), broadcastNumber( "$", value ).str() );
 	else if( field == &SpectatorStats::kills )
-		text.format( u"%d / %d", stats.kills, stats.losses );
+		text.format( u"%d", stats.kills );	// the losses beside it in red, drawRackLosses
 	else if( field == &SpectatorStats::rank )
 		text.format( TheGameText->fetch( "GUI:HudStatRankValue" ), value );
 	else if( field == &SpectatorStats::power )
@@ -3196,7 +3209,8 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 
 	const Color GREY = GameMakeColor( 138, 148, 159, 255 );
 	const Color WHITE = GameMakeColor( 240, 244, 246, 255 );
-	const Color LIT = GameMakeColor( 128, 149, 234, 255 );
+	// lit is the common frame's bronze trim, which the rack's art wears (ReforgedHudObsPieces)
+	const Color LIT = GameMakeColor( 194, 160, 86, 255 );
 	const Color GOLD = GameMakeColor( 242, 194, 48, 255 );
 	const Color DIM = GameMakeColor( 92, 100, 110, 255 );
 
@@ -3343,7 +3357,7 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 		const Int width = rackPx( RACK_WELL_RIGHT - RACK_WELL_LEFT ), height = rackPx( RACK_WELL_BOTTOM - RACK_WELL_TOP );
 		TheDisplay->drawOpenRect( left, top, width, height, 1.0f, on ? LIT : GOLD );
 		if( on )
-			TheDisplay->drawOpenRect( left + 1, top + 1, width - 2, height - 2, 1.0f, GameMakeColor( 128, 149, 234, 160 ) );
+			TheDisplay->drawOpenRect( left + 1, top + 1, width - 2, height - 2, 1.0f, GameMakeColor( 194, 160, 86, 160 ) );
 	}
 
 	// the words, all upper case but the names and the numbers
@@ -3416,47 +3430,50 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 		drawRackText( rackText( RACK_TEXT_KEY + key, letter, 8, 0 ), right - rackPx( 8 ), bottom - rackPx( 9 ), right, bottom, 0,
 			RACK_ALIGN_CENTRE, key == m_rackStat ? GREY : DIM );
 	}
-	// the heading: the picked stat by name; on its right the key under the pointer, or the order
-	const SpectatorStat &stat = SPECTATOR_STATS[ m_rackStat ];
-	const UnicodeString statName = UIStyle::capitals( TheGameText->fetch( stat.label ) );
-	UnicodeString hint;
-	if( hoverKey >= 0 )
-		hint.format( u"%ls (%c)", TheGameText->fetch( SPECTATOR_STATS[ hoverKey ].label ).str(), (WideChar)RACK_KEYS[ hoverKey ] );
-	else
-		hint = TheGameText->fetch( "GUI:HudHighestFirst" );
-	DisplayString *hintText = rackText( RACK_TEXT_HINT, hint, 9, rackPx( 144 ) );
-	Int hintWidth = 0, hintHeight = 0;
-	hintText->getSize( &hintWidth, &hintHeight );
-	drawRackText( hintText, X + rackPx( 150 ), Y2 + rackPx( 60 ), X + rackPx( 294 ), Y2 + rackPx( 76 ), 0, RACK_ALIGN_RIGHT,
-		hoverKey >= 0 ? GOLD : DIM );
-	drawRackText( rackText( RACK_TEXT_STAT, statName, 13,
-		rackPx( 294 - 22 - 8 ) - hintWidth ), X + rackPx( 22 ), Y2 + rackPx( 60 ), X + rackPx( 294 ), Y2 + rackPx( 76 ), 0, RACK_ALIGN_LEFT, WHITE );
-	// the column heads: place, player, and the stat with its unit over the numbers
-	UnicodeString valueHead = statName;
-	if( stat.unit != NULL )
-		valueHead.format( u"%ls (%ls)", statName.str(), TheGameText->fetch( stat.unit ).str() );
-	const Int headTop = Y2 + rackPx( 79 ), headBottom = Y2 + rackPx( 93 );
-	drawRackText( rackText( RACK_TEXT_PLACE_HEAD, UnicodeString( u"#" ), 9, 0 ), X + rackPx( 22 ), headTop, X + rackPx( 38 ), headBottom, 0,
-		RACK_ALIGN_CENTRE, DIM );
-	drawRackText( rackText( RACK_TEXT_PLAYER_HEAD, UIStyle::capitals( TheGameText->fetch( "GUI:HudPlayerHead" ) ), 9, rackPx( 60 ) ),
-		X + rackPx( 76 ), headTop, X + rackPx( 136 ), headBottom, 0, RACK_ALIGN_LEFT, DIM );
-	drawRackText( rackText( RACK_TEXT_VALUE_HEAD, valueHead, 9, rackPx( 154 ) ), X + rackPx( 140 ), headTop, X + rackPx( 294 ), headBottom, 0,
-		RACK_ALIGN_RIGHT, GREY );
+	// the heading: the picked stat by name, large over the rows, which are ranked by it; the key under the
+	// pointer puts its own name there in gold, so a key's picture is never a riddle
+	const SpectatorStat &stat = SPECTATOR_STATS[ hoverKey >= 0 ? hoverKey : m_rackStat ];
+	drawRackText( rackText( RACK_TEXT_STAT, UIStyle::capitals( TheGameText->fetch( stat.label ) ), 16, rackPx( 294 - 22 ) ),
+		X + rackPx( 22 ), Y2 + rackPx( 62 ), X + rackPx( 294 ), Y2 + rackPx( 90 ), 0, RACK_ALIGN_LEFT, hoverKey >= 0 ? GOLD : WHITE );
 
+	// the losses beside the kills are not one of the kept strings; the common frame's pool lends one
+	DirectStrikeTheme::begin( DirectStrikeTheme::SIDE_COMMON, ControlBarHudPageScale() / 1.8f );
+	GameFont *lossFont = TheFontLibrary->getFont( m_superweaponNormalFont, max( rackPx( 12 * 0.75f ), 1 ), TRUE );
+	const Color LOSS = GameMakeColor( 226, 92, 78, 255 );
+	const Color SURPLUS = GameMakeColor( 96, 214, 104, 255 );
 	for( Int row = 0; row < rows; row++ )
 	{
 		const Int top = rowTop( row );
 		const SpectatorStats &stats = theRackStats[ row ];
 		UnicodeString place;
 		place.format( u"%d", row + 1 );
-		drawRackText( rackText( RACK_TEXT_PLACE + row, place, 12, 0 ), X + rackPx( 26 ), top + rackPx( 2 ), X + rackPx( 40 ), top + rackPx( 28 ), 0,
-			RACK_ALIGN_CENTRE, row == 0 ? WHITE : GREY );
+		drawRackText( rackText( RACK_TEXT_PLACE + row, place, 13, 0 ), X + rackPx( 26 ), top + rackPx( 2 ), X + rackPx( 40 ), top + rackPx( 28 ), 0,
+			RACK_ALIGN_CENTRE, row == 0 ? GOLD : GREY );
+		// kills white with the losses after them in red; a power surplus green, a brown-out red
+		const Int SpectatorStats::*field = SPECTATOR_STATS[ m_rackStat ].value;
+		Int valueRight = X + rackPx( 294 - 4 );
+		if( field == &SpectatorStats::kills )
+		{
+			UnicodeString losses;
+			losses.format( u" / %d", stats.losses );
+			if( DisplayString *lossText = DirectStrikeTheme::pooled( losses, lossFont ) )
+			{
+				Int lossWidth = 0, lossHeight = 0;
+				lossText->getSize( &lossWidth, &lossHeight );
+				valueRight -= lossWidth;
+				drawRackText( lossText, valueRight, top + rackPx( 3 ), valueRight + lossWidth, top + rackPx( 23 ), 0, RACK_ALIGN_LEFT, LOSS );
+			}
+		}
+		Color valueColour = WHITE;
+		if( field == &SpectatorStats::power )
+			valueColour = stats.power < 0 ? LOSS : SURPLUS;
 		// the number first, so the name gets the room it leaves
-		DisplayString *value = rackText( RACK_TEXT_VALUE + row, rackValueText( m_rackStat, stats ), 14, rackPx( 114 - 12 ) );
+		DisplayString *value = rackText( RACK_TEXT_VALUE + row, rackValueText( m_rackStat, stats ), 16, rackPx( 114 - 12 ) );
 		Int valueWidth = 0, valueHeight = 0;
 		value->getSize( &valueWidth, &valueHeight );
-		drawRackText( value, X + rackPx( 180 ), top + rackPx( 2 ), X + rackPx( 294 ), top + rackPx( 22 ), rackPx( 4 ), RACK_ALIGN_RIGHT, WHITE );
-		drawRackText( rackText( RACK_TEXT_NAME + row, stats.player->getPlayerDisplayName(), 13, rackPx( 290 - 76 - 6 ) - valueWidth ),
+		drawRackText( value, valueRight - valueWidth, top + rackPx( 2 ), valueRight, top + rackPx( 22 ), 0, RACK_ALIGN_RIGHT, valueColour );
+		drawRackText( rackText( RACK_TEXT_NAME + row, stats.player->getPlayerDisplayName(), 14,
+			max( valueRight - X - rackPx( 76 + 6 ) - valueWidth, 1 ) ),
 			X + rackPx( 76 ), top + rackPx( 2 ), X + rackPx( 190 ), top + rackPx( 22 ), 0, RACK_ALIGN_LEFT, rackColour( stats.player ) );
 
 		// each kind's count on a dark plate in its cell's bottom right
@@ -3497,27 +3514,29 @@ void InGameUI::drawRackStatus( Int left, Int top, Int right, const UnicodeString
 	const Int followed = TheObserverCamera.getFollowedPlayerIndex();
 	Player *player = followed != ObserverCamera::NO_PLAYER ? ThePlayerList->getNthPlayer( followed ) : NULL;
 	const ObserverCameraMode mode = TheObserverCamera.getMode();
+	// the second line is a state too, never a how-to: what the controls do is the pointer's hint
 	const char *state = "GUI:HudCamStateFree";
-	const char *next = player != NULL ? "GUI:HudCamNextFreeFollowed" : "GUI:HudCamNextFree";
+	const char *next = NULL;
 	Bool named = FALSE;		///< the state line carries the player's name
 	if( mode == OBSERVER_CAMERA_PLAYER && player != NULL )
 	{
 		state = "GUI:HudCamStatePlayer";
 		named = TRUE;
-		if( TheObserverCamera.isShowingPlayerView() )
-			next = "GUI:HudCamNextPlayer";
-		else
+		if( !TheObserverCamera.isShowingPlayerView() )
 			next = player->getPlayerType() == PLAYER_COMPUTER ? "GUI:HudCamNextComputer" : "GUI:HudCamNextWaiting";
 	}
 	else if( mode == OBSERVER_CAMERA_DIRECTOR )
 	{
 		state = "GUI:HudCamStateDirector";
-		next = player != NULL ? "GUI:HudCamNextDirectorFollowed" : "GUI:HudCamNextDirector";
+		next = player != NULL ? "GUI:HudCamNextDirectorFollowed" : NULL;
 	}
 
 	const Int pad = rackPx( RACK_STATUS_PAD );
 	const Int room = right - left - 2 * pad;
-	const Int line1 = top + rackPx( 1 ), line2 = line1 + rackPx( RACK_STATUS_LINE_H );
+	// one line stands in the middle of the well, two share it
+	const Bool twoLines = next != NULL || !hover.isEmpty();
+	const Int line1 = top + rackPx( twoLines ? 1 : ( RACK_STATUS_BOTTOM - RACK_STATUS_TOP - RACK_STATUS_LINE_H ) / 2 );
+	const Int line2 = line1 + rackPx( RACK_STATUS_LINE_H );
 	const UnicodeString name = player != NULL ? player->getPlayerDisplayName() : UnicodeString();
 
 	// the state: its words white either side of the name, the name in his colour fitted to what is left
@@ -3553,7 +3572,9 @@ void InGameUI::drawRackStatus( Int left, Int top, Int right, const UnicodeString
 		drawRackText( tailText, x, line1, x + tailWidth, line1 + rackPx( RACK_STATUS_LINE_H ), 0, RACK_ALIGN_LEFT, WHITE );
 	}
 
-	// the next step, or the hovered control's use
+	// the second state, or the hovered control's use
+	if( !twoLines )
+		return;
 	UnicodeString step = hover, stepShort;
 	if( step.isEmpty() )
 	{
@@ -12536,6 +12557,11 @@ void InGameUI::drawHudOverlay( void )
 	if( TheGameLogic->getFrame() == 0 )
 		return;
 
+	// the watcher's panels at the radar, here so the health bars and the cash floating off a refinery
+	// go under them
+	if( localPlayerWatching() )
+		drawObserverPanels();
+
 	// the match clock at the top middle, under the readout strip while that is up
 	if( MatchClock_wanted() )
 	{
@@ -12919,7 +12945,7 @@ static Int productionListPlace( const InGameUI::ProductionListSlot *slots, Int c
 //-------------------------------------------------------------------------------------------------
 /** Append everything this object has queued, units and upgrades alike, into a list kept sorted by
 	* how long each item still has to wait - soonest first. Everything is counted in *total; only
-	* the PRODUCTION_LIST_CELLS items that finish first get a cell, whatever order they were met in.
+	* the `cells` items that finish first get a cell, whatever order they were met in.
 	*
 	* The wait is cumulative down a producer's queue: an entry only starts once everything ahead of
 	* it has popped, so its remaining time is the time left on the entry in front plus its own build
@@ -12928,7 +12954,7 @@ static Int productionListPlace( const InGameUI::ProductionListSlot *slots, Int c
 	* barracks' Red Guard pairs) does not multiply the wait - the entry overbuilds in place and all
 	* of its units pop in the same handful of frames. */
 //-------------------------------------------------------------------------------------------------
-static void appendProducerQueue( Object *obj, InGameUI::ProductionListSlot *slots, Int *count, Int *total )
+static void appendProducerQueue( Object *obj, InGameUI::ProductionListSlot *slots, Int *count, Int *total, Int cells )
 {
 	ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
 	if( pu == NULL )
@@ -12988,10 +13014,10 @@ static void appendProducerQueue( Object *obj, InGameUI::ProductionListSlot *slot
 		// something else has come between: whatever this producer queues next starts a new run
 		runAt = -1;
 
-		if( at >= InGameUI::PRODUCTION_LIST_CELLS )
+		if( at >= cells )
 			continue;						// everything already kept finishes sooner: counted, but not drawn
 
-		if( *count < InGameUI::PRODUCTION_LIST_CELLS )
+		if( *count < cells )
 			(*count)++;
 
 		for( Int j = *count - 1; j > at; j-- )
@@ -13018,7 +13044,7 @@ static void appendProducerQueue( Object *obj, InGameUI::ProductionListSlot *slot
 	* putting up is nowhere in a queue, it is an object on the ground with a construction percentage on
 	* it, sorted in among the queued items on the one thing they share - how long it still has. */
 //-------------------------------------------------------------------------------------------------
-static void appendStructureUnderConstruction( Object *obj, InGameUI::ProductionListSlot *slots, Int *count, Int *total )
+static void appendStructureUnderConstruction( Object *obj, InGameUI::ProductionListSlot *slots, Int *count, Int *total, Int cells )
 {
 	// a rebuild hole wears the same status while it puts a GLA structure back up
 	if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->isKindOf( KINDOF_REBUILD_HOLE ) )
@@ -13034,10 +13060,10 @@ static void appendStructureUnderConstruction( Object *obj, InGameUI::ProductionL
 	(*total)++;
 
 	const Int at = productionListPlace( slots, *count, remaining );
-	if( at >= InGameUI::PRODUCTION_LIST_CELLS )
+	if( at >= cells )
 		return;
 
-	if( *count < InGameUI::PRODUCTION_LIST_CELLS )
+	if( *count < cells )
 		(*count)++;
 
 	for( Int j = *count - 1; j > at; j-- )
@@ -13065,6 +13091,7 @@ struct ProductionListGather
 	Int *count;
 	Int *total;
 	ObjectID *hero;		///< the first living hero met, for the hero's cell
+	Int cells;				///< how many slot has room for
 };
 
 /** What drawProductionList's last sweep was of. */
@@ -13087,11 +13114,110 @@ static void gatherProductionList( Object *obj, void *userData )
 	// every module of everything the player owns
 	Drawable *draw = obj->getDrawable();
 	if( draw == NULL || draw->hasProductionModule() )
-		appendProducerQueue( obj, g->slot, g->count, g->total );
-	appendStructureUnderConstruction( obj, g->slot, g->count, g->total );
+		appendProducerQueue( obj, g->slot, g->count, g->total, g->cells );
+	appendStructureUnderConstruction( obj, g->slot, g->count, g->total, g->cells );
 	// the hero the SELECT_HERO key would pick: a body still on the list while it dies is not one
 	if( *g->hero == INVALID_ID && obj->isKindOf( KINDOF_HERO ) && !obj->isEffectivelyDead() )
 		*g->hero = obj->getID();
+}
+
+//-------------------------------------------------------------------------------------------------
+// The watcher's two panels at the radar (drawObserverPanels), in the common frame every player of a
+// match shares: every seated player's queue over the radar, and beside it the card of the player
+// picked.  Every number is a pixel at 1080, put through the theme's px at the HUD's own scale.
+//-------------------------------------------------------------------------------------------------
+enum
+{
+	OBS_QUEUE_CELLS		= 6,		///< a player's row: his six soonest
+	OBS_PAD						= 8,		///< a panel's inside margin
+	OBS_GAP						= 6,		///< between a panel and what it stands beside
+	OBS_ROW_H					= 50,
+	OBS_EMBLEM_W			= 50,		///< the colour lamp and the army's badge at a row's start
+	OBS_CAMEO_W				= 46,
+	OBS_CAMEO_H				= 32,
+	OBS_CELL_PITCH		= 57,		///< a cameo's cell piece and a pixel between
+	OBS_MORE_W				= 36,		///< the "+N" at a full row's end
+	OBS_HEAD_H				= 28,		///< the header strip, DSHead
+	OBS_CARD_W				= 488,
+	OBS_CARD_H				= 300,
+	// the cell piece, DSCell, 85x65 at 1080 round a 71x49 glass at 7,8
+	OBS_CELL_ART_W		= 85,
+	OBS_CELL_ART_H		= 65,
+	OBS_CELL_GLASS_X	= 7,
+	OBS_CELL_GLASS_Y	= 8,
+	OBS_CELL_GLASS_W	= 71,
+	OBS_CELL_GLASS_H	= 49
+};
+
+/// one player's row of the queue panel
+struct ObserverQueue
+{
+	Player *player;
+	InGameUI::ProductionListSlot slot[ OBS_QUEUE_CELLS ];
+	Int count;
+	Int total;
+};
+
+/// the last sweep, once a logic frame, of everybody or of the picked player alone
+static std::vector< ObserverQueue > theObserverQueues;
+static Bool theObserverQueuesValid = FALSE;
+static UnsignedInt theObserverQueuesFrame = 0;
+static const Player *theObserverQueuesOf = NULL;
+
+/// what a click on the panels takes, from the last draw: a cell looks at its building, a badge picks its player
+struct ObserverHit
+{
+	IRegion2D box;
+	ObjectID look;
+	Int pick;					///< a player index, -1 for none
+};
+static std::vector< ObserverHit > theObserverHits;
+static IRegion2D theObserverPanelBoxes[ 2 ];		///< the queue panel and the card; a press on either is theirs
+
+static void forgetObserverPanels( void )
+{
+	theObserverHits.clear();
+	theObserverPanelBoxes[ 0 ] = theObserverPanelBoxes[ 1 ] = noHudTab();
+}
+
+/// the player the watcher has picked, by his button, a standings row or a unit of his; NULL for none
+static Player *observerPickedPlayer( void )
+{
+	Player *player = TheControlBar != NULL ? TheControlBar->getObserverLookAtPlayer() : NULL;
+	const Int followed = TheObserverCamera.getFollowedPlayerIndex();
+	if( player == NULL && followed != ObserverCamera::NO_PLAYER )
+		player = ThePlayerList->getNthPlayer( followed );
+	if( player == NULL || player == ThePlayerList->getLocalPlayer() || !isObserverSeat( player ) )
+		return NULL;
+	return player;
+}
+
+static void gatherObserverQueues( const Player *picked )
+{
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if( theObserverQueuesValid && theObserverQueuesFrame == frame && theObserverQueuesOf == picked )
+		return;
+	theObserverQueuesValid = TRUE;
+	theObserverQueuesFrame = frame;
+	theObserverQueuesOf = picked;
+	theObserverQueues.clear();
+	const Player *local = ThePlayerList->getLocalPlayer();
+	for( Int index = 0; index < ThePlayerList->getPlayerCount(); index++ )
+	{
+		Player *player = ThePlayerList->getNthPlayer( index );
+		if( player == NULL || player == local || !player->isPlayerActive() || !isObserverSeat( player ) )
+			continue;
+		if( picked != NULL && player != picked )
+			continue;
+		ObserverQueue queue;
+		queue.player = player;
+		queue.count = 0;
+		queue.total = 0;
+		ObjectID hero = INVALID_ID;
+		ProductionListGather gather = { queue.slot, &queue.count, &queue.total, &hero, OBS_QUEUE_CELLS };
+		player->iterateObjects( gatherProductionList, &gather );
+		theObserverQueues.push_back( queue );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -13257,6 +13383,7 @@ void InGameUI::drawProductionList( void )
 	m_productionListCells = 0;
 	m_productionListTab = noHudTab();
 	m_heroCell = noHudTab();
+	forgetObserverPanels();
 	if( !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
 		return;
 
@@ -13278,7 +13405,7 @@ void InGameUI::drawProductionList( void )
 		m_productionListCount = 0;
 		m_productionListTotal = 0;
 		m_hero = INVALID_ID;
-		ProductionListGather gather = { m_productionList, &m_productionListCount, &m_productionListTotal, &m_hero };
+		ProductionListGather gather = { m_productionList, &m_productionListCount, &m_productionListTotal, &m_hero, PRODUCTION_LIST_CELLS };
 		player->iterateObjects( gatherProductionList, &gather );
 		s_listGather.valid = TRUE;
 		s_listGather.frame = frame;
@@ -13385,6 +13512,363 @@ void InGameUI::drawProductionList( void )
 		rest.format( u"+%d", m_productionListTotal - shown );
 		drawHudTab( style.tabUp, m_productionListTab, -1, cellString( m_productionListMoreText, rest ) );
 	}
+}
+
+/// a number on a dark plate in a cameo's corner, the theme's small face
+static void drawObserverReadout( const UnicodeString &text, const IRegion2D &cameo, Bool top, Bool right, Color colour )
+{
+	DisplayString *string = DirectStrikeTheme::pooled( text, DirectStrikeTheme::font( DirectStrikeTheme::TYPE_TICK ) );
+	if( string == NULL )
+		return;
+	Int width = 0, height = 0;
+	string->getSize( &width, &height );
+	const Int x = right ? cameo.hi.x - width - 2 : cameo.lo.x + 2;
+	const Int y = top ? cameo.lo.y + 1 : cameo.hi.y - height - 1;
+	TheDisplay->drawFillRect( x - 2, y, width + 4, height, GameMakeColor( 2, 4, 5, 220 ) );
+	string->draw( x, y, colour, GameMakeColor( 0, 0, 0, 255 ) );
+}
+
+/// the common frame's cell piece round a cameo, its glass on the cameo; a dark hole while the sheet lacks it
+static void drawObserverCell( const IRegion2D &cameo )
+{
+	const Image *cell = DirectStrikeTheme::art( DirectStrikeTheme::CELL );
+	if( cell == NULL )
+	{
+		TheDisplay->drawFillRect( cameo.lo.x, cameo.lo.y, cameo.hi.x - cameo.lo.x, cameo.hi.y - cameo.lo.y, GameMakeColor( 2, 4, 5, 255 ) );
+		return;
+	}
+	const Real sx = ( cameo.hi.x - cameo.lo.x ) / (Real)OBS_CELL_GLASS_W, sy = ( cameo.hi.y - cameo.lo.y ) / (Real)OBS_CELL_GLASS_H;
+	const Int x = cameo.lo.x - REAL_TO_INT( OBS_CELL_GLASS_X * sx + 0.5f );
+	const Int y = cameo.lo.y - REAL_TO_INT( OBS_CELL_GLASS_Y * sy + 0.5f );
+	TheDisplay->drawImage( cell, x, y, x + REAL_TO_INT( OBS_CELL_ART_W * sx + 0.5f ), y + REAL_TO_INT( OBS_CELL_ART_H * sy + 0.5f ) );
+}
+
+static IRegion2D regionOf( const LaneHudBox &box )
+{
+	IRegion2D region;
+	region.lo.x = box.x;
+	region.lo.y = box.y;
+	region.hi.x = box.x + box.w;
+	region.hi.y = box.y + box.h;
+	return region;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** While the local player watches, two panels at the radar.  Over it, every seated player's row: his
+	* colour, his army's badge, and what he has coming, units, upgrades and buildings going up, soonest
+	* first, each cameo swept as the production bar sweeps it, its seconds in the corner and an "xN" for a
+	* run; once a player is picked, his row alone.  Beside the radar, the picked player's card: his
+	* army's portrait and flag, his name in his colour, his purse, income, power, army and what he has
+	* standing, his kills and losses, his rank, the upgrades his side has finished and his superweapons'
+	* clocks.  Both read the logic and write nothing back: a click on a cell looks at the building, a
+	* click on a badge picks its player as a standings row does. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::drawObserverPanels( void )
+{
+	// the panels stand on the radar's frame, which is not up while the bar is hidden
+	if( controlBarTop() >= TheDisplay->getHeight() )
+		return;
+
+	using namespace DirectStrikeTheme;
+	begin( SIDE_COMMON, ControlBarHudPageScale() / 1.8f );
+	Player *picked = observerPickedPlayer();
+	gatherObserverQueues( picked );
+
+	const Color WHITE_INK = GameMakeColor( 245, 245, 245, 255 );
+	const Color LOSS = GameMakeColor( 226, 92, 78, 255 );
+	const Color SURPLUS = GameMakeColor( 96, 214, 104, 255 );
+
+	//
+	// the queues, over the radar against the left edge
+	//
+	const Int rows = (Int)theObserverQueues.size();
+	if( rows > 0 )
+	{
+		const Int pad = px( OBS_PAD ), rowH = px( OBS_ROW_H );
+		const Int width = px( 2 * OBS_PAD + OBS_EMBLEM_W + OBS_QUEUE_CELLS * OBS_CELL_PITCH + OBS_MORE_W );
+		const Int height = 2 * pad + rows * rowH;
+		const LaneHudBox frame = LaneHud_box( hudPlay().lo.x, radarFrameTop() - px( OBS_GAP ) - height, width, height );
+		theObserverPanelBoxes[ 0 ] = regionOf( frame );
+		const Int cameoW = px( OBS_CAMEO_W ), cameoH = px( OBS_CAMEO_H );
+		auto cameoAt = [ & ]( Int row, Int cell )
+		{
+			IRegion2D at;
+			at.lo.x = frame.x + pad + px( OBS_EMBLEM_W ) + cell * px( OBS_CELL_PITCH );
+			at.lo.y = frame.y + pad + row * rowH + ( rowH - px( 4 ) - cameoH ) / 2;
+			at.hi.x = at.lo.x + cameoW;
+			at.hi.y = at.lo.y + cameoH;
+			return at;
+		};
+
+		TheDisplay->beginBatch2D();
+		panel( frame );
+		for( Int row = 0; row < rows; row++ )
+		{
+			const ObserverQueue &queue = theObserverQueues[ row ];
+			const LaneHudBox well = LaneHud_box( frame.x + pad, frame.y + pad + row * rowH, width - 2 * pad, rowH - px( 4 ) );
+			nineSlice( well, WELL_TL );
+			// his colour down the well's left, his army's badge beside it
+			TheDisplay->drawFillRect( well.x + px( 4 ), well.y + px( 4 ), px( 5 ), well.h - px( 8 ), rackColour( queue.player ) );
+			const LaneHudBox badge = LaneHud_box( well.x + px( 12 ), well.y + ( well.h - px( 26 ) ) / 2, px( 34 ), px( 26 ) );
+			if( const Image *emblem = queue.player->getPlayerTemplate()->getEnabledImage() )
+				drawImage( emblem, badge );
+			const ObserverHit pick = { regionOf( badge ), INVALID_ID, queue.player->getPlayerIndex() };
+			theObserverHits.push_back( pick );
+			for( Int cell = 0; cell < queue.count; cell++ )
+			{
+				const InGameUI::ProductionListSlot &slot = queue.slot[ cell ];
+				const IRegion2D at = cameoAt( row, cell );
+				drawObserverCell( at );
+				if( slot.cameo != NULL )
+					TheDisplay->drawImage( slot.cameo, at.lo.x, at.lo.y, at.hi.x, at.hi.y );
+				TheDisplay->drawRemainingRectClock( at.lo.x, at.lo.y, cameoW, cameoH, slot.percent, GameMakeColor( 0, 0, 0, 110 ) );
+				drawHudCellBorder( at, hudCellBorder( slot.isUpgrade ? COMMAND_BUTTON_BORDER_UPGRADE : COMMAND_BUTTON_BORDER_BUILD ) );
+				const ObserverHit look = { at, slot.producer, -1 };
+				theObserverHits.push_back( look );
+			}
+		}
+		TheDisplay->endBatch2D();
+
+		for( Int row = 0; row < rows; row++ )
+		{
+			const ObserverQueue &queue = theObserverQueues[ row ];
+			Int shown = 0;
+			for( Int cell = 0; cell < queue.count; cell++ )
+			{
+				const InGameUI::ProductionListSlot &slot = queue.slot[ cell ];
+				const IRegion2D at = cameoAt( row, cell );
+				shown += slot.quantity;
+				UnicodeString seconds;
+				seconds.format( u"%d", max( ControlBar_secondsFromFrames( (Real)slot.remaining ), 0 ) );
+				drawObserverReadout( seconds, at, FALSE, FALSE, WHITE_INK );
+				if( slot.quantity > 1 )
+				{
+					UnicodeString count;
+					count.format( u"x%d", slot.quantity );
+					drawObserverReadout( count, at, TRUE, TRUE, WHITE_INK );
+				}
+			}
+			if( queue.total > shown )
+			{
+				UnicodeString rest;
+				rest.format( u"+%d", queue.total - shown );
+				const IRegion2D last = cameoAt( row, OBS_QUEUE_CELLS - 1 );
+				drawText( rest, font( TYPE_SMALL ), last.hi.x + px( OBS_MORE_W ) / 2 + px( 3 ), last.lo.y, cameoH, TEXT_GREY, 0 );
+			}
+		}
+	}
+
+	if( picked == NULL )
+		return;
+
+	//
+	// the picked player's card, beside the radar and the column of players' buttons
+	//
+	SpectatorStats stats;
+	Bool known = FALSE;
+	for( size_t row = 0; row < theRackStats.size() && !known; row++ )
+		if( theRackStats[ row ].player == picked )
+		{
+			stats = theRackStats[ row ];
+			known = TRUE;
+		}
+	if( !known )
+		return;
+
+	Int anchor = hudPlay().lo.x;
+	static NameKeyType radarKey = NAMEKEY( "ControlBar.wnd:LeftHUD" );
+	static NameKeyType listKey = NAMEKEY( "ControlBar.wnd:ObserverPlayerListWindow" );
+	const NameKeyType besides[ 2 ] = { radarKey, listKey };
+	for( Int each = 0; each < 2; each++ )
+	{
+		GameWindow *window = TheWindowManager->winGetWindowFromId( NULL, besides[ each ] );
+		if( window == NULL || window->winIsHidden() )
+			continue;
+		Int x = 0, y = 0, w = 0, h = 0;
+		window->winGetScreenPosition( &x, &y );
+		window->winGetSize( &w, &h );
+		anchor = max( anchor, x + w );
+	}
+	const LaneHudBox card = LaneHud_box( anchor + px( OBS_GAP + 8 ), TheDisplay->getHeight() - px( OBS_GAP ) - px( OBS_CARD_H ),
+		px( OBS_CARD_W ), px( OBS_CARD_H ) );
+	theObserverPanelBoxes[ 1 ] = regionOf( card );
+	const PlayerTemplate *army = picked->getPlayerTemplate();
+	const Color colour = rackColour( picked );
+	const Int left = card.x + px( 14 ), right = card.x + card.w - px( 14 ), top = card.y + px( 12 );
+
+	// the header strip with flag, name and army; under it the portrait well and, right of it, two
+	// columns of four numbers
+	const LaneHudBox head = LaneHud_box( left, top, right - left, px( OBS_HEAD_H ) );
+	const Int bodyTop = top + px( OBS_HEAD_H + 8 );
+	const LaneHudBox well = LaneHud_box( left, bodyTop, px( 132 ), px( 160 ) );
+	const Int gridLeft = well.x + well.w + px( 14 );
+	const Int columnW = ( right - gridLeft ) / 2;
+	const Int gridRowH = px( 44 );
+	// the strip of finished upgrades on the left, superweapons from the right, at the foot
+	const Int stripH = px( 44 );
+	const Int stripTop = card.y + card.h - px( 12 ) - stripH;
+	const Int smallW = px( 44 ), smallH = px( 31 ), smallPitch = px( 56 );
+
+	struct CardSuperweapon
+	{
+		const Image *cameo;
+		Bool ready;
+		Int seconds;
+		Int percent;
+		ObjectID building;
+	};
+	std::vector< CardSuperweapon > superweapons;
+	const Int index = picked->getPlayerIndex();
+	for( SuperweaponMap::iterator mapIt = m_superweapons[ index ].begin(); mapIt != m_superweapons[ index ].end(); ++mapIt )
+	{
+		for( SuperweaponList::iterator listIt = mapIt->second.begin(); listIt != mapIt->second.end(); ++listIt )
+		{
+			SuperweaponInfo *info = *listIt;
+			if( info == NULL || info->m_hiddenByScript || info->m_hiddenByScience )
+				continue;
+			Object *building = TheGameLogic->findObjectByID( info->m_id );
+			if( building == NULL || building->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+				continue;
+			SpecialPowerModuleInterface *module = building->getSpecialPowerModule( info->getSpecialPowerTemplate() );
+			if( module == NULL )
+				continue;
+			const UnsignedInt now = TheGameLogic->getFrame();
+			const UnsignedInt wait = module->getReadyFrame() > now ? module->getReadyFrame() - now : 0;
+			const UnsignedInt reload = info->getSpecialPowerTemplate()->getReloadTime();
+			CardSuperweapon line;
+			line.cameo = superweaponCameo( info->getSpecialPowerTemplate() );
+			line.ready = module->isReady();
+			line.seconds = ControlBar_secondsFromFrames( (Real)wait );
+			line.percent = line.ready || reload == 0 ? 100 : ( wait >= reload ? 0 : REAL_TO_INT( 100.0f * ( reload - wait ) / reload ) );
+			line.building = building->getID();
+			superweapons.push_back( line );
+			// a shared power's timers are one clock
+			if( info->getSpecialPowerTemplate()->isSharedNSync() )
+				break;
+		}
+	}
+	const Int swCount = min( (Int)superweapons.size(), max( ( right - left ) / 2 / smallPitch, 1 ) );
+
+	std::vector< const UpgradeTemplate * > upgrades;
+	const UpgradeMaskType done = picked->getCompletedUpgradeMask();
+	for( const UpgradeTemplate *upgrade = TheUpgradeCenter->firstUpgradeTemplate(); upgrade != NULL; upgrade = upgrade->friend_getNext() )
+		if( upgrade->getUpgradeType() == UPGRADE_TYPE_PLAYER && upgrade->getButtonImage() != NULL && upgrade->getUpgradeMask().any()
+				&& done.testForAll( upgrade->getUpgradeMask() ) )
+			upgrades.push_back( upgrade );
+	const Int upgradeRoom = ( right - left - swCount * smallPitch ) / smallPitch;
+	const Int upgradeCount = min( (Int)upgrades.size(), max( upgradeRoom, 0 ) );
+	auto smallCell = [ & ]( Int x )
+	{
+		IRegion2D at;
+		at.lo.x = x;
+		at.lo.y = stripTop + ( stripH - smallH ) / 2;
+		at.hi.x = x + smallW;
+		at.hi.y = at.lo.y + smallH;
+		return at;
+	};
+
+	TheDisplay->beginBatch2D();
+	panel( card );
+	// his colour along the card's left
+	TheDisplay->drawFillRect( card.x + px( 5 ), card.y + px( 12 ), px( 4 ), card.h - px( 24 ), colour );
+	nineSlice( well, WELL_TL );
+	const Int inset = px( 4 );
+	if( const Image *portrait = UIStyle::armyPortrait( army ) )
+		UIStyle::coverImage( portrait, well.x + inset, well.y + inset, well.w - 2 * inset, well.h - 2 * inset );
+	TheDisplay->drawFillRect( well.x + inset, well.y + well.h - inset - px( 6 ), well.w - 2 * inset, px( 6 ), colour );
+	threeSlice( head, HEAD_L, HEAD_C, HEAD_R );
+	if( const Image *flag = army->getFlagWaterMarkImage() )
+		drawImage( flag, LaneHud_box( left + px( 6 ), top + px( 3 ), px( 32 ), px( OBS_HEAD_H - 6 ) ) );
+	// the power: what his plants make against what his base draws, the share drawn under the number
+	{
+		const Int consumed = stats.produced - stats.power;
+		const Int barX = gridLeft + columnW, barY = bodyTop + gridRowH + px( 38 );
+		const Int barW = columnW - px( 12 );
+		TheDisplay->drawFillRect( barX, barY, barW, px( 4 ), GameMakeColor( 2, 4, 5, 255 ) );
+		if( stats.produced > 0 || consumed > 0 )
+		{
+			const Int most = max( stats.produced, consumed );
+			TheDisplay->drawFillRect( barX, barY, barW * min( consumed, most ) / most, px( 4 ), stats.power < 0 ? LOSS : SURPLUS );
+		}
+	}
+	for( Int each = 0; each < upgradeCount; each++ )
+	{
+		const IRegion2D at = smallCell( left + px( 4 ) + each * smallPitch );
+		drawObserverCell( at );
+		TheDisplay->drawImage( upgrades[ each ]->getButtonImage(), at.lo.x, at.lo.y, at.hi.x, at.hi.y );
+		drawHudCellBorder( at, hudCellBorder( COMMAND_BUTTON_BORDER_UPGRADE ) );
+	}
+	for( Int each = 0; each < swCount; each++ )
+	{
+		const CardSuperweapon &line = superweapons[ each ];
+		const IRegion2D at = smallCell( right - px( 4 ) - ( each + 1 ) * smallPitch + ( smallPitch - smallW ) );
+		drawObserverCell( at );
+		if( line.cameo != NULL )
+			TheDisplay->drawImage( line.cameo, at.lo.x, at.lo.y, at.hi.x, at.hi.y );
+		if( !line.ready )
+			TheDisplay->drawRemainingRectClock( at.lo.x, at.lo.y, smallW, smallH, line.percent, GameMakeColor( 0, 0, 0, 130 ) );
+		drawOwnerRing( at, colour, px( 3 ) );
+		const ObserverHit look = { at, line.building, -1 };
+		theObserverHits.push_back( look );
+	}
+	TheDisplay->endBatch2D();
+
+	// the head: his name in his colour after the flag, his army on the right
+	GameFont *armyFont = font( TYPE_SMALL );
+	const UnicodeString armyName = army->getDisplayName();
+	const Int armyWidth = textWidth( armyName, armyFont );
+	drawText( armyName, armyFont, right - px( 10 ), top, head.h, TEXT_GREY, 1 );
+	GameFont *nameFont = font( TYPE_LABEL );
+	const Int nameLeft = left + px( 46 );
+	drawText( UIStyle::fitName( picked->getPlayerDisplayName(), nameFont, max( right - px( 10 ) - armyWidth - px( 12 ) - nameLeft, 1 ) ),
+		nameFont, nameLeft, top, head.h, colour );
+
+	// his rank under the portrait
+	UnicodeString rank;
+	rank.format( TheGameText->fetch( "GUI:HudStatRankValue" ), stats.rank );
+	drawText( UIStyle::capitals( rank ), font( TYPE_BODY ), well.x + well.w / 2, well.y + well.h + px( 4 ), px( 24 ), TEXT_GOLD, 0 );
+
+	// the numbers: a dim word over each, the number large
+	UnicodeString cash, income, power, armyValue, units, buildings, kills, losses;
+	if( stats.unlimited )
+		cash = TheGameText->fetch( "GUI:StartingMoneyUnlimited" );
+	else
+		cash = broadcastNumber( "$", stats.cash );
+	income.format( TheGameText->fetch( "GUI:HudStatIncomeValue" ), broadcastNumber( "$", stats.income ).str() );
+	power.format( u"%+d", stats.power );
+	armyValue = broadcastNumber( "$", stats.army );
+	units.format( u"%d", stats.unitCount );
+	buildings.format( u"%d", stats.buildingCount );
+	kills.format( u"%d", stats.kills );
+	losses.format( u"%d", stats.losses );
+	struct CardNumber { const char *label; const UnicodeString *value; Color colour; };
+	const CardNumber numbers[ 8 ] =
+	{
+		{ "GUI:HudStatCash", &cash, TEXT_WHITE },					{ "GUI:ObsPanelIncome", &income, TEXT_WHITE },
+		{ "GUI:HudStatArmy", &armyValue, TEXT_WHITE },		{ "GUI:HudStatPower", &power, stats.power < 0 ? LOSS : SURPLUS },
+		{ "GUI:ObsPanelUnits", &units, TEXT_WHITE },			{ "GUI:ObsPanelBuildings", &buildings, TEXT_WHITE },
+		{ "GUI:ObsPanelKills", &kills, TEXT_WHITE },			{ "GUI:ObsPanelLosses", &losses, LOSS }
+	};
+	GameFont *labelFont = font( TYPE_TICK );
+	GameFont *valueFont = font( TYPE_LABEL + 2 );
+	for( Int each = 0; each < 8; each++ )
+	{
+		const Int x = gridLeft + ( each % 2 ) * columnW;
+		const Int y = bodyTop + ( each / 2 ) * gridRowH;
+		const Int room = columnW - px( 8 );
+		drawText( UIStyle::fitText( UIStyle::capitals( TheGameText->fetch( numbers[ each ].label ) ), labelFont, room ), labelFont,
+			x, y, px( 14 ), TEXT_DIM );
+		drawText( UIStyle::fitText( *numbers[ each ].value, valueFont, room ), valueFont, x, y + px( 14 ), px( 26 ), numbers[ each ].colour );
+	}
+
+	// a superweapon's seconds while it charges
+	for( Int each = 0; each < swCount; each++ )
+		if( !superweapons[ each ].ready )
+		{
+			UnicodeString seconds;
+			seconds.format( u"%d", superweapons[ each ].seconds );
+			drawObserverReadout( seconds, smallCell( right - px( 4 ) - ( each + 1 ) * smallPitch + ( smallPitch - smallW ) ), FALSE, FALSE, WHITE_INK );
+		}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -13649,6 +14133,25 @@ Bool InGameUI::handleHudCellClick( const ICoord2D *mouse, Bool cancel )
 	}
 
 	if( GroupPanel_click( mouse, cancel ) )
+		return TRUE;
+
+	// the watcher's panels: a cell looks at its building, a badge picks its player, the rest is plate
+	for( size_t each = 0; each < theObserverHits.size(); each++ )
+	{
+		const ObserverHit &hit = theObserverHits[ each ];
+		if( !inside( hit.box ) )
+			continue;
+		if( Object *building = TheGameLogic->findObjectByID( hit.look ) )
+			TheTacticalView->lookAt( building->getPosition() );
+		else if( hit.pick >= 0 && !cancel )
+		{
+			AsciiString follow;
+			follow.format( "%s%d", FOLLOW_ACTION.c_str(), hit.pick );
+			runSpectatorAction( follow.str() );
+		}
+		return TRUE;
+	}
+	if( inside( theObserverPanelBoxes[ 0 ] ) || inside( theObserverPanelBoxes[ 1 ] ) )
 		return TRUE;
 
 	for( Int each = 0; each < m_productionListCells; each++ )

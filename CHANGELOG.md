@@ -27,6 +27,13 @@ found and fixed, EA's own, not port damage.**
 - Move and attack clicks close in on the point as a steel ring with four chevrons, the attack with a cross, and leave a dot for a second and a half.
 - Classic graphics keep the original markers. Only you see your own markers after you fire, as before; there is still no warning marker for enemies.
 
+## Watching a match at a glance
+
+- Over the radar, every player's production in one panel: a row each in his colour with his army's badge, then what he has coming, units, upgrades and buildings going up, soonest first, each swept as it builds with its seconds in the corner. Pick a player and the panel keeps his row alone. Click a cameo to look at the building it comes from, click a badge to pick that player.
+- Beside the radar, the picked player's card: his general's portrait and flag, his name in his colour, cash, income, power green or red with a bar of what his base draws, army value, units, buildings, kills, losses, his rank, the upgrades he has finished and his superweapons counting down. EA's old readout window, five numbers in a box that hid the list of players, is gone; the list stays up with his row ringed.
+- The standings on the right read at a glance. The stat you ranked by stands large over the rows, and pointing at a stat key puts that key's name there in gold, so the pictures on the keys are no longer a guess. The column heads that repeated it and the "highest first" note are gone. The numbers are bigger, the leader's place is gold, kills stand white with the losses after them in red, and a power surplus is green and a brown-out red. The camera drawer says what the camera is doing and nothing else; what a control does shows when you point at it.
+- With the fog of a player turned on, the radar is his: units only their own player sees on his radar, which every watcher saw on the map, now show for that player alone.
+
 ## Night falls on the battlefield
 
 - A new box under the match rules, Day and Night, for the host of a skirmish, a LAN game or a custom online room. Ten game minutes of day, a minute and a half of dusk, four minutes of night, a minute of dawn, and round again. At night every unit and building clears the fog of war a fifth less far: the dusk takes it down in two steps and the dawn gives it back the same way, so a scout that sees a base at noon has to walk closer to see it at midnight. Guns still reach as far as they always did, so a tank can fire at a spot its own eyes no longer show, as long as someone else is looking. Pausing stops the clock with the game.

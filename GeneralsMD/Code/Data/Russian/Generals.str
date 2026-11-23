@@ -16909,26 +16909,6 @@ GUI:HudNoWorkerLeft
 "У %s не осталось рабочих"
 END
 
-GUI:HudHighestFirst
-"по убыванию"
-END
-
-GUI:HudPlayerHead
-"Игрок"
-END
-
-GUI:HudStatUnitMoney
-"$"
-END
-
-GUI:HudStatUnitIncome
-"$/мин"
-END
-
-GUI:HudStatUnitPower
-"излишек"
-END
-
 GUI:BarIdleWorker
 "Рабочий"
 END
@@ -21065,26 +21045,6 @@ GUI:HudCamNextDirectorFollowed
 "Следим за боями игрока %ls"
 END
 
-GUI:HudCamNextFree
-"Щёлкните по имени игрока, чтобы увидеть его экран"
-END
-
-GUI:HudCamNextFree_Short
-"Щёлкните по имени, чтобы увидеть экран"
-END
-
-GUI:HudCamNextFreeFollowed
-"Щёлкните, чтобы вернуться: %ls"
-END
-
-GUI:HudCamNextPlayer
-"Esc или повторный щелчок по имени отпускает"
-END
-
-GUI:HudCamNextPlayer_Short
-"Esc или имя ещё раз отпускает"
-END
-
 GUI:HudCamNextWaiting
 "Ожидание камеры этого игрока"
 END
@@ -21115,6 +21075,26 @@ END
 
 GUI:HudStandings
 "Положение"
+END
+
+GUI:ObsPanelIncome
+"Доход"
+END
+
+GUI:ObsPanelUnits
+"Юниты"
+END
+
+GUI:ObsPanelBuildings
+"Здания"
+END
+
+GUI:ObsPanelKills
+"Убийства"
+END
+
+GUI:ObsPanelLosses
+"Потери"
 END
 
 GUI:HudStatCash

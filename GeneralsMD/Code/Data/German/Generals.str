@@ -15069,26 +15069,6 @@ GUI:HudNoWorkerLeft
 "%s hat keinen Arbeiter mehr"
 END
 
-GUI:HudHighestFirst
-"höchste zuerst"
-END
-
-GUI:HudPlayerHead
-"Spieler"
-END
-
-GUI:HudStatUnitMoney
-"$"
-END
-
-GUI:HudStatUnitIncome
-"$/Min."
-END
-
-GUI:HudStatUnitPower
-"Überschuss"
-END
-
 GUI:BarIdleWorker
 "Arbeiter"
 END
@@ -19025,26 +19005,6 @@ GUI:HudCamNextDirectorFollowed
 "Folgt den Kämpfen von %ls"
 END
 
-GUI:HudCamNextFree
-"Klicke auf einen Spielernamen, um seinen Bildschirm zu sehen"
-END
-
-GUI:HudCamNextFree_Short
-"Name anklicken für seinen Bildschirm"
-END
-
-GUI:HudCamNextFreeFollowed
-"Klicken zum Zurückkehren: %ls"
-END
-
-GUI:HudCamNextPlayer
-"Esc oder erneuter Klick auf den Namen lässt los"
-END
-
-GUI:HudCamNextPlayer_Short
-"Esc oder Name lässt los"
-END
-
 GUI:HudCamNextWaiting
 "Warte auf die Kamera dieses Spielers"
 END
@@ -19079,6 +19039,26 @@ END
 
 GUI:HudStandings
 "Stand"
+END
+
+GUI:ObsPanelIncome
+"Einkommen"
+END
+
+GUI:ObsPanelUnits
+"Einheiten"
+END
+
+GUI:ObsPanelBuildings
+"Gebäude"
+END
+
+GUI:ObsPanelKills
+"Abschüsse"
+END
+
+GUI:ObsPanelLosses
+"Verluste"
 END
 
 GUI:HudStatCash

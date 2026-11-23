@@ -16845,26 +16845,6 @@ GUI:HudNoWorkerLeft
 "У %s не лишилося робітників"
 END
 
-GUI:HudHighestFirst
-"за спаданням"
-END
-
-GUI:HudPlayerHead
-"Гравець"
-END
-
-GUI:HudStatUnitMoney
-"$"
-END
-
-GUI:HudStatUnitIncome
-"$/хв"
-END
-
-GUI:HudStatUnitPower
-"надлишок"
-END
-
 GUI:BarIdleWorker
 "Робітник"
 END
@@ -20869,26 +20849,6 @@ GUI:HudCamNextDirectorFollowed
 "Стежимо за боями гравця %ls"
 END
 
-GUI:HudCamNextFree
-"Клацніть ім'я гравця, щоб побачити його екран"
-END
-
-GUI:HudCamNextFree_Short
-"Клацніть ім'я, щоб бачити екран"
-END
-
-GUI:HudCamNextFreeFollowed
-"Клацніть, щоб повернутися: %ls"
-END
-
-GUI:HudCamNextPlayer
-"Esc або ще клік по імені, щоб відпустити"
-END
-
-GUI:HudCamNextPlayer_Short
-"Esc або ім'я ще раз відпускає"
-END
-
 GUI:HudCamNextWaiting
 "Чекаємо на камеру цього гравця"
 END
@@ -20919,6 +20879,26 @@ END
 
 GUI:HudStandings
 "Таблиця"
+END
+
+GUI:ObsPanelIncome
+"Дохід"
+END
+
+GUI:ObsPanelUnits
+"Юніти"
+END
+
+GUI:ObsPanelBuildings
+"Будівлі"
+END
+
+GUI:ObsPanelKills
+"Вбивства"
+END
+
+GUI:ObsPanelLosses
+"Втрати"
 END
 
 GUI:HudStatCash

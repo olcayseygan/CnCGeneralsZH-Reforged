@@ -84,6 +84,9 @@ enum
 	LANEWAR_STRIKE_SECONDS = 30,					///< game seconds a strike may last before its jets are called home
 	LANEWAR_JET_REARM_SECONDS = 15,				///< game seconds a parked jet takes to reload before it can strike again
 	LANEWAR_CARGO_LOG_SECONDS = 5,				///< wall seconds between the log's counts of passengers and drones out in the waves
+	LANEWAR_TOWER_BOUNTY = 500,						///< paid once to every seated player of the team that brings an enemy Watch Tower down
+	LANEWAR_PRESS_COOLDOWN_SECONDS = 20,	///< game seconds a Dragon's fire wall or a Toxin Truck's slime waits before that copy presses it again
+	LANEWAR_HERO_COOLDOWN_SECONDS = 30,		///< game seconds a hero's copy waits after any of its buttons before the next
 };
 
 /** A span the mode was tuned for in wall seconds at the native 1.5x, as game time: the same share of the
@@ -405,6 +408,7 @@ private:
 		ObjectID id;
 		UnsignedInt dieFrame;
 		Int owner;											///< the player index it last marched for; a hijacked copy marches again for its taker
+		UnsignedInt pressFrame = 0;			///< the first frame it may press a button again after a capped one (useAbilities), 0 at once
 	};
 	enum { JET_PARKED, JET_OUT, JET_HOME };
 	/** A wave's jet copy.  Parked, nothing of it is on the map: it is only this entry, so it cannot be
@@ -445,6 +449,7 @@ private:
 	Real enemyEndX( Int team ) const;
 	Bool heroCopyAlive( const Player *player ) const;
 	void tick( UnsignedInt now );
+	void payTowerBounties( UnsignedInt now );
 	void logCargo( UnsignedInt now ) const;
 	void spawnWave( Int team, Int seat, UnsignedInt now );
 	Bool buyTier( Player *player, Int track, Int level );
@@ -472,6 +477,7 @@ private:
 	Int m_seatPlayer[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];		///< player index, -1 for an empty seat
 	ObjectID m_fortress[ LANEWAR_TEAMS ];
 	ObjectID m_tower[ LANEWAR_TEAMS ][ 2 ];								///< LaneWar_TowerA1, A2, B1, B2; INVALID_ID where the map has none
+	Bool m_towerPaid[ LANEWAR_TEAMS ][ 2 ];								///< that tower has fallen and its bounty gone to the other team
 	Bool m_fortressDown[ LANEWAR_TEAMS ];
 	UnsignedInt m_nextTickFrame;
 	UnsignedInt m_tickCount;

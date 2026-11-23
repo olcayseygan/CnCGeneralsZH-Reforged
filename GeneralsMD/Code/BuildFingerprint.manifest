@@ -1456,6 +1456,7 @@ Data/Scenarios/lanewar.txt
 Data/Scenarios/lanewar_air.txt
 Data/Scenarios/lanewar_buy.txt
 Data/Scenarios/lanewar_cargo.txt
+Data/Scenarios/lanewar_cooldowns.txt
 Data/Scenarios/lanewar_end.txt
 Data/Scenarios/lanewar_hack.txt
 Data/Scenarios/lanewar_hacktower.txt
@@ -1466,6 +1467,7 @@ Data/Scenarios/lanewar_ranks.txt
 Data/Scenarios/lanewar_scales.txt
 Data/Scenarios/lanewar_speed.txt
 Data/Scenarios/lanewar_strays.txt
+Data/Scenarios/lanewar_towerbounty.txt
 Data/Scenarios/lanewar_towerheal.txt
 Data/Scenarios/lanewar_tricks.txt
 Data/Scenarios/laserdefense.txt

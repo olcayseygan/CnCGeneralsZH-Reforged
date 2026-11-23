@@ -1,0 +1,18 @@
+# Direct Strike proof of the tower bounty (2026-11-23): twenty staged Gattling Tanks of team A take down
+# team B's Watch Tower before the first tick, so nothing but the bounty moves money. A 2v2, so both of
+# team A's seats are paid and both of team B's are not.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 4 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -side 2 FactionAmerica -side 3 FactionChina
+#     -seed 1 -maxframes 2400 -scenario lanewar_towerbounty -logPrefix lanewar_towerbounty_
+#
+# Passes on one line "HEADLESS LANEWAR: frame ... tower B1 down: 500 to each seat of team A, now
+# [ <a>:2500 <b>:2500 ]; team B keeps [ <c>:2000 <d>:2000 ]" and no second line for that tower. Slots 0
+# and 2 are team A, 1 and 3 team B (the numbers in the line are player indices); team B's tower stands
+# at 3876,1805 on this map (rmg_v22_3_6p_642c_lane).
+
+30    spawn   0  ChinaTankGattling   20  3576  1805  40
+60    attack  0  ChinaTankGattling   1  LaneWarWatchTower
+900   tally   1  LaneWarWatchTower
+1500  tally   1  LaneWarWatchTower

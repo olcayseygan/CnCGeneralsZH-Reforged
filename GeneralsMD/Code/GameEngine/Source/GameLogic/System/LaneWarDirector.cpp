@@ -695,6 +695,7 @@ void LaneWarDirector::reset( void )
 		m_spawn[ t ].zero();
 		m_fortress[ t ] = INVALID_ID;
 		m_tower[ t ][ 0 ] = m_tower[ t ][ 1 ] = INVALID_ID;
+		m_towerPaid[ t ][ 0 ] = m_towerPaid[ t ][ 1 ] = FALSE;
 		m_fortressDown[ t ] = FALSE;
 	}
 	m_middle.zero();
@@ -1853,6 +1854,22 @@ static Bool laneShortVolley( Object *obj, const AIAbilityButton &entry )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The frame a copy that has just pressed a button in weapon slot `slot` may press again (2026-11-23): a
+	  hero's after LANEWAR_HERO_COOLDOWN_SECONDS of game time whatever he pressed, a Dragon's wall of fire or
+	  a Toxin Truck's slime after LANEWAR_PRESS_COOLDOWN_SECONDS (each unit's one button, so the rest covers
+	  all its presses), anything else at once. */
+static UnsignedInt pressCooldown( const Player *player, const Object *obj, Int slot, UnsignedInt now )
+{
+	if( LaneWar_isHero( player, obj->getTemplate() ) )
+		return now + (UnsignedInt)( LANEWAR_HERO_COOLDOWN_SECONDS * LOGICFRAMES_PER_GAME_SECOND );
+	const Weapon *weapon = slot >= 0 && slot < WEAPONSLOT_COUNT ? obj->getWeaponInWeaponSlot( (WeaponSlotType)slot ) : NULL;
+	const AsciiString name = weapon != NULL ? weapon->getName() : AsciiString::TheEmptyString;
+	if( strstr( name.str(), "FireWallWeapon" ) != NULL || strstr( name.str(), "ToxinTruckSprayer" ) != NULL )
+		return now + (UnsignedInt)( LANEWAR_PRESS_COOLDOWN_SECONDS * LOGICFRAMES_PER_GAME_SECOND );
+	return now;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The wave units' own buttons, each copy looked at every half game second on its own frame of the
 	  stride (ObjectID and frame, no state).  The skirmish AI's on-the-spot rules go first, at the rung that
 	  weighs every target in reach, then the walk-ups, the remote charges before the rest; only what the
@@ -1889,6 +1906,13 @@ void LaneWarDirector::useAbilities( UnsignedInt now )
 		}
 		if( AIAbility_unitBusy( obj ) )
 			continue;
+		// a copy resting after a capped press only walks on (pressCooldown)
+		if( now < copy.pressFrame )
+		{
+			if( ai->isIdle() )
+				march( obj, team );
+			continue;
+		}
 
 		Object *victim = ai->getCurrentVictim();
 		if( victim != NULL && ( victim->isEffectivelyDead() || player->getRelationship( victim->getTeam() ) != ENEMIES ) )
@@ -1913,9 +1937,12 @@ void LaneWarDirector::useAbilities( UnsignedInt now )
 				default:									break;
 			}
 			if( used )
-				DEBUG_LOG(( "LANEWAR ABILITY USE: frame %u player %d '%s' %d on the spot '%s' slot %d, victim '%s' %d\n", now, me,
+			{
+				copy.pressFrame = pressCooldown( player, obj, entry.slot, now );
+				DEBUG_LOG(( "LANEWAR ABILITY USE: frame %u player %d '%s' %d on the spot '%s' slot %d, victim '%s' %d, rests until frame %u\n", now, me,
 										tmpl->getName().str(), (Int)obj->getID(), entry.button->getName().str(), entry.index,
-										victim ? victim->getTemplate()->getName().str() : "none", victim ? (Int)victim->getID() : 0 ));
+										victim ? victim->getTemplate()->getName().str() : "none", victim ? (Int)victim->getID() : 0, copy.pressFrame ));
+			}
 		}
 
 		LaneWarAbility list[ LANEWAR_ABILITIES_MAX ];
@@ -1927,6 +1954,8 @@ void LaneWarDirector::useAbilities( UnsignedInt now )
 				if( ( specialPowerOf( button ) == SPECIAL_REMOTE_CHARGES ) != ( pass == 0 ) || !isWalkUpButton( button ) || !buttonOn( me, tmpl, button ) )
 					continue;
 				used = walkUp( obj, button, 1 - team );
+				if( used )
+					copy.pressFrame = pressCooldown( player, obj, PRIMARY_WEAPON, now );
 			}
 
 		if( !used && ai->isIdle() )
@@ -1958,6 +1987,7 @@ void LaneWarDirector::update( void )
 			DEBUG_LOG(( "HEADLESS LANEWAR: frame %u fortress %s down, team %s loses\n", now, TEAM_NAME[ t ], TEAM_NAME[ t ] ));
 		}
 	}
+	payTowerBounties( now );
 	if( m_fortressDown[ 0 ] || m_fortressDown[ 1 ] )
 		return;
 
@@ -2559,6 +2589,44 @@ void LaneWarDirector::tick( UnsignedInt now )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A Watch Tower that has fallen pays LANEWAR_TOWER_BOUNTY once to every seated player of the other team,
+	  the frame it is found gone or dead, whoever's shot ended it (2026-11-23). */
+void LaneWarDirector::payTowerBounties( UnsignedInt now )
+{
+	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+		for( Int k = 0; k < 2; ++k )
+		{
+			if( m_towerPaid[ t ][ k ] || m_tower[ t ][ k ] == INVALID_ID )
+				continue;
+			const Object *tower = TheGameLogic->findObjectByID( m_tower[ t ][ k ] );
+			if( tower != NULL && !tower->isEffectivelyDead() )
+				continue;
+			m_towerPaid[ t ][ k ] = TRUE;
+			const Int paid = 1 - t;
+			AsciiString to, kept;
+			for( Int s = 0; s < LANEWAR_SEATS; ++s )
+			{
+				AsciiString one;
+				if( m_seatPlayer[ paid ][ s ] >= 0 )
+				{
+					Player *player = ThePlayerList->getNthPlayer( m_seatPlayer[ paid ][ s ] );
+					player->getMoney()->deposit( LANEWAR_TOWER_BOUNTY, FALSE );
+					TheLaneWarStats->onIncome( m_seatPlayer[ paid ][ s ], LANEWAR_TOWER_BOUNTY, 0 );
+					one.format( " %d:%u", m_seatPlayer[ paid ][ s ], player->getMoney()->countMoney() );
+					to.concat( one );
+				}
+				if( m_seatPlayer[ t ][ s ] >= 0 )
+				{
+					one.format( " %d:%u", m_seatPlayer[ t ][ s ], ThePlayerList->getNthPlayer( m_seatPlayer[ t ][ s ] )->getMoney()->countMoney() );
+					kept.concat( one );
+				}
+			}
+			DEBUG_LOG(( "HEADLESS LANEWAR: frame %u tower %s%d down: %d to each seat of team %s, now [%s ]; team %s keeps [%s ]\n", now,
+									TEAM_NAME[ t ], k + 1, (Int)LANEWAR_TOWER_BOUNTY, TEAM_NAME[ paid ], to.str(), TEAM_NAME[ t ], kept.str() ));
+		}
+}
+
+//-------------------------------------------------------------------------------------------------
 /** For the log only: the passengers out riding in their wave units and the drones out with their
 	  masters, and how many of each have fired.  Counted mid-fight, since a wave rarely lives to the next tick. */
 void LaneWarDirector::logCargo( UnsignedInt now ) const
@@ -2773,10 +2841,12 @@ void LaneWarDirector::crc( Xfer *xfer )
 	  Version 5: each plot unit's rank and what it cost.
 	  Version 6: each plot unit's object upgrades and passengers.
 	  Version 7: each jet's object upgrades.
-	  Version 8: each jet's plot unit, and how far adoptStrays has looked. */
+	  Version 8: each jet's plot unit, and how far adoptStrays has looked.
+	  Version 9: which towers' bounties are paid.
+	  Version 10: each copy's next press frame. */
 void LaneWarDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 8;
+	XferVersion currentVersion = 10;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2804,6 +2874,10 @@ void LaneWarDirector::xfer( Xfer *xfer )
 			xfer->xferInt( &m_copies[ i ].owner );
 		else
 			m_copies[ i ].owner = -1;		// taken as whoever holds it the first time it is looked at
+		if( version >= 10 )
+			xfer->xferUnsignedInt( &m_copies[ i ].pressFrame );
+		else
+			m_copies[ i ].pressFrame = 0;
 	}
 
 	count = (UnsignedInt)m_plotUnits.size();
@@ -2984,4 +3058,14 @@ void LaneWarDirector::xfer( Xfer *xfer )
 		xfer->xferObjectID( &m_strayWatch );
 	else
 		m_strayWatch = INVALID_ID;
+
+	// a match saved before the bounty pays none, for towers fallen or still to fall
+	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+		for( Int k = 0; k < 2; ++k )
+		{
+			if( version >= 9 )
+				xfer->xferBool( &m_towerPaid[ t ][ k ] );
+			else
+				m_towerPaid[ t ][ k ] = TRUE;
+		}
 }

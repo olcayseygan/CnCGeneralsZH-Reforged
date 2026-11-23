@@ -1,0 +1,31 @@
+# Direct Strike proof of the press cooldowns (2026-11-23): a Dragon's wall of fire and a Toxin Truck's
+# slime at most once every 20 game seconds a copy, a hero's buttons once every 30. Team A fields Dragons,
+# Toxin Trucks, Black Lotus and Jarmen Kell; team B Rangers and Colonel Burton to press them on.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 4 -takeover -side 0 FactionChina -side 1 FactionAmerica
+#     -side 2 FactionGLA -side 3 FactionAmerica
+#     -seed 1 -maxframes 18000 -scenario lanewar_cooldowns -logPrefix lanewar_cooldowns_
+#
+# Passes when, over the LANEWAR ABILITY USE lines, no copy of a Dragon or a Toxin Truck presses twice
+# within 400 logic frames and no hero copy within 600 (20 and 30 game seconds at 1.5x; the line says
+# "rests until frame"). A small script over the log prints the presses a copy a minute and the
+# smallest gap per template; run it on the exe before the change for the counts the cap took away.
+# Slots 0 and 2 are team A, 1 and 3 team B.
+
+30    lanecash   0  6000
+30    lanecash   2  6000
+30    laneplace  0  ChinaInfantryBlackLotus   7 0
+30    laneplace  0  ChinaTankDragon           0 0
+30    laneplace  0  ChinaTankDragon           3 0
+30    lanetier   2  1 2
+60    laneplace  2  GLAInfantryJarmenKell     7 0
+60    laneplace  2  GLAVehicleToxinTruck      0 0
+60    laneplace  2  GLAVehicleToxinTruck      3 0
+30    laneplace  1  AmericaInfantryColonelBurton  7 0
+30    laneplace  1  AmericaInfantryRanger     0 0
+30    laneplace  1  AmericaInfantryRanger     2 0
+30    laneplace  1  AmericaInfantryRanger     4 0
+30    laneplace  3  AmericaInfantryRanger     0 0
+30    laneplace  3  AmericaInfantryRanger     2 0
+30    laneplace  3  AmericaInfantryRanger     4 0

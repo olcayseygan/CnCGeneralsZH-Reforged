@@ -54,6 +54,7 @@
 #include "WW3D2/dx8indexbuffer.h"
 #include "WW3D2/dx8vertexbuffer.h"
 #include "WW3D2/dx8wrapper.h"
+#include "WW3D2/matinfo.h"
 #include "WW3D2/matpass.h"
 #include "WW3D2/rendobj.h"
 #include "WW3D2/rinfo.h"
@@ -86,6 +87,8 @@ const Real TRACK_HANDOFF_SPEED = 3.0f;	// units a game second: a piece faster th
 const Real SLIDE_STOP = 1.5f;					// a piece on the ground slower than this sideways stops
 const Real SLIDE_FRICTION = 4.0f;			// of its sideways speed lost a game second on the ground
 const Real LONG_AGO = 1000.0f;				// game seconds: a death this far back has long finished falling
+const Real ORPHAN_RUIN_LIES = 12.0f;	// game seconds the ruin of a structure whose object went at its death lies
+const Real ORPHAN_RUIN_SINKS = 4.0f;	// and then sinks out of sight
 const Real GROUND_FOLLOW_HEIGHT = 20.0f;	// a baked fragment this far down to the model's foot lies on the ground under it
 const Real BOUNDS_MARGIN = 150.0f;		// how far past the model debris and the fall may reach, for the culling box (the tower's diagonal falls throw 146)
 const Real DUST_VOLUME = 6.0f;			// a fragment at least this big raises dust where it comes down
@@ -470,6 +473,10 @@ public:
 	const std::vector<unsigned char> &standingSet( void ) const { return m_collapsing ? m_present : m_standing; }
 	Int collapseWay( void ) const { return m_collapse ? m_way : -1; }
 	void restore( const std::vector<unsigned char> &standing, Int way );		///< a load's, before anything moves
+	/** Its drawable is going while it falls (DestroyDie, the GLA Command Center): it lets go of it and
+		finishes the fall on its own, nothing to pick, then its ruin lies a while and sinks away. */
+	void orphan( void );
+	Bool orphanTick( void );										///< FALSE once it is gone, or a new game began
 
 private:
 
@@ -534,13 +541,17 @@ private:
 	Real m_now, m_deathTime, m_removedVolume;
 	Int m_dustLeft;
 	Bool m_dirty, m_collapsing, m_dropped, m_settled, m_ruin, m_damagedLook;
+	VertexMaterialClass *m_houseMaterial;		///< the colour the model's house meshes wear, for MATERIAL_HOUSE
+	Matrix3D m_ruinRoot;										///< an orphan's root when its ruin settled
+	Real m_ruinAt;													///< an orphan's: game seconds its ruin settled, -1 before
 };
 
 //-------------------------------------------------------------------------------------------------
 FractureRenderObjClass::FractureRenderObjClass( Shared *shared, Drawable *drawable, const std::vector<AsciiString> &gunBones ) :
 	m_shared( shared ), m_collapse( NULL ), m_way( -1 ), m_source( 0, 0, 0 ), m_hasSource( FALSE ), m_drawable( drawable ), m_model( NULL ), m_root( true ), m_pileOrigin( 0, 0, 0 ),
 	m_now( -1.0f ), m_deathTime( 0.0f ), m_removedVolume( 0.0f ), m_dustLeft( MAX_DUST ), m_dirty( TRUE ),
-	m_collapsing( FALSE ), m_dropped( FALSE ), m_settled( FALSE ), m_ruin( FALSE ), m_damagedLook( FALSE )
+	m_collapsing( FALSE ), m_dropped( FALSE ), m_settled( FALSE ), m_ruin( FALSE ), m_damagedLook( FALSE ),
+	m_houseMaterial( NULL ), m_ruinRoot( true ), m_ruinAt( -1.0f )
 {
 	++shared->users;
 	const size_t count = shared->asset.fragments.size();
@@ -561,6 +572,7 @@ FractureRenderObjClass::FractureRenderObjClass( Shared *shared, Drawable *drawab
 FractureRenderObjClass::~FractureRenderObjClass()
 {
 	REF_PTR_RELEASE( m_model );
+	REF_PTR_RELEASE( m_houseMaterial );
 	for( size_t c = 0; c < m_standingIndices.size(); ++c )
 		REF_PTR_RELEASE( m_standingIndices[c] );
 	for( size_t c = 0; c < m_ruinVertices.size(); ++c )
@@ -674,6 +686,30 @@ void FractureRenderObjClass::follow( RenderObjClass *model )
 		REF_PTR_SET( m_model, model );
 		for( size_t s = 1; s < m_modelBones.size(); ++s )
 			m_modelBones[s] = model ? model->Get_Bone_Index( m_shared->boneNames[s].str() ) : 0;
+		// the side's colour as the model wears it (the asset manager tints a HOUSECOLOR mesh's vertex
+		// material, W3DAssetManager::Recolor_Vertex_Material): a new model is a new colour or skin
+		for( Int i = 0; model && i < model->Get_Num_Sub_Objects(); ++i )
+		{
+			RenderObjClass *sub = model->Get_Sub_Object( i );
+			const char *name = sub ? strchr( sub->Get_Name(), '.' ) : NULL;
+			MaterialInfoClass *info = name && strncasecmp( name + 1, "HOUSECOLOR", 10 ) == 0 ? sub->Get_Material_Info() : NULL;
+			if( info && info->Vertex_Material_Count() > 0 )
+			{
+				if( m_houseMaterial == NULL )
+				{
+					m_houseMaterial = NEW_REF( VertexMaterialClass, () );
+					m_houseMaterial->Set_Lighting( true );
+				}
+				Vector3 colour;
+				info->Peek_Vertex_Material( 0 )->Get_Diffuse( &colour );
+				m_houseMaterial->Set_Diffuse( colour );
+				info->Peek_Vertex_Material( 0 )->Get_Ambient( &colour );
+				m_houseMaterial->Set_Ambient( colour );
+				i = model->Get_Num_Sub_Objects();
+			}
+			REF_PTR_RELEASE( info );
+			REF_PTR_RELEASE( sub );
+		}
 	}
 	if( m_model == NULL )
 		return;
@@ -1302,9 +1338,50 @@ void FractureRenderObjClass::tick( void )
 }
 
 //-------------------------------------------------------------------------------------------------
+void FractureRenderObjClass::orphan( void )
+{
+	m_drawable = NULL;
+	Set_User_Data( NULL );		// the drawable's info goes with it: the scene draws this as plain scenery
+	Set_Collision_Type( 0 );	// and nothing picks it
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool FractureRenderObjClass::orphanTick( void )
+{
+	const Real now = gameSeconds();
+	if( !Is_In_Scene() || now < m_deathTime - COLLAPSE_DELAY - 1.0f )
+		return FALSE;		// the map was reset under it, or its clock is a new game's
+	tick();
+	if( !m_ruin )
+		return TRUE;
+	if( m_ruinAt < 0.0f )
+	{
+		m_ruinAt = now;
+		m_ruinRoot = m_root;
+	}
+	const Real sunk = ( now - m_ruinAt - ORPHAN_RUIN_LIES ) / ORPHAN_RUIN_SINKS;
+	if( sunk >= 1.0f )
+	{
+		DEBUG_LOG( ( "FRACTURE RUIN GONE %s frame %d: settled at %.1f game seconds, sunk away\n", m_shared->name.str(),
+			(Int)TheGameLogic->getFrame(), m_ruinAt ) );
+		return FALSE;
+	}
+	if( sunk > 0.0f )
+	{
+		// into the ground as retail debris goes, deep enough for the highest heap
+		m_root = m_ruinRoot;
+		m_root.Adjust_Z_Translation( -sunk * ( m_shared->asset.boxMax[2] * 0.5f + 5.0f ) );
+		Set_Transform( m_root );
+	}
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
 void FractureRenderObjClass::applyMaterial( unsigned short m )
 {
 	TextureClass *damaged = m_damagedLook ? m_shared->damaged[m] : NULL;
+	const Bool house = m_houseMaterial && ( m_shared->asset.materials[m].flags & Fracture::MATERIAL_HOUSE );
+	DX8Wrapper::Set_Material( house ? m_houseMaterial : m_shared->material );
 	DX8Wrapper::Set_Texture( 0, damaged ? damaged : m_shared->textures[m] );
 	DX8Wrapper::Set_Shader( m_shared->shaders[m] );
 }
@@ -1406,10 +1483,10 @@ void FractureRenderObjClass::Render( RenderInfoClass &rinfo )
 //-------------------------------------------------------------------------------------------------
 void FractureRenderObjClass::renderCaster( RenderInfoClass &sunInfo )
 {
-	if( m_drawable == NULL || m_drawable->isDrawableEffectivelyHidden() || !Is_In_Scene() )
-		return;
+	if( !Is_In_Scene() || ( m_drawable && m_drawable->isDrawableEffectivelyHidden() ) )
+		return;		// an orphan (no drawable) casts while it lies
 	// a building in the fog keeps its shadow under its ghost, by the model's own rule
-	const W3DModelDraw *modelDraw = modelDrawOf( m_drawable );
+	const W3DModelDraw *modelDraw = m_drawable ? modelDrawOf( m_drawable ) : NULL;
 	if( modelDraw && modelDraw->isShadowHiddenByShroud() )
 		return;
 	step( gameSeconds() );		// off the screen the debris still falls, and so does its shadow
@@ -1427,6 +1504,7 @@ void FractureRenderObjClass::renderCaster( RenderInfoClass &sunInfo )
 
 namespace {
 std::vector<W3DFractureDraw *> s_modules;
+std::vector<FractureRenderObjClass *> s_orphans;		///< falls whose drawable went at the death, one reference each
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1460,6 +1538,15 @@ W3DFractureDraw::~W3DFractureDraw( void )
 	if( m_fracture )
 	{
 		s_modules.erase( std::remove( s_modules.begin(), s_modules.end(), this ), s_modules.end() );
+		if( m_fracture->isCollapsing() && TheGameLogic && !TheGameLogic->isClearingGameData() )
+		{
+			// a structure whose object goes at its death (DestroyDie) takes its drawable with it in
+			// the same flush: the fall it started keeps the reference and finishes alone
+			m_fracture->orphan();
+			s_orphans.push_back( m_fracture );
+			m_fracture = NULL;
+			return;
+		}
 		m_fracture->Remove();
 		REF_PTR_RELEASE( m_fracture );
 	}
@@ -1548,9 +1635,10 @@ void W3DFractureDraw::reactToImpact( const Coord3D &pos, Real radius, const Coor
 	if( radius >= 0.0f )
 		m_fracture->hit( pos, radius );
 	// the killing hit starts the fall here, in view or not, so an off-screen death is not kept for the
-	// moment the camera comes back
+	// moment the camera comes back.  No object: it was destroyed in the tick that hit it (DestroyDie),
+	// the drawable goes right after this work and the fall carries on without it (orphan)
 	const Object *obj = getDrawable()->getObject();
-	if( obj && obj->isEffectivelyDead() )
+	if( obj == NULL || obj->isEffectivelyDead() )
 		m_fracture->collapse( FALSE );
 }
 
@@ -1560,6 +1648,19 @@ void W3DFractureDraw::updateAll( void )
 	for( size_t i = 0; i < s_modules.size(); ++i )
 		if( s_modules[i]->m_fracture )
 			s_modules[i]->m_fracture->tick();
+	size_t kept = 0;
+	for( size_t i = 0; i < s_orphans.size(); ++i )
+	{
+		FractureRenderObjClass *orphan = s_orphans[i];
+		if( orphan->orphanTick() )
+		{
+			s_orphans[kept++] = orphan;
+			continue;
+		}
+		orphan->Remove();
+		REF_PTR_RELEASE( orphan );
+	}
+	s_orphans.resize( kept );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1568,6 +1669,8 @@ void W3DFractureDraw::renderShadowCasters( RenderInfoClass &sunInfo )
 	for( size_t i = 0; i < s_modules.size(); ++i )
 		if( s_modules[i]->m_fracture )
 			s_modules[i]->m_fracture->renderCaster( sunInfo );
+	for( size_t i = 0; i < s_orphans.size(); ++i )
+		s_orphans[i]->renderCaster( sunInfo );
 }
 
 //-------------------------------------------------------------------------------------------------

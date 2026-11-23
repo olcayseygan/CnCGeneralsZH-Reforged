@@ -40,7 +40,8 @@
 
 namespace Fracture {
 
-enum { MATERIAL_INNER = 1, MATERIAL_ALPHA_TEST = 2, MATERIAL_DECAL = 4 };
+/// MATERIAL_HOUSE: cut from a retail HOUSECOLOR mesh, drawn in the colour the model's own house mesh wears.
+enum { MATERIAL_INNER = 1, MATERIAL_ALPHA_TEST = 2, MATERIAL_DECAL = 4, MATERIAL_HOUSE = 8 };
 enum { FRAGMENT_GROUND = 1 };
 enum { COLLAPSE_STAYS = 1, COLLAPSE_KICKED = 2 };
 

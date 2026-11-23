@@ -1725,6 +1725,7 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	TheUnicodeStringCriticalSection = NULL;
 	TheDmaCriticalSection = NULL;
 	TheMemoryPoolCriticalSection = NULL;
+	TheDebugLogCriticalSection = NULL;	// critSec5 is a static: gone after this return, while exit can still log
 
 	return 0;
 

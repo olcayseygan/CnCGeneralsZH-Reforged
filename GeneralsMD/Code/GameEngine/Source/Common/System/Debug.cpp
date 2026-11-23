@@ -768,6 +768,14 @@ void DebugCrash(const char *format, ...)
 */
 void DebugShutdown()
 {
+#if defined(_WIN32) && defined(_DEBUG)
+	/* The CRT's leak dump runs after the atexit table and the static destructors, and every line of it
+		 came here: into DebugLog through the critical section WinMain's statics had already destroyed,
+		 then a stack dump that set the symbol handler up again after its own teardown.  A Debug run
+		 died on the way out with 0xC0000005 and no log.  Past this point the CRT reports as it would
+		 with no hook, to the debugger's output. */
+	_CrtSetReportHook2(_CRT_RPTHOOK_REMOVE, unattendedCrtReport);
+#endif
 #ifdef DEBUG_LOGGING
 	if (theLogFile)
 	{

@@ -1,0 +1,40 @@
+# A GLA Command Center holed and then mended: glahqfall's seat 0 puts its two Nuke Cannons, two
+# Tomahawks and four Overlords east of seat 1's Command Center (1733,4205 on Twilight Flame) and
+# shells it to about half health, then hands all eight to seat 1, so the shelling stops (the rounds
+# already in the air still land), and the Command Center's health is
+# set back up to 70, 85 and 100 percent. The fragments come back as the health rises, the last one
+# knocked out first, and at full health it stands whole. A drawn run: the FRACTURE HIT and FRACTURE
+# REPAIR lines are the text of it, the last REPAIR line reading 0 still out at health 100%.
+#
+#   generals.exe -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionGLA -seed 1 -camera 1733 4205
+#     -scenario glahqrepair -maxframes 500 -logPrefix glahqrepair_
+#
+# health and handover act outside the command stream, so a replay of the run does not hold them.
+# Frames here are this file's 30 a game second; the log's logic frames are two thirds of them at 1.5x.
+
+30    spawn     1  GLABarracks                1  2100  3850
+30    spawn     0  ChinaVehicleNukeLauncher   2  2080  4040  180
+30    spawn     0  AmericaVehicleTomahawk     2  2080  4300  180
+30    spawn     0  ChinaTankOverlord          4  1980  4150  180
+60    attack    0  ChinaVehicleNukeLauncher   1  GLACommandCenter
+60    attack    0  AmericaVehicleTomahawk     1  GLACommandCenter
+60    attack    0  ChinaTankOverlord          1  GLACommandCenter
+300   tally     1  GLACommandCenter
+330   handover  0  ChinaVehicleNukeLauncher   1733  4205  1
+330   handover  0  ChinaVehicleNukeLauncher   1733  4205  1
+330   handover  0  AmericaVehicleTomahawk     1733  4205  1
+330   handover  0  AmericaVehicleTomahawk     1733  4205  1
+330   handover  0  ChinaTankOverlord          1733  4205  1
+330   handover  0  ChinaTankOverlord          1733  4205  1
+330   handover  0  ChinaTankOverlord          1733  4205  1
+330   handover  0  ChinaTankOverlord          1733  4205  1
+420   tally     1  GLACommandCenter
+450   health    1  GLACommandCenter           70
+480   tally     1  GLACommandCenter
+510   health    1  GLACommandCenter           85
+540   tally     1  GLACommandCenter
+570   health    1  GLACommandCenter           100
+600   tally     1  GLACommandCenter
+720   tally     1  GLACommandCenter

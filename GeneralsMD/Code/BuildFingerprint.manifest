@@ -12,6 +12,7 @@ Data/Art/Textures/LWFort_LeadD.tga
 Data/Art/Textures/LWFort_Rubble.tga
 Data/Art/Textures/LWFort_Stone.tga
 Data/Art/Textures/LWFort_StoneD.tga
+Data/Art/Textures/LWFrag_InnerAdobe.tga
 Data/Art/Textures/LWFrag_InnerConcrete.tga
 Data/Art/Textures/LWFrag_InnerPlate.tga
 Data/Art/Textures/LWFrag_InnerSand.tga
@@ -1398,6 +1399,7 @@ Data/Scenarios/foreign_snipe.txt
 Data/Scenarios/fortressair.txt
 Data/Scenarios/fortressattack.txt
 Data/Scenarios/fortressfall.txt
+Data/Scenarios/fortressrepair.txt
 Data/Scenarios/gate60hz.txt
 Data/Scenarios/geproto_alpine.txt
 Data/Scenarios/geproto_fogedge.txt
@@ -1406,6 +1408,8 @@ Data/Scenarios/geproto_hazefog.txt
 Data/Scenarios/geproto_oasis.txt
 Data/Scenarios/givemoney.txt
 Data/Scenarios/glahqfall.txt
+Data/Scenarios/glahqfour.txt
+Data/Scenarios/glahqrepair.txt
 Data/Scenarios/glowbase.txt
 Data/Scenarios/glowfight.txt
 Data/Scenarios/glowmicrowave.txt

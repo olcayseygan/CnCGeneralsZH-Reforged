@@ -2250,10 +2250,53 @@ static void updateLaneMarches( UnsignedInt now )
 	}
 }
 
+/** health's work on one object: the rank first, since a rank's health bonus moves the maximum the
+	  share is taken of, then the share. */
+static void setScenarioHealth( const ScenarioAction &action, Object *obj )
+{
+	BodyModuleInterface *body = obj->getBodyModule();
+	if (body == NULL)
+		return;
+	if (action.targetSlot >= 0 && obj->getExperienceTracker())
+		obj->getExperienceTracker()->setVeterancyLevel( (VeterancyLevel)action.targetSlot, FALSE );
+	body->internalChangeHealth( body->getMaxHealth() * action.count / 100.0f - body->getHealth() );
+	DEBUG_LOG(("SCENARIO: frame %d health slot %d '%s' %d rank %d: %.0f of %.0f\n", action.frame, action.slot,
+						 obj->getTemplate()->getName().str(), obj->getID(), (Int)obj->getVeterancyLevel(), body->getHealth(), body->getMaxHealth()));
+}
+
+/** health on what takes no order (a Command Center, a wall: no AI, so no group can hold it), set here
+	  before the group is gathered.  TRUE when nothing that does take orders matches, so no group is
+	  made: a match with orderable units makes the same group it always did. */
+static Bool setHealthOfStructures( const ScenarioAction &action, Player *player, Int *set )
+{
+	Bool orderable = FALSE;
+	*set = 0;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if (obj->getControllingPlayer() != player || obj->isEffectivelyDead() || !selectorMatches( action.selector, obj ))
+			continue;
+		if (obj->getAIUpdateInterface() != NULL)
+		{
+			orderable = TRUE;
+			continue;
+		}
+		setScenarioHealth( action, obj );
+		++*set;
+	}
+	return !orderable;
+}
+
 static Bool executeOrder( const ScenarioAction &action, Player *player, const Coord3D &dest )
 {
 	if (action.action == SCENARIO_ACTION_SHIFTUPGRADE)
 		return executeShiftUpgrade( action, player );
+	Int structures = 0;
+	if (action.action == SCENARIO_ACTION_HEALTH && setHealthOfStructures( action, player, &structures ))
+	{
+		if (structures == 0)
+			DEBUG_LOG(("SCENARIO: frame %d: slot %d owns nothing matching '%s'\n", action.frame, action.slot, action.selector.str()));
+		return structures > 0;
+	}
 
 	AIGroup *group = TheAI->createGroup();
 	const Int taken = gatherIntoGroup( player, action.selector, group );
@@ -2422,19 +2465,12 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 
 		case SCENARIO_ACTION_HEALTH:
 		{
-			// the rank first: a rank's health bonus moves the maximum the share is taken of
 			const VecObjectID &ids = group->getAllIDs();
 			for (VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it)
 			{
 				Object *obj = TheGameLogic->findObjectByID( *it );
-				BodyModuleInterface *body = obj ? obj->getBodyModule() : NULL;
-				if (body == NULL)
-					continue;
-				if (action.targetSlot >= 0 && obj->getExperienceTracker())
-					obj->getExperienceTracker()->setVeterancyLevel( (VeterancyLevel)action.targetSlot, FALSE );
-				body->internalChangeHealth( body->getMaxHealth() * action.count / 100.0f - body->getHealth() );
-				DEBUG_LOG(("SCENARIO: frame %d health slot %d '%s' %d rank %d: %.0f of %.0f\n", action.frame, action.slot,
-									 obj->getTemplate()->getName().str(), obj->getID(), (Int)obj->getVeterancyLevel(), body->getHealth(), body->getMaxHealth()));
+				if (obj)
+					setScenarioHealth( action, obj );
 			}
 			break;
 		}

@@ -2596,6 +2596,7 @@ static void takeReadsForRender( Bool renders )
 		draw->takeLookForDraw();
 	}
 	W3DControlBar_takeReadsForRender();
+	W3DFractureDraw::takeReadsForRender();		// a repaired structure's health, before the fragments step
 	if( !renders || TheGlobalData->m_breakTheMovie || TheGlobalData->m_disableRender )
 		return;
 	// the mobs' members for their health bars and selection rings, at the positions they are shown

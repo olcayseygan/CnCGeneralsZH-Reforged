@@ -193,10 +193,11 @@ class ArchiveFileSystem : public SubsystemInterface
 	static Bool		isReforgedBaseArt(const AsciiString& path);
 	/// Whether this Reforged*.big mounts under these Options: Classic Graphics shuts them all, HD Textures
 	/// off the base art and Detailed Models off the batches, except ReforgedSkins.big, the online skins'
-	/// sheets for both looks, which every setting mounts.
+	/// sheets for both looks, and ReforgedFracture.big, the structures' fracture sets, which every
+	/// setting mounts.
 	static Bool		reforgedArchiveWanted(const AsciiString& path, Bool classicGraphics, Bool hdTextures, Bool detailedModels);
 	/// One of the archives the fork ships, the names the launcher's payload carries: ReforgedSkins,
-	/// ReforgedUSA, ReforgedChina, ReforgedGLA, ReforgedTurkiye, ReforgedNeutral<letter>, ReforgedTextures
+	/// ReforgedFracture, ReforgedUSA, ReforgedChina, ReforgedGLA, ReforgedTurkiye, ReforgedNeutral<letter>, ReforgedTextures
 	/// and ReforgedTerrain.  Any other Reforged*.big goes into the tree nowhere, since one mounts over retail.
 	static Bool		isForkArchive(const AsciiString& path);
 

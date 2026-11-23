@@ -169,8 +169,11 @@ Bool ArchiveFileSystem::isReforgedBaseArt(const AsciiString& path)
 Bool ArchiveFileSystem::reforgedArchiveWanted(const AsciiString& path, Bool classicGraphics, Bool hdTextures, Bool detailedModels)
 {
 	// the online skins' sheets: no model and no retail name, a Classic and a Reforged copy of each, so
-	// every look wants them and a sheet the models do not ask for is never read
-	if (strcasecmp(archiveBaseName(path), "ReforgedSkins.big") == 0) {
+	// every look wants them and a sheet the models do not ask for is never read.  The same for the
+	// fracture sets cut from retail models and from the rebuilt ones (W3DFractureDraw picks the set of
+	// the model it draws), which cannot ship in the public source
+	const char *name = archiveBaseName(path);
+	if (strcasecmp(name, "ReforgedSkins.big") == 0 || strcasecmp(name, "ReforgedFracture.big") == 0) {
 		return TRUE;
 	}
 	return !classicGraphics && (isReforgedBaseArt(path) ? hdTextures : detailedModels);
@@ -178,8 +181,8 @@ Bool ArchiveFileSystem::reforgedArchiveWanted(const AsciiString& path, Bool clas
 
 Bool ArchiveFileSystem::isForkArchive(const AsciiString& path)
 {
-	static const char *const named[] = { "ReforgedSkins.big", "ReforgedUSA.big", "ReforgedChina.big", "ReforgedGLA.big",
-		"ReforgedTurkiye.big", "ReforgedTextures.big", "ReforgedTerrain.big" };
+	static const char *const named[] = { "ReforgedSkins.big", "ReforgedFracture.big", "ReforgedUSA.big", "ReforgedChina.big",
+		"ReforgedGLA.big", "ReforgedTurkiye.big", "ReforgedTextures.big", "ReforgedTerrain.big" };
 	const char *name = archiveBaseName(path);
 	for (Int i = 0; i < (Int)(sizeof(named) / sizeof(named[0])); ++i) {
 		if (strcasecmp(name, named[i]) == 0) {

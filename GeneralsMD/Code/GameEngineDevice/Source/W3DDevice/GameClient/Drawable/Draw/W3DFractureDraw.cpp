@@ -28,6 +28,7 @@
 // of its own and drawn like the standing structure.  Every draw goes through DX8Wrapper, which
 // reaches both the Direct3D 11 frame and -d3d9.
 
+#include "Common/ArchiveFileSystem.h"
 #include "Common/FileSystem.h"
 #include "Common/File.h"
 #include "Common/GameCommon.h"
@@ -54,6 +55,7 @@
 #include "WW3D2/dx8indexbuffer.h"
 #include "WW3D2/dx8vertexbuffer.h"
 #include "WW3D2/dx8wrapper.h"
+#include "WW3D2/hlod.h"
 #include "WW3D2/matinfo.h"
 #include "WW3D2/matpass.h"
 #include "WW3D2/rendobj.h"
@@ -63,9 +65,12 @@
 #include "WW3D2/vertmaterial.h"
 #include "WW3D2/w3d_file.h"
 #include "WW3D2/w3d_util.h"
+#include "WW3D2/ww3d.h"
 #include "WWMath/colmath.h"
 #include "WWMath/lineseg.h"
 #include "WWMath/quat.h"
+
+#include <chrono>
 
 namespace {
 
@@ -80,6 +85,14 @@ const Real DEBRIS_LIES = 6.0f;			// game seconds a knocked out fragment lies bef
 const Real DEBRIS_SINKS = 1.5f;
 const Real FALL_SECONDS = 8.0f;			// a plain collapse is over by then, settled or not; a baked one that long past its track
 const Real COLLAPSE_DELAY = 0.5f;		// game seconds the structure stands after the death, so the death flash's glare has passed
+const Real PLAIN_FALL_DELAY = 0.1f;	// a plain fall's: at 0.5 the GLA Command Center read late, the object already gone
+const Real PLAIN_FALL_INWARD = 5.0f;	// units a game second at most a plain fall's piece goes in toward the middle: walls onto their stumps
+const Real PLAIN_FALL_SCATTER = 1.5f;	// and at most sideways at random
+const Real PLAIN_FALL_DROP = 4.0f;		// and at most downward, so it is moving at the first frame
+const Real SINKER_LIES = 0.3f;				// game seconds a FRAGMENT_SINKS piece lies once down before it goes into the ground
+const Real REPAIR_MARGIN = 0.05f;			// of health over its level when a fragment went before it comes back
+const Real REPAIR_WHOLE = 0.001f;			// of health lost at most: full health, every fragment back
+const Int REPAIR_PUFFS = 6;						// dust puffs at most for the fragments one repair step brings back
 const Real DROP_GAP = 1.5f;					// a piece of the ruin with more air than this under its box falls the rest of the way
 const Real SUPPORT_INSET = 0.5f;			// how far two boxes have to overlap across before one holds the other up
 const Real NO_REST_Z = -1e30f;
@@ -148,6 +161,18 @@ struct Shared
 };
 
 std::vector<Shared *> s_shared;
+
+/// The FRACTURE COST line's counter: CPU time in the steps, the draws and the shadow casts.
+const UnsignedInt COST_REPORT_MS = 1000;
+double s_costUs = 0.0;
+UnsignedInt s_costReportStart = 0;
+
+struct CostTimer
+{
+	std::chrono::steady_clock::time_point started;
+	CostTimer() : started( std::chrono::steady_clock::now() ) { }
+	~CostTimer() { s_costUs += std::chrono::duration<double, std::micro>( std::chrono::steady_clock::now() - started ).count(); }
+};
 
 /// Every buffer and texture of the files no structure draws from any more.
 void freeUnusedShared( void )
@@ -271,17 +296,32 @@ TextureClass *damagedTexture( const char *name )
 	return WW3DAssetManager::Get_Instance()->Get_Texture( damaged.str() );
 }
 
+/** The fragments cut from the model the file system serves.  A Reforged batch's rebuilt model (Detailed
+	Models on) has its own set, <name>_Detailed.lwfrag, so its first hit does not swap it for retail's
+	pieces; without one, or with the retail model, <name>.lwfrag. */
+AsciiString fractureFile( const AsciiString &name )
+{
+	AsciiString model, detailed, path;
+	model.format( "Art\\W3D\\%s.w3d", name.str() );
+	detailed.format( "%s_Detailed", name.str() );
+	path.format( "Art/W3D/%s.lwfrag", detailed.str() );
+	const Bool rebuilt = TheArchiveFileSystem != NULL
+		&& TheArchiveFileSystem->getArchiveFilenameForFile( model ) != TheArchiveFileSystem->getRetailArchiveFilenameForFile( model );
+	return rebuilt && TheFileSystem->doesFileExist( path.str() ) ? detailed : name;
+}
+
 Bool load( Shared &s )
 {
 	std::vector<unsigned char> bytes;
-	if( !readFile( s.name, ".lwfrag", bytes ) || !Fracture::parse( &bytes[0], bytes.size(), s.asset ) )
+	const AsciiString file = fractureFile( s.name );
+	if( !readFile( file, ".lwfrag", bytes ) || !Fracture::parse( &bytes[0], bytes.size(), s.asset ) )
 	{
-		DEBUG_LOG( ( "FRACTURE: Art/W3D/%s.lwfrag missing or unreadable\n", s.name.str() ) );
+		DEBUG_LOG( ( "FRACTURE: Art/W3D/%s.lwfrag missing or unreadable\n", file.str() ) );
 		return FALSE;
 	}
 	const Fracture::Asset &a = s.asset;
-	if( readFile( s.name, ".lwcollapse", bytes ) && !Fracture::parseCollapses( &bytes[0], bytes.size(), a.fragments.size(), s.collapses ) )
-		DEBUG_LOG( ( "FRACTURE: Art/W3D/%s.lwcollapse does not fit its .lwfrag, a plain fall instead\n", s.name.str() ) );
+	if( readFile( file, ".lwcollapse", bytes ) && !Fracture::parseCollapses( &bytes[0], bytes.size(), a.fragments.size(), s.collapses ) )
+		DEBUG_LOG( ( "FRACTURE: Art/W3D/%s.lwcollapse does not fit its .lwfrag, a plain fall instead\n", file.str() ) );
 
 	// the bone each fragment's mesh hangs on, by the cut model's mesh order, and that bone's built pose
 	std::vector<AsciiString> parts;
@@ -397,8 +437,8 @@ Bool load( Shared &s )
 	}
 	s.material = NEW_REF( VertexMaterialClass, () );		// the art's "default": white ambient and diffuse, lit
 	s.material->Set_Lighting( true );
-	DEBUG_LOG( ( "FRACTURE: %s, %d fragments in %d chunks, %d bones, collapse baked %d ways (none: a plain fall)\n", s.name.str(),
-		(Int)count, (Int)s.chunks.size(), (Int)s.boneNames.size(), (Int)s.collapses.size() ) );
+	DEBUG_LOG( ( "FRACTURE: %s from %s.lwfrag, %d fragments in %d chunks, %d bones, collapse baked %d ways (none: a plain fall)\n", s.name.str(),
+		file.str(), (Int)count, (Int)s.chunks.size(), (Int)s.boneNames.size(), (Int)s.collapses.size() ) );
 	return TRUE;
 }
 
@@ -472,7 +512,14 @@ public:
 	/// What a save keeps: the fragments standing, or at the death those that stood, and the way it fell.
 	const std::vector<unsigned char> &standingSet( void ) const { return m_collapsing ? m_present : m_standing; }
 	Int collapseWay( void ) const { return m_collapse ? m_way : -1; }
-	void restore( const std::vector<unsigned char> &standing, Int way );		///< a load's, before anything moves
+	/// And the knocked out fragments in the order they went, each with the share of health lost then.
+	const std::vector<unsigned> &knockedFragments( void ) const { return m_knocked; }
+	const std::vector<Real> &knockedAt( void ) const { return m_knockedAt; }
+	/// A load's, before anything moves; knocked and knockedAt as saved (empty from a version 2 save).
+	void restore( const std::vector<unsigned char> &standing, Int way, const std::vector<unsigned> &knocked,
+		const std::vector<Real> &knockedAt );
+	/// Health back (a Worker's repair, a heal): the fragments come back, the last knocked out first.
+	void repair( void );
 	/** Its drawable is going while it falls (DestroyDie, the GLA Command Center): it lets go of it and
 		finishes the fall on its own, nothing to pick, then its ruin lies a while and sinks away. */
 	void orphan( void );
@@ -490,6 +537,7 @@ private:
 		Real restedAt;					///< -1 while it moves
 		Bool track;							///< follows the baked collapse
 		Bool fromHit;						///< knocked out: lies a while and goes
+		Bool sinks;							///< FRAGMENT_SINKS in a plain fall: lies SINKER_LIES, as fromHit otherwise
 		Bool landed;
 		Vector3 offset;					///< a gun's turn at the death, folded into the bake
 		Matrix3x3 turn;
@@ -530,6 +578,8 @@ private:
 	std::vector<Matrix3D> m_slotWorld;
 	Matrix3D m_root;
 	std::vector<unsigned char> m_standing, m_kept, m_present;
+	std::vector<unsigned> m_knocked;			///< knocked out by hits, in order; a repair takes them back from the end
+	std::vector<Real> m_knockedAt;				///< per knocked: the share of health lost when it went
 	std::vector<DX8IndexBufferClass *> m_standingIndices;		///< per chunk
 	std::vector<DX8VertexBufferClass *> m_ruinVertices;			///< per chunk, once baked
 	std::vector<Matrix3D> m_ruinPose;												///< per fragment, once baked: where it lies, model space
@@ -582,7 +632,8 @@ FractureRenderObjClass::~FractureRenderObjClass()
 }
 
 //-------------------------------------------------------------------------------------------------
-void FractureRenderObjClass::restore( const std::vector<unsigned char> &standing, Int way )
+void FractureRenderObjClass::restore( const std::vector<unsigned char> &standing, Int way, const std::vector<unsigned> &knocked,
+	const std::vector<Real> &knockedAt )
 {
 	const Fracture::Asset &a = m_shared->asset;
 	if( m_collapsing || standing.size() != a.fragments.size() )
@@ -595,7 +646,63 @@ void FractureRenderObjClass::restore( const std::vector<unsigned char> &standing
 		if( !m_standing[i] )
 			m_removedVolume += a.fragments[i].volume;
 	}
+	m_knocked.clear();
+	m_knockedAt.clear();
+	for( size_t k = 0; k < knocked.size() && k < knockedAt.size(); ++k )
+	{
+		if( knocked[k] < m_standing.size() && !m_standing[knocked[k]] )
+		{
+			m_knocked.push_back( knocked[k] );
+			m_knockedAt.push_back( knockedAt[k] );
+		}
+	}
 	m_dirty = TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The share standing follows the share of health on the way up as it did on the way down: a fragment
+	comes back once the health is REPAIR_MARGIN over what it was when the fragment went, the last one
+	out first, and every one at full health, so a repaired structure stands whole.  The margin keeps
+	the slow heal of a GLA building under fire from shutting each hole the frame after it opened.
+	Each comes back in place, its debris gone, with a puff. */
+//-------------------------------------------------------------------------------------------------
+void FractureRenderObjClass::repair( void )
+{
+	if( m_collapsing || m_drawable == NULL || m_knocked.empty() )
+		return;
+	const Object *obj = m_drawable->getObject();
+	const BodyModuleInterface *body = obj ? obj->getBodyModule() : NULL;
+	if( body == NULL || obj->isEffectivelyDead() || body->getMaxHealth() <= 0.0f )
+		return;
+	const Real lost = WWMath::Clamp( 1.0f - body->getHealth() / body->getMaxHealth(), 0.0f, 1.0f );
+	const Fracture::Asset &a = m_shared->asset;
+	const Bool whole = lost <= REPAIR_WHOLE;
+	Int back = 0;
+	computeSlots();
+	while( !m_knocked.empty() && ( whole || m_knockedAt.back() > lost + REPAIR_MARGIN ) )
+	{
+		const unsigned fragment = m_knocked.back();
+		m_knocked.pop_back();
+		m_knockedAt.pop_back();
+		m_standing[fragment] = 1;
+		m_removedVolume = std::max( 0.0f, m_removedVolume - a.fragments[fragment].volume );
+		size_t kept = 0;
+		for( size_t k = 0; k < m_moving.size(); ++k )
+			if( !( m_moving[k].fromHit && m_moving[k].fragment == fragment ) )
+				m_moving[kept++] = m_moving[k];
+		m_moving.resize( kept );
+		if( back < REPAIR_PUFFS )
+		{
+			const Fracture::Fragment &f = a.fragments[fragment];
+			m_dust.push_back( fragmentWorld( fragment ) * Vector3( f.centroid[0], f.centroid[1], f.centroid[2] ) );
+		}
+		++back;
+	}
+	if( back == 0 )
+		return;
+	m_dirty = TRUE;
+	DEBUG_LOG( ( "FRACTURE REPAIR %s frame %d: %d back, %d still out, %.0f%% of the volume gone, health %.0f%%\n", m_shared->name.str(),
+		(Int)TheGameLogic->getFrame(), back, (Int)m_knocked.size(), 100.0f * m_removedVolume / a.volume, 100.0f * ( 1.0f - lost ) ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -619,6 +726,7 @@ FractureRenderObjClass::Moving FractureRenderObjClass::still( unsigned fragment,
 	m.restedAt = -1.0f;
 	m.track = FALSE;
 	m.fromHit = FALSE;
+	m.sinks = FALSE;
 	m.landed = FALSE;
 	m.offset.Set( 0, 0, 0 );
 	m.turn.Make_Identity();
@@ -808,13 +916,21 @@ void FractureRenderObjClass::hit( const Coord3D &pos, Real radius )
 	for( size_t i = 0; i < out.size(); ++i )
 	{
 		m_removedVolume += a.fragments[out[i]].volume;
+		m_knocked.push_back( out[i] );
+		m_knockedAt.push_back( lost );
 		launch( out[i], from );
 	}
 	if( !out.empty() )
 		m_dirty = TRUE;
-	DEBUG_LOG( ( "FRACTURE HIT %s frame %d at %.0f %.0f %.0f radius %.0f hole %.1f: %d out, %.0f%% of the volume gone, health %.0f%%\n",
+	Int drawn = 0;
+	for( size_t i = 0; i < m_standing.size(); ++i )
+		if( m_standing[i] )
+			drawn += (Int)a.fragments[i].triangles;
+	for( size_t k = 0; k < m_moving.size(); ++k )
+		drawn += (Int)a.fragments[m_moving[k].fragment].triangles;
+	DEBUG_LOG( ( "FRACTURE HIT %s frame %d at %.0f %.0f %.0f radius %.0f hole %.1f: %d out, %.0f%% of the volume gone, health %.0f%%, %d triangles drawn\n",
 		m_shared->name.str(), (Int)TheGameLogic->getFrame(), local.X, local.Y, local.Z, radius, hole, (Int)out.size(),
-		100.0f * m_removedVolume / a.volume, 100.0f * ( 1.0f - lost ) ) );
+		100.0f * m_removedVolume / a.volume, 100.0f * ( 1.0f - lost ), drawn ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -827,7 +943,7 @@ void FractureRenderObjClass::collapse( Bool over )
 		return;
 	m_collapsing = TRUE;
 	m_now = gameSeconds();
-	m_deathTime = m_now + COLLAPSE_DELAY;
+	m_deathTime = m_now + ( m_shared->collapses.empty() ? PLAIN_FALL_DELAY : COLLAPSE_DELAY );
 	if( over )
 	{
 		// a load of a ruin: the fall is past its end at the first step, and raises no dust
@@ -888,13 +1004,26 @@ void FractureRenderObjClass::collapse( Bool over )
 				pileOn( (unsigned)i, m.pos );
 				continue;
 			}
+			// down onto the stumps and a little in, not out: thrown out at 0.6 of its distance from the
+			// middle the Command Center's walls landed one and a half widths away, an explosion's spread
 			m.track = FALSE;
-			Vector3 out = m.pos - m_root.Get_Translation();
-			out.Z = 0.0f;
-			m.velocity = out * 0.6f + Vector3( GameClientRandomValueReal( -4.0f, 4.0f ), GameClientRandomValueReal( -4.0f, 4.0f ),
-				GameClientRandomValueReal( 0.0f, 6.0f ) );
-			m.spin = randomAxis() * GameClientRandomValueReal( 0.5f, 3.0f );
-			m.start = m_deathTime + GameClientRandomValueReal( 0.0f, 0.3f ) + 0.25f * ( f.centroid[2] / top );
+			Vector3 in = m_root.Get_Translation() - m.pos;
+			in.Z = 0.0f;
+			if( in.Length2() > 1e-4f )
+				in.Normalize();
+			m.velocity = in * GameClientRandomValueReal( 0.0f, PLAIN_FALL_INWARD )
+				+ Vector3( GameClientRandomValueReal( -PLAIN_FALL_SCATTER, PLAIN_FALL_SCATTER ),
+					GameClientRandomValueReal( -PLAIN_FALL_SCATTER, PLAIN_FALL_SCATTER ), -GameClientRandomValueReal( 0.0f, PLAIN_FALL_DROP ) );
+			m.spin = randomAxis() * GameClientRandomValueReal( 0.2f, 1.0f );
+			m.start = m_deathTime + GameClientRandomValueReal( 0.0f, 0.1f ) + 0.1f * ( f.centroid[2] / top );
+			if( f.flags & Fracture::FRAGMENT_SINKS )
+			{
+				// straight down with the rest, and into the ground once there, never lying on the ruin
+				m.fromHit = TRUE;
+				m.sinks = TRUE;
+				m.spin.Set( 0, 0, 0 );
+				m_present[i] = 0;
+			}
 		}
 		m_standing[i] = 0;
 		m_moving.push_back( m );
@@ -1162,10 +1291,11 @@ void FractureRenderObjClass::step( Real now )
 	for( size_t i = 0; i < m_moving.size(); ++i )
 	{
 		Moving &m = m_moving[i];
-		if( m.fromHit && m.restedAt >= 0.0f && now - m.restedAt > DEBRIS_LIES )
+		const Real lies = m.sinks ? SINKER_LIES : DEBRIS_LIES;
+		if( m.fromHit && m.restedAt >= 0.0f && now - m.restedAt > lies )
 		{
 			const Fracture::Fragment &f = m_shared->asset.fragments[m.fragment];
-			const Real sunk = ( now - m.restedAt - DEBRIS_LIES ) / DEBRIS_SINKS;
+			const Real sunk = ( now - m.restedAt - lies ) / DEBRIS_SINKS;
 			if( sunk >= 1.0f )
 				continue;
 			m.pos.Z -= ( f.boxMax[2] - f.boxMin[2] + 1.0f ) * elapsed / DEBRIS_SINKS;
@@ -1267,6 +1397,22 @@ void FractureRenderObjClass::bakeRuin( void )
 	}
 	m_moving.resize( kept );
 	m_ruinPose = local;
+	// how far the ruin spread, centroids out from the middle, against the standing structure's
+	std::vector<Real> lies;
+	Real stood = 0.0f;
+	for( size_t i = 0; i < a.fragments.size(); ++i )
+	{
+		if( !m_present[i] )
+			continue;
+		const Fracture::Fragment &f = a.fragments[i];
+		const Vector3 c = local[i] * Vector3( f.centroid[0], f.centroid[1], f.centroid[2] );
+		lies.push_back( sqrtf( c.X * c.X + c.Y * c.Y ) );
+		stood = std::max( stood, sqrtf( f.centroid[0] * f.centroid[0] + f.centroid[1] * f.centroid[1] ) );
+	}
+	std::sort( lies.begin(), lies.end() );
+	if( !lies.empty() )
+		DEBUG_LOG( ( "FRACTURE RUIN %s frame %d: %d pieces lie within %.1f of the middle, 95%% within %.1f; standing, within %.1f\n",
+			m_shared->name.str(), (Int)TheGameLogic->getFrame(), (Int)lies.size(), lies.back(), lies[( lies.size() * 95 ) / 100], stood ) );
 	for( size_t c = 0; c < m_shared->chunks.size(); ++c )
 	{
 		DX8VertexBufferClass *vb = NEW_REF( DX8VertexBufferClass, ( DX8_FVF_XYZNUV1, (unsigned short)m_shared->chunks[c].vertexCount ) );
@@ -1316,8 +1462,8 @@ void FractureRenderObjClass::beforeRender( void )
 //-------------------------------------------------------------------------------------------------
 void FractureRenderObjClass::tick( void )
 {
-	if( m_moving.empty() && ( !m_collapsing || m_ruin ) )
-		return;		// nothing moves
+	if( m_moving.empty() && m_dust.empty() && ( !m_collapsing || m_ruin ) )
+		return;		// nothing moves, and no repair's dust to raise
 	step( gameSeconds() );
 	if( m_settled && !m_ruin )
 		bakeRuin();
@@ -1438,6 +1584,7 @@ void FractureRenderObjClass::Render( RenderInfoClass &rinfo )
 {
 	// the scene leaves out a drawable the shroud fully hides (its ghost draws the model as last seen)
 	// and shades a fogged one with its shroud pass, so the fragments are shown exactly as the model was
+	const CostTimer timer;
 	step( gameSeconds() );		// between ticks, so the fall is as smooth as the frame
 	if( m_dirty )
 		rebuild();		// a hit after the last draw module pass: the model is hidden already
@@ -1485,6 +1632,7 @@ void FractureRenderObjClass::renderCaster( RenderInfoClass &sunInfo )
 {
 	if( !Is_In_Scene() || ( m_drawable && m_drawable->isDrawableEffectivelyHidden() ) )
 		return;		// an orphan (no drawable) casts while it lies
+	const CostTimer timer;
 	// a building in the fog keeps its shadow under its ghost, by the model's own rule
 	const W3DModelDraw *modelDraw = m_drawable ? modelDrawOf( m_drawable ) : NULL;
 	if( modelDraw && modelDraw->isShadowHiddenByShroud() )
@@ -1569,12 +1717,14 @@ void W3DFractureDraw::doDrawModule( const Matrix3D *transformMtx )
 	{
 		// a load's holes, or dead without a hit that reached the client (a map that starts with it in
 		// ruins, a kill with no blast): a fall the client saw before a load is over, any other plays
-		m_fracture->restore( m_loadedStanding, m_loadedWay );
+		m_fracture->restore( m_loadedStanding, m_loadedWay, m_loadedKnocked, m_loadedKnockedAt );
 		if( rubble )
 			m_fracture->collapse( m_loaded );
 	}
 	m_loadedStanding.clear();
 	m_loadedWay = -1;
+	m_loadedKnocked.clear();
+	m_loadedKnockedAt.clear();
 	if( m_fracture == NULL )
 		return;
 	m_fracture->follow( modelOf( draw ) );
@@ -1605,6 +1755,11 @@ Bool W3DFractureDraw::makeFracture( void )
 		return FALSE;
 	m_fracture = NEW_REF( FractureRenderObjClass, ( shared, getDrawable(), getW3DFractureDrawModuleData()->m_gunBones ) );
 	m_fracture->follow( model );
+	// what the swap trades: the fragments have one level, the model may have been drawing a coarser one
+	const Bool levels = model->Class_ID() == RenderObjClass::CLASSID_HLOD;
+	DEBUG_LOG( ( "FRACTURE TAKES OVER %s frame %d: the model drew level %d of %d, %d triangles; the fragments draw %d\n",
+		shared->name.str(), (Int)TheGameLogic->getFrame(), levels ? ( (HLodClass *)model )->Get_LOD_Level() + 1 : 1,
+		levels ? ( (HLodClass *)model )->Get_LOD_Count() : 1, model->Get_Num_Polys(), (Int)shared->asset.triangles.size() ) );
 	W3DDisplay::m_3DScene->Add_Render_Object( m_fracture );
 	s_modules.push_back( this );
 	return TRUE;
@@ -1626,9 +1781,11 @@ void W3DFractureDraw::reactToImpact( const Coord3D &pos, Real radius, const Coor
 		return;
 	if( !m_loadedStanding.empty() )
 	{
-		m_fracture->restore( m_loadedStanding, m_loadedWay );		// a hit before the first picture after a load
+		m_fracture->restore( m_loadedStanding, m_loadedWay, m_loadedKnocked, m_loadedKnockedAt );		// a hit before the first picture after a load
 		m_loadedStanding.clear();
 		m_loadedWay = -1;
+		m_loadedKnocked.clear();
+		m_loadedKnockedAt.clear();
 	}
 	if( source )
 		m_fracture->heardFrom( *source );
@@ -1645,22 +1802,46 @@ void W3DFractureDraw::reactToImpact( const Coord3D &pos, Real radius, const Coor
 //-------------------------------------------------------------------------------------------------
 void W3DFractureDraw::updateAll( void )
 {
+	{
+		const CostTimer timer;
+		for( size_t i = 0; i < s_modules.size(); ++i )
+			if( s_modules[i]->m_fracture )
+				s_modules[i]->m_fracture->tick();
+		size_t kept = 0;
+		for( size_t i = 0; i < s_orphans.size(); ++i )
+		{
+			FractureRenderObjClass *orphan = s_orphans[i];
+			if( orphan->orphanTick() )
+			{
+				s_orphans[kept++] = orphan;
+				continue;
+			}
+			orphan->Remove();
+			REF_PTR_RELEASE( orphan );
+		}
+		s_orphans.resize( kept );
+	}
+	// once a second while any structure shows its fragments: what they cost the CPU
+	const UnsignedInt now = WW3D::Get_Sync_Time();
+	if( now - s_costReportStart < COST_REPORT_MS )
+		return;
+	Int falling = (Int)s_orphans.size();
+	for( size_t i = 0; i < s_modules.size(); ++i )
+		if( s_modules[i]->m_fracture && s_modules[i]->m_fracture->isCollapsing() )
+			++falling;
+	if( !s_modules.empty() || !s_orphans.empty() )
+		DEBUG_LOG( ( "FRACTURE COST frame %d: %d structures in fragments, %d of them fallen, %.2f ms of CPU in %u ms\n",
+			(Int)TheGameLogic->getFrame(), (Int)( s_modules.size() + s_orphans.size() ), falling, s_costUs / 1000.0, now - s_costReportStart ) );
+	s_costUs = 0.0;
+	s_costReportStart = now;
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DFractureDraw::takeReadsForRender( void )
+{
 	for( size_t i = 0; i < s_modules.size(); ++i )
 		if( s_modules[i]->m_fracture )
-			s_modules[i]->m_fracture->tick();
-	size_t kept = 0;
-	for( size_t i = 0; i < s_orphans.size(); ++i )
-	{
-		FractureRenderObjClass *orphan = s_orphans[i];
-		if( orphan->orphanTick() )
-		{
-			s_orphans[kept++] = orphan;
-			continue;
-		}
-		orphan->Remove();
-		REF_PTR_RELEASE( orphan );
-	}
-	s_orphans.resize( kept );
+			s_modules[i]->m_fracture->repair();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1695,12 +1876,14 @@ void W3DFractureDraw::crc( Xfer *xfer )
 	* 1: Initial version.  The holes were not saved: a loaded game showed the structure whole.
 	* 2: The holes, one byte a fragment, 1 standing (none before the first hit), then the baked way it
 	*    fell (-1 standing).  The client's look only, written by the client's draw module: no logic
-	*    reads it and the CRC never sees it. */
+	*    reads it and the CRC never sees it.
+	* 3: The fragments the hits knocked out, in order, each with the share of health lost as it went, so
+	*    a repair after the load brings them back the way it would have before it. */
 // ------------------------------------------------------------------------------------------------
 void W3DFractureDraw::xfer( Xfer *xfer )
 {
 	const Int MOST_FRAGMENTS = 65536;
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	DrawModule::xfer( xfer );
@@ -1724,10 +1907,36 @@ void W3DFractureDraw::xfer( Xfer *xfer )
 	if( count > 0 )
 		xfer->xferUser( &standing[0], count );
 	xfer->xferInt( &way );
+	std::vector<unsigned> knocked = m_loadedKnocked;
+	std::vector<Real> knockedAt = m_loadedKnockedAt;
+	if( xfer->getXferMode() != XFER_LOAD && m_fracture )
+	{
+		knocked = m_fracture->knockedFragments();
+		knockedAt = m_fracture->knockedAt();
+	}
+	if( version >= 3 )
+	{
+		Int knockedCount = (Int)knocked.size();
+		xfer->xferInt( &knockedCount );
+		if( knockedCount < 0 || knockedCount > count )
+		{
+			DEBUG_CRASH( ( "W3DFractureDraw::xfer - %d knocked out, expected 0 to %d", knockedCount, count ) );
+			throw XFER_INVALID_PARAMETERS;
+		}
+		knocked.resize( knockedCount );
+		knockedAt.resize( knockedCount );
+		for( Int k = 0; k < knockedCount; ++k )
+		{
+			xfer->xferUnsignedInt( &knocked[k] );
+			xfer->xferReal( &knockedAt[k] );
+		}
+	}
 	if( xfer->getXferMode() == XFER_LOAD )
 	{
 		m_loadedStanding.swap( standing );
 		m_loadedWay = way;
+		m_loadedKnocked.swap( knocked );
+		m_loadedKnockedAt.swap( knockedAt );
 	}
 }
 

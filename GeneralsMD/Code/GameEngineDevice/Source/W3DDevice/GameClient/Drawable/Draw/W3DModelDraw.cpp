@@ -2598,8 +2598,8 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 //-------------------------------------------------------------------------------------------------
 void W3DModelDraw::reactToImpact( const Coord3D &pos, Real radius, const Coord3D *source )
 {
-	if (!m_ragdollWanted)
-		return;
+	if (!m_ragdollWanted || radius < 0.0f)
+		return;		// below zero: a kill with no point of impact (poison, a nuke's blast), which pushes no body
 	m_ragdollImpact.pos = pos;
 	m_ragdollImpact.radius = radius;
 	m_ragdollImpact.hasSource = source != NULL;

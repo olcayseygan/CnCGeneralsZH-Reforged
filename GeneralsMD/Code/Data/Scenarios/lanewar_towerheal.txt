@@ -1,0 +1,46 @@
+# Direct Strike proof of the Watch Tower's repair and its stronger gun (2026-11-23). First the repair:
+# team B's tower is put at half health and one Gattling Tank shoots it until the tower kills it (the
+# repair wakes on a hit, and the health line alone is none), then the tallies read it climbing 5 a game
+# second from 10 game seconds after the last hit. Then twenty Gattling Tanks (staged, outside the director) shoot it, as in piecetowerdirect.txt:
+# the tallies read no repair while it is under fire, and it kills more of them before it falls than EA's
+# gun did.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 2600 -scenario lanewar_towerheal -logPrefix lanewar_towerheal_
+#
+# Passes on: the SCENARIO tally of LaneWarWatchTower reading under half health once the lone tank is
+# dead, then rising 50 for every 300 file frames (10 game seconds) towards full; no rise between two
+# tallies while the twenty tanks shoot; and fewer tanks standing at its fall than on the exe before the change (run this
+# file on both). Team B's tower stands at 3876,1805 on this map (rmg_v22_3_6p_642c_lane); the tanks
+# start west of it, out of its reach (225). File frames are 30 Hz game frames, two thirds of a logic
+# frame at 1.5x; everything ends before the first tick (logic 2700, file 4050).
+
+30    health  1  LaneWarWatchTower   50
+30    spawn   0  ChinaTankGattling   1  3576  1805
+60    attack  0  ChinaTankGattling   1  LaneWarWatchTower
+60    tally   1  LaneWarWatchTower
+360   tally   1  LaneWarWatchTower
+660   tally   1  LaneWarWatchTower
+960   tally   1  LaneWarWatchTower
+1260  tally   1  LaneWarWatchTower
+1560  tally   1  LaneWarWatchTower
+1860  tally   1  LaneWarWatchTower
+2400  tally   1  LaneWarWatchTower
+2430  health  1  LaneWarWatchTower   100
+2460  spawn   0  ChinaTankGattling   20  3576  1805  40
+2490  attack  0  ChinaTankGattling   1  LaneWarWatchTower
+2700  tally   0  ChinaTankGattling
+2700  tally   1  LaneWarWatchTower
+2850  tally   0  ChinaTankGattling
+2850  tally   1  LaneWarWatchTower
+3000  tally   0  ChinaTankGattling
+3000  tally   1  LaneWarWatchTower
+3150  tally   0  ChinaTankGattling
+3150  tally   1  LaneWarWatchTower
+3300  tally   0  ChinaTankGattling
+3300  tally   1  LaneWarWatchTower
+3600  tally   0  ChinaTankGattling
+3600  tally   1  LaneWarWatchTower
+3850  tally   0  ChinaTankGattling
+3850  tally   1  LaneWarWatchTower

@@ -1,0 +1,29 @@
+# REPRO OF AN OPEN ITEM, NOT A PASSING PROOF (TODO Balance > Deploy Units > 1, 2026-11-23).
+#
+# Does a Nuke Cannon unpack for a Humvee that has just started driving out of its reach?
+#
+# The Humvee parks 250 from the cannon, inside its reach of 356, and drives away east at frame 60.
+# The attack order comes 8 frames later, while the Humvee is still starting off. Today the cannon
+# unpacks at once and packs again without a shot. The log of 2026-11-23 (150 speed, so scenario
+# frame 68 is logic frame 45) shows:
+#
+#   DEPLOY STATE: frame 45 'ChinaVehicleNukeLauncher' <id> -> 1     unpack at the order frame
+#   DEPLOY STATE: frame 112 ... -> 2, 114 -> 4, 115 -> 3              ready, align, pack
+#
+# Two tries in willTargetStayInRange (scale velocity to desired speed; also when the victim is
+# isMoving() or isWaitingForPath()) changed nothing: at frame 45 the Humvee is neither.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 1 2 small -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -maxframes 1500
+#     -scenario deploypullaway -logPrefix deploypullaway_
+#
+# Fixed means: no "-> 1" line near logic frame 45, the first "-> 1" comes after the Humvee stops,
+# and no "-> 3" follows it before a shot. deploystall must still pass.
+#
+# See mobstress.txt for the line grammar.
+
+30    spawn   0  ChinaVehicleNukeLauncher  1  700 500
+30    spawn   1  AmericaVehicleHumvee      1  950 500
+60    move    1  AmericaVehicleHumvee         1600 500
+68    attack  0  ChinaVehicleNukeLauncher  1  AmericaVehicleHumvee

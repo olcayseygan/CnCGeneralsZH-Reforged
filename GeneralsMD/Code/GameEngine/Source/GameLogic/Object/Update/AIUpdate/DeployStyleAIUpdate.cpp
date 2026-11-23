@@ -323,7 +323,9 @@ void DeployStyleAIUpdate::setMyState( DeployStateTypes stateID, Bool reverseDepl
 	Object *self = getObject();
 	UnsignedInt now = TheGameLogic->getFrame();
 	const DeployStyleAIUpdateModuleData *data = getDeployStyleAIUpdateModuleData();
-	
+	// what the deploy scenarios count set-ups and pack-ups by
+	DEBUG_LOG(("DEPLOY STATE: frame %d '%s' %d -> %d%s\n", now, self->getTemplate()->getName().str(), self->getID(), (Int)stateID, reverseDeploy ? " reversed" : ""));
+
 	switch( stateID )
 	{
 		case DEPLOY:

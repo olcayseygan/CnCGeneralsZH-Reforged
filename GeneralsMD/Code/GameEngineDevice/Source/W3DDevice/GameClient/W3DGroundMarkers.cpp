@@ -1086,7 +1086,7 @@ static void followPlanes( Marker &m, UnsignedInt now, Real tl )
 		m.pastTMs = now;
 		m.pingMs = now;
 		m.pingR = m.R;
-		m.pingTint = pingTintOf( m.tint );
+		m.pingTint = m.tint;
 	}
 
 	m.hook = ( state == CONSIDER_NEW_APPROACH || state == RECOVER_FROM_OFF_MAP );
@@ -1216,7 +1216,7 @@ static void followSuperweapon( Marker &m, UnsignedInt now, Real tl )
 		m.impactMs = now;
 		m.pingMs = now;
 		m.pingR = 0.9f * m.R;
-		m.pingTint = pingTintOf( TINT_GOLD );
+		m.pingTint = TINT_GOLD;
 		startFade( m, now + 100, 0.4f );		// gone between 0.1 and 0.5 s after it lands
 	}
 }
@@ -1511,15 +1511,17 @@ void W3DGroundMarkers_take( InGameUI *ui )
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 /** The order marks' batcher (W3DInGameUI's GroundOverlayQuads) with the atlas's coordinates on the
-	* first set and the shroud's on the second. */
+	* first set and the shroud's on the second.  Quads are kept until flush, which draws them in batches,
+	* so the additive ones can be gathered while the alpha blended ones are laid and drawn after them. */
 class MarkerQuads
 {
 public:
-	MarkerQuads( void ) : m_quads( 0 ), m_pull( 0.0f ), m_shrouded( FALSE ),
+	MarkerQuads( void ) : m_pull( 0.0f ), m_shrouded( FALSE ),
 		m_shroudOffsetX( 0.0f ), m_shroudOffsetY( 0.0f ), m_shroudScaleX( 0.0f ), m_shroudScaleY( 0.0f ) { }
 
 	void begin( const Vector3 &eye, Real pull, W3DShroud *shroud )
 	{
+		m_verts.clear();
 		m_eye = eye;
 		m_pull = pull;
 		m_shrouded = shroud != NULL;
@@ -1534,31 +1536,31 @@ public:
 
 	void add( const Vector3 *p, const Real *u, const Real *v, const UnsignedInt *c )
 	{
-		if( m_quads >= MAX_QUADS )
-			flush();
-		Vert *out = &m_verts[ m_quads * 4 ];
 		for( Int i = 0; i < 4; ++i )
 		{
-			out[ i ].pos = p[ i ];
-			out[ i ].diffuse = c[ i ];
-			out[ i ].u = u[ i ];
-			out[ i ].v = v[ i ];
+			Vert out;
+			out.pos = p[ i ];
+			out.diffuse = c[ i ];
+			out.u = u[ i ];
+			out.v = v[ i ];
+			m_verts.push_back( out );
 		}
-		++m_quads;
 	}
+
+	Bool empty( void ) const { return m_verts.empty(); }
 
 	void flush( void );
 
 private:
-	enum { MAX_QUADS = 512 };
+	enum { BATCH_QUADS = 4096 };		///< 16384 vertices, well inside an unsigned short index
 	struct Vert
 	{
 		Vector3 pos;
 		UnsignedInt diffuse;
 		Real u, v;
 	};
-	Vert m_verts[ MAX_QUADS * 4 ];
-	Int m_quads;
+	void drawBatch( Int first, Int quads );
+	std::vector<Vert> m_verts;
 	Vector3 m_eye;
 	Real m_pull;
 	Bool m_shrouded;
@@ -1567,11 +1569,14 @@ private:
 
 void MarkerQuads::flush( void )
 {
-	if( m_quads == 0 )
-		return;
-	const Int quads = m_quads;
-	m_quads = 0;
+	const Int total = (Int)m_verts.size() / 4;
+	for( Int first = 0; first < total; first += BATCH_QUADS )
+		drawBatch( first, MIN( (Int)BATCH_QUADS, total - first ) );
+	m_verts.clear();
+}
 
+void MarkerQuads::drawBatch( Int first, Int quads )
+{
 	DynamicVBAccessClass vbAccess( BUFFER_TYPE_DYNAMIC_DX8, DX8_FVF_XYZNDUV2, quads * 4 );
 	DynamicIBAccessClass ibAccess( BUFFER_TYPE_DYNAMIC_DX8, quads * 6 );
 	{
@@ -1586,7 +1591,7 @@ void MarkerQuads::flush( void )
 		{
 			for( Int i = 0; i < 4; ++i, ++vb )
 			{
-				const Vert &src = m_verts[ q * 4 + i ];
+				const Vert &src = m_verts[ ( first + q ) * 4 + i ];
 				Vector3 pos = src.pos;
 				if( m_pull > 0.0f )
 				{
@@ -1623,6 +1628,7 @@ void MarkerQuads::flush( void )
 }
 
 static MarkerQuads theMarkerQuads;
+static MarkerQuads theAddQuads;		///< the additive ones: pings, glows, beam heads; drawn after the rest
 
 // The ground sheets' state (W3DInGameUI's SC_GROUND_OVERLAY_TESTED) with the atlas on: depth tested,
 // never depth written, texture times vertex colour
@@ -1668,6 +1674,7 @@ struct DrawCtx
 	const HeightGrid *w2;
 	Real flatZ;
 	Bool waterPass;					///< drawing after the water: only the quads standing on it
+	Bool additive;					///< what is laid now goes to theAddQuads
 };
 static DrawCtx s_ctx;
 
@@ -1729,7 +1736,7 @@ static void emit( Int piece, const Real *x, const Real *y, const Real *pu, const
 		u[ i ] = u0 + pu[ i ] * du;
 		v[ i ] = v0 + pv[ i ] * dv;
 	}
-	theMarkerQuads.add( p, u, v, col );
+	( s_ctx.additive ? theAddQuads : theMarkerQuads ).add( p, u, v, col );
 }
 
 /** A band round (cx, cy) at radius r, `across` wide, the piece's row 0 on the outer edge, from angle
@@ -1847,6 +1854,205 @@ struct FlatAlpha
 	explicit FlatAlpha( Real alpha ) : a( alpha ) { }
 	Real operator()( Real ) const { return a; }
 };
+
+/** A band round (cx, cy) whose radius the caller gives at every angle: scallops, a zigzag, a churning
+	* cloud's edge, a ragged ring, a gear's teeth.  At most maxStepDeg a quad (a zigzag of 24 teeth wants
+	* two degrees) and GROUND_STEP along the ground; lit pairs take the light from the radial. */
+template< class RadiusAt >
+static void radialStrip( Int piece, Real cx, Real cy, const RadiusAt &radiusAt, Real across, Real a0, Real a1,
+												 const Tint &tint, Real alpha, Bool lit, Real maxStepDeg = 2.0f )
+{
+	const Real span = a1 - a0;
+	if( alpha <= 0.002f || span <= 0.0f )
+		return;
+	const Real rGuess = MAX( 1.0f, radiusAt( a0 ) );
+	Int n = MAX( (Int)ceilf( span / ( maxStepDeg * MARKER_DEG ) ), (Int)ceilf( span * rGuess / GROUND_STEP ) );
+	n = MAX( 1, MIN( 1440, n ) );
+	const Real pv[ 4 ] = { 0.0f, 0.0f, 1.0f, 1.0f };
+	const Real pu[ 4 ] = { 0.5f, 0.5f, 0.5f, 0.5f };
+	Real ta = a0, ra = radiusAt( ta );
+	for( Int i = 0; i < n; ++i )
+	{
+		const Real tb = a0 + span * (Real)( i + 1 ) / (Real)n;
+		const Real rb = radiusAt( tb );
+		const Real ca = (Real)cos( ta ), sa = (Real)sin( ta );
+		const Real cb = (Real)cos( tb ), sb = (Real)sin( tb );
+		const Real roa = ra + 0.5f * across, ria = MAX( 0.0f, ra - 0.5f * across );
+		const Real rob = rb + 0.5f * across, rib = MAX( 0.0f, rb - 0.5f * across );
+		const Real x[ 4 ] = { cx + roa * ca, cx + rob * cb, cx + rib * cb, cx + ria * ca };
+		const Real y[ 4 ] = { cy + roa * sa, cy + rob * sb, cy + rib * sb, cy + ria * sa };
+		const Real wa = lit ? lightOf( ca, sa ) : 1.0f;
+		const Real wb = lit ? lightOf( cb, sb ) : 1.0f;
+		const UnsignedInt col[ 4 ] = { argb( tint, alpha * wa ), argb( tint, alpha * wb ), argb( tint, alpha * wb ), argb( tint, alpha * wa ) };
+		emit( piece, x, y, pu, pv, col );
+		ta = tb;
+		ra = rb;
+	}
+}
+
+/** A band along a polyline, row 0 on the right of the way it runs (outside a counter-clockwise
+	* polygon), its corners mitred so a hexagon or a stepped box stays one band; lit pairs take the
+	* light from each edge's right normal.  Each edge is cut into quads no longer than GROUND_STEP. */
+static void polyStrip( Int piece, const Real *px, const Real *py, Int n, Bool closed, Real across,
+											 const Tint &tint, Real alpha, Bool lit )
+{
+	if( alpha <= 0.002f || n < 2 )
+		return;
+	enum { MAX_POINTS = 96 };
+	n = MIN( n, (Int)MAX_POINTS );
+	Real ox[ MAX_POINTS ], oy[ MAX_POINTS ];		// each corner's outward offset for half the width
+	const Real half = 0.5f * across;
+	for( Int i = 0; i < n; ++i )
+	{
+		const Bool hasIn = closed || i > 0;
+		const Bool hasOut = closed || i < n - 1;
+		const Int ip = ( i + n - 1 ) % n, in = ( i + 1 ) % n;
+		Real nx = 0.0f, ny = 0.0f, ix = 0.0f, iy = 0.0f, qx = 0.0f, qy = 0.0f;
+		if( hasIn )
+		{
+			const Real dx = px[ i ] - px[ ip ], dy = py[ i ] - py[ ip ];
+			const Real l = MAX( 1.0e-4f, (Real)sqrt( dx * dx + dy * dy ) );
+			ix = dy / l;  iy = -dx / l;
+		}
+		if( hasOut )
+		{
+			const Real dx = px[ in ] - px[ i ], dy = py[ in ] - py[ i ];
+			const Real l = MAX( 1.0e-4f, (Real)sqrt( dx * dx + dy * dy ) );
+			qx = dy / l;  qy = -dx / l;
+		}
+		if( !hasIn )
+		{
+			ix = qx;  iy = qy;
+		}
+		if( !hasOut )
+		{
+			qx = ix;  qy = iy;
+		}
+		nx = ix + qx;
+		ny = iy + qy;
+		const Real nl = (Real)sqrt( nx * nx + ny * ny );
+		if( nl < 1.0e-4f )
+		{
+			nx = qx;  ny = qy;
+		}
+		else
+		{
+			nx /= nl;  ny /= nl;
+		}
+		// the mitre: as long as it must be for the edges either side to keep their width, within reason
+		const Real cosine = MAX( 0.35f, nx * qx + ny * qy );
+		ox[ i ] = nx * half / cosine;
+		oy[ i ] = ny * half / cosine;
+	}
+	const Real pv[ 4 ] = { 0.0f, 0.0f, 1.0f, 1.0f };
+	const Real pu[ 4 ] = { 0.5f, 0.5f, 0.5f, 0.5f };
+	const Int edges = closed ? n : n - 1;
+	for( Int e = 0; e < edges; ++e )
+	{
+		const Int a = e, b = ( e + 1 ) % n;
+		const Real dx = px[ b ] - px[ a ], dy = py[ b ] - py[ a ];
+		const Real len = (Real)sqrt( dx * dx + dy * dy );
+		if( len < 1.0e-3f )
+			continue;
+		const Real w = lit ? lightOf( dy / len, -dx / len ) : 1.0f;
+		const UnsignedInt c = argb( tint, alpha * w );
+		const UnsignedInt col[ 4 ] = { c, c, c, c };
+		const Int m = MAX( 1, MIN( 200, (Int)ceilf( len / GROUND_STEP ) ) );
+		for( Int j = 0; j < m; ++j )
+		{
+			const Real f0 = (Real)j / (Real)m, f1 = (Real)( j + 1 ) / (Real)m;
+			const Real cx0 = px[ a ] + dx * f0, cy0 = py[ a ] + dy * f0;
+			const Real cx1 = px[ a ] + dx * f1, cy1 = py[ a ] + dy * f1;
+			const Real o0x = ox[ a ] + ( ox[ b ] - ox[ a ] ) * f0, o0y = oy[ a ] + ( oy[ b ] - oy[ a ] ) * f0;
+			const Real o1x = ox[ a ] + ( ox[ b ] - ox[ a ] ) * f1, o1y = oy[ a ] + ( oy[ b ] - oy[ a ] ) * f1;
+			const Real x[ 4 ] = { cx0 + o0x, cx1 + o1x, cx1 - o1x, cx0 - o0x };
+			const Real y[ 4 ] = { cy0 + o0y, cy1 + o1y, cy1 - o1y, cy0 - o0y };
+			emit( piece, x, y, pu, pv, col );
+		}
+	}
+}
+
+/// the piece a flat fill samples: one opaque white texel's worth, its middle
+static Int solidPiece( void )
+{
+	return P_BAND_INLAY;
+}
+
+/** A flat fill: a fan from (cx, cy) out to the outline, its alpha going from alphaCentre at the middle
+	* to alphaEdge at the outline, cut into quads a terrain cell at most so it lies on the ground.  A
+	* radar's afterglow, a camera's footprint, a gas cloud's haze, a scorch; additive (s_ctx.additive)
+	* with alphaEdge nought it is a soft glow. */
+static void fillFan( Real cx, Real cy, const Real *px, const Real *py, Int n, Bool closed, const Tint &tint,
+										 Real alphaCentre, Real alphaEdge )
+{
+	if( n < 2 || ( alphaCentre <= 0.002f && alphaEdge <= 0.002f ) )
+		return;
+	const Int piece = solidPiece();
+	const Real pu[ 4 ] = { 0.5f, 0.5f, 0.5f, 0.5f };
+	const Real pv[ 4 ] = { 0.5f, 0.5f, 0.5f, 0.5f };
+	const Int edges = closed ? n : n - 1;
+	for( Int e = 0; e < edges; ++e )
+	{
+		const Int a = e, b = ( e + 1 ) % n;
+		const Real ra = (Real)sqrt( ( px[ a ] - cx ) * ( px[ a ] - cx ) + ( py[ a ] - cy ) * ( py[ a ] - cy ) );
+		const Real rb = (Real)sqrt( ( px[ b ] - cx ) * ( px[ b ] - cx ) + ( py[ b ] - cy ) * ( py[ b ] - cy ) );
+		const Real el = (Real)sqrt( ( px[ b ] - px[ a ] ) * ( px[ b ] - px[ a ] ) + ( py[ b ] - py[ a ] ) * ( py[ b ] - py[ a ] ) );
+		const Int rings = MAX( 1, MIN( 64, (Int)ceilf( MAX( ra, rb ) / GROUND_STEP ) ) );
+		const Int along = MAX( 1, MIN( 64, (Int)ceilf( el / GROUND_STEP ) ) );
+		for( Int r = 0; r < rings; ++r )
+		{
+			const Real f0 = (Real)r / (Real)rings, f1 = (Real)( r + 1 ) / (Real)rings;
+			const UnsignedInt c0 = argb( tint, alphaCentre + ( alphaEdge - alphaCentre ) * f0 );
+			const UnsignedInt c1 = argb( tint, alphaCentre + ( alphaEdge - alphaCentre ) * f1 );
+			const UnsignedInt col[ 4 ] = { c0, c0, c1, c1 };
+			for( Int s = 0; s < along; ++s )
+			{
+				const Real e0 = (Real)s / (Real)along, e1 = (Real)( s + 1 ) / (Real)along;
+				const Real ax = px[ a ] + ( px[ b ] - px[ a ] ) * e0 - cx, ay = py[ a ] + ( py[ b ] - py[ a ] ) * e0 - cy;
+				const Real bx = px[ a ] + ( px[ b ] - px[ a ] ) * e1 - cx, by = py[ a ] + ( py[ b ] - py[ a ] ) * e1 - cy;
+				const Real x[ 4 ] = { cx + ax * f0, cx + bx * f0, cx + bx * f1, cx + ax * f1 };
+				const Real y[ 4 ] = { cy + ay * f0, cy + by * f0, cy + by * f1, cy + ay * f1 };
+				emit( piece, x, y, pu, pv, col );
+			}
+		}
+	}
+}
+
+/// a disc as a fan of `sides`
+static void fillDisc( Real cx, Real cy, Real r, const Tint &tint, Real alphaCentre, Real alphaEdge, Int sides = 24 )
+{
+	enum { MAX_SIDES = 48 };
+	sides = MAX( 6, MIN( (Int)MAX_SIDES, sides ) );
+	Real x[ MAX_SIDES ], y[ MAX_SIDES ];
+	for( Int i = 0; i < sides; ++i )
+	{
+		const Real a = 2.0f * MARKER_PI * (Real)i / (Real)sides;
+		x[ i ] = cx + r * (Real)cos( a );
+		y[ i ] = cy + r * (Real)sin( a );
+	}
+	fillFan( cx, cy, x, y, sides, TRUE, tint, alphaCentre, alphaEdge );
+}
+
+/// a soft additive glow: bright in the middle, nothing at r
+static void glowDisc( Real cx, Real cy, Real r, const Tint &tint, Real alpha )
+{
+	const Bool was = s_ctx.additive;
+	s_ctx.additive = TRUE;
+	fillDisc( cx, cy, r, tint, alpha, 0.0f );
+	s_ctx.additive = was;
+}
+
+/// a ping: a thin additive ring growing a little and fading, `age` seconds into its `life`
+static void pingRing( Real cx, Real cy, Real r, Real k, Real age, const Tint &tint, Real life = 0.45f, Real grow = 0.14f, Real width = 6.0f )
+{
+	if( age < 0.0f || age >= life )
+		return;
+	const Real e = easeOut( age / life );
+	const Bool was = s_ctx.additive;
+	s_ctx.additive = TRUE;
+	ring( P_PING, cx, cy, r * ( 1.0f + grow * e ), width * k, pingTintOf( tint ), 0.9f * ( 1.0f - e ), FALSE );
+	s_ctx.additive = was;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // THE MARKS
@@ -2232,16 +2438,7 @@ static void drawDrops( const Marker &m, Real R, Real t, Real app, Real fade )
 		quadPiece( P_DROP, m.fallen[ i ].x, m.fallen[ i ].y, yaw, 18.0f * k, 18.0f * k, fallenTint, 0.5f * fade );
 }
 
-/// an additive ping, drawn after every alpha blended piece
-struct PingDraw
-{
-	Real x, y, R, k, age;
-	Tint tint;
-	const HeightGrid *grid;
-	const HeightGrid *water;
-};
-
-static void drawMarker( const Marker &m, std::vector<PingDraw> &pings )
+static void drawMarker( const Marker &m )
 {
 	if( s_ctx.waterPass && !m.wet )
 		return;
@@ -2282,20 +2479,15 @@ static void drawMarker( const Marker &m, std::vector<PingDraw> &pings )
 		drawDart( d.x, d.y, d.heading, d.scale, m.k, m.tint, 1.0f );
 	}
 
-	if( tl >= 0.0f && tl < 0.45f && !m.guarding )
-	{
-		PingDraw p = { m.x, m.y, R, m.k, tl, pingTintOf( m.tint ), &m.grid, &m.water };
-		pings.push_back( p );
-	}
+	// the pings, additive, drawn after every alpha blended piece
+	s_ctx.g1 = &m.grid;
+	s_ctx.g2 = NULL;
+	s_ctx.w1 = &m.water;
+	s_ctx.w2 = NULL;
+	if( !m.guarding )
+		pingRing( m.x, m.y, R, m.k, tl, m.tint );
 	if( m.pingMs != 0 )
-	{
-		const Real age = secondsSince( now, m.pingMs );
-		if( age >= 0.0f && age < 0.45f )
-		{
-			PingDraw p = { m.x, m.y, m.pingR, m.k, age, m.pingTint, &m.grid, &m.water };
-			pings.push_back( p );
-		}
-	}
+		pingRing( m.x, m.y, m.pingR, m.k, secondsSince( now, m.pingMs ), m.pingTint );
 }
 
 /// a move's or attack's click: the ring closing in 0.32 s with four chevrons on it pointing in, the
@@ -2384,36 +2576,30 @@ static void drawPass( Bool waterPass, Bool shadeByShroud )
 		shroud = NULL;
 
 	const Real pull = MARKER_PULL;
-	setMarkerState( FALSE, shroudTexture );
+	s_ctx.additive = FALSE;
 	theMarkerQuads.begin( eye, pull, shroud );
+	theAddQuads.begin( eye, pull, shroud );
 
-	std::vector<PingDraw> pings;
 	for( size_t i = 0; i < s_guards.size(); ++i )
-		drawMarker( s_guards[ i ], pings );
+		drawMarker( s_guards[ i ] );
 	for( size_t i = 0; i < s_shots.size(); ++i )
-		drawMarker( s_shots[ i ], pings );
+		drawMarker( s_shots[ i ] );
 	if( s_aimOn )
-		drawMarker( s_aim, pings );
+		drawMarker( s_aim );
 	if( !waterPass )
 		for( size_t i = 0; i < s_clicks.size(); ++i )
 			drawClick( s_clicks[ i ] );
-	theMarkerQuads.flush();
+	s_ctx.additive = FALSE;
 
-	if( !pings.empty() )
+	if( !theMarkerQuads.empty() )
+	{
+		setMarkerState( FALSE, shroudTexture );
+		theMarkerQuads.flush();
+	}
+	if( !theAddQuads.empty() )
 	{
 		setMarkerState( TRUE, shroudTexture );
-		theMarkerQuads.begin( eye, pull, shroud );
-		for( size_t i = 0; i < pings.size(); ++i )
-		{
-			const PingDraw &p = pings[ i ];
-			s_ctx.g1 = p.grid;
-			s_ctx.g2 = NULL;
-			s_ctx.w1 = p.water;
-			s_ctx.w2 = NULL;
-			const Real e = easeOut( p.age / 0.45f );
-			ring( P_PING, p.x, p.y, p.R * ( 1.0f + 0.14f * e ), 6.0f * p.k, p.tint, 0.9f * ( 1.0f - e ), FALSE );
-		}
-		theMarkerQuads.flush();
+		theAddQuads.flush();
 	}
 
 	s_ctx.g1 = NULL;

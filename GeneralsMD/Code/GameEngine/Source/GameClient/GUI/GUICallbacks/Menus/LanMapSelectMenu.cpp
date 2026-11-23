@@ -136,6 +136,10 @@ void LanMapSelectMenuInit( WindowLayout *layout, void *userData )
 {
 	showLANGameOptionsUnderlyingGUIElements(FALSE);
 
+	// the radio selection below fills mapList before it is looked up: never the last picker's list,
+	// which a close and reopen in one frame leaves destroyed but not yet freed (v4.3.2 report 4639)
+	mapList = NULL;
+
 	// set keyboard focus to main parent
 	AsciiString parentName( "LanMapSelectMenu.wnd:LanMapSelectMenuParent" );
 	NameKeyType parentID = TheNameKeyGenerator->nameToKey( parentName );

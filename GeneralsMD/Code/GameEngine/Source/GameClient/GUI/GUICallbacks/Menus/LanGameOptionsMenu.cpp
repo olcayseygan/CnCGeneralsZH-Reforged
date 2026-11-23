@@ -1213,11 +1213,14 @@ void DeinitLanGameGadgets( void )
 //-------------------------------------------------------------------------------------------------
 void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
 {
-	if (TheLAN->GetMyGame() && TheLAN->GetMyGame()->isGameInProgress())
+	// A player who left the match from the quit menu has left the LAN game too, and the score
+	// screen's pop lands here with no game at all: the room was built on nothing and crashed
+	// (v4.2.0, one report).  Back to the lobby either way.
+	if (TheLAN->GetMyGame() == NULL || TheLAN->GetMyGame()->isGameInProgress())
 	{
 		// If we init while the game is in progress, we are really returning to the menu
 		// after the game.  So, we pop the menu and go back to the lobby.  Whee!
-		DEBUG_LOG(("Popping to lobby after a game!\n"));
+		DEBUG_LOG(("Popping to lobby after a game%s!\n", TheLAN->GetMyGame() == NULL ? " we had left" : ""));
 		TheShell->popImmediate();
 		return;
 	}

@@ -276,9 +276,13 @@ static void adjustDisplay( GameWindow *window, Int adjustment,
 			sData->maxVal = 0;
 		}
 		
+		// a destroyed listbox's slider has already given up its thumb (v4.3.2 report 4639)
 		child = list->slider->winGetChild();
-		child->winGetSize( &sliderChildSize.x, &sliderChildSize.y );
-		sData->numTicks = (float)((sliderSize.y - sliderChildSize.y) / (float)sData->maxVal);
+		if( child )
+		{
+			child->winGetSize( &sliderChildSize.x, &sliderChildSize.y );
+			sData->numTicks = (float)((sliderSize.y - sliderChildSize.y) / (float)sData->maxVal);
+		}
 
 		if( updateSlider )
 			TheWindowManager->winSendSystemMsg( list->slider, 

@@ -143,6 +143,10 @@ static void showGameSpyGameOptionsUnderlyingGUIElements( Bool show )
 void WOLMapSelectMenuInit( WindowLayout *layout, void *userData )
 {
 
+	// the radio selection below fills mapList before it is looked up: never the last picker's list,
+	// which a close and reopen in one frame leaves destroyed but not yet freed (v4.3.2 report 4639)
+	mapList = NULL;
+
 	// set keyboard focus to main parent
 	AsciiString parentName( "WOLMapSelectMenu.wnd:WOLMapSelectMenuParent" );
 	NameKeyType parentID = TheNameKeyGenerator->nameToKey( parentName );

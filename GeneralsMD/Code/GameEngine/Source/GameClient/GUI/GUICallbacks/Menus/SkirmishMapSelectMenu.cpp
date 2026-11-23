@@ -189,7 +189,15 @@ void showSkirmishGameOptionsUnderlyingGUIElements( Bool show )
 void SkirmishMapSelectMenuInit( WindowLayout *layout, void *userData )
 {
 
+	/* The radio selection below sends GBM_SELECTED, and its handler fills mapList before this Init
+		 has looked the new list up.  A picker closed and opened again in one frame left mapList on the
+		 old list, destroyed but not yet freed and already without its slider thumb (v4.3.2 report 4639) */
+	mapList = NULL;
+
 	// set keyboard focus to main parent
+	/* EA's "Skrimish" matches no window in our layout, so parent is NULL and every lookup below is a
+		 global one.  The OK branch counts on that: it finds SkirmishGameOptionsMenu.wnd:TextEntryMapDisplay
+		 "under parent".  Correct the name only together with those lookups */
 	AsciiString parentName( "SkirmishMapSelectMenu.wnd:SkrimishMapSelectMenuParent" );
 	NameKeyType parentID = TheNameKeyGenerator->nameToKey( parentName );
 	parent = TheWindowManager->winGetWindowFromId( NULL, parentID );
@@ -475,6 +483,7 @@ WindowMsgHandledType SkirmishMapSelectMenuSystem( GameWindow *window, UnsignedIn
 				skirmishMapSelectLayout->destroyWindows();
 				skirmishMapSelectLayout->deleteInstance();
 				skirmishMapSelectLayout = NULL;
+				mapList = NULL;	// destroyed now, GWM_DESTROY only comes with the next window update
 				skirmishPositionStartSpots();
 				//TheShell->pop();
 				//do you need this ??
@@ -539,6 +548,7 @@ WindowMsgHandledType SkirmishMapSelectMenuSystem( GameWindow *window, UnsignedIn
 				skirmishMapSelectLayout->destroyWindows();
 				skirmishMapSelectLayout->deleteInstance();
 				skirmishMapSelectLayout = NULL;
+				mapList = NULL;	// destroyed now, GWM_DESTROY only comes with the next window update
 					//TheShell->pop();
 
 				}  // end if

@@ -128,6 +128,7 @@ found and fixed, EA's own, not port damage.**
 - The Direct Strike lobby and the end screen now wear one steel frame for every player in the room, whatever army they picked, so the host and his guests look at the same screen. The seats point at the lane, team against team, a strip of lights on every seat turns your team's colour when the player is ready, and a bar along the foot fills from each end as the teams get ready.
 - Change seats in the lobby. Click an open seat to sit there, or click the other team's name to move to its first open seat; you keep your army and colour, and everyone's Ready is cleared, as when anything else in the room changes. In a LAN or online room the host makes the move for you.
 - The chat fills the middle of the lobby, eleven lines, and the map sits on one line above it.
+- Watchers wear that frame too. The observer's bar, radar frame, player panel and spectator drawers were blue-grey steel with America's emblem in the corner, America's rank bar and America's superweapon tray; they are now the lobby's brushed, scratched grey steel with bronze trim and the emblem in grey, and someone watching a Direct Strike match or its replay sees the top of the HUD in it instead of America's.
 - Replays and saves from before this change play as they did: nothing in the match changed. Everyone in a room needs this version, as always.
 
 ## Direct Strike waves leave from behind the fortress

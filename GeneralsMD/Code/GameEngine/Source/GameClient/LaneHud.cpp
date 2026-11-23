@@ -237,10 +237,10 @@ static void tip( const LaneHudBox &b, const UnicodeString &text )
 			s_tip.concat( *c );
 }
 
-/// the side whose art the HUD wears: the seated player's, America's for a watcher
+/// the set the HUD wears: the seated player's side, the common frame for a watcher (an observer, a replay), who is no side
 static Side hudSide( void )
 {
-	return sideOf( s_player != NULL ? s_player->getSide() : AsciiString( "America" ) );
+	return s_seated ? sideOf( s_player->getSide() ) : SIDE_COMMON;
 }
 
 //-------------------------------------------------------------------------------------------------

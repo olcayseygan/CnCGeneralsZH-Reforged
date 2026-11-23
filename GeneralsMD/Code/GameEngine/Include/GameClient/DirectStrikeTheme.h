@@ -157,6 +157,10 @@ namespace DirectStrikeTheme
 		ROW_L,						///< an open list's row as a 3-slice, only in its H (under the pointer) and P (current) states
 		ROW_C,
 		ROW_R,
+		HEAD_L,						///< a header strip as a 3-slice, 28 tall at 1080, its glass 4 in (the common sheet only)
+		HEAD_C,
+		HEAD_R,
+		CELL,						///< a cameo's cell, 85x65 at 1080, the 71x49 cameo's glass at 7,8 (the common sheet only)
 
 		// the lobby's own, README-lobby.md
 		LOBBY_PICK_TILE,

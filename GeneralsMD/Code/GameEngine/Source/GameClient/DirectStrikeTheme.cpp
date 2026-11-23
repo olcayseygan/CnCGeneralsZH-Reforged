@@ -98,6 +98,10 @@ namespace
 		"DSRowL",
 		"DSRowC",
 		"DSRowR",
+		"DSHeadL",
+		"DSHeadC",
+		"DSHeadR",
+		"DSCell",
 
 		"LobbyPickTile",
 		"LobbyIsland",

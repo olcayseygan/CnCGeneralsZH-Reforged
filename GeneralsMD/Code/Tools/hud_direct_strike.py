@@ -22,7 +22,7 @@ import bigfile
 import hud_command_bar as H
 import hud_direct_strike_theme as T
 from hud_command_bar import plate, rotated
-from hud_sidebar import box, icon_layers
+from hud_sidebar import box, icon_layers, KEY_SIZES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.normpath(os.path.join(HERE, "..", "Data"))
@@ -404,6 +404,26 @@ def hud(side):
     return out
 
 
+CELL, CELL_GLASS = (85, 65), (7, 8, 78, 57)    # a cameo's cell: the 71x49 cameo's glass in a plate
+HEAD_H = 28                                     # the header strip's height, its glass 4 in
+
+
+def watch(side):
+    """The common frame's match pieces: what LaneHud.cpp draws for a watcher, who is no side (the top's chips, the strip
+    map's marks, a seat's frame, the menu keys), and the observer panels' own (InGameUI.cpp): a header strip as a 3-slice
+    (DSHead) and a cameo's cell (DSCell); their plates are DSPanel, DSPanelLit and DSWell."""
+    build = T.build_of(side)
+    out = {"LaneAirMark": air_mark(), "LaneMapFortress": map_fortress(build), "LaneMapTower": map_tower(build),
+           "LaneEnemyPlotFrame": T.chip(side, 212, 80), "LaneLaneChip": T.chip(side, 490, 66),
+           "LaneBarChip": T.chip(side, 490, 14, 4), "LaneCountChip": T.chip(side, 84, 36),
+           "DSCell": T.panel(side, *CELL, [CELL_GLASS])}
+    out.update({"DSHead" + part: img for part, img in T.three_cut(T.chip(side, 200, HEAD_H, 4)).items()})
+    for s in STATES:
+        out["SidebarKeyMenu" + s] = T.key(side, *KEY_SIZES["Menu"], s, icon_layers("Options", build), 0.55)
+        out["SidebarKeyDiplomacy" + s] = T.key(side, *KEY_SIZES["Diplomacy"], s, icon_layers("Chat", build), 0.55)
+    return out
+
+
 def end_card(side, won):
     return T.panel(side, *END_CARD, END_CARD_WELLS, won)
 
@@ -731,7 +751,7 @@ def pieces(side):
     # shared plates, keys and lamps (the match HUD and the shell's mode picker draw them) and its match HUD
     # the common sheet's clamp dropdown and list rows replace the shared ones under the same names
     restyled = {n for n in out if n.startswith(("DSDrop", "DSFieldR", "DSRow"))} if side in T.COMMONS else set()
-    for part in ((end(side), lobby(side)) if side in T.COMMONS else (hud(side),)):
+    for part in ((end(side), lobby(side), watch(side)) if side in T.COMMONS else (hud(side),)):
         twice = set(part) & set(out) - restyled
         assert not twice, "a name is drawn twice: %s" % sorted(twice)
         out.update(part)

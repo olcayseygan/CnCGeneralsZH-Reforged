@@ -412,6 +412,40 @@ def scratches(rng, shape_, wrap=(0, 0)):
     return np.asarray(im, np.float32) / 255.0
 
 
+def worn(img, p, palette, seed):
+    """A common frame's texture, the GLA's: scratches through the paint (only on the bevels and corners, chipped to
+    bright metal, with edge_wear), rust blooms and a fine grit on the metal; the glass stays clean."""
+    s = SS
+    rng = np.random.default_rng(seed)
+
+    def down(a):
+        return a.reshape(p.h_, s, p.w, s).mean(axis=(1, 3))
+    metal = (p.mat != GLASS) & p.alpha
+    m = down(metal.astype(np.float32))
+    a = np.asarray(img, np.float32) / 255
+    rgb, al = a[..., :3], a[..., 3]
+    shape_ = (p.h_, p.w)
+    sc = down(scratches(rng, p.h.shape) * metal)
+    if palette.get("edge_wear"):                # bevels: where the height field slopes, grown a texel
+        gy, gx = np.gradient(ndimage.gaussian_filter(p.h, 0.5 * s) * s)
+        edge = ndimage.maximum_filter(down((np.hypot(gx, gy) > 0.35).astype(np.float32)), 3)
+        chips = (ndimage.gaussian_filter(rng.standard_normal(shape_), 0.8) > 0.55) * edge
+        sc = np.maximum(sc * edge, chips * 0.8)
+    rgb += sc[..., None] * palette.get("wear", 0) * np.array([1.0, 0.94, 0.84])
+    if palette.get("rust"):
+        n = ndimage.gaussian_filter(rng.standard_normal(shape_), 5)
+        n /= n.std() + 1e-6
+        n += 0.5 * ndimage.gaussian_filter(rng.standard_normal(shape_), 1.2) / 0.3
+        r = np.clip((n - 0.9) * 0.45, 0, 0.75) * m * palette["rust"]
+        lum = rgb.mean(2, keepdims=True)
+        rgb = rgb * (1 - r[..., None]) + np.array(RUST, np.float32) / 255 * (0.45 + 1.6 * lum) * r[..., None]
+    if palette.get("grit"):
+        g = ndimage.gaussian_filter(rng.standard_normal(shape_), 0.6)
+        rgb *= 1 + palette["grit"] * 2.2 * g[..., None] * m[..., None]
+    a[..., :3] = np.clip(rgb, 0, 1) * (al[..., None] > 0)
+    return Image.fromarray((a * 255 + 0.5).astype(np.uint8), "RGBA")
+
+
 def shade(p, side, seams=(), shadow=True, seed=7, falloff=True, tiling=None):
     """falloff darkens the steel and the glass from top to bottom, as down a panel; a piece the game
     tiles (the tray's) goes without, or each copy would step against the next.  tiling (GrownTiling)
@@ -452,6 +486,8 @@ def shade(p, side, seams=(), shadow=True, seed=7, falloff=True, tiling=None):
     elif build == "scavenged":                         # mill scale and wear, no grain direction
         grain = 1.0 + 0.09 * mottle + 0.045 * fine + 0.04 * noise(3 * SS)
         spec_base, rough_base = 0.32, 18.0
+    elif build == "desk" and side.get("brushed"):       # the common frame's brushed steel (Forged Alloy)
+        grain = 1.0 + 0.05 * noise((0.5 * SS, 40 * SS)) + 0.06 * mottle + 0.025 * fine
     elif build == "desk":                              # anodised: even, a faint grain, semi-gloss
         grain = 1.0 + 0.03 * mottle + 0.02 * fine
         spec_base, rough_base = 0.5, 30.0
@@ -486,7 +522,7 @@ def shade(p, side, seams=(), shadow=True, seed=7, falloff=True, tiling=None):
     spec_k = np.full(shape_, spec_base, np.float32)
     rough = np.full(shape_, rough_base, np.float32)
     flat = {ACCENT: side["accent"], ACCENT2: side["accent2"], GOLDM: GOLD, INKM: INK, PAPERM: PAPER,
-            DIM: (78, 86, 100), HILITE: TEXT_BLUE}
+            DIM: (78, 86, 100), HILITE: side.get("hilite", TEXT_BLUE)}
     for mid, c in flat.items():
         sel = m == mid
         albedo[sel] = col(c) * grain[sel][:, None] ** 0.4
@@ -526,7 +562,10 @@ def shade(p, side, seams=(), shadow=True, seed=7, falloff=True, tiling=None):
     for x in seams:                                     # nothing may cross a cut
         alpha[:, max(0, (x - 3) * SS):(x + 3) * SS] = 0
         rgb[:, max(0, (x - 3) * SS):(x + 3) * SS] = 0
-    return downsample(np.dstack([rgb, alpha]), p.w, p.h_)
+    img = downsample(np.dstack([rgb, alpha]), p.w, p.h_)
+    if side.get("worn"):                                # the common frame's scratches, rust and grit (OBS_LOOK)
+        img = worn(img, p, side, seed * 1009 + p.w * 7 + p.h_)
+    return img
 
 
 def downsample(rgba_premul, w, h):
@@ -589,8 +628,15 @@ BAR_LOOKS = {   # the bar's own steel, apart from SIDES, which the sheets, cards
 # welded patches and odd bolts.  The Tab screen and the tooltips stand beside the radar box and take its build
 # (skin); the shading stays the desk's even anodising, so no side's rust or brushing comes with a build.
 BUILDS["desk"] = dict(metric="edt", bevel=2.0, corner="cut")
-BAR_LOOKS["Observer"] = dict(build="desk", skin="machined", steel=(116, 120, 127), glass=(20, 24, 30), glass_lo=(11, 14, 18),
-                             accent=(70, 76, 86), accent2=(0xb8, 0x26, 0x1f), crest=(0.85, 0.9, 1.0), crest_k=0.5)
+#
+# Round 23 (2026-11-23): the watcher wears the common frame, the Forged Alloy palette the owner picked that day for
+# the screens every player shares (hud_direct_strike_theme's PALETTE["ForgedAlloy"], the CommonPro sheet): its grey
+# steel brushed, near-black glass, bronze for the accents, the tally and the lit rims, and its scratches, rust and
+# grit (worn).  No side's colour is left anywhere on the watcher's HUD; the boxes keep round 20's shapes, their
+# fittings rivets as the common frame's are, and the selection box's corner notched.
+BAR_LOOKS["Observer"] = dict(build="desk", skin="machined", steel=(120, 120, 120), glass=(12, 13, 14), glass_lo=(8, 8, 9),
+                             accent=(150, 124, 70), accent2=(194, 160, 86), crest=(1.0, 0.96, 0.88), crest_k=0.55,
+                             hilite=(194, 160, 86), brushed=True, worn=True, wear=0.10, rust=0.3, grit=0.045)
 OBS_LOOK = BAR_LOOKS["Observer"]
 
 
@@ -1807,15 +1853,18 @@ def flat(size, shapes, scale=4):
     return im.resize((w, h), Image.BOX)
 
 
-def logo(size, svg_path, pad=26, opacity=0.6, mute=0.45, grey=(96, 104, 120)):
+def logo(size, svg_path, pad=26, opacity=0.6, mute=0.45, grey=(96, 104, 120), mono=False):
     """The emblem the selection window shows when nothing is selected, every side: set well inside the
-    window, its colours pulled toward the glass's grey and half see-through, so it reads as a watermark."""
+    window, its colours pulled toward the glass's grey and half see-through, so it reads as a watermark.
+    mono (the watcher's) takes each colour to its own lightness first, so no colour is left in it."""
     w, h = size
     e = h - 2 * pad
     k = e / 128.0
     dx, dy = (w - e) / 2, pad
     shapes = []
     for c, poly in emblem_polys(svg_path):
+        if mono:
+            c = (int(0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]),) * 3
         c = tuple(int(a * (1 - mute) + g * mute) for a, g in zip(c, grey))
         shapes.append((c + (255,), [(dx + x * k, dy + y * k) for x, y in poly]))
     im = flat(size, shapes)                             # opaque first, so the layers do not show through
@@ -1983,8 +2032,14 @@ def tray_outline(build, inset=0.0, layout="powers"):
     return [(260 - x, y) for x, y in pts] if layout == "production" else pts
 
 
+def sheet_look(side_name):
+    """A side's sheet palette, or for the watcher his HUD's (OBS_LOOK) in the machined build: the pieces his scheme
+    names on ReforgedHudObsPieces (the tray, the rank bar) are drawn with the sides' code."""
+    return dict(OBS_LOOK, build="machined") if side_name == "Observer" else SIDES[side_name]
+
+
 def tray_reference(side_name, layout="powers"):
-    side = SIDES[side_name]
+    side = sheet_look(side_name)
     build = side["build"]
     p = Painter(260, 172)
     if layout == "superweapon":
@@ -2059,7 +2114,7 @@ TRAY_TAB, TRAY_TAB_JOIN = (40, 28), 6
 
 
 def tray_tab(side_name, up=False):
-    side = SIDES[side_name]
+    side = sheet_look(side_name)
     build = side["build"]
     w, h = TRAY_TAB
     p = Painter(w + 8, h + 8)
@@ -2171,7 +2226,7 @@ def ready_glow_pieces(build, variant):
 
 
 def hud_cell_pieces(side_name):
-    side = SIDES[side_name]
+    side = sheet_look(side_name)
     pw, ph = HUD_PLATE
     rim = tuple(int(v * 0.5) for v in side["steel"])
     plate_img = Image.new("RGBA", (pw, ph), rim + (255,))
@@ -3502,7 +3557,7 @@ TAB_RADIO_H = tab_u(34) - tab_u(10)             # 43 at 1080
 TAB_RADIO_END, TAB_RADIO_MID = 16, 8
 TAB_RADIO_X = 1932                              # the pieces' column on the TabPanel sheet
 TAB_RADIO_OPEN_K = 0.55
-TAB_RADIO_OBS_OPEN = (118, 126, 138)            # the observer's open tab: lit graphite, no side's colour
+TAB_RADIO_OBS_OPEN = OBS_LOOK["hilite"]         # the observer's open tab: the common frame's lit bronze, no side's colour
 
 
 def tab_radio(side, state):
@@ -3651,24 +3706,24 @@ def paint_observer_bar():
         well(p, shape(b, *grow(r, 1), 4), 3.5, 2)
     p.inlay([T(plate(389, 1006, 394, 1007))], INKM, 0.8)
     for x, y in ((342, 746), (388, 1076)):
-        p.stud(x, y - TOP, 2.2)
+        p.rivet(x, y - TOP, 2.2)
     p.cut([T(plate(290, 730, 330, 1080))])
 
     # the selection's box: Turkiye's wide chamfer, an armour panel with a gap, range ticks and recessed
     # fasteners, and a mount above as on every side's bar, holding a grille and the tally
-    stack(p, plate(1625, 870, 1920, 1080, tl=("slant", 26)))
-    stack(p, plate(*OBS_MOUNT, tl=("slant", 12)), 9, 12, 4, 2.2)
+    stack(p, plate(1625, 870, 1920, 1080, tl=("notch", 14)))
+    stack(p, plate(*OBS_MOUNT, tl=("notch", 8)), 9, 12, 4, 2.2)
     floor(p, plate(1850, 846, 1920, 872))
     grille(p, 1856, 850 - TOP, 1892, 868 - TOP, 3.2)
     tally(p, 1906, 859 - TOP, 3.0)
-    floor(p, plate(1638, 883, 1916, 1080, tl=("slant", 14)))
+    floor(p, plate(1638, 883, 1916, 1080, tl=("notch", 8)))
     well(p, plate(*grow(OBS_SELECTION, 2)), 6, 2.5)
     well(p, plate(*grow(OBS_EXP, 1)), 6, 2)
     p.bump([T([(1690, 877), (1704, 872), (1790, 872), (1790, 877)])], 2.2, 1.0, STEEL)
     p.inlay([T(plate(1792, 871, 1793, 880))], INKM, 0.9)
     p.inlay([T(plate(x, 873, x + 1, 876 if i % 5 else 879)) for i, x in enumerate(range(1798, 1834, 6))], INKM, 0.6)
     for x, y in ((1632, 1070), (1912, 1070), (1680, 876)):
-        fastener(p, x, y - TOP)
+        p.rivet(x, y - TOP, 2.2)
     return bar_finish(shade(p, OBS_LOOK, SEAMS), p, OBS_LOOK)
 
 
@@ -3703,16 +3758,22 @@ def paint_observer_panel():
     return bar_finish(shade(p, OBS_LOOK), p, OBS_LOOK, gloss=False)
 
 
-def paint_observer_pieces():
+OBS_OWN = ("Logo", "ExpBar", "Tray", "HudCell", "HudReady")   # what the watcher took from America's sheet until round 23
+
+
+def paint_observer_pieces(svg_path=EMBLEM_SVG):
     """ReforgedHudObsPieces, 512x512: the toolbar's three buttons in four states, the hovered (RowH) and
     the watched (RowS) row's rings that stand 4 px round a 45x30 player button and the radar's nine.  The
-    sides' emblems that stood at y 150-248 are retail's SSObserver pictures again, and that band is free."""
+    sides' emblems that stood at y 150-248 are retail's SSObserver pictures again.  Since round 23 the sheet
+    also holds what the watcher's scheme took from America's: the emblem in the selection window (in grey,
+    ObserverProLogo), the rank bar (ObserverProExpBar) and the superweapon tray's pieces (ObserverProTray*,
+    ObserverProHudCellPlate), all in the common frame's Forged Alloy."""
     b = "machined"                              # the column's, America's like the radar box it belongs to
     M = read_mapped("Obs", "Pieces")
     p = Painter(*OBS_PIECES_SIZE)
     for name, r in M.items():
         kind = name[len("ObserverPro"):]
-        if not name.startswith("ObserverPro") or kind.startswith("Radar"):
+        if not name.startswith("ObserverPro") or kind.startswith(("Radar",) + OBS_OWN):
             continue
         st = kind[-1] if kind[-1] in "HPIS" else ""
         base = kind[:-1] if st else kind
@@ -3727,10 +3788,22 @@ def paint_observer_pieces():
             else:                               # the watched one: on air, red bars top and bottom
                 p.inlay([plate(x0 + 9, y0 + 1.4, x1 - 9, y0 + 2.6), plate(x0 + 9, y1 - 2.6, x1 - 9, y1 - 1.4)], ACCENT2, 0.2)
             p.cut([shape(b, x0 + 4, y0 + 4, x1 - 4, y1 - 4, 2)])
+    exp_bar(p, *M["ObserverProExpBar"][:2], b)
     p.limit[:] = True
     sheet_img = bar_finish(shade(p, OBS_LOOK, shadow=False), p, OBS_LOOK, scan=False, gloss=False)
     for name, img in radar_pieces(observer_radar_frame(), OBS_RADAR_EDGE).items():
         put(sheet_img, img, M["ObserverProRadar" + name])
+    x0, y0, x1, y1 = M["ObserverProLogo"]
+    if os.path.exists(svg_path):                # the launcher is not beside this checkout
+        sheet_img.paste(logo((x1 - x0, y1 - y0), svg_path, mute=0.3, grey=OBS_LOOK["steel"], mono=True), (x0, y0))
+    pieces = {"Tray" + k: v for k, v in tray_pieces("Observer").items()}
+    pieces.update({"HudCell" + k: v for k, v in hud_cell_pieces("Observer").items()})
+    pieces.update({"TrayTabDown": tray_tab("Observer"), "TrayTabUp": tray_tab("Observer", up=True)})
+    pieces.update(ready_glow_pieces(b, "B"))
+    for name, img in pieces.items():
+        put(sheet_img, img, M["ObserverPro" + name])
+    assert {n for n in M if n.startswith(tuple("ObserverPro" + k for k in OBS_OWN))} == \
+        {"ObserverProLogo", "ObserverProExpBar"} | {"ObserverPro" + n for n in pieces}, "ReforgedHudObsPieces.ini and its pieces differ"
     check_mapped(M, OBS_PIECES_SIZE)
     return sheet_img
 
@@ -3888,8 +3961,9 @@ RACK_STAT_KEYS = "QWERTYA"
 RACK_STAT_W, RACK_STAT_PITCH = 36, 39
 RACK_STAT_AT = [(23 + RACK_STAT_PITCH * i, 3, 23 + RACK_STAT_PITCH * i + RACK_STAT_W, 29) for i in range(len(RACK_STAT_KEYS))]
 RACK_HEAD_AT = dict(heading=(22, 32, 294, 48), columns=(22, 51, 294, 65), rule=(22, 65, 294, 66))
-# the code's text colours (InGameUI drawSpectatorRack), which the keys' glyphs and rims match
-RACK_GREY, RACK_WHITE, RACK_LIT, RACK_GOLD = (138, 148, 159), (240, 244, 246), (128, 149, 234), (242, 194, 48)
+# the code's text colours (InGameUI drawSpectatorRack), which the keys' glyphs and rims match; the lit rim is
+# Forged Alloy's lit bronze since round 23 (it was America's blue, 128, 149, 234)
+RACK_GREY, RACK_WHITE, RACK_LIT, RACK_GOLD = (138, 148, 159), (240, 244, 246), OBS_LOOK["hilite"], (242, 194, 48)
 RACK_LABEL = (24, 9, 180, 23)
 DRAWER_W, DRAWER_TOP = 276, 12
 DRAWER_CAMEOS = [(22 + 39 * i, 3, 58 + 39 * i, 27) for i in range(6)]   # all six clear of the standings' edge
@@ -4081,8 +4155,8 @@ def rack_cap(p):
     p.sink([shape("machined", *RACK_CAP_WELL, 3)], 4, 1.6)
     p.inlay([plate(196, 25, RACK_W + 20, 25.6)], INKM, 0.3)
     vents(p, 200, 262, 9, 20, 6)
-    p.stud(274, 15, 2.6)
-    p.stud(294, 15, 2.6)
+    p.rivet(274, 15, 2.4)
+    p.rivet(294, 15, 2.4)
 
 
 def rack_shell(p, plate_foot, floor_top, floor_foot):
@@ -4209,7 +4283,7 @@ def cam_plate():
         p.tiers([shape("machined", 0, 0, w, h, 8)], (False,) * 4, 3.0, 6.0, 3.2, 1.6, 2.0)
         p.sink([shape("machined", 8, 5, 40, 29, 3)], 3.0, 1.2)
         p.sink([shape("machined", 46, 5, 268, 29, 3)], 4.0, 1.6)
-        p.stud(284, 9, 2.0)
+        p.rivet(284, 9, 2.0)
     img = lit(w, h, draw)
     img.alpha_composite(tally_piece(True), (277, 14))
     return img
@@ -4616,7 +4690,7 @@ def main():
             bar, panel = paint_observer_bar(), paint_observer_panel()
             check_observer(bar, panel)
             made = {"ReforgedHudObsCommandBar": bar, "ReforgedHudObsPlayerWindow": panel,
-                    "ReforgedHudObsPieces": paint_observer_pieces(), "ReforgedHudObsSpec": paint_rack()}
+                    "ReforgedHudObsPieces": paint_observer_pieces(args.emblem), "ReforgedHudObsSpec": paint_rack()}
             made["ReforgedHudHelpbox"] = helpbox = paint_helpbox()
             check_helpbox(helpbox)
             made["ReforgedHudObsTabPanel"] = tab = tab_panel("Observer")

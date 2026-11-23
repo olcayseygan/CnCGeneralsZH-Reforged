@@ -185,39 +185,7 @@ def small(side, w, h, draw, shadow=False, scan=False):
     return img.crop((PAD, PAD, PAD + w, PAD + h))
 
 
-def worn(img, p, palette, seed):
-    """A common frame's texture, the GLA's: scratches through the paint (only on the bevels and corners, chipped to
-    bright metal, with edge_wear), rust blooms and a fine grit on the metal; the glass stays clean."""
-    from scipy import ndimage
-    s = H.SS
-    rng = np.random.default_rng(seed)
-
-    def down(a):
-        return a.reshape(p.h_, s, p.w, s).mean(axis=(1, 3))
-    metal = (p.mat != H.GLASS) & p.alpha
-    m = down(metal.astype(np.float32))
-    a = np.asarray(img, np.float32) / 255
-    rgb, al = a[..., :3], a[..., 3]
-    shape_ = (p.h_, p.w)
-    sc = down(H.scratches(rng, p.h.shape) * metal)
-    if palette.get("edge_wear"):                # bevels: where the height field slopes, grown a texel
-        gy, gx = np.gradient(ndimage.gaussian_filter(p.h, 0.5 * s) * s)
-        edge = ndimage.maximum_filter(down((np.hypot(gx, gy) > 0.35).astype(np.float32)), 3)
-        chips = (ndimage.gaussian_filter(rng.standard_normal(shape_), 0.8) > 0.55) * edge
-        sc = np.maximum(sc * edge, chips * 0.8)
-    rgb += sc[..., None] * palette.get("wear", 0) * np.array([1.0, 0.94, 0.84])
-    if palette.get("rust"):
-        n = ndimage.gaussian_filter(rng.standard_normal(shape_), 5)
-        n /= n.std() + 1e-6
-        n += 0.5 * ndimage.gaussian_filter(rng.standard_normal(shape_), 1.2) / 0.3
-        r = np.clip((n - 0.9) * 0.45, 0, 0.75) * m * palette["rust"]
-        lum = rgb.mean(2, keepdims=True)
-        rgb = rgb * (1 - r[..., None]) + np.array(H.RUST, np.float32) / 255 * (0.45 + 1.6 * lum) * r[..., None]
-    if palette.get("grit"):
-        g = ndimage.gaussian_filter(rng.standard_normal(shape_), 0.6)
-        rgb *= 1 + palette["grit"] * 2.2 * g[..., None] * m[..., None]
-    a[..., :3] = np.clip(rgb, 0, 1) * (al[..., None] > 0)
-    return Image.fromarray((a * 255 + 0.5).astype(np.uint8), "RGBA")
+worn = H.worn                                   # the common frame's texture; the observer's HUD wears it too
 
 
 def sharp(side):

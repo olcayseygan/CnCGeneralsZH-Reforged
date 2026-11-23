@@ -427,6 +427,7 @@ public:
 	inline UnsignedInt getBallisticFlightFrames() const { return m_ballisticFlightFrames; }
 	inline Real getBallisticPeakHeight() const { return m_ballisticPeakHeight; }
 	Real getBallisticLaunchPitch(const Coord3D& from, const Coord3D& to) const;
+	Real getBallisticGroundPeakHeight(const Coord3D& from, const Coord3D& to) const;	///< the least peak that clears the ground between, zero when the line does
 	inline Real getWeaponRecoilAmount() const { return m_weaponRecoil; }
 	inline Real getMinTargetPitch() const { return m_minTargetPitch; }
 	inline Real getMaxTargetPitch() const { return m_maxTargetPitch; }

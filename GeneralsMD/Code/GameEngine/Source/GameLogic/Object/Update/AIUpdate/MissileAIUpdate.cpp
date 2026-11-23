@@ -592,8 +592,10 @@ void MissileAIUpdate::doAttackState(Bool turnOK)
 	if (TheGameLogic->getFrame() >= m_fuelExpirationDate)
 	{
 		// Out of fuel on the ground: a landing the collision check let pass (a ridge far above its goal)
-		// never comes again, and nothing else would end it.
-		if( d->m_detonateOnNoFuel || !getObject()->isAboveTerrain() )
+		// never comes again, and nothing else would end it. A spent one's fuel was cut because its target
+		// went (airborneTargetGone), not because it ran out, so a DetonateOnNoFuel missile (the Dragon
+		// Tank's flame) falls to the ground like the rest instead of bursting in mid-air.
+		if( ( d->m_detonateOnNoFuel && !m_isSpent ) || !getObject()->isAboveTerrain() )
 		{
 			detonate();
 			return;
@@ -874,9 +876,10 @@ UpdateSleepTime MissileAIUpdate::update()
 		if( victim )
 		{
 			ObjectID targetID = missile->calculateCountermeasureToDivertTo( *victim );
-			if( targetID != INVALID_ID )
+			// the flare can have burnt out this very frame
+			victim = targetID != INVALID_ID ? TheGameLogic->findObjectByID( targetID ) : NULL;
+			if( victim )
 			{
-				victim = TheGameLogic->findObjectByID( targetID );
 				getStateMachine()->setGoalPosition(victim->getPosition());
 				// ick. const-cast is evil. fix. (srj)
  				aiMoveToObject(const_cast<Object*>(victim), CMD_FROM_AI );

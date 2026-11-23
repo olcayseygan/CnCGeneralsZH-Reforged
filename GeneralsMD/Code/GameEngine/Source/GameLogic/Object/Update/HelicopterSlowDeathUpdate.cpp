@@ -242,6 +242,12 @@ void HelicopterSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 		 shot at full speed came down 630 on from the hit. A hovering one only gets the push.
 		 DeathMomentum = No keeps EA's. */
 	PhysicsBehavior *deathPhysics = getObject()->getPhysics();
+
+	// physics deletes a vehicle that falls onto a building, which took the wreck with no blast and no
+	// hull; it comes down on the roof instead and crashes there (update)
+	if( deathPhysics )
+		deathPhysics->setNoStructureCrash( TRUE );
+
 	if( modData->m_deathMomentum && deathPhysics )
 	{
 		const Coord3D *vel = deathPhysics->getVelocity();
@@ -425,8 +431,18 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 			drifted.x += m_driftX;
 			drifted.y += m_driftY;
 
-			// moved by hand, so nothing else keeps it on the map or out of a hillside: it stops at the
-			// map's edge, and rising ground in its way is where it comes down
+			// moved by hand, so physics does not keep it out of a building: a wall in its way, below the
+			// roof, ends the drift, and the fall goes on beside it
+			Real roofZ = 0.0f;
+			if( findStructureUnder( copter, drifted, roofZ ) != NULL && !isOverRoof( copter, drifted, roofZ ) )
+			{
+				m_driftX = 0.0f;
+				m_driftY = 0.0f;
+				drifted = *copter->getPosition();
+			}
+
+			// nor on the map or out of a hillside: it stops at the map's edge, and rising ground in its
+			// way is where it comes down
 			Region3D extent;
 			TheTerrainLogic->getExtent( &extent );
 			if( drifted.x < extent.lo.x || drifted.x > extent.hi.x || drifted.y < extent.lo.y || drifted.y > extent.hi.y )
@@ -517,11 +533,26 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 
 		Real ground = TheTerrainLogic->getLayerHeight( tmpPt.x, tmpPt.y, newLayer );
 
-		if (pos->z <= ground + 1.0f || hitATree )
+		// a roof under it is ground too: the crash and the hull happen up there
+		Real roofZ = 0.0f;
+		Object *roof = findStructureUnder( copter, *pos, roofZ );
+		if( roof != NULL && !( roofZ > ground && isOverRoof( copter, *pos, roofZ ) && pos->z <= roofZ + 1.0f ) )
+			roof = NULL;
+
+		if (pos->z <= ground + 1.0f || hitATree || roof != NULL )
 		{
-			
+
 			// mark the frame we hit the ground on
 			m_hitGroundFrame = TheGameLogic->getFrame();
+
+			// down on a building, it takes the damage physics would have dealt it, and nothing ploughs
+			// on from there: the plough below follows the terrain, under the roof
+			if( roof != NULL )
+			{
+				crashIntoStructure( copter, roof );
+				m_driftX = 0.0f;
+				m_driftY = 0.0f;
+			}
 
 			// A copter down before its blades flew off never reached the ejection above, which only
 			// runs in the air: a veteran Comanche shot down low lost its pilot (upstream #175).
@@ -573,8 +604,10 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 		TheTerrainLogic->getExtent( &extent );
 		const Real groundZ = TheTerrainLogic->getLayerHeight( ploughed.x, ploughed.y, copter->getLayer() );
 		const Real MAX_CLIMB = 2.0f;
+		Real roofZ = 0.0f;
+		// held, so physics no longer keeps it out of a building: a wall stops it as rising ground does
 		if( ploughed.x < extent.lo.x || ploughed.x > extent.hi.x || ploughed.y < extent.lo.y || ploughed.y > extent.hi.y ||
-				groundZ > copter->getPosition()->z + MAX_CLIMB )
+				groundZ > copter->getPosition()->z + MAX_CLIMB || findStructureUnder( copter, ploughed, roofZ ) != NULL )
 		{
 			m_driftX = 0.0f;
 			m_driftY = 0.0f;

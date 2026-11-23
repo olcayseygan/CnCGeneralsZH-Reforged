@@ -166,7 +166,15 @@ public:
 	virtual Bool isDieApplicable(const DamageInfo *damageInfo) const { return getSlowDeathBehaviorModuleData()->m_dieMuxData.isDieApplicable(getObject(), damageInfo); }
 	virtual Bool canBeginSecondLife() const { return FALSE; }
 
+	/// the structure whose footprint obj would cover at pos, and its roof's height; NULL for none
+	static Object* findStructureUnder(const Object* obj, const Coord3D& pos, Real& roofZ);
+	/// a body at pos is on that roof, not against the building's side below it
+	static Bool isOverRoof(const Object* obj, const Coord3D& pos, Real roofZ);
+
 protected:
+
+	/// the building damage and fire physics gives a vehicle falling onto a structure, without deleting it
+	static void crashIntoStructure(Object* obj, Object* structure);
 
 	/// what = SlowDeathBehaviorModuleData::HAS_FX / HAS_OCL / HAS_WEAPON, the lists of the phase to run
 	void doPhaseStuff(SlowDeathPhaseType sdphase, Int what = SlowDeathBehaviorModuleData::HAS_FX | SlowDeathBehaviorModuleData::HAS_NON_LOD_EFFECTS);

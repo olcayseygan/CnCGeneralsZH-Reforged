@@ -238,6 +238,12 @@ void JetSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 		 down a long way on, at stall speed it drops nearly where it was hit. */
 	m_glideSupport = 1.0f;
 	PhysicsBehavior *physics = us->getPhysics();
+
+	// physics deletes a vehicle that falls onto a building, which took the wreck with no fireball;
+	// it comes down on the roof instead and crashes there (update)
+	if( physics )
+		physics->setNoStructureCrash( TRUE );
+
 	if( modData->m_deathMomentum && modData->m_momentumGlide > 0.0f && physics )
 	{
 		const Coord3D *vel = physics->getVelocity();
@@ -352,7 +358,17 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 				height = 0.0f;
 		}
 
-		
+		// a roof under it is ground too, with the same slop as a bridge
+		Real roofZ = 0.0f;
+		Object *roof = findStructureUnder( us, *us->getPosition(), roofZ );
+		if( roof != NULL && isOverRoof( us, *us->getPosition(), roofZ ) && us->getPosition()->z - roofZ < height )
+		{
+			const Real roofHeight = us->getPosition()->z - roofZ;
+			height = (roofHeight <= 1.0f) ? 0.0f : roofHeight;
+		}
+		else
+			roof = NULL;
+
 
 		Bool hitATree = FALSE;
 		// Here we want to make sure we crash if we collide with a tree on the way down
@@ -373,6 +389,10 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 		// when we've hit the ground, we're totally done
 		if( height <= 0.0f || hitATree )
 		{
+
+			// down on a building, it takes the damage physics would have dealt it
+			if( roof != NULL && height <= 0.0f )
+				crashIntoStructure( us, roof );
 
 			// stop the death looping sound at the right time
 			TheAudio->removeAudioEvent( m_deathLoopSound.getPlayingHandle() );

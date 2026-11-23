@@ -329,8 +329,6 @@ private:
 	ProjectileUpdateInterface*	m_pui;
 	mutable Real								m_velMag;									///< magnitude of cur vel (recalced when m_vel changes)
 
-	Bool												m_originalAllowBounce;		///< orignal state of allow bounce
-
 	inline void setFlag(PhysicsFlagsType f, Bool set) { wakeIfDormant(); if (set) m_flags |= f; else m_flags &= ~f; }
 	inline Bool getFlag(PhysicsFlagsType f) const { return (m_flags & f) != 0; }
 

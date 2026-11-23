@@ -831,7 +831,7 @@ void reallyDoStart( void )
 		TheGameLogic->clearGameData(FALSE);
 
 	// on the game, so the replay's header carries it as a network lobby's does
-	TheSkirmishGameInfo->setGameSpeedPercent( chosenGameSpeedPercent() );
+	TheSkirmishGameInfo->setGameSpeedPercent( skirmishDirectStrike ? NATIVE_GAME_SPEED_PERCENT : chosenGameSpeedPercent() );	// Direct Strike plays its own speed (FitDirectStrikeRoom)
 	const Int gameSpeedPercent = TheSkirmishGameInfo->getGameSpeedPercent();
 	DEBUG_LOG(("Game speed %d%%: %d logic frames a second\n", gameSpeedPercent, GameEngine_matchFramesPerSecond()));
 

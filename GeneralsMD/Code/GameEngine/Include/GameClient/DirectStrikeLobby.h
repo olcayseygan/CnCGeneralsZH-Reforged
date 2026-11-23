@@ -43,5 +43,7 @@ class GameWindow;
 void DirectStrikeLobby_attach( GameWindow *parent, const char *layoutFilename, const GameInfo *game );
 /// give the room its own draw and input back, before its windows go
 void DirectStrikeLobby_detach( void );
+/// unhide and redraw the room windows the lobby blanked, when a room opens (InitLobbySeatVisuals)
+void DirectStrikeLobby_restoreRoom( void );
 
 #endif // __DIRECTSTRIKELOBBY_H_

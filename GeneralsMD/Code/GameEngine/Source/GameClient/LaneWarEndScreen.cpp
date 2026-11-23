@@ -735,7 +735,9 @@ void watchReplay( void )
 }
 
 /** The same seats, armies and colours on a fresh island, as the room's Start builds it (the skirmish
-	* menu's reallyDoStart); a network game goes back to its room, where the host starts the next one. */
+	* menu's reallyDoStart).  A network game has no room to go back to: an online room is gone from the
+	* server at its game.start, and the LAN and online rooms pop to their lobby when the shell comes back
+	* (LanGameOptionsMenuInit, WOLGameSetupMenuInit).  So there Rematch clears the game exactly as Back does. */
 void rematch( void )
 {
 	if( TheGameLogic->isInMultiplayerGame() )
@@ -743,7 +745,6 @@ void rematch( void )
 		TheMessageStream->appendMessage( GameMessage::MSG_CLEAR_GAME_DATA );
 		return;
 	}
-	const Int gameSpeedPercent = TheSkirmishGameInfo->getGameSpeedPercent();
 	endMatchHere();
 	if( !SetDirectStrikeMap( TheSkirmishGameInfo ) )
 	{
@@ -751,6 +752,7 @@ void rematch( void )
 		return;
 	}
 	FitDirectStrikeRoom( TheSkirmishGameInfo );
+	const Int gameSpeedPercent = TheSkirmishGameInfo->getGameSpeedPercent();	// after the fit, which pins the mode's speed
 	TheSkirmishGameInfo->setSeed( TheGlobalData->m_fixedSeed >= 0 ? TheGlobalData->m_fixedSeed : (Int)Clock_Milliseconds() );
 	TheWritableGlobalData->m_mapName = TheSkirmishGameInfo->getMap();
 	InitRandom( TheSkirmishGameInfo->getSeed() );

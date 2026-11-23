@@ -199,6 +199,12 @@ WindowMsgHandledType DisconnectControlSystem( GameWindow *window, UnsignedInt ms
 			GameWindow *control = (GameWindow *) mData1;
 			Int controlID = control->winGetWindowId();
 
+			// the match's network is gone and the menu with it: nothing is left to quit or vote on
+			if (TheDisconnectMenu == NULL) {
+				HideDisconnectWindow();
+				break;
+			}
+
 			if (controlID == buttonQuitID) {
 				TheDisconnectMenu->quitGame();
 				buttonQuitWindow->winEnable(FALSE);
@@ -250,7 +256,9 @@ WindowMsgHandledType DisconnectControlSystem( GameWindow *window, UnsignedInt ms
 				// Clean up the text (remove leading/trailing chars, etc)
 				txtInput.trim();
 				// Echo the user's input to the chat window
-				if (!txtInput.isEmpty()) {
+				if (TheDisconnectMenu == NULL) {
+					HideDisconnectWindow();
+				} else if (!txtInput.isEmpty()) {
 //					DEBUG_LOG(("DisconnectControlSystem - sending string %ls\n", txtInput.str()));
 					TheDisconnectMenu->sendChat(txtInput);
 				}

@@ -49,6 +49,9 @@
 #include "GameNetwork/GameSpy/StagingRoomGameInfo.h"
 #include "GameNetwork/Online/OnlineQueues.h"
 
+#include <algorithm>
+#include <vector>
+
 using namespace DirectStrikeTheme;
 
 namespace
@@ -125,6 +128,15 @@ namespace
 	DisplayString *s_chatTexts[ CHAT_LINES ];
 	DisplayString *s_inputText = NULL;
 	Int s_chatScroll = 0;	///< entries the log is scrolled back from the newest
+
+	/// what hideRoom changed in the room, so the detach gives the room back as it was found
+	struct Drawn
+	{
+		GameWindow *window;
+		GameWinDrawFunc draw;
+	};
+	std::vector<GameWindow *> s_hidden;
+	std::vector<Drawn> s_blanked;
 
 	//-----------------------------------------------------------------------------------------------
 	GameWindow *named( const char *what, Int seat = -1 )
@@ -345,13 +357,30 @@ namespace
 				if( child->winIsHidden() )
 					child->winHide( FALSE );
 				if( child->winGetDrawFunc() != drawNothing )
+				{
+					const Drawn was = { child, child->winGetDrawFunc() };
+					s_blanked.push_back( was );
 					child->winSetDrawFunc( drawNothing );
+				}
 				if( child != keep )
 					hideRoom( child, keep );
 			}
 			else if( !child->winIsHidden() )
+			{
+				if( std::find( s_hidden.begin(), s_hidden.end(), child ) == s_hidden.end() )
+					s_hidden.push_back( child );
 				child->winHide( TRUE );
+			}
 		}
+	}
+
+	GameWindow *s_fading = NULL;				///< the room the lobby left as its layout fades out
+	GameWinDrawFunc s_fadingDraw = NULL;		///< that room's own draw, back at DirectStrikeLobby_restoreRoom
+
+	/// the left room's draw through the fade-out: the shell's transition shows the stock gadgets again, so they go every frame
+	void fadingDraw( GameWindow *window, WinInstanceData * )
+	{
+		hideRoom( window, NULL );
 	}
 
 	/// the chat entry on the chat input's rect, so a click there gives it the keyboard
@@ -1018,6 +1047,8 @@ void DirectStrikeLobby_attach( GameWindow *parent, const char *layoutFilename, c
 	if( s_parent == parent )
 		return;
 	DirectStrikeLobby_detach();
+	if( s_fading == parent )
+		DirectStrikeLobby_restoreRoom();	// its own draw, never the fade's, is the one to keep
 	s_game = game;
 	s_parent = parent;
 	s_room = (Room)room;
@@ -1030,11 +1061,31 @@ void DirectStrikeLobby_attach( GameWindow *parent, const char *layoutFilename, c
 	logSeats( "attach" );
 }
 
+/** The room's windows back as the lobby found them, so a later show of the layout is the stock room and
+	* never a bare frame.  Called when a room opens, not at the detach, which runs as the room starts to fade
+	* out: the stock gadgets would flash up over the fade. */
+void DirectStrikeLobby_restoreRoom( void )
+{
+	if( s_fading != NULL && s_fading->winGetDrawFunc() == fadingDraw )
+		s_fading->winSetDrawFunc( s_fadingDraw );
+	s_fading = NULL;
+	s_fadingDraw = NULL;
+	for( size_t i = 0; i < s_blanked.size(); ++i )
+		s_blanked[ i ].window->winSetDrawFunc( s_blanked[ i ].draw );
+	for( size_t i = 0; i < s_hidden.size(); ++i )
+		s_hidden[ i ]->winHide( FALSE );
+	s_blanked.clear();
+	s_hidden.clear();
+}
+
 void DirectStrikeLobby_detach( void )
 {
 	if( s_parent != NULL )
 	{
-		s_parent->winSetDrawFunc( s_roomDraw );
+		// the room's windows stay hidden through its fade-out; DirectStrikeLobby_restoreRoom gives them back
+		s_fading = s_parent;
+		s_fadingDraw = s_roomDraw;
+		s_parent->winSetDrawFunc( fadingDraw );
 		s_parent->winSetInputFunc( s_roomInput );
 	}
 	for( Int i = 0; i < CHAT_LINES; ++i )

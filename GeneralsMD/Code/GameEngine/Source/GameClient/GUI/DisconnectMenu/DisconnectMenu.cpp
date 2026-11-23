@@ -92,6 +92,12 @@ DisconnectMenu::DisconnectMenu() {
 }
 
 DisconnectMenu::~DisconnectMenu() {
+	/* The window outlives the menu: its layout is made once and kept.  A screen still up when the match's
+		 network went away stayed over the shell with its rows hidden, an empty frame whose Quit led nowhere.
+		 The engine's own shutdown deletes the network after the window manager has gone. */
+	if (TheWindowManager != NULL) {
+		HideDisconnectWindow();
+	}
 }
 
 void DisconnectMenu::init() {

@@ -855,8 +855,8 @@ Bool FileSystem::createDirectory(AsciiString directory)
 	 English keeps Language=german with only EnglishZH.big beside the exe, and GlobalLanguage::init
 	 then threw on Data\german\Language.ini before the first frame (player report #39). A German-only
 	 install has no english to fall back to either (issue #63), so every retail language is tried.
-	 Empty when no Language.ini is found at all. */
-static const char *const RetailLanguages[] = { "english", "german", "french", "spanish", "italian",
+	 Empty when no Language.ini is found at all.  german2 is EA's censored German edition. */
+static const char *const RetailLanguages[] = { "english", "german", "german2", "french", "spanish", "italian",
 	"korean", "chinese", "brazilian", "polish", "russian" };
 
 Bool FileSystem::isRetailLanguage(const char *language)

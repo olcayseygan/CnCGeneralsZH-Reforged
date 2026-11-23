@@ -13508,6 +13508,17 @@ TEST(lane_war_jets_take_off_when_the_meeting_is_no_further_than_their_flight)
 	CHECK_EQ( LANEWAR_JET_REARM_FRAMES, (UnsignedInt)( 15 * LOGICFRAMES_PER_GAME_SECOND ) );
 }
 
+TEST(lane_war_late_income_leaves_the_opening_alone_then_grows_to_its_cap)
+{
+	for( UnsignedInt tick = 0; tick < LANEWAR_LATE_INCOME_FROM_TICK; ++tick )
+		CHECK_EQ( LaneWar_lateIncome( tick ), (UnsignedInt)0 );
+	CHECK_EQ( LaneWar_lateIncome( LANEWAR_LATE_INCOME_FROM_TICK ), (UnsignedInt)LANEWAR_LATE_INCOME_STEP );
+	CHECK_EQ( LaneWar_lateIncome( LANEWAR_LATE_INCOME_FROM_TICK + 1 ), (UnsignedInt)( 2 * LANEWAR_LATE_INCOME_STEP ) );
+	CHECK_EQ( LaneWar_lateIncome( 1000 ), (UnsignedInt)LANEWAR_LATE_INCOME_MOST );
+	for( UnsignedInt tick = 1; tick < 100; ++tick )
+		CHECK( LaneWar_lateIncome( tick ) >= LaneWar_lateIncome( tick - 1 ) );
+}
+
 TEST(lane_war_tiers_cost_what_the_plan_says_and_a_sale_pays_back_half_once_sent)
 {
 	// four income levels of 1000 each, every one paying 100 more a tick, the middle a quarter on top

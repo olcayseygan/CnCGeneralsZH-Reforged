@@ -2552,10 +2552,12 @@ void LaneWarDirector::tick( UnsignedInt now )
 		{
 			if( m_seatPlayer[ t ][ s ] < 0 )
 				continue;
-			const UnsignedInt pay = LaneWar_incomeAt( m_incomeLevel[ t ][ s ], holder == t );
+			// the level's pay with the middle's bonus, and for the middle's holder what the match's length adds
+			const UnsignedInt pay = LaneWar_incomeAt( m_incomeLevel[ t ][ s ], holder == t ) + ( holder == t ? LaneWar_lateIncome( m_tickCount ) : 0 );
 			paid[ t ] = max( paid[ t ], pay );
 			ThePlayerList->getNthPlayer( m_seatPlayer[ t ][ s ] )->getMoney()->deposit( pay, FALSE );
-			TheLaneWarStats->onIncome( m_seatPlayer[ t ][ s ], pay, pay - LaneWar_incomeAt( m_incomeLevel[ t ][ s ], FALSE ) );
+			TheLaneWarStats->onIncome( m_seatPlayer[ t ][ s ], pay,
+				LaneWar_incomeAt( m_incomeLevel[ t ][ s ], holder == t ) - LaneWar_incomeAt( m_incomeLevel[ t ][ s ], FALSE ) );
 		}
 	m_middleHolder = holder;
 

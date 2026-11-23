@@ -190,6 +190,28 @@ enum { LANEWAR_TRACK_INCOME = 0, LANEWAR_TRACK_TECH = 1 };
 
 /// what a player on that income level is paid on a tick, the middle's bonus on top when his team holds it
 extern UnsignedInt LaneWar_incomeAt( Int level, Bool holdsMiddle );
+
+enum
+{
+	LANEWAR_LATE_INCOME_FROM_TICK = 4,		///< the ticks before this one pay what they always did
+	LANEWAR_LATE_INCOME_STEP = 150,				///< every tick from it pays this much more than the last
+	LANEWAR_LATE_INCOME_MOST = 4500,			///< and no more than this on top
+};
+
+/** What every seated player of the team holding the middle is paid on top on tick `tick` (from 0):
+	  nothing on the opening ticks, then LANEWAR_LATE_INCOME_STEP more each tick up to
+	  LANEWAR_LATE_INCOME_MOST, so the middle is worth more the longer the match runs and a stalemate
+	  breaks (the owner's lever of 2026-11-23, income growing with match time). Paid to both teams
+	  alike it changed nothing: both plots fill and the waves still cancel; to the middle's holder it
+	  ended six 3v3 Hard matches at 1.0x at a median of 24 minutes, all inside 40. Ticks are game time,
+	  so the curve is the same at every speed. */
+inline UnsignedInt LaneWar_lateIncome( UnsignedInt tick )
+{
+	if( tick < LANEWAR_LATE_INCOME_FROM_TICK )
+		return 0;
+	const UnsignedInt late = ( tick - LANEWAR_LATE_INCOME_FROM_TICK + 1 ) * LANEWAR_LATE_INCOME_STEP;
+	return late < LANEWAR_LATE_INCOME_MOST ? late : LANEWAR_LATE_INCOME_MOST;
+}
 /// what buying that level of a track costs; 0 for a level that cannot be bought
 extern Int LaneWar_tierPrice( Int track, Int level );
 /// what selling a unit bought for cost gives back, whether or not it has gone out in a wave
@@ -357,7 +379,10 @@ public:
 	Int getMiddleHolder( void ) const { return m_middleHolder; }
 	Bool isHeroBought( Int team, Int seat ) const { return m_heroBought[ team ][ seat ]; }
 	/// what the seat is paid on the next tick if the middle stays with whoever holds it now
-	UnsignedInt getIncome( Int team, Int seat ) const { return LaneWar_incomeAt( m_incomeLevel[ team ][ seat ], m_middleHolder == team ); }
+	UnsignedInt getIncome( Int team, Int seat ) const
+	{
+		return LaneWar_incomeAt( m_incomeLevel[ team ][ seat ], m_middleHolder == team ) + ( m_middleHolder == team ? LaneWar_lateIncome( m_tickCount ) : 0 );
+	}
 	Int getSeatPlayer( Int team, Int seat ) const { return m_seatPlayer[ team ][ seat ]; }
 	UnsignedInt getTickCount( void ) const { return m_tickCount; }
 	UnsignedInt getNextTickFrame( void ) const { return m_nextTickFrame; }

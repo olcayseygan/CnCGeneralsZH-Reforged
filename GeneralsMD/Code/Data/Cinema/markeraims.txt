@@ -1,0 +1,7 @@
+# Scenarios/markeraims.txt on Tournament Desert: the camera held over the open sand in the middle of the
+# map, between the two bases, so the ground marker of each power the control socket aims
+# (experiments/ground-markers/aims.py in the wrapper) stands whole in the middle of the picture, the
+# point under the screen's centre. The interface stays up: with it off the cursor's marker is not taken.
+
+0.5   cut      1000 1250 1.3
+0.5   hud      on

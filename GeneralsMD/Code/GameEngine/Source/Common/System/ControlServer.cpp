@@ -38,7 +38,9 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/NameKeyGenerator.h"
+#include "Common/ThingTemplate.h"
 #include "GameClient/AirliftPanel.h"
+#include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GameWindowManager.h"
@@ -815,6 +817,45 @@ static void handleCommand( const AsciiString &command )
 			replyOk( "\"airlift\":\"open\"" );
 		else
 			replyError( "the local player has no airlift power" );
+		return;
+	}
+
+	/* aim <CommandButton> [<Object>]: what pressing that button does, on the local player's first object
+		 that owns its power (or, for a button with none, such as Command_Guard, the first unit that can
+		 move), of that template when one is named, selected first.  The cursor is then up and follows the
+		 pointer, so hover draws the ground marker and click fires it.  Read the way airliftopen reads; for
+		 recording the aims' programs (Tools/record-dx11-shaders.ps1 has no way to aim a power). */
+	if (strncmp( command.str(), "aim ", 4 ) == 0)
+	{
+		char buttonName[ 128 ] = "", templateName[ 128 ] = "";
+		sscanf( command.str() + 4, "%127s %127s", buttonName, templateName );
+		const CommandButton *button = TheControlBar ? TheControlBar->findCommandButton( AsciiString( buttonName ) ) : NULL;
+		Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+		if (button == NULL || player == NULL || TheGameLogic == NULL || TheInGameUI == NULL)
+		{
+			replyError( "aim <CommandButton>, in a match" );
+			return;
+		}
+		const SpecialPowerTemplate *power = button->getSpecialPowerTemplate();
+		Object *caster = NULL;
+		for (Object *obj = TheGameLogic->getFirstObject(); obj && caster == NULL; obj = obj->getNextObject())
+		{
+			if (obj->getControllingPlayer() != player || obj->isEffectivelyDead() || obj->getDrawable() == NULL)
+				continue;
+			if (templateName[ 0 ] != 0 && obj->getTemplate()->getName().compareNoCase( templateName ) != 0)
+				continue;
+			if (power ? obj->getSpecialPowerModule( power ) != NULL : ( obj->getAI() != NULL && !obj->isKindOf( KINDOF_STRUCTURE ) ))
+				caster = obj;
+		}
+		if (caster == NULL)
+		{
+			replyError( "nothing of the local player's fires that button" );
+			return;
+		}
+		TheInGameUI->deselectAllDrawables();
+		TheInGameUI->selectDrawable( caster->getDrawable() );
+		TheInGameUI->setGUICommand( button );
+		replyOk( "\"aimed\":true" );
 		return;
 	}
 

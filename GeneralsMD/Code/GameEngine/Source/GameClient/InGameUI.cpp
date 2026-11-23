@@ -129,6 +129,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/JetAIUpdate.h"
+#include "GameLogic/Module/ParticleUplinkCannonUpdate.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Armor.h"
 #include "GameLogic/Object.h"
@@ -2023,6 +2024,25 @@ void InGameUI::init( void )
 //-------------------------------------------------------------------------------------------------
 void InGameUI::setRadiusCursor(RadiusCursorType cursorType, const SpecialPowerTemplate* specPowTempl, WeaponSlotType weaponSlot)
 {
+	// EA aimed three powers with no radius cursor at all: the Particle Cannon, the Laser General's
+	// cannon and the supply crate drop.  The ground markers give them one; Classic keeps them bare
+	if (cursorType == RADIUSCURSOR_NONE && specPowTempl != NULL && groundMarkersOn())
+	{
+		switch (specPowTempl->getSpecialPowerType())
+		{
+			case SPECIAL_PARTICLE_UPLINK_CANNON:
+			case SUPW_SPECIAL_PARTICLE_UPLINK_CANNON:
+			case LAZR_SPECIAL_PARTICLE_UPLINK_CANNON:
+				cursorType = RADIUSCURSOR_PARTICLECANNON;
+				break;
+			case SPECIAL_CRATE_DROP:
+				cursorType = RADIUSCURSOR_PARADROP;
+				break;
+			default:
+				break;
+		}
+	}
+
 	if (cursorType == m_curRcType)
 		return;
 
@@ -2114,6 +2134,21 @@ void InGameUI::setRadiusCursor(RadiusCursorType cursorType, const SpecialPowerTe
 			radius = specPowTempl ? specPowTempl->getRadiusCursorRadius( controller ) : 0.0f;
 			break;
 
+	}
+
+	// the cannon's power names no radius: its beam sweeps an S along the line from the uplink, half
+	// its swath either side of the target and its amplitude across (ParticleUplinkCannonUpdate)
+	if (radius <= 0.0f && cursorType == RADIUSCURSOR_PARTICLECANNON)
+	{
+		const ModuleInfo &info = obj->getTemplate()->getBehaviorModuleInfo();
+		for (Int i = 0; i < info.getCount(); ++i)
+		{
+			if (info.getNthName( i ).compareNoCase( "ParticleUplinkCannonUpdate" ) != 0)
+				continue;
+			const ParticleUplinkCannonUpdateModuleData *data = (const ParticleUplinkCannonUpdateModuleData *)info.getNthData( i );
+			radius = MAX( 0.5f * data->m_swathOfDeathDistance, data->m_swathOfDeathAmplitude ) + 20.0f;
+			break;
+		}
 	}
 
 	if (radius <= 0.0f)

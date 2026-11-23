@@ -1,0 +1,20 @@
+# Every ground-aimed power and order of every side, for the Machined Reticle ground markers: the units
+# here, and the casters of America, the Air Force, Laser and Superweapon generals, China, Infantry, Tank
+# and Nuke, the GLA, Toxin, Demolition and Stealth, and Turkiye, which experiments/ground-markers/aims.py
+# in the wrapper spawns over the control socket wherever a structure may stand, then aims each power with
+# the socket's aim verb (and records the Direct3D 11 programs the markers draw with). Seat 0 is played.
+#
+#   generals.exe -quickstart -noshellmap -multiInstance -map "Maps\Tournament Desert\Tournament Desert.map"
+#     -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina -seed 8 -noshroud
+#     -control 8791 -scenario markeraims -logPrefix markeraims_
+#
+# See mobstress.txt for the line grammar.
+
+20    spawn   0  AmericaVehicleMedic                1  start0:-300:300
+20    spawn   0  AmericaVehicleComanche             1  start0:-250:300
+20    spawn   0  AmericaVehicleDozer                1  start0:-200:300
+20    spawn   0  AmericaInfantryRanger              1  start0:-150:300
+20    spawn   0  ChinaVehicleHelix                  1  start0:-100:300
+20    spawn   0  Nuke_ChinaVehicleHelix             1  start0:-50:300
+20    spawn   0  GLAVehicleRadarVan                 1  start0:0:300
+20    spawn   0  TurkiyeInfantryMaroonBeret         1  start0:50:300

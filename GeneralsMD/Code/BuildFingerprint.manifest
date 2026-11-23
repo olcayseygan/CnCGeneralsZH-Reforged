@@ -1083,6 +1083,7 @@ Data/Cinema/mapshot_sand_serpent.txt
 Data/Cinema/mapshot_tournament_desert.txt
 Data/Cinema/mapshot_tournament_plains.txt
 Data/Cinema/mapshot_winter_wolf.txt
+Data/Cinema/markeraims.txt
 Data/Cinema/minefx.txt
 Data/Cinema/minefx_blast.txt
 Data/Cinema/minefx_desert.txt
@@ -1491,6 +1492,7 @@ Data/Scenarios/maplayers_jetroute.txt
 Data/Scenarios/maplayers_memory.txt
 Data/Scenarios/maplayers_worth.txt
 Data/Scenarios/mappers.txt
+Data/Scenarios/markeraims.txt
 Data/Scenarios/mass420x2.txt
 Data/Scenarios/mass840.txt
 Data/Scenarios/massmove.txt
@@ -5517,6 +5519,7 @@ Tools/gdi-font-metrics-header.py
 Tools/gdi-font-metrics.ps1
 Tools/generals-icon.py
 Tools/gentrigtables.py
+Tools/ground_markers.py
 Tools/guard_marker.py
 Tools/hud_command_bar.py
 Tools/hud_direct_strike.py

@@ -49,6 +49,7 @@
 #include "GameLogic/Module/OCLSpecialPower.h"
 #include "GameLogic/Module/ParticleUplinkCannonUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
+#include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/SpectreGunshipDeploymentUpdate.h"
 #include "GameLogic/Module/SpectreGunshipUpdate.h"
 #include "W3DDevice/GameClient/BaseHeightMap.h"
@@ -175,6 +176,12 @@ enum Piece
 	P_ORBIT_DASH, P_ORDER_CROSS, P_ORDER_DOT, P_ORDER_RING, P_PING, P_RAIL,
 	P_SEG_INLAY, P_SEG_STEEL_A, P_SEG_STEEL_B,
 	P_STUD, P_STUD_DOT, P_TICK, P_TICK_MAJOR, P_TURN_BAND, P_TURN_DASH,
+	// every power's own glyph, one picture each (Tools/ground_markers.py GLYPHS)
+	P_GLYPH_PARA, P_GLYPH_CRATE, P_GLYPH_LEAFLET, P_GLYPH_VOLLEY, P_GLYPH_BOMBS, P_GLYPH_BLAST,
+	P_GLYPH_FLAME, P_GLYPH_SCUD, P_GLYPH_BEAM, P_GLYPH_MISSILE, P_GLYPH_BALLISTIC, P_GLYPH_ARTILLERY,
+	P_GLYPH_SWARM, P_GLYPH_DRONES, P_GLYPH_BOLT, P_GLYPH_JAM, P_GLYPH_MINE, P_GLYPH_FRENZY,
+	P_GLYPH_WRENCH, P_GLYPH_SATELLITE, P_GLYPH_UAV, P_GLYPH_EYE, P_GLYPH_RADAR, P_GLYPH_SCRAMBLE,
+	P_GLYPH_AMBUSH, P_GLYPH_TOXIN, P_GLYPH_CLEAN, P_GLYPH_DEMINE,
 	P_COUNT
 };
 
@@ -197,6 +204,11 @@ static const char *const PIECE_NAMES[ P_COUNT ] =
 	"MarkerOrbitDash", "MarkerOrderCross", "MarkerOrderDot", "MarkerOrderRing", "MarkerPing", "MarkerRail",
 	"MarkerSegmentInlay", "MarkerSegmentSteelA", "MarkerSegmentSteelB",
 	"MarkerStud", "MarkerStudDot", "MarkerTick", "MarkerTickMajor", "MarkerTurnBand", "MarkerTurnDash",
+	"MarkerGlyphPara", "MarkerGlyphCrate", "MarkerGlyphLeaflet", "MarkerGlyphVolley", "MarkerGlyphBombs", "MarkerGlyphBlast",
+	"MarkerGlyphFlame", "MarkerGlyphScud", "MarkerGlyphBeam", "MarkerGlyphMissile", "MarkerGlyphBallistic", "MarkerGlyphArtillery",
+	"MarkerGlyphSwarm", "MarkerGlyphDrones", "MarkerGlyphBolt", "MarkerGlyphJam", "MarkerGlyphMine", "MarkerGlyphFrenzy",
+	"MarkerGlyphWrench", "MarkerGlyphSatellite", "MarkerGlyphUav", "MarkerGlyphEye", "MarkerGlyphRadar", "MarkerGlyphScramble",
+	"MarkerGlyphAmbush", "MarkerGlyphToxin", "MarkerGlyphClean", "MarkerGlyphDemine",
 };
 
 static const Real CHEVRON_ANCHOR_U = 0.7777778f;	///< its tip (pieces.json); every other piece is anchored on its middle
@@ -395,7 +407,16 @@ static Bool squareCovers( const HeightGrid &g, Real cx, Real cy, Real reach )
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 enum Family { FAMILY_GUARD, FAMILY_AREA, FAMILY_SUPER, FAMILY_DROP, FAMILY_STRIKE, FAMILY_SPECTRE };
-enum Glyph { GLYPH_NONE, GLYPH_GUARD, GLYPH_DROP, GLYPH_STRIKE, GLYPH_BARRAGE, GLYPH_NUKE, GLYPH_RETICLE };
+enum Glyph
+{
+	GLYPH_NONE, GLYPH_GUARD, GLYPH_DROP, GLYPH_STRIKE, GLYPH_BARRAGE, GLYPH_NUKE, GLYPH_RETICLE,
+	// every power's own, after the spinning ones; GLYPH_PARA + i draws P_GLYPH_PARA + i
+	GLYPH_PARA, GLYPH_CRATE, GLYPH_LEAFLET, GLYPH_VOLLEY, GLYPH_BOMBS, GLYPH_BLAST,
+	GLYPH_FLAME, GLYPH_SCUD, GLYPH_BEAM, GLYPH_MISSILE, GLYPH_BALLISTIC, GLYPH_ARTILLERY,
+	GLYPH_SWARM, GLYPH_DRONES, GLYPH_BOLT, GLYPH_JAM, GLYPH_MINE, GLYPH_FRENZY,
+	GLYPH_WRENCH, GLYPH_SATELLITE, GLYPH_UAV, GLYPH_EYE, GLYPH_RADAR, GLYPH_SCRAMBLE,
+	GLYPH_AMBUSH, GLYPH_TOXIN, GLYPH_CLEAN, GLYPH_DEMINE
+};
 enum SuperKind { SUPER_NONE, SUPER_MISSILES, SUPER_CANNON };
 
 struct Dart
@@ -453,6 +474,7 @@ struct Marker
 	UnsignedInt impactMs;
 	// the lane from the map's edge
 	Bool lane, gap, arrow, exitStub;
+	Bool fromCaster;					///< the lane starts at the caster (a swarm), and no delivery plane flies it
 	Real ex, ey;							///< E
 	Real endX, endY;					///< where the lane ends: the target, or the Spectre's orbit
 	Real ux, uy, L;
@@ -494,7 +516,7 @@ struct Marker
 		pressMs( 0 ), clickMs( 0 ), clickFrame( 0 ), caster( INVALID_ID ), firstNewID( INVALID_ID ), guarding( FALSE ),
 		fadeMs( 0 ), fadeSeconds( 0.5f ), dead( FALSE ), pingMs( 0 ), pingR( 0.0f ),
 		super( SUPER_NONE ), cannonFrames( 0 ), missileSeen( FALSE ), frac( 1.0f ), impactMs( 0 ),
-		lane( FALSE ), gap( FALSE ), arrow( FALSE ), exitStub( FALSE ), ex( 0.0f ), ey( 0.0f ), endX( 0.0f ), endY( 0.0f ),
+		lane( FALSE ), gap( FALSE ), arrow( FALSE ), exitStub( FALSE ), fromCaster( FALSE ), ex( 0.0f ), ey( 0.0f ), endX( 0.0f ), endY( 0.0f ),
 		ux( 1.0f ), uy( 0.0f ), L( 0.0f ), half( 0.0f ), chevUntil( 0.0f ),
 		turn( FALSE ), rmin( 0.0f ), rmax( 0.0f ), rnom( 0.0f ), side( 1.0f ), lastPast( 0.0f ),
 		lead( INVALID_ID ), planesSeen( FALSE ), initialCarried( 0 ), carried( 0 ), pastT( FALSE ), pastTMs( 0 ),
@@ -566,14 +588,65 @@ static const OCLSpecialPower *findOCLPower( const Object *caster, const SpecialP
 	return NULL;
 }
 
+/// whether this power is the caster's SwarmStrikeSpecialPower (the Kargu swarm, the swarm munition)
+static Bool findSwarmPower( const Object *caster, const SpecialPowerTemplate *power )
+{
+	static const NameKeyType key_SwarmStrikeSpecialPower = NAMEKEY( "SwarmStrikeSpecialPower" );
+	for( BehaviorModule **m = caster->getBehaviorModules(); *m; ++m )
+		if( (*m)->getModuleNameKey() == key_SwarmStrikeSpecialPower
+				&& ( (const SpecialPowerModule *)( *m ) )->getSpecialPowerTemplate() == power )
+			return TRUE;
+	return FALSE;
+}
+
 static DeliverPayloadAIUpdate *findDeliverPayload( Object *obj )
 {
 	static const NameKeyType key_DeliverPayloadAIUpdate = NAMEKEY( "DeliverPayloadAIUpdate" );
 	return (DeliverPayloadAIUpdate *)obj->findUpdateModule( key_DeliverPayloadAIUpdate );
 }
 
-/// the family, tint and glyph a cursor type draws; Scud Storm and the Particle Cannon have no glyph
-/// of their own and take Barrage, as the spec's family table says
+/** Every power's own glyph, by a piece of its template's name, first match wins: the cursor type is
+	* shared (the leaflets, the MOAB and the Kargu swarm all aim with the Daisy Cutter's) and so is the
+	* power's enum (the fork's Turkiye powers borrow retail ones), but every general's copy of a power
+	* keeps its name after a prefix (AirF_, Nuke_, Infa_, Tank_, SupW_, Lazr_, Slth_, Demo_, Early_). */
+struct PowerGlyph
+{
+	const char *name;
+	Glyph glyph;
+};
+static const PowerGlyph POWER_GLYPHS[] =
+{
+	{ "SpectreGunship", GLYPH_RETICLE },
+	{ "ParticleUplinkCannon", GLYPH_BEAM },	{ "LaserCannon", GLYPH_BEAM },
+	{ "CruiseMissile", GLYPH_MISSILE },			{ "TurkiyeTayfun", GLYPH_BALLISTIC },
+	{ "NeutronMissile", GLYPH_NUKE },				{ "NukeDrop", GLYPH_NUKE },					{ "HelixNukeBomb", GLYPH_NUKE },
+	{ "ScudStorm", GLYPH_SCUD },
+	{ "TurkiyeKarguSwarm", GLYPH_DRONES },	{ "TurkiyeSwarmMunition", GLYPH_SWARM },
+	{ "TurkiyeElectronicBlinding", GLYPH_JAM },	{ "TurkiyeUavRecon", GLYPH_UAV },
+	{ "TurkiyeAllyAid", GLYPH_CRATE },			{ "TurkiyeRapidDeployment", GLYPH_PARA },	{ "TurkiyeCommandoRaid", GLYPH_PARA },
+	{ "Paradrop", GLYPH_PARA },							{ "CrateDrop", GLYPH_CRATE },				{ "LeafletDrop", GLYPH_LEAFLET },
+	{ "A10Thunderbolt", GLYPH_VOLLEY },			{ "CarpetBomb", GLYPH_BOMBS },			{ "DaisyCutter", GLYPH_BLAST },
+	{ "NapalmBomb", GLYPH_FLAME },					{ "NapalmStrike", GLYPH_FLAME },		{ "AnthraxBomb", GLYPH_TOXIN },
+	{ "EMPPulse", GLYPH_BOLT },							{ "ClusterMines", GLYPH_MINE },
+	{ "ArtilleryBarrage", GLYPH_ARTILLERY },	{ "BattleshipBombardment", GLYPH_ARTILLERY },
+	{ "Frenzy", GLYPH_FRENZY },							{ "EmergencyRepair", GLYPH_WRENCH },
+	{ "SpySatellite", GLYPH_SATELLITE },		{ "SpyDrone", GLYPH_EYE },					{ "RadarVanScan", GLYPH_RADAR },
+	{ "GPSScrambler", GLYPH_SCRAMBLE },			{ "RebelAmbush", GLYPH_AMBUSH },		{ "TerrorCell", GLYPH_AMBUSH },
+	{ "AmbulanceCleanupArea", GLYPH_CLEAN },
+};
+
+static Glyph powerGlyph( const SpecialPowerTemplate *power )
+{
+	if( power == NULL )
+		return GLYPH_NONE;
+	const AsciiString name = power->getName();
+	for( Int i = 0; i < (Int)ARRAY_SIZE( POWER_GLYPHS ); ++i )
+		if( strstr( name.str(), POWER_GLYPHS[ i ].name ) != NULL )
+			return POWER_GLYPHS[ i ].glyph;
+	return GLYPH_NONE;
+}
+
+/// the family, tint and glyph a cursor type draws; describe() then gives the power its own glyph
 static void classify( Marker &m )
 {
 	m.super = SUPER_NONE;
@@ -588,9 +661,11 @@ static void classify( Marker &m )
 		case RADIUSCURSOR_SPYSATELLITE:
 		case RADIUSCURSOR_RADAR:
 		case RADIUSCURSOR_SPYDRONE:
-		case RADIUSCURSOR_CLEARMINES:
 		case RADIUSCURSOR_AMBULANCE:
 			m.family = FAMILY_AREA;		m.tint = TINT_WARM;		m.glyph = GLYPH_BARRAGE;
+			break;
+		case RADIUSCURSOR_CLEARMINES:		// a weapon's cursor: no power to name it
+			m.family = FAMILY_AREA;		m.tint = TINT_WARM;		m.glyph = GLYPH_DEMINE;
 			break;
 		case RADIUSCURSOR_PARADROP:
 			m.family = FAMILY_DROP;		m.tint = TINT_GOLD;		m.glyph = GLYPH_DROP;			share = 0.27f;
@@ -648,11 +723,19 @@ static void planSpectre( Marker &m, const Object *caster )
 {
 	const SpectreGunshipDeploymentUpdateModuleData *data =
 		(const SpectreGunshipDeploymentUpdateModuleData *)findTemplateModule( caster->getTemplate(), "SpectreGunshipDeploymentUpdate" );
-	if( data == NULL || data->m_gunshipOrbitRadius <= 0.0f )
+	if( data == NULL )
+		return;
+	// The orbit is the gunship's own GunshipOrbitRadius (SpectreGunshipUpdate, 250 on every retail
+	// gunship).  The deployment module's field of that name is never parsed nor set in its constructor,
+	// so it is read only for the push out of the corner below, as the logic reads it, and only when sane
+	const SpectreGunshipUpdateModuleData *ship = (const SpectreGunshipUpdateModuleData *)findTemplateModule(
+		TheThingFactory->findTemplate( data->m_gunshipTemplateName ), "SpectreGunshipUpdate" );
+	if( ship == NULL || ship->m_gunshipOrbitRadius <= 0.0f )
 		return;
 	m.orbit = TRUE;
-	m.Ro = data->m_gunshipOrbitRadius;
+	m.Ro = ship->m_gunshipOrbitRadius;
 	m.k = bandUnit( m.Ro );
+	const Real push = ( data->m_gunshipOrbitRadius > 0.0f && data->m_gunshipOrbitRadius < 4000.0f ) ? data->m_gunshipOrbitRadius : 0.0f;
 
 	Coord3D target;
 	target.x = m.x;  target.y = m.y;  target.z = m.z;
@@ -670,7 +753,7 @@ static void planSpectre( Marker &m, const Object *caster )
 	if( dist < 1.0f )
 		return;
 	const Real nx = dx / dist, ny = dy / dist;
-	if( !setLaneEnds( m, m.x - nx * ( dist + m.Ro ), m.y - ny * ( dist + m.Ro ), m.x - nx * m.Ro, m.y - ny * m.Ro ) )
+	if( !setLaneEnds( m, m.x - nx * ( dist + push ), m.y - ny * ( dist + push ), m.x - nx * m.Ro, m.y - ny * m.Ro ) )
 		return;
 	m.gap = FALSE;
 	m.arrow = FALSE;
@@ -687,6 +770,7 @@ static void planSpectre( Marker &m, const Object *caster )
 static void planLane( Marker &m, const Object *caster, const SpecialPowerTemplate *power )
 {
 	m.lane = FALSE;
+	m.fromCaster = FALSE;
 	m.gap = TRUE;
 	m.arrow = TRUE;
 	m.exitStub = TRUE;
@@ -701,6 +785,17 @@ static void planLane( Marker &m, const Object *caster, const SpecialPowerTemplat
 	if( m.family == FAMILY_SPECTRE )
 	{
 		planSpectre( m, caster );
+		return;
+	}
+	if( findSwarmPower( caster, power ) )
+	{
+		// the Kargu drones scramble off the caster's own runways and the swarm munition flies from it,
+		// so the run starts at the building, not at the map's edge, and ends in the dive
+		if( setLaneEnds( m, caster->getPosition()->x, caster->getPosition()->y, m.x, m.y ) )
+		{
+			m.exitStub = FALSE;
+			m.fromCaster = TRUE;
+		}
 		return;
 	}
 
@@ -813,6 +908,16 @@ static void describe( Marker &m, const InGameUI::GroundMarkerAim &aim )
 		m.family = FAMILY_DROP;
 		m.tint = TINT_GOLD;
 		m.glyph = GLYPH_DROP;
+		m.glyphS = 0.27f * aim.radius;
+	}
+	// the power's own glyph; the leaflets are a drop, though they aim with the Daisy Cutter's cursor
+	const Glyph own = powerGlyph( aim.power );
+	if( own != GLYPH_NONE )
+		m.glyph = own;
+	if( own == GLYPH_LEAFLET )
+	{
+		m.family = FAMILY_DROP;
+		m.tint = TINT_GOLD;
 		m.glyphS = 0.27f * aim.radius;
 	}
 
@@ -1195,7 +1300,7 @@ static void updateShot( Marker &m, UnsignedInt now, InGameUI *ui )
 	const Real tl = secondsSince( now, m.clickMs );
 	m.darts.clear();
 	m.wet = FALSE;		// the darts and takeGround say it again
-	if( m.lane && m.family != FAMILY_SPECTRE )
+	if( m.lane && m.family != FAMILY_SPECTRE && !m.fromCaster )
 		followPlanes( m, now, tl );
 	else if( m.family == FAMILY_SPECTRE )
 		followGunship( m, now, tl );
@@ -1841,6 +1946,7 @@ static void drawGlyph( const Marker &m, Real t, Real tl, Real app )
 		case GLYPH_BARRAGE:	base = P_GLYPH_BARRAGE00;	steps = 4;	stepDeg = 22.5f;	rate = 0.6f;	break;
 		case GLYPH_NUKE:		base = P_GLYPH_NUKE00;		steps = 8;	stepDeg = 15.0f;	rate = -0.4f;	break;
 		case GLYPH_RETICLE:	base = P_GLYPH_RETICLE00;	steps = 4;	stepDeg = 22.5f;	rate = 0.8f;	break;
+		default:						base = P_GLYPH_PARA + ( m.glyph - GLYPH_PARA );	break;
 	}
 	Int piece = base;
 	Real turn = 0.0f;
@@ -1875,15 +1981,20 @@ static void drawCountdown( const Marker &m, Real R, Real t, Real alpha )
 	}
 }
 
-/// the Spectre's orbit: the dashes clockwise, the chevrons the way the gunship flies, counter-clockwise
-/// (SpectreGunshipUpdate aims at the anticlockwise side of its line to the target, its apogee)
+/** The Spectre's orbit, all of it turning the way the gunship flies: counter-clockwise seen from above.
+	* SpectreGunshipUpdate steers at m_satellitePosition = target + Ro (n1 p + n2 apogee), p the unit
+	* vector from the target to the ship and apogee = (-p.y, p.x), p turned a quarter counter-clockwise,
+	* so the point it chases always leads it about 23 degrees counter-clockwise round the target (n1 0.7).
+	* World x east, y north, z up and the camera looking down, so that is counter-clockwise on screen
+	* too.  The dashes used to run clockwise against the chevrons and the orbit read as turning both
+	* ways; they go with the gunship now. */
 static void drawOrbit( const Marker &m, Real t, Real alpha )
 {
 	const Real k = m.k, Ro = m.Ro, yaw = s_ctx.yaw;
 	ring( P_BAND_SHELL, m.x, m.y, Ro, 20.0f * k, TINT_WHITE, 0.84f * alpha, FALSE );
 	const Real step = 2.0f * MARKER_PI / 18.0f;
 	for( Int j = 0; j < 18; ++j )
-		arcPiece( P_ORBIT_DASH, m.x, m.y, Ro, yaw - 0.9f * t + (Real)j * step, step * 0.31f * 18.0f / 17.0f, 7.0f * k, TINT_WHITE, alpha, FALSE );
+		arcPiece( P_ORBIT_DASH, m.x, m.y, Ro, yaw + 0.9f * t + (Real)j * step, step * 0.31f * 18.0f / 17.0f, 7.0f * k, TINT_WHITE, alpha, FALSE );
 	for( Int j = 0; j < 9; ++j )
 	{
 		const Real a = yaw + 0.9f * t + (Real)j * 2.0f * MARKER_PI / 9.0f;

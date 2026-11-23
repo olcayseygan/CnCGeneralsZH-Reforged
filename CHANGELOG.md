@@ -229,6 +229,27 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - A jet empties its racks in one run. When a tank swerved out of its sights or got under its nose between two missiles, the jet used to swing round its whole wide turn and fly a second pass, through the same anti-air, for the missiles it had left. Now it fires them there and then and the missiles find their own way. In 14 staged strikes by a Raptor, a MiG and a Stealth Fighter on parked and driving tanks, 3 of 36 racks were split over two passes before; now none of 38 is. A Raptor that used to come back 3 seconds later for its fourth missile puts all four in on the first pass. A Stealth Fighter that only ever got one missile off at a Scorpion now fires both. This is a buff against moving targets: the same damage arrives sooner, with fewer trips through enemy fire, though a missile let go at a bad angle can miss.
 - An order you queue with Alt behind a jet strike now follows the strike. Send a MiG at a tank, Alt-click a point to the side, and once its racks are empty it flies off that way and then home. It used to ignore the point, go home, reload and fly the same strike again, and only reached the point once the target was dead. A strike with nothing queued behind it is still flown again after the reload, and a second strike queued behind the first waits for the reload as before.
 
+## Computers, aircraft and modes, 23 November
+
+- Easy computer players never asked for an airfield, so an Easy USA or China opponent had no air force all match. All seven sides build one now: in a Twilight Flame match with four Easy seats, all four had begun theirs before frame 4700.
+- The Medium Superweapon General waited for a barracks before building its first one, a typo in EA's build order, and fielded no infantry until then. The Medium Air Force General had the same typo on its Strategy Center. Both build now: the barracks stands at frame 957, the Strategy Center at frame 8787.
+- The Air Force General's Combat Chinook flew off to gather supplies the moment it left the Supply Center. It goes to the rally point and waits there like a gunship now. Sent to a supply dock it still gathers, and the plain Chinook is unchanged.
+- A jet queued from the group panel ignored an order given while it was taking off. Your order wins.
+- At the native 1.5x speed, rotor dust, a strafing run's ground trail and a crashing vehicle's sparks came out a third thinner than at retail speed. They have retail's density at every speed.
+- A unit that killed the Angry Mob member it was told to attack used to chase the rest of the mob across the map. It carries on only to members within its reach.
+- Apocalypse played alone from the second start sent the day waves at the empty side. Every front now faces a start somebody holds.
+- Direct Strike: holding a unit card over your plot lights the ground green where the unit fits and red where it does not.
+- A Direct Strike LAN room resent its settings to everyone on every frame. It sits still now.
+- Ticking Day and Night on an Apocalypse or Direct Strike map left the map's own buildings on their daytime look. The cycle is off on those maps before anything is placed.
+- Random massif maps and maps built in a shipped map's image no longer roll a night, and template rivers lay their bridges evenly.
+- In a network match nobody can send orders, or a "player left", under another player's seat.
+- A banned account got a bare "banned" at sign-in. The login screen says until when, and why when the site gives a reason.
+- Installs of EA's censored German edition, German2, have their language files recognised like those of every other retail language.
+- At the farthest zoom with the camera tilted flat, a big map's far corner could lose its shadows.
+- After alt-tabbing out of fullscreen a map could come back without its trees and bushes until the camera moved.
+- On night maps, searchlights placed as map props wear their night model again.
+- Leaving a match could crash when the next screen had falling snow: the snow read the last map's fog of war after it had been freed.
+
 ## Screen and controls
 
 - The command bar and menus no longer go dark now and then, as if a shadow fell over them. The sun's shadows and smoke land only on the battlefield.
@@ -3396,4 +3417,6 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - A cloaked unit of yours that gives itself away by firing still turns solid inside its muzzle flash instead of easing out of its glass, and several of the stealth fades run shorter than the half second they were meant to.
 - Replays and saves from 4.3.2 that hold an upgrade queued with Shift read it wrongly in this build, because orders now name the upgrade by a different number.
 - The upgrade desync was proven in the reports and in code, not reproduced here: two copies on one machine could not be made to queue an upgrade over the network. The minimap past the real 65535 cap did not happen on any map we could build either. A test switch makes every 2D batch split at 600 indices instead, and the Alpine Assault minimap, the menus and the HUD came out pixel for pixel the same with it on as off.
+- The raised massif table was tried and taken back: on 2 of 40 seeds the way up to the top was lost.
+- A lone Hacker cannot finish a hack on a Direct Strike tower. It dies about 40 frames after the tower's first shot, and the staged proof only works with healers beside it. Whether that stands is a balance call.
 - You need to own the game; no game data ships here.

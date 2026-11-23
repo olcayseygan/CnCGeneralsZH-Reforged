@@ -2083,6 +2083,16 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		}
 	}
 
+	/* The cycle off before the map's own objects are made on a map that carries either mode's marker, the
+		 ones the directors' newMap first looks for below: a drawable made while the cycle reads on takes no
+		 NIGHT state (Drawable's time of day, Object's objectTime 2), so a night Apocalypse or Lane War map
+		 with the box ticked kept its placed objects on day models after the latch below turned it off.
+		 The waypoints and trigger areas are the map file's, read by TerrainLogic::loadMap. */
+	if (!loadingSaveGame && m_dayNight
+			&& (TheTerrainLogic->getTriggerAreaByName( "LaneWar_MiddleArea" ) != NULL
+					|| TheTerrainLogic->getWaypointByName( "Apocalypse_Centre" ) != NULL))
+		m_dayNight = FALSE;
+
 	#ifdef DUMP_PERF_STATS
 	GetPrecisionTimer(&endTime64);
 	sprintf(Buf,"Before loading objects=%f\n",((double)(endTime64-startTime64)/(double)(freq64)*1000.0));

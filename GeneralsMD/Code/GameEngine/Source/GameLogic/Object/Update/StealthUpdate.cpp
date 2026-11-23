@@ -58,6 +58,7 @@
 
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/StealthUpdate.h"
+#include "GameLogic/Module/SubObjectsUpgrade.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/SpawnBehavior.h"
@@ -1250,6 +1251,74 @@ void StealthUpdate::disguiseAsObject( const Object *target )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The mask a SubObjectsUpgrade's TriggeredBy or ConflictsWith names, read off the template's data:
+	* the names while they are still there, the mask an object's first look cached once they are gone
+	* (UpgradeMuxData::getUpgradeActivationMasks). */
+//-------------------------------------------------------------------------------------------------
+static UpgradeMaskType disguiseUpgradeMask( const std::vector<AsciiString> &names, const UpgradeMaskType &cached )
+{
+	if( names.empty() )
+		return cached;
+	UpgradeMaskType mask;
+	for( std::vector<AsciiString>::const_iterator it = names.begin(); it != names.end(); ++it )
+	{
+		const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( *it );
+		if( upgrade )
+			mask.set( upgrade->getUpgradeMask() );
+	}
+	return mask;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A disguise is a fresh drawable of the mimicked template, and the sub-objects an upgrade shows
+	* live in the real unit's SubObjectsUpgrade modules, which the disguise has none of.  So a Bomb
+	* Truck as an Avenger showed no ARMORUP01 plates beside real Avengers after Composite Armor.  Run
+	* the template's SubObjectsUpgrade lists against the mimicked player's finished upgrades instead.
+	* Logic reads only template data and that player's upgrade mask; only the drawable is written. */
+// ponytail: player upgrades only, read once at disguise time; an object-level upgrade of the unit
+// mimicked, or the player finishing one while the disguise holds, is not shown.
+//-------------------------------------------------------------------------------------------------
+static void showDisguiseUpgradeSubObjects( Drawable *draw, const ThingTemplate *tmpl, const Player *player )
+{
+	if( draw == NULL || tmpl == NULL || player == NULL )
+		return;
+
+	const UpgradeMaskType completed = player->getCompletedUpgradeMask();
+	Bool changed = FALSE;
+	const ModuleInfo &modules = tmpl->getBehaviorModuleInfo();
+	for( Int m = 0; m < modules.getCount(); ++m )
+	{
+		if( modules.getNthName( m ).compareNoCase( "SubObjectsUpgrade" ) != 0 )
+			continue;
+		const SubObjectsUpgradeModuleData *data = static_cast<const SubObjectsUpgradeModuleData *>( modules.getNthData( m ) );
+		if( data == NULL )
+			continue;
+		const UpgradeMuxData &mux = data->m_upgradeMuxData;
+
+		const UpgradeMaskType activation = disguiseUpgradeMask( mux.m_activationUpgradeNames, mux.m_activationMask );
+		const UpgradeMaskType conflicting = disguiseUpgradeMask( mux.m_conflictingUpgradeNames, mux.m_conflictingMask );
+		if( !activation.any() || completed.testForAny( conflicting ) )
+			continue;
+		if( mux.m_requiresAllTriggers ? !completed.testForAll( activation ) : !completed.testForAny( activation ) )
+			continue;
+
+		std::vector<AsciiString>::const_iterator name;
+		for( name = data->m_showSubObjectNames.begin(); name != data->m_showSubObjectNames.end(); ++name )
+		{
+			draw->showSubObject( *name, true );
+			changed = TRUE;
+		}
+		for( name = data->m_hideSubObjectNames.begin(); name != data->m_hideSubObjectNames.end(); ++name )
+		{
+			draw->showSubObject( *name, false );
+			changed = TRUE;
+		}
+	}
+	if( changed )
+		draw->updateSubObjects();
+}
+
+//-------------------------------------------------------------------------------------------------
 void StealthUpdate::changeVisualDisguise()
 {
 	Object *self = getObject();
@@ -1276,6 +1345,7 @@ void StealthUpdate::changeVisualDisguise()
 			draw->setOrientation( self->getOrientation() );
 			draw->setModelConditionFlags( flags );
 			draw->updateDrawable();
+			showDisguiseUpgradeSubObjects( draw, m_disguiseAsTemplate, player );
 			self->getPhysics()->resetDynamicPhysics();
 			if( selected )
 			{

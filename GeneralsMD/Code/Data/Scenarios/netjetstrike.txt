@@ -1,0 +1,25 @@
+# Jet strikes with a queued order behind them across a network match (TODO 211). Every copy plays
+# this file on the same frame: seat 0 gets two Raptors and two Stealth Fighters beside its base,
+# seat 1 four Crusaders in two heaps 400 off its own. The copy whose local seat is slot 0 hands each
+# jet an attack on the first heap, a shift attack on the second and a shift move home, so the order
+# chain has to rearm and carry on between runs (OrderChain::m_armedThisStep, source 5fe3e798). The
+# CRC covers the chain, so a copy that disagrees about it reports "CRC Mismatch".
+#
+#   python net_check.py --each "-scenario netjetstrike -headless" --frames 3000 --tag netjet
+#
+# See mobstress.txt for the line grammar.
+
+30    spawn         0  AmericaJetRaptor          2  start0:0:300   60
+30    spawn         0  AmericaJetStealthFighter  2  start0:0:380   60
+30    spawn         1  AmericaTankCrusader       2  start1:400:0   60
+30    spawn         1  AmericaTankCrusader       2  start1:-400:0  60
+90    attack        0  AmericaJetRaptor          1  AmericaTankCrusader
+90    attack        0  AmericaJetStealthFighter  1  AmericaTankCrusader
+91    shiftattack   0  AmericaJetRaptor          1  AmericaTankCrusader
+91    shiftattack   0  AmericaJetStealthFighter  1  AmericaTankCrusader
+92    shiftmove     0  AmericaJetRaptor          start0:0:300
+92    shiftmove     0  AmericaJetStealthFighter  start0:0:380
+900   tally         0  AmericaJetRaptor
+900   tally         1  AmericaTankCrusader
+1500  tally         0  AmericaJetRaptor
+1500  tally         1  AmericaTankCrusader

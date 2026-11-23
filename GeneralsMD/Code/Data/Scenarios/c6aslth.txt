@@ -1,0 +1,24 @@
+# GLA talent 6A, buildings cost 20% less, on the GLAStealthGeneral Command Center's modules (TODO 162). Only the
+# local seat (0) can place a building, so one seat does both: a Barracks and a Demo Trap before the
+# card (full price), the same two after it, one at a time so the Workers have walked up and the bank
+# has paid (a spawned Barracks and Supply Stash are the trap's prerequisites). The 'money' field of
+# each tally pair is what the placement cost. Expect Barracks 500 then 400, Demo Trap 200 then 160.
+#
+#   generals.exe -headless -quickstart -noshellmap -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionGLAStealthGeneral -side 1 FactionGLAStealthGeneral -seed 1 -maxframes 1100 -scenario c6aslth -logPrefix c6aslth_
+
+10   spawn      0  Slth_GLAInfantryWorker 4 start0:-250:-200 40
+10   spawn      0  Slth_GLABarracks 1 start0:-600:-200
+10   spawn      0  Slth_GLASupplyStash 1 start0:-350:-100
+40   tally      0  Slth_GLACommandCenter
+42   construct  0  Slth_GLABarracks start0:-350:-350
+250  tally      0  Slth_GLACommandCenter
+252  construct  0  Slth_GLADemoTrap start0:-450:-450
+460  tally      0  Slth_GLACommandCenter
+470  purchase   0  SCIENCE_GLATalent6A
+480  tally      0  Slth_GLACommandCenter
+482  construct  0  Slth_GLABarracks start0:-350:-550
+690  tally      0  Slth_GLACommandCenter
+692  construct  0  Slth_GLADemoTrap start0:-450:-650
+900  tally      0  Slth_GLACommandCenter

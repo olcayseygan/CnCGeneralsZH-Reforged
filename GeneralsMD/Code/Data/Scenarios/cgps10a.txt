@@ -1,0 +1,24 @@
+# Stealth 10A and a Technical under the GPS Scrambler (TODO 162). Both seats own the GPS Scrambler,
+# seat 0 the card 10A (Technicals hide when they hold fire), seat 1 not. Each fires the Scrambler 125
+# from a Technical of its own and an enemy Fire Base stands 250 from it (Technical 150, howitzer 275).
+# Read the two alive counts at 850: whether a Technical without the card is hidden by the Scrambler
+# alone.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionGLAStealthGeneral -side 1 FactionGLAStealthGeneral -seed 1 -maxframes 1800
+#     -scenario cgps10a -logPrefix cgps10a_
+
+30   purchase   0  Slth_SCIENCE_GPSScrambler
+30   purchase   1  Slth_SCIENCE_GPSScrambler
+40   purchase   0  SCIENCE_StealthTalent10A
+50   spawn      0  Slth_GLAVehicleTechnical 1 start0:0:-500
+50   spawn      1  Slth_GLAVehicleTechnical 1 start1:0:500
+60   power      0  Slth_GLACommandCenter start0:0:-625 Slth_SuperweaponGPSScrambler
+60   power      1  Slth_GLACommandCenter start1:0:625 Slth_SuperweaponGPSScrambler
+380  tally      0  GLAVehicleTechnicalChassis*
+380  tally      1  GLAVehicleTechnicalChassis*
+400  spawn      1  AmericaFireBase 1 start0:0:-250
+400  spawn      0  AmericaFireBase 1 start1:0:250
+850  tally      0  GLAVehicleTechnicalChassis*
+850  tally      1  GLAVehicleTechnicalChassis*

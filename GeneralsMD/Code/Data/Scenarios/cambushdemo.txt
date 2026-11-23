@@ -1,0 +1,20 @@
+# Rebel Ambush through the plain sciences on the GLADemolitionGeneral Command Center (TODO 162): the Command Center's
+# UpgradeOCL lines ask for the talent 9A with the plain SCIENCE_RebelAmbush2 and 3 as well as its own
+# Demo_SCIENCE_RebelAmbush ones. Seat 0 holds the Demo_science, the plain tiers 1 and 2 and 9A; seat 1 the
+# same without 9A. Each fires the ambush, a tally counts the Demo_Rebels that land (9A adds 4 rebels).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionGLADemolitionGeneral -side 1 FactionGLADemolitionGeneral -seed 1 -maxframes 600 -scenario cambushdemo -logPrefix cambushdemo_
+
+30   purchase   0  Demo_SCIENCE_RebelAmbush1
+30   purchase   1  Demo_SCIENCE_RebelAmbush1
+31   purchase   0  SCIENCE_RebelAmbush1
+31   purchase   1  SCIENCE_RebelAmbush1
+32   purchase   0  SCIENCE_RebelAmbush2
+32   purchase   1  SCIENCE_RebelAmbush2
+40   purchase   0  SCIENCE_GLATalent9A
+60   power      0  Demo_GLACommandCenter start0:300:-300 Demo_SuperweaponRebelAmbush
+60   power      1  Demo_GLACommandCenter start1:-300:300 Demo_SuperweaponRebelAmbush
+120  tally      0  Demo_GLAInfantryRebel
+120  tally      1  Demo_GLAInfantryRebel

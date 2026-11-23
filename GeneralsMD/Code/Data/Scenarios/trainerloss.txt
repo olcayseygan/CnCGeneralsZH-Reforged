@@ -1,0 +1,24 @@
+# askForTrainer after the Barracks dies (TODO 93). Seat 0 is a Turkiye computer player (AI), seat 1 is
+# idle (-takeover 1) and only does what this file says: it spawns Crusaders at seat 0's base, takes the
+# Barracks down once the AI has put one up, and seat 0 holds Firtinas that fire past their own sight
+# with no spotter on its default team. replaceSpotter then finds no barracks to train one in and calls
+# askForTrainer: read the log for "AI ARTILLERY ... asks for the plan's 'TurkiyeBarracks' to train".
+# tally lines show the Barracks standing before and gone after.
+#
+#   generals.exe -headless -quickstart -noshellmap -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 1 -aidiff hard
+#     -side 0 FactionTurkiye -side 1 FactionAmerica -seed 1 -maxframes 9000
+#     -scenario trainerloss -logPrefix trainerloss_
+
+30    spawn      0  TurkiyeVehicleFirtina 6 start0:0:-200 60
+60    tally      0  TurkiyeBarracks
+1500  tally      0  TurkiyeBarracks
+2400  tally      0  TurkiyeBarracks
+3300  tally      0  TurkiyeBarracks
+3400  spawn      1  AmericaTankCrusader 8 start0:300:300 40
+3500  attack     1  AmericaTankCrusader 0 TurkiyeBarracks
+3800  tally      0  TurkiyeBarracks
+4200  tally      0  TurkiyeBarracks
+4800  tally      0  TurkiyeBarracks
+5400  tally      0  TurkiyeBarracks
+6000  tally      0  TurkiyeBarracks

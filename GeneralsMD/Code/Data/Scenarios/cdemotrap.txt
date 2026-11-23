@@ -1,0 +1,25 @@
+# Demolition talent 8A (Demo Trap costs 50% less) stacked with GLA 6A (buildings 20% less) (TODO 162).
+# Seat 0 places a Demo Trap three times with its own Workers, one at a time: with no card (200), after
+# 8A (100, a 50% cut) and after 6A as well (80, the cuts multiply). The 'money' field of each tally
+# pair is the price. A Barracks, an Arms Dealer and a Supply Stash are spawned first (the trap's prerequisites, and where the 8A modifier lives). Measured: bank 10000, 9800, 9700, 9620.
+#
+#   generals.exe -headless -quickstart -noshellmap -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionGLADemolitionGeneral -side 1 FactionGLADemolitionGeneral -seed 1 -maxframes 900
+#     -scenario cdemotrap -logPrefix cdemotrap_
+
+10   spawn      0  Demo_GLAInfantryWorker 3 start0:-250:-200 40
+10   spawn      0  Demo_GLABarracks 1 start0:-600:-200
+10   spawn      0  Demo_GLAArmsDealer 1 start0:-600:-400
+10   spawn      0  Demo_GLASupplyStash 1 start0:-350:-100
+40   tally      0  Demo_GLACommandCenter
+42   construct  0  Demo_GLADemoTrap start0:-150:-350
+250  tally      0  Demo_GLACommandCenter
+260  purchase   0  SCIENCE_DemolitionTalent8A
+270  tally      0  Demo_GLACommandCenter
+272  construct  0  Demo_GLADemoTrap start0:-50:-350
+480  tally      0  Demo_GLACommandCenter
+490  purchase   0  SCIENCE_GLATalent6A
+500  tally      0  Demo_GLACommandCenter
+502  construct  0  Demo_GLADemoTrap start0:50:-350
+710  tally      0  Demo_GLACommandCenter

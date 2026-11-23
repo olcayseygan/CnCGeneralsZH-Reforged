@@ -249,6 +249,16 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - After alt-tabbing out of fullscreen a map could come back without its trees and bushes until the camera moved.
 - On night maps, searchlights placed as map props wear their night model again.
 - Leaving a match could crash when the next screen had falling snow: the snow read the last map's fog of war after it had been freed.
+- Idle units and idle turrets stood and watched an enemy drive into their reach for two or three seconds. They open fire within about a second. Old replays no longer play back.
+- A game saved while the computer's dozer was looking for room to build carries on where it left off after the load.
+- A Bomb Truck disguised as an Avenger gave itself away after Composite Armor, because it had no plates. The disguise now wears what the copied player's units wear.
+- New option Damage Numbers (Interface), off by default: the damage a hit does rises over the unit in red. When several attackers hit one target at once, the figure is the sum.
+- Tank dust on night maps glowed tan over moonlit ground. It takes the night's tint.
+- Ground foliage popped in over a second or two after a minimap jump. It fills in within a few frames.
+- With Smooth Motion off and vsync on, a battle state could hang for an extra refresh and the next arrive late. Each one shows on time now, and scrolling stays smooth when a tick runs longer than a refresh.
+- Box-selecting a whole line of defences stuttered once per defence while their reach was drawn. The fields fill in over a few frames.
+- Apocalypse rooms on LAN and online no longer leave an empty gap under the fourth seat, chat fills it, and the skirmish, LAN and online rooms preview the generated map instead of "?".
+- In an online Direct Strike room your own seat card shows your ping light.
 
 ## Screen and controls
 

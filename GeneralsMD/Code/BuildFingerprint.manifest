@@ -1459,6 +1459,7 @@ Data/Scenarios/lanewar_cargo.txt
 Data/Scenarios/lanewar_cooldowns.txt
 Data/Scenarios/lanewar_end.txt
 Data/Scenarios/lanewar_hack.txt
+Data/Scenarios/lanewar_hacklone.txt
 Data/Scenarios/lanewar_hacktower.txt
 Data/Scenarios/lanewar_lotus.txt
 Data/Scenarios/lanewar_microwave.txt

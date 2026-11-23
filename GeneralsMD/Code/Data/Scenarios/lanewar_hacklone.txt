@@ -1,0 +1,18 @@
+# Direct Strike proof that a lone Hacker finishes his building hack on a Watch Tower (2026-11-23). In a
+# lane match a Hacker starts the hack from 250, just past the tower gun's 225, where EA's 150 put him
+# under it and the tower killed him during his unpack (lanewar_hacktower.txt had to heal him to get one
+# through). One Regular Hacker on China's plot (slot 1, team B), nothing else on either side, and no
+# staging after the purchase.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 6000 -scenario lanewar_hacklone -logPrefix lanewar_hacklone_
+#
+# Passes on "LANEWAR ABILITY USE: ... 'ChinaInfantryHacker' ... walk-up
+# 'Command_ChinaInfantryHackerDisableBuilding' at 'LaneWarWatchTower'" followed by "HEADLESS LANEWAR:
+# frame ... 'LaneWarWatchTower' ... of team A hacked off until frame ...", with no KILLXP of that Hacker
+# by the tower before it. On the exe before the change the hack never lands.
+
+30    lanecash   1  5000
+30    lanetier   1  1 2
+60    laneplace  1  ChinaInfantryHacker           7 3

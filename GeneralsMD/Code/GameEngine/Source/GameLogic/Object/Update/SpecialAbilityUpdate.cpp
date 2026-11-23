@@ -53,6 +53,7 @@
 
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/TerrainLogic.h"
@@ -1001,6 +1002,19 @@ void SpecialAbilityUpdate::killUnpackLaser()
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The INI's StartAbilityRange.  In a Direct Strike match a Hacker's building hack starts from
+	* LANEWAR_HACK_RANGE instead, just past the Watch Tower's gun (225), so a lone Hacker lives through
+	* his unpack and finishes the hack (2026-11-23); classic and the other modes keep EA's 150. */
+Real SpecialAbilityUpdate::getStartAbilityRange() const
+{
+  const SpecialAbilityUpdateModuleData* data = getSpecialAbilityUpdateModuleData();
+  if( data->m_specialPowerTemplate != NULL && data->m_specialPowerTemplate->getSpecialPowerType() == SPECIAL_HACKER_DISABLE_BUILDING
+      && TheLaneWarDirector != NULL && TheLaneWarDirector->isActive() )
+    return __max( data->m_startAbilityRange, (Real)LANEWAR_HACK_RANGE );
+  return data->m_startAbilityRange;
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool SpecialAbilityUpdate::isWithinStartAbilityRange() const
 {
   const SpecialAbilityUpdateModuleData* data = getSpecialAbilityUpdateModuleData();
@@ -1008,7 +1022,7 @@ Bool SpecialAbilityUpdate::isWithinStartAbilityRange() const
 
   //Quickly convert very short range approachs to "contact" class requiring collision before
   //stopping.
-  Real range = data->m_startAbilityRange;
+  Real range = getStartAbilityRange();
   const Real UNDERSIZE = PATHFIND_CELL_SIZE_F * 0.25f;
   range = __max( 0.0f, range - UNDERSIZE );
 
@@ -1039,7 +1053,7 @@ Bool SpecialAbilityUpdate::isWithinStartAbilityRange() const
   }
 
   //Check to see how far we are from the target!
-  Real fStartRangeSquared = data->m_startAbilityRange * data->m_startAbilityRange;
+  Real fStartRangeSquared = getStartAbilityRange() * getStartAbilityRange();
   if( fDistSquared <= fStartRangeSquared )
   {
     if( range == 0.0f && m_targetID != INVALID_ID )
@@ -1089,7 +1103,7 @@ Bool SpecialAbilityUpdate::isWithinAbilityAbortRange() const
 
   //Quickly convert very short range approachs to "contact" class requiring collision before
   //stopping.
-  Real range = data->m_startAbilityRange;
+  Real range = getStartAbilityRange();
   const Real UNDERSIZE = PATHFIND_CELL_SIZE_F * 0.25f;
   range = __max( 0.0f, range - UNDERSIZE );
 

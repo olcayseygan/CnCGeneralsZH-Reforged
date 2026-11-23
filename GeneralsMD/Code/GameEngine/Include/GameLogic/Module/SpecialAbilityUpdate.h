@@ -231,7 +231,7 @@ public:
 	virtual Bool getCaptureTarget( ObjectID *targetID ) const;
 
 	// what the skirmish AI weighs a button by (AIPlayer::doAbilities)
-	Real getStartAbilityRange() const { return getSpecialAbilityUpdateModuleData()->m_startAbilityRange; }
+	Real getStartAbilityRange() const;		///< the INI's StartAbilityRange, or Direct Strike's own for the Hacker's building hack
 	UnsignedInt getPreparationFrames() const { return getSpecialAbilityUpdateModuleData()->m_preparationFrames; }
 	UnsignedInt getUnpackFrames() const { return getSpecialAbilityUpdateModuleData()->m_unpackTime; }
 	const AsciiString &getSpecialObjectName() const { return getSpecialAbilityUpdateModuleData()->m_specialObjectName; }

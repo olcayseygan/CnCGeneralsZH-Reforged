@@ -87,6 +87,7 @@ enum
 	LANEWAR_TOWER_BOUNTY = 500,						///< paid once to every seated player of the team that brings an enemy Watch Tower down
 	LANEWAR_PRESS_COOLDOWN_SECONDS = 20,	///< game seconds a Dragon's fire wall or a Toxin Truck's slime waits before that copy presses it again
 	LANEWAR_HERO_COOLDOWN_SECONDS = 30,		///< game seconds a hero's copy waits after any of its buttons before the next
+	LANEWAR_HACK_RANGE = 250,							///< how far a Hacker starts his building hack, just past the Watch Tower's 225 (SpecialAbilityUpdate::getStartAbilityRange)
 };
 
 /** A span the mode was tuned for in wall seconds at the native 1.5x, as game time: the same share of the

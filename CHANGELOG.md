@@ -93,6 +93,7 @@ found and fixed, EA's own, not port damage.**
 - The Microwave Tank has a job in Direct Strike: its beam stuns enemy vehicles with the ECM Tank's numbers, while its field keeps cooking infantry. Towers and the fortress cannot be stunned.
 - Black Lotus carries a light gun in Direct Strike, 20 a shot every half second at short reach, so she does more than hack. Jarmen Kell already shot infantry. A hero uses a button at most once every 30 seconds of game time.
 - A Dragon Tank lays its wall of fire, and a Toxin Truck its slime, at most once every 20 seconds of game time per unit.
+- A Hacker starts his building hack from 250 in Direct Strike, just outside the Watch Tower's guns. From 150 he stood under them and died while he set up his laptop, so a lone Hacker never switched a tower off. Direct Strike replays with a Hacker in them recorded before this change no longer play back.
 - On the end screen of a LAN or online match the first key is called Lobby, since that is where it takes you; in skirmish it is still Rematch.
 - Once a Direct Strike match is decided, a player whose connection goes quiet no longer keeps everyone else on the disconnect screen: no four-minute wait for a reconnect, and a seat silent for 12 seconds is let go so the results stay in front of you.
 - Leaving a Direct Strike room with the back arrow no longer flashes the ordinary skirmish room's lists and buttons through the fade.

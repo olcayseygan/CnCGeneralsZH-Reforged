@@ -16806,6 +16806,14 @@ TOOLTIP:GroundFoliage
 "Yerde otlar, çalılar, eğrelti otları ve taşlar biter, ağaçlarla birlikte rüzgârda sallanır. Yalnızca görüntüdür, birlikler içinden geçer. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
 END
 
+GUI:Ragdoll
+"Gevşek Ölümler"
+END
+
+TOOLTIP:Ragdoll
+"Ölen asker ölüm animasyonunu oynatmak yerine gevşer ve kurşunun ya da patlamanın ittiği yöne düşer. Yalnızca görüntüdür: cesedin yattığı yer ve kaybolduğu an aynıdır, diğer oyuncular kendi ayarını görür. Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca bir sonraki ölümden itibaren uygulanır."
+END
+
 GUI:StructureCollapse
 "Yıkılan Binalar"
 END

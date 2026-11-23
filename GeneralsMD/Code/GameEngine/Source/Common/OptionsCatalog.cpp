@@ -178,6 +178,7 @@ OPTION_BOOL_ACCESSORS( m_waterFoam )
 OPTION_BOOL_ACCESSORS( m_mapAwareWaveHeading )
 OPTION_BOOL_ACCESSORS( m_underwaterClarity )
 OPTION_BOOL_ACCESSORS( m_groundFoliage )
+OPTION_BOOL_ACCESSORS( m_ragdoll )
 OPTION_BOOL_ACCESSORS( m_groundMarks )
 OPTION_BOOL_ACCESSORS( m_firelight )
 OPTION_BOOL_ACCESSORS( m_hemiAmbient )
@@ -806,6 +807,16 @@ const OptionDef TheOptionCatalog[] =
 	{ "GroundFoliage",						OPT_WND( "CheckGroundFoliage" ), "GUI:GroundFoliage",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_groundFoliage, set_m_groundFoliage },
+
+	// A dying soldier goes limp and falls by the last hit instead of playing his death animation.
+	// W3DRagdoll asks at each death, so a switch mid-match reaches the next one and a body already
+	// falling finishes.  Client only: the logic never reads it, and the dead object is the same with
+	// it on or off.  Off under Classic graphics; -ragdoll turns it on for a run over both.  Either
+	// renderer.  On Options > Display beside Ground Foliage.  No quality slider row: it is a taste,
+	// a few microseconds of CPU a body, not a picture's price.
+	{ "Ragdoll",									OPT_WND( "CheckRagdoll" ), "GUI:Ragdoll",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_ragdoll, set_m_ragdoll },
 
 	// Craters and a building's stain on the terrain, fading over minutes, and darker treads.  The
 	// scorch buffer asks every draw.  Off under Classic graphics and -d3d9.  On Options > Effects.

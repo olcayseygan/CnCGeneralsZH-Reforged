@@ -2621,17 +2621,19 @@ static Bool stateIsDying(const ModelConditionInfo* state)
 }
 
 //-------------------------------------------------------------------------------------------------
-/** -ragdoll, every draw once the drawable's transform is on the model.  It goes by the state this module
-	last applied, never the object, which the tick may be writing beside the render. */
+/** The Ragdoll option, every draw of an infantry model once the drawable's transform is on it.  It goes
+	by the state this module last applied, never the object, which the tick may be writing beside the
+	render.  The option is asked only before a ragdoll starts, so one switched off mid-match lies down
+	as it was going to. */
 void W3DModelDraw::updateRagdoll()
 {
 	if (m_renderObject == NULL || m_ragdollRefused)
 		return;
 	if (m_ragdoll == NULL)
 	{
-		if (!stateIsDying(m_curState) && !stateIsDying(m_nextState))
+		if (!W3DRagdoll::enabled() || (!stateIsDying(m_curState) && !stateIsDying(m_nextState)))
 			return;
-		m_ragdoll = W3DRagdoll::create(m_renderObject, m_ragdollImpact);
+		m_ragdoll = W3DRagdoll::create(m_renderObject, m_ragdollImpact, getDrawable()->getTemplate());
 		if (m_ragdoll == NULL)
 		{
 			m_ragdollRefused = TRUE;

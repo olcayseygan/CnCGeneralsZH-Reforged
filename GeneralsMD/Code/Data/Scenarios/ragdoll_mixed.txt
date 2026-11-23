@@ -1,0 +1,63 @@
+# Infantry of all three sides dying on the ragdoll_slope ground, for the Ragdoll option's before and
+# after: every skeleton on the field either starts a ragdoll or logs once why it keeps its death
+# animation (RAGDOLL lines). Each side's soldiers are set to a tenth of their health, the Americans
+# stand between the other two and everyone attack-moves into the middle; two Rocket Buggies add
+# EXPLODED deaths. A second wave at frame 450, once the first bodies are gone and the cap of 24 live
+# ragdolls is clear again, brings pilots and civilian skeletons in front of fresh Rebels. The slope is
+# the one south of 1550,3650 on Twilight Flame.
+#
+#   generals.exe -win -xres 1280 -yres 720 -noFPSLimit -quickstart -noshellmap -observer
+#     -multiInstance -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 3 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -side 2 FactionGLA -seed 7
+#     -camera 1500 3660 -maxframes 900 -scenario ragdoll_mixed -logPrefix ragdoll_on_
+#
+# with ZH_USER_DATA_DIR naming a folder whose Options.ini is reforged-look.ini plus "Ragdoll = yes",
+# and the same line with "Ragdoll = no" and another -logPrefix. The HEADLESS CRC lines of the two
+# runs have to be the same.
+
+20    spawn      0  AmericaInfantryRanger            3   1450 3670  14
+20    spawn      0  AmericaInfantryMissileDefender   2   1470 3650  14
+20    spawn      0  AmericaInfantryPathfinder        1   1490 3680  14
+20    spawn      0  AmericaInfantryColonelBurton     1   1480 3700  14
+20    spawn      1  ChinaInfantryRedguard            3   1340 3660  14
+20    spawn      1  ChinaInfantryTankHunter          2   1330 3630  14
+20    spawn      1  ChinaInfantryHacker              1   1320 3680  14
+20    spawn      1  ChinaInfantryBlackLotus          1   1310 3650  14
+20    spawn      1  Infa_ChinaInfantryMiniGunner     2   1350 3620  14
+20    spawn      2  GLAInfantryRebel                 2   1560 3650  14
+20    spawn      2  Chem_GLAInfantryRebel            2   1580 3630  14
+20    spawn      2  GLAInfantryTunnelDefender        2   1600 3650  14
+20    spawn      2  GLAInfantryJarmenKell            1   1620 3640  14
+20    spawn      2  GLAInfantryWorker                1   1560 3620  14
+20    spawn      2  GLAInfantryHijacker              1   1590 3670  14
+20    spawn      2  GLAInfantryAngryMobPistol01      2   1610 3620  14
+25    health     0  AmericaInfantry*                     10
+25    health     1  ChinaInfantry*                       10
+25    health     1  Infa_ChinaInfantry*                  10
+25    health     2  GLAInfantry*                         10
+25    health     2  Chem_GLAInfantry*                    10
+30    spawn      2  GLAVehicleRocketBuggy            2   1640 3600  30
+60    attackmove 0  AmericaInfantry*                     1460 3670
+60    attackmove 1  ChinaInfantry*                       1460 3670
+60    attackmove 1  Infa_ChinaInfantry*                  1460 3670
+60    attackmove 2  GLAInfantry*                         1460 3670
+60    attackmove 2  Chem_GLAInfantry*                    1460 3670
+60    attackmove 2  GLAVehicleRocketBuggy                1460 3670
+450   spawn      0  AmericaInfantryPilot             2   1460 3670  14
+450   spawn      0  Partisan01                       1   1480 3660  14
+450   spawn      0  UNSoldier                        1   1440 3680  14
+450   spawn      0  GenericMale01                    1   1470 3690  14
+450   spawn      0  HomelessGuy                      1   1450 3650  14
+450   spawn      0  MogadishuFemaleCivilian01        1   1490 3670  14
+450   spawn      0  FlamingInfantry                  1   1430 3660  14
+450   spawn      2  GLAInfantryRebel                 4   1580 3650  14
+455   health     0  AmericaInfantryPilot                 10
+455   health     0  Partisan01                           10
+455   health     0  UNSoldier                            10
+455   health     0  GenericMale01                        10
+455   health     0  HomelessGuy                          10
+455   health     0  MogadishuFemaleCivilian01            10
+460   attackmove 2  GLAInfantry*                         1460 3670
+600   tally      0  AmericaInfantry*
+600   tally      1  ChinaInfantry*
+600   tally      2  GLAInfantry*

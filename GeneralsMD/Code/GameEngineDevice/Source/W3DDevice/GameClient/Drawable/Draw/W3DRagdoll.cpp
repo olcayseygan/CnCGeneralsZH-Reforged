@@ -48,6 +48,7 @@
 // while the body is in the air the carry is its fall, so the particles take no gravity of their own.
 
 #include "Common/EarlyCommandLine.h"
+#include "Common/GlobalData.h"
 #include "Common/ThingTemplate.h"
 #include "GameClient/ClientRandomValue.h"
 #include "W3DDevice/GameClient/BaseHeightMap.h"
@@ -58,14 +59,13 @@
 
 #include <chrono>
 #include <math.h>
+#include <set>
 #include <stdio.h>
+#include <string>
 #include <string.h>
 
 /// live ragdolls at once; a death past it plays its animation
 static const Int MAX_ACTIVE_RAGDOLLS = 24;
-/// ponytail: suffix match on the template name, so the generals' AirF_, Lazr_ and SupW_ copies come
-/// along; a per-template INI flag when more than a handful of soldiers join
-static const char *const RAGDOLL_TEMPLATES[] = { "AmericaInfantryRanger" };
 
 static const Real STEP_MS = 1000.0f / 60.0f;			///< fixed simulation step, in W3D sync milliseconds
 static const Int MAX_STEPS_PER_UPDATE = 4;				///< a long gap (off screen, a hitch) is dropped, not caught up
@@ -119,17 +119,25 @@ static Bool endsWithNoCase( const char *name, const char *suffix )
 //-------------------------------------------------------------------------------------------------
 Bool W3DRagdoll::wants( const ThingTemplate *tmpl )
 {
-	if( tmpl == NULL || !ragdollSwitch() )
-		return FALSE;
-	const char *name = tmpl->getName().str();
-	const size_t n = strlen( name );
-	for( size_t i = 0; i < sizeof( RAGDOLL_TEMPLATES ) / sizeof( RAGDOLL_TEMPLATES[ 0 ] ); ++i )
-	{
-		const size_t m = strlen( RAGDOLL_TEMPLATES[ i ] );
-		if( n >= m && strcmp( name + n - m, RAGDOLL_TEMPLATES[ i ] ) == 0 && ( n == m || name[ n - m - 1 ] == '_' ) )
-			return TRUE;
-	}
-	return FALSE;
+	return tmpl != NULL && tmpl->isKindOf( KINDOF_INFANTRY );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool W3DRagdoll::enabled( void )
+{
+	return ragdollSwitch() || ( TheGlobalData->m_ragdoll && !TheGlobalData->m_classicGraphics );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The RAGDOLL line for a skeleton build refused, once per template a run. */
+static void logRefusal( const char *templateName, RenderObjClass *robj, const char *why )
+{
+	static std::set<std::string> s_logged;
+	if( !s_logged.insert( templateName ).second )
+		return;
+	const HTreeClass *tree = robj->Get_HTree();
+	DEBUG_LOG(( "RAGDOLL: %s keeps its death animation: %s (model %s, skeleton %s, %d pivots)\n",
+		templateName, why, robj->Get_Name(), tree ? tree->Get_Name() : "none", tree ? tree->Num_Pivots() : 0 ));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -206,14 +214,17 @@ W3DRagdoll::~W3DRagdoll()
 }
 
 //-------------------------------------------------------------------------------------------------
-W3DRagdoll *W3DRagdoll::create( RenderObjClass *robj, const RagdollImpact &impact )
+W3DRagdoll *W3DRagdoll::create( RenderObjClass *robj, const RagdollImpact &impact, const ThingTemplate *tmpl )
 {
 	if( robj == NULL || s_activeRagdolls >= MAX_ACTIVE_RAGDOLLS )
 		return NULL;
+	const char *templateName = tmpl ? tmpl->getName().str() : "?";
 	W3DRagdoll *doll = new W3DRagdoll;
 	++s_activeRagdolls;
-	if( !doll->build( robj, impact ) )
+	const char *refusal = doll->build( robj, impact, templateName );
+	if( refusal != NULL )
 	{
+		logRefusal( templateName, robj, refusal );
 		delete doll;
 		return NULL;
 	}
@@ -233,18 +244,22 @@ void W3DRagdoll::addConstraint( Int a, Int b, Real minD, Real maxD )
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact )
+const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact, const char *templateName )
 {
 	const HTreeClass *tree = robj->Get_HTree();
 	if( tree == NULL )
-		return FALSE;
+		return "no skeleton";
 	const Int n = tree->Num_Pivots();
-	if( n < 3 || n > MAX_BONES || robj->Get_Num_Bones() != n )
-		return FALSE;
+	if( n < 3 )
+		return "too few pivots";
+	if( n > MAX_BONES )
+		return "more pivots than it holds";
+	if( robj->Get_Num_Bones() != n )
+		return "the model's bones are not its skeleton's";
 	// a scaled drawable puts the scale in the root, and the captures below assume rigid matrices
 	const Matrix3D &rootTm = robj->Get_Transform();
 	if( fabs( rootTm.Get_X_Vector().Length() - 1.0f ) > 0.01f )
-		return FALSE;
+		return "drawn scaled";
 
 	m_robj = robj;
 	m_numBones = n;
@@ -258,7 +273,7 @@ Bool W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact )
 		w0[ i ] = robj->Get_Bone_Transform( i );
 		m_bone[ i ].parent = ( i == 0 ) ? -1 : tree->Get_Parent_Index( i );
 		if( m_bone[ i ].parent >= i )
-			return FALSE;		// Base_Update poses in index order, parents first; anything else is not a skeleton this reads
+			return "a bone before its parent";		// Base_Update poses in index order, parents first; anything else is not a skeleton this reads
 		descendants[ i ] = 0;
 	}
 	for( Int i = n - 1; i > 0; --i )
@@ -277,7 +292,7 @@ Bool W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact )
 			bodyRoot = i;
 	}
 	if( bodyRoot < 0 )
-		return FALSE;
+		return "no body under the root";
 
 	Bool inBody[ MAX_BONES ];
 	Int hand = bodyRoot;
@@ -308,7 +323,7 @@ Bool W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact )
 		}
 	}
 	if( numParticles < 3 )
-		return FALSE;
+		return "fewer than three bones to swing";
 
 	for( Int i = 0; i < n; ++i )
 	{
@@ -468,12 +483,12 @@ Bool W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact )
 		if( m_bone[ i ].role != ROLE_KINEMATIC )
 			robj->Capture_Bone( i );
 	pose( robj );
-	DEBUG_LOG(( "RAGDOLL: start %s, %d bones, %d particles, %d constraints, body %s, gun on %s, push %s\n",
-		tree->Get_Name(), n, numParticles, m_numConstraints, tree->Get_Bone_Name( bodyRoot ), tree->Get_Bone_Name( hand ),
+	DEBUG_LOG(( "RAGDOLL: start %s, skeleton %s, %d bones, %d particles, %d constraints, body %s, gun on %s, push %s\n",
+		templateName, tree->Get_Name(), n, numParticles, m_numConstraints, tree->Get_Bone_Name( bodyRoot ), tree->Get_Bone_Name( hand ),
 		!fresh ? "none" : impact.radius > 0.0f ? "blast" : "shot" ));
 	logPose( robj, "start", 0.0f );
 	m_startSync = m_lastSync;
-	return TRUE;
+	return NULL;
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -402,7 +402,7 @@ public:
 	virtual Bool isVisible() const;
 	virtual void reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPos, Real oldAngle);
 	virtual void reactToGeometryChange() { }
-	/// -ragdoll: the last hit, which pushes the body when the soldier dies (W3DRagdoll.h)
+	/// Ragdoll option: the last hit, which pushes the body when the soldier dies (W3DRagdoll.h)
 	virtual void reactToImpact( const Coord3D &pos, Real radius, const Coord3D *source );
 
 	// R1, smooth motion (W3DSmoothMotion.h): W3DDisplay::draw's capture, blend and restore.
@@ -608,9 +608,9 @@ private:
 	void updateRagdoll();
 	void dropRagdoll();
 
-	W3DRagdoll*										m_ragdoll;					///< -ragdoll: the limp body that has taken over the bones, or NULL
+	W3DRagdoll*										m_ragdoll;					///< Ragdoll option: the limp body that has taken over the bones, or NULL
 	RagdollImpact									m_ragdollImpact;		///< the last hit, for the push
-	Bool													m_ragdollWanted;		///< -ragdoll is on and this template is one it covers
+	Bool													m_ragdollWanted;		///< the template is infantry, so its death may go limp
 	Bool													m_ragdollRefused;		///< tried and fell back to the animation; never again for this drawable
 };
 

@@ -847,6 +847,7 @@ GlobalData::GlobalData()
 	m_underwaterClarity = FALSE;
 	m_waterFoam = FALSE;
 	m_groundFoliage = FALSE;
+	m_ragdoll = FALSE;
 	m_groundMarks = FALSE;
 	m_firelight = FALSE;
 	m_heatHaze = FALSE;

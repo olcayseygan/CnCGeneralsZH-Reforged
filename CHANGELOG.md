@@ -60,6 +60,10 @@ found and fixed, EA's own, not port damage.**
 - A computer weighed only itself before typing GG, so allied Easy seats facing one strong player each saw a lost match and gave up unfought; seven Easy seats against one player given 180 tanks were all gone before a shot was fired. A computer now sets its whole team's worth against the strongest enemy team. In ten matches of two allied Easy seats against one computer at a rating of 4200, three seats gave up, each with its team under a fifth of the enemy's worth.
 - Replays with a computer player recorded before this change will not play back.
 
+## Soldiers fall where they are hit
+
+- Ragdoll Deaths, under Options, Display, is a new setting, off by default. A soldier who dies goes limp and drops the way the bullet or the blast pushed him: shot from the left he folds to the right, a rocket at his feet lifts him and throws him clear, and on a hillside he comes to rest along the slope he fell on. Every side's infantry falls this way, and so do the heroes, the generals' own soldiers, pilots and civilians: on a test field of 17 kinds of soldier, from Rangers and Red Guards to Colonel Burton, a Toxin Rebel and a burning civilian, every one of them went down limp. Past the 24th body falling at once, a death plays the old animation. Switch it in the middle of a match and the next death follows the new choice while those already falling finish their fall. Looks only: where the body lies, how long it stays and when it goes are what they always were, so your opponent's setting is his own and replays play the same either way. Off under Classic Graphics.
+
 ## Wrecks slide off walls, shells clear the hill
 
 - The slope the game reads off the ground, which tanks and cars tilt to as they drive and wrecks bounce off, was worked out wrong on every hillside. EA's formula took one corner's slope from the wrong pair of heights, leaving the right one unused, and then blended the four corners of each patch crosswise, so each corner's slope pulled hardest at the opposite corner. The slope now comes from each patch's own four corners, blended the way the heights already were. The heights themselves have not moved.

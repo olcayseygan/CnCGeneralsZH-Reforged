@@ -18,8 +18,9 @@
 // Modified 2026 by Olcay Seygan for Zero Hour Reforged; see the git history.
 
 // FILE: W3DRagdoll.h
-// A soldier's death drawn as a limp body instead of the canned death animation, behind -ragdoll.
-// Client only.  The logic keeps the dead object exactly as it always did (where it lies, the slow
+// A soldier's death drawn as a limp body instead of the canned death animation: the Ragdoll option
+// (off under Classic graphics), or -ragdoll over it for a run.  Client only; the option is read here
+// and nowhere in the logic.  The logic keeps the dead object exactly as it always did (where it lies, the slow
 // death's sink and its removal); this only overrides the bone transforms of the drawable's own
 // render object, through the HTree's bone capture, and reads nothing back into the logic.  The
 // bones are verlet particles held by distance constraints (W3DRagdoll.cpp has the rules), pushed by
@@ -54,12 +55,17 @@ struct RagdollImpact
 class W3DRagdoll
 {
 public:
-	/** -ragdoll is on and the template is one the prototype covers. */
+	/** The template is infantry, so its drawable listens for hits whether or not the option is on now. */
 	static Bool wants( const ThingTemplate *tmpl );
 
+	/** A new death may go limp: the Ragdoll option outside Classic graphics, or -ragdoll.  Asked at
+		each death, so a switch mid-match reaches the next one and a live ragdoll plays out. */
+	static Bool enabled( void );
+
 	/** Takes over robj's skeleton from the pose it holds now.  NULL when the cap of live ragdolls is
-		reached or the skeleton is one it cannot use; the death animation then plays as before. */
-	static W3DRagdoll *create( RenderObjClass *robj, const RagdollImpact &impact );
+		reached or the skeleton is one it cannot use (logged once per template); the death animation
+		then plays as before. */
+	static W3DRagdoll *create( RenderObjClass *robj, const RagdollImpact &impact, const ThingTemplate *tmpl );
 
 	~W3DRagdoll();
 
@@ -100,7 +106,7 @@ private:
 	};
 
 	W3DRagdoll();
-	Bool build( RenderObjClass *robj, const RagdollImpact &impact );
+	const char *build( RenderObjClass *robj, const RagdollImpact &impact, const char *templateName );	///< NULL, or why the skeleton cannot be used
 	void addConstraint( Int a, Int b, Real minD, Real maxD );
 	void step( Real dt, Bool gravity, Real sinkOffset );
 	void pose( RenderObjClass *robj );

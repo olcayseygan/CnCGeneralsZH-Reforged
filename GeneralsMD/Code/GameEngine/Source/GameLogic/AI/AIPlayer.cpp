@@ -38,6 +38,7 @@
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
 #include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/ApocalypseDirector.h"
 #include "Common/PlayerTemplate.h"
 #include "Common/SpecialPower.h"
 #include "Common/Team.h" 
@@ -10350,6 +10351,19 @@ Bool AIPlayer::killZonesHere( void ) const
 	return !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_KILL_ZONES ) != 0 );
 }
 
+/** The owner, 2026-11-23: players beat even the hardest level easily, and every level should press them
+	* harder.  What this changes (the spare guards, the gun hold by rating, the smallest attack held at Hard's
+	* above it, which sent no Elo 4200 wave under 11,700 of army) is off for -aiknobsoff pressure and in an
+	* Apocalypse match.  Holding the odds at guns to Hard's above it as well was tried the same night and backed
+	* out: Elo 3400 and 4200 lost half again as much to defences for each kill and won no more. */
+Bool AIPlayer::pressureHere( void ) const
+{
+	// an Apocalypse seat holds a basin against the dead with its allies and plays as it did
+	if( TheApocalypseDirector != NULL && TheApocalypseDirector->isActive() )
+		return FALSE;
+	return !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_PRESSURE ) != 0 );
+}
+
 Real AIPlayer::killZoneWeight( void ) const
 {
 	return killZonesHere() ? aiRatingLerp( m_rating, KILL_ZONE_WEIGHT ) : 0.0f;
@@ -13199,6 +13213,11 @@ static const AIRungReal WAVE_GUN_ODDS = { { 0.0f, 1.0f, 1.5f }, AIKNOB_GATED };
 	* starts again after it: a turtle that keeps building is still attacked every few minutes, by the
 	* biggest army that could be gathered meanwhile. */
 #define GUN_HOLD_MAX_FRAMES ((UnsignedInt)(180 * LOGICFRAMES_PER_GAME_SECOND))
+/** ... by rating since 2026-11-23, in game seconds: the hold counts the AI's own losses on the road, and an Elo
+	* 4200 seat that lost a wave sat out the whole three minutes with most of its army at home.  Easy holds
+	* nothing (WAVE_GUN_ODDS); every rung from Medium up waits less than the old 180, the higher the less.
+	* -aiknobsoff pressure keeps GUN_HOLD_MAX_FRAMES. */
+static const AIRungInt GUN_HOLD_SECONDS = { { 180, 170, 160 }, AIKNOB_OPEN };
 /** A defence this far past its reach from the middle of the enemy's base is one an attack on it meets. */
 static const Real WAVE_AIM_REACH = 300.0f;
 /** How much of the enemy's known defences count in the pressure (updatePressure), beside his army.  They do
@@ -13305,7 +13324,8 @@ Bool AIPlayer::attackBeatsGuns( Real power, const char *what )
 	if( odds <= 0.0f || rushPending() || power <= 0.0f )
 		return TRUE;
 	const UnsignedInt now = TheGameLogic->getFrame();
-	if( m_gunHoldSince != 0 && now - m_gunHoldSince >= GUN_HOLD_MAX_FRAMES )
+	const UnsignedInt holdMax = pressureHere() ? (UnsignedInt)( aiRatingLerp( m_rating, GUN_HOLD_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) : GUN_HOLD_MAX_FRAMES;
+	if( m_gunHoldSince != 0 && now - m_gunHoldSince >= holdMax )
 		return TRUE;
 	const Real guarded = guardedRoad();
 	if( power >= odds * guarded )
@@ -13468,6 +13488,7 @@ void AIPlayer::doWaves( void )
 		return;
 
 	m_lossMap.fade( LOSS_KEPT, LOSS_LEAST );
+	logHomeTally();
 	updatePressure();
 	defendHome();
 	notePersonaProgress();
@@ -13486,6 +13507,7 @@ void AIPlayer::doWaves( void )
 		personaSortie();
 	sendIdleAttackTeams();
 	sendIdleUnitsHunting();
+	sendSpareGuards();
 	keepSiegeBehind();
 
 	Real power = 0.0f;
@@ -13530,8 +13552,13 @@ void AIPlayer::doWaves( void )
 	// and a rung that does not mass lets go the moment what is parked is worth sending
 	if( teams < MAX_HELD_TEAMS ? !waveGoes( power, heldFrames ) : !readyToPush() )
 		return;
-	// ... and not into guns it does not beat: it waits and grows, a full staging point too, up to GUN_HOLD_MAX_FRAMES
-	if( !attackBeatsGuns( power, "wave" ) )
+	// ... and not into guns it does not beat: it waits and grows, a full staging point too, up to GUN_HOLD_MAX_FRAMES.
+	// What idles at home past the rung's share goes with it and counts towards the odds: an Elo 4200 seat held a
+	// staging point of 12,462 at the guns for minutes with 56,312 of its 83,812 standing at home
+	std::vector<Object *> spares;
+	Real spareShare, spareIdle, spareArmy;
+	const Real sparePower = collectSpareGuards( &spares, &spareShare, &spareIdle, &spareArmy );
+	if( !attackBeatsGuns( power + sparePower, "wave" ) )
 		return;
 	const char *cause = !holdsTeamsForWaves() ? "press" : teams >= MAX_HELD_TEAMS ? "full" : power >= wavePower() ? "wave" : "timeout";
 
@@ -13565,6 +13592,13 @@ void AIPlayer::doWaves( void )
 			waitingPower( team, wave );
 	}
 	power += addHomeStrays( wave );
+	for( size_t s = 0; s < spares.size(); ++s )
+	{
+		if( spares[ s ]->getGroup() == wave )
+			continue;		// a stray addHomeStrays took
+		power += aiCombatPower( spares[ s ] );
+		wave->add( spares[ s ] );
+	}
 	// the Rusher's one attack takes every fighter at home, the guard teams' as well: one rush went with
 	// one team of four and 8,275 of army stayed behind
 	if( rushPending() )
@@ -14784,6 +14818,171 @@ void AIPlayer::personaSortie( void )
 	m_rushSent = TRUE;
 	personaChat( "Wave" );
 	sendWave( group, approach, pathSuffix, 0, power, 0, rush ? "rush" : "sortie" );
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** The owner, 2026-11-23: once it attacks, it must stop piling units up at home.  Hard at frame 43200 had
+	* 205 of its 368 units within 900 of its start: the scripts put a share of every army into base defence
+	* teams that only a beaten enemy calls out, the strays nobody calls stand where they were trained, and a
+	* rating above Hard built more of both.  So once a period what stands idle at home past the rung's share
+	* of the whole army (HOME_GUARD_SHARE) goes out as a wave of its own, guards included, the newest kept
+	* last in the list order the player walks.  Easy keeps the most at home and looks the least often, Hard
+	* keeps under a third, and every step past Hard keeps less and looks sooner.  It is still an attack: worth
+	* the rung's smallest one and not into guns it does not beat (attackBeatsGuns), and never while the base is
+	* hit.  An AI that rates itself outmatched (AIPRESSURE_DEFEND) keeps twice the share. */
+//----------------------------------------------------------------------------------------------------------
+static const AIRungReal HOME_GUARD_SHARE = { { 0.6f, 0.45f, 0.3f }, AIKNOB_SHARE };
+/** ... and how often it looks, in game seconds. */
+static const AIRungInt SPARE_GUARD_SECONDS = { { 90, 60, 40 }, AIKNOB_OPEN };
+
+Real AIPlayer::collectSpareGuards( std::vector<Object *> *spares, Real *keepShare, Real *idleAtHome, Real *armyPower )
+{
+	spares->clear();
+	*keepShare = 0.0f;
+	*idleAtHome = 0.0f;
+	*armyPower = 0.0f;
+	if( !runsOwnAI() || !m_baseCenterSet || !pressureHere() || rushPending() )
+		return 0.0f;
+	std::vector<Object *> owned;
+	m_player->iterateObjects( collectOwned, &owned );
+	std::vector<Object *> idle;
+	Real army = 0.0f;
+	Real idlePower = 0.0f;
+	for( std::vector<Object *>::const_iterator o = owned.begin(); o != owned.end(); ++o )
+	{
+		Object *obj = *o;
+		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_IMMOBILE ) || obj->getAI() == NULL || obj->isContained() || !leavesToFinish( obj ) )
+			continue;
+		const Real power = aiCombatPower( obj );
+		army += power;
+		if( !isAtHome( obj->getPosition() ) || isMassUnit( obj->getID() ) || isFallingBack( obj->getID() ) )
+			continue;
+		const StateID state = obj->getAI()->getCurrentStateID();
+		if( state != AI_IDLE && state != AI_GUARD && state != AI_GUARD_RETALIATE )
+			continue;
+		// a parked team waits for its own wave
+		Bool parked = FALSE;
+		const Team *team = obj->getTeam();
+		for( Int i = 0; team && i < MAX_HELD_TEAMS; ++i )
+			if( m_heldUsed[ i ] && m_heldTeam[ i ] == team->getID() )
+				parked = TRUE;
+		if( parked )
+			continue;
+		idle.push_back( obj );
+		idlePower += power;
+	}
+	Real share = aiRatingLerp( m_rating, HOME_GUARD_SHARE );
+	if( m_pressure == AIPRESSURE_DEFEND )
+		share = min( 1.0f, 2.0f * share );
+	const Real keep = share * army;
+	*keepShare = share;
+	*idleAtHome = idlePower;
+	*armyPower = army;
+	Real spare = 0.0f;
+	for( size_t i = 0; i < idle.size() && idlePower - spare > keep; ++i )
+	{
+		spare += aiCombatPower( idle[ i ] );
+		spares->push_back( idle[ i ] );
+	}
+	return spare;
+}
+
+void AIPlayer::sendSpareGuards( void )
+{
+	if( !runsOwnAI() || !m_baseCenterSet || !pressureHere() || rushPending() || !readyToPush() )
+		return;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	// once a period, without a member for it: doWaves runs every WAVE_CHECK_RATE frames
+	const UnsignedInt every = (UnsignedInt)( aiRatingLerp( m_rating, SPARE_GUARD_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND );
+	if( every == 0 || now % every >= (UnsignedInt)WAVE_CHECK_RATE || isBaseUnderAttack() )
+		return;
+	Player *enemy = getAiEnemy();
+	if( enemy == NULL )
+		return;
+	std::vector<Object *> spares;
+	Real share, idlePower, army;
+	const Real spare = collectSpareGuards( &spares, &share, &idlePower, &army );
+	if( spares.empty() || spare < getSkillProfile()->m_minAttackPower || !attackBeatsGuns( spare, "spare guards" ) )
+		return;
+	AIGroup *group = TheAI->createGroup();
+	for( size_t i = 0; i < spares.size(); ++i )
+		group->add( spares[ i ] );
+	if( group->isEmpty() )
+	{
+		TheAI->destroyGroup( group );
+		return;
+	}
+	DEBUG_LOG(("AI WAVE frame %d player %d sends %d spare units, %.0f of %.0f idle at home over its keep of %.2f of %.0f army\n", now,
+		m_player->getPlayerIndex(), group->getCount(), spare, idlePower, share, army));
+	const Int pathSuffix = enemy->getMpStartIndex() + 1;
+	Coord3D from;
+	group->getCenter( &from );
+	const AIThreatMix spareMix = groupMix( group );
+	const AsciiString approach = chooseApproachLabel( &from, AsciiString( SKIRMISH_CENTER ), pathSuffix, &spareMix );
+	if( m_personaWaves == 0 )
+		m_firstWaveFrame = now;
+	++m_personaWaves;
+	sendWave( group, approach, pathSuffix, 0, spare, 0, "spare" );
+}
+
+/** AI HOME, for the batches: how much of the army stands at home and how much is out, at game minutes 15
+	* and 25.  Nothing reads it. */
+void AIPlayer::logHomeTally( void )
+{
+	if( !runsOwnAI() || !m_baseCenterSet )
+		return;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	Int minute = 0;
+	if( now >= (UnsignedInt)( 15 * 60 * LOGICFRAMES_PER_GAME_SECOND ) && now < (UnsignedInt)( 15 * 60 * LOGICFRAMES_PER_GAME_SECOND + WAVE_CHECK_RATE ) )
+		minute = 15;
+	else if( now >= (UnsignedInt)( 25 * 60 * LOGICFRAMES_PER_GAME_SECOND ) && now < (UnsignedInt)( 25 * 60 * LOGICFRAMES_PER_GAME_SECOND + WAVE_CHECK_RATE ) )
+		minute = 25;
+	if( minute == 0 )
+		return;
+	// and how many stand nearer the enemy's start than its own base: two base radii are half of a small map
+	Coord3D enemyAt;
+	Player *enemy = getAiEnemy();
+	const Bool enemyKnown = enemy != NULL && enemyStartGuess( enemy->getPlayerIndex(), &enemyAt );
+	std::vector<Object *> owned;
+	m_player->iterateObjects( collectOwned, &owned );
+	Int units = 0;
+	Int home = 0;
+	Int forward = 0;
+	Int homeIdle = 0;		// of those at home, idle or on guard
+	Int homeKept = 0;		// ... and kept at home by their job (leavesToFinish)
+	std::map<Int, Int> busyStates;		// the fighters at home that are neither idle nor on guard, by state
+	Real power = 0.0f;
+	Real homePower = 0.0f;
+	for( std::vector<Object *>::const_iterator o = owned.begin(); o != owned.end(); ++o )
+	{
+		const Object *obj = *o;
+		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_STRUCTURE ) || obj->isKindOf( KINDOF_IMMOBILE ) || obj->getAI() == NULL || obj->isContained() )
+			continue;
+		const Real unitPower = aiCombatPower( obj );
+		if( unitPower <= 0.0f )
+			continue;
+		++units;
+		power += unitPower;
+		const Coord3D *at = obj->getPosition();
+		if( isAtHome( at ) )
+		{
+			++home;
+			homePower += unitPower;
+			const StateID state = obj->getAI()->getCurrentStateID();
+			if( state == AI_IDLE || state == AI_GUARD || state == AI_GUARD_RETALIATE )
+				++homeIdle;
+			else if( leavesToFinish( obj ) )
+				++busyStates[ (Int)state ];
+			if( !leavesToFinish( obj ) )
+				++homeKept;
+		}
+		if( enemyKnown && sqr( at->x - enemyAt.x ) + sqr( at->y - enemyAt.y ) < sqr( at->x - m_baseCenter.x ) + sqr( at->y - m_baseCenter.y ) )
+			++forward;
+	}
+	DEBUG_LOG(("AI HOME frame %d player %d minute %d: %d of %d units and %.0f of %.0f power at home, %d forward, %d waves sent; at home %d idle, %d on jobs, base hit %d, pressure %d\n", now,
+		m_player->getPlayerIndex(), minute, home, units, homePower, power, forward, m_personaWaves, homeIdle, homeKept, isBaseUnderAttack() ? 1 : 0, (Int)m_pressure));
+	for( std::map<Int, Int>::const_iterator s = busyStates.begin(); s != busyStates.end(); ++s )
+		DEBUG_LOG(("AI HOME frame %d player %d busy at home: state %d x %d\n", now, m_player->getPlayerIndex(), s->first, s->second));
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -24031,15 +24230,28 @@ void AIPlayer::refreshRatedProfile( void )
 {
 	AIDifficultyProfile scratch;
 	m_ratedProfile = *TheAI->getRatedProfile( m_rating, &scratch );
+	// the smallest attack stays Hard's above it (pressureHere): -aiknobsoff pressure puts it back (getSkillProfile)
+	if( m_rating > AI_RATING_HARD )
+	{
+		AIDifficultyProfile hardScratch;
+		m_ratedProfile.m_minAttackPower = TheAI->getRatedProfile( AI_RATING_HARD, &hardScratch )->m_minAttackPower;
+	}
 }
 
 const AIDifficultyProfile *AIPlayer::getSkillProfile( void ) const
 {
 	const AIDifficultyProfile *profile = ratedProfile();
 	const Bool knobsOff = knobsOffHere();
-	if( !knobsOff && m_persona == AIPERSONA_NORMAL )
+	// above Hard, refreshRatedProfile held the smallest attack at Hard's; where the pressure is off it rises again
+	const Bool uncapped = m_rating > AI_RATING_HARD && !pressureHere();
+	if( !knobsOff && !uncapped && m_persona == AIPERSONA_NORMAL )
 		return profile;
 	m_measuredProfile = *profile;
+	if( uncapped )
+	{
+		AIDifficultyProfile scratch;
+		m_measuredProfile.m_minAttackPower = TheAI->getRatedProfile( m_rating, &scratch )->m_minAttackPower;
+	}
 	if( knobsOff )
 	{
 		const Int mask = TheGlobalData->m_aiKnobsOffMask;
@@ -26103,6 +26315,9 @@ static const AIRatingTable s_ratingTables[] =
 	AI_TABLE_REAL( DOCTRINE_AIR_GUN_SHARE ),
 	AI_TABLE_REAL( WAVE_GUN_ODDS ),
 	AI_TABLE_REAL( DEFENCE_PRESSURE_SHARE ),
+	AI_TABLE_REAL( HOME_GUARD_SHARE ),
+	AI_TABLE_INT( SPARE_GUARD_SECONDS ),
+	AI_TABLE_INT( GUN_HOLD_SECONDS ),
 	AI_TABLE_REAL( ALLY_ARMY_SHARE ),
 	AI_TABLE_REAL( GARRISON_FRONT_REACH ),
 	AI_TABLE_REAL( GARRISON_FRONT_REACH_INFANTRY ),

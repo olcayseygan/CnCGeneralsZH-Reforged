@@ -798,6 +798,10 @@ protected:
 	void doPersonaRaids(void);										///< Raider: fast units at the enemy's gatherers, workers and depots
 	void huntGatherers(void);										///< raiders out of the base turn on the nearest known gatherer near them
 	void personaSortie(void);										///< Attacker and Rusher on a rung that does not mass: the rush and the regular sorties of what idles at home
+	void sendSpareGuards(void);									///< what idles at home past the rung's share of the army goes out as a wave of its own
+	Real collectSpareGuards(std::vector<Object *> *spares, Real *keepShare, Real *idleAtHome, Real *armyPower);	///< those units and their power; none under -aiknobsoff pressure
+	void logHomeTally(void);										///< AI HOME: the army at home and away at game minutes 15 and 25; read by nothing
+	Bool pressureHere(void) const;								///< -aiknobsoff pressure is not on this seat
 	void defendAlly(void);												///< Supporter: idle units at home go to an ally's base when it is hit
 	void postTeamRequests(void);									///< what this AI asks of its allies, every wave tick
 	void answerTeamRequests(void);								///< Air, Attacker and Rusher answer an ally's call for help

@@ -8,6 +8,14 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## The computer stops sitting on its army
+
+- Every level kept a large part of its army standing at home. The guard teams the base scripts fill are only called out once you are nearly beaten, and an Insane computer held a twelve-thousand attack at your defences for minutes while 56,000 more of its army stood in the base behind it. Now whatever stands idle at home past a share of the whole army goes out: Easy keeps three fifths at home and looks every minute and a half, Hard keeps under a third and looks every 40 seconds, and each level above keeps less and looks sooner. The spare units join the next attack and count towards the odds it weighs against your guns, or go out on their own. They still stay while their base is under attack, and a small group still will not walk into defences it cannot beat.
+- An attack your defences hold back now waits at most two minutes forty on Hard instead of three, and less the higher the level. The computer counts its own losses on the road as part of what holds it back, so one that lost an attack used to sit out the full three minutes.
+- Above Hard the smallest attack a computer will send stays at Hard's. Insane sent nothing under 11,700 of army, two and a half times Hard's figure, and so attacked later and less often than Hard did.
+- On 40 games a pair at double speed, Hard now sends 8.1 attacks a match against Medium where it sent 6.0, Medium's first attack leaves at 5.5 game minutes instead of 5.9 and Easy's at 7.0 instead of 8.4, and Hard loses fewer units to your defences for every kill (0.075 against 0.087). The levels above Hard still do not beat Hard by as much as their names promise; that is the next piece of work.
+- Replays with a computer player recorded before this change will not play back.
+
 ## Ground markers in machined steel
 
 - Every targeting circle on the ground is new: a bevelled steel band with your power's colour inlaid, studs round it, a turning range scale and four brackets that swing loose while you aim and snap shut on the click with a ping. Every power of every side and general has its own glyph in the middle, 34 of them: a parachute for the paradrops, a stick of bombs for the carpet bombers, three diving missiles for the A-10, the beam for the Particle and Laser Cannons, a fan of three rockets for the SCUD Storm, a cruise missile, Turkiye's Tayfun and its Kargu quadcopter, leaflets, mines, a wrench for the repair and the rest. The colour says the family at a glance: gold for drops, orange for air strikes, amber for barrages, red for superweapons. Zoomed all the way in, a glyph now shows its machining, an engraved line inside every edge and fine lathe rings across the face, where it used to blur into a flat shape.

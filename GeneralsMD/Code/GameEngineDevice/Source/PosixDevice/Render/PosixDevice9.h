@@ -49,6 +49,7 @@
 #include "Platform/RenderLighting.h"
 #include "Platform/D3D9Posix.h"
 #include "Platform/WaterShoreOverlay.h"
+#include "Platform/WaterCleanPrecompute.h"
 #include "Platform/WaterHullVisualLayout.h"
 #include <memory>
 
@@ -422,6 +423,9 @@ public:
 	RenderResult GetPixelShader(IDirect3DPixelShader9 **shader) override;
 	RenderResult SetPixelShaderConstantF(unsigned int start, const float *data, unsigned int count) override;
 
+	bool Clean_Water_Bind(const WaterCleanPrecompute::Atlas *atlas);
+	void Clean_Water_Clear();
+
 protected:
 	struct SunCapture;
 	std::shared_ptr<SunCapture> Sun;
@@ -538,6 +542,9 @@ protected:
 	bool Engine_Program_Of(const void *shader, const char *stage, int &program);
 
 	PosixDirect3D9 *Adapter;			///< held, as D3D9's device holds its IDirect3D9
+	bool CleanWaterRefused = false; // optional-provider failure latch until map/option invalidation
+	bool CleanWaterActive=false;
+	float CleanAtlasInfo[4]={},CleanAtlasOrigin[4]={};
 	SdlGpuFrame *Gpu;					///< the SDL3 GPU frame, with a window only
 	SdlProgramCache *Programs;			///< the draw's caches and GPU copies, with the frame
 	SdlPipelineCache *Pipelines;

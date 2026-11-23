@@ -32,7 +32,11 @@ inline VarianceTable UnresolvedSlopeVariance(const std::vector<float>& initial, 
     }
     return result;
 }
-inline const VarianceTable &SpectrumVariance(WaterFftSpectrum::Configuration configuration=WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution)) {
+inline const VarianceTable &SpectrumVariance(WaterFftSpectrum::Configuration configuration=WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution),bool clean=false) {
+    if(clean) {
+        if(configuration.resolution==128){static const VarianceTable low=UnresolvedSlopeVariance(WaterFftSpectrum::InitialSpectrum(WaterFftSpectrum::ForResolution(128),true),WaterFftSpectrum::ForResolution(128));return low;}
+        static const VarianceTable high=UnresolvedSlopeVariance(WaterFftSpectrum::InitialSpectrum(WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution),true));return high;
+    }
     if(configuration.resolution==128) {
         static const VarianceTable low=UnresolvedSlopeVariance(WaterFftSpectrum::InitialSpectrum(WaterFftSpectrum::ForResolution(128)),WaterFftSpectrum::ForResolution(128));
         return low;
@@ -40,9 +44,9 @@ inline const VarianceTable &SpectrumVariance(WaterFftSpectrum::Configuration con
     static const VarianceTable high=UnresolvedSlopeVariance(WaterFftSpectrum::InitialSpectrum());
     return high;
 }
-inline std::string Source(WaterFftSpectrum::Configuration configuration=WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution)) {
+inline std::string Source(WaterFftSpectrum::Configuration configuration=WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution),bool clean=false) {
     std::string source="static const float3 fftLostSlopeVariance["+std::to_string(configuration.levels)+"]={\n";
-    const auto &table=SpectrumVariance(configuration);
+    const auto &table=SpectrumVariance(configuration,clean);
     for(unsigned l=0;l<configuration.levels;++l) {
         char row[192];std::snprintf(row,sizeof(row),"float3(%.9g,%.9g,%.9g)%s\n",table[l][0],table[l][1],table[l][2],l+1<configuration.levels?",":"");
         source+=row;

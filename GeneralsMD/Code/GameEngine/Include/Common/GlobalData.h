@@ -603,6 +603,7 @@ public:
 	Bool m_optionsMenuOnStart;				///< -optionsmenu: open the options screen over the main menu at startup
 	Bool m_mapLight;								///< "MapLight": warm low sun and a still ground haze (Direct3D 11, client only)
 	Bool m_teamGlow;								///< "TeamGlow": bright house colour glows (Direct3D 11, client only)
+	Bool m_cleanFftWater; // "CleanFftWater": optional native clean FFT provider
 	Bool m_mapAwareWaveHeading;			///< "MapAwareWaveHeading": swells follow shores and channels (SDL Modern water, client only)
 	Bool m_underwaterClarity;				///< "UnderwaterClarity": shallow shelves and ruins show through Modern water (SDL, client only)
 	Bool m_waterFoam;								///< "WaterFoam": foam, shore band and the sun's shadow on water (Direct3D 11, client only)

@@ -103,8 +103,9 @@ struct SdlWaterPixelConstants
 	float MaterialOptics[4]; // optional clarity, native only
 	float MaterialSurface[4]; // a rule's turbidity, roughness, ripple damping, wind resistance; native only
 	float ClipFromWorld[16]; // inverse of depth-range-adjusted WorldFromClip for SSR
+	float CleanAtlasInfo[4],CleanAtlasOrigin[4]; // SDL-only clean atlas mapping
 };
-static_assert(sizeof(SdlWaterPixelConstants) == (WaterHullVisualLayout::VertexCommonRegisters + 6) * 16, "water uniform packing");
+static_assert(sizeof(SdlWaterPixelConstants) == (WaterHullVisualLayout::VertexCommonRegisters + 8) * 16, "water uniform packing");
 static_assert(offsetof(SdlWaterPixelConstants,MaterialColor)==184*16
 	&& offsetof(SdlWaterPixelConstants,MaterialParameters)==185*16
 	&& offsetof(SdlWaterPixelConstants,MaterialOptics)==186*16
@@ -116,7 +117,7 @@ struct SdlWaterVisualPixelConstants
 	SdlWaterPixelConstants Water;
 	float VisualHullMeta[WaterHullVisualLayout::MaxHulls][4];
 };
-static_assert(sizeof(SdlWaterVisualPixelConstants)==(WaterHullVisualLayout::FragmentCommonRegisters + 6)*16,
+static_assert(sizeof(SdlWaterVisualPixelConstants)==(WaterHullVisualLayout::FragmentCommonRegisters + 8)*16,
 	"fragment hull metadata packing");
 
 // A generator adding a block must have an explicit recording/binding path. The mesh packet

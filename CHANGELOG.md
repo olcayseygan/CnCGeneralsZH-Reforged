@@ -495,6 +495,11 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - A transport whose passengers shoot out of it now brings them into an attack move's fights. The Infantry General's Troop Crawler, sent on an attack move past an enemy Power Plant, used to drive up to it and stop there for good while its eight soldiers never fired: the order went to the Crawler alone, whose own gun is a stand-in that does next to nothing, and soldiers riding inside pick only units for themselves. Now everyone aboard who can hit the target gets it, and the Power Plant goes down. Any transport with firing seats hands its target over the same way, to the passengers within reach of it. If nobody aboard can hurt the target, the transport drives on and leaves it be.
 - A replay recorded before this change will not play back.
 
+## Optional clean FFT water
+
+- On Linux, set `CleanFftWater = yes` in `Options.ini` for Modern water with waves that fade with the water's depth, filtered sunlight and foam on the crests. It starts off; `MapAwareWaveHeading` still controls shoreline steering separately.
+- Water keeps its usual animation if a water level has no usable depth data or the graphics card cannot prepare the new waves. Rivers keep their existing look.
+
 ## Water maps run like dry ones
 
 - On Tournament Island, Bombardment Beach and every other map with a lot of sea, a fast PC fell from about 240 frames a second to 70 or 80. Two things this build added to water were paying for it on every frame. The reflection of the units and buildings in the water was drawn again each time the picture was, 240 times a second on a fast card, for a soft darkening that moves no faster than the game does. It is now drawn at most 30 times a second, and between those it stays fixed to the water, so it does not swim while you scroll and a jump across the map draws it fresh at once. And on any map with water the sun's shadows were being drawn for every tank and building in a wide box round the view, seen or not, because the water's reflection might show one. Now only the ones that can throw a shadow into the view or into its reflection are drawn. The water looks the way it did. Modern water keeps drawing its reflection every frame.

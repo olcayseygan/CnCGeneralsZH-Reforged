@@ -276,6 +276,26 @@ int main()
     CHECK(cache.Programs_Built()==builtTiers);WaterPerformanceSettings::Applied()=savedWater;
     printf("sdl_program_cache_selfcheck: all 12 water quality variants cached and reused\n");
 
+    VertexPipelineDescription waterVertex={};waterVertex.FVF=0x252;waterVertex.StageCount=4;
+    for(unsigned i=0;i<4;++i)waterVertex.Stages[i].TextureCoordinateIndex=i<2?i:0;
+    const SdlProgram *waterVS[2][2]={},*waterPS[2][2]={};
+    for(unsigned clean=0;clean<2;++clean)for(unsigned heading=0;heading<2;++heading) {
+        waterVS[clean][heading]=&cache.Water_Vertex_Program(waterVertex,heading,clean);
+        waterPS[clean][heading]=&cache.Engine_Pixel_Program(ENGINE_SHADER_WATER_TRAPEZOID,waterPipeline,heading,clean);
+        CHECK(waterVS[clean][heading]->Shader && waterPS[clean][heading]->Shader);
+        if(clean) {
+            CHECK(waterVS[clean][heading]!=waterVS[0][heading]);
+            CHECK(waterPS[clean][heading]!=waterPS[0][heading]);
+        }
+    }
+    const unsigned builtProviders=cache.Programs_Built();
+    for(unsigned clean=0;clean<2;++clean)for(unsigned heading=0;heading<2;++heading) {
+        CHECK(&cache.Water_Vertex_Program(waterVertex,heading,clean)==waterVS[clean][heading]);
+        CHECK(&cache.Engine_Pixel_Program(ENGINE_SHADER_WATER_TRAPEZOID,waterPipeline,heading,clean)==waterPS[clean][heading]);
+    }
+    CHECK(cache.Programs_Built()==builtProviders);
+    printf("sdl_program_cache_selfcheck: ordinary/clean water vertex and pixel providers remain distinct and are reused\n");
+
 	check_shore_program_canonical_cache(cache);
 
 	printf("sdl_program_cache_selfcheck: %s, %u programs built in %.0f ms, %u refused\n",

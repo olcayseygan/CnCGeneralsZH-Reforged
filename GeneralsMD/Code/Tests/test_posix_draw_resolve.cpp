@@ -359,7 +359,13 @@ static void check_constants(PosixDevice9 *device)
 	CHECK(memcmp(water.HullData,hull_registers[1],sizeof(water.HullData))==0);
 	// The optional foam contour is a distinct tail, never a replacement for the mean hull used
 	// by displacement. Exercise every register, including the twelfth vertex of hull eight.
-	CHECK(sizeof(water)==192*16 && offsetof(SdlWaterPixelConstants,ContactHullData)==100*16);
+	CHECK(sizeof(water)==194*16 && offsetof(SdlWaterPixelConstants,ContactHullData)==100*16);
+	// SDL appends the clean atlas mapping after the forward projection in both water modes.
+	// Contact contours are optional data, so their availability cannot move this fixed tail.
+	CHECK(offsetof(SdlWaterPixelConstants,ClipFromWorld)==188*16);
+	CHECK(offsetof(SdlWaterPixelConstants,CleanAtlasInfo)==192*16
+		&& offsetof(SdlWaterPixelConstants,CleanAtlasOrigin)==193*16);
+	for(unsigned c=0;c<4;++c)CHECK(water.CleanAtlasInfo[c]==0 && water.CleanAtlasOrigin[c]==0);
 	float contact_registers[80][4]={};
 	for(int r=0;r<80;++r)for(int c=0;c<4;++c)contact_registers[r][c]=-float(r*4+c)-0.75f;
 	CHECK(device->SetPixelShaderConstantF(96,&contact_registers[0][0],80)==D3D_OK);
@@ -398,15 +404,15 @@ static void check_constants(PosixDevice9 *device)
 	device->Build_Water_Constants(pixel,water);CHECK(memcmp(water.FoamFillLights,fill_registers,sizeof(fill_registers))==0);
 	CHECK(device->SetPixelShaderConstantF(175,contact_registers[79],1)==D3D_OK);
 	CHECK(device->SetPixelShaderConstantF(WaterHullVisualLayout::PixelRegisterCount,contact_registers[79],1)==D3DERR_INVALIDCALL);
-	// Exact mesh transport extends the emulated bank deliberately, without moving the old
-	// 186-register native vertex prefix or copying the reserved engine-register gap into metadata.
+	// Exact mesh transport extends the emulated bank deliberately. Its register addresses
+	// remain independent of the 194-register SDL prefix and its fragment metadata tail.
 	using namespace WaterHullVisualLayout;
 	CHECK(PosixDevice9::PIXEL_SHADER_CONSTANT_COUNT==896);
 	const float clarity[4]={.9f,0,0,0};
 	CHECK(device->SetPixelShaderConstantF(190,clarity,1)==D3D_OK);
 	device->Build_Water_Constants(pixel,water);
 	CHECK(memcmp(water.MaterialOptics,clarity,16)==0);
-	CHECK(sizeof(SdlWaterVisualPixelConstants)==200*16 && offsetof(SdlWaterVisualPixelConstants,VisualHullMeta)==192*16);
+	CHECK(sizeof(SdlWaterVisualPixelConstants)==202*16 && offsetof(SdlWaterVisualPixelConstants,VisualHullMeta)==194*16);
 	CHECK(VertexCommonRegisters==186 && FragmentCommonRegisters==194);
 	CHECK(BlockOffset(0)==0 && BlockOffset(1)==256 && BlockOffset(2)==512);
 	CHECK(BlockRegisters(0)==256 && BlockRegisters(1)==256 && BlockRegisters(2)==192);
@@ -419,6 +425,11 @@ static void check_constants(PosixDevice9 *device)
 	CHECK(device->SetPixelShaderConstantF(895,visualPacket[703],1)==D3D_OK);
 	CHECK(device->SetPixelShaderConstantF(895,visualPacket[703],2)==D3DERR_INVALIDCALL);
 	CHECK(device->SetPixelShaderConstantF(896,visualPacket[703],1)==D3DERR_INVALIDCALL);
+	// Native atlas values must survive the visual snapshot even while the emulated packet
+	// starts at register 192. The two address spaces must never alias each other.
+	const float atlasInfo[4]={512,7,9,1},atlasOrigin[4]={-3,-5,1.0f/512,1.0f/521};
+	memcpy(water.CleanAtlasInfo,atlasInfo,sizeof(atlasInfo));
+	memcpy(water.CleanAtlasOrigin,atlasOrigin,sizeof(atlasOrigin));
 	SdlWaterVisualPixelConstants visual;
 	device->Build_Water_Visual_Constants(water,visual);
 	CHECK(memcmp(&visual.Water,&water,sizeof(water))==0);

@@ -798,12 +798,14 @@ void ConnectionManager::doRelay() {
 			UnsignedInt senderSlot = MAX_SLOTS;
 			UnsignedInt addressSlot = MAX_SLOTS;
 			Int addressMatches = 0;
+			Bool exactSender = FALSE;	// address and port both: only then is the author check below fair
 			for (Int s = 0; s < MAX_SLOTS; ++s) {
 				if ((m_connections[s] == NULL) || (m_connections[s]->getUser()->GetIPAddr() != m_transport->m_inBuffer[i].addr)) {
 					continue;
 				}
 				if (m_connections[s]->getUser()->GetPort() == m_transport->m_inBuffer[i].port) {
 					senderSlot = s;
+					exactSender = TRUE;
 					break;
 				}
 				addressSlot = s;
@@ -846,6 +848,30 @@ void ConnectionManager::doRelay() {
 				if (m_rejoining && IsCommandSynchronized(cmd->getCommand()->getNetCommandType())) {
 					cmd = cmd->getNext();
 					continue;
+				}
+
+				/* The sender has to be the author.  A frame resend answer (sendSlotFrameToPlayer, a rejoin's
+					 readmitPlayer included) carries other seats' frame-synchronized commands and frame infos, and a
+					 big one of them goes in wrapper pieces under its author's id, so those may come from anybody
+					 in the room; nothing else may, and nobody ever sends us our own commands.  Judged only on an
+					 exact address and port: the address-only guess (a remapped port) would pin a rejoiner's
+					 REJOINREQUEST, from a seat with no connection yet, on another player behind the same address
+					 and drop it.  Anything else is judged by nobody, as before. */
+				if (exactSender && (senderSlot < MAX_SLOTS)) {
+					NetCommandMsg *carried = cmd->getCommand();
+					const UnsignedInt author = carried->getPlayerID();
+					const NetCommandType type = carried->getNetCommandType();
+					const Bool mayBeAnotherSeats = IsCommandSynchronized(type) || (type == NETCOMMANDTYPE_WRAPPER);
+					if ((author != senderSlot) && ((author == m_localSlot) || !mayBeAnotherSeats)) {
+						static Int s_reportedForgedAuthor = 0;
+						if (s_reportedForgedAuthor < 8) {
+							++s_reportedForgedAuthor;
+							DEBUG_LOG(("ConnectionManager::doRelay - player %d sent a %s under player %d's id, dropped\n",
+								senderSlot, GetAsciiNetCommandType(type).str(), author));
+						}
+						cmd = cmd->getNext();
+						continue;
+					}
 				}
 
 				if (CommandRequiresAck(cmd->getCommand())) {
@@ -1422,6 +1448,12 @@ void ConnectionManager::processAck(NetCommandMsg *msg) {
  */
 PlayerLeaveCode ConnectionManager::processPlayerLeave(NetPlayerLeaveCommandMsg *msg) {
 	UnsignedByte playerID = msg->getLeavingPlayerID();
+	/* Only a seat says it leaves (handleLocalPlayerLeaving): a leave naming another seat, or no seat, is
+		 refused on every machine alike, since every machine runs the same command on the same frame. */
+	if ((playerID >= MAX_SLOTS) || ((UnsignedInt)playerID != msg->getPlayerID())) {
+		DEBUG_LOG(("ConnectionManager::processPlayerLeave() - player %d says player %d leaves, refused\n", msg->getPlayerID(), playerID));
+		return PLAYERLEAVECODE_UNKNOWN;
+	}
 	if ((playerID != m_localSlot) && (m_connections[playerID] != NULL)) {
 		DEBUG_LOG(("ConnectionManager::processPlayerLeave() - setQuitting() on player %d on frame %d\n", playerID, TheGameLogic->getFrame()));
 		m_connections[playerID]->setQuitting();

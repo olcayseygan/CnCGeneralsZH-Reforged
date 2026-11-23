@@ -105,7 +105,8 @@ public:
 	// prevent supply-ferry behavior in some cases (eg, when toting passengers)
 	virtual Bool isAvailableForSupplying() const;
 	virtual Bool isCurrentlyFerryingSupplies() const;
-	
+	virtual void setForceWantingState(Bool v);	///< a player's Combat Chinook is never pushed into gathering
+
 	virtual Bool isIdle() const;
 
 	const ChinookAIUpdateModuleData* friend_getData() const { return getChinookAIUpdateModuleData(); }

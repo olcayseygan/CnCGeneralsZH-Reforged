@@ -1562,7 +1562,9 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 							damageInfo.in.m_amount = ConvertRetailPerFrameRate(weaponTemplate->getPrimaryDamage(nullBonus));
 
 							other->attemptDamage(&damageInfo);
-							if (TheGameLogic->getFrame() % LOGICFRAMES_PER_RETAIL_FRAME == 0)
+							// once per retail frame of game time (1 or 2 a tick at 150, 1 at 100); FX is client-only
+							const UnsignedInt now = TheGameLogic->getFrame();
+							for (UnsignedInt fx = ConvertFramesToRetail(now + 1) - ConvertFramesToRetail(now); fx > 0; --fx)
 								FXList::doFXObj(weaponTemplate->getFireFX(obj->getVeterancyLevel()), obj);
 						}
 					}

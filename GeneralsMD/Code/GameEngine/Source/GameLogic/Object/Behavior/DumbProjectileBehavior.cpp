@@ -706,7 +706,10 @@ Bool DumbProjectileBehavior::calcFlightPath(Bool recalcNumSegments)
 	// straight line to the next sample, so a path looks and lasts as it did. Sampled at every frame, a
 	// fast shot met points of the curve retail never visited: an instant tracer with FirstHeight 300
 	// and WeaponSpeed 9999, which retail sampled at its two ends only, and at 60 Hz the third of four
-	// samples flew it 200 into the air.
+	// samples flew it 200 into the air.  The step is the logic rate's on purpose, not the game speed's:
+	// m_flightPathSpeed is already a game-speed distance per tick, so the flight lasts its game time at
+	// every speed, and the speed only spaces the samples wider (one tick at 150 is 1.5 retail frames).
+	// Sampling per game-time frame would need fractional samples and change every shell's path and CRC.
 	BezierSegment flightCurve( controlPoints );
 	Int retailSegments;
 	if (recalcNumSegments)

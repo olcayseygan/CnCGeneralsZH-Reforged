@@ -1036,6 +1036,25 @@ Bool ChinookAIUpdate::isAvailableForSupplying() const
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A player's Combat Chinook (the one its riders shoot out of) is a gunship: the supply center's door
+	* sends it to its rally point and it waits there, without the trip to the supplies every Chinook out
+	* of that door was forced onto.  A player's order to gather still works, and keeps it gathering.
+	* The computer's are left alone: AIPlayer switches the door's push off itself and lends a gunship to
+	* the supply runs when it has no gatherer left. */
+void ChinookAIUpdate::setForceWantingState(Bool v)
+{
+	if (v)
+	{
+		const Object* obj = getObject();
+		const Player* owner = obj->getControllingPlayer();
+		ContainModuleInterface* contain = obj->getContain();
+		if (owner && owner->getPlayerType() == PLAYER_HUMAN && contain && contain->isPassengerAllowedToFire())
+			return;
+	}
+	SupplyTruckAIUpdate::setForceWantingState(v);
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool ChinookAIUpdate::isAllowedToAdjustDestination() const
 {
 	if (m_flightStatus == CHINOOK_LANDED)
@@ -1217,9 +1236,13 @@ UpdateSleepTime ChinookAIUpdate::update()
       pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y ) + 3.0f;
       chopperElevation -= pos.z;
 
-      // one roll per retail frame, so the wash is as dense as it was at 30 Hz
-      if ( TheGameLogic->getFrame() % LOGICFRAMES_PER_RETAIL_FRAME == 0 && GameClientRandomValueReal( 0.0f, chopperElevation ) < 5.0f )
+      // one roll per retail frame of game time (1 or 2 a tick at 150, 1 at 100), so the wash is as dense
+      // against its particles' game-time life as at retail's 30 Hz.  Client stream and client particles only.
+      const UnsignedInt now = TheGameLogic->getFrame();
+      for ( UnsignedInt roll = ConvertFramesToRetail( now + 1 ) - ConvertFramesToRetail( now ); roll > 0; --roll )
       {
+        if ( GameClientRandomValueReal( 0.0f, chopperElevation ) >= 5.0f )
+          continue;
 	      const ParticleSystemTemplate *tmp = TheParticleSystemManager->findTemplate( getChinookAIUpdateModuleData()->m_rotorWashParticleSystem );
 	      ParticleSystem *system;
 	      if( tmp )

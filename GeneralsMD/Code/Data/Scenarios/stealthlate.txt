@@ -1,0 +1,24 @@
+# TODO "Targeting and Aircraft" 5: a Stealth Fighter ordered onto a parked Scorpion late in its cruise
+# never fires (the one-run racks sweep, attack frames 240, 260 and 290). jetbreak.txt orders the same
+# pair at frame 100 and the jet fires from 211; this one gives the order after the jet has flown past.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 1200
+#     -scenario stealthlate -logPrefix stealthlate_
+#
+# Read the SCENARIO SHOT lines (every shot an aircraft fires) and SCENARIO JET RUN lines (every frame a
+# jet aims at a ground target) after frame 240, and the two tallies. Reproduced when no SCENARIO SHOT
+# follows the order and the Scorpion keeps full health at 1100; fixed when the jet turns back, fires
+# and the 1100 tally is below the 600 one. A run with no SCENARIO JET RUN line at all means the attack
+# never started (look at AIAttackState::onEnter's weapon pick); JET RUN lines with no shot mean the run
+# reached the target and the weapon refused (range, the rack state, or the stealth fire lock).
+#
+# Spots from jetbreak.txt, where the spawn check accepts each.
+
+30    spawn      1  GLATankScorpion              1   2200 4350
+30    spawn      0  AmericaJetStealthFighter     1   1000 4350
+31    move       0  AmericaJetStealthFighter         4400 4350
+240   attack     0  AmericaJetStealthFighter     1  GLATankScorpion
+600   tally      1  GLATankScorpion
+1100  tally      1  GLATankScorpion

@@ -48,6 +48,7 @@
 #include "GameLogic/Module/DeliverPayloadAIUpdate.h"
 #include "GameLogic/Module/OCLSpecialPower.h"
 #include "GameLogic/Module/ParticleUplinkCannonUpdate.h"
+#include "GameLogic/Module/SwarmStrikeSpecialPower.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/SpectreGunshipDeploymentUpdate.h"
@@ -554,6 +555,7 @@ struct Marker
 	Int swarmCount;
 	Bool beamSeen;						///< a cannon's beam is on the ground at (beamX, beamY)
 	Real beamX, beamY;
+	std::vector<Fallen> beamTrail;	///< where it has burned, for the scorch
 	// the ground, and the water over it: the parts on water are drawn after the water
 	HeightGrid grid, water;
 	UnsignedInt gridMs;
@@ -652,6 +654,35 @@ static Bool findSwarmPower( const Object *caster, const SpecialPowerTemplate *po
 				&& ( (const SpecialPowerModule *)( *m ) )->getSpecialPowerTemplate() == power )
 			return TRUE;
 	return FALSE;
+}
+
+/** How many munitions a swarm power sends, read as SwarmStrikeSpecialPower reads it: the first
+	* UpgradeTargetCount whose sciences the caster's player all owns, else TargetCount; read only. */
+static Int swarmTargetCount( const Object *caster, const SpecialPowerTemplate *power )
+{
+	if( caster == NULL || power == NULL )
+		return 3;
+	const Player *player = caster->getControllingPlayer();
+	const ModuleInfo &info = caster->getTemplate()->getBehaviorModuleInfo();
+	for( Int i = 0; i < info.getCount(); ++i )
+	{
+		if( info.getNthName( i ).compareNoCase( "SwarmStrikeSpecialPower" ) != 0 )
+			continue;
+		const SwarmStrikeSpecialPowerModuleData *data = (const SwarmStrikeSpecialPowerModuleData *)info.getNthData( i );
+		if( data == NULL || data->m_specialPowerTemplate != power )
+			continue;
+		for( size_t u = 0; u < data->m_upgradeTargetCount.size(); ++u )
+		{
+			const SwarmStrikeSpecialPowerModuleData::UpgradeTargetCount &up = data->m_upgradeTargetCount[ u ];
+			Bool all = player != NULL && !up.m_sciences.empty();
+			for( size_t s = 0; all && s < up.m_sciences.size(); ++s )
+				all = player->hasScience( up.m_sciences[ s ] );
+			if( all )
+				return up.m_count;
+		}
+		return data->m_targetCount;
+	}
+	return 3;
 }
 
 static DeliverPayloadAIUpdate *findDeliverPayload( Object *obj )
@@ -1042,7 +1073,7 @@ static void setHeading( Marker &m, Real fx, Real fy, Real tx, Real ty )
 /** What a design changes in the marker: its tint where it is not its family's, what stands for a drop
 	* and an item that fell, the arrow at the rim (a frame that is no circle has none), and a heading:
 	* the shells' flight from the far corner, the airlift's from the nearest edge, a line from the caster. */
-static void describeDesign( Marker &m, const Object *caster )
+static void describeDesign( Marker &m, const Object *caster, const SpecialPowerTemplate *power )
 {
 	m.hx = 0.0f;
 	m.hy = 0.0f;
@@ -1098,8 +1129,11 @@ static void describeDesign( Marker &m, const Object *caster )
 			break;
 		case DESIGN_EMP:			m.tint = TINT_BLUE;	break;
 		case DESIGN_ANTHRAX:	m.tint = m.variant == VARIANT_CHEM ? TINT_GAMMA : TINT_TOXIN;	break;
-		case DESIGN_KARGU:
-		case DESIGN_SWARM:		m.tint = TINT_ORANGE;	break;
+		case DESIGN_KARGU:		m.tint = TINT_ORANGE;	break;
+		case DESIGN_SWARM:
+			m.tint = TINT_ORANGE;
+			m.swarmCount = swarmTargetCount( caster, power );
+			break;
 		case DESIGN_LASER:
 		case DESIGN_TAYFUN:
 		case DESIGN_PARTICLE:	m.tint = TINT_RED;	break;
@@ -1157,7 +1191,7 @@ static void describe( Marker &m, const InGameUI::GroundMarkerAim &aim )
 	}
 
 	pickDesign( m, aim.power, caster );
-	describeDesign( m, caster );
+	describeDesign( m, caster, aim.power );
 
 	m.cannonFrames = 0;
 	if( m.super == SUPER_CANNON && caster )
@@ -1397,6 +1431,34 @@ static void followGunship( Marker &m, UnsignedInt now, Real tl )
 /// a superweapon's countdown: the share of the flight its missiles still have, or of the beam's travel
 static void followSuperweapon( Marker &m, UnsignedInt now, Real tl )
 {
+	if( m.super == SUPER_CANNON )
+	{
+		// the beam itself, while its cannon says it burns (ParticleUplinkCannonUpdate::getBurningSpot,
+		// const): the marker's head and scorch follow it, and it stays until the beam is gone
+		static const NameKeyType key_ParticleUplinkCannonUpdate = NAMEKEY( "ParticleUplinkCannonUpdate" );
+		const Object *caster = TheGameLogic->findObjectByID( m.caster );
+		const ParticleUplinkCannonUpdate *cannon = caster ? (const ParticleUplinkCannonUpdate *)caster->findUpdateModule( key_ParticleUplinkCannonUpdate ) : NULL;
+		Coord3D spot;
+		Real radius = 0.0f;
+		if( cannon != NULL && cannon->getBurningSpot( &spot, &radius ) )
+		{
+			m.beamSeen = TRUE;
+			m.beamX = spot.x;
+			m.beamY = spot.y;
+			const Fallen *last = m.beamTrail.empty() ? NULL : &m.beamTrail.back();
+			if( ( last == NULL || ( last->x - spot.x ) * ( last->x - spot.x ) + ( last->y - spot.y ) * ( last->y - spot.y ) > 16.0f )
+					&& m.beamTrail.size() < 400 )
+			{
+				Fallen f;
+				f.x = spot.x;
+				f.y = spot.y;
+				m.beamTrail.push_back( f );
+			}
+			m.fadeMs = 0;		// burning: no fade yet, whatever the impact said
+		}
+		else if( m.beamSeen && m.fadeMs == 0 )
+			startFade( m, now, END_FADE );
+	}
 	if( m.impactMs != 0 )
 		return;
 	Bool impact = FALSE;
@@ -3266,7 +3328,7 @@ static void drawSpyDrone( const DesignDraw &d )
 			cx += b.x[ i ] / (Real)b.n;
 			cy += b.y[ i ] / (Real)b.n;
 		}
-		fillFan( cx, cy, b.x, b.y, b.n, TRUE, blade, 0.5f * d.app, 0.5f * d.app );
+		fillFan( cx, cy, b.x, b.y, b.n, TRUE, blade, 0.3f * d.app, 0.3f * d.app );
 		hairLine( hex.x[ j ], hex.y[ j ], d.x + rim * (Real)cos( aj ), d.y + rim * (Real)sin( aj ), 2.4f * k, TINT_DARK, 0.85f * d.app );
 	}
 	polyStrip( P_HAIR, hex.x, hex.y, hex.n, TRUE, 3.0f * k, d.tint, 0.9f * d.app, FALSE );
@@ -3493,20 +3555,23 @@ static void drawParticle( const DesignDraw &d )
 	// the head: the real beam where the click's cannon is seen firing (followSuperweapon), else a
 	// wander that never leaves the zone
 	Real bx = 0.0f, by = 0.0f;
-	for( Int i = 0; i <= 30; ++i )
-	{
-		const Real s = tb * (Real)i / 30.0f;
-		Real u = 0.28f * R * (Real)sin( 1.1f * s ) + 0.08f * R * (Real)sin( 5.0f * s );
-		Real v = 0.34f * R * (Real)sin( 0.8f * s + 0.3f ) - 0.34f * R * (Real)sin( 0.3f );
-		d.screen( u, v, bx, by );
-		if( i < 30 )
-			part( P_SHAPE_DISC, bx, by, d.yaw, 12.0f * k, 12.0f * k, TINT_SCORCH, 0.6f * d.app );
-	}
 	if( m.beamSeen )
 	{
+		for( size_t i = 0; i < m.beamTrail.size(); ++i )
+			part( P_SHAPE_DISC, m.beamTrail[ i ].x, m.beamTrail[ i ].y, d.yaw, 12.0f * k, 12.0f * k, TINT_SCORCH, 0.6f * d.app );
 		bx = m.beamX;
 		by = m.beamY;
 	}
+	else
+		for( Int i = 0; i <= 30; ++i )
+		{
+			const Real s = tb * (Real)i / 30.0f;
+			const Real u = 0.28f * R * (Real)sin( 1.1f * s ) + 0.08f * R * (Real)sin( 5.0f * s );
+			const Real v = 0.34f * R * (Real)sin( 0.8f * s + 0.3f ) - 0.34f * R * (Real)sin( 0.3f );
+			d.screen( u, v, bx, by );
+			if( i < 30 )
+				part( P_SHAPE_DISC, bx, by, d.yaw, 12.0f * k, 12.0f * k, TINT_SCORCH, 0.6f * d.app );
+		}
 	const Real flick = 0.8f + 0.2f * (Real)sin( 40.0f * d.t );
 	const Tint hot = { 1.0f, 0.95f, 0.9f };
 	glowDisc( bx, by, 16.0f * k, pingTintOf( d.tint ), 0.9f * flick * d.app );
@@ -3552,16 +3617,22 @@ static void drawLaser( const DesignDraw &d )
 	d.at( 0.35f + MARKER_PI, 0.7f * R, ax, ay );
 	d.at( 0.35f, 0.7f * R, ex, ey );
 	Real bx = ax + ( ex - ax ) * tb, by = ay + ( ey - ay ) * tb;
-	if( m.beamSeen )
+	if( m.beamSeen && !m.beamTrail.empty() )
 	{
+		// the trench the real beam cut, segment by segment
 		bx = m.beamX;
 		by = m.beamY;
+		for( size_t i = 1; i < m.beamTrail.size(); ++i )
+			hairLine( m.beamTrail[ i - 1 ].x, m.beamTrail[ i - 1 ].y, m.beamTrail[ i ].x, m.beamTrail[ i ].y, 9.0f * k, TINT_SCORCH, 0.75f * d.app );
 	}
-	hairLine( ax, ay, bx, by, 9.0f * k, TINT_SCORCH, 0.75f * d.app );
-	const Bool was = s_ctx.additive;
-	s_ctx.additive = TRUE;
-	hairLine( ax, ay, bx, by, 3.0f * k, d.tint, 0.5f * d.app );
-	s_ctx.additive = was;
+	else
+	{
+		hairLine( ax, ay, bx, by, 9.0f * k, TINT_SCORCH, 0.75f * d.app );
+		const Bool was = s_ctx.additive;
+		s_ctx.additive = TRUE;
+		hairLine( ax, ay, bx, by, 3.0f * k, d.tint, 0.5f * d.app );
+		s_ctx.additive = was;
+	}
 	const Tint hot = { 1.0f, 0.96f, 0.92f };
 	glowDisc( bx, by, 12.0f * k, pingTintOf( d.tint ), 0.9f * d.app );
 	glowDisc( bx, by, 5.0f * k, hot, d.app );

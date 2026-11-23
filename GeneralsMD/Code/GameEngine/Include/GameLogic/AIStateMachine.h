@@ -298,7 +298,10 @@ protected:
 	virtual void loadPostProcess();
 
 private:
-	enum { MIN_REPATH_TIME = 10 * LOGICFRAMES_PER_RETAIL_FRAME };									///< minimum # of frames must elapse before re-pathing
+	/// minimum # of frames must elapse before re-pathing.  A budget, kept in ticks at every
+	/// GAME_SPEED_PERCENT: each repath is a request on the pathfinder's queue, whose work per tick is fixed
+	/// in ticks, and in game time at 150 it would mean half again as many requests a wall second.
+	enum { MIN_REPATH_TIME = 10 * LOGICFRAMES_PER_RETAIL_FRAME };
 protected:
 	Coord3D							m_goalPosition;											///< the goal position to move to
 	PathfindLayerEnum		m_goalLayer;										///< The layer we are moving towards.
@@ -483,6 +486,8 @@ protected:
 
 private:
 
+	// A budget, kept in ticks at every GAME_SPEED_PERCENT, like AIInternalMoveToState's MIN_REPATH_TIME:
+	// each recompute is a path request, and at 150 the victim moves half again as far between two of them.
 	enum { MIN_RECOMPUTE_TIME = 10 * LOGICFRAMES_PER_RETAIL_FRAME };
 
 	StateReturnType updateInternal( void );
@@ -532,6 +537,7 @@ protected:
 
 private:
 
+	// A budget in ticks, as in AIAttackApproachTargetState.
 	enum { MIN_RECOMPUTE_TIME = 10 * LOGICFRAMES_PER_RETAIL_FRAME };
 
 	StateReturnType updateInternal( void );

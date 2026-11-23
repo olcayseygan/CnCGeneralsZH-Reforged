@@ -42,7 +42,9 @@
 // How long everyone in a chain has to have been off its order before the next one goes out.  A unit
 // that has just been given an order can read as idle for a frame while it is still being set up, and
 // an aircraft taxiing out holds its order rather than being on it; four retail frames is an eighth of
-// a second, which is invisible at a corner and longer than either of those.
+// a second, which is invisible at a corner and longer than either of those.  Ticks at every
+// GAME_SPEED_PERCENT: the false idle it waits out lasts a tick, not a share of game time, and four ticks
+// at 150 are 0.2 game seconds, still invisible.
 static const UnsignedInt STEP_SETTLE_FRAMES = 4 * LOGICFRAMES_PER_RETAIL_FRAME;
 
 //-------------------------------------------------------------------------------------------------

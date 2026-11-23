@@ -272,7 +272,10 @@ protected:
 	virtual void loadPostProcess();
 
 protected:
-	enum {MAX_CPOP=20 * LOGICFRAMES_PER_RETAIL_FRAME};			///< Max times we will return the cached cpop (about once a frame, so two thirds of a second).
+	/// Max times we will return the cached cpop (about once a frame, so two thirds of a second).  A budget,
+	/// not game time: it counts reuses of a cache, and a fresh answer is only ever more exact, so it
+	/// stays in ticks at every GAME_SPEED_PERCENT.
+	enum {MAX_CPOP=20 * LOGICFRAMES_PER_RETAIL_FRAME};
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE( Path, "PathPool" );							///< @todo Set real numbers for mem alloc
 
 	PathNode*		m_path;															///< The list of PathNode objects that define the path
@@ -906,7 +909,12 @@ enum
 	PF_TRAFFIC_DEPOSIT				= 24 / LOGICFRAMES_PER_RETAIL_FRAME,	///< one blocked unit-frame, at the centre cell; 24 a retail frame, so the same per second
 	PF_TRAFFIC_DECAY_NUM			= 54,			///< x54/64 every decay tick ~ the sandbox's x0.85 per 0.1s
 	PF_TRAFFIC_DECAY_DEN			= 64,
-	PF_TRAFFIC_DECAY_FRAMES		= 3 * LOGICFRAMES_PER_RETAIL_FRAME,	///< a tenth of a second
+	/* A tenth of a second at retail speed, and kept in ticks at every GAME_SPEED_PERCENT.  The deposit
+		 above is per blocked tick too, so the level a standing jam settles at (deposit times decay ticks
+		 over 10/64) is the same at every speed; in game time the field only remembers a jam a third longer
+		 at 150.  Moving both to game time would need a run-time deposit in AIPathfind.cpp and buys nothing
+		 the cost reads. */
+	PF_TRAFFIC_DECAY_FRAMES		= 3 * LOGICFRAMES_PER_RETAIL_FRAME,
 	PF_TRAFFIC_FULL						= 192,		///< traffic at or above this is as expensive as it gets
 	PF_TRAFFIC_NUM						= 4,			///< peak traffic penalty is NUM/DEN of a step - the sandbox's traffic weight
 	PF_TRAFFIC_DEN						= 1,

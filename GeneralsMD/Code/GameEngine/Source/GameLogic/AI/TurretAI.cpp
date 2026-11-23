@@ -777,7 +777,9 @@ UpdateSleepTime TurretAI::updateTurretAI()
 
 		if (m_didFire)
 		{
-			// if we fired, enable sweeping for a few frames.
+			// if we fired, enable sweeping for a few frames.  Ticks at every GAME_SPEED_PERCENT: it bridges
+			// the gap to the next shot, and shot delays shrink with the speed, so three ticks bridge more
+			// game time at 150, never less; two would leave a 2-tick weapon's sweep dropping between shots.
 			const Int ENABLE_SWEEP_FRAME_COUNT = 3 * LOGICFRAMES_PER_RETAIL_FRAME;
 			m_enableSweepUntil = now + ENABLE_SWEEP_FRAME_COUNT;
 			m_continuousFireExpirationFrame = now + ENABLE_SWEEP_FRAME_COUNT;// so the recent firing will not interrupt the moving sound

@@ -6275,6 +6275,9 @@ static void holdToRetailFireCycle( Object *obj, const Weapon *fired )
 
 	// every slot that fired this frame (linked turrets fire them all), and every slot a shared reload
 	// stamped; rounding a frame already on the grid leaves it there, so a slot met twice is no matter
+	// Ticks at every GAME_SPEED_PERCENT, not game time: the grid is the aim-fire loop's two state hops,
+	// which take two ticks whatever a tick is worth.  Retail's grid at 150 would be 1.33 ticks, which no
+	// frame count holds, and a one-tick grid would lift every weapon this state fires off its rate.
 	const UnsignedInt CYCLE = 2 * LOGICFRAMES_PER_RETAIL_FRAME;
 	const Bool shared = obj->isReloadTimeShared();
 	for( Int slot = PRIMARY_WEAPON; slot < WEAPONSLOT_COUNT; ++slot )
@@ -6635,7 +6638,10 @@ static ObjectID mobNexusOf( const Object *victim )
 /** An order to attack one member of an Angry Mob is an order to attack the mob.  The mob is selected
 	  and ordered as one, and the attacker that killed the one it was pointed at stood idle beside the
 	  other nine.  So the attack carries on to whichever of the victim's mob is nearest, until the nexus has nobody left, by the same means ContinueAttackRange swaps the victim
-	  inside this state.  An attack that ends for any other reason still ends. */
+	  inside this state.  An attack that ends for any other reason still ends.
+	  The nearest member has to stand within the attacker's reach plus MOB_CARRY_ON_MARGIN: one that ran
+	  off across the map is not part of the fight any more, and chasing it took the attacker after it. */
+#define MOB_CARRY_ON_MARGIN (5.0f * PATHFIND_CELL_SIZE_F)
 Bool AIAttackState::carryOnThroughMob()
 {
 	if (!m_isAttackingObject || m_victimNexusID == INVALID_ID || m_attackMachine == NULL)
@@ -6646,6 +6652,12 @@ Bool AIAttackState::carryOnThroughMob()
 	Object *source = getMachineOwner();
 	Object *mate = spawn ? spawn->getClosestSlave( source->getPosition() ) : NULL;
 	if (mate == NULL || mate->isEffectivelyDead() || mate == source)
+		return FALSE;
+
+	const Real reach = source->getLargestWeaponRange() + MOB_CARRY_ON_MARGIN;
+	const Real dx = mate->getPosition()->x - source->getPosition()->x;
+	const Real dy = mate->getPosition()->y - source->getPosition()->y;
+	if (dx*dx + dy*dy > sqr(reach))
 		return FALSE;
 
 	AIUpdateInterface *ai = source->getAI();

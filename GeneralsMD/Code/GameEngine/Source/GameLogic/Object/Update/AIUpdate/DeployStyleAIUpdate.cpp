@@ -119,7 +119,12 @@ void DeployStyleAIUpdate::aiDoCommand( const AICommandParms* parms )
 //-------------------------------------------------------------------------------------------------
 Bool DeployStyleAIUpdate::willTargetStayInRange( const Weapon *weapon ) const
 {
+	// On the frame of the attack order the attack state has its goal but has not yet named it the
+	// victim, and with no victim the unpack was waved through: the cannon unpacked for a Humvee that
+	// had set off five frames before the order.
 	const Object *victim = getCurrentVictim();
+	if( victim == NULL )
+		victim = getStateMachine()->getGoalObject();
 	if( victim == NULL || victim->getPhysics() == NULL )
 		return TRUE;
 

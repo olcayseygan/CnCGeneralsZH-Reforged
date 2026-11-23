@@ -74,7 +74,17 @@ public:
 	Bool update( RenderObjClass *robj );
 
 private:
-	enum { MAX_BONES = 64, MAX_NEIGHBORS = 8, MAX_CONSTRAINTS = 192 };
+	enum { MAX_BONES = 64, MAX_NEIGHBORS = 8, MAX_CONSTRAINTS = 192, MAX_OBSTACLES = 8 };
+
+	/** A vehicle or building near the body at death, as its template's geometry stood then. */
+	struct Obstacle
+	{
+		Real x, y, z;				///< its position
+		Real cosA, sinA;		///< its facing
+		Real major, minor;	///< a box's half length and half width, else the radius in major
+		Real top;						///< world height of its top
+		Bool box;
+	};
 
 	enum Role
 	{
@@ -118,6 +128,8 @@ private:
 	void addConstraint( Int a, Int b, Real minD, Real maxD );
 	void step( Real dt, Bool gravity, Real sinkOffset );
 	Real worstStretch( Int *which ) const;	///< how far the constraint furthest out is, and which one
+	void gatherObstacles( const Vector3 &at );	///< the vehicles and buildings the body could fall into
+	void collide( Vector3 &x );						///< a particle pushed out of them
 	void pose( RenderObjClass *robj, Real sinkOffset );
 	void logPose( RenderObjClass *robj, const char *when, Real sinkOffset );	///< the RAGDOLL line: where the bones landed against where they were sent
 
@@ -131,6 +143,10 @@ private:
 	Bone m_bone[ MAX_BONES ];
 	Int m_numConstraints;
 	Constraint m_constraint[ MAX_CONSTRAINTS ];
+	Int m_numObstacles;
+	Obstacle m_obstacle[ MAX_OBSTACLES ];
+	Int m_pushes;							///< particle pushes out of them, for the log
+	Real m_lastPoseMs;				///< sync milliseconds from death to the last pose, for the log
 	Vector3 m_lastRoot;				///< the drawable's position last update, for the carry
 	UnsignedInt m_lastSync;
 	UnsignedInt m_startSync;	///< sync time at death, for the log

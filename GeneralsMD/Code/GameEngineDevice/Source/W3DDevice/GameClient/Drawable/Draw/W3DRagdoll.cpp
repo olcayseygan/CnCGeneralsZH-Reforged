@@ -33,12 +33,17 @@
 // The constraints, all lengths taken from the pose at the moment of death:
 //  - every particle to its parent particle, fixed;
 //  - particle siblings to each other, fixed: the hips with the spine, the shoulders with the head;
-//  - at a bone with two or more particle children (the spine) the joint is stiff: each child to the
-//    bone's parent and to the bone's siblings within STIFF_MIN to STIFF_MAX of its length;
-//  - at a bone with one particle child (shoulder, hip) the joint folds no tighter than
-//    JOINT_MIN_ANGLE_DEG.
+//  - at a bone with two or more particle children (the spine), or whose one child has (the chest
+//    under the neck), the joint is stiff: each child to the bone's parent and to the bone's siblings
+//    within STIFF_MIN to STIFF_MAX of its length;
+//  - at any other bone with one particle child (shoulder, hip) the joint folds no tighter than
+//    JOINT_MIN_ANGLE_DEG, or than it was folded at death;
+//  - a bone an artist added to the body (no space in its name: PARA_MAN, a ghillie flap) only to its
+//    parent, so it hangs loose and lies down by itself; its parent's joint ignores it.
 // The Ranger's rig has no elbow and no knee: upper arm to hand and thigh to foot are one rigid link
 // each, and his limbs swing as sticks.  Nothing stops a hip bending backward or a shoulder twisting.
+// Vehicles and buildings near the body at death push its particles out of their template's box or
+// cylinder, read off the client's drawables and never written.
 //
 // A bone's rotation is the rotation that best carries the offsets to its neighbours at death onto
 // the offsets now (Muller, Bender, Chentanez and Macklin, "A Robust Method to Extract the Rotational
@@ -52,9 +57,12 @@
 // while the body is in the air the carry is its fall, so the particles take no gravity of their own.
 
 #include "Common/EarlyCommandLine.h"
+#include "Common/Geometry.h"
 #include "Common/GlobalData.h"
 #include "Common/ThingTemplate.h"
 #include "GameClient/ClientRandomValue.h"
+#include "GameClient/Drawable.h"
+#include "GameClient/GameClient.h"
 #include "W3DDevice/GameClient/BaseHeightMap.h"
 #include "W3DDevice/GameClient/W3DRagdoll.h"
 #include "WW3D2/htree.h"
@@ -84,6 +92,7 @@ static const Real LONG_CARRIED = 2.5f;						///< a carried thing this long or lo
 static const Real CARRIED_CLEARANCE = 0.5f;				///< how far its bones stay above the ground
 static const Real CARRIED_DROP_REACH = 2.0f;			///< its hand this far over where it lies or closer, it is let down onto the ground
 static const Real LEVEL_HEADING_MIN = 0.25f;			///< the level of its length in the hand under which the hand no longer turns it
+static const Real OBSTACLE_REACH = 30.0f;						///< a vehicle or building this far past its own size from the body at death can be fallen into
 static const Real LEVEL_MS = 600.0f;							///< how long it takes to come level from its tilt at death, in sync milliseconds
 static const Real STIFF_MIN = 0.92f;
 static const Real STIFF_MAX = 1.04f;
@@ -204,6 +213,9 @@ W3DRagdoll::W3DRagdoll() :
 	m_gunLow( 0.0f ),
 	m_numBones( 0 ),
 	m_numConstraints( 0 ),
+	m_numObstacles( 0 ),
+	m_pushes( 0 ),
+	m_lastPoseMs( 0.0f ),
 	m_lastRoot( 0.0f, 0.0f, 0.0f ),
 	m_lastSync( 0 ),
 	m_startSync( 0 ),
@@ -335,7 +347,29 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 	if( numParticles < 3 )
 		return "fewer than three bones to swing";
 
-	char carriedLog[ 256 ] = "";
+	// The rig's own bones are named "<model> <part>" (the biped's "AIPFDR L HAND"); what an artist added
+	// to the body is named without a space (PARA_MAN, the ghillie's DUM_CAMO flaps).  Such a bone hangs
+	// loose on its parent alone: tied rigidly to its siblings it gave the torso a back the ground
+	// pressed flat (squashed chests, constraints left 0.05 to 0.26 out) and stood the flaps up.
+	Bool attach[ MAX_BONES ];
+	Int numFrame = 0;
+	for( Int i = 0; i < n; ++i )
+	{
+		attach[ i ] = inBody[ i ] && i != bodyRoot && strchr( tree->Get_Bone_Name( i ), ' ' ) == NULL;
+		if( m_bone[ i ].role == ROLE_PARTICLE && !attach[ i ] )
+			++numFrame;
+	}
+	if( numFrame < 3 )
+		for( Int i = 0; i < n; ++i )
+			attach[ i ] = FALSE;
+	Int frameChildren[ MAX_BONES ];
+	for( Int i = 0; i < n; ++i )
+		frameChildren[ i ] = 0;
+	for( Int i = 1; i < n; ++i )
+		if( m_bone[ i ].role == ROLE_PARTICLE && !attach[ i ] )
+			++frameChildren[ m_bone[ i ].parent ];
+
+	char carriedLog[ 640 ] = "";
 	m_gun = -1;
 	for( Int r = 1; r < n; ++r )
 	{
@@ -343,21 +377,19 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 			continue;
 		Bone &br = m_bone[ r ];
 		const Vector3 at = w0[ r ].Get_Translation();
+		const Matrix3x3 rot0( w0[ r ] );
 		Real nearest = 1.0e9f;
 		Real extent = 0.0f;
-		Int farthest = r;
 		for( Int k = r; k < n; ++k )
 		{
 			if( carried[ k ] != r )
 				continue;
 			const Vector3 xk = w0[ k ].Get_Translation();
-			if( ( xk - at ).Length() > extent )
-			{
-				extent = ( xk - at ).Length();
-				farthest = k;
-			}
+			// its length runs along its first bone's X, as the muzzle does: the Pathfinder's rifle also
+			// holds a ghillie flap ten units off to one side
+			extent = WWMath::Max( extent, (Real)fabs( ( rot0.Transpose() * ( xk - at ) ).X ) );
 			for( Int p = 1; p < n; ++p )
-				if( m_bone[ p ].role == ROLE_PARTICLE && ( xk - w0[ p ].Get_Translation() ).Length() < nearest )
+				if( m_bone[ p ].role == ROLE_PARTICLE && !attach[ p ] && ( xk - w0[ p ].Get_Translation() ).Length() < nearest )
 				{
 					nearest = ( xk - w0[ p ].Get_Translation() ).Length();
 					br.anchor = p;
@@ -368,9 +400,8 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 		const Bool level = extent >= LONG_CARRIED;
 		if( level )
 		{
-			const Matrix3x3 rot0( w0[ r ] );
-			const Vector3 axis = ( w0[ farthest ].Get_Translation() - at ) / extent;
-			br.axisLocal = rot0.Transpose() * axis;
+			const Vector3 axis = rot0.Get_X_Vector();
+			br.axisLocal.Set( 1.0f, 0.0f, 0.0f );
 			br.grip = rot0.Transpose() * ( w0[ br.anchor ].Get_Translation() - at );
 			Vector3 flat( axis.X, axis.Y, 0.0f );
 			br.levelAxis.Set( 0.0f, 0.0f, 1.0f );
@@ -435,10 +466,12 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 			bj.neighbor[ bj.numNeighbors++ ] = p;
 			addConstraint( j, p, length[ j ], length[ j ] );
 		}
+		if( attach[ j ] )
+			continue;	// loose: its parent alone holds it and turns it
 		Int children[ MAX_BONES ];
 		Int numChildren = 0;
 		for( Int c = j + 1; c < n; ++c )
-			if( m_bone[ c ].parent == j && m_bone[ c ].role == ROLE_PARTICLE )
+			if( m_bone[ c ].parent == j && m_bone[ c ].role == ROLE_PARTICLE && !attach[ c ] )
 			{
 				children[ numChildren++ ] = c;
 				if( bj.numNeighbors < MAX_NEIGHBORS )
@@ -446,22 +479,25 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 			}
 		// siblings, once a pair
 		for( Int s = j + 1; s < n; ++s )
-			if( m_bone[ s ].parent == p && m_bone[ s ].role == ROLE_PARTICLE )
+			if( m_bone[ s ].parent == p && m_bone[ s ].role == ROLE_PARTICLE && !attach[ s ] )
 			{
 				const Real d = ( bj.x - m_bone[ s ].x ).Length();
 				addConstraint( j, s, d, d );
 			}
 		if( !parentIsParticle )
 			continue;
+		// the trunk is stiff: a bone that forks (the spine at the hips, the neck at the shoulders), and one
+		// whose only child forks (the chest under the neck)
+		const Bool stiff = numChildren >= 2 || ( numChildren == 1 && frameChildren[ children[ 0 ] ] >= 2 );
 		for( Int k = 0; k < numChildren; ++k )
 		{
 			const Int c = children[ k ];
-			if( numChildren >= 2 )
+			if( stiff )
 			{
 				const Real d = ( m_bone[ c ].x - m_bone[ p ].x ).Length();
 				addConstraint( c, p, d * STIFF_MIN, d * STIFF_MAX );
 				for( Int s = 1; s < n; ++s )
-					if( s != j && m_bone[ s ].parent == p && m_bone[ s ].role == ROLE_PARTICLE )
+					if( s != j && m_bone[ s ].parent == p && m_bone[ s ].role == ROLE_PARTICLE && !attach[ s ] )
 					{
 						const Real ds = ( m_bone[ c ].x - m_bone[ s ].x ).Length();
 						addConstraint( c, s, ds * STIFF_MIN, ds * STIFF_MAX );
@@ -481,7 +517,7 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 	for( Int j = 1; j < n; ++j )
 	{
 		Bone &bj = m_bone[ j ];
-		if( bj.role != ROLE_PARTICLE || bj.numNeighbors != 1 )
+		if( bj.role != ROLE_PARTICLE || bj.numNeighbors != 1 || attach[ j ] )
 			continue;
 		const Bone &bp = m_bone[ bj.parent ];
 		if( bp.role != ROLE_PARTICLE )
@@ -576,10 +612,13 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 		if( m_bone[ i ].role != ROLE_KINEMATIC )
 			robj->Capture_Bone( i );
 	m_name = templateName;
+	const std::chrono::steady_clock::time_point gatherStart = std::chrono::steady_clock::now();
+	gatherObstacles( rootPos );
+	const double gatherUs = std::chrono::duration<double, std::micro>( std::chrono::steady_clock::now() - gatherStart ).count();
 	pose( robj, 0.0f );
-	DEBUG_LOG(( "RAGDOLL: start %s, skeleton %s, %d bones, %d particles, %d constraints, body %s, push %s, lifted %.2f, carried: %s\n",
-		templateName, tree->Get_Name(), n, numParticles, m_numConstraints, tree->Get_Bone_Name( bodyRoot ),
-		!fresh ? "none" : impact.radius > 0.0f ? "blast" : "shot", -lowest, carriedLog[ 0 ] ? carriedLog : "nothing" ));
+	DEBUG_LOG(( "RAGDOLL: start %s, skeleton %s, %d bones, %d particles (%d loose), %d constraints, body %s, push %s, lifted %.2f, %d vehicles and buildings near (%.1f us), carried: %s\n",
+		templateName, tree->Get_Name(), n, numParticles, numParticles - numFrame, m_numConstraints, tree->Get_Bone_Name( bodyRoot ),
+		!fresh ? "none" : impact.radius > 0.0f ? "blast" : "shot", -lowest, m_numObstacles, gatherUs, carriedLog[ 0 ] ? carriedLog : "nothing" ));
 	logPose( robj, "start", 0.0f );
 	return NULL;
 }
@@ -621,8 +660,14 @@ void W3DRagdoll::step( Real dt, Bool gravity, Real sinkOffset )
 			xb -= corr;
 		}
 		for( Int i = 1; i < m_numBones; ++i )
-			if( m_bone[ i ].role == ROLE_PARTICLE && m_bone[ i ].x.Z < floorZ[ i ] )
+		{
+			if( m_bone[ i ].role != ROLE_PARTICLE )
+				continue;
+			if( m_numObstacles > 0 )
+				collide( m_bone[ i ].x );
+			if( m_bone[ i ].x.Z < floorZ[ i ] )
 				m_bone[ i ].x.Z = floorZ[ i ];
+		}
 	}
 
 	Real maxMove = 0.0f;
@@ -681,6 +726,93 @@ void W3DRagdoll::step( Real dt, Bool gravity, Real sinkOffset )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The client's own drawables only, read and never written, so the logic never sees any of it. Taken
+	once at death: a body lives seconds, and what it falls into is what stood there. */
+void W3DRagdoll::gatherObstacles( const Vector3 &at )
+{
+	m_numObstacles = 0;
+	if( TheGameClient == NULL )
+		return;
+	for( Drawable *draw = TheGameClient->firstDrawable(); draw != NULL && m_numObstacles < MAX_OBSTACLES; draw = draw->getNextDrawable() )
+	{
+		const ThingTemplate *tmpl = draw->getTemplate();
+		if( tmpl == NULL || !( tmpl->isKindOf( KINDOF_VEHICLE ) || tmpl->isKindOf( KINDOF_STRUCTURE ) ) || draw->isDrawableEffectivelyHidden() )
+			continue;
+		const GeometryInfo &geom = tmpl->getTemplateGeometryInfo();
+		const Coord3D *pos = draw->getPosition();
+		const Real dx = pos->x - at.X;
+		const Real dy = pos->y - at.Y;
+		const Real reach = OBSTACLE_REACH + geom.getBoundingCircleRadius();
+		if( dx * dx + dy * dy > reach * reach )
+			continue;
+		Obstacle &o = m_obstacle[ m_numObstacles++ ];
+		o.x = pos->x;
+		o.y = pos->y;
+		o.z = pos->z;
+		o.cosA = cosf( draw->getOrientation() );
+		o.sinA = sinf( draw->getOrientation() );
+		o.box = geom.getGeomType() == GEOMETRY_BOX;
+		o.major = geom.getMajorRadius();
+		o.minor = o.box ? geom.getMinorRadius() : o.major;
+		o.top = pos->z + geom.getMaxHeightAbovePosition();
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DRagdoll::collide( Vector3 &x )
+{
+	for( Int k = 0; k < m_numObstacles; ++k )
+	{
+		const Obstacle &o = m_obstacle[ k ];
+		if( x.Z > o.top + PARTICLE_RADIUS || x.Z < o.z - PARTICLE_RADIUS )
+			continue;
+		const Real wx = x.X - o.x;
+		const Real wy = x.Y - o.y;
+		// out by the shortest way: over the top, or out of the side
+		const Real up = o.top + PARTICLE_RADIUS - x.Z;
+		if( o.box )
+		{
+			const Real lx = wx * o.cosA + wy * o.sinA;
+			const Real ly = -wx * o.sinA + wy * o.cosA;
+			const Real outX = o.major + PARTICLE_RADIUS - (Real)fabs( lx );
+			const Real outY = o.minor + PARTICLE_RADIUS - (Real)fabs( ly );
+			if( outX <= 0.0f || outY <= 0.0f )
+				continue;
+			++m_pushes;
+			if( up <= outX && up <= outY )
+				x.Z += up;
+			else if( outX <= outY )
+			{
+				const Real s = lx < 0.0f ? -outX : outX;
+				x.X += s * o.cosA;
+				x.Y += s * o.sinA;
+			}
+			else
+			{
+				const Real s = ly < 0.0f ? -outY : outY;
+				x.X -= s * o.sinA;
+				x.Y += s * o.cosA;
+			}
+		}
+		else
+		{
+			const Real d = (Real)sqrt( wx * wx + wy * wy );
+			const Real out = o.major + PARTICLE_RADIUS - d;
+			if( out <= 0.0f )
+				continue;
+			++m_pushes;
+			if( up <= out || d < 1.0e-4f )
+				x.Z += up;
+			else
+			{
+				x.X += wx / d * out;
+				x.Y += wy / d * out;
+			}
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 Real W3DRagdoll::worstStretch( Int *which ) const
 {
 	Real stretch = 0.0f;
@@ -705,6 +837,7 @@ void W3DRagdoll::logPose( RenderObjClass *robj, const char *when, Real sinkOffse
 	Real worst = 0.0f;
 	Real top = -1.0e9f;
 	Real low = 1.0e9f;
+	Int highest = 1;
 	for( Int i = 1; i < m_numBones; ++i )
 	{
 		const Bone &b = m_bone[ i ];
@@ -712,7 +845,11 @@ void W3DRagdoll::logPose( RenderObjClass *robj, const char *when, Real sinkOffse
 			continue;
 		worst = WWMath::Max( worst, ( robj->Get_Bone_Transform( i ).Get_Translation() - b.x ).Length() );
 		const Real over = b.x.Z - ( groundUnder( b.x.X, b.x.Y, b.x.Z ) + sinkOffset );
-		top = WWMath::Max( top, over );
+		if( over > top )
+		{
+			top = over;
+			highest = i;
+		}
 		low = WWMath::Min( low, over );
 	}
 	Int worstConstraint;
@@ -722,9 +859,9 @@ void W3DRagdoll::logPose( RenderObjClass *robj, const char *when, Real sinkOffse
 	if( m_gun >= 0 )
 		snprintf( gun, sizeof( gun ), ", %s %.0f deg off level in the hand, drawn %.0f, %.2f over the ground",
 			tree->Get_Bone_Name( m_gun ), m_gunHandTilt, m_gunTilt, m_gunLow );
-	DEBUG_LOG(( "RAGDOLL: %s %s: bones %.3f off their particles at worst, particles %.2f to %.2f over the ground, constraints %.3f out at worst (%s to %s)%s\n",
-		m_name, when, worst, low, top, stretch, tree->Get_Bone_Name( m_constraint[ worstConstraint ].a ),
-		tree->Get_Bone_Name( m_constraint[ worstConstraint ].b ), gun ));
+	DEBUG_LOG(( "RAGDOLL: %s %s: bones %.3f off their particles at worst, particles %.2f to %.2f (%s) over the ground, constraints %.3f out at worst (%s to %s), %d pushes out of vehicles and buildings%s\n",
+		m_name, when, worst, low, top, tree->Get_Bone_Name( highest ), stretch, tree->Get_Bone_Name( m_constraint[ worstConstraint ].a ),
+		tree->Get_Bone_Name( m_constraint[ worstConstraint ].b ), m_pushes, gun ));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -861,11 +998,19 @@ Bool W3DRagdoll::update( RenderObjClass *robj )
 		m_accumMs -= STEP_MS;
 	}
 
+	const Bool wasLevel = m_lastPoseMs >= LEVEL_MS;
+	m_lastPoseMs = (Real)( now - m_startSync );
 	pose( robj, sinkOffset );
 	if( m_asleep && !wasAsleep )
 	{
 		char when[ 48 ];
 		snprintf( when, sizeof( when ), "asleep %.2f s after death", ( now - m_startSync ) / 1000.0f );
+		logPose( robj, when, sinkOffset );
+	}
+	else if( m_gun >= 0 && !wasLevel && m_lastPoseMs >= LEVEL_MS )
+	{
+		char when[ 48 ];
+		snprintf( when, sizeof( when ), "%s %.2f s after death", m_asleep ? "asleep" : "awake", ( now - m_startSync ) / 1000.0f );
 		logPose( robj, when, sinkOffset );
 	}
 

@@ -1189,7 +1189,14 @@ void RecorderClass::handleCRCMessage(UnsignedInt newCRC, Int playerIndex, Bool f
 	const Player *p = ThePlayerList->getNthPlayer(playerIndex);
 	if (!p || (p->getPlayerNameKey() == NAMEKEY(playerName)))
 		samePlayer = TRUE;
-	if (samePlayer || (localPlayerIndex < 0))
+	/* A game played on one machine recorded one CRC stream, that machine's, and it is the stream to
+		 check whatever seat it came from.  A skirmish watched with -observer writes it from the
+		 ReplayObserver, which sits after the slots and is no "player<slot>", so the name test above
+		 skipped every one of them: such a playback, a replay rewind included, never compared a single
+		 CRC and parted from its recording without a line in the log.  Only a network game records
+		 every seat's CRCs and needs the local one picked out. */
+	const Bool oneMachine = m_originalGameMode != GAME_LAN && m_originalGameMode != GAME_INTERNET;
+	if (samePlayer || (localPlayerIndex < 0) || oneMachine)
 	{
 		/* Its computed CRC may still be on the message stream: a pass that ran two frames had no client
 			 pass between them.  Compared against the empty queue it read 0, set the one-shot flag on a

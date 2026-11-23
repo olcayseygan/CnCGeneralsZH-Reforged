@@ -1344,8 +1344,17 @@ Data/Scenarios/blastcheck.txt
 Data/Scenarios/bridgecross.txt
 Data/Scenarios/bridgelong.txt
 Data/Scenarios/broadcastend.txt
+Data/Scenarios/c6ademo.txt
+Data/Scenarios/c6aslth.txt
+Data/Scenarios/c6atox.txt
+Data/Scenarios/cambushdemo.txt
+Data/Scenarios/cambushtox.txt
 Data/Scenarios/capturedbuild.txt
 Data/Scenarios/cargocrash.txt
+Data/Scenarios/cdemotrap.txt
+Data/Scenarios/cgla6b.txt
+Data/Scenarios/cgla6b0.txt
+Data/Scenarios/cgps10a.txt
 Data/Scenarios/cheatwitness.txt
 Data/Scenarios/chokeprobe.txt
 Data/Scenarios/comanchehill.txt
@@ -1356,6 +1365,7 @@ Data/Scenarios/debristrails.txt
 Data/Scenarios/debristrails3.txt
 Data/Scenarios/defencereach.txt
 Data/Scenarios/deployguard.txt
+Data/Scenarios/deploypullaway.txt
 Data/Scenarios/deploystall.txt
 Data/Scenarios/dozerloss.txt
 Data/Scenarios/dragonfirewall.txt
@@ -1443,6 +1453,8 @@ Data/Scenarios/lanewar_buy.txt
 Data/Scenarios/lanewar_cargo.txt
 Data/Scenarios/lanewar_end.txt
 Data/Scenarios/lanewar_hack.txt
+Data/Scenarios/lanewar_hacktower.txt
+Data/Scenarios/lanewar_ranks.txt
 Data/Scenarios/lanewar_tricks.txt
 Data/Scenarios/laserdefense.txt
 Data/Scenarios/laserflow.txt
@@ -1492,8 +1504,10 @@ Data/Scenarios/mobwin.txt
 Data/Scenarios/moneypop.txt
 Data/Scenarios/moneypop3.txt
 Data/Scenarios/msaa_river.txt
+Data/Scenarios/netjetstrike.txt
 Data/Scenarios/netrepeat.txt
 Data/Scenarios/netstance.txt
+Data/Scenarios/netwrap.txt
 Data/Scenarios/neutronshells.txt
 Data/Scenarios/nukefade.txt
 Data/Scenarios/obeyorders.txt
@@ -1511,6 +1525,7 @@ Data/Scenarios/piecetower.txt
 Data/Scenarios/piecetowerdirect.txt
 Data/Scenarios/piecetowerfilm.txt
 Data/Scenarios/powerpropcapture.txt
+Data/Scenarios/radarbatch.txt
 Data/Scenarios/reachhills.txt
 Data/Scenarios/reachproof.txt
 Data/Scenarios/reachshot.txt
@@ -1571,6 +1586,7 @@ Data/Scenarios/stashbeside.txt
 Data/Scenarios/statues.txt
 Data/Scenarios/stealthenemy.txt
 Data/Scenarios/stealthintruder.txt
+Data/Scenarios/stealthlate.txt
 Data/Scenarios/stealthown.txt
 Data/Scenarios/stealthreveal.txt
 Data/Scenarios/strikeair_nuke.txt
@@ -1595,6 +1611,7 @@ Data/Scenarios/trailer_clash.txt
 Data/Scenarios/trailer_corridor.txt
 Data/Scenarios/trailer_fourway.txt
 Data/Scenarios/trailer_intro.txt
+Data/Scenarios/trainerloss.txt
 Data/Scenarios/truckredirect.txt
 Data/Scenarios/tunnelattack.txt
 Data/Scenarios/tunnelfull.txt

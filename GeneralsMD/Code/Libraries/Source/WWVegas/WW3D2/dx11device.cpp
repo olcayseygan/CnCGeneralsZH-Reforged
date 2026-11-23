@@ -396,7 +396,16 @@ void DX11DeviceClass::Release_Views()
 
 void DX11DeviceClass::Release()
 {
+	// DXGI destroys a flip chain late, once nothing on the context holds its buffers and the context
+	// has flushed.  A startup that releases Direct3D 11 to try Direct3D 9 alone (W3DDisplay::init) needs
+	// the window free right away, so unbind everything and flush before the chain goes.
+	if (Context != NULL) {
+		Context->ClearState();
+	}
 	Release_Views();
+	if (Context != NULL) {
+		Context->Flush();
+	}
 	if (FrameLatencyWaitable != NULL) {
 		CloseHandle(FrameLatencyWaitable);
 		FrameLatencyWaitable = NULL;

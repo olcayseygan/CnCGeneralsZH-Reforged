@@ -9194,7 +9194,7 @@ ERROR:D3DFailurePrompt
 END
 
 ERROR:D3DFailureMessage
-"Lütfen DirectX 8.1 veya üstünün kurulu olduğundan emin olun. Ekran kartınızın asgari gereksinimleri karşıladığını da kontrol edin"
+"Ekran kartı açılmadı.\n\nEkran kartı sürücüsünü güncelle. Overlay'leri ve tam ekran açık başka programları kapat. Oyunu uzak masaüstünden ya da kilitli ekrandan açma. Bilgisayarı yeniden başlat ya da oyunu -win ile aç."
 END
 
 GUI:AudioHardware

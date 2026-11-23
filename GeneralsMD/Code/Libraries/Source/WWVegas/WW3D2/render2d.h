@@ -161,6 +161,18 @@ public:
 	// Color access
 	DynamicVectorClass<unsigned long> &	Get_Color_Array (void)	{ return Colors; }
 
+	// What the batch holds, all of its draws together
+	int	Get_Vertex_Count( void ) const		{ return Vertices.Count(); }
+	int	Get_Index_Count( void ) const		{ return Indices.Count(); }
+
+	// The dynamic vertex and index buffers count in an unsigned short and an index is one, so a
+	// batch is drawn in pieces of at most this much; every piece is whole quads and triangles
+	enum { MAX_DRAW_VERTICES = 65532, MAX_DRAW_INDICES = 65532 };
+
+	// The first batch this process had to split: what it would have held, vertices and indices,
+	// had it stayed one draw.  False while no batch has gone over.
+	static bool	Get_First_Split( int & vertices, int & indices );
+
 	// statics to access the Screen Resolution in Pixels
 	static void	Set_Screen_Resolution( const RectClass & screen );
 	static const RectClass & Get_Screen_Resolution( void )			{ return ScreenResolution; }
@@ -183,6 +195,14 @@ protected:
 	bool											IsGrayScale;
 	float											ZValue;
 
+	// A batch past one draw's room is split into draws; each later one starts here, its vertex
+	// first and its index second, and its indices count from that vertex.  Empty under the cap.
+	DynamicVectorClass<int>					DrawStarts;
+	int											DrawVertexStart;
+	int											DrawIndexStart;
+	static int									FirstSplitVertices;
+	static int									FirstSplitIndices;
+
 	static RectClass							ScreenResolution;
 
 	Vector2 Convert_Vert( const Vector2 & v );
@@ -197,6 +217,8 @@ protected:
 	void	Internal_Add_Quad_VColors( unsigned long color1, unsigned long color2 );
 	void	Internal_Add_Quad_HColors( unsigned long color1, unsigned long color2 );
 	void	Internal_Add_Quad_Indicies( int start_vert_index, bool backfaced = false );
+	int	Draw_Vertex_Base( int new_vertices, int new_indices );
+	void	Render_Draw( int first_vertex, int vertex_count, int first_index, int index_count );
 };
 
 

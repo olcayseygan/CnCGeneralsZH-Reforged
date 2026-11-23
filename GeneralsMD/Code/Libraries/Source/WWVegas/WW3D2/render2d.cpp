@@ -41,6 +41,7 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "render2d.h"
+#include <stdlib.h>
 #include "mutex.h"
 #include "ww3d.h"
 #include "refcount.h"
@@ -79,9 +80,11 @@ Render2DClass::Render2DClass( TextureClass* tex ) :
 	Indices(sizeof(PreAllocatedIndices)/sizeof(unsigned short),PreAllocatedIndices),
 	Vertices(sizeof(PreAllocatedVertices)/sizeof(Vector2),PreAllocatedVertices),
 	UVCoordinates(sizeof(PreAllocatedUVCoordinates)/sizeof(Vector2),PreAllocatedUVCoordinates),
-	Colors(sizeof(PreAllocatedColors)/sizeof(unsigned long),PreAllocatedColors)
+	Colors(sizeof(PreAllocatedColors)/sizeof(unsigned long),PreAllocatedColors),
+	DrawVertexStart(0),
+	DrawIndexStart(0)
 {
-	Set_Texture( tex );	
+	Set_Texture( tex );
    Shader = Get_Default_Shader();
 	return ;
 }
@@ -125,8 +128,67 @@ void	Render2DClass::Reset(void)
 	UVCoordinates.Reset_Active();
 	Colors.Reset_Active();
 	Indices.Reset_Active();
+	DrawStarts.Reset_Active();
+	DrawVertexStart = 0;
+	DrawIndexStart = 0;
 
 	Update_Bias(); // Keep the bias updated
+}
+
+int Render2DClass::FirstSplitVertices = 0;
+int Render2DClass::FirstSplitIndices = 0;
+
+bool Render2DClass::Get_First_Split( int & vertices, int & indices )
+{
+	vertices = FirstSplitVertices;
+	indices = FirstSplitIndices;
+	return FirstSplitVertices != 0;
+}
+
+/** The first vertex of the draw the next primitive goes into.  A batch is one draw until a
+	* primitive would take it past what a dynamic buffer and an unsigned short index hold; that one
+	* opens the next draw.  The minimap held up to 77400 indices in one batch on a big map and wrote
+	* past the end of the index buffer (v4.2.0, 9 reports). */
+/** The room one draw gets.  ZHR_RENDER2D_SPLIT=<indices> in the environment, a multiple of 6 from 6 to
+	* 65532, makes every batch past that many split the way a too big one does, so the split can be
+	* proven on any screen against a run without it; anything else leaves the real cap.  Dev only. */
+static int Draw_Cap( void )
+{
+	static int cap = 0;
+	if( cap == 0 )
+	{
+		cap = Render2DClass::MAX_DRAW_INDICES;
+		const char *forced = getenv( "ZHR_RENDER2D_SPLIT" );
+		if( forced != NULL )
+		{
+			const int value = atoi( forced );
+			if( value >= 6 && value <= Render2DClass::MAX_DRAW_INDICES && value % 6 == 0 )
+				cap = value;
+		}
+	}
+	return cap;
+}
+
+int Render2DClass::Draw_Vertex_Base( int new_vertices, int new_indices )
+{
+	// one cap for both counts: a quad adds fewer vertices than indices and a triangle as many, so the
+	// vertex count never passes the index count's cap first
+	const int cap = Draw_Cap();
+	if( Vertices.Count() - DrawVertexStart + new_vertices > cap ||
+			Indices.Count() - DrawIndexStart + new_indices > cap )
+	{
+		// kept for the device layer to log: WW3D2 builds without RELEASE_DEBUG_LOGGING on Windows,
+		// so a DEBUG_LOG here would say nothing in the build players run
+		if (FirstSplitVertices == 0) {
+			FirstSplitVertices = Vertices.Count() + new_vertices;
+			FirstSplitIndices = Indices.Count() + new_indices;
+		}
+		DrawVertexStart = Vertices.Count();
+		DrawIndexStart = Indices.Count();
+		DrawStarts.Add( DrawVertexStart );
+		DrawStarts.Add( DrawIndexStart );
+	}
+	return DrawVertexStart;
 }
 
 void Render2DClass::Set_Texture(TextureClass* tex)
@@ -378,7 +440,10 @@ void	Render2DClass::Internal_Add_Quad_HColors( unsigned long color1, unsigned lo
 void	Render2DClass::Internal_Add_Quad_Indicies( int start_vert_index, bool backfaced )
 {
 	unsigned short * indices;
-	
+
+	// the callers pass the vertex count, which is where this quad's four go; count from its draw
+	start_vert_index -= Draw_Vertex_Base( 4, 6 );
+
 	if (backfaced ^ (CoordinateScale.X * CoordinateScale.Y > 0)) {
 		indices=Indices.Uninitialized_Add();
 		*indices = start_vert_index + 1;
@@ -491,7 +556,7 @@ void	Render2DClass::Add_Quad( const RectClass & screen, unsigned long color )
 */
 void	Render2DClass::Add_Tri( const Vector2 & v0, const Vector2 & v1, const Vector2 & v2, const Vector2 & uv0, const Vector2 & uv1, const Vector2 & uv2, unsigned long color )
 {
-	int old_vert_count = Vertices.Count();
+	int old_vert_count = Vertices.Count() - Draw_Vertex_Base( 3, 3 );
 
 	// Add the verticies (translated to new coordinates)
 #if 0
@@ -640,30 +705,53 @@ void Render2DClass::Render(void)
 	DX8Wrapper::Set_View_Identity();
 	DX8Wrapper::Set_Transform(D3DTS_PROJECTION,identity);
 
-	DynamicVBAccessClass vb(BUFFER_TYPE_DYNAMIC_DX8,dynamic_fvf_type,Vertices.Count());
+	// one draw under the cap, as it always was; past it each piece in the order it was added
+	int first_vertex = 0;
+	int first_index = 0;
+	for (int d=0; d+1<DrawStarts.Count(); d+=2)
+	{
+		Render_Draw(first_vertex, DrawStarts[d]-first_vertex, first_index, DrawStarts[d+1]-first_index);
+		first_vertex = DrawStarts[d];
+		first_index = DrawStarts[d+1];
+	}
+	Render_Draw(first_vertex, Vertices.Count()-first_vertex, first_index, Indices.Count()-first_index);
+
+	DX8Wrapper::Set_Transform(D3DTS_VIEW,view);
+	DX8Wrapper::Set_Transform(D3DTS_PROJECTION,proj);
+	if (IsGrayScale)
+		ShaderClass::Invalidate();	//force both stages to be reset.
+
+}
+
+void Render2DClass::Render_Draw( int first_vertex, int vertex_count, int first_index, int index_count )
+{
+	if (index_count <= 0 || vertex_count <= 0)
+		return;
+
+	DynamicVBAccessClass vb(BUFFER_TYPE_DYNAMIC_DX8,dynamic_fvf_type,vertex_count);
 	{
 		DynamicVBAccessClass::WriteLockClass Lock(&vb);
 		const FVFInfoClass &fi=vb.FVF_Info();
 		unsigned char *va=(unsigned char*)Lock.Get_Formatted_Vertex_Array();
 		int i;
 
-		for (i=0; i<Vertices.Count(); i++)
+		for (i=first_vertex; i<first_vertex+vertex_count; i++)
 		{
 			Vector3 temp(Vertices[i].X,Vertices[i].Y,ZValue);
 			*(Vector3*)(va+fi.Get_Location_Offset())=temp;
 			*(unsigned int*)(va+fi.Get_Diffuse_Offset())=Colors[i];
 			*(Vector2*)(va+fi.Get_Tex_Offset(0))=UVCoordinates[i];
 			va+=fi.Get_FVF_Size();
-		}		
+		}
 	}
 
-	DynamicIBAccessClass ib(BUFFER_TYPE_DYNAMIC_DX8,Indices.Count());
+	DynamicIBAccessClass ib(BUFFER_TYPE_DYNAMIC_DX8,index_count);
 	try {
 		DynamicIBAccessClass::WriteLockClass Lock(&ib);
 			unsigned short *mem=Lock.Get_Index_Array();
-			for (int i=0; i<Indices.Count(); i++)
-				mem[i]=Indices[i];
-	
+			for (int i=0; i<index_count; i++)
+				mem[i]=Indices[first_index+i];
+
 		IndexBufferExceptionFunc();
 	} catch(...) {
 		IndexBufferExceptionFunc();
@@ -698,13 +786,7 @@ void Render2DClass::Render(void)
 	}
 	else
 		DX8Wrapper::Set_Shader(Shader);
-	DX8Wrapper::Draw_Triangles(0,Indices.Count()/3,0,Vertices.Count());	
-
-	DX8Wrapper::Set_Transform(D3DTS_VIEW,view);
-	DX8Wrapper::Set_Transform(D3DTS_PROJECTION,proj);
-	if (IsGrayScale)
-		ShaderClass::Invalidate();	//force both stages to be reset.
-
+	DX8Wrapper::Draw_Triangles(0,index_count/3,0,vertex_count);
 }
 
 

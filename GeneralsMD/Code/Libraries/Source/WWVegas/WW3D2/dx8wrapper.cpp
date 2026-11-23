@@ -512,6 +512,44 @@ const char * DX8Wrapper::Get_Device_Failures(void)
 	return DeviceFailures;
 }
 
+void DX8Wrapper::Clear_Device_Failures(void)
+{
+	DeviceFailures[0] = '\0';
+}
+
+/* ZHR_FAIL_D3D9_DEVICES=<n> in the environment makes the first n Create_Device calls answer every
+	 CreateDevice inside them with DEVICELOST, D3D never asked, so the call runs the same adapter 0 fall
+	 back, the same DEVICELOST retries and the same notes as a real refusal, and W3DDisplay's fallback order
+	 can be watched on a machine whose device works.  A developer's switch: the launcher never sets it,
+	 and with it unset or 0 nothing here changes. */
+static bool Take_Forced_Device_Refusal(void)
+{
+	static int left = -1;
+	if (left < 0) {
+		const char * value = getenv("ZHR_FAIL_D3D9_DEVICES");
+		left = value ? atoi(value) : 0;
+		if (left < 0) left = 0;
+	}
+	if (left == 0)
+		return false;
+	--left;
+	return true;
+}
+
+// How often a refused device is asked again, 250 ms apart; W3DDisplay shortens it after its first try.
+static int DeviceRetries = 12;
+
+void DX8Wrapper::Set_Device_Retries(int retries)
+{
+	DeviceRetries = retries < 0 ? 0 : retries;
+}
+
+void DX8Wrapper::Select_Render_Device(int dev)
+{
+	if (dev >= 0 && dev < _RenderDeviceNameTable.Count())
+		CurRenderDevice = dev;
+}
+
 static const char * Render_Device_Name(int device)
 {
 	return (device >= 0 && device < _RenderDeviceNameTable.Count()) ? (const char *)_RenderDeviceNameTable[device] : "?";
@@ -855,12 +893,27 @@ bool DX8Wrapper::Create_Device(void)
 {
 	WWASSERT(D3DDevice==NULL);	// for now, once you've created a device, you're stuck with it!
 
+	// the developer's switch above: every CreateDevice of this call answers DEVICELOST
+	const bool forced_refusal = Take_Forced_Device_Refusal();
+	if (forced_refusal)
+		Note_Device_Failure("adapter %d '%s': ZHR_FAIL_D3D9_DEVICES refuses this device", CurRenderDevice,
+			Render_Device_Name(CurRenderDevice));
+
 	D3DCAPS9 caps;
 	RenderResult caps_hr = D3DInterface->GetDeviceCaps(CurRenderDevice, WW3D_DEVTYPE, &caps);
+	// NOTAVAILABLE here came with a keyboard DirectInput could not take in every report that had it
+	// (v4.2.0 and v4.3.0): the game's window was not on the desktop the player sees yet, a club's shell
+	// or a locked screen still in front of it.  Ask again for a few seconds, as for DEVICELOST below.
+	int caps_retries = 0;
+	for (; caps_hr == D3DERR_NOTAVAILABLE && caps_retries < DeviceRetries; ++caps_retries)
+	{
+		ThreadClass::Sleep_Ms(250);
+		caps_hr = D3DInterface->GetDeviceCaps(CurRenderDevice, WW3D_DEVTYPE, &caps);
+	}
 	if (Render_Failed(caps_hr))
 	{
-		Note_Device_Failure("adapter %d '%s': GetDeviceCaps %s (0x%08X)", CurRenderDevice,
-			Render_Device_Name(CurRenderDevice), Get_D3D_Error_String(caps_hr), (unsigned)caps_hr);
+		Note_Device_Failure("adapter %d '%s': GetDeviceCaps %s (0x%08X), %d retries", CurRenderDevice,
+			Render_Device_Name(CurRenderDevice), Get_D3D_Error_String(caps_hr), (unsigned)caps_hr, caps_retries);
 		return false;
 	}
 
@@ -904,7 +957,7 @@ bool DX8Wrapper::Create_Device(void)
 	Vertex_Processing_Behavior|=D3DCREATE_FPU_PRESERVE;
 #endif
 
-	RenderResult hr=D3DInterface->CreateDevice
+	RenderResult hr=forced_refusal ? D3DERR_DEVICELOST : D3DInterface->CreateDevice
 	(
 		CurRenderDevice,
 		WW3D_DEVTYPE,
@@ -917,7 +970,7 @@ bool DX8Wrapper::Create_Device(void)
 	if (Render_Failed(hr) && CurRenderDevice != 0)
 	{
 		CurRenderDevice = 0;
-		hr=D3DInterface->CreateDevice
+		hr=forced_refusal ? D3DERR_DEVICELOST : D3DInterface->CreateDevice
 		(
 			CurRenderDevice,
 			WW3D_DEVTYPE,
@@ -933,10 +986,10 @@ bool DX8Wrapper::Create_Device(void)
 	// passes, so ask again for a few seconds before giving up on the start (an RX 9070 XT at
 	// 3840x2160 failed five starts in a row on the first answer).
 	int lost_retries = 0;
-	for (; hr == D3DERR_DEVICELOST && lost_retries < 12; ++lost_retries)
+	for (; hr == D3DERR_DEVICELOST && lost_retries < DeviceRetries; ++lost_retries)
 	{
 		ThreadClass::Sleep_Ms(250);
-		hr=D3DInterface->CreateDevice
+		hr=forced_refusal ? D3DERR_DEVICELOST : D3DInterface->CreateDevice
 		(
 			CurRenderDevice,
 			WW3D_DEVTYPE,
@@ -968,14 +1021,14 @@ bool DX8Wrapper::Create_Device(void)
 			_PresentParameters.AutoDepthStencilFormat==D3DFMT_D24X8)) 
 		{
 			_PresentParameters.AutoDepthStencilFormat=D3DFMT_D16;
-			hr = D3DInterface->CreateDevice
+			hr = forced_refusal ? D3DERR_DEVICELOST : D3DInterface->CreateDevice
 			(
 				CurRenderDevice,
 				WW3D_DEVTYPE,
 				_Hwnd,
 				Vertex_Processing_Behavior,
 				&_PresentParameters,
-				&D3DDevice 
+				&D3DDevice
 			);
 
 			if (Render_Failed(hr))

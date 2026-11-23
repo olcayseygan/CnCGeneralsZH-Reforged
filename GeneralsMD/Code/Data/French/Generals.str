@@ -9406,7 +9406,7 @@ ERROR:D3DFailurePrompt
 END
 
 ERROR:D3DFailureMessage
-"Veuillez vous assurer que votre ordinateur possède DirectX 8.1 ou une version supérieure. Veuillez aussi vérifier que votre carte graphique possède les caractéristiques minimum requises par le jeu."
+"La carte graphique n'a pas démarré.\n\nMettez à jour le pilote graphique. Fermez les overlays et les autres programmes en plein écran. Ne lancez pas le jeu via le Bureau à distance ni sur un écran verrouillé. Redémarrez le PC ou lancez le jeu avec -win."
 END
 
 GUI:AudioHardware

@@ -1,0 +1,43 @@
+# A minimap batch split into several draws, and drawn the same.
+#
+# The minimap draws every blip and every row of every building's footprint into one 2D batch. On a
+# big map with a big army that batch passed the 65535 entries a dynamic index buffer and a 16-bit
+# index can hold, and the copy into the buffer wrote past its end (v4.2.0, crash group C, 9
+# reports, 77400 indices in one batch). The fix splits such a batch into draws of at most 65532.
+#
+# Alpine Assault takes only about 145 of the buildings below, so on this map the minimap never
+# reaches 65532 on its own. Run it with ZHR_RENDER2D_SPLIT=600 in the environment: every 2D batch
+# past 600 indices (the minimap, the HUD, long text) is split the way a too big one is.
+#
+# It has to draw, so no -headless; the radar is not drawn in a headless run.
+#
+#   $env:ZHR_RENDER2D_SPLIT = "600"
+#   generals.exe -win -xres 2560 -yres 1440 -quickstart -noshellmap -observer -multiInstance
+#     -noFPSLimit -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 600
+#     -scenario radarbatch -logPrefix radarbatch_ -screenshot 590
+#
+# Pass: HEADLESS RESULT at -maxframes, and the shutdown report carries "Render2D: batch split at
+# <v> vertices <i> indices". Then the same command with the variable removed: no such line, and the
+# frame 590 shot matches the split run's (same build, same seed; the HUD and minimap pixels must be
+# equal). A run without the variable that still logs the line means some batch really went over
+# 65532 on this map.
+#
+# Spawns refused on cliffs or water are logged and harmless.
+
+30    spawn      0  AmericaPowerPlant         150  start1        60
+30    spawn      0  AmericaPowerPlant         150  start2        60
+30    spawn      1  ChinaPowerPlant           150  start1:600:0  60
+30    spawn      1  ChinaPowerPlant           150  start2:-600:0 60
+40    spawn      0  AmericaPowerPlant         150  start1:0:600  60
+40    spawn      0  AmericaPowerPlant         150  start2:0:-600 60
+40    spawn      1  ChinaPowerPlant           150  start1:600:600   60
+40    spawn      1  ChinaPowerPlant           150  start2:-600:-600 60
+
+60    spawn      0  AmericaInfantryRanger     300  start1:300:300   15
+60    spawn      0  AmericaInfantryRanger     300  start2:-300:-300 15
+60    spawn      1  ChinaInfantryRedguard     300  start1:900:300   15
+60    spawn      1  ChinaInfantryRedguard     300  start2:-900:-300 15
+
+590   tally      0  AmericaPowerPlant
+590   tally      1  ChinaPowerPlant

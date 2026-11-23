@@ -868,8 +868,17 @@ public:
 	// Caps exist only while a device does: initted with no device yet, or after one was refused or
 	// released, Get_Current_Caps is NULL.
 	static bool				Has_Current_Caps() { return CurrentCaps != NULL; }
-	// Every refusal met on the way to a device since the start, "; " between them; empty when none.
+	// Every refusal met on the way to a device since the start (or since the last clear), "; " between
+	// them; empty when none.  W3DDisplay logs and clears it between its fallback tries, so each try's
+	// refusals get a line of their own and the buffer never fills.
 	static const char *	Get_Device_Failures(void);
+	static void				Clear_Device_Failures(void);
+	// How many times Create_Device asks again, 250 ms apart, after GetDeviceCaps NOTAVAILABLE or
+	// CreateDevice DEVICELOST; 12 (3 s) until changed.
+	static void				Set_Device_Retries(int retries);
+	// Makes adapter dev the one the next Set_Render_Device(-1, ...) creates on.  Set_Render_Device(0)
+	// means "the preferred adapter" and cannot pick adapter 0 again once another one is current.
+	static void				Select_Render_Device(int dev);
 
 #if defined(_WIN32)	// the registry: Windows only
 	static bool Registry_Save_Render_Device( const char * sub_key );

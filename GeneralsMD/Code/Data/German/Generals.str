@@ -8802,7 +8802,7 @@ ERROR:D3DFailurePrompt
 END
 
 ERROR:D3DFailureMessage
-"Stelle sicher, dass DirectX 8.1 oder höher installiert ist. Prüfe außerdem, ob deine Grafikkarte die Mindestanforderungen erfüllt"
+"Die Grafikkarte ist nicht gestartet.\n\nAktualisiere den Grafiktreiber. Schließe Overlays und andere Vollbildprogramme. Starte das Spiel nicht über Remotedesktop oder bei gesperrtem Bildschirm. Starte den PC neu oder starte das Spiel mit -win."
 END
 
 GUI:AudioHardware

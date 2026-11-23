@@ -7467,3 +7467,8 @@ END
 OBJECT:ApocalypseZombieBrute
 "Brute Zombie"
 END
+
+// EA's text asked for DirectX 8.1; the device is refused for other reasons now (driver, a held screen).
+ERROR:D3DFailureMessage
+"The graphics card did not start.\n\nUpdate the graphics driver. Close overlays and other fullscreen programs. Do not start the game over remote desktop or on a locked screen. Restart the PC, or start the game with -win."
+END

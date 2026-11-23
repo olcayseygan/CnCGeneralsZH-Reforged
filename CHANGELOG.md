@@ -1131,6 +1131,10 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - The computer plays Turkiye too. A Turkish AI puts up a full base with radar towers, Hisar batteries and Siper bunkers it fills with its own infantry, sends supply trucks, fields the new army, artillery included, fires its own powers and attacks.
 - The Turkish computer brings its guns and the eyes to aim them. A Firtina or Sakarya that comes out for one of its attack groups now sends for spotter teams, one on Easy and Medium and two on Hard, and the group waits for them before it leaves; until now the guns walked out blind and the spotters it did buy sat in its bunkers. The American battle plans it plays never put a Firtina in an Easy attack and only reach one after a quarter of an hour on Medium, so it adds a gun of its own to every Easy attack group, every second Medium one and every fourth on Hard. In three fifteen-minute matches a difficulty on Twilight Flame against America, Easy fielded 21 guns, Medium 48 and Hard 27, and all 41 that came out for an attack group sent for their spotters. The computer pays the Turkish price for them now. A Firtina used to cost it the American 1200 whenever that was all it had in the bank. A spotter team killed in the field is replaced for any group that still has a gun and none left to see for it, the men it trains for the seats of a Humvee or a bunker are no longer spotter teams, and a group whose spotters are late leaves without them instead of breaking up when its build time runs out.
 
+## Steadier memory use on Vulkan
+
+- Long Vulkan sessions now reclaim completed texture and buffer uploads as play continues, instead of retaining their memory until another wait or shutdown.
+
 ## Zero Hour on a Mac, on Linux and on the Steam Deck
 
 - On Mac and Linux the battle now runs on its own thread beside the drawing, as it does on Windows, where it used to be worked out between pictures. `-logicthread` is gone from the command line on every platform; the battle always has its thread.

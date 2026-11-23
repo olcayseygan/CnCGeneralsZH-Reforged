@@ -44,8 +44,9 @@ DEFENCE_AT = (1200, 1200)
 POWER_AT = (1400, 800)
 # west and north: the ground from the south-west hides the infantry from a defence's line of sight.
 # The west spot keeps clear of the cliff cells about (770-840, 1130-1200), where a big army's spread
-# from (750,1200) put a Ranger and got the spawn refused.
-APPROACHES = ((700, 1300), (1200, 1650))
+# from (750,1200) put a Ranger and got the spawn refused. The north spot was (1200,1650) until a later
+# generator put a cliff there; (1000,1600) is open ground.
+APPROACHES = ((700, 1300), (1000, 1600))
 GARRISON_AT = (1280, 1200)
 BUDGETS = (1, 2)
 
@@ -86,7 +87,14 @@ class ScenarioRefused(RuntimeError):
     """A spawn or line the engine would not take: whatever the run tallies afterwards is not the fight asked for."""
 
 
-def launch(exe: str, name: str, lines: list[str], max_frames: int, seed: int = 1) -> str | None:
+def seat_faction(template: str, default: str) -> str:
+    """A Turkiye template spawned for a seat of another faction is gone before the first tally, so a
+    Turkiye unit or defence takes a Turkiye seat; every other template fights from the default one."""
+    return "FactionTurkiye" if template.startswith("Turkiye") else default
+
+
+def launch(exe: str, name: str, lines: list[str], max_frames: int, seed: int = 1,
+           sides: tuple[str, str] = ("FactionAmerica", "FactionChina")) -> str | None:
     """Play one scenario headless on generated map 1 and return its debug log, None when it ran out of time."""
     scenario = SCENARIO_DIR / (name + ".txt")
     scenario.write_text("\n".join(lines) + "\n", encoding="ascii")
@@ -94,7 +102,7 @@ def launch(exe: str, name: str, lines: list[str], max_frames: int, seed: int = 1
     log.unlink(missing_ok=True)
     arguments = [str(RUN_DIR / exe), "-headless", "-quickstart", "-noshellmap", "-observer", "-multiInstance",
                  "-noFPSLimit", "-randommap", "1", "2", "small", "-autoskirmish", "2", "-takeover",
-                 "-side", "0", "FactionAmerica", "-side", "1", "FactionChina", "-seed", str(seed),
+                 "-side", "0", sides[0], "-side", "1", sides[1], "-seed", str(seed),
                  "-maxframes", str(max_frames), "-scenario", name, "-logPrefix", name + "_"]
     with LIVE_LOCK:
         if STOPPED.is_set():
@@ -166,7 +174,8 @@ def run_one(exe: str, tag: str, index: int, defence: str, attacker: str, budget:
     count = max(1, round(budget * total / ATTACKERS[attacker]))
     # the log prefix is cut at about thirty characters, so the name has to be short and unique
     name = "sg%s%03d" % (tag, index)
-    text = launch(exe, name, scenario_text(defence, attacker, count, approach), MAX_FRAMES)
+    sides = (seat_faction(attacker, "FactionAmerica"), seat_faction(defence, "FactionChina"))
+    text = launch(exe, name, scenario_text(defence, attacker, count, approach), MAX_FRAMES, sides=sides)
     if text is None:
         return {"defence": defence, "attacker": attacker, "budget": budget, "approach": approach, "error": "timeout",
                 "tallies": ""}

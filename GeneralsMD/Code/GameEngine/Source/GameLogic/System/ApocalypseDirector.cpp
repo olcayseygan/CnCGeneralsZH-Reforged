@@ -545,6 +545,30 @@ Int ApocalypseDirector::seatsAlive( void ) const
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool ApocalypseDirector::isZombie( const Object *obj ) const
+{
+	if( !m_active || obj == NULL || obj->getControllingPlayer() == NULL || obj->getControllingPlayer()->getPlayerIndex() != m_zombiePlayer )
+		return FALSE;
+	for( Int k = 0; k < KINDS; ++k )
+		if( m_kinds[ k ] != NULL && obj->getTemplate()->isEquivalentTo( m_kinds[ k ] ) )
+			return TRUE;
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A plane flying a general's power in from off the map: a DeliverPayload transport (the Supply Drop
+	  Zone's and the Supply Drop's cargo plane, the paradrops, the A-10, B-52 and carpet bomber strikes)
+	  or the Spectre gunship.  The power, not the player, flies them, and they come in over the map's
+	  edge, through the fog ring: the cargo plane flies 125 a game second, so the 4 s grace killed it
+	  500 in with its cargo still aboard.  Every aircraft the player orders still dies there. */
+static Bool isOffMapDelivery( const Object *obj )
+{
+	static const NameKeyType key_DeliverPayloadAIUpdate = NAMEKEY( "DeliverPayloadAIUpdate" );
+	static const NameKeyType key_SpectreGunshipUpdate = NAMEKEY( "SpectreGunshipUpdate" );
+	return obj->findUpdateModule( key_DeliverPayloadAIUpdate ) != NULL || obj->findUpdateModule( key_SpectreGunshipUpdate ) != NULL;
+}
+
+//-------------------------------------------------------------------------------------------------
 /// an idle zombie goes at the nearest thing a seat has, or back to the middle when nothing is left
 void ApocalypseDirector::sendOn( Object *obj )
 {
@@ -939,7 +963,8 @@ Bool ApocalypseDirector::ringSpot( Coord3D *pos, const Object *obj, Int sector )
 
 //-------------------------------------------------------------------------------------------------
 /** Anything of the living (a unit of a seat or of anyone but the dead and the neutral map) that has
-	  stood in the fog ring APOCALYPSE_FOG_GRACE_SECONDS dies there.  Walked in object list order, the
+	  stood in the fog ring APOCALYPSE_FOG_GRACE_SECONDS dies there, save a power's plane from off the
+	  map (isOffMapDelivery); what rides in one, a parachute and a crate are no unit of the ring's either.  Walked in object list order, the
 	  stays kept sorted by ObjectID, so every machine kills the same thing on the same frame. */
 void ApocalypseDirector::killInFog( UnsignedInt now )
 {
@@ -953,7 +978,7 @@ void ApocalypseDirector::killInFog( UnsignedInt now )
 		if( owner == NULL || owner == neutral || owner->getPlayerIndex() == m_zombiePlayer || obj->isEffectivelyDead()
 				|| obj->getContainedBy() != NULL
 				|| !( obj->isKindOf( KINDOF_INFANTRY ) || obj->isKindOf( KINDOF_VEHICLE ) || obj->isKindOf( KINDOF_AIRCRAFT ) )
-				|| !inRing( obj->getPosition() ) )
+				|| !inRing( obj->getPosition() ) || isOffMapDelivery( obj ) )
 			continue;
 		FogStay stay;
 		stay.id = obj->getID();
@@ -1165,6 +1190,13 @@ void ApocalypseDirector::update( void )
 				++nearMiddle;
 		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u the dead: %d still in the fog, %d idle, %d among the bases; the seats hold %d buildings, %d units\n",
 								now, inFog, idle, nearMiddle, buildings, units ));
+		for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+		{
+			Player *player = ThePlayerList->getNthPlayer( i );
+			if( isSeat( player ) )
+				DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u seat %d money %u rank %d skill %d\n", now, i,
+										player->getMoney()->countMoney(), player->getRankLevel(), player->getSkillPoints() ));
+		}
 		if( standing == 0 && !m_fallLogged )
 		{
 			m_fallLogged = TRUE;

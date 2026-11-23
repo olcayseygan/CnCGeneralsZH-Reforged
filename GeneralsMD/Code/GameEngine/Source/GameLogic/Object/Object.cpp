@@ -63,6 +63,7 @@
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPlayer.h"
 #include "GameLogic/AIPathfind.h"
+#include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/DayNightCycle.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/FiringTracker.h"
@@ -3379,19 +3380,24 @@ void Object::scoreTheKill( const Object *victim )
 	Player* victimController = victim->getControllingPlayer();
 	// if the other player is not a playable side (i.e. they are civilian, observer, whatever)
 	// we shouldn't count the kill.
-	if (victimController->isPlayableSide() == FALSE)
+	// An Apocalypse zombie is the one civilian that counts: the killer's player gets the kill on the
+	// score screen and the general's points for it, but no cash bounty (thousands walk in a match, an
+	// income nobody designed), nothing goes on the civilians' own books, and the unit takes no
+	// veterancy, as before.
+	const Bool zombie = TheApocalypseDirector->isZombie( victim );
+	if (victimController->isPlayableSide() == FALSE && !zombie)
 	{
 		return;
 	}
 
-	
+
 	if ( victim->isKindOf( KINDOF_IGNORED_IN_GUI ) )
 		return;
 
 
 	Player* controller = getControllingPlayer();
 
-	if (victimController)
+	if (victimController && !zombie)
 	{
 		victimController->getScoreKeeper()->addObjectLost(victim);
 		victimController->onUnitLost(victim);
@@ -3414,8 +3420,12 @@ void Object::scoreTheKill( const Object *victim )
 	{
 		controller->getScoreKeeper()->addObjectDestroyed(victim);
 		controller->addSkillPointsForKill(this, victim);
-		controller->doBountyForKill(this, victim);
+		if (!zombie)
+			controller->doBountyForKill(this, victim);
 	}
+
+	if (zombie)
+		return;
 
 	/* Now handle experience, if we can gain any.
 

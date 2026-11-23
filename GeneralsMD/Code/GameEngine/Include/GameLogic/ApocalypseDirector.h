@@ -40,7 +40,8 @@
 //
 // A fog ring runs round the map, between the map's Apocalypse_Clear square and its edge: shrouded
 // for every player whoever looks (PartitionManager::setAlwaysShroudedOutside), drawn as a thin red
-// fog, and deadly: a unit of anyone but the dead that stands in it APOCALYPSE_FOG_GRACE_SECONDS dies.
+// fog, and deadly: a unit of anyone but the dead that stands in it APOCALYPSE_FOG_GRACE_SECONDS dies,
+// save a plane flying a general's power in from off the map (a supply drop, a paradrop, a strike).
 // The dead rise anywhere in it and walk in.  The fog's red and the smoke's follow the night.
 //
 // The HEADLESS APOCALYPSE lines carry the phase, the wave, the counts and the kills.
@@ -162,6 +163,9 @@ public:
 	void newMap( Bool loadingSaveGame );
 
 	Bool isActive( void ) const { return m_active; }
+
+	/// one of the dead: while the mode is on, an object of the dead player made from one of the zombie templates
+	Bool isZombie( const Object *obj ) const;
 
 	/// once a logic frame, from GameLogic::update
 	void update( void );

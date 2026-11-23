@@ -1,0 +1,49 @@
+# Apocalypse: zombie kills promote the general, and the Supply Drop Zone pays (2026-11-23).
+#
+# A player's report: no general's rank from zombies (they belong to the civilians, whose kills EA
+# never counted) and a USA Supply Drop Zone that paid nothing (its cargo plane comes in over the
+# map's edge, through the fog ring, and the ring killed it 4 game seconds in with the crates aboard;
+# older logs show 'AmericaJetCargoPlaneDropZone ... died in the fog' about 500 in from the edge).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 2 normal apocalypse -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 3 -maxframes 9000
+#     -scenario apoc_ranksdrop -logPrefix apoc_ranksdrop_
+#
+# Scenario frames are game frames, 1.5 a logic frame at game speed 150: 13400 runs on logic 8933.
+# The drop zone stands at 30 and calls its first plane 120 game seconds later (about 3630), the second
+# about 7230; each drop is six crates of 250, 1500 without Supply Lines. Nothing else pays seat 0: no
+# supply, no oil, and a zombie kill pays no bounty.
+#
+# Pass, all of:
+#   - no 'AmericaJetCargoPlaneDropZone' in any 'died in the fog' line;
+#   - the HEADLESS TALLY money of seat 0 at 5400 is at least its money at 3600 plus 1500, and at 9000
+#     at least its money at 5400 plus 1500 (money only rises by drops: a lower 3600 to 5400 step that
+#     is a multiple of 1500 still passes);
+#   - the director's 10 s 'HEADLESS APOCALYPSE: frame N seat P money M rank R skill S' line for the
+#     USA seat (P is its player index, the same as its HEADLESS PLAYER line) shows S above 0 once the
+#     first wave (game second 60) has met the army, and rising after; HEADLESS PLAYER for that seat
+#     ends 'rank R skill S' with S > 0 and 'killed' above 0. At 10 points a walker and 40 a brute,
+#     800 points (80 walkers) is rank 2, so R >= 2 is expected but not the pass.
+# Before the fix: the drop zone's plane dies in the fog, the money holds still and skill stays 0.
+
+# Seat 0, USA: the drop zone and an army that holds the dead off it
+10    spawn      0  AmericaSupplyDropZone        1   start0:300:300
+10    spawn      0  AmericaTankCrusader          6   start0:0:-200     70
+10    spawn      0  AmericaTankPaladin           2   start0:-200:0     80
+10    spawn      0  AmericaInfantryRanger        12  start0:150:-50    20
+20    stance     0  *                            defensive
+
+# Seat 1, China: kill zones of its own, so the waves split and seat 1 stands
+10    spawn      1  ChinaPowerPlant              2   start1:0:-170     90
+10    spawn      1  ChinaGattlingCannon          4   start1:0:200      90
+20    stance     1  *                            defensive
+
+3000  tally      0  AmericaSupplyDropZone        1
+3600  tally      0  AmericaSupplyDropZone        1
+5400  tally      0  AmericaSupplyDropZone        1
+7200  tally      0  AmericaSupplyDropZone        1
+9000  tally      0  AmericaSupplyDropZone        1
+13400 tally      0  AmericaSupplyDropZone        1
+13400 tally      0  AmericaTankCrusader
+13400 tally      0  AmericaInfantryRanger

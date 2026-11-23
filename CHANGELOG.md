@@ -27,6 +27,9 @@ found and fixed, EA's own, not port damage.**
 - In Apocalypse a small steel tray at the top of the screen keeps the match's time, and a bar along its foot shows the day and night with the sun or the moon riding it, the time left until the light turns and how many nights you have lived through.
 - You can no longer click or drag-select the dead, so a box over your own army around a horde picks up only your army. Attacking them, force-fire and attack-move work as before.
 - Allies no longer send each other money in an Apocalypse match; the Tab screen's money column is gone there, as in Direct Strike.
+- Killing the dead now promotes your general. The dead belong to the civilians, and the game has never scored a civilian's losses, so a whole night of kills left you at rank 1 with nothing on the score screen. Every zombie you kill now counts as a kill and earns your general's points, 10 for a walker, 8 for a runner and 40 for a brute. It pays no bounty and gives the unit that fired no rank. In a five minute test the two seats came out with 226 and 780 points; rank 2 takes 800.
+- The Supply Drop Zone pays in Apocalypse. Its cargo plane comes in over the map's edge, through the red fog, and the fog killed it four seconds in with the crates still aboard: the logs of earlier test matches hold 202 of those deaths. A plane that one of your general's powers flies in from off the map, a supply drop, a paradrop or a bomber, now crosses the fog unharmed. Aircraft you order into the fog still die there. In the same test the drop zone went from paying nothing to 1500 a drop.
+- Apocalypse replays and saves recorded before this change will not play back.
 
 ## The computer builds superweapons like a turtle does
 

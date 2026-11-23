@@ -499,6 +499,7 @@ public:
 	Bool m_showEmptyBuildingPips;		///< the row of empty slots over a building nobody is in
 	Bool m_hitFlash;					///< a struck unit or building lights up for a blink (Drawable::updateDrawable); client only, logic never reads it
 	Bool m_damageNumbers;			///< the damage a hit did rises over the unit as a red figure (Drawable::updateDrawable); client only, logic never reads it
+	Bool m_idleWorkerCamera;		///< the idle worker key and buttons centre the camera on the worker on every layout (InGameUI::selectNextIdleWorker); client only
 	Bool m_workersReturnToSupply;		///< a worker that finishes a build job goes back to the dock it left
 	Bool m_archiveReplays;					///< keep a timestamped copy of every replay, instead of only the last one
 	Int m_bloomIntensity;				///< Glow strength in percent, 0 = off; the renderer derives the rest

@@ -1282,6 +1282,7 @@ GlobalData::GlobalData()
 	m_showEmptyBuildingPips = TRUE;
 	m_hitFlash = FALSE;
 	m_damageNumbers = FALSE;
+	m_idleWorkerCamera = TRUE;		// retail's: the camera goes to the worker; off is what the fork added
 	m_workersReturnToSupply = TRUE;
 	m_archiveReplays = TRUE;
 

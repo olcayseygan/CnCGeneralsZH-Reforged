@@ -47,6 +47,7 @@
 #include "GameClient/KeyDefs.h"
 #include "GameClient/LaneHud.h"
 #include "GameClient/Shell.h"
+#include "GameClient/View.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/MetaEvent.h"
 #include "GameClient/Mouse.h"
@@ -672,11 +673,16 @@ static void replyStatus( void )
 	// which front-end screen is up, so a script driving the menus can tell where its clicks landed
 	WindowLayout *screen = TheShell ? TheShell->top() : NULL;
 	WindowLayout *options = TheShell ? TheShell->getOptionsLayout( FALSE ) : NULL;
-	sprintf( piece, "{\"ok\":true,\"frame\":%d,\"inGame\":%s,\"screen\":\"%s\",\"options\":%s,\"players\":[",
+	// where the tactical camera looks, so a script can tell whether a key or button moved it
+	Coord3D camera = { 0.0f, 0.0f, 0.0f };
+	if (TheTacticalView)
+		TheTacticalView->getPosition( &camera );
+	sprintf( piece, "{\"ok\":true,\"frame\":%d,\"inGame\":%s,\"screen\":\"%s\",\"options\":%s,\"camera\":[%.1f,%.1f],\"players\":[",
 					 TheGameLogic ? (Int)TheGameLogic->getFrame() : 0,
 					 inGame ? "true" : "false",
 					 screen ? screen->getFilename().str() : "",
-					 options && !options->isHidden() ? "true" : "false" );
+					 options && !options->isHidden() ? "true" : "false",
+					 camera.x, camera.y );
 	for( const char *at = piece; *at; ++at )
 		reply.push_back( *at );
 

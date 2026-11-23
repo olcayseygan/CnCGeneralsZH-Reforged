@@ -676,7 +676,7 @@ WindowMsgHandledType ControlBarSystem( GameWindow *window, UnsignedInt msg,
 			}
 			else if( controlID == buttonIdleWorker || controlID == buttonIdleInfantry || controlID == buttonIdleVehicle || controlID == buttonIdleAircraft )
 			{
-				// the Next Idle keys' cycle, camera left alone but for the worker's on Classic
+				// the Next Idle keys' cycle, camera left alone but for the worker's (Classic, or IdleWorkerCamera on)
 				// (selectNextIdleWorker); Shift takes every idle one of the kind
 				HideQuitMenu( );
 				KindOfMaskType mustBeSet, mustBeClear;

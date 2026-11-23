@@ -209,6 +209,7 @@ NEW_CONTROLS = [
     (CHECK,  "CheckEmptyBuildingPips", "GUI:EmptyBuildingPips"),
     (CHECK,  "CheckHitFlash",          "GUI:HitFlash"),
     (CHECK,  "CheckDamageNumbers",     "GUI:DamageNumbers"),
+    (CHECK,  "CheckIdleWorkerCamera",  "GUI:IdleWorkerCamera"),
     (CHECK,  "CheckZoomToCursor",      "GUI:ZoomToCursor"),
     (CHECK,  "CheckIsometricCamera",   "GUI:IsometricCamera"),
     (CHECK,  "CheckCameraShake",       "GUI:CameraShake"),
@@ -517,7 +518,8 @@ GROUP_LAYOUT = [
             setting("LabelMinimapSize", "SliderMinimapSize", "ValueMinimapSize"),
             # here and not under the battlefield, whose column is full to the page's foot
             ("check", "CheckHitFlash"),
-            ("check", "CheckDamageNumbers")]),
+            ("check", "CheckDamageNumbers"),
+            ("check", "CheckIdleWorkerCamera")]),
         ("GUI:OptionsGroupBattlefield", [
             setting("LabelHealthBars", "ComboBoxHealthBars"),
             setting("LabelHealthBarColors", "ComboBoxHealthBarColors"),

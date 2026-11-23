@@ -13929,16 +13929,17 @@ void InGameUI::removeIdleWorker( Object *obj, Int playerNumber )
 	return;
 }
 
-// The worker key and the worker button.  Reforged and Red Alert Style leave the camera where the
-// player has it; Classic is the original game's bar and centres it on the worker picked, or on what
-// carries it, as the original game's selectNextIdleWorker did (issue #232).
+// The worker key and the worker button.  With IdleWorkerCamera on (the default) every layout centres
+// the camera on the worker picked, or on what carries it, each press, as the original game's
+// selectNextIdleWorker did; off, only Classic, the original game's bar, does (issue #232) and Reforged
+// and Red Alert Style leave the camera where the player has it.
 Object *InGameUI::selectNextIdleWorker( void )
 {
 	// the same walk the button's light comes from, so a lit button always has a worker to give
 	KindOfMaskType mustBeSet, mustBeClear;
 	idleUnitKinds( GameMessage::MSG_META_SELECT_NEXT_IDLE_WORKER, &mustBeSet, &mustBeClear );
 	Object *picked = selectNextIdleUnit( mustBeSet, mustBeClear );
-	if( picked && TheGlobalData->m_hudLayout == HUD_LAYOUT_RETAIL && TheTacticalView )
+	if( picked && ( TheGlobalData->m_idleWorkerCamera || TheGlobalData->m_hudLayout == HUD_LAYOUT_RETAIL ) && TheTacticalView )
 		TheTacticalView->lookAt( picked->getPosition() );
 	return picked;
 }

@@ -935,6 +935,14 @@ TOOLTIP:DamageNumbers
 "The damage a hit does rises over the unit in red."
 END
 
+GUI:IdleWorkerCamera
+"Jump to Idle Worker"
+END
+
+TOOLTIP:IdleWorkerCamera
+"The idle worker button and key move the camera to the worker."
+END
+
 GUI:ArchiveReplays
 "Archive Replays"
 END

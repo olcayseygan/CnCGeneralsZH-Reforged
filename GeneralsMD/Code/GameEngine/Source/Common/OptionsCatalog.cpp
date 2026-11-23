@@ -162,6 +162,7 @@ OPTION_INT_ACCESSORS( m_minimapSize )
 OPTION_BOOL_ACCESSORS( m_showEmptyBuildingPips )
 OPTION_BOOL_ACCESSORS( m_hitFlash )
 OPTION_BOOL_ACCESSORS( m_damageNumbers )
+OPTION_BOOL_ACCESSORS( m_idleWorkerCamera )
 OPTION_BOOL_ACCESSORS( m_useShadowVolumesForSkins )
 OPTION_BOOL_ACCESSORS( m_shadowsForProjectiles )
 OPTION_BOOL_ACCESSORS( m_shadowsForProps )
@@ -707,6 +708,13 @@ const OptionDef TheOptionCatalog[] =
 	{ "DamageNumbers",						OPT_WND( "CheckDamageNumbers" ), "GUI:DamageNumbers",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_damageNumbers, set_m_damageNumbers },
+
+	// The idle worker key and buttons centre the camera on the worker they pick, every press, on every
+	// layout (InGameUI::selectNextIdleWorker reads it).  On by default: that is the original game, and
+	// off is the fork's camera-stays-put, which Classic's bar still overrides.  Client only, no quality row.
+	{ "IdleWorkerCamera",					OPT_WND( "CheckIdleWorkerCamera" ), "GUI:IdleWorkerCamera",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_idleWorkerCamera, set_m_idleWorkerCamera },
 
 	// Which language the words are in.  English is the string table the game shipped with, and every
 	// other entry is a translation laid over it, so a line the translation lacks stays English.  The

@@ -15710,6 +15710,14 @@ TOOLTIP:DamageNumbers
 "Vuruşun hasarı birimin üstünde kırmızı çıkar."
 END
 
+GUI:IdleWorkerCamera
+"Boş İşçiye Git"
+END
+
+TOOLTIP:IdleWorkerCamera
+"Boştaki işçi tuşu kamerayı işçiye götürür."
+END
+
 GUI:ArchiveReplays
 "Tekrarları Arşivle"
 END

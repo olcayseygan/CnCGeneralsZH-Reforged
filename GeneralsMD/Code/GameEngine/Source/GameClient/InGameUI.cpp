@@ -13138,6 +13138,7 @@ enum
 	OBS_CELL_PITCH		= 57,		///< a cameo's cell piece and a pixel between
 	OBS_MORE_W				= 36,		///< the "+N" at a full row's end
 	OBS_HEAD_H				= 28,		///< the header strip, DSHead
+	OBS_HEAD_END_W		= 24,		///< each of its end pieces, the lug on the outer side
 	OBS_CARD_W				= 488,
 	OBS_CARD_H				= 300,
 	// the cell piece, DSCell, 85x65 at 1080 round a 71x49 glass at 7,8
@@ -13813,14 +13814,16 @@ void InGameUI::drawObserverPanels( void )
 	}
 	TheDisplay->endBatch2D();
 
-	// the head: his name in his colour after the flag, his army on the right
+	// the head: his name in his colour after the flag, his army on the right, both inside the strip's
+	// glass: its end pieces carry the lug that closes it, which beside a word read as a stray letter
 	GameFont *armyFont = font( TYPE_SMALL );
 	const UnicodeString armyName = army->getDisplayName();
 	const Int armyWidth = textWidth( armyName, armyFont );
-	drawText( armyName, armyFont, right - px( 10 ), top, head.h, TEXT_GREY, 1 );
+	const Int armyRight = right - px( OBS_HEAD_END_W + 6 );
+	drawText( armyName, armyFont, armyRight, top, head.h, TEXT_GREY, 1 );
 	GameFont *nameFont = font( TYPE_LABEL );
 	const Int nameLeft = left + px( 46 );
-	drawText( UIStyle::fitName( picked->getPlayerDisplayName(), nameFont, max( right - px( 10 ) - armyWidth - px( 12 ) - nameLeft, 1 ) ),
+	drawText( UIStyle::fitName( picked->getPlayerDisplayName(), nameFont, max( armyRight - armyWidth - px( 12 ) - nameLeft, 1 ) ),
 		nameFont, nameLeft, top, head.h, colour );
 
 	// his rank under the portrait

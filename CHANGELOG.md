@@ -1997,6 +1997,10 @@ A third pass went through the generals' powers, promotions and unit abilities.
 - A move order onto ground your units cannot walk to goes through the tunnels. Up a cliff, across water with no bridge, the plateaus of the GLA campaign: with a tunnel on your side and one on theirs, the selection goes down and comes up there, where it used to walk to the foot of the cliff and stop, and you had to put them in the tunnel and empty it on the far side by hand. The tunnels picked are the nearest ones your units can actually walk to and from, so nobody comes up on an island next to where you sent them and stands there, and a tunnel across a river no longer counts as the way in for units on this bank. Four Rebels sent into a walled-off hollow on Dark Night, 700 short of it and 900 from the tunnel behind them, came up in it 49 seconds later. Replays recorded before this change play out differently.
 - Units sent through the tunnels come up at the one nearest where you sent them, even while the enemy is shooting at it. A tunnel hit in the last two seconds used to be passed over, and a Sneak Attack in an enemy base is hit for as long as it stands, so a player in a 7 against 1 match watched his army surface at a quiet tunnel across the map, or at home, and walk to the fight in one long line in front of the enemy. Thirty Rebels and five Scorpions attack-moving into a base whose Rangers were shooting the Sneak Attack beside it all came up at a tunnel 300 short of it and walked; now all 35 come up at the Sneak Attack, the Rebels reach the fight in 4.7 seconds on average where they took 11.8, and the last of them in 6.3 where he took 14.8. Replays recorded before this change play out differently.
 
+## Cold Fusion Reactor control rods
+
+- The Cold Fusion Reactor no longer glows before its control rods are installed. The glow appears while the rods extend and stays visible after the upgrade, even at full zoom-out with rebuilt models. This also applies to damaged reactors and the Superweapon General's reactor.
+
 ## The power bar tells the truth
 
 - An EMP on an upgraded plant no longer takes the upgrade off your grid twice.

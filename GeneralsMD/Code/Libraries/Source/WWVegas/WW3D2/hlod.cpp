@@ -1267,6 +1267,7 @@ HLodClass & HLodClass::operator = (const HLodClass & that)
 		for (lod=0; lod<LodCount;lod++) {
 			Lod[lod].Resize(that.Lod[lod].Count());
 			Lod[lod].MaxScreenSize = that.Lod[lod].MaxScreenSize;
+			Lod[lod].RequiredBoneLodOffset = that.Lod[lod].RequiredBoneLodOffset;
 
 			for (model = 0; model < that.Lod[lod].Count(); model++) {
 				
@@ -1629,6 +1630,27 @@ float HLodClass::Get_Max_Screen_Size(int lod_index) const
 	
 	// Return the LOD's screen size to the caller
 	return size;
+}
+
+void HLodClass::Set_Required_LOD_Bone(int bone)
+{
+	// Additional models draw at every level.
+	for (int i = 0; bone && i < AdditionalModels.Count(); ++i) {
+		if (AdditionalModels[i].BoneIndex == bone)
+			bone = 0;
+	}
+
+	int nearestWithBone = -1;
+	for (int lod = LodCount - 1; lod >= 0; --lod) {
+		for (int i = 0; bone && i < Lod[lod].Count(); ++i) {
+			if (Lod[lod][i].BoneIndex == bone) {
+				nearestWithBone = lod;
+				break;
+			}
+		}
+		// Keep the authored level if no finer level contains the part.
+		Lod[lod].RequiredBoneLodOffset = nearestWithBone < 0 ? 0 : nearestWithBone - lod;
+	}
 }
 
 

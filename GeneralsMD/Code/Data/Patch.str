@@ -4794,6 +4794,18 @@ GUI:OnlineLoginBanned
 "This account is banned."
 END
 
+GUI:OnlineLoginBannedReason
+"This account is banned: %ls"
+END
+
+GUI:OnlineLoginBannedUntil
+"This account is banned until %ls."
+END
+
+GUI:OnlineLoginBannedUntilReason
+"This account is banned until %ls: %ls"
+END
+
 GUI:OnlineMaintenance
 "Online play is down for maintenance. Try again later."
 END

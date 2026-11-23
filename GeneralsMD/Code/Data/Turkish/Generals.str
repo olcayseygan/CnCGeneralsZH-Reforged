@@ -10765,6 +10765,18 @@ GUI:OnlineLoginBanned
 "Bu hesap yasaklı."
 END
 
+GUI:OnlineLoginBannedReason
+"Bu hesap yasaklı: %ls"
+END
+
+GUI:OnlineLoginBannedUntil
+"Bu hesap %ls tarihine kadar yasaklı."
+END
+
+GUI:OnlineLoginBannedUntilReason
+"Bu hesap %ls tarihine kadar yasaklı: %ls"
+END
+
 GUI:OnlineMaintenance
 "Çevrimiçi oyun bakımda. Sonra yeniden dene."
 END

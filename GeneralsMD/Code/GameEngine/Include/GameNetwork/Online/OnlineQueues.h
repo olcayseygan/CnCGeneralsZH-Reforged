@@ -94,8 +94,9 @@ Bool OnlineGetCounts( Int &players, Int &games, Int &queue );
 Bool OnlineGetServerInfo( AsciiString &name, AsciiString &city, Int &pingMs );
 /* The code of the last login the server refused (auth.fail: badlogin, throttled, expired...), and its
 	 retry in seconds, 0 when it gave none.  Empty when the last login never reached a refusal (the
-	 connection failed), and cleared by the next login.  `file` gets the install file a "files" refusal names. */
-AsciiString OnlineGetLoginFailure( Int *retrySeconds, AsciiString *file = NULL, AsciiString *until = NULL );
+	 connection failed), and cleared by the next login.  `file` gets the install file a "files" refusal names,
+	 `until` a maintenance or ban end as UTC text, `reason` a ban's reason. */
+AsciiString OnlineGetLoginFailure( Int *retrySeconds, AsciiString *file = NULL, AsciiString *until = NULL, AsciiString *reason = NULL );
 
 /* The server's notice (notice{kind,en,tr,until}, after the welcome and whenever it changes), shown as a
 	 banner across the top of every screen.  en and tr are UTF-8 and until is as the server wrote it, usually

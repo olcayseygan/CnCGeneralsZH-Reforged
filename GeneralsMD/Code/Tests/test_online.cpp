@@ -866,6 +866,38 @@ TEST(online_adapter_login_refusal_and_no_register)
 	CHECK_EQ( retry, 42 );
 }
 
+/* A banned login: the site's reason and the ban's end (Unix ms, kept as UTC text for OnlineUntilText), each
+	 absent for an indefinite ban; a maintenance notice's until is not a ban's end, and a new login forgets both. */
+TEST(online_adapter_login_banned_reason_and_until)
+{
+	AdapterRig rig;
+	AsciiString until, reason;
+	BuddyRequest req;
+	memset( &req, 0, sizeof(req) );
+	req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
+	strcpy( req.arg.login.email, "tank@example.com" );
+	strcpy( req.arg.login.password, "secret" );
+
+	rig.buddy->addRequest( req );
+	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"banned\",\"reason\":\"map hack\",\"until\":1709208000000}" );
+	CHECK_STR( OnlineGetLoginFailure( NULL, NULL, &until, &reason ).str(), "banned" );
+	CHECK_STR( until.str(), "2024-02-29T12:00:00Z" );
+	CHECK_EQ( OnlineParseUtc( until.str() ), 1709208000ll );
+	CHECK_STR( reason.str(), "map hack" );
+	rig.peerResponses();
+
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"maintenance\",\"en\":\"\",\"tr\":\"\",\"until\":\"2026-11-18T23:00:00Z\"}" );
+	rig.buddy->addRequest( req );
+	OnlineGetLoginFailure( NULL, NULL, &until, &reason );
+	CHECK( until.isEmpty() );		// the next login forgot the last refusal
+	CHECK( reason.isEmpty() );
+	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"banned\"}" );		// indefinite, no reason
+	CHECK_STR( OnlineGetLoginFailure( NULL, NULL, &until, &reason ).str(), "banned" );
+	CHECK( until.isEmpty() );
+	CHECK( reason.isEmpty() );
+	rig.peerResponses();
+}
+
 TEST(online_adapter_room_and_chat)
 {
 	AdapterRig rig;

@@ -183,7 +183,8 @@ struct OnlineSession
 	Bool pingRefused;				///< the server does not know ping (error{for:ping,code:unknown}): no more this connection
 	std::string failCode;		///< the last auth.fail's code, cleared by the next requestAuth: OnlineGetLoginFailure
 	Int failRetry;					///< its retry, in seconds; 0 when it gave none
-	std::string failUntil;	///< its until (auth.fail{code:maintenance}), as the server wrote it
+	std::string failUntil;	///< its until: maintenance's as the server wrote it, banned's Unix ms as UTC text
+	std::string failReason;	///< its reason (auth.fail{code:banned}), empty when the site gave none
 	// the server's notice{kind,en,tr,until}: OnlineGetNotice.  Belongs to the connection: an empty one or a
 	// sign-out (connectionGone) clears it
 	std::string noticeKind, noticeEn, noticeTr, noticeUntil;

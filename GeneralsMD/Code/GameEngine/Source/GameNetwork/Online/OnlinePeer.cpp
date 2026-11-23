@@ -282,6 +282,7 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	failCode.clear();
 	failFile.clear();
 	failUntil.clear();
+	failReason.clear();
 	failRetry = 0;
 	status = lines ? ONLINE_WELCOMED : ONLINE_OFF;
 }
@@ -368,6 +369,7 @@ void OnlineSession::requestAuth( const OnlineMessage &line )
 	failCode.clear();
 	failFile.clear();
 	failUntil.clear();
+	failReason.clear();
 	failRetry = 0;
 	pendingAuth = m;
 	hasPendingAuth = TRUE;
@@ -877,8 +879,20 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		failCode = code;
 		failFile = m.getString( "file" );		// code files: the install file that is not the release's
 		failUntil = m.getString( "until" );	// code maintenance: when the service should be back, else the notice's
-		if (failUntil.empty())
+		const OnlineValue *untilValue = m.find( "until" );
+		if (untilValue && untilValue->kind == OnlineValue::NUMBER)
+		{
+			// code banned: the ban's end in Unix ms, kept as UTC text so OnlineUntilText words it; none is indefinite
+			const time_t end = (time_t)(m.getInt( "until" ) / 1000);
+			const struct tm *utc = end > 0 ? gmtime( &end ) : NULL;
+			char iso[32] = "";
+			if (utc)
+				strftime( iso, sizeof(iso), "%Y-%m-%dT%H:%M:%SZ", utc );
+			failUntil = iso;
+		}
+		else if (failUntil.empty() && code == "maintenance")
 			failUntil = noticeUntil;
+		failReason = m.getString( "reason" );		// code banned: the site's words, empty when it gave none
 		failRetry = (Int)m.getInt( "retry" );
 		Bool wasIn = authed;
 		forgetAccount();
@@ -2152,9 +2166,11 @@ Bool OnlineGetQuickMatchChanceWindow( Real &chanceLo, Real &chanceHi, Int &nextM
 	return s.qmWindow.has( "lo" ) && s.qmWindow.has( "hi" );
 }
 
-AsciiString OnlineGetLoginFailure( Int *retrySeconds, AsciiString *file, AsciiString *until )
+AsciiString OnlineGetLoginFailure( Int *retrySeconds, AsciiString *file, AsciiString *until, AsciiString *reason )
 {
 	const OnlineSession &s = OnlineSession::get();
+	if (reason)
+		*reason = s.failReason.c_str();
 	if (retrySeconds)
 		*retrySeconds = s.failRetry > 0 ? s.failRetry : 0;
 	if (file)

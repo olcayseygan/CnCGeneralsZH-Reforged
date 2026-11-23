@@ -1129,14 +1129,37 @@ static void onlineLoginError( const UnicodeString &text )
 	GSMessageBoxOk( TheGameText->fetch( "GUI:OnlineLoginFailed" ), text, focusPassword );
 }
 
+/* A ban's line: its end and the site's reason, each left out when the refusal had none (no end is an
+	 indefinite ban).  A format string missing from the language falls back to the plain line. */
+static UnicodeString onlineBannedText( const AsciiString &until, const AsciiString &reason )
+{
+	const UnicodeString when = OnlineUntilText( until );
+	const UnicodeString why( MultiByteToWideCharSingleLine( reason.str() ).c_str() );		// the site's UTF-8, on one line
+	const char *key = when.isEmpty()
+		? (why.isEmpty() ? NULL : "GUI:OnlineLoginBannedReason")
+		: (why.isEmpty() ? "GUI:OnlineLoginBannedUntil" : "GUI:OnlineLoginBannedUntilReason");
+	Bool exists = FALSE;
+	const UnicodeString format = key ? TheGameText->fetch( key, &exists ) : UnicodeString::TheEmptyString;
+	if (!exists)
+		return TheGameText->fetch( "GUI:OnlineLoginBanned" );
+	UnicodeString text;
+	if (when.isEmpty())
+		text.format( format, why.str() );
+	else if (why.isEmpty())
+		text.format( format, when.str() );
+	else
+		text.format( format, when.str(), why.str() );
+	return text;
+}
+
 /* A refused or failed sign-in: the server's code worded honestly (a wrong password and an unknown login
 	 read the same), EA's disconnect text when no refusal arrived.  The password is cleared and focused for
 	 the next try; a token the server no longer takes is forgotten. */
 static void onlineLoginFailed( Int reason )
 {
 	Int retry = 0;
-	AsciiString file, until;
-	const AsciiString code = OnlineGetLoginFailure( &retry, &file, &until );
+	AsciiString file, until, banReason;
+	const AsciiString code = OnlineGetLoginFailure( &retry, &file, &until, &banReason );
 	UnicodeString text;
 	if (code == "maintenance")
 		text = OnlineMaintenanceText( until );
@@ -1159,7 +1182,7 @@ static void onlineLoginFailed( Int reason )
 	else if (code == "expired")
 		text = TheGameText->fetch( "GUI:OnlineLoginExpired" );
 	else if (code == "banned")
-		text = TheGameText->fetch( "GUI:OnlineLoginBanned" );
+		text = onlineBannedText( until, banReason );
 	else if (code == "elsewhere")
 		text = TheGameText->fetch( "GUI:OnlineLoginElsewhere" );
 	else

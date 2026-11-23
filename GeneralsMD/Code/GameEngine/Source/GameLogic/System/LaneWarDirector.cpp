@@ -218,7 +218,7 @@ namespace
 		{ "ChinaTankECM",												2, FALSE },
 		{ "ChinaVehicleInfernoCannon",					2, FALSE },
 		{ "ChinaVehicleListeningOutpost",				2, FALSE },
-		{ "ChinaVehicleHelix",									2, FALSE },
+		{ "ChinaVehicleHelix",									3, FALSE },	// tier 2's dearest, so no tier has one unit (2026-11-23)
 		{ "ChinaInfantryHacker",								2, FALSE },
 		{ "ChinaJetMIG",												2, FALSE },
 		{ "ChinaTankOverlord",									3, FALSE },
@@ -237,13 +237,13 @@ namespace
 		{ "GLAVehicleCombatBikeTerrorist",			1, FALSE },
 		{ "GLATankScorpion",										1, FALSE },
 		{ "GLAVehicleQuadCannon",								1, FALSE },
-		{ "GLAVehicleToxinTruck",								1, FALSE },
-		{ "GLAInfantryAngryMobNexus",						2, FALSE },
+		{ "GLAVehicleToxinTruck",								2, FALSE },	// up from 1, and the two dearest of tier 2 to tier 3
+		{ "GLAInfantryAngryMobNexus",						2, FALSE },	// beside the Scud: 8, 5 and 3 (2026-11-23)
 		{ "GLAInfantryHijacker",								2, FALSE },
 		{ "GLATankMarauder",										2, FALSE },
 		{ "GLAVehicleRocketBuggy",							2, FALSE },
-		{ "GLAVehicleBombTruck",								2, FALSE },
-		{ "GLAVehicleBattleBus",								2, FALSE },
+		{ "GLAVehicleBombTruck",								3, FALSE },
+		{ "GLAVehicleBattleBus",								3, FALSE },
 		{ "GLAVehicleScudLauncher",							3, FALSE },
 		{ "GLAInfantryJarmenKell",							0, TRUE },
 	};

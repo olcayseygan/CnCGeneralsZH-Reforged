@@ -74,7 +74,7 @@ public:
 	Bool update( RenderObjClass *robj );
 
 private:
-	enum { MAX_BONES = 64, MAX_NEIGHBORS = 8, MAX_CONSTRAINTS = 192, MAX_OBSTACLES = 8 };
+	enum { MAX_BONES = 64, MAX_NEIGHBORS = 8, MAX_CONSTRAINTS = 192, MAX_OBSTACLES = 8, STOWED = -2 };
 
 	/** A vehicle or building near the body at death, as its template's geometry stood then. */
 	struct Obstacle
@@ -98,7 +98,12 @@ private:
 		Role role;
 		Int parent;
 		Int anchor;							///< ROLE_FOLLOW: the bone it rides on
-		Int carrier;						///< a bone of a long carried thing (the gun and what hangs off it): that thing's first bone, else -1
+		Int carrier;						///< a bone of a long carried thing (the gun and what hangs off it): that thing's first bone; STOWED for a thing put away; else -1
+		Int simParent;					///< ROLE_PARTICLE: the nearest particle above it, -1 for the body's first
+		Bool offAxis;						///< a carried bone well off its thing's length: hangs from it, kept out of the ground on its own
+		Bool trunk;							///< ROLE_PARTICLE: held stiff with the spine
+		Vector3 x0;							///< world position at the start
+		Real restLength;				///< world distance to its parent at the start
 		Matrix3D baseLocalInv;	///< the inverse of the HTree's base transform relative to the parent
 		Matrix3D followLocal;		///< ROLE_FOLLOW: its transform in the anchor's frame at the start
 		Matrix3x3 rot0;					///< world rotation at the start
@@ -120,7 +125,6 @@ private:
 	{
 		Int a, b;
 		Real minD, maxD;
-		Vector3 rest;		///< b minus a at the start, world space
 	};
 
 	W3DRagdoll();
@@ -137,8 +141,6 @@ private:
 	const char *m_name;				///< the template's, for the log
 	Int m_gun;								///< the first long carried thing's first bone, -1 when none; the log follows it
 	Real m_gunHandTilt;				///< degrees off level its length would be riding the hand, at the last pose
-	Real m_gunTilt;						///< degrees off level as drawn
-	Real m_gunLow;						///< its lowest bone over the ground
 	Int m_numBones;
 	Bone m_bone[ MAX_BONES ];
 	Int m_numConstraints;
@@ -146,6 +148,7 @@ private:
 	Int m_numObstacles;
 	Obstacle m_obstacle[ MAX_OBSTACLES ];
 	Int m_pushes;							///< particle pushes out of them, for the log
+	Quaternion m_trunkQ;			///< the trunk's turn since the start, as last put back in shape
 	Real m_lastPoseMs;				///< sync milliseconds from death to the last pose, for the log
 	Vector3 m_lastRoot;				///< the drawable's position last update, for the carry
 	UnsignedInt m_lastSync;

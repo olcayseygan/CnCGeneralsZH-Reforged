@@ -15,6 +15,20 @@ desync and show the check is looking.
     python net_check.py --each "-scenario netstance" --keys "KEY_A CTRL,KEY_H"   # the stance key, both ways
     python net_check.py --relay 8094 --each "-latAvg 90 -latNoise 30"           # through a local relay
     python net_check.py --copies 32 --map <a 32-spot map> --each "-headless"     # a full room, nothing drawn
+    python net_check.py --side 0 FactionAmerica --side 1 FactionGLA --ai 2      # named armies, two AI seats
+    python net_check.py --exe generals_base.exe --slot-exe 1 generals.exe       # copy 1 plays another exe
+    python net_check.py --wrap                            # one selection big enough to wrap, under 10% loss
+    python net_check.py --send 0 300 "key KEY_H" --send 0 330 "click 400 300" \
+                        --send 0 360 "press ControlBar.wnd:ButtonCommand03"     # a player's own click, by frame
+
+--side and --ai go to every copy alike (-side, -netai): AI seats sit after the copies, so the map needs
+a start spot for each, and an AI seat's side is --side <copies + n>.  --send hands one control command
+to one copy (or "all") once its logic frame reaches FRAME, whatever the command is: key H centres on
+the command center, a click at the window's middle then selects it, and press on a command bar button
+(ButtonCommand01 up, the selected object's command set in order) is the click a player makes, so an
+upgrade bought that way goes through the network as the player's own order.  --wrap plays the netwrap
+scenario (360 Rangers for seats 0 and 1), sends "select all" to every copy and counts the wrapper
+pieces each copy put back together.
 
 --relay starts `node relay/relay.js` on that UDP port, gives the copies 10.0.0.x slot addresses and
 -relay 127.0.0.1:port, and prints the relay's join and stats lines (one a minute) at the end.
@@ -51,6 +65,10 @@ with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "GameEn
 PROVE_FRAME = 10 * LOGIC_FPS
 PROVE_SPAWN = "spawn 0 AmericaVehicleHumvee 2 %s"
 QUIT_GRACE_SECONDS = 10.0
+WRAP_SCENARIO = "netwrap"  # Data/Scenarios/netwrap.txt: its spawns land on scenario frame 30, a second in
+WRAP_SELECT_FRAME = 5 * LOGIC_FPS
+WRAP_LOSS_PERCENT = 10
+CHUNK_LINE = "NetCommandWrapperListNode::copyChunkData() - copying chunk"  # one a wrapper piece received
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -78,7 +96,26 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--capped", action="store_true",
                         help="leave out -noFPSLimit, so each copy keeps its Options.ini FrameRateLimit "
                              "(give one with --slot-options); players run capped, and the cap's wait is time the network sits")
-    return parser.parse_args()
+    parser.add_argument("--exe", default=EXE_NAME, help="the exe every copy runs, in its game folder")
+    parser.add_argument("--slot-exe", nargs=2, action="append", default=[], metavar=("SLOT", "EXE"),
+                        help="one copy's exe, over --exe, repeatable")
+    parser.add_argument("--side", nargs=2, action="append", default=[], metavar=("SEAT", "FACTION"),
+                        help="-side for every copy: that seat's faction (FactionAmerica, FactionGLA, a general's), repeatable")
+    parser.add_argument("--ai", type=int, default=0, help="-netai for every copy: AI seats after the copies")
+    parser.add_argument("--send", nargs=3, action="append", default=[], metavar=("SLOT", "FRAME", "COMMAND"),
+                        help="send one control command to copy SLOT (or all) once it reaches logic frame FRAME, repeatable")
+    parser.add_argument("--wrap", action="store_true",
+                        help="the %s scenario, %d%% loss and a select all at frame %d: a selection order sent in wrapper pieces"
+                             % (WRAP_SCENARIO, WRAP_LOSS_PERCENT, WRAP_SELECT_FRAME))
+    arguments = parser.parse_args()
+    if arguments.wrap:
+        if "-scenario" in arguments.each:
+            raise SystemExit("--wrap plays its own -scenario; leave it out of --each")
+        arguments.send.append(("all", str(WRAP_SELECT_FRAME), "select all"))
+    for target, frame, _ in arguments.send:
+        if not frame.isdigit() or not (target == "all" or (target.isdigit() and int(target) < arguments.copies)):
+            raise SystemExit("--send wants a copy below %d (or all) and a frame, got %s %s" % (arguments.copies, target, frame))
+    return arguments
 
 
 def run_directory(arguments: argparse.Namespace, slot: int) -> str:
@@ -86,10 +123,17 @@ def run_directory(arguments: argparse.Namespace, slot: int) -> str:
     return os.path.abspath(folders[slot]) if slot in folders else RUN_DIRECTORY
 
 
+# options added after rejoin_check.py and the proof scripts began building their own Namespace for
+# command_line: a caller that does not name one gets the default parse_arguments gives it
+LATER_OPTIONS = {"exe": EXE_NAME, "slot_exe": [], "side": [], "ai": 0, "wrap": False, "send": []}
+
+
 def command_line(arguments: argparse.Namespace, slot: int) -> list:
+    arguments = argparse.Namespace(**dict(LATER_OPTIONS, **vars(arguments)))
     network = "10.0.0.%d" if arguments.relay else "127.0.0.%d"
     hosts = ",".join(network % (index + 1) for index in range(arguments.copies))
-    line = [os.path.join(run_directory(arguments, slot), EXE_NAME), "-multiInstance", "-quickstart", "-win",
+    exes = {int(target): name for target, name in arguments.slot_exe}
+    line = [os.path.join(run_directory(arguments, slot), exes.get(slot, arguments.exe)), "-multiInstance", "-quickstart", "-win",
             "-xres", "800", "-yres", "600", "-msaa", "0"] + ([] if arguments.capped else ["-noFPSLimit"]) + [
             "-netgame", hosts, "-netslot", str(slot), "-control", str(FIRST_CONTROL_PORT + slot),
             "-map", arguments.map, "-seed", str(arguments.seed),
@@ -98,6 +142,14 @@ def command_line(arguments: argparse.Namespace, slot: int) -> list:
         line += ["-teams", str(arguments.teams)]
     if arguments.relay:
         line += ["-relay", "127.0.0.1:%d" % arguments.relay]
+    if arguments.ai:
+        line += ["-netai", str(arguments.ai)]
+    for seat, faction in arguments.side:
+        line += ["-side", seat, faction]
+    if arguments.wrap:
+        line += ["-scenario", WRAP_SCENARIO]
+        if "-packetloss" not in arguments.each:
+            line += ["-packetloss", str(WRAP_LOSS_PERCENT)]
     line += shlex.split(arguments.each, posix=False)
     for target, switches in arguments.slot_args:
         if int(target) == slot:
@@ -130,11 +182,15 @@ def wait_for_match(games: list) -> None:
         time.sleep(1.0)
 
 
-def count_mismatches(log_path: str) -> int:
+def count_lines(log_path: str, text: str) -> int:
     if not os.path.exists(log_path):
         return -1
     with open(log_path, "r", errors="replace") as log:
-        return sum(MISMATCH_LINE in line for line in log)
+        return sum(text in line for line in log)
+
+
+def count_mismatches(log_path: str) -> int:
+    return count_lines(log_path, MISMATCH_LINE)
 
 
 def report_census(log_path: str) -> int:
@@ -159,6 +215,9 @@ def play(arguments: argparse.Namespace, games: list) -> list:
     proved = False
     press = 0
     presses = arguments.keys.split(",")
+    # (copy, frame, command) still to go; "all" is one per copy
+    sends = [(slot, int(frame), command) for target, frame, command in arguments.send
+             for slot in (range(len(games)) if target == "all" else [int(target)])]
     try:
         while min(frames) < arguments.frames:
             for game in games:
@@ -167,6 +226,9 @@ def play(arguments: argparse.Namespace, games: list) -> list:
             if arguments.prove and not proved and frames[0] >= PROVE_FRAME:
                 games[0].send(PROVE_SPAWN % arguments.prove_at)
                 proved = True
+            for due in [entry for entry in sends if frames[entry[0]] >= entry[1]]:
+                sends.remove(due)
+                print("NET CHECK slot %d frame %d: %s -> %s" % (due[0], frames[due[0]], due[2], games[due[0]].send(due[2])))
             time.sleep(PRESS_INTERVAL_SECONDS)
             frames = [game.status()["frame"] for game in games]
     except (OSError, ControlError):
@@ -230,18 +292,28 @@ def main() -> int:
 
     total = 0
     reads = 0
+    unwrapped = []  # --wrap: copies that put no wrapped command together, though seat 0 or 1 sent them one
     for slot, (first, last, seconds) in enumerate(results):
         log_path = os.path.join(run_directory(arguments, slot), "%s%d_DebugLogFile.txt" % (arguments.tag, slot))
         mismatches = count_mismatches(log_path)
         total += max(mismatches, 0)
         print("NET CHECK slot %d: frame %d, %.1f logic fps, %s mismatches, %s"
               % (slot, last, (last - first) / seconds, "no log" if mismatches < 0 else mismatches, log_path))
+        if arguments.wrap:
+            # copyChunkData logs a piece the first time only: a resent duplicate is not counted
+            pieces = max(count_lines(log_path, CHUNK_LINE), 0)
+            print("  %d new wrapper pieces received" % pieces)
+            if pieces == 0:
+                unwrapped.append(slot)
         reads += report_census(log_path)
     if arguments.prove:
         print("NET CHECK: detector %s" % ("fired" if total else "DID NOT FIRE"))
         return 0 if total else 1
+    if unwrapped:
+        print("NET CHECK: --wrap sent no wrapped command to slot(s) %s, so the big-command path was not tested there"
+              % ", ".join(map(str, unwrapped)))
     print("NET CHECK: %s, %d census or window counts not 0" % ("agreed" if total == 0 else "DESYNC", reads))
-    return 0 if total == 0 and reads == 0 else 1
+    return 0 if total == 0 and reads == 0 and not unwrapped else 1
 
 
 if __name__ == "__main__":

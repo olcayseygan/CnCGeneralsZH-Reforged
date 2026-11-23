@@ -1,0 +1,17 @@
+# A selection too big for one packet, across a network match.  Every copy of a -netgame match plays
+# the same file on the same frame, so seats 0 and 1 each get 720 Rangers beside their base; net_check.py
+# --wrap then sends "select all" to every copy, and it goes out in wrapper pieces under 10% loss.
+#
+# Why 720 and not 360: select all is two presses, the screen and then the rest of the map, and each
+# press sends a MSG_CREATE_SELECTED_GROUP with only the units it newly selected (InGameUI::
+# selectAllUnitsByTypeAcrossRegion), so 360 split by that seat's camera into two groups that could both
+# fit one packet.  At 720 the larger of the two holds at least 360, which wrapped in the 2-copy run.
+# The receiver logs one "copying chunk" line a new piece; net_check prints the count.
+#
+#   python net_check.py --wrap --tag netwrap
+#
+# Pass: every copy put a wrapped command together (seat 0 hears seat 1's, every other copy both) and
+# the run ends "agreed", 0 mismatches.
+
+30    spawn   0  AmericaInfantryRanger   720  start0:250:0   12
+30    spawn   1  AmericaInfantryRanger   720  start1:250:0   12

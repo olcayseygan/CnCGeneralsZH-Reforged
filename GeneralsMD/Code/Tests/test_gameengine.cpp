@@ -13431,13 +13431,51 @@ TEST(lane_war_plot_front_faces_the_lane_and_leads_the_wave)
 	CHECK_NEAR( leftA, -leftB, 0.01f );
 }
 
-TEST(lane_war_times_are_wall_seconds_in_logic_frames)
+TEST(lane_war_damage_scales_reach_only_their_targets)
 {
-	// wall time, so the logic rate and never the game speed: a tick every 45 s, the first at 90 s, a
-	// copy living 130 s, at any speed
-	CHECK_EQ( LANEWAR_TICK_FRAMES, (UnsignedInt)( 45 * LOGICFRAMES_PER_SECOND ) );
-	CHECK_EQ( LANEWAR_FIRST_TICK_FRAMES, (UnsignedInt)( 90 * LOGICFRAMES_PER_SECOND ) );
-	CHECK_EQ( LANEWAR_LIFESPAN_FRAMES, (UnsignedInt)( 130 * LOGICFRAMES_PER_SECOND ) );
+	// the artillery at 60 against units, men included, and full against a structure
+	CHECK_EQ( LaneWar_damagePercent( "ChinaVehicleNukeLauncher", FALSE, FALSE ), 60 );
+	CHECK_EQ( LaneWar_damagePercent( "ChinaVehicleNukeLauncher", TRUE, FALSE ), 100 );
+	CHECK_EQ( LaneWar_damagePercent( "Nuke_ChinaVehicleNukeLauncher", FALSE, FALSE ), 60 );
+	CHECK_EQ( LaneWar_damagePercent( "GLAVehicleScudLauncher", FALSE, TRUE ), 60 );
+	CHECK_EQ( LaneWar_damagePercent( "AmericaVehicleTomahawk", TRUE, FALSE ), 100 );
+	// the Aurora at 75 against structures only, a general's copy too
+	CHECK_EQ( LaneWar_damagePercent( "AirF_AmericaJetAurora", TRUE, FALSE ), 75 );
+	CHECK_EQ( LaneWar_damagePercent( "AmericaJetAurora", FALSE, FALSE ), 100 );
+	// the Pathfinder at 45 against infantry only
+	CHECK_EQ( LaneWar_damagePercent( "AmericaInfantryPathfinder", FALSE, TRUE ), 45 );
+	CHECK_EQ( LaneWar_damagePercent( "AmericaInfantryPathfinder", FALSE, FALSE ), 100 );
+	// nothing else, and no name that merely ends the same way
+	CHECK_EQ( LaneWar_damagePercent( "AmericaInfantryRanger", FALSE, TRUE ), 100 );
+	CHECK_EQ( LaneWar_damagePercent( "XAmericaJetAurora", TRUE, FALSE ), 100 );
+
+	CHECK( LaneWar_hasModeWeaponSet( "AmericaTankMicrowave" ) );
+	CHECK( LaneWar_hasModeWeaponSet( "SupW_AmericaTankMicrowave" ) );
+	// Black Lotus's gun is on her LaneWar_ copy, never a set on her own template
+	CHECK( !LaneWar_hasModeWeaponSet( "ChinaInfantryBlackLotus" ) );
+	CHECK( !LaneWar_hasModeWeaponSet( "ChinaTankECM" ) );
+}
+
+TEST(lane_war_times_are_the_same_match_at_every_speed)
+{
+	// game time: at the native 1.5x a tick every 45 wall s, the first at 90 s, a copy living 130 s, as
+	// tuned; at another speed the same share of the match, so the frames scale against the speed
+	// the frames at today's 30 Hz; 45 s at 2.0x is 1012.5, rounded up
+	const struct { Int percent; UnsignedInt tick, first, life; } SPEEDS[] =
+	{
+		{ 150, 1350, 2700, 3900 },
+		{ 100, 2025, 4050, 5850 },
+		{ 125, 1620, 3240, 4680 },
+		{ 200, 1013, 2025, 2925 },
+	};
+	for( Int i = 0; LOGICFRAMES_PER_SECOND == 30 && i < (Int)( sizeof( SPEEDS ) / sizeof( SPEEDS[ 0 ] ) ); ++i )
+	{
+		GameSpeed_set( SPEEDS[ i ].percent );
+		CHECK_EQ( LANEWAR_TICK_FRAMES, SPEEDS[ i ].tick );
+		CHECK_EQ( LANEWAR_FIRST_TICK_FRAMES, SPEEDS[ i ].first );
+		CHECK_EQ( LANEWAR_LIFESPAN_FRAMES, SPEEDS[ i ].life );
+	}
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
 
 	// a plot unit's status bit has a name, so a save writes it and an INI can read it
 	CHECK_EQ( ObjectStatusMaskType::getSingleBitFromName( "UNATTACKABLE" ), (Int)OBJECT_STATUS_UNATTACKABLE );

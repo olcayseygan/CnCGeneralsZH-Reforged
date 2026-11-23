@@ -1,0 +1,35 @@
+# Direct Strike proof of the mode's damage scales (2026-11-23), as a before and after: run this file on
+# the exe before the change and after it. Staged units outside the director, out of both towers' reach:
+# a Nuke Cannon of China against four Crusaders in the lane's middle, a Pathfinder against four Red
+# Guards beside them, then a second Nuke Cannon against team A's Watch Tower.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 2600 -scenario lanewar_scales -logPrefix lanewar_scales_
+#
+# Passes on: the Crusaders' health lost to the Nuke Cannon (tallies 30 to 600) about 60 percent of
+# what it was before; the Red Guards: before, every Pathfinder shot a kill (KILLXP killer=
+# AmericaInfantryPathfinder two seconds apart), after, two shots a kill; team A's tower losing the same
+# to a shell before and after. On this map (rmg_v22_3_6p_642c_lane) the middle is x 3210, team A's tower
+# 2544,1805 and team B's 3876,1805, each reaching 225.
+
+30    spawn   0  AmericaTankCrusader       4  3000  1805  30
+30    spawn   1  ChinaVehicleNukeLauncher  1  3260  1805
+60    attack  1  ChinaVehicleNukeLauncher  0  AmericaTankCrusader
+40    tally   0  AmericaTankCrusader
+300   tally   0  AmericaTankCrusader
+600   tally   0  AmericaTankCrusader
+900   tally   0  AmericaTankCrusader
+900   spawn   0  AmericaInfantryPathfinder 1  2960  1560
+900   spawn   1  ChinaInfantryRedguard     4  3220  1560  15
+930   attack  0  AmericaInfantryPathfinder 1  ChinaInfantryRedguard
+960   tally   1  ChinaInfantryRedguard
+1020  tally   1  ChinaInfantryRedguard
+1080  tally   1  ChinaInfantryRedguard
+1140  tally   1  ChinaInfantryRedguard
+1260  tally   1  ChinaInfantryRedguard
+1800  spawn   1  ChinaVehicleNukeLauncher  1  2844  1805
+1830  attack  1  ChinaVehicleNukeLauncher  0  LaneWarWatchTower
+1810  tally   0  LaneWarWatchTower
+2400  tally   0  LaneWarWatchTower
+3000  tally   0  LaneWarWatchTower

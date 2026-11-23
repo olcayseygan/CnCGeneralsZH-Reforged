@@ -52,6 +52,7 @@
 #include "GameLogic/Armor.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/LaneWarStats.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Damage.h"
@@ -578,6 +579,16 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 			// Apply the damage scalar (extra bonuses -- like strategy center defensive battle plan)
 			// And remember not to adjust unresistable damage, just like the armor code can't.
 			amount *= m_damageScalar;
+		}
+
+		// Direct Strike's scales on a few of EA's guns, in a lane match only (LaneWar_damagePercent); a hit
+		// at 100 percent keeps its float path untouched
+		if( damager != NULL && TheLaneWarDirector != NULL && TheLaneWarDirector->isActive() )
+		{
+			const Int percent = LaneWar_damagePercent( damager->getTemplate()->getName().str(),
+				obj->isKindOf( KINDOF_STRUCTURE ), obj->isKindOf( KINDOF_INFANTRY ) );
+			if( percent != 100 )
+				amount = amount * (Real)percent / 100.0f;
 		}
 
 		// one hit kill: anything that got through the armour at all takes the whole bar

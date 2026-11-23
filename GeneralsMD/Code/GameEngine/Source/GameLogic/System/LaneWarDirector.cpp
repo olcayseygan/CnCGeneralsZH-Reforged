@@ -415,8 +415,11 @@ Int LaneWar_roster( const Player *player, LaneWarRosterItem *out, Int maxItems )
 	return count;
 }
 
+static const ThingTemplate *plotTemplateOf( const ThingTemplate *tmpl );
+
 Bool LaneWar_isHero( const Player *player, const ThingTemplate *tmpl )
 {
+	tmpl = plotTemplateOf( tmpl );	// a wave copy made from the unit's Direct Strike copy is still him
 	LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
 	const Int count = LaneWar_roster( player, roster, LANEWAR_ROSTER_MAX );
 	for( Int i = 0; i < count; ++i )
@@ -446,6 +449,76 @@ Int LaneWar_upgrades( const Player *player, const UpgradeTemplate **out, Int max
 			out[ count++ ] = upgrade;
 	}
 	return count;
+}
+
+//-------------------------------------------------------------------------------------------------
+/// the name is the base side's template or a general's own copy of it ("<tag>_<base>")
+static Bool namedAs( const char *name, const char *base )
+{
+	const size_t length = strlen( name ), baseLength = strlen( base );
+	if( length == baseLength )
+		return strcmp( name, base ) == 0;
+	return length > baseLength && name[ length - baseLength - 1 ] == '_' && strcmp( name + length - baseLength, base ) == 0;
+}
+
+namespace
+{
+	/// LaneWar_damagePercent's table: what the gun does to a unit, a structure and a man, in percent (2026-11-23)
+	struct DamageScale
+	{
+		const char *name;
+		Int units, structures, infantry;
+	};
+	const DamageScale DAMAGE_SCALES[] =
+	{
+		{ "AmericaVehicleTomahawk",			60, 100, 60 },
+		{ "ChinaVehicleNukeLauncher",		60, 100, 60 },
+		{ "GLAVehicleScudLauncher",			60, 100, 60 },
+		{ "AmericaJetAurora",						100, 75, 100 },
+		{ "AmericaInfantryPathfinder",	100, 100, 45 },
+	};
+
+	/// the units whose wave copies switch to their WEAPONSET_PLAYER_UPGRADE set, FixesReforged.ini's Lane War part
+	const char *const MODE_WEAPON_SETS[] = { "AmericaTankMicrowave" };
+
+	/// a Direct Strike copy of a unit is named "LaneWar_<its name>" (FixesReforged.ini: Black Lotus with a gun)
+	const char MODE_COPY_PREFIX[] = "LaneWar_";
+}
+
+/// the template a wave copy of a plot unit of this template is made from: its Direct Strike copy where
+/// FixesReforged.ini has one, else itself
+static const ThingTemplate *waveTemplateOf( const ThingTemplate *tmpl )
+{
+	AsciiString name;
+	name.format( "%s%s", MODE_COPY_PREFIX, tmpl->getName().str() );
+	const ThingTemplate *mode = TheThingFactory->findTemplate( name, FALSE );
+	return mode != NULL ? mode : tmpl;
+}
+
+/// the other way: the plot's template a wave copy's template stands for, so the roster, the hero rule and
+/// the players' ability switches know a Direct Strike copy as the unit it copies
+static const ThingTemplate *plotTemplateOf( const ThingTemplate *tmpl )
+{
+	const ThingTemplate *from = tmpl != NULL ? tmpl->friend_getReskinnedFrom() : NULL;
+	if( from != NULL && strncmp( tmpl->getName().str(), MODE_COPY_PREFIX, sizeof( MODE_COPY_PREFIX ) - 1 ) == 0 )
+		return from;
+	return tmpl;
+}
+
+Int LaneWar_damagePercent( const char *damager, Bool victimStructure, Bool victimInfantry )
+{
+	for( Int i = 0; i < (Int)( sizeof( DAMAGE_SCALES ) / sizeof( DAMAGE_SCALES[ 0 ] ) ); ++i )
+		if( namedAs( damager, DAMAGE_SCALES[ i ].name ) )
+			return victimStructure ? DAMAGE_SCALES[ i ].structures : victimInfantry ? DAMAGE_SCALES[ i ].infantry : DAMAGE_SCALES[ i ].units;
+	return 100;
+}
+
+Bool LaneWar_hasModeWeaponSet( const char *name )
+{
+	for( Int i = 0; i < (Int)( sizeof( MODE_WEAPON_SETS ) / sizeof( MODE_WEAPON_SETS[ 0 ] ) ); ++i )
+		if( namedAs( name, MODE_WEAPON_SETS[ i ] ) )
+			return TRUE;
+	return FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1820,7 +1893,7 @@ void LaneWarDirector::useAbilities( UnsignedInt now )
 		Object *victim = ai->getCurrentVictim();
 		if( victim != NULL && ( victim->isEffectivelyDead() || player->getRelationship( victim->getTeam() ) != ENEMIES ) )
 			victim = NULL;
-		const ThingTemplate *tmpl = obj->getTemplate();
+		const ThingTemplate *tmpl = plotTemplateOf( obj->getTemplate() );	// the switches are the plot unit's
 		Bool used = FALSE;
 		const std::vector<AIAbilityButton> buttons = AIAbility_buttonsOf( obj );
 		for( size_t b = 0; b < buttons.size() && !used; ++b )
@@ -2490,10 +2563,12 @@ void LaneWarDirector::tick( UnsignedInt now )
 	  masters, and how many of each have fired.  Counted mid-fight, since a wave rarely lives to the next tick. */
 void LaneWarDirector::logCargo( UnsignedInt now ) const
 {
-	Int riding = 0, fired = 0;
+	Int riding = 0, fired = 0, subdued = 0;
 	for( size_t i = 0; i < m_copies.size(); ++i )
 	{
 		Object *obj = TheGameLogic->findObjectByID( m_copies[ i ].id );
+		if( obj != NULL && !obj->isEffectivelyDead() && obj->isDisabledByType( DISABLED_SUBDUED ) )
+			++subdued;
 		if( obj == NULL || obj->isEffectivelyDead() || !obj->isContained() )
 			continue;
 		++riding;
@@ -2532,6 +2607,9 @@ void LaneWarDirector::logCargo( UnsignedInt now ) const
 	if( riding > 0 || drones > 0 )
 		DEBUG_LOG(( "HEADLESS LANEWAR: frame %u: %d passengers out riding, %d of them have fired; %d drones out with their masters, %d of them have fired\n",
 								now, riding, fired, drones, dronesFired ));
+	// and the wave units a Microwave Tank or an ECM Tank holds stunned
+	if( subdued > 0 )
+		DEBUG_LOG(( "HEADLESS LANEWAR: frame %u: %d wave units subdued\n", now, subdued ));
 
 	// and a tower or fortress a Hacker has switched off
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
@@ -2543,6 +2621,8 @@ void LaneWarDirector::logCargo( UnsignedInt now ) const
 			if( obj != NULL && obj->isDisabledByType( DISABLED_HACKED ) )
 				DEBUG_LOG(( "HEADLESS LANEWAR: frame %u '%s' %d of team %s hacked off until frame %u\n", now, obj->getTemplate()->getName().str(),
 										(Int)obj->getID(), TEAM_NAME[ t ], obj->getDisabledUntil( DISABLED_HACKED ) ));
+			if( obj != NULL && obj->isDisabledByType( DISABLED_SUBDUED ) )
+				DEBUG_LOG(( "HEADLESS LANEWAR: frame %u '%s' %d of team %s subdued\n", now, obj->getTemplate()->getName().str(), (Int)obj->getID(), TEAM_NAME[ t ] ));
 		}
 	}
 }
@@ -2591,7 +2671,7 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 		pos.y += at.y - m_plotAnchor[ team ][ seat ].y;
 		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
 
-		Object *copy = TheThingFactory->newObject( original->getTemplate(), owner );
+		Object *copy = TheThingFactory->newObject( waveTemplateOf( original->getTemplate() ), owner );
 		if( copy == NULL )
 			continue;
 		copy->setOrientation( facing );
@@ -2608,6 +2688,14 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 			copy->getExperienceTracker()->setVeterancyLevel( (VeterancyLevel)u.veterancy, FALSE );
 			DEBUG_LOG(( "HEADLESS LANEWAR: frame %u '%s' %d goes out at rank %d\n", now, copy->getTemplate()->getName().str(),
 									(Int)copy->getID(), (Int)copy->getVeterancyLevel() ));
+		}
+		// the Microwave Tank's vehicle disabler: a set only the mode switches on (FixesReforged.ini); Black Lotus's
+		// gun came with her template above (waveTemplateOf)
+		if( LaneWar_hasModeWeaponSet( copy->getTemplate()->getName().str() ) )
+		{
+			copy->setWeaponSetFlag( WEAPONSET_PLAYER_UPGRADE );
+			DEBUG_LOG(( "LANEWAR JOB: frame %u '%s' %d goes out with its Direct Strike weapons\n", now, copy->getTemplate()->getName().str(),
+									(Int)copy->getID() ));
 		}
 		owner->setActive();
 		TheAI->pathfinder()->addObjectToPathfindMap( copy );

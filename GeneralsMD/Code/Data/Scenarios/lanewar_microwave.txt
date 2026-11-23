@@ -1,0 +1,20 @@
+# Direct Strike proof of the Microwave Tank's job (2026-11-23): two Microwave Tanks of the USA against
+# four Battlemasters of China, nothing else. The Microwave copies carry EA's vehicle disabler, the ECM
+# Tank's numbers, in the mode.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 9000 -scenario lanewar_microwave -logPrefix lanewar_microwave_
+#
+# Passes on "LANEWAR JOB: ... 'AmericaTankMicrowave' ..." on the waves, "HEADLESS LANEWAR: frame ...:
+# N wave units subdued" lines while the waves meet, and no "LaneWarWatchTower ... subdued" or
+# "LaneWarFortress ... subdued" line in the whole run.
+
+30    lanecash   0  5000
+30    lanetier   0  1 2
+60    laneplace  0  AmericaTankMicrowave      2 0
+60    laneplace  0  AmericaTankMicrowave      6 0
+30    laneplace  1  ChinaTankBattleMaster     0 0
+30    laneplace  1  ChinaTankBattleMaster     3 0
+30    laneplace  1  ChinaTankBattleMaster     6 0
+30    laneplace  1  ChinaTankBattleMaster     9 0

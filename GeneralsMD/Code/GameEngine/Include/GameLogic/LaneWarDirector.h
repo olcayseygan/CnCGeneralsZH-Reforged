@@ -261,6 +261,16 @@ extern Bool LaneWar_isHero( const Player *player, const ThingTemplate *tmpl );
 /// the player upgrades the player's side or general sells in Lane War, as LaneWar_roster resolves units
 extern Int LaneWar_upgrades( const Player *player, const UpgradeTemplate **out, Int maxItems );
 
+/** Direct Strike's own scale on a few of EA's guns, a percent of what the hit would do: the artillery
+	  (Tomahawk, Nuke Cannon, Scud Launcher) 60 against anything but a structure, so it still sieges at full
+	  strength; the Aurora 75 against structures; the Pathfinder 45 against infantry, two shots for a Red
+	  Guard.  `damager` is a template name, a general's own ("AirF_AmericaJetAurora") counting as the base
+	  one; 100 for everything else.  ActiveBody::attemptDamage applies it while the mode is on. */
+extern Int LaneWar_damagePercent( const char *damager, Bool victimStructure, Bool victimInfantry );
+
+/// the template is one of the units whose wave copies take the mode's own weapon set (the Microwave Tank)
+extern Bool LaneWar_hasModeWeaponSet( const char *name );
+
 //-------------------------------------------------------------------------------------------------
 class LaneWarDirector : public Snapshot
 {

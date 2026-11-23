@@ -1,0 +1,23 @@
+# Direct Strike proof that Black Lotus fires her Direct Strike gun (2026-11-23): China fields her alone,
+# the USA four Rangers, nothing else on either plot.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 6000 -scenario lanewar_lotus -logPrefix lanewar_lotus_
+#
+# Her wave copies are made from LaneWar_ChinaInfantryBlackLotus, her Direct Strike copy with the gun; the
+# retail Lotus has no weapon. Passes on KILLXP lines with killer=LaneWar_ChinaInfantryBlackLotus, or the
+# Rangers' tallied health falling while she is the only China unit near them, and on the hero rule
+# holding ("the hero held back: his last copy is still out" while one lives). Before the change she
+# kills nothing.
+
+30    laneplace  1  ChinaInfantryBlackLotus   6 0
+30    laneplace  0  AmericaInfantryRanger     0 0
+30    laneplace  0  AmericaInfantryRanger     2 0
+30    laneplace  0  AmericaInfantryRanger     4 0
+30    laneplace  0  AmericaInfantryRanger     6 0
+4500  tally   0  AmericaInfantryRanger
+5400  tally   0  AmericaInfantryRanger
+6300  tally   0  AmericaInfantryRanger
+7200  tally   0  AmericaInfantryRanger
+8100  tally   0  AmericaInfantryRanger

@@ -239,6 +239,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 ## Direct Strike towers and fortresses break where they are hit
 
 - The Watch Tower and the fortress come apart piece by piece. Each shell knocks out the chunks where it lands, as wide as its blast, and never a chunk whose loss would leave the rest hanging in the air. At zero health a tower stands half a second while the death blast clears, then falls away from whoever killed it, and the ruin stays where it landed, a piece left over a hole dropping onto the ground under it. A fall nobody was watching still lands and throws its dust on time, the mouse picks the structure by what is left of it, and a save keeps every hole and every ruin lying the way it fell.
+- The GLA Command Center no longer blinks out when it dies. Shells punch holes in its walls and dome as it takes damage and the holes close again as it is repaired. The killing blow, a nuke's included, drops it onto its own stumps in a heap of sand-coloured rubble that lies a while before it sinks away. The Lane War fortress and watch tower mend the same way.
 
 ## The computer stops paying for guns it has already seen
 

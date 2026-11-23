@@ -24888,7 +24888,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 44;		// 44: the rating on Elo  43: the loss map and the guns' hold  42: the rating  41: a strike route kept once struck  40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
+	XferVersion currentVersion = 45;		// 45: the dozer's search  44: the rating on Elo  43: the loss map and the guns' hold  42: the rating  41: a strike route kept once struck  40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -25531,6 +25531,56 @@ void AIPlayer::xfer( Xfer *xfer )
 	{
 		m_lossMap = AILossMap();
 		m_gunHoldSince = 0;
+	}
+
+	// the dozer's search half walked, or a loaded game starts it again from the spot and places the
+	// building frames later than the game it was saved from
+	if( version >= 45 )
+	{
+		AsciiString planName = m_buildSearchPlan ? m_buildSearchPlan->getName() : AsciiString::TheEmptyString;
+		xfer->xferAsciiString( &planName );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_buildSearchPlan = planName.isEmpty() ? NULL : TheThingFactory->findTemplate( planName, FALSE );
+		xfer->xferCoord3D( &m_buildProbePos );
+		xfer->xferInt( &m_buildSearchNext );
+		// the widest square any search covers; a count past it is a corrupt save, refused before it allocates
+		const UnsignedInt wideSeen = (UnsignedInt)( ( 2*SKIRMISH_BUILD_SEARCH_CELLS + 1 )*( 2*SKIRMISH_BUILD_SEARCH_CELLS + 1 ) );
+		const UnsignedInt narrowSeen = (UnsignedInt)( ( 2*BUILD_SEARCH_CELLS + 1 )*( 2*BUILD_SEARCH_CELLS + 1 ) );
+		UnsignedInt cells = (UnsignedInt)m_buildSearchCells.size();
+		xfer->xferUnsignedInt( &cells );
+		if( xfer->getXferMode() == XFER_LOAD )
+		{
+			if( cells > wideSeen )
+				throw XFER_INVALID_PARAMETERS;
+			m_buildSearchCells.resize( cells );
+		}
+		for( UnsignedInt c = 0; c < cells; ++c )
+			xfer->xferICoord2D( &m_buildSearchCells[ c ] );
+		UnsignedInt seen = (UnsignedInt)m_buildSearchSeen.size();
+		xfer->xferUnsignedInt( &seen );
+		if( xfer->getXferMode() == XFER_LOAD )
+		{
+			if( seen > wideSeen )
+				throw XFER_INVALID_PARAMETERS;
+			m_buildSearchSeen.resize( seen );
+		}
+		if( seen > 0 )
+			xfer->xferUser( &m_buildSearchSeen[ 0 ], seen );
+		// a plan the load cannot name, or a search whose square, queue and cursor do not agree, starts over
+		if( xfer->getXferMode() == XFER_LOAD &&
+				( m_buildSearchPlan == NULL || ( seen != wideSeen && seen != narrowSeen ) || cells > seen ||
+					m_buildSearchNext < 0 || m_buildSearchNext > (Int)cells ) )
+		{
+			m_buildSearchCells.clear();
+			m_buildSearchSeen.clear();
+			m_buildSearchNext = 0;
+			m_buildSearchPlan = NULL;
+		}
+	}
+	else if( xfer->getXferMode() == XFER_LOAD )
+	{
+		m_buildSearchCells.clear();
+		m_buildSearchPlan = NULL;
 	}
 
 }  // end xfer

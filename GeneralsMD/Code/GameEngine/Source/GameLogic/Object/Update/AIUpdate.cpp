@@ -93,7 +93,11 @@ AIUpdateModuleData::AIUpdateModuleData()
 	for (int i = 0; i < MAX_TURRETS; i++)
 		m_turretData[i] = NULL;
 	m_autoAcquireEnemiesWhenIdle = 0;
-	m_moodAttackCheckRate.setRaw( 2000 );
+	// EA's 2000 let an idle unit watch an enemy inside its reach for up to two game seconds, three on
+	// the first check with its random half-rate offset (amovefield's STATUE stops, TODO 68); the idle
+	// state sleeps no longer than this clock, so it alone sets the wait. Twice the idle scans for every
+	// unit whose INI names no rate; they run as the frame's mood search jobs.
+	m_moodAttackCheckRate.setRaw( 1000 );
 #ifdef ALLOW_SURRENDER
 	m_surrenderDuration.setRaw( 120000 );
 #endif
@@ -7451,6 +7455,7 @@ namespace
 		std::vector<Object *>	objects;
 		std::vector<Real>			distSqr;
 		SimpleObjectIterator	*iterator = NULL;
+		Int										reserved = 0;		///< clumps the iterator holds blocks for, filled on the logic thread
 	};
 
 	std::vector<MoodSearch>	s_moodSearches;
@@ -7546,6 +7551,7 @@ namespace
 			 them: every Object's armour for its armour flags now, and the AI's worth and armour tables and
 			 name keys for its template (AI_prewarmTargetTables); an aircraft's facing is filled in the walk
 			 above. A height above the ground is worked out in the job and not stored (Thing::CachePeek). */
+		Int objectCount = 0;
 		for( Object *o = TheGameLogic->getFirstObject(); o; o = o->getNextObject() )
 		{
 			DamageInfoInput probe;
@@ -7553,18 +7559,36 @@ namespace
 			probe.m_amount = 0.0f;
 			o->estimateDamage( probe );
 			AI_prewarmTargetTables( o );
+			++objectCount;
 		}
 		ThePartitionManager->prepareJobGathers();
+		/* A gather holds each object once and gives up past MOOD_SEARCH_CAPACITY, so no job's iterator
+			 fills past the smaller of the two. Its pool blocks are taken here, on the logic thread, by one
+			 throwaway fill that recycle() keeps as spares: a job then takes nothing from the pool (the
+			 iterator's blocks were the last allocations from a job in HEADLESS JOBS, TODO 190). */
+		const Int fill = min( objectCount, (Int)MOOD_SEARCH_CAPACITY );
 		const Int slots = min( JobSystem::workerCount() + 1, (Int)MOOD_SEARCH_SLOTS );
 		for( Int s = 0; s < slots; ++s )
 		{
-			if( (Int)s_moodSearchScratch[ s ].objects.size() < (Int)MOOD_SEARCH_CAPACITY )
+			MoodSearchScratch &scratch = s_moodSearchScratch[ s ];
+			if( (Int)scratch.objects.size() < (Int)MOOD_SEARCH_CAPACITY )
 			{
-				s_moodSearchScratch[ s ].objects.resize( MOOD_SEARCH_CAPACITY );
-				s_moodSearchScratch[ s ].distSqr.resize( MOOD_SEARCH_CAPACITY );
+				scratch.objects.resize( MOOD_SEARCH_CAPACITY );
+				scratch.distSqr.resize( MOOD_SEARCH_CAPACITY );
 			}
-			if( s_moodSearchScratch[ s ].iterator == NULL )
-				s_moodSearchScratch[ s ].iterator = newInstance( SimpleObjectIterator );
+			if( scratch.iterator == NULL )
+			{
+				scratch.iterator = newInstance( SimpleObjectIterator );
+				scratch.reserved = 0;
+			}
+			if( scratch.reserved < fill )
+			{
+				Object *any = TheGameLogic->getFirstObject();
+				for( Int i = 0; i < fill; ++i )
+					scratch.iterator->insert( any, 0.0f );
+				scratch.iterator->recycle();
+				scratch.reserved = fill;
+			}
 		}
 
 		JobSystem::parallel_for( (Int)s_moodSearches.size(), 1, moodSearchJob, NULL );
@@ -7596,6 +7620,7 @@ void AIUpdate_resetMoodSearches( void )
 			s_moodSearchScratch[ s ].iterator->deleteInstance();
 			s_moodSearchScratch[ s ].iterator = NULL;
 		}
+		s_moodSearchScratch[ s ].reserved = 0;
 	}
 }
 

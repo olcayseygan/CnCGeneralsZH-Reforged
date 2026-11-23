@@ -49,6 +49,7 @@
 #include "GameClient/Shell.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/MetaEvent.h"
+#include "GameClient/Mouse.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
@@ -1129,25 +1130,52 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
+	/* hover <x> <y>
+		 Puts the game's pointer at that screen pixel.  Mouse::createStreamMessages sends the position
+		 every frame and the window manager takes it as a real move, so a button lights up under it and
+		 stays lit until the real mouse moves.  The Windows pointer goes there too when the game has the
+		 focus; without it only the game's own idea of the pointer moves, which is all a window reads. */
+	if (strncmp( command.str(), "hover ", 6 ) == 0)
+	{
+		Int x = 0, y = 0;
+		if (sscanf( command.str() + 6, "%d %d", &x, &y ) != 2)
+		{
+			replyError( "hover wants two screen pixels, x then y" );
+			return;
+		}
+		if (TheMouse == NULL)
+		{
+			replyError( "no mouse to move" );
+			return;
+		}
+		if (!TheMouse->warpCursor( x, y ))
+			TheMouse->setPosition( x, y );
+		replyOk( "\"hovered\":true" );
+		return;
+	}
+
 	/* click <x> <y>, rclick <x> <y>
 		 A left (right) press and release at that screen pixel, carried the way Mouse.cpp carries a real
 		 one: the windows, the minimap among them, selection and orders all read the message's own
 		 position, so a click on a unit selects it and a right click on the radar orders there.  The
 		 cursor itself does not move.  Both halves carry time 0, which every click-or-drag test reads
-		 as a quick click. */
+		 as a quick click.  A trailing HOLD sends the press alone, so a button can be shot pressed; the
+		 next click lets it go. */
 	const Bool isRightClick = strncmp( command.str(), "rclick ", 7 ) == 0;
 	if (isRightClick || strncmp( command.str(), "click ", 6 ) == 0)
 	{
 		ICoord2D pixel;
-		if (sscanf( command.str() + (isRightClick ? 7 : 6), "%d %d", &pixel.x, &pixel.y ) != 2)
+		char hold[ 8 ] = "";
+		const Int read = sscanf( command.str() + (isRightClick ? 7 : 6), "%d %d %7s", &pixel.x, &pixel.y, hold );
+		if (read < 2 || (read == 3 && strcmp( hold, "HOLD" ) != 0))
 		{
-			replyError( "click and rclick want two screen pixels, x then y" );
+			replyError( "click and rclick want two screen pixels, x then y, and HOLD to keep the button down" );
 			return;
 		}
 		const GameMessage::Type left[] = { GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP };
 		const GameMessage::Type right[] = { GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN, GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP };
 		const GameMessage::Type *halves = isRightClick ? right : left;
-		for (Int half = 0; half < 2; ++half)
+		for (Int half = 0; half < (read == 3 ? 1 : 2); ++half)
 		{
 			GameMessage *msg = TheMessageStream->appendMessage( halves[ half ] );
 			msg->appendPixelArgument( pixel );

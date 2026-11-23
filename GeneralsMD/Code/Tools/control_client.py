@@ -15,8 +15,10 @@ and the client-side input that goes through the game's own message stream:
 
     key KEY_Q [ALT] [CTRL] [SHIFT] [HOLD|RELEASE]   one key; a modifier is pressed around it
     select all                                       every unit of yours (screen, then map)
-    click <x> <y>                                    left click at a screen pixel: selects, places
-    rclick <x> <y>                                   right click there: orders, rally point, minimap
+    hover <x> <y>                                    put the pointer there: buttons light up under it
+    click <x> <y> [HOLD]                             left click at a screen pixel: selects, places;
+                                                     HOLD keeps the button down until the next click
+    rclick <x> <y> [HOLD]                            right click there: orders, rally point, minimap
 
 No dependencies on purpose: this speaks enough of RFC 6455 to talk to one server on loopback, and
 anybody who wants to poke the game should not first have to install anything.

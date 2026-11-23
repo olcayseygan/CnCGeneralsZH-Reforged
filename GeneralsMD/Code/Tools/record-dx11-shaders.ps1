@@ -141,6 +141,21 @@ foreach ($look in @(
 	$runs += , @{ Name = "$($look.Name)-nopost"; Args = $staged + @("-dx11post", "off"); Minutes = $TimeoutMinutes; Frames = $lookFrames }
 	$runs += , @{ Name = "$($look.Name)-ultra"; Args = $staged; Minutes = $TimeoutMinutes; Ultra = $true; Frames = $lookFrames }
 }
+# Two scenes no seeded match reaches. The Direct Strike lane with a watch tower holed and felled (the fracture
+# draw has its own vertex format), and a battle under a million burning particles, which fills the Direct3D 11
+# particle ring past its cap so its evaluate shader is compiled and used.
+$runs += , @{ Name = "lanetower"; Minutes = $TimeoutMinutes; Frames = 9000
+	Args = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-observer", "-randommap", 3, "lane", "-autoskirmish", 2,
+		"-takeover", "-side", 0, "FactionAmerica", "-side", 1, "FactionChina", "-seed", 1, "-scenario", "piecetower") }
+$runs += , @{ Name = "lanetower-ultra"; Minutes = $TimeoutMinutes; Frames = 9000; Ultra = $true
+	Args = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-observer", "-randommap", 3, "lane", "-autoskirmish", 2,
+		"-takeover", "-side", 0, "FactionAmerica", "-side", 1, "FactionChina", "-seed", 1, "-scenario", "piecetower") }
+$ringArgs = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-noDynamicLOD", "-gpuparticles", "-particlecap", 2500,
+	"-map", "`"Maps\Twilight Flame\Twilight Flame.map`"", "-autoskirmish", 3, "-takeover", "-observer",
+	"-side", 0, "FactionAmerica", "-side", 1, "FactionChina", "-side", 2, "FactionGLA", "-seed", 7,
+	"-scenario", "gpu1m_battle", "-cinema", "gpu1m_battle")
+$runs += , @{ Name = "gpuring"; Minutes = $TimeoutMinutes; Frames = 3300; Args = $ringArgs }
+$runs += , @{ Name = "gpuring-ultra"; Minutes = $TimeoutMinutes; Frames = 3300; Ultra = $true; Args = $ringArgs }
 # The main menu's shell map, the first thing a player sees: the intro movies, then the menu, which runs until
 # it is killed.  The cache is written while the game runs, so the kill loses nothing.
 $runs += , @{ Name = "shellmap"; Args = @("-multiInstance", "-noFPSLimit"); Minutes = 5 }

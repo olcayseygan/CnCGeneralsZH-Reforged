@@ -1192,6 +1192,11 @@ Bool ControlBar::drawFadingPurchaseScience( GameWindow *window, Int alpha )
 			TheDisplay->drawImage( image, pos.x, pos.y, pos.x + size.x, pos.y + size.y, faded( GameMakeColor( shade, shade, shade, 255 ) ) );
 		}
 
+		// the cameo's frame in its command colour, which otherwise came on with the last step
+		const PushButtonData *button = BitTest( child->winGetStyle(), GWS_PUSH_BUTTON ) ? (const PushButtonData *)child->winGetUserData() : NULL;
+		if( button && button->drawBorder && button->colorBorder != GAME_COLOR_UNDEFINED )
+			TheDisplay->drawOpenRect( pos.x - 1, pos.y - 1, size.x + 2, size.y + 2, 1, faded( button->colorBorder ) );
+
 		const TextData *data = BitTest( child->winGetStyle(), GWS_STATIC_TEXT ) ? (const TextData *)child->winGetUserData() : NULL;
 		if( data && data->text && data->text->getTextLength() > 0 )
 		{
@@ -5920,6 +5925,10 @@ void ControlBar::showPurchaseScience( void )
 	{
 		// a fade still running out is ended first, or it would hide the screen it just showed
 		TheTransitionHandler->remove("GenExpFade");
+		// so is the arrow a rank or a point sends down at this button: a fire-once group, so setGroup
+		// queues the fade behind it, and the screen sat hidden for the rest of the arrow's 22 steps
+		// before it began to fade in
+		TheTransitionHandler->remove("ControlBarArrow");
 		TheTransitionHandler->setGroup("GenExpFade");
 	}
 		//m_generalsScreenAnimate->registerGameWindow( m_contextParent[ CP_PURCHASE_SCIENCE ], WIN_ANIMATION_SLIDE_TOP, TRUE, 200 );

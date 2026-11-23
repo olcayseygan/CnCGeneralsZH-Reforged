@@ -2122,16 +2122,24 @@ Bool AIUpdateInterface::processCollision(PhysicsBehavior *physics, Object *other
 			}
 			// jba intense debug
 			//DEBUG_LOG(("*****Units ended up on top of each other.  Shouldn't happen.\n"));
+			// One order per collision at most, and none that leaves a unit where it stands: the
+			// other unit's collision runs this too, so moving both from both sides gave each up to
+			// two orders a tick, and a spot the pathfinder hands back unchanged repeated forever.
+			Bool moved = FALSE;
 			if (isIdle()) {
 				Coord3D safePosition = *getObject()->getPosition();
-				
 				TheAI->pathfinder()->adjustToPossibleDestination(getObject(), getLocomotorSet(), &safePosition);
-				aiMoveToPosition( &safePosition, CMD_FROM_AI ); 
+				if (safePosition.x != getObject()->getPosition()->x || safePosition.y != getObject()->getPosition()->y) {
+					aiMoveToPosition( &safePosition, CMD_FROM_AI );
+					moved = TRUE;
+				}
 			}
-			if (aiOther->isIdle()) {
-				TheAI->pathfinder()->adjustToPossibleDestination(other, aiOther->getLocomotorSet(), 
+			if (!moved && aiOther->isIdle()) {
+				TheAI->pathfinder()->adjustToPossibleDestination(other, aiOther->getLocomotorSet(),
 					&otherPos);
-				aiOther->aiMoveToPosition( &otherPos, CMD_FROM_AI);
+				if (otherPos.x != other->getPosition()->x || otherPos.y != other->getPosition()->y) {
+					aiOther->aiMoveToPosition( &otherPos, CMD_FROM_AI);
+				}
 			}
 		}
 	}

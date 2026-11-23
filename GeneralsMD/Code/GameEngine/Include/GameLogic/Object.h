@@ -794,6 +794,8 @@ private:
 	Bool					m_reinforcementRetargeted;	///< the one re-issue on arrival has been used
 	Drawable*			m_drawable;									///< drawable (if any) for this object
 	AsciiString		m_name;										///< internal name
+	Coord3D				m_notedPos;									///< position the partition and trigger areas last reacted to (reactToTransformChange)
+	Real					m_notedAngle;								///< orientation the partition last reacted to
 
 	Object *			m_next;
 	Object *			m_prev;

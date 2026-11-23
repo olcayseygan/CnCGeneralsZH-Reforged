@@ -161,6 +161,9 @@ namespace DirectStrikeTheme
 		HEAD_C,
 		HEAD_R,
 		CELL,						///< a cameo's cell, 85x65 at 1080, the 71x49 cameo's glass at 7,8 (the common sheet only)
+		QUEUE_BAND_L,				///< the observer queue's compact band as a 3-slice, ends 34x32, middle 8x32: a lamp slot
+		QUEUE_BAND_C,				///< in the left end's x 6..12, one glass channel from x 14 to 15 short of the right end,
+		QUEUE_BAND_R,				///< which caps it with two rivets (the common sheet only)
 
 		// the lobby's own, README-lobby.md
 		LOBBY_PICK_TILE,

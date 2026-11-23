@@ -3618,7 +3618,7 @@ def check_tab(sheet_img, side_name, prefix, solo_img=None, comm_img=None):
 # the selection's and, round the mount, the general's button's).  Its pieces are on two sheets of their own,
 # ReforgedHudObsPieces (the toolbar's buttons, the rows' hover and watched rings, the radar's nine) and
 # ReforgedHudObsSpec (the rack), each laid out by its MappedImages/HandCreated INI.
-OBS_LIST = [(334, 755 + 32 * i, 379, 785 + 32 * i) for i in range(8)]  # ButtonPlayer0..7, each a side's picture
+OBS_WALL, OBS_POD = 350, 998                    # the radar box's right wall's edge, the key pod's top (screen)
 OBS_OPTIONS, OBS_CHAT = (334, 1011, 379, 1041), (334, 1043, 379, 1073)  # OptionsUL/LR, ChatUL/LR; ButtonCancel on chat
 OBS_SELECTION, OBS_EXP = (1642, 887, 1871, 1071), (1875, 887, 1911, 1071)   # RightHUD and the rank bar's place
 # the column's, the selection's and the general's button's (round the mount); the radar's follows its frame
@@ -3676,10 +3676,6 @@ def tally(p, cx, cy, r):
     p.bump([regular(cx - r * 0.35, cy - r * 0.35, r * 0.3, 8)], 0.4, 0.3, PAPERM)
 
 
-# each row's colour lamp beside its button, empty glass until the code lights it in the player's colour
-OBS_LAMPS = [(383, r[1] + 4, 389.5, r[3] - 4) for r in OBS_LIST]
-
-
 def fastener(p, cx, cy):
     """Turkiye's recessed fastener: a dark cup with a hex head low in it."""
     p.inlay([regular(cx, cy, 2.8, 12)], DARK, 1.0)
@@ -3687,26 +3683,26 @@ def fastener(p, cx, cy):
 
 
 def paint_observer_bar():
-    """The bar: the players' column on the left, a lamp beside each row, the selection window under its mount
-    on the right and nothing in the middle.  The column is the right end of the radar's box (America's): the
-    radar's nine piece frame (observer_radar_frame) stands round the map left of it, its ledge running over
-    the radar to an arrow point on the column's top, and the column takes the box's 45 degree cut toward the
-    field.  The selection box is Turkiye's."""
+    """The bar: the radar box's right wall stepping out into the pod round the options and chat keys on the
+    left, the selection window under its mount on the right and nothing in the middle.  Since 2026-11-23 EA's
+    column of eight player buttons is gone (a player is picked on the standings), so the wall is only as wide
+    as the box's side under the ledge's arrow point, with a groove down it, and the pod at its foot is built
+    round the two keys alone.  The radar's nine piece frame (observer_radar_frame) stands round the map left of
+    it, its ledge running over the radar to the arrow point on the wall's top."""
     b = "machined"
     p = Painter(2048, 512)
-    # the column, open on its left where the frame's right edge meets it: drawn from further left and that
-    # part cut away, so its lip runs on into the frame's
-    stack(p, plate(300, 740, 394, 1080, tr=("cut", 30)))
-    floor(p, plate(300, 751, 389, 1080, tr=("cut", 22)))
-    for row, lamp in zip(OBS_LIST, OBS_LAMPS):
-        well(p, shape(b, *grow(row, 2), 3), 4, 2)
-        p.bump([T(shape(b, *grow(lamp, 1.4), 2))], 1.0, 0.7, DARK)
-        well(p, shape(b, *lamp, 2), 1.5, 0.8)
+    # the wall and the pod, open on their left where the frame's right edge meets them: drawn from further left
+    # and that part cut away, so the lip runs on into the frame's
+    stack(p, [(300, 740), (OBS_WALL - 6, 740), (OBS_WALL, 746), (OBS_WALL, OBS_POD), (386, OBS_POD), (386, OBS_POD + 8),
+              (394, OBS_POD + 8), (394, 1080), (300, 1080)])
+    floor(p, [(300, 751), (OBS_WALL - 7, 751), (OBS_WALL - 5, 753), (OBS_WALL - 5, OBS_POD + 5), (382, OBS_POD + 5),
+              (382, OBS_POD + 12), (389, OBS_POD + 12), (389, 1080), (300, 1080)])
+    p.inlay([T(plate(337.5, 762, 338.5, OBS_POD - 8))], INKM, 0.6)
     for r in (OBS_OPTIONS, OBS_CHAT):
         well(p, shape(b, *grow(r, 1), 4), 3.5, 2)
     p.inlay([T(plate(389, 1006, 394, 1007))], INKM, 0.8)
-    for x, y in ((342, 746), (388, 1076)):
-        p.rivet(x, y - TOP, 2.2)
+    for x, y in ((338, 752), (338, OBS_POD - 2), (388, 1076)):
+        p.rivet(x, y - TOP, 2.0)
     p.cut([T(plate(290, 730, 330, 1080))])
 
     # the selection's box: Turkiye's wide chamfer, an armour panel with a gap, range ticks and recessed
@@ -3834,7 +3830,7 @@ def check_observer(bar, panel):
     a = np.asarray(bar)[..., 3]
     for x in SEAMS:
         assert not a[:, x - 2:x + 3].any(), "observer art across the cut at texel %d" % x
-    for r in [OBS_OPTIONS, OBS_CHAT, OBS_SELECTION, OBS_EXP] + OBS_LIST:
+    for r in [OBS_OPTIONS, OBS_CHAT, OBS_SELECTION, OBS_EXP]:
         x0, y0, x1, y1 = to_bar(r)
         assert (a[y0:y1, x0:x1] == 255).all(), "observer window %s is not on the plate" % (r,)
     for img, blocks, at in ((a[:, :1920], OBS_BLOCKS, (0, TOP)), (np.asarray(panel)[..., 3], OBS_PANEL_BLOCKS, OBS_PANEL_AT)):
@@ -3861,9 +3857,9 @@ def check_observer(bar, panel):
 # The observer's radar sized to the map like the sides' (RadarFrameImage ObserverProRadar on
 # Observer8x6): the left part of America's radar box, round 20.  5 down the left and the foot, which are the
 # screen's; 39 over the top, where the ledge runs over the box (714..742, the box itself from 731); 33 on the
-# right, where the ledge ends in its arrow point over the players' column.  Below the ledge the right edge is
-# the box's lip five texels wide and the rest of it is empty: the column (the bar's left piece) stands there,
-# open on its side, so the two read as one box.  At the square map the frame is 0..360 x 714..1080, which is
+# right, where the ledge ends in its arrow point over the box's right wall.  Below the ledge the right edge is
+# the box's lip five texels wide and the rest of it is empty: the wall and the key pod at its foot (the bar's
+# left piece, OBS_WALL and OBS_POD) stand there, open on their side, so the two read as one box.  At the square map the frame is 0..360 x 714..1080, which is
 # Observer8x6's BlockRadar (fitRadarToMap stands the radar on it, so the square keeps its place).  The ledge
 # runs the frame's whole width, so T stretches it evenly; its fittings (two swept chevrons) are in TR.  Drawn
 # on the bar's 512 rows (screen y 568..1080) with the bar's top to bottom falloff, so the ledge's lip and the
@@ -4180,10 +4176,16 @@ def camera_reference():
     return lit(RACK_W, RACK_CAM_PLATE + 6, draw, shadow=True)
 
 
-def standings_reference(rows=2):
+RACK_COMPACT = 18                               # the closest a standings row comes (InGameUI's RACK_ROW_MIN)
+RACK_COMPACT_POSTS = (43, 70)                   # its steel posts: past the place, past the badge
+
+
+def standings_reference(rows=2, pitch=RACK_PITCH):
     """The standings whole: the cap, the head with the stat keys' wells and the column heads' rule, rows of one
-    well each, and the foot."""
-    H = RACK_TOP + RACK_HEAD + rows * RACK_PITCH + RACK_FOOT
+    well each, and the foot.  pitch RACK_COMPACT draws the compact row a 32 seat match closes up to: one shallow
+    well under the same rims, parted by two steel posts into the place, the badge and the name and value, so
+    the row reads as a table line rather than a full row squeezed."""
+    H = RACK_TOP + RACK_HEAD + rows * pitch + RACK_FOOT
 
     def draw(p):
         rack_shell(p, H - 6, RACK_TOP + 1, H - RACK_FOOT + 1)
@@ -4193,9 +4195,15 @@ def standings_reference(rows=2):
         r = RACK_HEAD_AT["rule"]
         p.inlay([plate(r[0], RACK_TOP + r[1], r[2], RACK_TOP + r[3])], INKM, 0.4)
         for k in range(rows):
-            y0 = RACK_TOP + RACK_HEAD + k * RACK_PITCH
+            y0 = RACK_TOP + RACK_HEAD + k * pitch
             r = RACK_ROW["well"]
-            p.sink([shape("machined", r[0], r[1] + y0, r[2], r[3] + y0, 3)], 4, 1.6)
+            if pitch == RACK_PITCH:
+                p.sink([shape("machined", r[0], r[1] + y0, r[2], r[3] + y0, 3)], 4, 1.6)
+                continue
+            k_ = pitch / RACK_PITCH             # the code's rims at the row's height
+            p.sink([shape("machined", r[0], r[1] * k_ + y0, r[2], r[3] * k_ + y0, 1.5)], 2.4, 1.0)
+            for x in RACK_COMPACT_POSTS:
+                p.bump([plate(x - 0.6, y0 + 2.6, x + 0.6, y0 + pitch - 2.6)], 1.6, 0.4, STEEL)
     return lit(RACK_W, H, draw, shadow=True), H
 
 
@@ -4353,6 +4361,7 @@ def rack_pieces():
     drawer, DH = drawer_reference()
     out = {"RackTop": stand.crop((0, 0, RACK_W, RACK_TOP)), "RackHead": stand.crop((0, RACK_TOP, RACK_W, rows_at)),
            "RackRow": stand.crop((0, rows_at, RACK_W, rows_at + RACK_PITCH)), "RackBottom": stand.crop((0, H - RACK_FOOT, RACK_W, H)),
+           "RackRowCompact": standings_reference(pitch=RACK_COMPACT)[0].crop((0, rows_at, RACK_W, rows_at + RACK_COMPACT)),
            "RackCamera": cam.crop((0, RACK_TOP, RACK_W, RACK_CAM_PLATE + 6)),
            "RackBody": old.crop((0, body_at + 4, RACK_W, body_at + 8)),
            "RackTallyOff": tally_piece(False), "RackEye": eye_piece(False), "RackEyeOn": eye_piece(True),
@@ -4383,7 +4392,7 @@ def rack_pieces():
     return out
 
 
-RACK_TILES = ("RackRow", "RackBody", "DrawerRow")
+RACK_TILES = ("RackRow", "RackRowCompact", "RackBody", "DrawerRow")
 
 
 def paint_rack():

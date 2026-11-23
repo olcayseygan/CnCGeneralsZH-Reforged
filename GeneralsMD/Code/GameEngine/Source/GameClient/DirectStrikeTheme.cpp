@@ -102,6 +102,9 @@ namespace
 		"DSHeadC",
 		"DSHeadR",
 		"DSCell",
+		"ObsBandL",
+		"ObsBandC",
+		"ObsBandR",
 
 		"LobbyPickTile",
 		"LobbyIsland",

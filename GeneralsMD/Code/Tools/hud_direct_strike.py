@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw, ImageFilter
 import bigfile
 import hud_command_bar as H
 import hud_direct_strike_theme as T
-from hud_command_bar import plate, rotated
+from hud_command_bar import plate, rotated, shape
 from hud_sidebar import box, icon_layers, KEY_SIZES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -406,6 +406,25 @@ def hud(side):
 
 CELL, CELL_GLASS = (85, 65), (7, 8, 78, 57)    # a cameo's cell: the 71x49 cameo's glass in a plate
 HEAD_H = 28                                     # the header strip's height, its glass 4 in
+OBS_BAND, OBS_BAND_END = (200, 32), 34          # the observer queue's compact band, drawn whole and cut in three
+
+
+def obs_band(side):
+    """A player's band in the observer's production queue at its closest (InGameUI's queue, 0.7 of its 44): a
+    low plate with the common frame's notched corners and stepped lip, a slot in the left jaw for the code's
+    colour lamp, one glass channel the badge and the cameos stand in, and a cap on the right with a bronze
+    hairline and two rivets where the "+N" ends the row.  Its own piece, not the lobby's ClampBand squeezed."""
+    w, h = OBS_BAND
+
+    def draw(o, b):
+        o.tiers([shape("terraced", 0, 0, w, h, 5)], T.CLOSED, T.SHELL_TOP, T.LIP_TOP, 2.4, T.LIP_BEVEL[b], 2.0)
+        T.stepped_lip(o, [shape("terraced", 3.4, 3.4, w - 3.4, h - 3.4, 3)], 3.4)
+        o.sink([shape("terraced", 6, 8, 12, h - 8, 1.2)], 2.4, 0.8)
+        o.sink([plate(14, 5, w - 15, h - 5)], T.WELL_DEPTH, T.WELL_LIP)
+        o.inlay([plate(w - 12.6, 7, w - 11.6, h - 7)], H.ACCENT, 0.3)
+        o.rivet(w - 7, 10, 1.6)
+        o.rivet(w - 7, h - 10, 1.6)
+    return T.small(side, w, h, draw)
 
 
 def watch(side):
@@ -418,6 +437,7 @@ def watch(side):
            "LaneBarChip": T.chip(side, 490, 14, 4), "LaneCountChip": T.chip(side, 84, 36),
            "DSCell": T.panel(side, *CELL, [CELL_GLASS])}
     out.update({"DSHead" + part: img for part, img in T.three_cut(T.chip(side, 200, HEAD_H, 4)).items()})
+    out.update({"ObsBand" + part: img for part, img in T.three_cut_ends(obs_band(side), OBS_BAND_END, OBS_BAND_END).items()})
     for s in STATES:
         out["SidebarKeyMenu" + s] = T.key(side, *KEY_SIZES["Menu"], s, icon_layers("Options", build), 0.55)
         out["SidebarKeyDiplomacy" + s] = T.key(side, *KEY_SIZES["Diplomacy"], s, icon_layers("Chat", build), 0.55)

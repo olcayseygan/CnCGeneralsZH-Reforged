@@ -702,6 +702,16 @@ Bool ApocalypseDirector::isWarnedCell( Int cellX, Int cellY ) const
 }
 
 //-------------------------------------------------------------------------------------------------
+/// the gate of the n-th set bit (from 0) of a gate mask, in gate order; 0 when the mask has fewer
+static Int nthGate( UnsignedInt mask, Int n )
+{
+	for( Int g = 0; g < APOCALYPSE_SPAWNS_MOST; ++g )
+		if( ( mask & ( 1u << g ) ) && n-- == 0 )
+			return g;
+	return 0;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The next wave picks its gates, the phase's count of them from the logic stream, and they glow for
 	  APOCALYPSE_TELEGRAPH_SECONDS before it comes. */
 void ApocalypseDirector::gatherWave( UnsignedInt now )
@@ -715,14 +725,31 @@ void ApocalypseDirector::gatherWave( UnsignedInt now )
 		want = 1;
 	UnsignedInt mask = 0;
 	AsciiString names;
-	/* Co-op: the map's first passes are the seats' fronts in seat order (Player_N_Start's lobe), the rest
-		seams between two seats.  The first gate is the next front in turn, so every seat is hit; every
-		third wave it is a seam instead, which two neighbours must hold together. */
+	/* Co-op: the map's pass N faces Player_N_Start's lobe, the passes past the starts are seams between two
+		lobes.  The fronts are the passes of the starts a seat holds, so a player alone on start 2 is not
+		left watching the waves walk into lobe 1; a start nobody holds is a seam like the rest.  The first
+		gate is the next front in turn, in gate order, so every seat is hit; every third wave it is a seam
+		instead, which two neighbours must hold together. */
 	{
-		const Int fronts = m_seats < gates ? m_seats : gates;
-		Int first = fronts > 0 ? (Int)( m_frontTurn % (UnsignedInt)fronts ) : 0;
-		if( gates > fronts && m_wave % 3 == 2 )
-			first = fronts + GameLogicRandomValue( 0, gates - fronts - 1 );
+		UnsignedInt fronts = 0;
+		for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+		{
+			Player *player = ThePlayerList->getNthPlayer( i );
+			const Int start = isSeat( player ) ? player->getMpStartIndex() : -1;
+			if( start >= 0 && start < gates )
+				fronts |= 1u << start;
+		}
+		// no seat on a start the map knows: the first passes, one a seat, as before
+		for( Int g = 0; fronts == 0 && g < m_seats && g < gates; ++g )
+			fronts |= 1u << g;
+		Int frontCount = 0;
+		for( Int g = 0; g < gates; ++g )
+			if( fronts & ( 1u << g ) )
+				++frontCount;
+		const UnsignedInt allGates = gates >= 32 ? 0xFFFFFFFFu : ( 1u << gates ) - 1;
+		Int first = frontCount > 0 ? nthGate( fronts, (Int)( m_frontTurn % (UnsignedInt)frontCount ) ) : 0;
+		if( gates > frontCount && m_wave % 3 == 2 )
+			first = nthGate( allGates & ~fronts, GameLogicRandomValue( 0, gates - frontCount - 1 ) );
 		else
 			++m_frontTurn;
 		mask |= 1u << first;
@@ -1083,15 +1110,45 @@ void ApocalypseDirector::update( void )
 								now, Apocalypse_phaseName( m_phase ), m_cycle, m_wave, (Int)m_zombies.size(), m_spawned, m_kills, m_reached,
 								m_pending, standing, m_seats, m_fogKills, m_infected, m_adapt ));
 		Int inFog = 0, idle = 0;
+		// the ones out of the fog that have not reached the bases, by what they do: where a wave stalls
+		Int outIdle = 0, outOnStructure = 0, outOnUnit = 0, outWalking = 0;
+		const Object *front = NULL;
+		Real front2 = 1.0e30f;
 		for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
 		{
 			Object *obj = TheGameLogic->findObjectByID( m_zombies[ i ].id );
 			if( obj == NULL )
 				continue;
-			if( inRing( obj->getPosition() ) )
+			const Bool fogged = inRing( obj->getPosition() );
+			if( fogged )
 				++inFog;
-			if( obj->getAI() != NULL && obj->getAI()->isIdle() )
+			AIUpdateInterface *ai = obj->getAI();
+			if( ai != NULL && ai->isIdle() )
 				++idle;
+			if( fogged || m_zombies[ i ].reached )
+				continue;
+			const Object *victim = ai != NULL ? ai->getCurrentVictim() : NULL;
+			if( ai == NULL || ai->isIdle() )
+				++outIdle;
+			else if( victim != NULL && victim->isKindOf( KINDOF_STRUCTURE ) )
+				++outOnStructure;
+			else if( victim != NULL )
+				++outOnUnit;
+			else
+				++outWalking;
+			const Real dx = obj->getPosition()->x - m_centre.x, dy = obj->getPosition()->y - m_centre.y;
+			if( dx * dx + dy * dy < front2 )
+			{
+				front2 = dx * dx + dy * dy;
+				front = obj;
+			}
+		}
+		if( front != NULL )
+		{
+			const Object *victim = front->getAI() != NULL ? front->getAI()->getCurrentVictim() : NULL;
+			DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u on the way in: %d idle, %d on a structure, %d on a unit, %d walking; the nearest at (%.0f,%.0f), %.0f from the middle against a reach of %.0f, on '%s'\n",
+									now, outIdle, outOnStructure, outOnUnit, outWalking, front->getPosition()->x, front->getPosition()->y,
+									sqrtf( front2 ), m_reachRadius, victim != NULL ? victim->getTemplate()->getName().str() : "nothing" ));
 		}
 		Int buildings = 0, units = 0, nearMiddle = 0;
 		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )

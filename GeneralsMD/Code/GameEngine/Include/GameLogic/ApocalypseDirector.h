@@ -239,7 +239,7 @@ private:
 	UnsignedInt m_waveSectors;					///< the gates the waves out now come from, one bit a gate
 	UnsignedInt m_warnSectors;					///< the gates the next wave gathers at, glowing; 0 until it is told
 	Int m_adapt;												///< the adaptive share, percent (Apocalypse_adapt)
-	UnsignedInt m_frontTurn;						///< whose front the next wave gathers before, in seat order
+	UnsignedInt m_frontTurn;						///< whose front the next wave gathers before: the held starts' passes, in gate order
 	UnsignedInt m_reachedAtWave;				///< m_reached when the last wave came, to judge it by
 	std::vector<Rise> m_rises;					///< the fallen soldiers waiting to rise, and those that have, while their bodies lie
 	UnsignedInt m_infected;							///< soldiers risen as the dead

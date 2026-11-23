@@ -79,6 +79,7 @@
 #include "BuildVersion.h"
 #include "GeneratedVersion.h"
 #include "Resource.h"
+#include "wwdebug.h"
 
 #include <rts/profile.h>
 
@@ -1158,6 +1159,13 @@ static LONG WINAPI dumpUnhandledException( EXCEPTION_POINTERS *e_info )
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
+/// WWRELEASE_SAY's lines from the WWVegas libraries, into the game's own log.
+static void WWDebug_ToDebugLog( DebugType /*type*/, const char *message )
+{
+	(void)message;	// DEBUG_LOG is empty in a configuration without logging
+	DEBUG_LOG(( "%s", message ));
+}
+
 /** One argument on the end of a command line, in quotes when it holds a space. */
 static void appendArgument( char *line, size_t size, const char *argument )
 {
@@ -1543,9 +1551,10 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 
 
-		// install debug callbacks
-	//	WWDebug_Install_Message_Handler(WWDebug_Message_Callback);
-	//	WWDebug_Install_Assert_Handler(WWAssert_Callback);
+		// WW3D2 is built without RELEASE_DEBUG_LOGGING, so in Release its only voice is WWRELEASE_SAY,
+		// which says nothing until a handler is in.  This one puts those lines in DebugLogFile.txt.
+		// EA's assert handler stays out: WWASSERT already goes through DEBUG_ASSERTCRASH.
+		WWDebug_Install_Message_Handler(WWDebug_ToDebugLog);
 
 
 // Force "splash image" to be loaded from a file, not a resource so same exe can be used in different localizations.

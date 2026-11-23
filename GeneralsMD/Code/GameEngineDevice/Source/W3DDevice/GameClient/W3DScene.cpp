@@ -494,6 +494,28 @@ void RTS3DScene::Add_Render_Object(RenderObjClass * obj)
 
 void RTS3DScene::Remove_Render_Object(RenderObjClass * obj)
 {
+	// Crash reports 4137 and 3839 drew a polygon renderer whose texture category was gone.  One way
+	// there is a robj leaving the scene mid-draw while the occluder arrays still point at it: they
+	// hold no reference, so the scene's was the last.  Said once a run, so the next report names it.
+	static Bool s_saidMidDraw = FALSE;
+	if (!s_saidMidDraw && m_camera != NULL)
+	{
+		const char *where = NULL;
+		Int i;
+		for (i = 0; where == NULL && i < m_numPotentialOccluders; ++i)
+			if (m_potentialOccluders[i] == obj) where = "occluders";
+		for (i = 0; where == NULL && i < m_numPotentialOccludees; ++i)
+			if (m_potentialOccludees[i] == obj) where = "occludees";
+		for (i = 0; where == NULL && i < m_numNonOccluderOrOccludee; ++i)
+			if (m_nonOccludersOrOccludees[i] == obj) where = "non-occluders";
+		if (where != NULL)
+		{
+			s_saidMidDraw = TRUE;
+			DEBUG_LOG(("RTS3DScene::Remove_Render_Object: '%s' left the scene mid-draw, still in the %s array "
+				"(refs %d, W3D frame %u)\n", obj->Get_Name() ? obj->Get_Name() : "?", where, obj->Num_Refs(),
+				WW3D::Get_Frame_Count()));
+		}
+	}
 	std::replace(m_visibleObjects.begin(), m_visibleObjects.end(), obj, (RenderObjClass *)NULL);
 	SimpleSceneClass::Remove_Render_Object(obj);
 }

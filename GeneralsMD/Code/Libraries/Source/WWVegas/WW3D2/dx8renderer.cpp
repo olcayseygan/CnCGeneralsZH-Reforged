@@ -264,6 +264,20 @@ void DX8TextureCategoryClass::Add_Polygon_Renderer(DX8PolygonRendererClass* p_re
 
 void DX8TextureCategoryClass::Remove_Polygon_Renderer(DX8PolygonRendererClass* p_renderer)
 {
+	// Crash reports 4137 and 3839 drew a polygon renderer whose category was NULL.  This is one of
+	// the two places that writes it; a renderer leaving while a draw queued this frame still names
+	// it is the stale-list way there.  Once a run, through the WWDebug handler WinMain installs.
+	static bool s_saidQueued = false;
+	if (!s_saidQueued) {
+		for (PolyRenderTaskClass * task = render_task_head; task != NULL; task = task->Get_Next_Visible()) {
+			if (task->Peek_Polygon_Renderer() == p_renderer) {
+				s_saidQueued = true;
+				WWRELEASE_SAY(("DX8TextureCategoryClass::Remove_Polygon_Renderer: renderer %p leaves its category "
+					"with a draw still queued (W3D frame %u)\n", (void *)p_renderer, WW3D::Get_Frame_Count()));
+				break;
+			}
+		}
+	}
 	PolygonRendererList.Remove(p_renderer);
 	p_renderer->Set_Texture_Category(NULL);
 	if (PolygonRendererList.Peek_Head() == NULL) {
@@ -2874,6 +2888,16 @@ static void Invalidate_FVF_Category_Container_List(FVFCategoryList& list)
 void DX8MeshRendererClass::Invalidate( bool shutdown)
 {
 	WWMEMLOG(MEM_RENDERER);
+	// The other NULL-writing way (crash reports 4137, 3839): every category goes, and a mesh queued
+	// for this frame keeps renderers that point at none.  Map loads land here too, so the first few
+	// calls are said, with the frame, and a mid-match one reads as such beside the crash.
+	// Not at shutdown: the debug log may already be closed by then.
+	static int s_saidInvalidates = 0;
+	if (!shutdown && s_saidInvalidates < 8) {
+		++s_saidInvalidates;
+		WWRELEASE_SAY(("DX8MeshRendererClass::Invalidate %d at W3D frame %u\n",
+			s_saidInvalidates, WW3D::Get_Frame_Count()));
+	}
 	_RegisteredMeshList.Reset_List();
 
 	for (int i=0;i<texture_category_container_lists_rigid.Count();++i) {

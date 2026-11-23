@@ -20,8 +20,8 @@
 // FILE: AudioMixPolicy.h
 // The arithmetic behind MilesAudioManager's battle mix, kept free of the engine so a test can hold
 // it: which playing sound gives way to a new one, how much louder a shot gets for the identical
-// shots folded into it, how deep a hill or a building stands in the line between the microphone and
-// a sound, and how fast the muffle that follows from it moves.  Nothing here reads or writes logic.
+// shots folded into it, and how a distance moved becomes a speed for the doppler.  The hill and
+// building occlusion left with source 600698247.  Nothing here reads or writes logic.
 
 #pragma once
 

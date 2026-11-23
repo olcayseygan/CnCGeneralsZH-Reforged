@@ -471,7 +471,10 @@ namespace
 		if( s->isHuman() )
 			lamp = slot == 0 ? LAMP_HOST : s->isAccepted() ? LAMP_READY : LAMP_WAITING;
 		drawImage( art( lamp ), boxOf( seatPart( slot, DSSEAT_LAMP ) ) );
-		const Int ping = s->isHuman() && slot != localSlot() ? seatPing( slot ) : -1;
+		// online the light is the player's own trip to the server, so your own seat has one as in the classic
+		// room; a LAN or skirmish room has no ping of your own.  -1 (nothing drawn) until the card's ping arrives
+		const Bool ownLight = s_room == ROOM_ONLINE && OnlineIsEnabled();
+		const Int ping = s->isHuman() && ( slot != localSlot() || ownLight ) ? seatPing( slot ) : -1;
 		if( ping >= 0 )
 			drawImage( art( pingPiece( ping ) ), boxOf( seatPart( slot, DSSEAT_PING ) ) );
 	}

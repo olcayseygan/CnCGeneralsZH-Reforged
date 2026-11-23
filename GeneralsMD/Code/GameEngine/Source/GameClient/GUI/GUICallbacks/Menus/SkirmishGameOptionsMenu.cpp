@@ -1274,6 +1274,16 @@ void positionStartSpots( GameInfo *myGame, GameWindow *buttonMapStartPositions[]
 		AsciiString templatePath;
 		generatedMapTemplate(localMapFname, templatePath);
 		positionStartSpots(templatePath, buttonMapStartPositions, mapWindow);
+		// an Apocalypse map has no shipped map to stand for it, and the unknown map said nothing; the
+		// generator draws its own preview beside the map, from the name
+		if (IsApocalypseMap(localMapFname))
+		{
+			if (Image *image = getMapPreviewImage(localMapFname))
+			{
+				mapWindow->winSetStatus(WIN_STATUS_IMAGE);
+				mapWindow->winSetEnabledImage(0, image);
+			}
+		}
 		mapWindow->winSetUserData(NULL);
 		positionAdditionalImages(NULL, mapWindow, TRUE);
 		for (Int i = 0; i < MAX_SLOTS; ++i)

@@ -1898,6 +1898,35 @@ void HideLobbySeatRowsFrom(GameWindow *parent, const char *layoutFilename, Int f
 				if (!window->winIsHidden())
 					window->winHide(TRUE);
 	}
+
+	/* The network rooms' chat sits under the last row (lobbyroom_layout.py, place_chat: 16 under the
+		 cards at 1080), so the rows let go left an empty band over it.  The chat grows up into the band,
+		 its foot where it was; a second call finds it there already. */
+	GameWindow *lastCard = firstHiddenRow > 0 ? findSeatWindow(parent, layoutFilename, "SeatCard", firstHiddenRow - 1) : NULL;
+	if (lastCard == NULL)
+		return;
+	Int cardX, cardY, cardW, cardH;
+	lastCard->winGetScreenPosition(&cardX, &cardY);
+	lastCard->winGetSize(&cardW, &cardH);
+	const Int top = cardY + cardH + UIStyle::px(16.0f);
+	static const char *const chats[] = { "ListboxChatWindowLanGame", "ListboxChatWindowGameSpyGameSetup" };
+	for (Int c = 0; c < (Int)ARRAY_SIZE(chats); ++c)
+	{
+		AsciiString full;
+		full.format("%s:%s", layoutFilename, chats[c]);
+		GameWindow *chat = TheWindowManager->winGetWindowFromId(parent, NAMEKEY(full));
+		if (chat == NULL)
+			continue;
+		Int x, y, width, height;
+		chat->winGetScreenPosition(&x, &y);
+		chat->winGetSize(&width, &height);
+		if (top >= y)
+			continue;
+		Int left, above;
+		chat->winGetPosition(&left, &above);
+		chat->winSetPosition(left, above + top - y);
+		chat->winSetSize(width, height + y - top);
+	}
 }
 
 Bool IsApocalypseMap(const AsciiString &map)

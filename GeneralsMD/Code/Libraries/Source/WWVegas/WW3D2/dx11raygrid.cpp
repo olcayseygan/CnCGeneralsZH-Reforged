@@ -24,8 +24,11 @@
 ** ponytail: a cell's list is every triangle whose plane crosses it inside the triangle's box, not an
 ** exact triangle and box test, so a long thin diagonal triangle is listed in cells it misses; and a
 ** triangle the size of the map walks its whole box in one thread.  The upgrade for either is a
-** binned BVH; nothing the game streams has needed it yet.  Cut casters (leaves, fences) are not in
-** the grid at all: they are not streamed, and only the sun's map knows them.
+** binned BVH; nothing the game streams has needed it yet.  Cut casters (leaves, fences, the
+** foliage) are streamed beside the solid ones with their stamp negated, their texture coordinates
+** and a slice of the backend's cut alpha in a second buffer, and a hit on one counts only where the
+** texel at the hit passes its alpha reference: nearest texel of a 512 square copy, the texture's
+** alpha alone (not its vertex colour's), which is the sun map's cut to within a texel.
 **
 ** Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
 */
@@ -60,6 +63,8 @@ static const char RG_COMMON[] =
 	"    float4 RgTuning;\n"						// ground held, stamp, triangle slots, reference slots
 	"    float4 RgBuild;\n"						// world units a unit of sun clip x, y and z; cell budget
 	"    float4 RgProbe;\n"						// normal offset, depth bias, seed, the 2D grid's reference slots
+	"    float4 RgKeepLow;\n"						// the box the grid keeps to in the sun's clip space (Set_Keep)
+	"    float4 RgKeepHigh;\n"
 	"};\n"
 	// Low corner in sun clip space and cells used; cells per sun clip unit and a cell's world size;
 	// cells along x, y, z and one when anything was binned.
@@ -73,14 +78,27 @@ static const char RG_TRACE[] =
 	"Buffer<uint> RgBlocks : register(t18);\n"
 	"Buffer<uint> RgItems : register(t19);\n"
 	"Texture2D<float> RgHeights : register(t21);\n"
+	"Buffer<float4> RgCutCoordinates : register(t22);\n"
+	"Texture2DArray<float> RgCutAlpha : register(t23);\n"
 	"\n"
 	"uint rg_cell_start(uint cell) { return RgStarts[cell] + RgBlocks[cell >> 10]; }\n"
+	"\n"
+	// A cut caster's texel at the hit's weights on its second and third corners, against its reference.
+	"bool rg_cut_passes(uint corner, float u, float v)\n"
+	"{\n"
+	"    float4 first = RgCutCoordinates[corner];\n"
+	"    float2 at = first.xy * (1.0 - u - v) + RgCutCoordinates[corner + 1].xy * u + RgCutCoordinates[corner + 2].xy * v;\n"
+	"    uint width, height, slices;\n"
+	"    RgCutAlpha.GetDimensions(width, height, slices);\n"
+	"    int2 texel = min(int2(frac(at) * float2(width, height)), int2(width, height) - 1);\n"
+	"    return RgCutAlpha.Load(int4(texel, (int)first.z, 0)) >= first.w;\n"
+	"}\n"
 	"\n"
 	"bool rg_triangle_hit(uint item, float3 o, float3 d, float reach)\n"
 	"{\n"
 	"    uint corner = item * 3;\n"
 	"    float4 a = RgCorners[corner];\n"
-	"    if (a.w != RgTuning.y) return false;\n"	// a slot an older pass left, listed by a cell its count missed
+	"    if (abs(a.w) != RgTuning.y) return false;\n"	// a slot an older pass left, listed by a cell its count missed
 	"    float3 e1 = RgCorners[corner + 1].xyz - a.xyz;\n"
 	"    float3 e2 = RgCorners[corner + 2].xyz - a.xyz;\n"
 	"    float3 p = cross(d, e2);\n"
@@ -94,7 +112,9 @@ static const char RG_TRACE[] =
 	"    float v = dot(d, q) * inv;\n"
 	"    if (v < 0.0 || u + v > 1.0) return false;\n"
 	"    float at = dot(e2, q) * inv;\n"
-	"    return at > 0.0 && at <= reach;\n"
+	"    if (at <= 0.0 || at > reach) return false;\n"
+	"    if (a.w > 0.0) return true;\n"	// a solid caster; a cut one's stamp is negated
+	"    return rg_cut_passes(corner, u, v);\n"
 	"}\n"
 	"\n"
 	"// A world ray against the solid casters: origin, unit direction, reach in world units.\n"
@@ -207,7 +227,7 @@ static const char RG_LENGTH_PROGRAM[] =
 	"    uint high = (uint)RgTuning.z;\n"
 	"    [loop] while (low < high) {\n"
 	"        uint middle = (low + high) / 2;\n"
-	"        if (RgCorners[middle * 3].w == RgTuning.y) low = middle + 1;\n"
+	"        if (abs(RgCorners[middle * 3].w) == RgTuning.y) low = middle + 1;\n"
 	"        else high = middle;\n"
 	"    }\n"
 	"    RgArgumentsW[0] = (low + 63) / 64;\n"
@@ -233,12 +253,12 @@ static const char RG_BOUNDS_PROGRAM[] =
 	"        float4 c = RgCorners[id.x * 3 + 2];\n"
 	"        float3 low = min(a.xyz, min(b.xyz, c.xyz));\n"
 	"        float3 high = max(a.xyz, max(b.xyz, c.xyz));\n"
-	"        bool valid = a.w == RgTuning.y && b.w == RgTuning.y && c.w == RgTuning.y\n"
-	"            && all(high.xy >= -1.0) && all(low.xy <= 1.0) && high.z >= 0.0 && low.z <= 1.0\n"
+	"        bool valid = abs(a.w) == RgTuning.y && abs(b.w) == RgTuning.y && abs(c.w) == RgTuning.y\n"
+	"            && all(high >= RgKeepLow.xyz) && all(low <= RgKeepHigh.xyz)\n"
 	"            && !any(isnan(low)) && !any(isnan(high));\n"
 	"        if (valid) {\n"
-	"            low = max(low, float3(-1.0, -1.0, 0.0));\n"
-	"            high = min(high, float3(1.0, 1.0, 1.0));\n"
+	"            low = max(low, RgKeepLow.xyz);\n"
+	"            high = min(high, RgKeepHigh.xyz);\n"
 	"            InterlockedMin(RgGroupBounds[0], rg_order(low.x));\n"
 	"            InterlockedMin(RgGroupBounds[1], rg_order(low.y));\n"
 	"            InterlockedMin(RgGroupBounds[2], rg_order(low.z));\n"
@@ -298,7 +318,7 @@ static const char RG_BIN_PROGRAM[] =
 	"    float4 a = RgCorners[id.x * 3];\n"
 	"    float4 b = RgCorners[id.x * 3 + 1];\n"
 	"    float4 c = RgCorners[id.x * 3 + 2];\n"
-	"    if (a.w != RgTuning.y || b.w != RgTuning.y || c.w != RgTuning.y) return;\n"
+	"    if (abs(a.w) != RgTuning.y || abs(b.w) != RgTuning.y || abs(c.w) != RgTuning.y) return;\n"
 	"    float3 low = RgShape[0].xyz;\n"
 	"    float3 scale = RgShape[1].xyz;\n"
 	"    int3 dims = int3(shape.xyz);\n"
@@ -536,11 +556,13 @@ std::string DX11RayGridClass::Trace_Program()
 
 DX11RayGridClass::DX11RayGridClass()
 	: Refused(false), ProbeWanted(false), BuiltThisFrame(false), FrameIndex(0), Seed(0), Corners(NULL),
+	  CutCoordinates(NULL), CutAlpha(NULL),
 	  ConstantBuffer(NULL), Arguments(NULL), ArgumentsWrite(NULL), References(0), CountsRead(false), BuildMS(0.0f),
 	  Triangles(0), SunProbeMS(0.0f), HemisphereProbeMS(0.0f)
 {
 	memset(StepMS, 0, sizeof(StepMS));
 	memset(&Block, 0, sizeof(Block));
+	Keep_Whole();
 	memset(Buffers, 0, sizeof(Buffers));
 	memset(Writes, 0, sizeof(Writes));
 	memset(Reads, 0, sizeof(Reads));
@@ -717,7 +739,27 @@ void DX11RayGridClass::Release()
 		frame.Open = frame.Issued = frame.Probed = false;
 	}
 	Corners = NULL;
+	CutCoordinates = NULL;
+	CutAlpha = NULL;
 	BuiltThisFrame = false;
+}
+
+void DX11RayGridClass::Set_Keep(const float low[3], const float high[3])
+{
+	// Never past the sun's own box, x and y -1 to 1 and depth 0 to 1.
+	static const float SUN_LOW[3] = { -1.0f, -1.0f, 0.0f };
+	static const float SUN_HIGH[3] = { 1.0f, 1.0f, 1.0f };
+	for (unsigned axis = 0; axis < 3; ++axis) {
+		Block.KeepLow[axis] = (low[axis] > SUN_LOW[axis]) ? low[axis] : SUN_LOW[axis];
+		Block.KeepHigh[axis] = (high[axis] < SUN_HIGH[axis]) ? high[axis] : SUN_HIGH[axis];
+	}
+}
+
+void DX11RayGridClass::Keep_Whole()
+{
+	const float low[3] = { -1e30f, -1e30f, -1e30f };
+	const float high[3] = { 1e30f, 1e30f, 1e30f };
+	Set_Keep(low, high);
 }
 
 void DX11RayGridClass::Upload(ID3D11DeviceContext * context)
@@ -843,17 +885,17 @@ void DX11RayGridClass::Bind(ID3D11DeviceContext * context, ID3D11ShaderResourceV
 	Block.Tuning[0] = held ? 1.0f : 0.0f;
 	Upload(context);
 	// No shape reads as nought, an empty grid: a pass bound while the grid is stale meets no caster.
-	ID3D11ShaderResourceView * reads[6] = { Corners, Reads[STARTS], Reads[BLOCKS], Reads[ITEMS],
-		BuiltThisFrame ? Reads[SHAPE] : NULL, held ? heights : NULL };
-	context->CSSetShaderResources(16, 6, reads);
+	ID3D11ShaderResourceView * reads[BOUND_READS] = { Corners, Reads[STARTS], Reads[BLOCKS], Reads[ITEMS],
+		BuiltThisFrame ? Reads[SHAPE] : NULL, held ? heights : NULL, CutCoordinates, CutAlpha };
+	context->CSSetShaderResources(16, BOUND_READS, reads);
 	context->CSSetConstantBuffers(1, 1, &ConstantBuffer);
 }
 
 void DX11RayGridClass::Unbind(ID3D11DeviceContext * context)
 {
-	ID3D11ShaderResourceView * no_reads[6] = { NULL, NULL, NULL, NULL, NULL, NULL };
+	ID3D11ShaderResourceView * no_reads[BOUND_READS] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 	ID3D11Buffer * no_buffer = NULL;
-	context->CSSetShaderResources(16, 6, no_reads);
+	context->CSSetShaderResources(16, BOUND_READS, no_reads);
 	context->CSSetConstantBuffers(1, 1, &no_buffer);
 }
 

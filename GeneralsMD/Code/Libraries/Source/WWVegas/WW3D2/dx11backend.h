@@ -541,6 +541,9 @@ public:
 	// D3DCompile's first flag word; zero is its default optimisation.
 	bool Compile_Program(const std::string & source, const char * name, const char * profile,
 		std::vector<unsigned char> & bytecode, unsigned flags = 0);
+	// The Ray Traced shadows' per-sample multiply under a multisampled scene (ps_5_0: the shade at
+	// t0, sample 0's depth at t1, the samples' depth at t2), for a test to run on its own.
+	static const char * Ray_Samples_Program();
 
 	// A generated fixed-function program missing from both caches is compiled on a worker thread
 	// rather than on the frame that first meets it, which cost that frame 100 to 130ms of FXC: the
@@ -569,6 +572,7 @@ private:
 		ID3D11VertexShader * VertexShader;
 		ID3D11PixelShader * PixelShader;
 		ID3D11InputLayout * Layout;
+		unsigned CutCapture;	///< one past its vertex program's entry in RayCutCaptures, nought for none
 	};
 
 	// The whole constant block the generated vertex shader reads, always uploaded in full.  A shader
@@ -775,10 +779,41 @@ private:
 	void Release_Ray_Shadows();
 	void Begin_Ray_Capture();
 	void End_Ray_Capture();
-	// Around the second draw a solid caster drawn one by one makes for the rays.
-	void Begin_Ray_Copy();
+	// Around the second draw a caster drawn one by one makes for the rays; false when this one is
+	// not streamed (a cloak's shadow, a cut caster with no coordinates or past the slices).
+	bool Begin_Ray_Copy(const Pipeline & pipeline);
+	bool Begin_Ray_Cut_Copy(unsigned cut_capture, ID3D11ShaderResourceView * texture, float reference);
 	void End_Ray_Copy();
 	bool Ray_Draw_Is_Cut() const;
+	bool Make_Ray_Samples();
+	// A cut caster's capture program, made from its vertex program's output signature on first
+	// use (nought for a program it cannot be made for), and the slice its texture's alpha goes into.
+	unsigned Cut_Capture_For(const std::vector<unsigned char> & vertex_code);
+	ID3D11GeometryShader * Ray_Cut_Program(unsigned cut_capture);
+	int Ray_Cut_Slice(ID3D11ShaderResourceView * texture);
+	void Release_Ray_Cut_Textures();
+	struct RayCutCapture
+	{
+		std::string Source;
+		ID3D11GeometryShader * Program;
+		bool Refused;
+	};
+	std::vector<RayCutCapture> RayCutCaptures;		///< kept with their sources across a device; the programs go with the rays
+	std::map<std::string, unsigned> RayCutCaptureIndex;
+	enum { RAY_CUT_SLICES = 32, RAY_CUT_SIZE = 512 };
+	bool RayCutWanted;				///< ZHR_RT_CUT=0 leaves the cut casters out of the 3D grid, for a before and after
+	bool RaySamplesRefused;
+	ID3D11ShaderResourceView * RayCutTextures[RAY_CUT_SLICES];	///< this pass's cut textures, held until their alpha is copied
+	unsigned RayCutTextureCount;
+	unsigned RayCutCopies;			///< the last caster pass's second draws of cut casters
+	unsigned RayCutTexturesLeftOut;	///< and of those refused a slice
+	float RayCaptureStamp[4];		///< what RayCaptureConstants holds
+	ID3D11Buffer * RayCutCoordinates;
+	ID3D11ShaderResourceView * RayCutCoordinatesView;
+	ID3D11Texture2D * RayCutAlpha;
+	ID3D11UnorderedAccessView * RayCutAlphaWrite;
+	ID3D11ShaderResourceView * RayCutAlphaRead;
+	ID3D11ComputeShader * RayCutAlphaShader;
 	float Sun_Depth_Scale() const;
 	bool Make_Ray_Mask();
 	bool Ray_Shade_Pending() const;
@@ -932,6 +967,7 @@ private:
 	ID3D11VertexShader * ShadowCasterVertexShaders[3];
 	ID3D11InputLayout * ShadowCasterLayouts[3];
 	ID3D11PixelShader * ShadowCasterAlphaTest;
+	unsigned ShadowCasterCutCapture;	///< the alpha tested kind's, as Pipeline::CutCapture
 	ID3D11Buffer * ShadowCasterInstances;
 	unsigned ShadowCasterCapacity;
 	ID3D11Buffer * ShadowCasterBones;

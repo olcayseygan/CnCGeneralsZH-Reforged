@@ -1310,19 +1310,20 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 	// (gth) CNC3 Flush the shader meshes	
 	SHD_FLUSH;
 
-	// The Ray Traced level's shadowed point lights, before the trees: no level ever lit those.
+	// The Ray Traced level's sun goes on before the batched trees, which no level's sun ever shadowed
+	// (their program receives none): traced over them, a pine took its own needles' shade and came
+	// out 21 to 30% darker than at High.  The grass does receive, so it goes down first, and ahead of
+	// the shadowed point lights too, which it drew under with none of its own.  The lights stay
+	// before the trees, which no level ever lit, and before the sun, whose dark pixel guard reads a
+	// lit scene.
 	const Bool defaultPass = m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE;
+	const Bool raysBeforeTrees = defaultPass && Direct3D11_Ray_Shade_Waiting();
+	if (raysBeforeTrees)
+		DoGrass(rinfo);
 	if (defaultPass)
 		Direct3D11_Ray_Traced_Lights();
-
-	// The Ray Traced level's sun goes on before the batched trees too, which no level's sun ever
-	// shadowed (their program receives none): traced over them, a pine took its own needles' shade
-	// and came out 21 to 30% darker than at High.  The grass does receive, so it goes down first.
-	const Bool raysBeforeTrees = defaultPass && Direct3D11_Ray_Shade_Waiting();
-	if (raysBeforeTrees) {
-		DoGrass(rinfo);
+	if (raysBeforeTrees)
 		Direct3D11_Ray_Traced_Shadows();
-	}
 
 	// Draw the trees last so they alpha blend onto everything correctly.
 	DoTrees(rinfo, !raysBeforeTrees);

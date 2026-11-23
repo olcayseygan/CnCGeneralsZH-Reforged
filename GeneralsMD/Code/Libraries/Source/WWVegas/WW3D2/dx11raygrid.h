@@ -30,8 +30,9 @@ public:
 
 	// The HLSL a pass includes to trace through the grid: ray_occluded(origin, direction, reach)
 	// with a world origin, a unit world direction and a reach in world units, true at the first
-	// solid caster or ground in the way (any hit, no order).  ray_hits_casters and ray_hits_ground
-	// are its two halves.  It reads t16 to t21 and b1, which Bind sets on the compute stage.
+	// caster or ground in the way (any hit, no order), a cut caster only where its texel passes its
+	// alpha test.  ray_hits_casters and ray_hits_ground are its two halves.  It reads t16 to t23
+	// and b1, which Bind sets on the compute stage.
 	static std::string Trace_Program();
 
 	// Bins the pass's triangles: the backend's stream-out buffer read as float4 corners, three a
@@ -40,6 +41,17 @@ public:
 	void Build(DX11BackendClass & backend, ID3D11Device * device, ID3D11DeviceContext * context,
 		ID3D11ShaderResourceView * corners, unsigned stamp, unsigned triangle_slots,
 		const float sun_from_world[16]);
+	// The cut casters' half: a float4 a corner beside the corners (texture coordinates, slice,
+	// alpha reference) and the slices of their alpha, read only for a triangle whose stamp is
+	// negated.  Borrowed like the corners; NULL for none.
+	void Set_Cut(ID3D11ShaderResourceView * coordinates, ID3D11ShaderResourceView * alpha)
+	{ CutCoordinates = coordinates; CutAlpha = alpha; }
+	// The box in the sun's clip space the grid keeps to, low then high corner, for the next Build;
+	// the sun's whole box (Keep_Whole) until told otherwise.  A triangle wholly outside it is left
+	// out and the grid's bounds are clamped to it, so casters far from anything the rays start on
+	// (trees streamed the length of the sun's column) cost no cells.
+	void Set_Keep(const float low[3], const float high[3]);
+	void Keep_Whole();
 	// True from Build until the next caster pass starts streaming over the corners it lists
 	// (Invalidate, from Begin_Ray_Capture), so a frame that captured and did not build traces nothing.
 	bool Built() const { return BuiltThisFrame; }
@@ -72,7 +84,7 @@ private:
 	bool Make(DX11BackendClass & backend, ID3D11Device * device);
 	void Upload(ID3D11DeviceContext * context);
 
-	enum { BUFFERS = 7, PROGRAMS = 8, QUERY_FRAMES = 4, PROBE_COUNTS = 13, BUILD_STEPS = 4 };
+	enum { BUFFERS = 7, PROGRAMS = 8, QUERY_FRAMES = 4, PROBE_COUNTS = 13, BUILD_STEPS = 4, BOUND_READS = 8 };
 	enum { BOUNDS, SHAPE, COUNTS, STARTS, BLOCKS, ITEMS, HITS };
 	struct Frame
 	{
@@ -98,6 +110,8 @@ private:
 		float Tuning[4];
 		float Build[4];
 		float Probe[4];
+		float KeepLow[4];
+		float KeepHigh[4];
 	};
 
 	bool Refused;
@@ -107,6 +121,8 @@ private:
 	unsigned Seed;
 	Constants Block;
 	ID3D11ShaderResourceView * Corners;		///< borrowed from the backend, valid while its rays are made
+	ID3D11ShaderResourceView * CutCoordinates;
+	ID3D11ShaderResourceView * CutAlpha;
 	ID3D11Buffer * Buffers[BUFFERS];
 	ID3D11UnorderedAccessView * Writes[BUFFERS];
 	ID3D11ShaderResourceView * Reads[BUFFERS];

@@ -23,8 +23,8 @@
 **
 ** A light any pixel of a quad found blocked is taken off all four, so a shadow's edge is two pixels
 ** wide and an edge between a unit and the ground behind it can take one pixel the wrong answer.  The
-** rays are any-hit through the solid casters and over the ground (ray_occluded); the light is taken
-** whole, diffuse and ambient; cut casters (leaves, fences) let it through, not being in the grid.
+** rays are any-hit through the casters and over the ground (ray_occluded), a cut caster (leaves,
+** fences) only where its texel is solid; the light is taken whole, diffuse and ambient.
 ** A ray tests the first 64 triangles of each cell it crosses (RAY_LIGHT_LIST_CAP), so a light can
 ** slip through a gap in a crowded cell.  Past MAX_JOBS a frame's rays are dropped and those lights
 ** stay unshadowed.

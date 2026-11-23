@@ -21,8 +21,8 @@
 ** ponytail: two rays a pixel, denoised only by the option's spatial blur; a temporal accumulation
 ** over the last frames is the upgrade if the grain shows on a moving camera.  The time goes in the
 ** triangle lists of the cells round the ray's start, not in the walk: four rays cost 1.85 times two,
-** a reach of 16 against 24 saved a sixth.  Cut casters (leaves,
-** fences) are not in the grid, so trees close nothing off here.
+** a reach of 16 against 24 saved a sixth.  Cut casters (leaves, fences, the foliage) close off
+** where their texel is solid, as the grid's hit test has it.
 **
 ** Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
 */
@@ -35,6 +35,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
+
+// A ray tests the first 32 triangles of each cell it walks, as the lights' test 64.  Pine needles and
+// grass put hundreds in a cell, and every occlusion ray starting under them walked those lists:
+// with the cut casters in the grid the pass took 3.37 ms on Dark Night's square and 1.83 on
+// Heartland Shield, against 0.98 and 1.13 at 32 for 7% and 6% fewer rays stopped (16 took
+// another 0.2 ms off and 11% of the stops).  ponytail: which 32 is the fill's order, which changes
+// frame to frame, so a crowded cell can shimmer; a list sorted nearest first is the upgrade.
+static const char RAY_AO_LIST_CAP[] = "#define RG_LIST_CAP 32\n";
 
 static const char RAY_AO_PROGRAM[] =
 	"#define AO_RAYS 2\n"			// 1.28 ms on Twilight Flame's drawlooks view, 4 cost 2.36: the cost is per ray
@@ -216,7 +224,7 @@ bool DX11RayOcclusionClass::Make(DX11BackendClass & backend, ID3D11Device * devi
 	bool made = true;
 	if (Program == NULL) {
 		std::vector<unsigned char> code;
-		made = backend.Compile_Program(DX11RayGridClass::Trace_Program() + RAY_AO_PROGRAM, "rayao", "cs_5_0", code)
+		made = backend.Compile_Program(RAY_AO_LIST_CAP + DX11RayGridClass::Trace_Program() + RAY_AO_PROGRAM, "rayao", "cs_5_0", code)
 			&& SUCCEEDED(device->CreateComputeShader(&code[0], code.size(), NULL, &Program));
 		D3D11_BUFFER_DESC constants;
 		memset(&constants, 0, sizeof(constants));

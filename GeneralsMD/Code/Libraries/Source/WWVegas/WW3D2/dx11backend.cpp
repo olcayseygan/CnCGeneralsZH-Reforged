@@ -345,6 +345,7 @@ DX11BackendClass::DX11BackendClass()
 	memset(ShadowCasterVertexShaders, 0, sizeof(ShadowCasterVertexShaders));
 	memset(ShadowCasterLayouts, 0, sizeof(ShadowCasterLayouts));
 	ShadowCasterAlphaTest = NULL;
+	ShadowCasterCutCapture = 0;
 	ShadowCasterInstances = NULL;
 	ShadowCasterCapacity = 0;
 	ShadowCasterBones = NULL;
@@ -377,6 +378,20 @@ DX11BackendClass::DX11BackendClass()
 	memset(RayProbe, 0, sizeof(RayProbe));
 	memset(RayProbeCounts, 0, sizeof(RayProbeCounts));
 	RaySolidCopies = 0;
+	const char * const cut = getenv("ZHR_RT_CUT");
+	RayCutWanted = cut == NULL || strcmp(cut, "0") != 0;
+	RaySamplesRefused = false;
+	memset(RayCutTextures, 0, sizeof(RayCutTextures));
+	RayCutTextureCount = 0;
+	RayCutCopies = 0;
+	RayCutTexturesLeftOut = 0;
+	memset(RayCaptureStamp, 0, sizeof(RayCaptureStamp));
+	RayCutCoordinates = NULL;
+	RayCutCoordinatesView = NULL;
+	RayCutAlpha = NULL;
+	RayCutAlphaWrite = NULL;
+	RayCutAlphaRead = NULL;
+	RayCutAlphaShader = NULL;
 	RayPassesLeftToMap = 0;
 	RayStoppedByCut = 0;
 	RayStoppedByMap = 0;
@@ -1247,6 +1262,7 @@ static const char SHADOW_CASTER_ALPHA_PIXEL_PROGRAM[] =
 	"    float alpha_level = floor(Texture0.Sample(Sampler0, input.TexCoord).a * 255.0 + 0.5);\n"
 	"    clip(alpha_level - 96.0);\n"
 	"}\n";
+static const float SHADOW_CASTER_ALPHA_REFERENCE = 96.0f / 255.0f;	///< the program's level above, for the rays
 
 #undef SHADOW_CASTER_INSTANCE_INPUT
 #undef SHADOW_CASTER_PROJECT
@@ -1331,6 +1347,9 @@ bool DX11BackendClass::Make_Shadow_Caster_Program()
 			&& SUCCEEDED(device->CreateVertexShader(&code[0], code.size(), NULL, &ShadowCasterVertexShaders[kind]))
 			&& SUCCEEDED(device->CreateInputLayout(programs[kind].Elements, programs[kind].ElementCount,
 				&code[0], code.size(), &ShadowCasterLayouts[kind]));
+		if (made && kind == SHADOW_CASTER_ALPHA_TESTED) {
+			ShadowCasterCutCapture = Cut_Capture_For(code);
+		}
 	}
 	made = made && Compile_Program(SHADOW_CASTER_ALPHA_PIXEL_PROGRAM, "shadowcasteralphatest", PIXEL_PROFILE, code)
 		&& SUCCEEDED(device->CreatePixelShader(&code[0], code.size(), NULL, &ShadowCasterAlphaTest));
@@ -1631,6 +1650,14 @@ bool DX11BackendClass::Draw_Shadow_Casters(const ShadowCasterRun * runs, unsigne
 		}
 		context->DrawIndexedInstanced(run.IndexCount, run.InstanceCount, run.StartIndex,
 			static_cast<INT>(run.BaseVertex), run.FirstInstance);
+		// A cut run goes again for the 3D grid, at SHADOW_CASTER_ALPHA_PIXEL_PROGRAM's level.
+		if (RayCapturing && run.Kind == SHADOW_CASTER_ALPHA_TESTED
+				&& Begin_Ray_Cut_Copy(ShadowCasterCutCapture, Textures[0], SHADOW_CASTER_ALPHA_REFERENCE)) {
+			context->DrawIndexedInstanced(run.IndexCount, run.InstanceCount, run.StartIndex,
+				static_cast<INT>(run.BaseVertex), run.FirstInstance);
+			context->GSSetShader(NULL, NULL, 0);
+			context->PSSetShader(ShadowCasterAlphaTest, NULL, 0);
+		}
 		++DrawsMade;
 	}
 	if (RayCapturing) {
@@ -3612,6 +3639,7 @@ bool DX11BackendClass::Resolve(Pipeline & pipeline)
 	built.VertexShader = NULL;
 	built.PixelShader = NULL;
 	built.Layout = NULL;
+	built.CutCapture = Cut_Capture_For(vertex_code);
 
 	ID3D11Device * device = Device->Get_Device();
 	const bool created = SUCCEEDED(device->CreateVertexShader(&vertex_code[0], vertex_code.size(),
@@ -4526,8 +4554,7 @@ bool DX11BackendClass::Draw_Indexed(unsigned index_count, unsigned start_index,
 	if (water) {
 		Unbind_Water();
 	}
-	if (RayCapturing && !Ray_Draw_Is_Cut()) {
-		Begin_Ray_Copy();
+	if (RayCapturing && Begin_Ray_Copy(pipeline)) {
 		context->DrawIndexed(index_count, start_index, base_vertex);
 		End_Ray_Copy();
 	}
@@ -4589,8 +4616,7 @@ bool DX11BackendClass::Draw_Triangles(unsigned vertex_count, unsigned start_vert
 	if (water) {
 		Unbind_Water();
 	}
-	if (RayCapturing && !Ray_Draw_Is_Cut()) {
-		Begin_Ray_Copy();
+	if (RayCapturing && Begin_Ray_Copy(pipeline)) {
 		context->Draw(vertex_count, start_vertex);
 		End_Ray_Copy();
 	}
@@ -4763,8 +4789,7 @@ bool DX11BackendClass::Draw_User_Strip(const void * vertices, unsigned primitive
 	Bind_Pipeline(pipeline, UserBuffer, stride, 0, NULL, DXGI_FORMAT_UNKNOWN,
 		D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context->Draw(list_vertex_count, 0);
-	if (RayCapturing && !Ray_Draw_Is_Cut()) {
-		Begin_Ray_Copy();
+	if (RayCapturing && Begin_Ray_Copy(pipeline)) {
 		context->Draw(list_vertex_count, 0);
 		End_Ray_Copy();
 	}
@@ -4909,14 +4934,17 @@ void DX11BackendClass::Take_Frame_Constant_Writes(unsigned & writes, unsigned & 
 ** list of triangles to test.  The grid is built by counting, a prefix sum and a fill, three
 ** dispatches.
 **
-** A caster cut at its alpha (leaves, fences, rotor blades, the cloak's thinned shadow) cannot be
-** streamed, since a triangle carries no texel to cut by, so its draw into the map writes the map's
-** stencil, RAY_CUT_STENCIL where it lands nearest the sun and nought where a solid caster does,
-** and a ray takes the map's depth where it crosses a marked texel.  That is exact: a solid caster
-** behind a cut one is still found among the triangles, and one in front unmarks the texel and is
-** found there too.  Streamed as solid, a pine was a stack of cards that shadowed itself.  (A
-** depth map of the cut casters' own, drawn a second time, cost 0.35 ms in its clear alone and as
-** much again in switching depth targets.)
+** A caster cut at its alpha (leaves, fences, rotor blades, the cloak's thinned shadow) is not in
+** the sun's grid, since a triangle there carries no texel to cut by, so its draw into the map
+** writes the map's stencil, RAY_CUT_STENCIL where it lands nearest the sun and nought where a solid
+** caster does, and a ray takes the map's depth where it crosses a marked texel.  That is exact: a
+** solid caster behind a cut one is still found among the triangles, and one in front unmarks the
+** texel and is found there too.  Streamed as solid, a pine was a stack of cards that shadowed
+** itself.  (A depth map of the cut casters' own, drawn a second time, cost 0.35 ms in its clear
+** alone and as much again in switching depth targets.)  The 3D grid's rays, which cross no map,
+** do take them: a cut caster textured at stage 0 is streamed on a second draw with its texture
+** coordinates, its texture's slice of a per-pass alpha copy and its alpha reference, its stamp
+** negated so the sun's grid passes it over (RAY_CAPTURE_WRITTEN, cut_capture_source).
 **
 ** The ray starts at the scene's depth.  A hit is a triangle the pixel falls inside, in x and y,
 ** whose depth at that point is nearer the sun than the pixel by more than a bias, or a cut texel
@@ -4975,10 +5003,137 @@ struct RayConstantBlock
 	float Probe[4];			///< the screen rectangle the report counts on its own (ZHR_RT_PROBE), left, top, right, bottom
 };
 
-static const char RAY_CAPTURE_PROGRAM[] =
+// Every capture program streams two float4 a corner, into the corners and into the cut coordinates
+// beside them, so the two buffers fill in step.  A solid caster's second one is nought.  A cut
+// caster's (Cut_Capture_Source) is its texture coordinates, its slice of the cut alpha and its alpha
+// reference, and its corners carry the stamp negated, which keeps it out of the sun's 2D grid: the
+// sun has the map's stencil for those.  Stamp is the pass's stamp, then a cut draw's slice and
+// reference.
+static const char RAY_CAPTURE_WRITTEN[] =
 	"cbuffer Capture : register(b0) { float4 Stamp; };\n"
+	"struct Written { float4 Position : SV_Position; float4 Sun : TEXCOORD0; float4 Cut : TEXCOORD1; };\n";
+static const UINT RAY_CAPTURE_STREAMS = 2;
+static const D3D11_SO_DECLARATION_ENTRY RAY_CAPTURE_STREAM[RAY_CAPTURE_STREAMS] = {
+	{ 0, "TEXCOORD", 0, 0, 4, 0 },
+	{ 0, "TEXCOORD", 1, 0, 4, 1 },
+};
+static const UINT RAY_CAPTURE_STRIDES[RAY_CAPTURE_STREAMS] = { 4 * sizeof(float), 4 * sizeof(float) };
+
+// The DXBC container's output signature chunk, which a vertex program of shader model 4 writes: a
+// count, the offset of the elements, then 24 bytes an element (its name's offset in the chunk, the
+// semantic index, the system value, the component type, the register and the mask).
+static const unsigned DXBC_HEADER_BYTES = 32;
+static const unsigned DXBC_SIGNATURE_ELEMENT_BYTES = 24;
+static const unsigned DXBC_SYSTEM_VALUE_POSITION = 1;
+static const unsigned DXBC_COMPONENT_UINT = 1;
+static const unsigned DXBC_COMPONENT_INT = 2;
+static const unsigned DXBC_COMPONENT_FLOAT = 3;
+
+static unsigned read_dxbc_word(const unsigned char * at)
+{
+	unsigned word;
+	memcpy(&word, at, sizeof(word));
+	return word;
+}
+
+/* A cut caster's capture program, for a vertex program's bytecode: its output signature taken
+	 element for element and in order as the corner, so the two stages link as the vertex program and
+	 its own pixel program do, and the position and the first two wide texture coordinate (set 0's
+	 where there is one) streamed.  Empty for a program with neither, or with a system value other
+	 than the position. */
+static std::string cut_capture_source(const std::vector<unsigned char> & code)
+{
+	const size_t size = code.size();
+	if (size < DXBC_HEADER_BYTES || memcmp(&code[0], "DXBC", 4) != 0) {
+		return std::string();
+	}
+	const unsigned chunks = read_dxbc_word(&code[28]);
+	for (unsigned chunk = 0; chunk < chunks && DXBC_HEADER_BYTES + chunk * 4 + 4 <= size; ++chunk) {
+		const unsigned offset = read_dxbc_word(&code[DXBC_HEADER_BYTES + chunk * 4]);
+		if (offset + 16 > size || memcmp(&code[offset], "OSGN", 4) != 0) {
+			continue;
+		}
+		const unsigned chunk_bytes = read_dxbc_word(&code[offset + 4]);
+		const unsigned char * const data = &code[offset + 8];
+		if (offset + 8 + chunk_bytes > size) {
+			return std::string();
+		}
+		const unsigned elements = read_dxbc_word(data);
+		const unsigned first = read_dxbc_word(data + 4);
+		if (first + elements * DXBC_SIGNATURE_ELEMENT_BYTES > chunk_bytes) {
+			return std::string();
+		}
+		std::string fields;
+		int position = -1;
+		int coordinate = -1;
+		int any_coordinate = -1;
+		for (unsigned element = 0; element < elements; ++element) {
+			const unsigned char * const at = data + first + element * DXBC_SIGNATURE_ELEMENT_BYTES;
+			const unsigned name_offset = read_dxbc_word(at);
+			if (name_offset >= chunk_bytes || memchr(data + name_offset, 0, chunk_bytes - name_offset) == NULL) {
+				return std::string();
+			}
+			const char * const name = reinterpret_cast<const char *>(data + name_offset);
+			const unsigned semantic_index = read_dxbc_word(at + 4);
+			const unsigned system_value = read_dxbc_word(at + 8);
+			const unsigned component_type = read_dxbc_word(at + 12);
+			const unsigned mask = at[20] & 0xfu;
+			const unsigned components = (mask & 1u) + ((mask >> 1) & 1u) + ((mask >> 2) & 1u) + ((mask >> 3) & 1u);
+			const char * const type = (component_type == DXBC_COMPONENT_FLOAT) ? "float"
+				: (component_type == DXBC_COMPONENT_UINT) ? "uint"
+				: (component_type == DXBC_COMPONENT_INT) ? "int" : NULL;
+			if (type == NULL || components == 0 || (system_value != 0 && system_value != DXBC_SYSTEM_VALUE_POSITION)) {
+				return std::string();
+			}
+			char line[128];
+			if (system_value == DXBC_SYSTEM_VALUE_POSITION) {
+				if (components != 4) {
+					return std::string();
+				}
+				position = static_cast<int>(element);
+				snprintf(line, sizeof(line), "    float4 e%u : SV_Position;\n", element);
+			} else {
+				if (components == 1) {
+					snprintf(line, sizeof(line), "    %s e%u : %s%u;\n", type, element, name, semantic_index);
+				} else {
+					snprintf(line, sizeof(line), "    %s%u e%u : %s%u;\n", type, components, element, name, semantic_index);
+				}
+				const bool two_wide = component_type == DXBC_COMPONENT_FLOAT && components >= 2 && _stricmp(name, "TEXCOORD") == 0;
+				if (two_wide && semantic_index == 0 && coordinate < 0) {
+					coordinate = static_cast<int>(element);
+				}
+				if (two_wide && any_coordinate < 0) {
+					any_coordinate = static_cast<int>(element);
+				}
+			}
+			fields += line;
+		}
+		if (coordinate < 0) {
+			coordinate = any_coordinate;
+		}
+		if (position < 0 || coordinate < 0) {
+			return std::string();
+		}
+		char body[512];
+		snprintf(body, sizeof(body),
+			"[maxvertexcount(3)]\n"
+			"void main(triangle Corner corner[3], inout TriangleStream<Written> stream)\n"
+			"{\n"
+			"    [unroll] for (int i = 0; i < 3; ++i) {\n"
+			"        Written written;\n"
+			"        written.Position = corner[i].e%d;\n"
+			"        written.Sun = float4(corner[i].e%d.xyz / corner[i].e%d.w, -Stamp.x);\n"
+			"        written.Cut = float4(corner[i].e%d.xy, Stamp.y, Stamp.z);\n"
+			"        stream.Append(written);\n"
+			"    }\n"
+			"}\n", position, position, position, coordinate);
+		return std::string(RAY_CAPTURE_WRITTEN) + "struct Corner\n{\n" + fields + "};\n" + body;
+	}
+	return std::string();
+}
+
+static const char RAY_CAPTURE_PROGRAM[] =
 	"struct Corner { float4 Position : SV_Position; };\n"
-	"struct Written { float4 Position : SV_Position; float4 Sun : TEXCOORD0; };\n"
 	"[maxvertexcount(3)]\n"
 	"void main(triangle Corner corner[3], inout TriangleStream<Written> stream)\n"
 	"{\n"
@@ -4986,8 +5141,28 @@ static const char RAY_CAPTURE_PROGRAM[] =
 	"        Written written;\n"
 	"        written.Position = corner[i].Position;\n"
 	"        written.Sun = float4(corner[i].Position.xyz / corner[i].Position.w, Stamp.x);\n"
+	"        written.Cut = float4(0.0, 0.0, 0.0, 0.0);\n"
 	"        stream.Append(written);\n"
 	"    }\n"
+	"}\n";
+
+// The cut alpha: each texture a pass's cut casters drew with, its alpha into one slice of a
+// RAY_CUT_SIZE square array, from the largest mip no smaller than the slice, nearest texel.
+static const char RAY_CUT_ALPHA_PROGRAM[] =
+	"#define CUT_SIZE 512\n"		// RAY_CUT_SIZE
+	"cbuffer Capture : register(b0) { float4 Stamp; };\n"	// y: the slice
+	"Texture2D<float4> Source : register(t0);\n"
+	"RWTexture2DArray<unorm float> Alpha : register(u0);\n"
+	"[numthreads(8, 8, 1)]\n"
+	"void main(uint3 id : SV_DispatchThreadID)\n"
+	"{\n"
+	"    uint width, height, levels;\n"
+	"    Source.GetDimensions(0, width, height, levels);\n"
+	"    uint level = 0;\n"
+	"    [loop] while (level + 1 < levels && (width >> (level + 1)) >= CUT_SIZE && (height >> (level + 1)) >= CUT_SIZE) ++level;\n"
+	"    Source.GetDimensions(level, width, height, levels);\n"
+	"    int2 texel = int2((float2(id.xy) + 0.5) * float2(width, height) / CUT_SIZE);\n"
+	"    Alpha[uint3(id.xy, (uint)Stamp.y)] = Source.Load(int3(texel, level)).a;\n"
 	"}\n";
 
 static const char RAY_PROGRAM_COMMON[] =
@@ -5427,18 +5602,23 @@ static const char RAY_SAMPLES_PROGRAM[] =
 	"    float centre = Depth.Load(int3(pixel, 0));\n"
 	"    int2 best = pixel;\n"
 	"    if (abs(own - centre) > 0.02 * (1.0 - min(centre, 0.999))) {\n"
-	"        float nearest = 2.0;\n"
+	"        float nearest = abs(centre - own);\n"
 	"        [unroll] for (int y = -1; y <= 1; ++y) {\n"
 	"            [unroll] for (int x = -1; x <= 1; ++x) {\n"
 	"                int2 at = clamp(pixel + int2(x, y), int2(0, 0), last);\n"
 	"                float gap = abs(Depth.Load(int3(at, 0)) - own);\n"
-	"                if ((x != 0 || y != 0) && gap < nearest) { nearest = gap; best = at; }\n"
+	"                if (gap < nearest) { nearest = gap; best = at; }\n"
 	"            }\n"
 	"        }\n"
 	"    }\n"
 	"    float shade = Shade.Load(int3(best, 0));\n"
 	"    return float4(shade, shade, shade, 1.0);\n"
 	"}\n";
+
+const char * DX11BackendClass::Ray_Samples_Program()
+{
+	return RAY_SAMPLES_PROGRAM;
+}
 
 static bool make_ray_buffer(ID3D11Device * device, unsigned elements, ID3D11Buffer ** buffer,
 	ID3D11UnorderedAccessView ** write, ID3D11ShaderResourceView ** read)
@@ -5473,34 +5653,29 @@ bool DX11BackendClass::Make_Ray_Shadows()
 	}
 	ID3D11Device * device = Device->Get_Device();
 	const std::string common = RAY_PROGRAM_COMMON;
-	std::vector<unsigned char> capture, count, scan, block, fill, trace, apply, samples;
+	std::vector<unsigned char> capture, count, scan, block, fill, trace, apply, cut_alpha;
 	bool made = Make_Depth_Resolve()		// its full screen triangle carries the shade
-		&& Compile_Program(RAY_CAPTURE_PROGRAM, "raycapture", "gs_5_0", capture)
+		&& Compile_Program(std::string(RAY_CAPTURE_WRITTEN) + RAY_CAPTURE_PROGRAM, "raycapture", "gs_5_0", capture)
 		&& Compile_Program(common + RAY_PROGRAM_CELLS + RAY_COUNT_PROGRAM, "raycount", "cs_5_0", count)
 		&& Compile_Program(common + RAY_SCAN_PROGRAM, "rayscan", "cs_5_0", scan)
 		&& Compile_Program(common + RAY_BLOCK_PROGRAM, "rayblock", "cs_5_0", block)
 		&& Compile_Program(common + RAY_PROGRAM_CELLS + RAY_FILL_PROGRAM, "rayfill", "cs_5_0", fill)
 		&& Compile_Program(common + RAY_TRACE_READS + RAY_PROGRAM_SURFACE + RAY_TRACE_PROGRAM, "raytrace", "cs_5_0", trace)
 		&& Compile_Program(common + RAY_APPLY_READS + RAY_PROGRAM_SURFACE + RAY_APPLY_PROGRAM, "rayapply", "ps_5_0", apply)
-		&& Compile_Program(RAY_SAMPLES_PROGRAM, "raysamples", "ps_5_0", samples);
+		&& Compile_Program(RAY_CUT_ALPHA_PROGRAM, "raycutalpha", "cs_5_0", cut_alpha);
 
 	if (made) {
-		D3D11_SO_DECLARATION_ENTRY entry;
-		memset(&entry, 0, sizeof(entry));
-		entry.SemanticName = "TEXCOORD";
-		entry.ComponentCount = 4;
-		const UINT stride = 4 * sizeof(float);
-		made = SUCCEEDED(device->CreateGeometryShaderWithStreamOutput(&capture[0], capture.size(), &entry, 1,
-				&stride, 1, D3D11_SO_NO_RASTERIZED_STREAM, NULL, &RayCaptureShader))
-			&& SUCCEEDED(device->CreateGeometryShaderWithStreamOutput(&capture[0], capture.size(), &entry, 1,
-				&stride, 1, 0, NULL, &RayCaptureRasterShader))
+		made = SUCCEEDED(device->CreateGeometryShaderWithStreamOutput(&capture[0], capture.size(), RAY_CAPTURE_STREAM,
+				RAY_CAPTURE_STREAMS, RAY_CAPTURE_STRIDES, RAY_CAPTURE_STREAMS, D3D11_SO_NO_RASTERIZED_STREAM, NULL, &RayCaptureShader))
+			&& SUCCEEDED(device->CreateGeometryShaderWithStreamOutput(&capture[0], capture.size(), RAY_CAPTURE_STREAM,
+				RAY_CAPTURE_STREAMS, RAY_CAPTURE_STRIDES, RAY_CAPTURE_STREAMS, 0, NULL, &RayCaptureRasterShader))
 			&& SUCCEEDED(device->CreateComputeShader(&count[0], count.size(), NULL, &RayCountShader))
 			&& SUCCEEDED(device->CreateComputeShader(&scan[0], scan.size(), NULL, &RayScanShader))
 			&& SUCCEEDED(device->CreateComputeShader(&block[0], block.size(), NULL, &RayBlockShader))
 			&& SUCCEEDED(device->CreateComputeShader(&fill[0], fill.size(), NULL, &RayFillShader))
 			&& SUCCEEDED(device->CreateComputeShader(&trace[0], trace.size(), NULL, &RayTraceShader))
 			&& SUCCEEDED(device->CreatePixelShader(&apply[0], apply.size(), NULL, &RayApplyShader))
-			&& SUCCEEDED(device->CreatePixelShader(&samples[0], samples.size(), NULL, &RayApplySamplesShader));
+			&& SUCCEEDED(device->CreateComputeShader(&cut_alpha[0], cut_alpha.size(), NULL, &RayCutAlphaShader));
 	}
 
 	if (made) {
@@ -5519,8 +5694,23 @@ bool DX11BackendClass::Make_Ray_Shadows()
 		constants.ByteWidth = 4 * sizeof(float);
 		constants.Usage = D3D11_USAGE_DEFAULT;
 		constants.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		D3D11_TEXTURE2D_DESC alpha;
+		memset(&alpha, 0, sizeof(alpha));
+		alpha.Width = RAY_CUT_SIZE;
+		alpha.Height = RAY_CUT_SIZE;
+		alpha.MipLevels = 1;
+		alpha.ArraySize = RAY_CUT_SLICES;
+		alpha.Format = DXGI_FORMAT_R8_UNORM;
+		alpha.SampleDesc.Count = 1;
+		alpha.Usage = D3D11_USAGE_DEFAULT;
+		alpha.BindFlags = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
 		made = SUCCEEDED(device->CreateBuffer(&corners, NULL, &RayCorners))
 			&& SUCCEEDED(device->CreateShaderResourceView(RayCorners, &corners_read, &RayCornersView))
+			&& SUCCEEDED(device->CreateBuffer(&corners, NULL, &RayCutCoordinates))
+			&& SUCCEEDED(device->CreateShaderResourceView(RayCutCoordinates, &corners_read, &RayCutCoordinatesView))
+			&& SUCCEEDED(device->CreateTexture2D(&alpha, NULL, &RayCutAlpha))
+			&& SUCCEEDED(device->CreateUnorderedAccessView(RayCutAlpha, NULL, &RayCutAlphaWrite))
+			&& SUCCEEDED(device->CreateShaderResourceView(RayCutAlpha, NULL, &RayCutAlphaRead))
 			&& SUCCEEDED(device->CreateBuffer(&constants, NULL, &RayCaptureConstants));
 		constants.ByteWidth = sizeof(RayConstantBlock);
 		made = made && SUCCEEDED(device->CreateBuffer(&constants, NULL, &RayConstants));
@@ -5610,6 +5800,8 @@ void DX11BackendClass::Release_Ray_Shadows()
 		(IUnknown **)&RayCellReads[2], (IUnknown **)&RayCellReads[3], (IUnknown **)&RayCells[0],
 		(IUnknown **)&RayCells[1], (IUnknown **)&RayCells[2], (IUnknown **)&RayCells[3],
 		(IUnknown **)&RayStencilRead,
+		(IUnknown **)&RayCutCoordinatesView, (IUnknown **)&RayCutCoordinates, (IUnknown **)&RayCutAlphaWrite,
+		(IUnknown **)&RayCutAlphaRead, (IUnknown **)&RayCutAlpha, (IUnknown **)&RayCutAlphaShader,
 	};
 	for (unsigned index = 0; index < sizeof(held) / sizeof(held[0]); ++index) {
 		if (*held[index] != NULL) {
@@ -5617,6 +5809,16 @@ void DX11BackendClass::Release_Ray_Shadows()
 			*held[index] = NULL;
 		}
 	}
+	for (unsigned index = 0; index < RayCutCaptures.size(); ++index) {
+		RayCutCapture & capture = RayCutCaptures[index];
+		if (capture.Program != NULL) {
+			capture.Program->Release();
+			capture.Program = NULL;
+		}
+		capture.Refused = false;
+	}
+	Release_Ray_Cut_Textures();
+	RaySamplesRefused = false;
 	for (unsigned index = 0; index < RAY_QUERY_FRAMES; ++index) {
 		RayFrameQueries & frame = RayQueries[index];
 		IUnknown ** const queries[] = {
@@ -5684,13 +5886,19 @@ void DX11BackendClass::Begin_Ray_Capture()
 
 	// 2^23 stamps before one repeats, all of them exact in a float.
 	RayStamp = (RayStamp % 0x7fffffu) + 1;
-	const float stamp[4] = { static_cast<float>(RayStamp), 0.0f, 0.0f, 0.0f };
-	context->UpdateSubresource(RayCaptureConstants, 0, NULL, stamp, 0, 0);
+	RayCaptureStamp[0] = static_cast<float>(RayStamp);
+	RayCaptureStamp[1] = 0.0f;
+	RayCaptureStamp[2] = 0.0f;
+	context->UpdateSubresource(RayCaptureConstants, 0, NULL, RayCaptureStamp, 0, 0);
 	context->GSSetConstantBuffers(0, 1, &RayCaptureConstants);
-	const UINT offset = 0;
-	context->SOSetTargets(1, &RayCorners, &offset);
+	ID3D11Buffer * const streams[RAY_CAPTURE_STREAMS] = { RayCorners, RayCutCoordinates };
+	const UINT offsets[RAY_CAPTURE_STREAMS] = { 0, 0 };
+	context->SOSetTargets(RAY_CAPTURE_STREAMS, streams, offsets);
 	RayGrid.Invalidate();
 	RaySolidCopies = 0;
+	RayCutCopies = 0;
+	RayCutTexturesLeftOut = 0;
+	Release_Ray_Cut_Textures();
 	RayCapturing = true;
 	// The stencil marks and the reference change the state objects every draw builds.
 	Note_Shadow_State_Changed();
@@ -5774,20 +5982,139 @@ bool DX11BackendClass::Ray_Draw_Is_Cut() const
 	return RenderStates.Get_Render_State(D3DRS_ALPHATESTENABLE) != FALSE || DrawEffect == DRAW_EFFECT_CLOAK_SHADOW;
 }
 
-/* A solid caster drawn one by one has gone into the map; now it goes again through the capture
-	 program, which streams its triangles and rasterises nothing.  Its pixel program reads what its
-	 vertex program wrote, so the capture program cannot stand between them on the map's own draw.
-	 A cut caster needs no second draw: its draw marked the map's stencil.  ponytail: these few
-	 (bridges, fragments, the sort lists' meshes) run their vertices twice; a pass-through geometry
-	 program made from each vertex program would stream them on the map's draw. */
-void DX11BackendClass::Begin_Ray_Copy()
+/* A caster drawn one by one has gone into the map; now it goes again through a capture program,
+	 which streams its triangles and rasterises nothing.  Its pixel program reads what its vertex
+	 program wrote, so the capture program cannot stand between them on the map's own draw.  A solid
+	 caster's is RAY_CAPTURE_PROGRAM.  A cut caster's draw marked the map's stencil for the sun; its
+	 second goes through the program made from its vertex program's signature, for the 3D grid's
+	 rays, with its stage 0 texture's slice and its alpha reference.  A cloak's shadow is cut by
+	 the cloak, not by a texture, and stays out.  ponytail: these run their vertices twice; the
+	 programs made from each vertex program could stream them on the map's draw. */
+bool DX11BackendClass::Begin_Ray_Copy(const Pipeline & pipeline)
 {
+	if (Ray_Draw_Is_Cut()) {
+		const unsigned function = RenderStates.Get_Render_State(D3DRS_ALPHAFUNC);
+		if (DrawEffect == DRAW_EFFECT_CLOAK_SHADOW
+				|| RenderStates.Get_Render_State(D3DRS_ALPHATESTENABLE) == FALSE
+				|| (function != D3DCMP_GREATER && function != D3DCMP_GREATEREQUAL)) {
+			return false;
+		}
+		// The test is on eight bit levels, so over a level is at least the next.
+		const unsigned level = (RenderStates.Get_Render_State(D3DRS_ALPHAREF) & 0xffu) + (function == D3DCMP_GREATER ? 1u : 0u);
+		return Begin_Ray_Cut_Copy(pipeline.CutCapture, Textures[0], static_cast<float>(level) / 255.0f);
+	}
 	// No pixel program: one reading what the vertex program wrote does not link behind the capture
 	// program's output, and nothing is rasterised for it to run on.
 	ID3D11DeviceContext * context = Device->Get_Context();
 	context->GSSetShader(RayCaptureShader, NULL, 0);
 	context->PSSetShader(NULL, NULL, 0);
 	++RaySolidCopies;
+	return true;
+}
+
+bool DX11BackendClass::Begin_Ray_Cut_Copy(unsigned cut_capture, ID3D11ShaderResourceView * texture, float reference)
+{
+	if (!RayCutWanted) {
+		return false;
+	}
+	ID3D11GeometryShader * const program = Ray_Cut_Program(cut_capture);
+	const int slice = (program != NULL) ? Ray_Cut_Slice(texture) : -1;
+	if (slice < 0) {
+		return false;
+	}
+	ID3D11DeviceContext * context = Device->Get_Context();
+	if (RayCaptureStamp[1] != static_cast<float>(slice) || RayCaptureStamp[2] != reference) {
+		RayCaptureStamp[1] = static_cast<float>(slice);
+		RayCaptureStamp[2] = reference;
+		context->UpdateSubresource(RayCaptureConstants, 0, NULL, RayCaptureStamp, 0, 0);
+	}
+	context->GSSetShader(program, NULL, 0);
+	context->PSSetShader(NULL, NULL, 0);
+	++RayCutCopies;
+	return true;
+}
+
+unsigned DX11BackendClass::Cut_Capture_For(const std::vector<unsigned char> & vertex_code)
+{
+	const std::string source = cut_capture_source(vertex_code);
+	if (source.empty()) {
+		return 0;
+	}
+	std::map<std::string, unsigned>::const_iterator known = RayCutCaptureIndex.find(source);
+	if (known != RayCutCaptureIndex.end()) {
+		return known->second;
+	}
+	RayCutCapture capture;
+	capture.Source = source;
+	capture.Program = NULL;
+	capture.Refused = false;
+	RayCutCaptures.push_back(capture);
+	const unsigned index = static_cast<unsigned>(RayCutCaptures.size());
+	RayCutCaptureIndex[source] = index;
+	return index;
+}
+
+ID3D11GeometryShader * DX11BackendClass::Ray_Cut_Program(unsigned cut_capture)
+{
+	if (cut_capture == 0 || cut_capture > RayCutCaptures.size()) {
+		return NULL;
+	}
+	RayCutCapture & capture = RayCutCaptures[cut_capture - 1];
+	if (capture.Program == NULL && !capture.Refused) {
+		std::vector<unsigned char> code;
+		capture.Refused = !Compile_Program(capture.Source, "raycutcapture", "gs_5_0", code)
+			|| FAILED(Device->Get_Device()->CreateGeometryShaderWithStreamOutput(&code[0], code.size(), RAY_CAPTURE_STREAM,
+				RAY_CAPTURE_STREAMS, RAY_CAPTURE_STRIDES, RAY_CAPTURE_STREAMS, D3D11_SO_NO_RASTERIZED_STREAM, NULL,
+				&capture.Program));
+		if (capture.Refused) {
+			Note_Refusal("the device would not make a cut caster's capture program; that caster stays out of the rays");
+		}
+	}
+	return capture.Program;
+}
+
+int DX11BackendClass::Ray_Cut_Slice(ID3D11ShaderResourceView * texture)
+{
+	if (texture == NULL) {
+		return -1;
+	}
+	for (unsigned slice = 0; slice < RayCutTextureCount; ++slice) {
+		if (RayCutTextures[slice] == texture) {
+			return static_cast<int>(slice);
+		}
+	}
+	D3D11_SHADER_RESOURCE_VIEW_DESC description;
+	texture->GetDesc(&description);
+	if (RayCutTextureCount == RAY_CUT_SLICES || description.ViewDimension != D3D11_SRV_DIMENSION_TEXTURE2D) {
+		++RayCutTexturesLeftOut;
+		return -1;
+	}
+	texture->AddRef();
+	RayCutTextures[RayCutTextureCount] = texture;
+	return static_cast<int>(RayCutTextureCount++);
+}
+
+void DX11BackendClass::Release_Ray_Cut_Textures()
+{
+	for (unsigned slice = 0; slice < RayCutTextureCount; ++slice) {
+		RayCutTextures[slice]->Release();
+		RayCutTextures[slice] = NULL;
+	}
+	RayCutTextureCount = 0;
+}
+
+bool DX11BackendClass::Make_Ray_Samples()
+{
+	if (RayApplySamplesShader != NULL || RaySamplesRefused) {
+		return RayApplySamplesShader != NULL;
+	}
+	std::vector<unsigned char> code;
+	RaySamplesRefused = !Compile_Program(RAY_SAMPLES_PROGRAM, "raysamples", "ps_5_0", code)
+		|| FAILED(Device->Get_Device()->CreatePixelShader(&code[0], code.size(), NULL, &RayApplySamplesShader));
+	if (RaySamplesRefused) {
+		Note_Refusal("the device would not make the ray traced shadows' per-sample multiply; edges take sample 0's");
+	}
+	return !RaySamplesRefused;
 }
 
 void DX11BackendClass::End_Ray_Copy()
@@ -5797,6 +6124,86 @@ void DX11BackendClass::End_Ray_Copy()
 	context->PSSetShader(Bound.PixelShader, NULL, 0);
 }
 
+// The 3D grid's rays start on what the camera sees and reach at most a light's way from there, so
+// the grid keeps to the camera's four corner sight lines between the ground's lowest and
+// RAY_GRID_HEADROOM over its highest, RAY_GRID_KEEP_MARGIN wider every way.  Without it, the trees
+// the sun's column streams thousands of units up and down the sun's way set the grid's bounds, and on
+// Alpine Assault its cells went from 11.7 world units to 18.9.
+static const float RAY_GRID_HEADROOM = 300.0f;
+static const float RAY_GRID_KEEP_MARGIN = 250.0f;
+
+static bool ray_grid_keep(const float view[16], const float projection[16], const float sun_from_world[16],
+	float highest_ground, float low[3], float high[3])
+{
+	float scene_clip[16];
+	float world_from_clip[16];
+	multiply(view, projection, scene_clip);
+	if (!invert(scene_clip, world_from_clip)) {
+		return false;
+	}
+	const float floor_height = -RAY_GRID_KEEP_MARGIN;
+	const float ceiling_height = highest_ground + RAY_GRID_HEADROOM;
+	for (unsigned axis = 0; axis < 3; ++axis) {
+		low[axis] = 1e30f;
+		high[axis] = -1e30f;
+	}
+	for (unsigned corner = 0; corner < 4; ++corner) {
+		float ends[2][3];
+		for (unsigned end = 0; end < 2; ++end) {
+			const float clip[4] = { (corner & 1) ? 1.0f : -1.0f, (corner & 2) ? 1.0f : -1.0f, static_cast<float>(end), 1.0f };
+			float world[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+			for (unsigned column = 0; column < 4; ++column) {
+				for (unsigned row = 0; row < 4; ++row) {
+					world[column] += clip[row] * world_from_clip[row * 4 + column];
+				}
+			}
+			if (world[3] == 0.0f) {
+				return false;
+			}
+			for (unsigned axis = 0; axis < 3; ++axis) {
+				ends[end][axis] = world[axis] / world[3];
+			}
+		}
+		// The sight line's stretch between the floor and the ceiling, as parameters along it.
+		const float rise = ends[1][2] - ends[0][2];
+		float from = 0.0f;
+		float to = 1.0f;
+		if (rise != 0.0f) {
+			const float at_floor = (floor_height - ends[0][2]) / rise;
+			const float at_ceiling = (ceiling_height - ends[0][2]) / rise;
+			from = fmaxf(from, fminf(at_floor, at_ceiling));
+			to = fminf(to, fmaxf(at_floor, at_ceiling));
+		}
+		if (from > to) {
+			continue;
+		}
+		const float along[2] = { from, to };
+		for (unsigned end = 0; end < 2; ++end) {
+			float world[3];
+			for (unsigned axis = 0; axis < 3; ++axis) {
+				world[axis] = ends[0][axis] + (ends[1][axis] - ends[0][axis]) * along[end];
+			}
+			for (unsigned axis = 0; axis < 3; ++axis) {
+				const float sun = world[0] * sun_from_world[axis] + world[1] * sun_from_world[4 + axis]
+					+ world[2] * sun_from_world[8 + axis] + sun_from_world[12 + axis];
+				low[axis] = fminf(low[axis], sun);
+				high[axis] = fmaxf(high[axis], sun);
+			}
+		}
+	}
+	if (low[0] > high[0]) {
+		return false;
+	}
+	// A column of the sun's matrix is that clip axis per world unit.
+	for (unsigned axis = 0; axis < 3; ++axis) {
+		const float per_unit = sqrtf(sun_from_world[axis] * sun_from_world[axis]
+			+ sun_from_world[4 + axis] * sun_from_world[4 + axis] + sun_from_world[8 + axis] * sun_from_world[8 + axis]);
+		low[axis] -= RAY_GRID_KEEP_MARGIN * per_unit;
+		high[axis] += RAY_GRID_KEEP_MARGIN * per_unit;
+	}
+	return true;
+}
+
 void DX11BackendClass::End_Ray_Capture()
 {
 	ID3D11DeviceContext * context = Device->Get_Context();
@@ -5804,11 +6211,31 @@ void DX11BackendClass::End_Ray_Capture()
 	context->End(frame.Streamed);
 	context->End(frame.Captured);
 	ID3D11Buffer * no_buffer = NULL;
-	const UINT offset = 0;
-	context->SOSetTargets(1, &no_buffer, &offset);
+	ID3D11Buffer * const no_streams[RAY_CAPTURE_STREAMS] = { NULL, NULL };
+	const UINT offsets[RAY_CAPTURE_STREAMS] = { 0, 0 };
+	context->SOSetTargets(RAY_CAPTURE_STREAMS, no_streams, offsets);
 	context->GSSetShader(NULL, NULL, 0);
 	context->GSSetConstantBuffers(0, 1, &no_buffer);
 	RayCapturing = false;
+
+	// The cut casters' alpha, a slice a texture, for the 3D grid's rays to test their hits against.
+	if (RayCutTextureCount != 0) {
+		context->CSSetShader(RayCutAlphaShader, NULL, 0);
+		context->CSSetConstantBuffers(0, 1, &RayCaptureConstants);
+		context->CSSetUnorderedAccessViews(0, 1, &RayCutAlphaWrite, NULL);
+		for (unsigned slice = 0; slice < RayCutTextureCount; ++slice) {
+			RayCaptureStamp[1] = static_cast<float>(slice);
+			context->UpdateSubresource(RayCaptureConstants, 0, NULL, RayCaptureStamp, 0, 0);
+			context->CSSetShaderResources(0, 1, &RayCutTextures[slice]);
+			context->Dispatch(RAY_CUT_SIZE / 8, RAY_CUT_SIZE / 8, 1);
+		}
+		ID3D11UnorderedAccessView * const no_write = NULL;
+		ID3D11ShaderResourceView * const no_read = NULL;
+		context->CSSetUnorderedAccessViews(0, 1, &no_write, NULL);
+		context->CSSetShaderResources(0, 1, &no_read);
+		Release_Ray_Cut_Textures();
+	}
+	RayGrid.Set_Cut(RayCutCoordinatesView, RayCutAlphaRead);
 
 	RayConstantBlock block;
 	memset(&block, 0, sizeof(block));
@@ -5863,6 +6290,17 @@ void DX11BackendClass::End_Ray_Capture()
 	context->End(frame.Binned);
 	RayCaptured = Sun_Depth_Scale() > 0.0f;
 	if (RayCaptured) {
+		// The camera is the last frame's: this one's is handed over after the caster pass, and the
+		// margin covers a frame of its movement.
+		float keep_low[3];
+		float keep_high[3];
+		const float highest_ground = static_cast<float>(TerrainHeightsHighest) * TerrainLight[35];
+		if (SceneViewKnown && SceneProjection[11] != 0.0f
+				&& ray_grid_keep(SceneView, SceneProjection, SunViewProjection, highest_ground, keep_low, keep_high)) {
+			RayGrid.Set_Keep(keep_low, keep_high);
+		} else {
+			RayGrid.Keep_Whole();
+		}
 		RayGrid.Build(*this, Device->Get_Device(), context, RayCornersView, RayStamp, RAY_TRIANGLE_SLOTS, SunViewProjection);
 	}
 }
@@ -5984,7 +6422,8 @@ bool DX11BackendClass::Trace_Ray_Shadows()
 	context->PSSetShader(RayApplyShader, NULL, 0);
 	context->PSSetConstantBuffers(0, 1, &RayConstants);
 	ID3D11ShaderResourceView * apply_reads[3] = { RayMaskRead, depth, SceneColourCopyView };
-	ID3D11ShaderResourceView * samples = Device->Scene_Is_Multisampled() ? Device->Get_Multisampled_Depth_Texture() : NULL;
+	ID3D11ShaderResourceView * samples = (Device->Scene_Is_Multisampled() && Make_Ray_Samples())
+		? Device->Get_Multisampled_Depth_Texture() : NULL;
 	if (samples != NULL) {
 		// The shade at sample 0 into its own target, then a multiply per sample (RAY_SAMPLES_PROGRAM).
 		context->OMSetRenderTargets(1, &RayShadeTarget, NULL);
@@ -6080,16 +6519,17 @@ std::string DX11BackendClass::Ray_Shadow_Report()
 		}
 	}
 	const bool overflowed = RayTrianglesWanted > RayTrianglesWritten || RayReferences > RAY_REFERENCE_SLOTS;
-	char line[640];
+	char line[768];
 	snprintf(line, sizeof(line),
-		"%llu solid triangles streamed (%llu wanted, %u slots), %u grid references (%u slots, %ux%u cells), %u rays, "
+		"%llu triangles streamed (%llu wanted, %u slots), %u grid references (%u slots, %ux%u cells), %u rays, "
 		"%u stopped by solid casters, %u by cut casters, %u by the ground; the map alone %u, %u shaded by casters "
-		"and not by the map, %u the other way; solid casters from %s; %u solid draws made twice, %u passes left to the map under a filter, "
+		"and not by the map, %u the other way; solid casters from %s; %u solid draws made twice, %u cut draws "
+		"made twice (%u past the cut slices), %u passes left to the map under a filter, "
 		"GPU caster pass %.3f ms, bins %.3f ms, rays and shade %.3f ms, strength %.2f, ground %s",
 		RayTrianglesWritten, RayTrianglesWanted, RAY_TRIANGLE_SLOTS, RayReferences, RAY_REFERENCE_SLOTS,
 		RAY_GRID, RAY_GRID, RayTracedPixels, RayStoppedByCasters, RayStoppedByCut, RayStoppedByGround,
 		RayStoppedByMap, RayRaysOnly, RayMapOnly, overflowed ? "the map (overflowed)" : "the rays",
-		RaySolidCopies, RayPassesLeftToMap,
+		RaySolidCopies, RayCutCopies, RayCutTexturesLeftOut, RayPassesLeftToMap,
 		RayCaptureMS, RayBinMS, RayTraceMS, RayStrength,
 		(TerrainHeightsView != NULL && TerrainLight[33] > 0.0f) ? "marched" : "not held");
 	std::string report = line;

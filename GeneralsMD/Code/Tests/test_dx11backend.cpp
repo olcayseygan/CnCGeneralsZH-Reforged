@@ -2669,3 +2669,154 @@ TEST(dx11backend_a_screen_filter_after_a_multisampled_clear_draws_over_a_cleared
 	device.Release();
 	DestroyWindow(window);
 }
+
+// The Ray Traced level's grid for rays in any direction: a tilted triangle and one aside binned, one
+// left by an older pass ignored, and rays along the sun's depth and across it, short and long, from
+// inside the grid and from outside it.  The sun's matrix is the identity, so the world is clip space.
+TEST(dx11backend_the_ray_grid_finds_a_triangle_from_any_side)
+{
+	DX11DeviceClass device;
+	device.Request_Debug_Layer();
+	CHECK(device.Create_Offscreen());
+	ID3D11Device * d3d = device.Get_Device();
+	ID3D11DeviceContext * context = device.Get_Context();
+	DX11BackendClass backend;
+	CHECK(backend.Initialise(&device));
+
+	// Stream out fills from slot nought, so this pass is slots 0 to 69 (the tilted triangle again and
+	// again, then the one aside) and the rest an older pass's: a length search that stops short of
+	// the second group of 64 drops the triangle aside.
+	const unsigned slots = 200;
+	const float stamp = 5.0f;
+	std::vector<float> corners(slots * 12, 0.0f);
+	const float tilted[12] = { -0.3f, -0.3f, 0.3f, stamp, 0.3f, -0.3f, 0.5f, stamp, 0.0f, 0.3f, 0.7f, stamp };
+	const float stale[12] = { 0.5f, 0.5f, 0.2f, 4.0f, 0.7f, 0.5f, 0.2f, 4.0f, 0.6f, 0.7f, 0.2f, 4.0f };
+	const float aside[12] = { 0.7f, -0.8f, 0.1f, stamp, 0.9f, -0.8f, 0.1f, stamp, 0.8f, -0.6f, 0.9f, stamp };
+	for (unsigned slot = 0; slot < 69; ++slot) {
+		memcpy(&corners[12 * slot], tilted, sizeof(tilted));
+	}
+	memcpy(&corners[12 * 69], aside, sizeof(aside));
+	memcpy(&corners[12 * 70], stale, sizeof(stale));
+	D3D11_BUFFER_DESC description;
+	memset(&description, 0, sizeof(description));
+	description.ByteWidth = static_cast<UINT>(corners.size() * sizeof(float));
+	description.Usage = D3D11_USAGE_DEFAULT;
+	description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	D3D11_SUBRESOURCE_DATA data;
+	memset(&data, 0, sizeof(data));
+	data.pSysMem = &corners[0];
+	ID3D11Buffer * corner_buffer = NULL;
+	CHECK(SUCCEEDED(d3d->CreateBuffer(&description, &data, &corner_buffer)));
+	D3D11_SHADER_RESOURCE_VIEW_DESC read;
+	memset(&read, 0, sizeof(read));
+	read.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	read.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+	read.Buffer.NumElements = slots * 3;
+	ID3D11ShaderResourceView * corner_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateShaderResourceView(corner_buffer, &read, &corner_view)));
+
+	float identity[16];
+	set_identity(identity);
+	DX11RayGridClass grid;
+	grid.Build(backend, d3d, context, corner_view, 5, slots, identity);
+	CHECK(grid.Built());
+
+	// Origin and reach, then the way, and the answer expected.
+	struct GridRay { float From[4]; float Way[4]; unsigned Hit; };
+	const GridRay rays[] = {
+		{ { 0.0f, -0.05f, 0.0f, 2.0f }, { 0.0f, 0.0f, 1.0f, 0.0f }, 1 },		// up through the tilted one
+		{ { 0.0f, -0.05f, 0.0f, 0.4f }, { 0.0f, 0.0f, 1.0f, 0.0f }, 0 },		// stops short of it
+		{ { -0.9f, 0.0f, 0.55f, 2.0f }, { 1.0f, 0.0f, 0.0f, 0.0f }, 1 },		// across the sun's depth
+		{ { -0.9f, 0.0f, 0.55f, 0.5f }, { 1.0f, 0.0f, 0.0f, 0.0f }, 0 },
+		{ { 0.0f, 0.0f, 0.95f, 1.0f }, { 0.0f, 0.0f, -1.0f, 0.0f }, 1 },		// down from above the grid
+		{ { 0.6f, 0.6f, 0.0f, 2.0f }, { 0.0f, 0.0f, 1.0f, 0.0f }, 0 },		// the stale triangle only
+		{ { -5.0f, 0.0f, 0.55f, 10.0f }, { 1.0f, 0.0f, 0.0f, 0.0f }, 1 },		// from far outside the grid
+		{ { -0.6f, -0.6f, 0.0f, 3.0f }, { 0.6f, 0.6f, 0.8f, 0.0f }, 0 },		// crosses the plane outside the triangle
+		{ { 0.0f, -0.2f, 0.0f, 3.0f }, { 0.1f, 0.3f, 1.0f, 0.0f }, 1 },		// slanted, inside it
+		{ { 0.8f, -0.7f, 0.0f, 2.0f }, { 0.0f, 0.0f, 1.0f, 0.0f }, 1 },		// the one aside
+	};
+	const unsigned ray_count = sizeof(rays) / sizeof(rays[0]);
+	std::vector<float> packed;
+	for (unsigned index = 0; index < ray_count; ++index) {
+		packed.insert(packed.end(), rays[index].From, rays[index].From + 4);
+		packed.insert(packed.end(), rays[index].Way, rays[index].Way + 4);
+	}
+	description.ByteWidth = static_cast<UINT>(packed.size() * sizeof(float));
+	data.pSysMem = &packed[0];
+	ID3D11Buffer * ray_buffer = NULL;
+	CHECK(SUCCEEDED(d3d->CreateBuffer(&description, &data, &ray_buffer)));
+	read.Buffer.NumElements = ray_count * 2;
+	ID3D11ShaderResourceView * ray_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateShaderResourceView(ray_buffer, &read, &ray_view)));
+
+	description.ByteWidth = ray_count * sizeof(unsigned);
+	description.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+	ID3D11Buffer * result_buffer = NULL;
+	CHECK(SUCCEEDED(d3d->CreateBuffer(&description, NULL, &result_buffer)));
+	D3D11_UNORDERED_ACCESS_VIEW_DESC write;
+	memset(&write, 0, sizeof(write));
+	write.Format = DXGI_FORMAT_R32_UINT;
+	write.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+	write.Buffer.NumElements = ray_count;
+	ID3D11UnorderedAccessView * result_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateUnorderedAccessView(result_buffer, &write, &result_view)));
+
+	const std::string source = DX11RayGridClass::Trace_Program()
+		+ "Buffer<float4> Rays : register(t0);\n"
+		  "RWBuffer<uint> Results : register(u0);\n"
+		  "[numthreads(16, 1, 1)]\n"
+		  "void main(uint3 id : SV_DispatchThreadID)\n"
+		  "{\n"
+		  "    uint count;\n"
+		  "    Rays.GetDimensions(count);\n"
+		  "    if (id.x * 2 >= count) return;\n"
+		  "    float4 from = Rays[id.x * 2];\n"
+		  "    float3 way = normalize(Rays[id.x * 2 + 1].xyz);\n"
+		  "    Results[id.x] = ray_occluded(from.xyz, way, from.w) ? 1 : 0;\n"
+		  "}\n";
+	std::vector<unsigned char> code;
+	CHECK(backend.Compile_Program(source, "raygrid test", "cs_5_0", code));
+	ID3D11ComputeShader * program = NULL;
+	CHECK(!code.empty() && SUCCEEDED(d3d->CreateComputeShader(&code[0], code.size(), NULL, &program)));
+
+	const float no_ground[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	grid.Bind(context, NULL, no_ground);
+	context->CSSetShaderResources(0, 1, &ray_view);
+	context->CSSetUnorderedAccessViews(0, 1, &result_view, NULL);
+	context->CSSetShader(program, NULL, 0);
+	context->Dispatch(1, 1, 1);
+	ID3D11ShaderResourceView * no_read = NULL;
+	ID3D11UnorderedAccessView * no_write = NULL;
+	context->CSSetShaderResources(0, 1, &no_read);
+	context->CSSetUnorderedAccessViews(0, 1, &no_write, NULL);
+	grid.Unbind(context);
+
+	description.Usage = D3D11_USAGE_STAGING;
+	description.BindFlags = 0;
+	description.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+	ID3D11Buffer * staging = NULL;
+	CHECK(SUCCEEDED(d3d->CreateBuffer(&description, NULL, &staging)));
+	context->CopyResource(staging, result_buffer);
+	D3D11_MAPPED_SUBRESOURCE mapped;
+	CHECK(SUCCEEDED(context->Map(staging, 0, D3D11_MAP_READ, 0, &mapped)));
+	const unsigned * hits = static_cast<const unsigned *>(mapped.pData);
+	for (unsigned index = 0; index < ray_count; ++index) {
+		if (hits[index] != rays[index].Hit) {
+			printf("  ray %u: hit %u, expected %u\n", index, hits[index], rays[index].Hit);
+		}
+		CHECK_EQ(hits[index], rays[index].Hit);
+	}
+	context->Unmap(staging, 0);
+
+	staging->Release();
+	program->Release();
+	result_view->Release();
+	result_buffer->Release();
+	ray_view->Release();
+	ray_buffer->Release();
+	grid.Release();
+	corner_view->Release();
+	corner_buffer->Release();
+	backend.Shutdown();
+	device.Release();
+}

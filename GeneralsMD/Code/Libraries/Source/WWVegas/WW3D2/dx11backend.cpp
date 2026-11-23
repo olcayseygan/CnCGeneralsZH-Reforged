@@ -4916,7 +4916,10 @@ void DX11BackendClass::Take_Frame_Constant_Writes(unsigned & writes, unsigned & 
 ** whose depth at that point is nearer the sun than the pixel by more than a bias, or a cut texel
 ** nearer by the same, or the ground, a heightfield that is marched.  What comes out is a mask, one
 ** ray a pixel, which a full screen pass softens by how far the blocker was and multiplies onto the
-** opaque scene before the water and anything translucent goes down, the same place and the same
+** opaque scene: the gap in world units through the sun's angle (RAY_SUN_ANGLE) is the penumbra in
+** the world, and the pixel's footprint at its depth turns it into pixels, so a shadow is hard at the
+** foot of its caster, spreads toward its far end and keeps that width at any zoom.  The multiply
+** lands before the water and anything translucent goes down, the same place and the same
 ** multiply the map's receivers make (SHADOW_APPLY), its dark pixel guard read off a copy of the
 ** scene.  A pine's far side is in its own shadow under the map and the rays alike (Heartland's
 ** probe: 2066 rays stopped, 2070 for the map alone), and at a grey near 0.08 the guard keeps half
@@ -4936,11 +4939,19 @@ static const unsigned RAY_TRIANGLE_SLOTS = 1u << 19;			///< triangles one caster
 static const unsigned RAY_REFERENCE_SLOTS = 1u << 23;			///< triangle entries over every cell
 static const float RAY_DEPTH_BIAS = 1.5f;						///< world units nearer the sun a blocker has to be
 static const float RAY_NORMAL_OFFSET = 1.0f;					///< world units the ray starts off its surface
+// The sun's disc seen from the ground, in radians across, which is how fast a shadow's edge widens
+// with the gap between the caster and where its shadow falls: a tank's tracks stay hard, the far
+// end of a tower's shadow spreads.  The real sun's half degree (0.009) would put every edge under
+// a pixel at this scale, as SHADOW_MAP_PENUMBRA_PER_UNIT's note says of the map; 0.04 is a sky's
+// worth of fill, twice the map's 0.01 a unit of radius.  Tune it here.
+static const float RAY_SUN_ANGLE = 0.04f;
 // Rays stopped by a solid caster, the ground, a cut caster; rays the map alone would have stopped,
 // rays a caster stopped and the map would not have, and the other way round.  Then the probe's:
 // pixels, rays stopped by a solid caster, a cut caster, the ground, the map alone; the scene's grey
-// before the shade, after it and after it without the dark pixel guard, each in 256ths.
-static const unsigned RAY_HIT_COUNTS = 14;
+// before the shade, after it and after it without the dark pixel guard, each in 256ths; and over
+// its shadowed pixels the penumbra's radius their own blocker opens, summed and widest, in
+// hundredths of a world unit and then of a pixel.  RAY_PROGRAM_COMMON's HIT_COUNTS.
+static const unsigned RAY_HIT_COUNTS = 18;
 static const float RAY_PROBE_STEPS = 256.0f;
 
 struct RayConstantBlock
@@ -4951,7 +4962,7 @@ struct RayConstantBlock
 	float Sun[4];			///< the way to the sun in the world, and world units per unit of sun depth
 	float Tuning[4];		///< depth bias, normal offset, reference slots, ground marched
 	float Ground[4];		///< height cells per world unit, border cells, world units per height byte, highest ground
-	float Bin[4];			///< stamp, triangle slots, unused, strength
+	float Bin[4];			///< stamp, triangle slots, penumbra radius per world unit of gap, strength
 	float Cut[4];			///< one over the map's size, world units a texel of it, the cut casters' stencil
 	float Probe[4];			///< the screen rectangle the report counts on its own (ZHR_RT_PROBE), left, top, right, bottom
 };
@@ -4986,7 +4997,47 @@ static const char RAY_PROGRAM_COMMON[] =
 	"    float4 Bin;\n"
 	"    float4 Cut;\n"
 	"    float4 Probe;\n"
-	"};\n";
+	"};\n"
+	"#define HIT_COUNTS 18\n"			// RAY_HIT_COUNTS
+	"#define NARROWEST_PIXELS 0.75\n"	// the edge's own smoothing, at the foot of a caster
+	"#define WIDEST_PIXELS 8\n"		// the apply's twelve taps band past this
+	"\n"
+	"// The penumbra's radius in the world, the sun's disc across the gap, and that on the screen along\n"
+	"// each axis, by what one pixel spans of the surface that way (surface_footprint).\n"
+	"float penumbra_world(float gap) { return gap * Bin.z; }\n"
+	"float2 penumbra_pixels(float gap, float2 footprint)\n"
+	"{\n"
+	"    return clamp(penumbra_world(gap) / max(footprint, 1e-4), NARROWEST_PIXELS, (float)WIDEST_PIXELS);\n"
+	"}\n";
+
+// The surface under a pixel, for a program that has declared the scene's depth as Depth.  A step is
+// the shorter of the two each way, so an edge takes its own surface's and not its background's; a
+// pixel's footprint is what one such step spans of the surface along the screen's x and y, which a
+// zoom changes and which on ground seen at a slant is longer down the screen than across it.
+static const char RAY_PROGRAM_SURFACE[] =
+	"float3 world_at(int2 pixel)\n"
+	"{\n"
+	"    pixel = clamp(pixel, int2(0, 0), int2(Screen.xy) - 1);\n"
+	"    float depth = Depth.Load(int3(pixel, 0));\n"
+	"    float2 ndc = float2(pixel.x * Screen.z * 2.0 - 1.0, 1.0 - pixel.y * Screen.w * 2.0);\n"
+	"    float4 world = mul(float4(ndc, depth, 1.0), WorldFromClip);\n"
+	"    return world.xyz / world.w;\n"
+	"}\n"
+	"\n"
+	"float3 shorter(float3 here, float3 ahead, float3 behind)\n"
+	"{\n"
+	"    float3 forward = ahead - here;\n"
+	"    float3 backward = here - behind;\n"
+	"    return dot(forward, forward) < dot(backward, backward) ? forward : backward;\n"
+	"}\n"
+	"\n"
+	"float2 surface_footprint(int2 pixel)\n"
+	"{\n"
+	"    float3 here = world_at(pixel);\n"
+	"    float3 across = shorter(here, world_at(pixel + int2(1, 0)), world_at(pixel - int2(1, 0)));\n"
+	"    float3 down = shorter(here, world_at(pixel + int2(0, 1)), world_at(pixel - int2(0, 1)));\n"
+	"    return float2(length(across), length(down));\n"
+	"}\n";
 
 // The cells under a triangle's box, for a triangle this pass wrote and that has an area in the sun's
 // view: one edge on to the sun covers nothing.
@@ -5093,7 +5144,8 @@ static const char RAY_FILL_PROGRAM[] =
 // half pixel puts column x at ndc x / width), starts a unit off its own surface toward the sun, and
 // is tested against its cell's triangles, then marched over the ground's heights.  The surface's
 // normal is the shorter of the two differences each way, so an edge does not take its background's.
-static const char RAY_TRACE_PROGRAM[] =
+// RAY_PROGRAM_SURFACE goes between the reads and the rest.
+static const char RAY_TRACE_READS[] =
 	"Texture2D<float> Depth : register(t0);\n"
 	"Buffer<float4> Corners : register(t1);\n"
 	"Buffer<uint> Starts : register(t2);\n"
@@ -5103,23 +5155,9 @@ static const char RAY_TRACE_PROGRAM[] =
 	"Buffer<uint> Blocks : register(t6);\n"
 	"Texture2D<uint2> SunStencil : register(t7);\n"
 	"Texture2D<float> SunDepth : register(t8);\n"
-	"RWTexture2D<float2> Mask : register(u0);\n"
-	"\n"
-	"float3 world_at(int2 pixel)\n"
-	"{\n"
-	"    pixel = clamp(pixel, int2(0, 0), int2(Screen.xy) - 1);\n"
-	"    float depth = Depth.Load(int3(pixel, 0));\n"
-	"    float2 ndc = float2(pixel.x * Screen.z * 2.0 - 1.0, 1.0 - pixel.y * Screen.w * 2.0);\n"
-	"    float4 world = mul(float4(ndc, depth, 1.0), WorldFromClip);\n"
-	"    return world.xyz / world.w;\n"
-	"}\n"
-	"\n"
-	"float3 shorter(float3 here, float3 ahead, float3 behind)\n"
-	"{\n"
-	"    float3 forward = ahead - here;\n"
-	"    float3 backward = here - behind;\n"
-	"    return dot(forward, forward) < dot(backward, backward) ? forward : backward;\n"
-	"}\n"
+	"RWTexture2D<float2> Mask : register(u0);\n";
+
+static const char RAY_TRACE_PROGRAM[] =
 	"\n"
 	"// The ground as a bilinear patch over the cell's four corners.  It is drawn as two triangles cut\n"
 	"// on a diagonal, which part from the patch by up to a quarter of the cell's twist (the two\n"
@@ -5254,14 +5292,16 @@ static const char RAY_TRACE_PROGRAM[] =
 	"\n"
 	"// How many rays a solid caster, the ground and a cut caster stopped, and how many the map would\n"
 	"// have, for the report: one count a group.  Then the same inside the probe's rectangle, with the\n"
-	"// scene's grey there before the shade and after it, with and without the dark pixel guard.\n"
+	"// scene's grey there before the shade and after it, with and without the dark pixel guard, and\n"
+	"// the penumbra its shadowed pixels' own blockers open, summed and widest.\n"
 	"Texture2D<float4> Colour : register(t9);\n"
 	"RWBuffer<uint> Hits : register(u1);\n"
-	"groupshared uint GroupHits[14];\n"
+	"groupshared uint GroupHits[HIT_COUNTS];\n"
+	"bool widest_count(uint index) { return index == 15 || index == 17; }\n"
 	"[numthreads(8, 8, 1)]\n"
 	"void main(uint3 id : SV_DispatchThreadID, uint index : SV_GroupIndex)\n"
 	"{\n"
-	"    if (index < 14) GroupHits[index] = 0;\n"
+	"    if (index < HIT_COUNTS) GroupHits[index] = 0;\n"
 	"    GroupMemoryBarrierWithGroupSync();\n"
 	"    if (id.x < (uint)Screen.x && id.y < (uint)Screen.y) {\n"
 	"        uint blocker, mapped;\n"
@@ -5281,21 +5321,44 @@ static const char RAY_TRACE_PROGRAM[] =
 	"            InterlockedAdd(GroupHits[11], (uint)(grey * PROBE_STEPS));\n"
 	"            InterlockedAdd(GroupHits[12], (uint)(grey * lerp(1.0, shade, saturate(grey * DARK_GUARD)) * PROBE_STEPS));\n"
 	"            InterlockedAdd(GroupHits[13], (uint)(grey * shade * PROBE_STEPS));\n"
+	"            if (blocker != 0) {\n"
+	"                uint world = (uint)(penumbra_world(traced.y) * 100.0);\n"
+	"                float2 opening = penumbra_pixels(traced.y, surface_footprint(int2(id.xy)));\n"
+	"                uint pixels = (uint)(max(opening.x, opening.y) * 100.0);\n"
+	"                InterlockedAdd(GroupHits[14], world);\n"
+	"                InterlockedMax(GroupHits[15], world);\n"
+	"                InterlockedAdd(GroupHits[16], pixels);\n"
+	"                InterlockedMax(GroupHits[17], pixels);\n"
+	"            }\n"
 	"        }\n"
 	"    }\n"
 	"    GroupMemoryBarrierWithGroupSync();\n"
-	"    if (index < 14) InterlockedAdd(Hits[index], GroupHits[index]);\n"
+	"    if (index < HIT_COUNTS) {\n"
+	"        if (widest_count(index)) InterlockedMax(Hits[index], GroupHits[index]);\n"
+	"        else InterlockedAdd(Hits[index], GroupHits[index]);\n"
+	"    }\n"
 	"}\n";
 
 // The shade on the scene.  The widest blocker gap close by opens the filter, as the map's blocker
-// search does, and a tap counts only on a surface at the pixel's own distance, so a unit in front
-// of a shadowed wall keeps its edge.  ponytail: the opening is in pixels per world unit of gap at
-// the usual zoom; a world sized penumbra wants the pixel's footprint from WorldFromClip.
-static const char RAY_APPLY_PROGRAM[] =
+// search does, looked for three pixels out and at the widest opening, so a lit pixel beside a far
+// shadow's edge is softened too; a tap's gap counts only where its own penumbra reaches back to the
+// pixel and on a surface at the pixel's distance, so a tank's hard contact shadow beside the wide
+// tip of a tower's keeps its edge.  The opening is the gap through the sun's angle (penumbra_world),
+// a world size taken to pixels along each screen axis by what a pixel spans of the surface that way,
+// so a zoom keeps it and ground seen at a slant is not softer across the screen than down it; a
+// solid caster's, a cut caster's and the ground's gaps are all world units.  A disc tap counts only
+// on a surface at the pixel's own distance, so a unit in front of a shadowed wall keeps its edge.
+// ponytail: twelve fixed taps, so a zoom close enough to open past WIDEST_PIXELS stops widening and
+// wider would band; a disc turned per pixel is the upgrade.  RAY_PROGRAM_SURFACE goes between the
+// reads and the rest.
+static const char RAY_APPLY_READS[] =
 	"Texture2D<float2> Mask : register(t0);\n"
 	"Texture2D<float> Depth : register(t1);\n"
-	"Texture2D<float4> Colour : register(t2);\n"
-	"static const int2 SEARCH[4] = { int2(-3, 0), int2(3, 0), int2(0, -3), int2(0, 3) };\n"
+	"Texture2D<float4> Colour : register(t2);\n";
+
+static const char RAY_APPLY_PROGRAM[] =
+	"static const int2 SEARCH[8] = { int2(-3, 0), int2(3, 0), int2(0, -3), int2(0, 3),\n"
+	"    int2(-WIDEST_PIXELS, 0), int2(WIDEST_PIXELS, 0), int2(0, -WIDEST_PIXELS), int2(0, WIDEST_PIXELS) };\n"
 	"static const float2 DISK[12] = {\n"
 	"    float2(-0.326, -0.406), float2(-0.840, -0.074), float2(-0.696, 0.457), float2(-0.203, 0.621),\n"
 	"    float2(0.962, -0.195), float2(0.473, -0.480), float2(0.519, 0.767), float2(0.185, -0.893),\n"
@@ -5307,11 +5370,18 @@ static const char RAY_APPLY_PROGRAM[] =
 	"    float centre = Depth.Load(int3(pixel, 0));\n"
 	"    if (centre >= 1.0) return float4(1.0, 1.0, 1.0, 1.0);\n"
 	"    float2 own = Mask.Load(int3(pixel, 0));\n"
-	"    float gap = own.y;\n"
-	"    [unroll] for (int s = 0; s < 4; ++s)\n"
-	"        gap = max(gap, Mask.Load(int3(clamp(pixel + SEARCH[s], int2(0, 0), last), 0)).y);\n"
-	"    float radius = clamp(0.75 + gap * 0.08, 0.75, 6.0);\n"
+	"    float2 footprint = surface_footprint(pixel);\n"
 	"    float tolerance = 0.02 * (1.0 - centre);\n"
+	"    float gap = own.y;\n"
+	"    [unroll] for (int s = 0; s < 8; ++s) {\n"
+	"        int2 at = clamp(pixel + SEARCH[s], int2(0, 0), last);\n"
+	"        if (abs(Depth.Load(int3(at, 0)) - centre) > tolerance) continue;\n"
+	"        float found = Mask.Load(int3(at, 0)).y;\n"
+	"        float2 reach = penumbra_pixels(found, footprint);\n"
+	"        float away = abs(SEARCH[s].x) + abs(SEARCH[s].y);\n"
+	"        if (away <= (SEARCH[s].x != 0 ? reach.x : reach.y)) gap = max(gap, found);\n"
+	"    }\n"
+	"    float2 radius = penumbra_pixels(gap, footprint);\n"
 	"    float lit = own.x;\n"
 	"    float weight = 1.0;\n"
 	"    [unroll] for (int i = 0; i < 12; ++i) {\n"
@@ -5369,8 +5439,8 @@ bool DX11BackendClass::Make_Ray_Shadows()
 		&& Compile_Program(common + RAY_SCAN_PROGRAM, "rayscan", "cs_5_0", scan)
 		&& Compile_Program(common + RAY_BLOCK_PROGRAM, "rayblock", "cs_5_0", block)
 		&& Compile_Program(common + RAY_PROGRAM_CELLS + RAY_FILL_PROGRAM, "rayfill", "cs_5_0", fill)
-		&& Compile_Program(common + RAY_TRACE_PROGRAM, "raytrace", "cs_5_0", trace)
-		&& Compile_Program(common + RAY_APPLY_PROGRAM, "rayapply", "ps_5_0", apply);
+		&& Compile_Program(common + RAY_TRACE_READS + RAY_PROGRAM_SURFACE + RAY_TRACE_PROGRAM, "raytrace", "cs_5_0", trace)
+		&& Compile_Program(common + RAY_APPLY_READS + RAY_PROGRAM_SURFACE + RAY_APPLY_PROGRAM, "rayapply", "ps_5_0", apply);
 
 	if (made) {
 		D3D11_SO_DECLARATION_ENTRY entry;
@@ -5522,6 +5592,7 @@ void DX11BackendClass::Release_Ray_Shadows()
 	RayMaskHeight = 0;
 	RayCapturing = false;
 	RayCaptured = false;
+	RayGrid.Release();
 }
 
 void DX11BackendClass::Begin_Ray_Capture()
@@ -5571,6 +5642,7 @@ void DX11BackendClass::Begin_Ray_Capture()
 	context->GSSetConstantBuffers(0, 1, &RayCaptureConstants);
 	const UINT offset = 0;
 	context->SOSetTargets(1, &RayCorners, &offset);
+	RayGrid.Invalidate();
 	RaySolidCopies = 0;
 	RayCapturing = true;
 	// The stencil marks and the reference change the state objects every draw builds.
@@ -5731,6 +5803,9 @@ void DX11BackendClass::End_Ray_Capture()
 	context->CopySubresourceRegion(frame.References, 0, 0, 0, 0, RayCells[4], 0, &last);
 	context->End(frame.Binned);
 	RayCaptured = Sun_Depth_Scale() > 0.0f;
+	if (RayCaptured) {
+		RayGrid.Build(*this, Device->Get_Device(), context, RayCornersView, RayStamp, RAY_TRIANGLE_SLOTS, SunViewProjection);
+	}
 }
 
 bool DX11BackendClass::Trace_Ray_Shadows()
@@ -5801,6 +5876,7 @@ bool DX11BackendClass::Trace_Ray_Shadows()
 	block.Ground[3] = static_cast<float>(TerrainHeightsHighest) * TerrainLight[35];
 	block.Bin[0] = static_cast<float>(RayStamp);
 	block.Bin[1] = static_cast<float>(RAY_TRIANGLE_SLOTS);
+	block.Bin[2] = RAY_SUN_ANGLE * 0.5f;	// a radius, half the disc
 	block.Bin[3] = RayStrength;
 	// The sun's first column is its x per world unit, and the map is two of those across.
 	const float across = sqrtf(SunViewProjection[0] * SunViewProjection[0] + SunViewProjection[4] * SunViewProjection[4]
@@ -5860,6 +5936,12 @@ bool DX11BackendClass::Trace_Ray_Shadows()
 		frame.Open = false;
 		frame.Issued = true;
 		frame.WasTraced = true;
+	}
+	if (RayGrid.Probing()) {
+		ID3D11ShaderResourceView * const old_grid[5] = { RayCornersView, RayCellReads[1], RayCellReads[0], RayCellReads[3],
+			RayCellReads[4] };
+		RayGrid.Probe(context, depth, world_from_clip, width, height, block.Sun, RAY_NORMAL_OFFSET, RAY_DEPTH_BIAS,
+			RAY_REFERENCE_SLOTS, ground ? TerrainHeightsView : NULL, block.Ground, old_grid);
 	}
 	RayTracedPixels = width * height;
 	Forget_Bindings();
@@ -5948,6 +6030,16 @@ std::string DX11BackendClass::Ray_Shadow_Report()
 			RayProbeCounts[3], RayProbeCounts[4], RayProbeCounts[5] * to_still, RayProbeCounts[6] * to_still,
 			RayProbeCounts[7] * to_still);
 		report += line;
+		const unsigned shadowed = RayProbeCounts[1] + RayProbeCounts[2] + RayProbeCounts[3];
+		if (shadowed > 0) {
+			const float hundredths = 100.0f;
+			snprintf(line, sizeof(line),
+				"; penumbra over its %u shadowed pixels: mean %.2f world units (%.2f pixels), widest %.2f world units (%.2f pixels)",
+				shadowed, RayProbeCounts[8] / (hundredths * shadowed), RayProbeCounts[10] / (hundredths * shadowed),
+				RayProbeCounts[9] / hundredths, RayProbeCounts[11] / hundredths);
+			report += line;
+		}
 	}
+	report += RayGrid.Report(context);
 	return report;
 }

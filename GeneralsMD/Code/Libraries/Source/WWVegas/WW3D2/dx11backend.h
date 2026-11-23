@@ -51,6 +51,7 @@
 #include "engineshader.h"
 #include "ffshader.h"
 #include "ffvertex.h"
+#include "dx11raygrid.h"
 
 #include <d3d11_1.h>
 #include <d3d9.h>
@@ -774,7 +775,7 @@ private:
 	float RayStrength;
 	ID3D11ShaderResourceView * RayStencilRead;	///< the map's stencil, let go with the map's surface
 	float RayProbe[4];							///< ZHR_RT_PROBE's screen rectangle, left, top, right, bottom
-	unsigned RayProbeCounts[8];					///< the trace's counts inside it (RAY_HIT_COUNTS)
+	unsigned RayProbeCounts[12];				///< the trace's counts inside it (RAY_HIT_COUNTS)
 	unsigned RaySolidCopies;		///< the last caster pass's second draws of solid casters drawn one by one
 	unsigned RayPassesLeftToMap;	///< caster passes under a filter's target, whose frame kept the map
 	ID3D11GeometryShader * RayCaptureShader;		///< streams and rasterises nothing: a generic draw's second go
@@ -832,6 +833,9 @@ private:
 	float RayBinMS;
 	float RayTraceMS;
 	unsigned RayTracedPixels;
+	// The same triangles in a 3D grid, for rays in any direction (dx11raygrid.h); built at the end
+	// of every caster pass that captured, its probe run beside the trace under ZHR_RT_GRID.
+	DX11RayGridClass RayGrid;
 
 	// Set_Scene_View's matrix, and whether it has been set; and the projection held when it was,
 	// which is the scene camera's own (Set_Scene_View follows the camera's Apply).

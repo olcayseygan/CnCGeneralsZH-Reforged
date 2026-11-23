@@ -288,6 +288,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - Box-selecting a whole line of defences stuttered once per defence while their reach was drawn. The fields fill in over a few frames.
 - Apocalypse rooms on LAN and online no longer leave an empty gap under the fourth seat, chat fills it, and the skirmish, LAN and online rooms preview the generated map instead of "?".
 - In an online Direct Strike room your own seat card shows your ping light.
+- Every room on a generated map, Apocalypse included, left preview pictures in your Documents folder, a new set each time a seat changed, and nothing ever cleared them: one test PC had 618 of them, 29 MB. The game now clears the old ones the first time it draws a map preview and makes this session's again as they are needed. A LAN start on a generated map also no longer waits on a map transfer it never needed, which could hold the game on the transfer screen for two minutes when someone started early.
 
 ## Screen and controls
 

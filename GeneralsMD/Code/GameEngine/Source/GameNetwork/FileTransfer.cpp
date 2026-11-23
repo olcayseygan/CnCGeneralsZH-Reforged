@@ -33,6 +33,7 @@
 #include "Platform/SleepMilliseconds.h"
 #include "Lib/Clock.h"
 
+#include "Common/RandomMapGenerator.h"
 #include "GameClient/LoadScreen.h"
 #include "GameClient/Shell.h"
 #include "GameNetwork/FileTransfer.h"
@@ -247,6 +248,10 @@ AsciiString GetReadmeFromMap( AsciiString path )
 Bool DoAnyMapTransfers(GameInfo *game)
 {
 	TheGameInfo = game;
+	// a generated map is never on disk to send, and every seat builds it from its name; waiting for a
+	// transfer here only sat out the two minute timeout when a start raced a seat still building it
+	if (isGeneratedMapPath(game->getMap()))
+		return TRUE;
 	SlotMask mask = 0;
 	Int i=0;
 	for (i=1; i<MAX_SLOTS; ++i)

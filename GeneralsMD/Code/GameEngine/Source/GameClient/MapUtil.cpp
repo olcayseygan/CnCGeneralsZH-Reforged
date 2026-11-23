@@ -1445,6 +1445,27 @@ Image *getMapPreviewImage( AsciiString mapName )
 		mapPreviewDir.format(MAP_PREVIEW_DIR_PATH, TheGlobalData->getPath_UserData().str());
 		TheFileSystem->createDirectory(mapPreviewDir);
 
+		// A generated map's name carries its seed and seat count and changes with every seat change in
+		// a room, so its preview copies piled up here from run to run (618 of them, 29 MB, on
+		// 2026-11-23) and nothing ever removed one. Its preview is built in memory whenever it is asked
+		// for, so once a run, before the first copy, the old ones go; this run's are made again on demand.
+		static Bool s_generatedPreviewsPurged = FALSE;
+		if (!s_generatedPreviewsPurged)
+		{
+			s_generatedPreviewsPurged = TRUE;
+			std::vector<AsciiString> stale;
+			TheLocalFileSystem->getFilesInDirectory(mapPreviewDir, AsciiString("*rmg_v*.tga"), stale);
+			Int removed = 0;
+			for (size_t i = 0; i < stale.size(); ++i)
+			{
+				AsciiString path = mapPreviewDir;
+				path.concat(stale[i]);
+				if (TheLocalFileSystem->deleteFile(path.str()))
+					++removed;
+			}
+			DEBUG_LOG(("MAPPREVIEWS: removed %d of %d generated map previews\n", removed, (Int)stale.size()));
+		}
+
 		mapPreviewDir.concat(name);
 
 		Bool success = false;

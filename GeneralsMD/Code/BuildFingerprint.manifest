@@ -3616,6 +3616,8 @@ Libraries/Source/WWVegas/WW3D2/dx11layout.cpp
 Libraries/Source/WWVegas/WW3D2/dx11layout.h
 Libraries/Source/WWVegas/WW3D2/dx11post.cpp
 Libraries/Source/WWVegas/WW3D2/dx11post.h
+Libraries/Source/WWVegas/WW3D2/dx11rayao.cpp
+Libraries/Source/WWVegas/WW3D2/dx11rayao.h
 Libraries/Source/WWVegas/WW3D2/dx11raygrid.cpp
 Libraries/Source/WWVegas/WW3D2/dx11raygrid.h
 Libraries/Source/WWVegas/WW3D2/dx11resource.cpp

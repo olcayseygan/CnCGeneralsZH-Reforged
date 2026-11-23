@@ -186,7 +186,9 @@ static const char RG_TRACE[] =
 	"\n"
 	"bool ray_occluded(float3 origin, float3 direction, float reach)\n"
 	"{\n"
-	"    return ray_hits_casters(origin, direction, reach) || ray_hits_ground(origin, direction, reach);\n"
+	// Shader model 5 evaluates both sides of || and &&, so the ground is marched only past a miss here.
+	"    if (ray_hits_casters(origin, direction, reach)) return true;\n"
+	"    return ray_hits_ground(origin, direction, reach);\n"
 	"}\n";
 
 // The pass's triangles are the slots from nought up to the first that holds another pass's stamp,

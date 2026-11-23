@@ -5593,6 +5593,7 @@ void DX11BackendClass::Release_Ray_Shadows()
 	RayCapturing = false;
 	RayCaptured = false;
 	RayGrid.Release();
+	RayOcclusion.Release();
 }
 
 void DX11BackendClass::Begin_Ray_Capture()
@@ -6041,5 +6042,6 @@ std::string DX11BackendClass::Ray_Shadow_Report()
 		}
 	}
 	report += RayGrid.Report(context);
+	report += RayOcclusion.Report(context);
 	return report;
 }

@@ -1009,7 +1009,18 @@ void Direct3D11_Ambient_Occlusion()
 	float projection_x = 0.0f;
 	float projection_y = 0.0f;
 	Backend.Scene_Projection_Scale(projection_x, projection_y);
-	if (Post.World_Occlude_Scene(Device.Get_Depth_Texture(), world_from_clip, projection_x, projection_y)) {
+	// At the Ray Traced level the half size term comes from rays when the grid was built this frame;
+	// at every other level this is NULL and timing does nothing.
+	float shroud_rect[4];
+	ID3D11ShaderResourceView * shroud = Post.World_Ao_Shroud(shroud_rect);
+	Backend.Time_Ray_Occlusion(true, false);
+	ID3D11ShaderResourceView * traced = Post.World_Occlusion_Ready()
+		? Backend.Trace_Ray_Occlusion(world_from_clip, shroud, shroud_rect) : NULL;
+	bool took_traced = false;
+	const bool occluded = Post.World_Occlude_Scene(Device.Get_Depth_Texture(), world_from_clip, projection_x,
+		projection_y, traced, &took_traced);
+	Backend.Time_Ray_Occlusion(false, took_traced);
+	if (occluded) {
 		Backend.Resume_Scene();
 	}
 }

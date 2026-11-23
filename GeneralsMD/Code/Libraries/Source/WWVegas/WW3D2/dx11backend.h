@@ -52,6 +52,7 @@
 #include "ffshader.h"
 #include "ffvertex.h"
 #include "dx11raygrid.h"
+#include "dx11rayao.h"
 
 #include <d3d11_1.h>
 #include <d3d9.h>
@@ -447,6 +448,12 @@ public:
 	void Set_Ray_Traced_Shadows(bool wanted) { RayShadowsWanted = wanted; }
 	bool Trace_Ray_Shadows();
 	std::string Ray_Shadow_Report();
+	// The Ambient Occlusion option's half size term from hemisphere rays through the ray grid, at the
+	// Ray Traced level on a frame that built it (dx11rayao.cpp); NULL leaves the option's own first
+	// pass to make it.  Time_Ray_Occlusion brackets the whole occlusion at that level, either kind.
+	ID3D11ShaderResourceView * Trace_Ray_Occlusion(const float world_from_clip[16],
+		ID3D11ShaderResourceView * shroud, const float shroud_rect[4]);
+	void Time_Ray_Occlusion(bool begin, bool traced);
 
 	// The two draws.  Both resolve the shadow state into a pipeline first, and both return false
 	// when some part of that state has no D3D11 answer, which leaves the draw undone rather than
@@ -836,6 +843,7 @@ private:
 	// The same triangles in a 3D grid, for rays in any direction (dx11raygrid.h); built at the end
 	// of every caster pass that captured, its probe run beside the trace under ZHR_RT_GRID.
 	DX11RayGridClass RayGrid;
+	DX11RayOcclusionClass RayOcclusion;	///< Trace_Ray_Occlusion's programs and textures
 
 	// Set_Scene_View's matrix, and whether it has been set; and the projection held when it was,
 	// which is the scene camera's own (Set_Scene_View follows the camera's Apply).

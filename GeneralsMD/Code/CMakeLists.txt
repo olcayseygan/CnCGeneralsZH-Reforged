@@ -702,7 +702,7 @@ target_link_libraries(dx11post PUBLIC dx11device d3d11)
 # into a D3D11 pipeline at the moment of the draw.  Ties the five pieces above
 # together, which is why it is the last of them and the one with a drawing test.
 add_library(dx11backend STATIC ${WW}/WW3D2/dx11backend.cpp ${WW}/WW3D2/dx11water.cpp
-  ${WW}/WW3D2/dx11raygrid.cpp)
+  ${WW}/WW3D2/dx11raygrid.cpp ${WW}/WW3D2/dx11rayao.cpp)
 set_target_properties(dx11backend PROPERTIES CXX_STANDARD 17)
 target_include_directories(dx11backend PUBLIC ${WW}/WW3D2)
 target_link_libraries(dx11backend PUBLIC dx11device dx11state dx11layout dx11resource

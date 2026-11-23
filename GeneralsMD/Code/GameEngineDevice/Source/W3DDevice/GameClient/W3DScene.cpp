@@ -986,11 +986,12 @@ static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, fl
 				? STEALTH_FRONT_RIPPLE : STEALTH_FRONT_WIND;
 		const Real geometry = draw->getTemplate()->getTemplateGeometryInfo().getMaxHeightAbovePosition();
 		const Int height = clamp( 1, REAL_TO_INT_CEIL( geometry * 1.3f ), 4000 );
-		// The paint bit: for the heat, its far end is paint; for the cloak, a unit that keeps a ghost
-		// of its paint over the glass (effect_cloak), since its bend alone is a few pixels at play zoom.
-		// Not an enemy's, which has no glass to keep it over.
+		// The paint bit: for the heat, its far end is paint; for the cloak, a unit or building that keeps
+		// a ghost of its paint over the glass (effect_cloak), since its bend alone is a few pixels at play
+		// zoom.  A building as plain glass over flat sand was the sand: Camo Netting hid a base from its
+		// own player.  Not an enemy's, which has no glass to keep it over.
 		const Bool overPaint = effect == DRAW_EFFECT_REVEALED ? draw->getStealthOverPaint()
-			: ( !draw->isKindOf( KINDOF_STRUCTURE ) && !draw->getStealthEnemy() );
+			: !draw->getStealthEnemy();
 		parameters[2] = draw->getPositionForDraw()->z;
 		parameters[3] = CombinerShader_Pack_Stealth( height, front, overPaint != FALSE, (float)fade );
 	}

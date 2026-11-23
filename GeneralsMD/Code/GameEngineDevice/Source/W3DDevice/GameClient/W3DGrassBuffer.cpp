@@ -33,6 +33,7 @@
 #include "Common/GameCommon.h"
 #include "Common/Geometry.h"
 #include "Common/GlobalData.h"
+#include "Lib/Clock.h"
 #include "Common/MapObject.h"
 #include "Common/TerrainTypes.h"
 #include "Common/ThingTemplate.h"
@@ -1504,12 +1505,20 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 		return a.dist != b.dist ? a.dist < b.dist : a.key < b.key;
 	});
 
-	// a slot each, at most BUILDS_PER_FRAME baked this frame; a dirty one draws its old pieces meanwhile
+	// a slot each, nearest first.  A dirty one rebakes BUILDS_PER_FRAME a frame and draws its old pieces
+	// meanwhile (a light or height change dirties every slot, and that stays two a frame).  A missing
+	// one, which draws nothing, bakes past that while BUILD_BUDGET_MS lasts: two a frame alone took a
+	// minimap jump's far firs 1 to 2 s to fill in.  The clock only paces the bake; nothing reaches logic.
 	Slot *draw[MAX_NEAR];
 	Real share[MAX_NEAR];
 	Int numDraw = 0;
 	Int builds = 0;
 	Int wantedThin = 0;
+	const long long buildStart = Clock_Ticks();
+	const long long buildBudget = Clock_Ticks_Per_Second() * BUILD_BUDGET_MS / 1000;
+	auto mayBuild = [&]() {
+		return builds < BUILDS_PER_FRAME || Clock_Ticks() - buildStart < buildBudget;
+	};
 	for (Int n = 0; n < numNear; n++) {
 		const Int key = nearby[n].key;
 		Slot *slot = NULL;
@@ -1526,7 +1535,7 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 				continue;	// the upload failed
 			}
 		}
-		if (slot == NULL && builds < BUILDS_PER_FRAME) {
+		if (slot == NULL && mayBuild()) {
 			// a free slot, or the one drawn longest ago that this frame has not claimed
 			for (Int i = 0; i < MAX_SLOTS; i++) {
 				if (m_slots[i].key < 0) {

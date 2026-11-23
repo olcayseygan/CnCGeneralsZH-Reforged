@@ -2312,8 +2312,8 @@ extern UnsignedInt TheSceneDrawCalls;
 // one keeps its tick serial.  A picture with a tick beside it shows the state before that tick, which was due
 // when it was handed over, so it is a whole tick behind and blends nothing anyway.  A picture drawn again
 // beside it (phase 4) could only show that same state, since the next one is still being made, so while the
-// blend is on and the present waits for the refresh the window closes instead (drawAgainBesideTick): the
-// next pass's picture then blends toward the new tick on the refresh the held copy would have taken.
+// present waits for the refresh the window closes instead (drawAgainBesideTick): the next pass's picture
+// then shows, or blends toward, the new tick on the refresh the held copy would have taken.
 //=============================================================================
 bool TheSmoothMotionActive = false;
 float TheSmoothMotionAlpha = 1.0f;
@@ -2327,7 +2327,7 @@ static UnsignedInt s_pacingFrame = 0;
 /* Smooth motion's default: a blend only on a display that refreshes faster than the logic ticks.  A display
 	 at the logic's rate or slower shows a new tick every refresh already, and the blend would only draw each
 	 one a tick late.  The adapter's mode is asked once. */
-static Bool displayOutpacesLogic()
+static Int displayRefreshHz()
 {
 	static Int refresh = -1;
 	if (refresh < 0)
@@ -2339,7 +2339,12 @@ static Bool displayOutpacesLogic()
 		DEBUG_LOG(("smooth motion: the display refreshes at %d Hz, the logic ticks at %d: %s\n", refresh,
 			LOGICFRAMES_PER_SECOND, refresh > LOGICFRAMES_PER_SECOND ? "models drawn between ticks" : "no blend"));
 	}
-	return refresh > LOGICFRAMES_PER_SECOND;
+	return refresh;
+}
+
+static Bool displayOutpacesLogic()
+{
+	return displayRefreshHz() > LOGICFRAMES_PER_SECOND;
 }
 
 /* With ZH_SMOOTH_MOTION_STATS, how evenly the picture's game time follows the wall clock: per window of 120
@@ -2497,10 +2502,14 @@ static void smoothMotionDrawAgain()
 }
 
 /* Phase 4 asks whether to draw again while the tick runs on.  A picture drawn again holds the last tick's
-	 state, and with a present that waits for the refresh it holds it for a whole refresh.  While the blend is
-	 on, the pass that follows the tick shows a state between the last two ticks instead, so the window
-	 closes and waits for the tick.  On a display no faster than the logic the blend is off and nothing
-	 changes; nor does it without vsync, where the held copy costs no refresh of its own. */
+	 state, and with a present that waits for the refresh it holds it for a whole refresh, whatever its own
+	 length: the tick ends inside that refresh and its state waits for the next one, so with Smooth Motion
+	 off a vsynced screen showed one state a refresh too long and the next a refresh late.  With the blend
+	 on, the pass after the tick would show a state between the last two ticks instead.  Either way the
+	 window closes and waits for the tick.  With the blend off only while the last tick fitted in a
+	 refresh: a longer tick (a slow one, or 144 Hz and up) misses that refresh anyway, and the held copy
+	 gives it a fresh camera where waiting repeated the old picture and the scroll juddered at the tick's
+	 cadence.  Without vsync the held copy costs no refresh of its own and is still drawn. */
 static Bool drawAgainBesideTick( LogicThread::OverlapWindow &window, Real pictureMS )
 {
 #if defined(_WIN32)
@@ -2508,7 +2517,15 @@ static Bool drawAgainBesideTick( LogicThread::OverlapWindow &window, Real pictur
 #else
 	const Bool presentWaitsForRefresh = TRUE;	// the SDL GPU swapchain's VSYNC, whatever was asked for
 #endif
-	if (TheSmoothMotionActive && presentWaitsForRefresh && !GameEngine_videoBlends())
+	Bool tickFitsRefresh = TheSmoothMotionActive;
+	if (!tickFitsRefresh && presentWaitsForRefresh)
+	{
+		Real tickMS = 0.0f, waitMS = 0.0f;
+		LogicThread::takeOverlapTimes(tickMS, waitMS);	// a read: the last overlapped tick's length
+		const Int refresh = displayRefreshHz();
+		tickFitsRefresh = tickMS <= 1000.0f / (Real)(refresh > 0 ? refresh : 60);
+	}
+	if (presentWaitsForRefresh && tickFitsRefresh && !GameEngine_videoBlends())
 	{
 		window.close();
 		return FALSE;

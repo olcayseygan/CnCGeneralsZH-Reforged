@@ -53,6 +53,7 @@
 #include "Common/JobSystem.h"
 #include "Common/LogicThread.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/DayNightCycle.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/LifetimeUpdate.h"
 #include "GameLogic/PartitionManager.h"
@@ -773,6 +774,24 @@ struct BillboardFillJob
 	Bool																			glowAfterShade;
 };
 
+/** The manager's smoke tint, or on a night map with the cycle off the cycle's own full night: smoke
+	* and dust are unlit, and nothing else darkens them, so Dark Night's dust glowed tan on moonlit
+	* ground.  The cycle (DayNight_mapNightCondition is false under it) and the Apocalypse set the
+	* tint themselves, and a tint they set is never plain white at night.  Classic keeps retail's. */
+static RGBColor managerSmokeTint( void )
+{
+	RGBColor tint = TheParticleSystemManager->getSmokeTint();
+	if (tint.red == 1.0f && tint.green == 1.0f && tint.blue == 1.0f
+		&& !TheGlobalData->m_classicGraphics && DayNight_mapNightCondition())
+	{
+		// ponytail: NIGHT_SMOKE in DayNightCycle.cpp, copied; move it to DayNightCycle.h if it changes
+		tint.red = 0.42f;
+		tint.green = 0.48f;
+		tint.blue = 0.66f;
+	}
+	return tint;
+}
+
 /** The tint the manager puts over smoke and dust (ParticleSystemManager::setSmokeTint), white for
 	* anything that glows: additive systems and emissive alpha ones keep their own colour. */
 static RGBColor smokeTintFor( ParticleSystem *sys )
@@ -780,7 +799,7 @@ static RGBColor smokeTintFor( ParticleSystem *sys )
 	RGBColor tint;
 	tint.red = tint.green = tint.blue = 1.0f;
 	if (TheParticleSystemManager != NULL && sys->getShaderType() == ParticleSystemInfo::ALPHA && !sys->getTemplate()->isEmissive())
-		tint = TheParticleSystemManager->getSmokeTint();
+		tint = managerSmokeTint();
 	return tint;
 }
 
@@ -3392,7 +3411,7 @@ void W3DParticleSystemManager::drawGpuParticles( RenderInfoClass &rinfo )
 	const UnsignedInt range = (UnsignedInt)( m_gpuWritten - m_gpuTail );
 
 	{
-		const RGBColor &smoke = getSmokeTint();
+		const RGBColor smoke = managerSmokeTint();
 		const float tint[ 3 ] = { smoke.red, smoke.green, smoke.blue };
 		GpuParticles::Set_Smoke_Tint( tint );
 	}

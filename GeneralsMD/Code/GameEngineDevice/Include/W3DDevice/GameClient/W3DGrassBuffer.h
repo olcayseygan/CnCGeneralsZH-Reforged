@@ -97,11 +97,12 @@ public:
 private:
 	enum {
 		CHUNK_CELLS = 16,
-		MAX_SLOTS = 96,							///< the far ring's tree chunks need room beside the near ones; buffers are made as used
+		MAX_SLOTS = 128,						///< the far ring's tree chunks need room beside the near ones (96 left the farthest out); buffers are made as used
 		MAX_CHUNK_VERTICES = 16384,	///< a chunk stops taking pieces here; a full grass chunk is 6144
 		MAX_CHUNK_INDICES = 32768,
 		BUFFER_STEP = 2048,					///< a slot's buffers grow in these
-		BUILDS_PER_FRAME = 2,
+		BUILDS_PER_FRAME = 2,				///< bakes a frame, dirty slots included; missing chunks take more while BUILD_BUDGET_MS lasts
+		BUILD_BUDGET_MS = 3,				///< missing chunks only: after a minimap jump the far firs fill in a few frames, not 1 to 2 s
 		MAX_DRAWN_THIN = 25000			///< cards (tufts, twigs, pebbles) drawn in a frame at most
 	};
 

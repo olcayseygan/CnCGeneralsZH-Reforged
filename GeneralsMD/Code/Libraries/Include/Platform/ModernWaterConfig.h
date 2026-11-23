@@ -26,16 +26,25 @@ struct Rule {
 };
 typedef std::vector<Rule> Rules;
 
-inline Rules Defaults() {
+// A distinct stock name opts in to the tuned surface without changing older custom rules.
+inline Rule TunedPollutedWaterDefault() {
     Rule rule;
-    rule.name = "PollutedWater";
+    rule.name = "TunedPollutedWater";
     rule.colors.push_back(Color{50, 75, 50});
     rule.textures.push_back("TSWater03.tga");
     rule.replacement = Color{45, 58, 11};
-    rule.brightness = 0.67f;
-    rule.pollution = 0.80f;
+    rule.brightness = 0.55f;
+    rule.pollution = 0.70f;
+    rule.turbidity = 1.0f;
+    rule.surfaceRoughness = 0.69f;
+    rule.rippleDamping = 0.34f;
+    rule.windResistance = 0.55f;
     rule.bubbles = true;
-    return Rules(1, rule);
+    return rule;
+}
+
+inline Rules Defaults() {
+    return Rules(1, TunedPollutedWaterDefault());
 }
 
 // Authored RGB values are stored by the engine as normalized floats. Round once
@@ -182,6 +191,15 @@ inline bool Parse(const std::string &text, Rules &result, std::string &error) {
                 if (Detail::Lower(parsed[i].name) == Detail::Lower(name))
                     return Detail::Fail(error, lineNumber, "duplicate rule name '" + name + "'");
             current = Rule();
+            // Only the explicit stock preset inherits surface controls. Existing custom
+            // PollutedWater rules remain neutral; explicit zeros override this preset.
+            if (Detail::Lower(name) == Detail::Lower(TunedPollutedWaterDefault().name)) {
+                const Rule stock = TunedPollutedWaterDefault();
+                current.turbidity = stock.turbidity;
+                current.surfaceRoughness = stock.surfaceRoughness;
+                current.rippleDamping = stock.rippleDamping;
+                current.windResistance = stock.windResistance;
+            }
             current.name = name;
             fields = 0;
             section = InRule;

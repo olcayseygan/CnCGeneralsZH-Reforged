@@ -925,6 +925,10 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - A tree's shadow used to be its outline laid flat at the foot of the trunk, which sank into the ground on a slope and never darkened a tank parked under it. Now every tree, the palms included, puts its real leaves into the sun's shadow, gaps between the fronds and all, and that shadow falls over the hillside and over the units standing in the wood. Direct3D 11 on Windows and Linux both draw it; the Direct3D 9 renderer keeps the old flat shadows.
 - Linux gets the sun's shadows Windows already had, soft under a helicopter and hard under a tank, and the smoke shadow that darkens a battlefield under a thick plume. Your own cloaked units still cast only a faint part of theirs.
 
+## Heavier polluted water
+
+- Polluted water now looks darker and cloudier, with duller reflections and calmer waves while its bubbles keep rising. Clear water and Classic water keep their existing appearance, and custom water rules keep their own settings.
+
 ## Modern water
 
 - Options has a Water Style box. Modern rolls the sea in waves whose crests catch the sun all the way into the shallows, and at the shore they turn along the bank and pile up foam. Boats push foam off their hulls. Classic stays the default, and either way a map keeps the water colour and depth its maker gave it.

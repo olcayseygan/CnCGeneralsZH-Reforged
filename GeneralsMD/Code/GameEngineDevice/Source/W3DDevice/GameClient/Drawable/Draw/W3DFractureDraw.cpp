@@ -30,7 +30,7 @@
 
 #include "Common/ArchiveFileSystem.h"
 #include "Common/FileSystem.h"
-#include "Common/File.h"
+#include "Common/file.h"
 #include "Common/GameCommon.h"
 #include "Common/GameEngine.h"
 #include "Common/GlobalData.h"

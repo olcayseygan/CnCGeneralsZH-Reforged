@@ -1581,7 +1581,7 @@ static void cursorFrame( const Marker &m, Real R, Real &along, Real &across )
 		case DESIGN_SPYSAT:			along = across = 0.92f * R;	break;
 		case DESIGN_ARTILLERY:	along = across = 0.9f * R;	break;
 		case DESIGN_TANKDROP:		along = across = 0.8f * R;	break;
-		case DESIGN_COMMANDO:		along = across = 0.8f * R;	break;
+		case DESIGN_COMMANDO:		along = across = 0.944f * R + 10.0f * m.k;	break;		// past its turning brackets (0.944R, 3k thick), close-in included
 		case DESIGN_CRUISE:			along = across = 0.744f * R;	break;
 		case DESIGN_NEUTRON:		along = across = R + 40.0f * m.k;	break;		// clear outside its countdown ring at R + 26k
 		case DESIGN_REPAIR:			along = across = R + 30.0f * m.k;	break;		// outside the gear's teeth (to R + 17k), close-in included
@@ -2566,7 +2566,7 @@ static void keepOffTris( Real &x, Real &y, Real size )
 		const Real clear = MIN( 0.5f * MARKER_PI - KEEP_OFF, MAX( KEEP_OFF, ( 0.4f * s_keep.side + size + 2.0f * s_keep.k ) / r ) );
 		if( fabs( diff ) >= clear )
 			continue;
-		const Real to = a + ( diff < 0.0f ? -clear : clear );
+		const Real to = a + ( diff < -1.0e-3f ? -clear : clear );		// on the axis itself always the same side, no flicker
 		x = s_keep.cx + r * (Real)cos( to );
 		y = s_keep.cy + r * (Real)sin( to );
 #if defined( _DEBUG )
@@ -3315,7 +3315,14 @@ static void studAt( const DesignDraw &d, Real x, Real y, Real scale = 1.0f, Real
 static void part( Int piece, Real x, Real y, Real ang, Real sx, Real sy, const Tint &tint, Real alpha )
 {
 	// the refined look: every part a smaller, crisper mark than the designs first drew it
-	keepOffTris( x, y, 0.5f * PART_SMALL * MAX( sx, sy ) );
+	if( s_keep.on )
+	{
+		// its reach along the radius through it: the box sx by sy turned to ang, projected on that line,
+		// so a gear tooth long round the ring and short across it counts as short
+		const Real th = (Real)atan2( y - s_keep.cy, x - s_keep.cx );
+		const Real size = 0.5f * PART_SMALL * ( (Real)fabs( sx * (Real)cos( ang - th ) ) + (Real)fabs( sy * (Real)sin( ang - th ) ) );
+		keepOffTris( x, y, size );
+	}
 	quadPiece( piece, x, y, ang, PART_SMALL * sx, PART_SMALL * sy, tint, alpha );
 }
 
@@ -4510,14 +4517,17 @@ static void drawHelixNapalm( const DesignDraw &d )
 			const Real a = (Real)j * 0.25f * MARKER_PI + 0.2f;
 			const Real len = ( 0.3f + 0.75f * e ) * R * ( 0.85f + 0.15f * (Real)sin( 11.0f * d.t + (Real)j ) );
 			const Real px = cx + ( 0.1f * R + 0.5f * len ) * (Real)cos( d.yaw + a ), py = cy + ( 0.1f * R + 0.5f * len ) * (Real)sin( d.yaw + a );
-			part( P_SHAPE_TONGUE, px, py, d.yaw + a, len * 1.6f, len * 0.55f, scaled( d.tint, 1.15f ), d.app );
+			// flames burst out even all round and pass under the triangles (not part(), which would bunch them)
+			quadPiece( P_SHAPE_TONGUE, px, py, d.yaw + a, PART_SMALL * len * 1.6f, PART_SMALL * len * 0.55f, scaled( d.tint, 1.15f ), d.app );
 		}
 	}
 	bandCircle( d.fin, cx, cy, R, 10.0f * k, d.tint, d.app );
 	for( Int j = 0; j < 6; ++j )
 	{
 		const Real a = d.yaw + MARKER_PI / 12.0f + (Real)j * MARKER_PI / 3.0f;		// off N, E, S and W
-		part( P_SHAPE_TONGUE, cx + ( R + 10.0f * k ) * (Real)cos( a ), cy + ( R + 10.0f * k ) * (Real)sin( a ), a, 16.0f * k, 16.0f * k, d.tint, d.app );
+		// already 15 degrees off the axes; the Helix's sway moves them, so drawn direct rather than turned
+		quadPiece( P_SHAPE_TONGUE, cx + ( R + 10.0f * k ) * (Real)cos( a ), cy + ( R + 10.0f * k ) * (Real)sin( a ), a, PART_SMALL * 16.0f * k,
+							 PART_SMALL * 16.0f * k, d.tint, d.app );
 	}
 	if( d.aim )
 	{
@@ -5181,9 +5191,10 @@ static void drawCommando( const DesignDraw &d )
 	Real ang;
 	if( d.aim )
 	{
-		// a quarter step at a time with no ease between, so a bracket never sweeps through the cursor
-		// triangles standing between its stops
-		ang = (Real)floor( d.t / 0.7f ) * 0.5f * MARKER_PI;
+		// a quarter turn eased in every 0.7 s; the cursor triangles stand outside the brackets' radius
+		// (cursorFrame), so the brackets turn freely past them
+		const Real f = d.t / 0.7f;
+		ang = ( (Real)floor( f ) + easeOut( MIN( 1.0f, ( f - (Real)floor( f ) ) / 0.25f ) ) ) * 0.5f * MARKER_PI;
 	}
 	else
 		ang = (Real)floor( d.tc / 0.7f + 1.0f ) * 0.5f * MARKER_PI;

@@ -2628,10 +2628,12 @@ static std::string spectatorClock( UnsignedInt frame )
 //-------------------------------------------------------------------------------------------------
 // Replay playback from the control socket: "replay:pause" pauses and resumes, "replay:seek:N" jumps
 // to frame N, and "replay:speed:N" plays at N percent of the logic rate the game was played at.
-// A seek forward fast-forwards, one picture in thirty drawn, until the frame
-// is reached.  A seek back loads the last checkpoint in front of the frame and runs forward from
-// there: the simulation keeps no history to step back through, so the replay saves the whole world
-// every half minute of it as it plays.  The load puts no loading screen up; the picture holds.
+// A seek back loads the last checkpoint in front of the frame and runs forward from there: the
+// simulation keeps no history to step back through, so the replay saves the whole world every half
+// minute of it as it plays.  A seek forward fast-forwards, one picture in thirty drawn, until the
+// frame is reached; with REPLAY_FORWARD_FROM_CHECKPOINT on, it loads a checkpoint already taken
+// between here and there instead when that beats simulating up to it (after a seek back, say).  The
+// load puts no loading screen up; the picture holds.
 //-------------------------------------------------------------------------------------------------
 static const std::string REPLAY_ACTION = "replay:";
 static const std::string REPLAY_SEEK_TO = REPLAY_ACTION + "seek:";
@@ -2658,6 +2660,8 @@ struct ReplayCheckpoint
 	RecorderClass::PlaybackCursor cursor;
 	GameLogicRandomState random;			///< a save game does not carry the logic's random stream
 	std::vector< std::pair< Int, Bool > > postedCRCs;
+	UnsignedInt line;									///< TheReplayLine when it was taken
+	Bool parted;											///< the line it was taken on had already gone out of sync
 };
 
 static const UnsignedInt REPLAY_CHECKPOINT_FRAMES = LOGICFRAMES_PER_SECOND * 30;
@@ -2677,13 +2681,52 @@ static Bool TheReplayRewindWaiting = FALSE;
 /// when the seek running now was asked for, for the log line when it lands
 static UnsignedInt TheReplaySeekStartMs = 0;
 
+/** What the last checkpoint load took and how many frames a second the last seek simulated, which
+	* decide whether a seek forward loads the checkpoint in front of its target.  Seeded with the
+	* slowest load measured, a late 8-player Twilight Flame (3.8 s), and a simulation rate above any
+	* measured there (43 to 55 a second headless), so until a seek has measured both the checkpoint
+	* has to be 400 frames ahead before it is taken. */
+static UnsignedInt TheReplayLoadMs = 4000;
+static UnsignedInt TheReplaySeekFramesPerSecond = 100;
+/// where the simulated part of the seek running now started, frame and clock
+static UnsignedInt TheReplaySimulatedFrom = 0;
+static UnsignedInt TheReplaySimulatedFromMs = 0;
+
+/** The line of play the replay is on: 0 is the replay played straight from its start, and every
+	* checkpoint load starts a new one.  Saving and loading do not yet carry every bit of the world, so
+	* a load can play on into a different game; the recorded CRCs catch it, and then the checkpoint
+	* loaded and those taken since on its line are dropped (recoverFromPartedReplayLine). */
+static UnsignedInt TheReplayLine = 0;
+static UnsignedInt TheReplayLineLoadedFrom = 0;	///< the checkpoint the line was loaded from
+static Bool TheReplayLineParted = FALSE;				///< it has gone out of sync, and been dealt with
+/** Loads of this replay that parted.  After one, a seek forward no longer trades the line it is on
+	* for a load; after two, loads have shown they cannot be trusted here and none is retried. */
+static Int TheReplayPartedLoads = 0;
+
+/** A seek forward may load a checkpoint in front of its target instead of simulating up to it.  Off
+	* until save/load parity holds, the condition REJOIN_FROM_CHECKPOINT (Network.cpp) waits on too: on
+	* an 8-player Twilight Flame replay of 2026-11-24 the load cut a 24,143 frame jump from 791 s to 38 s,
+	* and every load parted from the recording 100 frames later, so the fast jump ended on another game. */
+static const Bool REPLAY_FORWARD_FROM_CHECKPOINT = FALSE;
+
 static void seekReplay( UnsignedInt target )
 {
 	TheReplaySeekStartMs = Clock_Milliseconds();
 	TheGameLogic->setGamePaused( FALSE );
+	const UnsignedInt frame = TheGameLogic->getFrame();
 	// the first checkpoint is taken on the first frame, so only frame 0 has none behind it
-	TheReplayRewindWaiting = target <= TheGameLogic->getFrame() && !TheReplayCheckpoints.empty();
+	Bool load = target <= frame && !TheReplayCheckpoints.empty();
+	if( REPLAY_FORWARD_FROM_CHECKPOINT && target > frame && TheReplayPartedLoads == 0 )
+	{
+		// forward: the checkpoint at or before the target, if loading it beats simulating up to it
+		std::map< UnsignedInt, ReplayCheckpoint >::const_iterator at = TheReplayCheckpoints.upper_bound( target );
+		if( at != TheReplayCheckpoints.begin() && ( --at )->first > frame )
+			load = (UnsignedInt64)( at->first - frame ) * 1000 > (UnsignedInt64)TheReplayLoadMs * TheReplaySeekFramesPerSecond;
+	}
+	TheReplayRewindWaiting = load;
 	TheReplaySeekFrame = target;
+	TheReplaySimulatedFrom = frame;
+	TheReplaySimulatedFromMs = TheReplaySeekStartMs;
 }
 
 /** A folder of this process's own: two copies of the game watching replays at once each keep their
@@ -2713,6 +2756,9 @@ static void forgetReplayCheckpoints( void )
 	}
 	TheReplayCheckpoints.clear();
 	TheReplayCheckpointsFailed = FALSE;
+	TheReplayLine = 0;
+	TheReplayLineParted = FALSE;
+	TheReplayPartedLoads = 0;
 }
 
 static void collectPostedCRCs( GameMessageList *list, std::vector< std::pair< Int, Bool > > &crcs )
@@ -2734,6 +2780,8 @@ static void takeReplayCheckpoint( UnsignedInt frame )
 	checkpoint.path.format( "%s\\%u.sav", folder.str(), frame );
 	checkpoint.cursor = TheRecorder->getPlaybackCursor();
 	checkpoint.random = GetGameLogicRandomState();
+	checkpoint.line = TheReplayLine;
+	checkpoint.parted = checkpoint.cursor.crcInfo.sawCRCMismatch();
 	// the command list first: what it holds reaches the logic ahead of what the stream still holds
 	collectPostedCRCs( TheCommandList, checkpoint.postedCRCs );
 	collectPostedCRCs( TheMessageStream, checkpoint.postedCRCs );
@@ -2748,7 +2796,8 @@ static void takeReplayCheckpoint( UnsignedInt frame )
 	DEBUG_LOG(( "REPLAY CHECKPOINT frame %u in %u ms\n", frame, (UnsignedInt)( Clock_Milliseconds() - startMs ) ));
 }
 
-/** Load the last checkpoint at or before the frame, or the first one if the frame is before it.  The
+/** Load the last checkpoint at or before the frame, or the first one if the frame is before it, for a
+	* seek back or a seek forward past a checkpoint.  The
 	* camera, the speed and the observer's view stay as they were, the observer camera's mode, followed
 	* player and fog included: the checkpoint carries the camera it was taken with, which is not where
 	* the person watching is looking now. */
@@ -2758,6 +2807,7 @@ static void rewindReplay( UnsignedInt target )
 	if( at != TheReplayCheckpoints.begin() )
 		--at;
 	const ReplayCheckpoint &checkpoint = at->second;
+	const Bool forward = at->first > TheGameLogic->getFrame();
 
 	const AsciiString replayFile = TheRecorder->getCurrentReplayFilename();
 	// the reset forgets that the director raised the view over a fight, and the view keeps the raise;
@@ -2807,8 +2857,53 @@ static void rewindReplay( UnsignedInt target )
 	TheTacticalView->setPitch( pitch );
 	TheTacticalView->setZoom( zoom );
 	TheGameEngine->setFramesPerSecondLimit( framesPerSecond );
-	DEBUG_LOG(( "REPLAY REWIND to frame %u from the checkpoint at %u, loaded in %u ms\n",
-		target, at->first, (UnsignedInt)( Clock_Milliseconds() - startMs ) ));
+
+	TheReplayLine++;
+	TheReplayLineLoadedFrom = at->first;
+	TheReplayLineParted = checkpoint.parted;	// a line already out of sync has nothing left to catch
+	const UnsignedInt nowMs = Clock_Milliseconds();
+	TheReplayLoadMs = nowMs - startMs;
+	TheReplaySimulatedFrom = TheGameLogic->getFrame();
+	TheReplaySimulatedFromMs = nowMs;
+	DEBUG_LOG(( "REPLAY %s to frame %u from the checkpoint at %u, loaded in %u ms\n",
+		forward ? "FORWARD" : "REWIND", target, at->first, TheReplayLoadMs ));
+}
+
+/** The line a checkpoint load started has gone out of sync with the recording.  The load is what
+	* parted it, and loading the same file plays the same different game again, so that checkpoint and
+	* every one taken since on its line are dropped and the seek runs again once from an earlier one.  A
+	* second parted load ends it there: on an 8-player Twilight Flame replay of 2026-11-24 every load
+	* parted, the one at frame 1 by 9701, so stepping further back cost minutes and still ended out of
+	* sync.  The log says so either way.  The watcher sees the picture jump back and race forward again,
+	* as a seek. */
+static void recoverFromPartedReplayLine( UnsignedInt frame )
+{
+	TheReplayLineParted = TRUE;
+	TheReplayPartedLoads++;
+	Int dropped = 0;
+	for( std::map< UnsignedInt, ReplayCheckpoint >::iterator it = TheReplayCheckpoints.begin(); it != TheReplayCheckpoints.end(); )
+	{
+		if( it->first == TheReplayLineLoadedFrom || it->second.line == TheReplayLine )
+		{
+			TheLocalFileSystem->deleteFile( it->second.path.str() );
+			it = TheReplayCheckpoints.erase( it );
+			dropped++;
+		}
+		else
+			++it;
+	}
+	// a seek still running keeps its target; a line that parted after it landed goes back to where it is
+	const UnsignedInt target = TheReplaySeekFrame != 0 ? TheReplaySeekFrame : frame;
+	const Bool again = TheReplayPartedLoads < 2 && !TheReplayCheckpoints.empty() && TheReplayCheckpoints.begin()->first <= target;
+	DEBUG_LOG(( "REPLAY CHECKPOINT at %u parted from the recording by frame %u (parted load %d): %d checkpoints dropped, %s\n",
+		TheReplayLineLoadedFrom, frame, TheReplayPartedLoads, dropped,
+		again ? "seeking again from an earlier one" : "no load is retried on this replay, playback stays out of sync" ));
+	if( !again )
+		return;
+	if( TheReplaySeekFrame == 0 )
+		TheReplaySeekStartMs = Clock_Milliseconds();
+	TheReplaySeekFrame = target;
+	TheReplayRewindWaiting = TRUE;
 }
 
 /** Every client pass, between two logic frames: the checkpoints are taken here, a seek back is carried
@@ -2842,6 +2937,15 @@ static void updateReplaySeek( void )
 	}
 
 	const UnsignedInt frame = TheGameLogic->getFrame();
+	// a load never lands on frame 0, so this is the replay started over from the shell: the straight line
+	if( frame == 0 )
+		TheReplayLine = 0;
+	if( TheReplayLine != 0 && !TheReplayLineParted && TheRecorder->getPlaybackCursor().crcInfo.sawCRCMismatch() )
+	{
+		recoverFromPartedReplayLine( frame );
+		return;
+	}
+
 	if( TheRecorder->hasPlaybackLeft() && frame > 0 && !TheReplayCheckpointsFailed
 			&& ( TheReplayCheckpoints.empty() || frame >= TheReplayCheckpoints.rbegin()->first + REPLAY_CHECKPOINT_FRAMES ) )
 		takeReplayCheckpoint( frame );
@@ -2852,8 +2956,14 @@ static void updateReplaySeek( void )
 	TheWritableGlobalData->m_TiVOFastMode = seeking;
 	if( !seeking )
 	{
-		DEBUG_LOG(( "REPLAY SEEK to frame %u landed on %u in %u ms at %d fps\n", TheReplaySeekFrame, frame,
-			(UnsignedInt)( Clock_Milliseconds() - TheReplaySeekStartMs ), TheGameEngine->getFramesPerSecondLimit() ));
+		const UnsignedInt nowMs = Clock_Milliseconds();
+		const UnsignedInt simulated = frame > TheReplaySimulatedFrom ? frame - TheReplaySimulatedFrom : 0;
+		const UnsignedInt simulatedMs = nowMs - TheReplaySimulatedFromMs;
+		// a short tail measures the pass around it more than the simulation
+		if( simulated >= LOGICFRAMES_PER_SECOND && simulatedMs > 0 )
+			TheReplaySeekFramesPerSecond = (UnsignedInt)( (UnsignedInt64)simulated * 1000 / simulatedMs ) + 1;
+		DEBUG_LOG(( "REPLAY SEEK to frame %u landed on %u in %u ms at %d fps, %u frames simulated in %u ms\n", TheReplaySeekFrame,
+			frame, nowMs - TheReplaySeekStartMs, TheGameEngine->getFramesPerSecondLimit(), simulated, simulatedMs ));
 		TheReplaySeekFrame = 0;
 	}
 }

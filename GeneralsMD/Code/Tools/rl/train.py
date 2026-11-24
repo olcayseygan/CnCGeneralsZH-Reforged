@@ -3,6 +3,8 @@
     python train.py train --mock --envs 4 --steps 50000                  # no game needed
     python train.py train --envs 4 --steps 200000 --name usa_easy        # four games on ports 8800..8803
     python train.py train --resume models/usa_easy.zip --steps 100000    # carry on from a save
+    python train.py train --difficulty passive --name raze               # curriculum, phase 1: a base that
+    python train.py train --resume models/raze.zip --name usa_easy       #   never fights, then the Easy AI
     python train.py eval --model models/usa_easy.zip --episodes 3        # print the build order it plays
     python train.py eval --model models/usa_easy.zip --watch             # watch it play in a window
     python train.py eval --model models/usa_easy.zip --watch 2           # the same at twice the pace
@@ -107,7 +109,8 @@ def main():
     shared.add_argument("--user-dir", help="root of the per-game ZH_USER_DATA_DIR folders (default ZHR_RL_USER_DIR or temp)")
     shared.add_argument("--map", default=DEFAULT_MAP)
     shared.add_argument("--opponent", default="FactionGLA", help="slot 1's faction, e.g. FactionGLA, FactionAmerica")
-    shared.add_argument("--difficulty", default="easy", choices=["easy", "medium", "hard"])
+    shared.add_argument("--difficulty", default="easy", choices=["passive", "easy", "medium", "hard"],
+                        help="the AI seat; passive leaves it driverless (-takeover 1), a base to learn razing on")
     shared.add_argument("--decision-seconds", type=float, default=5.0, help="game seconds between decisions")
     shared.add_argument("--episode-minutes", type=float, default=20.0, help="game minutes in an episode")
     shared.add_argument("--frames-per-game-second", type=int, default=FRAMES_PER_GAME_SECOND,

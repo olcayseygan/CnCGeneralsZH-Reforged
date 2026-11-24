@@ -90,8 +90,10 @@ NOT_A_UNIT = re.compile(r"Projectile|Missile$|Field|Wreck|Debris|Shell$|Bomb$|Ro
 # Per 1000 credits: what we finish (economy full, army half), income, the enemy value we destroy and
 # ours that is destroyed; a kill, a refused order and the end of the match are flat. Combat outweighs
 # economy on purpose: a base is only worth what it lets the army do.
-REWARD = {"economy": 1.0, "army": 0.25, "income": 0.5, "razed": 3.0, "razed_each": 0.5, "dealt": 0.5,
-          "taken": 1.0, "refused": 0.05, "loss": 20.0, "win": 50.0}
+REWARD = {"economy": 1.0, "army": 0.75, "income": 0.5, "razed": 3.0, "razed_each": 0.5, "dealt": 0.5,
+          "taken": 1.0, "hoard": 0.01, "refused": 0.05, "loss": 20.0, "win": 50.0}
+HOARD_FREE = 3000          # money above this costs "hoard" per 1000 per game second: 10000 held for
+                           # ten minutes is -42, about what a good economy earns in that time
 
 
 def base_template(template):
@@ -163,8 +165,10 @@ class GameProcess:
         os.makedirs(user_dir, exist_ok=True)
         exe = exe or default_exe()
         # no -autoskirmish: the shell comes up and every match, the first included, starts with the
-        # socket's "skirmish", which takes these -side and -aidiff
-        line = [exe, "-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-aidiff", difficulty,
+        # socket's "skirmish", which takes these -side, -aidiff and -takeover. "passive" is the AI seat
+        # left driverless (-takeover 1): a base that never builds or fights, to learn razing on
+        seat = ["-takeover", "1"] if difficulty == "passive" else ["-aidiff", difficulty]
+        line = [exe, "-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit"] + seat + [
                 "-side", "0", "FactionAmerica", "-side", "1", opponent, "-control", str(port), "-logPrefix", "rl%d_" % port]
         line += ["-headless"] if headless else ["-win", "-xres", "800", "-yres", "600"]
         # the game starts only from its Run folder; ZH_UNATTENDED turns a waiting message box into an exit
@@ -247,7 +251,7 @@ class BuildOrderEnv(gym.Env):
     def _new_match(self, seed):
         if self.mock and self.game is None:
             from mock_game import MockGame
-            self.game = MockGame()
+            self.game = MockGame(passive=self.difficulty == "passive")
         if self.game is not None and not self.broken:
             try:
                 return self._skirmish(seed)
@@ -293,7 +297,8 @@ class BuildOrderEnv(gym.Env):
              "queue": dict.fromkeys(ITEMS, 0), "producers": {key: [] for key in PRODUCERS},
              "idle": 0, "economy": 0, "army": 0, "cc": None,
              "ids": {},          # every finished object: id -> (value, "economy" or "army")
-             "soldiers": []}     # the army: (template, x, y)
+             "soldiers": [],     # the army: (template, x, y)
+             "army_ids": {}}     # the army: id -> template
         for o in reply["objects"]:
             key = KEY_OF_TEMPLATE.get(base_template(o["template"]))
             if key is None:
@@ -321,6 +326,7 @@ class BuildOrderEnv(gym.Env):
                 s["ids"][o["id"]] = (item.cost, part)
                 if part == "army":
                     s["soldiers"].append((o["template"], o["x"], o["y"]))
+                    s["army_ids"][o["id"]] = o["template"]
                 if o["kind"] == "builder" and o.get("idle"):
                     s["idle"] += 1
         home = (s["cc"]["x"], s["cc"]["y"]) if s["cc"] else getattr(self, "home", (0.0, 0.0))
@@ -446,7 +452,19 @@ class BuildOrderEnv(gym.Env):
         self.army_order = 1 if key == "attack" else -1
         self.order_target = target
         self.order_decision = self.decisions
+        self.sent_ids = set(self.state["army_ids"])
         return True
+
+    def _reinforce(self):
+        """While an attack stands, units trained since go after it (and the target follows the base:
+        their CC, else their nearest structure)."""
+        new = self.state["army_ids"].keys() - self.sent_ids
+        target = self._attack_target()
+        if not new or target is None:
+            return
+        for template in sorted({self.state["army_ids"][i] for i in new}):
+            self.send("attackmove %d %s %.0f %.0f" % (self.slot, template, target[0], target[1]))
+        self.sent_ids = set(self.state["army_ids"])
 
     def action_masks(self):
         s = self.state
@@ -519,7 +537,7 @@ class BuildOrderEnv(gym.Env):
         self.supply_xy = self._find_supply()
         self.home = (self.state["cc"]["x"], self.state["cc"]["y"])
         self.army_order = 0  # 1 the army was last sent to attack, -1 to defend
-        self.order_target, self.order_decision, self.decisions = None, 0, 0
+        self.order_target, self.order_decision, self.decisions, self.sent_ids = None, 0, 0, set()
         enemy = self.state["enemy"]["cc"] or (self.state["enemy"]["targets"] or [None])[0]
         dx, dy = (enemy[0] - self.home[0], enemy[1] - self.home[1]) if enemy else (1.0, 0.0)
         length = math.hypot(dx, dy) or 1.0
@@ -545,6 +563,8 @@ class BuildOrderEnv(gym.Env):
                 _, ended = self._advance()
                 refused = not ordered
             else:
+                if self.army_order == 1:
+                    self._reinforce()
                 command = self._order(key) if key != "wait" else None
                 taken, ended = self._advance((key, command) if command else None)
                 refused = key != "wait" and not taken
@@ -571,7 +591,10 @@ class BuildOrderEnv(gym.Env):
         # by object id, so a loss is not mistaken for spending: new ids are what we finished, ids gone
         # are what was destroyed (a structure counts once it is finished)
         new = [s["ids"][i] for i in s["ids"].keys() - before["ids"].keys()]
-        taken = sum(before["ids"][i][0] for i in before["ids"].keys() - s["ids"].keys())
+        # combat units are spent to be lost; structures, dozers and Chinooks are what a raid costs us
+        lost_value = sum(value for value, part in (before["ids"][i] for i in before["ids"].keys() - s["ids"].keys())
+                         if part == "economy")
+        hoard = w["hoard"] * max(0, s["money"] - HOARD_FREE) / 1000.0 * self.decision_seconds
         gone = [before["enemy"]["ids"][i] for i in before["enemy"]["ids"].keys() - s["enemy"]["ids"].keys()]
         razed = [value for value, finished_structure in gone if finished_structure]
         dealt = sum(value for value, finished_structure in gone if not finished_structure)
@@ -580,11 +603,11 @@ class BuildOrderEnv(gym.Env):
         # a rebuilt dozer or supply centre is a new id and earns the economy term again, so a raided
         # economy is worth restoring; the base is the target, the units in front of it only half count
         reward = (w["economy"] * economy + w["army"] * army + w["income"] * max(income, 0)
-                  + w["razed"] * sum(razed) + w["dealt"] * dealt - w["taken"] * taken) / 1000.0
-        reward += w["razed_each"] * len(razed) - w["refused"] * refused - w["loss"] * lost + w["win"] * won
+                  + w["razed"] * sum(razed) + w["dealt"] * dealt - w["taken"] * lost_value) / 1000.0
+        reward += w["razed_each"] * len(razed) - hoard - w["refused"] * refused - w["loss"] * lost + w["win"] * won
         truncated = s["frame"] - self.start_frame >= self.episode_frames
         info.update(frame=s["frame"], money=s["money"], refused=refused, lost=lost, won=won,
-                    dealt=dealt, taken=taken, razed=len(razed), kills=len(gone) - len(razed))
+                    dealt=dealt, taken=lost_value, razed=len(razed), kills=len(gone) - len(razed), hoard=hoard)
         return self._obs(), float(reward), lost or won, truncated and not (lost or won), info
 
     def close(self):
@@ -624,16 +647,41 @@ def check():
     assert masks()["attack"] and not masks()["defend"]
     _, _, _, _, info = env.step(ACTIONS.index("attack"))
     assert not info["refused"] and env.army_order == 1 and not masks()["attack"], info  # no second order
+    assert info["hoard"] > 0, info  # still sitting on most of the starting 10000
     for _ in range(COMMIT_DECISIONS):
         threat = env.state["enemy"]["near_value"] > THREAT_SHARE * max(env.state["army"], 1)
         assert threat or not masks()["defend"]  # committed
         env.step(0)
-    assert env.state["away"] > 0 and masks()["defend"], env.state["away"]
+    sent = set(env.sent_ids)
+    while not env.state["army_ids"].keys() - sent:  # one more ranger, trained after the order
+        env.step(ACTIONS.index("ranger") if masks()["ranger"] else 0)
+    env.step(0)
+    late = [o for o in env.game.objects if o["id"] in env.state["army_ids"].keys() - sent]
+    assert late and all(o["goal"] or o["x"] > 1300 for o in late), late  # it went after the attack too
+    while not env.state["soldiers"]:  # the first wave may be gone by now
+        env.step(ACTIONS.index("ranger") if masks()["ranger"] else 0)
+    assert masks()["defend"], env.state["away"]  # the commitment is over, the attack still stands
     _, _, _, _, info = env.step(ACTIONS.index("defend"))
     assert not info["refused"] and env.army_order == -1, info
     for _ in range(COOLDOWN_DECISIONS - 1):  # no new attack straight after a recall
         assert not masks()["attack"]
         env.step(0)
+
+    # the passive seat: an economy, a handful of tanks and one attack take its base
+    passive = BuildOrderEnv(mock=True, difficulty="passive")
+    passive.reset(seed=3)
+    plan, done = ["power", "supply", "chinook", "factory"], False
+    while not done:
+        m = dict(zip(ACTIONS, passive.action_masks()))
+        key = next((k for k in plan if m[k]), None)
+        if key:
+            plan.remove(key)
+        else:
+            key = "attack" if len(passive.state["soldiers"]) >= 5 and m["attack"] else "crusader" if m["crusader"] else "wait"
+        _, _, terminated, truncated, info = passive.step(ACTIONS.index(key))
+        done = terminated or truncated
+    assert info["won"], info
+    passive.close()
 
     # a masked random episode: the mask and the game must agree, so nothing masked-in is refused
     rng = np.random.default_rng(0)

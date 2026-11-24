@@ -35,8 +35,9 @@ def selector_matches(selector, template):
 
 
 class MockGame:
-    def __init__(self):
-        self.in_game = False
+    def __init__(self, passive=False):
+        # passive: the seat the game leaves driverless under -takeover 1, a CC and a worker that never move
+        self.in_game, self.passive = False, passive
 
     def close(self):
         pass
@@ -54,6 +55,10 @@ class MockGame:
         self.objects = []
         self._add(0, "AmericaCommandCenter", "structure", HOME[0], HOME[1], 2000)
         self._add(0, "AmericaVehicleDozer", "builder", HOME[0] + 100, HOME[1], 1000)
+        if self.passive:
+            self._add(1, "GLACommandCenter", "structure", ENEMY_HOME[0], ENEMY_HOME[1], 3000)
+            self._add(1, "GLAInfantryWorker", "builder", ENEMY_HOME[0] + 100, ENEMY_HOME[1], 200)
+            return
         for template, dx, dy, hp in ENEMY_BASE:
             self._add(1, template, "structure", ENEMY_HOME[0] + dx, ENEMY_HOME[1] + dy, hp)
         for _ in range(3):
@@ -130,9 +135,9 @@ class MockGame:
     def _second(self):
         seconds = self.frame // FRAMES_PER_GAME_SECOND
         enemy_army = [o for o in self._mine(1) if o["kind"] == "unit"]
-        if seconds % ENEMY_TRAIN_SECONDS == 0 and self._mine(1) and len(enemy_army) < 4 + seconds // 60:
+        if not self.passive and seconds % ENEMY_TRAIN_SECONDS == 0 and self._mine(1) and len(enemy_army) < 4 + seconds // 60:
             self._enemy_unit()
-        if seconds >= FIRST_WAVE_SECONDS + WAVE_GAP_SECONDS * self.waves:
+        if not self.passive and seconds >= FIRST_WAVE_SECONDS + WAVE_GAP_SECONDS * self.waves:
             self.waves += 1
             for o in enemy_army:
                 o["goal"] = HOME

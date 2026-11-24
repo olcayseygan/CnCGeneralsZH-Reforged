@@ -1521,11 +1521,12 @@ void WorkerAIUpdate::crc( Xfer *xfer )
 	* Version Info:
 	* 1: Initial version
 	* 2: The dock action window, which now times the shortest leg between two supply dockings
-	* 3: Only the window's end; its start fed nothing but a progress bar */
+	* 3: Only the window's end; its start fed nothing but a progress bar
+	* 4: The dock left to go build, the rebuild flag and the busy latch, which a load used to clear */
 // ------------------------------------------------------------------------------------------------
 void WorkerAIUpdate::xfer( Xfer *xfer )
 {
-  XferVersion currentVersion = 3;
+  XferVersion currentVersion = 4;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
  
@@ -1579,6 +1580,13 @@ void WorkerAIUpdate::xfer( Xfer *xfer )
 
 	//-------------------------- xfer Worker info
 	xfer->xferSnapshot(m_workerMachine);
+
+	if( version >= 4 )
+	{
+		xfer->xferObjectID(&m_dockBeforeBuilding);
+		xfer->xferBool(&m_isRebuild);
+		xfer->xferBool(&m_forcedBusyPending);
+	}
 
 }  // end xfer
 

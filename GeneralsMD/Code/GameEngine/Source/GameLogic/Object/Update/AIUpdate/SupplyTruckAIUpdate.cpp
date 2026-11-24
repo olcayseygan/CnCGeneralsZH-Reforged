@@ -288,11 +288,12 @@ void SupplyTruckAIUpdate::crc( Xfer *xfer )
 	* Version Info:
 	* 1: Initial version
 	* 2: The dock action window, which now times the shortest leg between two supply dockings
-	* 3: Only the window's end; its start fed nothing but a progress bar */
+	* 3: Only the window's end; its start fed nothing but a progress bar
+	* 4: The busy latch, which a load used to clear */
 // ------------------------------------------------------------------------------------------------
 void SupplyTruckAIUpdate::xfer( Xfer *xfer )
 {
-  XferVersion currentVersion = 3;
+  XferVersion currentVersion = 4;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
  
@@ -310,6 +311,8 @@ void SupplyTruckAIUpdate::xfer( Xfer *xfer )
 	}
 	if( version >= 2 )
 		xfer->xferUnsignedInt(&m_dockActionEndFrame);
+	if( version >= 4 )
+		xfer->xferBool(&m_forcedBusyPending);
 
 }  // end xfer
 

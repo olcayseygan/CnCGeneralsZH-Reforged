@@ -220,7 +220,8 @@ namespace DirectStrikeTheme
 		CLAMP_BAND_L, CLAMP_BAND_C, CLAMP_BAND_R,
 
 		// the observer HUD (the Ledger) on the common sheet: the wrapper's experiments/observer-console/PIECES.md
-		OBS_RADAR,					///< the radar module, 232 square, open left and bottom, its glass from 5 in
+		OBS_RADAR,					///< the radar's scope housing, 250 square, open left and bottom, its glass from 18 in
+		OBS_BOARD_HEAD,			///< the board's head plate, 314x138, open right: the chip, the keys and the selector in wells
 		OBS_BOARD_TL, OBS_BOARD_T, OBS_BOARD_TR, OBS_BOARD_L, OBS_BOARD_C, OBS_BOARD_R, OBS_BOARD_BL, OBS_BOARD_B, OBS_BOARD_BR,	///< open right and bottom
 		OBS_CARD_TL, OBS_CARD_T, OBS_CARD_TR, OBS_CARD_L, OBS_CARD_C, OBS_CARD_R, OBS_CARD_BL, OBS_CARD_B, OBS_CARD_BR,
 		OBS_HEAT,						///< the heat scale, 192x10, stretched
@@ -229,9 +230,9 @@ namespace DirectStrikeTheme
 		OBS_ICON_CROWN,
 		OBS_ICON_STAR,
 		OBS_ICON_SKULL,
-		OBS_STAT_PREV,			///< the stat step keys, 18 square, "" H P I
+		OBS_STAT_PREV,			///< the stat step keys, 28 square, "" H P I
 		OBS_STAT_NEXT,
-		OBS_KEY_FREE,				///< the operator keys, 22 square, "" H P (P the mode in force, or held down)
+		OBS_KEY_FREE,				///< the operator keys, 45x28, "" H P (P the mode in force, or held down)
 		OBS_KEY_FOLLOW,
 		OBS_KEY_DIRECTOR,
 		OBS_KEY_VIS_ALL,

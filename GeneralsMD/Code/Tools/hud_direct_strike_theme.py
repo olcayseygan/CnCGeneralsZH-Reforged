@@ -249,53 +249,127 @@ def patches(o, w, h, x0, x1, seed):
         x += pw + rng.uniform(16, 60)
 
 
-def opened(kind, w, h, open4):
+def corner_points(kind, c):
+    """A top left corner from the left edge to the top edge, as offsets: hud_command_bar's kinds (cut, notch, slant,
+    round) and steps, China's stepped notch, two square steps of c / 2."""
+    if kind == "steps" and c > 0:
+        return [(0, c), (c * 0.5, c), (c * 0.5, c * 0.5), (c, c * 0.5), (c, 0)]
+    return H.corner_points(kind, c)
+
+
+def outline4(x0, y0, x1, y1, tl, tr, br, bl):
+    """A rectangle with a corner of its own at each of tl, tr, br, bl, each (kind, size) of corner_points."""
+    pts = [(x0 + dx, y0 + dy) for dx, dy in corner_points(*tl)]
+    pts += [(x1 - dx, y0 + dy) for dx, dy in reversed(corner_points(*tr))]
+    pts += [(x1 - dx, y1 - dy) for dx, dy in corner_points(*br)]
+    pts += [(x0 + dx, y1 - dy) for dx, dy in reversed(corner_points(*bl))]
+    return pts
+
+
+def opened(kind, w, h, open4, corners=None):
     """The outline maker of a w x h piece some of whose sides (open4: top, bottom, left, right) are the screen's edge:
     outline(x0, y0, x1, y1, c) is shape(kind, ...) with each open side run PAD past the piece, to the painter's
     border, which Painter.tiers and recess (open4 None) take as no edge, and the corners on an open side square.
-    Wells and lips drawn through it run to the screen's edge too.  With every side closed it is shape itself."""
+    Wells and lips drawn through it run to the screen's edge too.  With every side closed it is shape itself.
+    corners, (kind, share) for tl, tr, br, bl, gives a piece corners of its own instead of the build's: each corner
+    share times the c it is drawn with, so an inset outline keeps its corners in proportion."""
     top, bottom, left, right = open4
     corner = H.BUILDS[kind]["corner"]
 
     def outline(x0, y0, x1, y1, c):
-        if not any(open4):
+        if not any(open4) and corners is None:
             return shape(kind, x0, y0, x1, y1, c)
         x0, x1 = (-PAD if left else x0), (w + PAD if right else x1)
         y0, y1 = (-PAD if top else y0), (h + PAD if bottom else y1)
-        cut = (corner if corner in ("cut", "notch", "round") else "cut", c)
+        own = corners or [(corner if corner in ("cut", "notch", "round") else "cut", 1.0)] * 4
         square = ("none", 0)
-        return plate(x0, y0, x1, y1, square if top or left else cut, square if top or right else cut,
-                     square if bottom or right else cut, square if bottom or left else cut)
+        on_edge = (top or left, top or right, bottom or right, bottom or left)
+        return outline4(x0, y0, x1, y1, *[square if edge else (k, c * share) for edge, (k, share) in zip(on_edge, own)])
     return outline
 
 
-def panel(side, w, h, wells=(), lit=False, rule=None, bands=(), recess=None, open4=CLOSED):
+def panel(side, w, h, wells=(), lit=False, rule=None, bands=(), recess=None, open4=CLOSED, corners=None, top=0.0,
+          tab=None, bezel=None, fit=None, c=None):
     """Every plate of the mode: the side's outline, the near-black shell, the lip (bright steel when lit, the winner's
     and the hero's), glass wells sunk into it, square band wells, a recessed face, a gold rule.  Rects in the panel's
-    own pixels; open4 (top, bottom, left, right) the sides that are the screen's edge, without rim or bevel (opened)."""
+    own pixels; open4 (top, bottom, left, right) the sides that are the screen's edge, without rim or bevel (opened).
+    A housing of its own: corners (opened's) and c its corner's size, top the outline's top edge when a tab stands
+    over it, tab a polygon joined to the silhouette (a dossier's folder tab), bezel (width, height) a raised ring round
+    every well (a scope's housing), fit(o) the fittings, drawn last with the primitives below (rail, ticks, clamp)."""
     build = build_of(side)
-    c = min(CORNER[build], h / 4)
+    c = min(CORNER[build], h / 4) if c is None else c
     sharp_form = sharp(side)
-    outline = opened("terraced" if sharp_form else build, w, h, open4)   # a common frame takes China's notched corners
+    outline = opened("terraced" if sharp_form else build, w, h, open4, corners)   # a common frame: China's notches
     edges = None if any(open4) else CLOSED
 
     def draw(o, b):
-        o.tiers([outline(0, 0, w, h, c)], edges, SHELL_TOP, LIP_TOP, LIP_INSET, LIP_BEVEL[build], SHELL_BEVEL,
-                lip_mat=BRIGHT if lit else None)
+        o.tiers([outline(0, top, w, h, c)] + ([tab] if tab else []), edges, SHELL_TOP, LIP_TOP, LIP_INSET,
+                LIP_BEVEL[build], SHELL_BEVEL, lip_mat=BRIGHT if lit else None)
         if sharp_form:
             k = LIP_INSET + 1.5
-            stepped_lip(o, [outline(k, k, w - k, h - k, max(c - k * 0.5, 1.5))], k)
+            stepped_lip(o, [outline(k, top + k, w - k, h - k, max(c - k * 0.5, 1.5))], k)
             if look(side).get("patches") and min(w, h) >= 60:
                 patches(o, w, h, 8, w - 8, w * 3 + h)
         if recess:
             o.recess([outline(*recess, c * RECESS_CORNER)], edges, RECESS_DEPTH, RECESS_EDGE)
         for r in wells:
-            o.sink([outline(*r, c * WELL_CORNER)], WELL_DEPTH, WELL_LIP)
+            if bezel:
+                width, height = bezel
+                o.bump([outline(r[0] - width, r[1] - width, r[2] + width, r[3] + width, c * WELL_CORNER + width)], height, 1.0)
+            o.sink([outline(*r, c * WELL_CORNER)], WELL_DEPTH + (bezel[1] if bezel else 0), WELL_LIP)
         for r in bands:
             o.sink([plate(*r)], BAND_DEPTH, BAND_LIP)
         if rule:
             o.inlay([plate(*rule)], GOLDM, RULE_DEPTH)
+        if fit:
+            fit(o)
     return small(side, w, h, draw)
+
+
+# ---------------------------------------------------------------------------------------------- fittings
+# A housing's own furniture, drawn through panel's fit on top of the lip.  A 9-slice's fittings stand in its corners,
+# or repeat along an edge at a pitch that divides TILE, so a tiled edge carries them unbroken.
+
+def rail(o, x0, y0, x1, y1, pitch=24, first=None, r=1.6, accent=True):
+    """USA's machined spine: a raised bar with a bronze hairline down its face and a rivet every pitch, the first
+    first below its top (half a pitch by default)."""
+    o.bump([plate(x0, y0, x1, y1)], 1.8, 1.0, STEEL)
+    if accent:
+        o.inlay([plate(x0 + 1.2, y0, x0 + 1.9, y1)], H.ACCENT, 0.3)
+    cx = (x0 + x1) / 2 + 0.6
+    y = y0 + (pitch / 2 if first is None else first)
+    while y < y1 - r:
+        o.rivet(cx, y, r)
+        y += pitch
+
+
+def ticks(o, x0, y0, x1, y1, step=8, major=5, length=2.4):
+    """A scope's graduations inlaid along a line from (x0, y0) to (x1, y1), horizontal or vertical: a short tick every
+    step, a long one every major ticks, standing off the line toward the glass (down or left)."""
+    across = y0 == y1
+    n = int((x1 - x0 if across else y1 - y0) // step)
+    for i in range(n + 1):
+        k = length * (1.8 if i % major == 0 else 1.0)
+        if across:
+            x = x0 + i * step
+            o.inlay([plate(x - 0.45, y0, x + 0.45, y0 + k)], INKM, 0.5)
+        else:
+            y = y0 + i * step
+            o.inlay([plate(x0 - k, y - 0.45, x0, y + 0.45)], INKM, 0.5)
+
+
+def clamp(o, X, Y, sx, sy, c, arm, th, mat, arm_v=None, rivet=1.25, rise=1.8, fasten="rivet"):
+    """An L clamp hugging the corner at (X, Y) of a plate notched c, its arms toward (sx, sy): two bars over the lip
+    and a fastener at each bar's end, a rivet or the GLA's hex bolt."""
+    arm_v = arm if arm_v is None else arm_v
+
+    def r(a0, b0, a1, b1):
+        xs, ys = sorted((X + sx * a0, X + sx * a1)), sorted((Y + sy * b0, Y + sy * b1))
+        return plate(xs[0], ys[0], xs[1], ys[1])
+    o.bump([r(c + 1.5, 1.2, c + 1.5 + arm, 1.2 + th), r(1.2, c + 1.5, 1.2 + th, c + 1.5 + arm_v)], rise, 0.8, mat)
+    pin = o.rivet if fasten == "rivet" else (lambda x, y, rr: o.bolt(x, y, rr * 1.15, int(x * 7 + y)))
+    pin(X + sx * (c + arm - 1.2), Y + sy * (1.2 + th / 2), rivet)
+    pin(X + sx * (1.2 + th / 2), Y + sy * (c + arm_v - 1.2), rivet)
 
 
 def chip(side, w, h, inset=INSET, lit=False, open4=CLOSED):

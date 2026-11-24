@@ -12907,11 +12907,13 @@ enum
 	CON_STATS					= 7,			///< Money, Income, Army, Kills, Power, Builds, Super, as the keys Q W E R T Y A
 	CON_HISTORY				= 18,			///< income samples kept a player
 	CON_HISTORY_SECONDS	= 30,		///< a sample's length
-	CON_BOARD_W				= 304,
-	CON_BOARD_HEAD		= 86,			///< the chip, the key row and the selector over the first line
+	CON_BOARD_W				= 314,
+	CON_BOARD_GLASS		= 16,			///< the board's glass past its spine: the lines' left
+	CON_BOARD_HEAD		= 144,		///< the head plate (the chip, two rows of keys, the selector) over the first line
+	CON_HEAD_H				= 138,		///< the head plate's own height, and all a hidden board keeps
 	CON_LINE					= 20,			///< a seat's line, and a team header's
-	CON_STUB_H				= 30,			///< a hidden board's stub: its key row alone
-	CON_CARD_W				= 340
+	CON_CARD_W				= 340,
+	CON_CARD_TOP			= 16			///< the card's content under its folder tab and rim
 };
 
 /** Where everything stands.  PIECES.md writes every number at 1920x1080: k turns a length into the
@@ -12938,7 +12940,7 @@ static ConsoleLayout consoleLayout( void )
 	l.left = play.lo.x;
 	l.right = play.hi.x;
 	l.bottom = screenH;
-	l.radarBox = ConsoleLayout::box( l.L( 0 ), l.Y( 848 ), l.L( 232 ), l.Y( 1080 ) );
+	l.radarBox = ConsoleLayout::box( l.L( 0 ), l.Y( 830 ), l.L( 250 ), l.Y( 1080 ) );		// the scope's housing round the map
 	l.glass = ConsoleLayout::box( l.L( 6 ), l.Y( 854 ), l.L( 226 ), l.Y( 1074 ) );
 	return l;
 }
@@ -13437,7 +13439,7 @@ static IRegion2D drawObserverDossier( const ConsoleLayout &l, const SpectatorSta
 		queueLines = factories.empty() ? 0 : line + 1;
 	}
 	const Int armyLines = ( (Int)units.size() + 5 ) / 6, powerLines = ( (Int)powers.size() + 1 ) / 2;
-	const Int height1080 = 8 + 26 + 78 + ( armyLines > 0 ? 31 * armyLines + 6 : 0 ) + ( queueLines > 0 ? 31 * queueLines + 6 : 0 )
+	const Int height1080 = CON_CARD_TOP + 26 + 78 + ( armyLines > 0 ? 31 * armyLines + 6 : 0 ) + ( queueLines > 0 ? 31 * queueLines + 6 : 0 )
 		+ 31 * powerLines + ( upgradeCells == 0 ? 0 : 35 ) + 10;
 	const Int cardW = P( CON_CARD_W ), cardH = P( height1080 );
 	const Int cx = boardX - P( 342 ), cy = max( 0, min( lineY - P( 40 ), l.bottom - cardH ) );
@@ -13446,7 +13448,7 @@ static IRegion2D drawObserverDossier( const ConsoleLayout &l, const SpectatorSta
 	nineSlice( regionBox( card ), OBS_CARD_TL );
 	TheDisplay->endBatch2D();
 	const Int ix = cx + P( 8 ), right = ix + P( 324 );
-	Int top = cy + P( 8 );
+	Int top = cy + P( CON_CARD_TOP );
 
 	// the head: his colour, badge, name, a star a rank, his team
 	TheDisplay->drawFillRect( ix, top, P( 4 ), P( 20 ), colour );
@@ -13769,12 +13771,14 @@ void InGameUI::drawObserverConsole( void )
 	const Bool boardHidden = theConsoleHidden[ CON_MODULE_BOARD ];
 	const Int lines = (Int)seats.size() + headerCount;
 	const Int x0 = l.R( 1920 - CON_BOARD_W ), x1 = l.right;
-	const Int y0 = max( 0, l.bottom - P( boardHidden ? CON_STUB_H : CON_BOARD_HEAD + CON_LINE * lines ) );
+	const Int y0 = max( 0, l.bottom - P( boardHidden ? CON_HEAD_H : CON_BOARD_HEAD + CON_LINE * lines ) );
 	theConsoleBlock[ 1 ] = box( x0, y0, x1, l.bottom );
 	TheDisplay->beginBatch2D();
 	nineSlice( regionBox( box( x0, y0, x1, l.bottom ) ), OBS_BOARD_TL );
+	if( const Image *head = art( OBS_BOARD_HEAD ) )
+		TheDisplay->drawImage( head, x0, y0, x1, y0 + P( CON_HEAD_H ) );
 	TheDisplay->endBatch2D();
-	const Int ix = x0 + P( 6 );
+	const Int ix = x0 + P( CON_BOARD_GLASS );
 	auto BX = [ & ]( Real at ) { return ix + P( at ); };
 	auto BY = [ & ]( Real at ) { return y0 + P( at ); };
 
@@ -13782,7 +13786,7 @@ void InGameUI::drawObserverConsole( void )
 	{
 		static const Piece KEYS[ 12 ] = { OBS_KEY_FREE, OBS_KEY_FOLLOW, OBS_KEY_DIRECTOR, OBS_KEY_VIS_ALL, OBS_KEY_VIS_TEAM, OBS_KEY_VIS_PLAYER,
 			OBS_KEY_HIDE_RADAR, OBS_KEY_HIDE_BOARD, OBS_KEY_HIDE_DOSSIER, OBS_KEY_OPTIONS, OBS_KEY_CHAT, OBS_KEY_QUIT };
-		static const Int KEY_X[ 12 ] = { 0, 23, 46, 73, 96, 119, 146, 169, 192, 219, 242, 265 };
+		static const Int KEY_X[ 6 ] = { 0, 48, 96, 151, 199, 247 };		///< two rows of six, 45x28 at 1080
 		static const Int KEY_ACTION[ 12 ] = { CON_CAMERA, CON_CAMERA, CON_CAMERA, CON_VISION, CON_VISION, CON_VISION,
 			CON_HIDE, CON_HIDE, CON_HIDE, CON_OPTIONS, CON_CHAT, CON_QUIT };
 		static const Int KEY_ARG[ 12 ] = { 0, 1, 2, 0, 1, 2, CON_MODULE_RADAR, CON_MODULE_BOARD, CON_MODULE_DOSSIER, 0, 0, 0 };
@@ -13793,16 +13797,18 @@ void InGameUI::drawObserverConsole( void )
 		const Bool lit[ 12 ] = { camera == 0, camera == 1, camera == 2, vision == 0, vision == 1, vision == 2,
 			theConsoleHidden[ CON_MODULE_RADAR ], boardHidden, theConsoleHidden[ CON_MODULE_DOSSIER ],
 			options != NULL && !options->isHidden(), IsInGameChatActive(), isQuitMenuVisible() };
-		const Int keyTop = boardHidden ? BY( 4 ) : BY( 35 );
 		TheDisplay->beginBatch2D();
 		for( Int each = 0; each < 12; each++ )
-			consoleKey( KEYS[ each ], box( BX( KEY_X[ each ] ), keyTop, BX( KEY_X[ each ] + 22 ), keyTop + P( 22 ) ), lit[ each ], FALSE,
+		{
+			const Int keyTop = BY( each < 6 ? 37 : 67 ), keyX = KEY_X[ each % 6 ];
+			consoleKey( KEYS[ each ], box( BX( keyX ), keyTop, BX( keyX + 45 ), keyTop + P( 28 ) ), lit[ each ], FALSE,
 				KEY_ACTION[ each ], KEY_ARG[ each ] );
+		}
 		TheDisplay->endBatch2D();
 	}
 
+	// the head stands whole, hidden board or not: a hidden board is its head alone, its lines gone
 	const Int boardW = P( 296 );
-	if( !boardHidden )
 	{
 		// the match chip: the clock, the speed, the armies' tug, the seats still standing
 		UnicodeString clock;
@@ -13856,16 +13862,14 @@ void InGameUI::drawObserverConsole( void )
 			TheDisplay->drawOpenRect( tugX0 - 1, BY( 14 ) - 1, tugX1 - tugX0 + 2, P( 10 ) + 2, 1.0f, DARK_LINE );
 			TheDisplay->endBatch2D();
 		}
-		TheDisplay->drawFillRect( ix, BY( 32 ), boardW, 1, DARK_LINE );
-		TheDisplay->drawFillRect( ix, BY( 58 ), boardW, 1, DARK_LINE );
-
-		// the stat selector: the picked stat in words between the step keys, its range round the heat scale
+		// the stat selector, in the head's third well: the picked stat in words between the step keys, its range
+		// round the heat scale
 		static const char *const STAT_WORDS[ CON_STATS ] = { "GUI:ObsConStatMoney", "GUI:ObsConStatIncome", "GUI:ObsConStatArmy",
 			"GUI:ObsConStatKills", "GUI:ObsConStatPower", "GUI:ObsConStatBuilds", "GUI:ObsConStatSuper" };
-		consoleKey( OBS_STAT_PREV, box( BX( 0 ), BY( 61 ), BX( 18 ), BY( 79 ) ), FALSE, FALSE, CON_STAT_STEP, -1 );
-		const Int wordW = drawText( TheGameText->fetch( STAT_WORDS[ stat ] ), font( TYPE_ROW ), BX( 24 ), BY( 62 ), P( 16 ), GOLD_INK );
-		const Int nextX = BX( 24 ) + wordW + P( 6 );
-		consoleKey( OBS_STAT_NEXT, box( nextX, BY( 61 ), nextX + P( 18 ), BY( 79 ) ), FALSE, FALSE, CON_STAT_STEP, 1 );
+		consoleKey( OBS_STAT_PREV, box( BX( 0 ), BY( 102 ), BX( 28 ), BY( 130 ) ), FALSE, FALSE, CON_STAT_STEP, -1 );
+		const Int wordW = drawText( TheGameText->fetch( STAT_WORDS[ stat ] ), font( TYPE_ROW ), BX( 34 ), BY( 106 ), P( 20 ), GOLD_INK );
+		const Int nextX = BX( 34 ) + wordW + P( 6 );
+		consoleKey( OBS_STAT_NEXT, box( nextX, BY( 102 ), nextX + P( 28 ), BY( 130 ) ), FALSE, FALSE, CON_STAT_STEP, 1 );
 		const ConsoleSeat *lowSeat = NULL, *highSeat = NULL;
 		for( size_t each = 0; each < seats.size(); each++ )
 		{
@@ -13878,12 +13882,14 @@ void InGameUI::drawObserverConsole( void )
 		}
 		if( lowSeat != NULL && highSeat != NULL )
 		{
-			const Int highW = drawText( consoleValueText( stat, *highSeat ), font( TYPE_ROW ), BX( 292 ), BY( 62 ), P( 16 ), HOT_END_INK, 1 );
+			const Int highW = drawText( consoleValueText( stat, *highSeat ), font( TYPE_ROW ), BX( 292 ), BY( 106 ), P( 20 ), HOT_END_INK, 1 );
 			const Int heatX1 = BX( 292 ) - highW - P( 6 ), heatX0 = heatX1 - P( 60 );
 			if( const Image *heatScale = art( OBS_HEAT ) )
-				TheDisplay->drawImage( heatScale, heatX0, BY( 66 ), heatX1, BY( 74 ) );
-			drawText( consoleValueText( stat, *lowSeat ), font( TYPE_ROW ), heatX0 - P( 5 ), BY( 62 ), P( 16 ), GREY_INK, 1 );
+				TheDisplay->drawImage( heatScale, heatX0, BY( 112 ), heatX1, BY( 120 ) );
+			drawText( consoleValueText( stat, *lowSeat ), font( TYPE_ROW ), heatX0 - P( 5 ), BY( 106 ), P( 20 ), GREY_INK, 1 );
 		}
+		if( boardHidden )
+			return;
 
 		//
 		// the lines: a team's header, then a line a seat (PIECES.md's seat line)

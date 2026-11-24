@@ -562,12 +562,23 @@ def watch(side):
 # common frame's chip, its sides on the screen's edge open (no rim, the glass to the edge), the notch only on a
 # corner facing the battlefield.  The code writes every word and number; these are the frames, the heat scale, the
 # icons it tints, Turkiye's badge and the operator keys.
-OBS_RADAR, OBS_KEY, OBS_STAT_KEY, OBS_HEAT = 232, (22, 22), (18, 18), (192, 10)
+OBS_RADAR, OBS_KEY, OBS_STAT_KEY, OBS_HEAT = 250, (45, 28), (28, 28), (192, 10)
 OBS_KEYS = {"Free": "free", "Follow": "follow", "Director": "director", "VisAll": "vis_all", "VisTeam": "vis_team",
             "VisPlayer": "vis_player", "HideRadar": "hide_radar", "HideBoard": "hide_board", "HideDossier": "hide_dossier",
             "Options": "options", "Chat": "chat", "Quit": "quit"}
-OBS_KEY_GLYPH, OBS_STAT_GLYPH = 13, 11          # the glyph's box on a key: the face (key()'s, 4.7 in) holds it whole
+OBS_KEY_GLYPH, OBS_STAT_GLYPH = 18, 15          # the glyph's box on a key: the face (key()'s, 4.7 in) holds it whole
 OPEN_RADAR, OPEN_BOARD = (False, True, True, False), (False, True, False, True)    # open bottom and left; bottom and right
+# Each module its own housing in the common frame, a third each from the sides (the owner, 2026-11-24, "every panel
+# wears the same frame"): the radar China's scope, the board USA's machined ledger on a riveted spine, the card the
+# GLA's dossier plate with a folder tab and a bolted clamp.
+RADAR_GLASS, RADAR_CORNER = 18, 22              # the scope's glass this far in on its battlefield sides; the stepped notch
+BOARD_W, BOARD_HEAD, BOARD_GLASS = 314, 138, 16  # the ledger: its width, its head plate's height, the glass past the spine
+BOARD_HEAD_WELLS = [(BOARD_GLASS, 4, BOARD_W, 33), (BOARD_GLASS, 35, BOARD_W, 97), (BOARD_GLASS, 99, BOARD_W, 133)]
+BOARD_CORNER = 10                               # USA's 45 degree cut on the ledger's top left
+SPINE = (2, 14)                                 # the spine's rail across the board's left edge
+CARD_NINE, CARD_TOP, CARD_GLASS = 24, 9, (5, 14)  # the dossier's 9-slice corner, its top under the tab, its glass in
+CARD_TAB = [(4.0, 9.5), (6.6, 0.5), (19.6, 0.0), (22.5, 9.5)]
+CARD_CORNERS = (("cut", 0.7), ("notch", 0.6), ("cut", 1.3), ("notch", 0.35))       # every corner cut its own way
 
 
 def obs_key(side, size, kind, state, glyph):
@@ -600,12 +611,65 @@ def badge_turkiye():
     return out
 
 
+def obs_radar(side):
+    """China's scope: a thick housing open on the screen's edges, its battlefield corner notched in two steps with a
+    rivet each side, a raised bezel ring round the glass and graduations along the lip."""
+    w = OBS_RADAR
+    g = RADAR_GLASS
+
+    def fit(o):
+        T.ticks(o, 8, 5.0, w - RADAR_CORNER - 18, 5.0, length=3.0)
+        T.ticks(o, w - 5.0, RADAR_CORNER + 18, w - 5.0, w - 8, length=3.0)
+        for x, y in ((w - RADAR_CORNER - 10, 9.0), (w - 9.0, RADAR_CORNER + 10)):    # either side of the stepped notch
+            o.rivet(x, y, 2.0)
+    return T.panel(side, w, w, [(g, g, w - g, w - g)], open4=OPEN_RADAR, corners=(("notch", 1.0), ("steps", 1.0),
+                   ("notch", 1.0), ("notch", 1.0)), c=RADAR_CORNER, bezel=(4.0, 2.0), fit=fit)
+
+
+def obs_board_head(side):
+    """The ledger's head: a machined plate open on the screen's right edge, USA's 45 degree top left, a bronze hairline
+    along its top lip, its three readouts (the match chip, the keys, the stat selector) each in a well of its own, the
+    spine's rail down its left."""
+    w, h = BOARD_W, BOARD_HEAD
+
+    def fit(o):
+        o.inlay([plate(BOARD_CORNER + 10, 2.2, w + T.PAD, 2.9)], H.ACCENT, 0.3)
+        T.rail(o, SPINE[0], 8, SPINE[1], h + T.PAD, first=24)
+    return T.panel(side, w, h, BOARD_HEAD_WELLS, open4=(False, False, False, True),
+                   corners=(("cut", 1.0), ("cut", 1.0), ("cut", 1.0), ("none", 0)), c=BOARD_CORNER, fit=fit)
+
+
+def obs_board(side, s):
+    """The ledger's body, square for the tiled 9-slice: open on the right and the foot, the 45 degree top left, the
+    spine's rail down its left with a rivet every 24, so its tile (192) carries it unbroken and its rivets fall on the
+    head's."""
+    return T.panel(side, s, s, [(BOARD_GLASS, T.INSET, s, s)], open4=OPEN_BOARD, c=BOARD_CORNER,
+                   corners=(("cut", 1.0), ("cut", 1.0), ("cut", 1.0), ("cut", 1.0)),
+                   fit=lambda o: T.rail(o, SPINE[0], 8, SPINE[1], s + T.PAD, first=24))
+
+
+def obs_card(side, s):
+    """The GLA's dossier plate, square for the tiled 9-slice: every corner cut its own way, a crooked folder tab over
+    the top left with a hex bolt in it, a bright clamp bolted over the top right."""
+    c = 12.0
+    tr = c * CARD_CORNERS[1][1]
+
+    def fit(o):
+        o.weld((7.0, CARD_TOP + 0.8), (21.0, CARD_TOP + 0.8), 11, 1.1)
+        o.bolt(13.2, 4.2, 1.7, 5)
+        T.clamp(o, s, CARD_TOP, -1, 1, tr, 13, 7.0, H.BRIGHT, rivet=1.7, rise=2.6, fasten="bolt")    # onto the glass
+    return T.panel(side, s, s, [(CARD_GLASS[0], CARD_GLASS[1], s - CARD_GLASS[0], s - CARD_GLASS[0])], c=c,
+                   corners=CARD_CORNERS, top=CARD_TOP, tab=CARD_TAB, fit=fit)
+
+
 def observer(side):
     """The observer HUD's pieces, the names InGameUI.cpp's console reads (Piece OBS_*)."""
     s = T.master(side)
-    out = {"ObsRadar": T.chip(side, OBS_RADAR, OBS_RADAR, open4=OPEN_RADAR), "ObsHeat": heat_scale(), "ObsBadgeTurkiye": badge_turkiye()}
-    out.update(slices("ObsBoard", lambda st: T.nine(side, T.chip(side, s, s, open4=OPEN_BOARD))))
-    out.update(slices("ObsCard", lambda st: T.nine(side, T.chip(side, s, s))))
+    out = {"ObsRadar": obs_radar(side), "ObsBoardHead": obs_board_head(side), "ObsHeat": heat_scale(),
+           "ObsBadgeTurkiye": badge_turkiye()}
+    out.update(slices("ObsBoard", lambda st: T.nine(side, obs_board(side, s))))
+    s32 = T.master(side, CARD_NINE)
+    out.update(slices("ObsCard", lambda st: T.nine(side, obs_card(side, s32), CARD_NINE)))
     for name in ("Power", "Crown", "Star"):
         out["ObsIcon" + name] = stat_glyph(name.lower(), 14, (255, 255, 255))
     out["ObsIconSkull"] = stat_glyph("skull", 18, (255, 255, 255))
@@ -706,16 +770,8 @@ BOX_ARM, BOX_TH, BOX_RIVET, BOX_RISE = 24, 10.0, 1.9, 2.8      # the bars reach 
 def clamp_bars(o, w, h, c, arm, th, mat, arm_v=None, rivet=1.25, rise=1.8):
     """An L clamp hugging each notched corner: two bars over the lip and a rivet at each bar's end; arm_v the down
     bar's length when it differs (a thin band)."""
-    arm_v = arm if arm_v is None else arm_v
     for sx, sy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
-        X, Y = (0 if sx > 0 else w), (0 if sy > 0 else h)
-
-        def r(a0, b0, a1, b1):
-            xs, ys = sorted((X + sx * a0, X + sx * a1)), sorted((Y + sy * b0, Y + sy * b1))
-            return plate(xs[0], ys[0], xs[1], ys[1])
-        o.bump([r(c + 1.5, 1.2, c + 1.5 + arm, 1.2 + th), r(1.2, c + 1.5, 1.2 + th, c + 1.5 + arm_v)], rise, 0.8, mat)
-        o.rivet(X + sx * (c + arm - 1.2), Y + sy * (1.2 + th / 2), rivet)
-        o.rivet(X + sx * (1.2 + th / 2), Y + sy * (c + arm_v - 1.2), rivet)
+        T.clamp(o, 0 if sx > 0 else w, 0 if sy > 0 else h, sx, sy, c, arm, th, mat, arm_v, rivet, rise)
 
 
 def notched(x0, y0, x1, y1, c):

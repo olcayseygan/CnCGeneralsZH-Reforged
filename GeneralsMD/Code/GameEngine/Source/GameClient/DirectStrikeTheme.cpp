@@ -152,6 +152,7 @@ namespace
 		"DSClampBandL", "DSClampBandC", "DSClampBandR",
 
 		"ObsRadar",
+		"ObsBoardHead",
 		"ObsBoardTL", "ObsBoardT", "ObsBoardTR", "ObsBoardL", "ObsBoardC", "ObsBoardR", "ObsBoardBL", "ObsBoardB", "ObsBoardBR",
 		"ObsCardTL", "ObsCardT", "ObsCardTR", "ObsCardL", "ObsCardC", "ObsCardR", "ObsCardBL", "ObsCardB", "ObsCardBR",
 		"ObsHeat",

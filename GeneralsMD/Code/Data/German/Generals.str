@@ -15465,6 +15465,10 @@ GUI:HotkeysCategoryMISC
 "Kamera und Chat"
 END
 
+GUI:HotkeysCategoryOBSERVER
+"Beobachter"
+END
+
 GUI:HotkeysFamilySaveView
 "Lesezeichen %d setzen"
 END
@@ -18931,6 +18935,62 @@ END
 
 GUI:HotkeysCommandREQUEST_MONEY
 "Verbündete um Geld bitten"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FREE
+"Freie Kamera"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FOLLOW
+"Spieler folgen"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_DIRECTOR
+"Regiekamera"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_ALL
+"Alles sehen"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_TEAM
+"Sicht des Teams"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_PLAYER
+"Sicht des Spielers"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_RADAR
+"Radar ein/aus"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_BOARD
+"Tafel ein/aus"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_DOSSIER
+"Dossier ein/aus"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_HUD
+"HUD ein/aus"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_SEAT
+"Nächster Spieler"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_SEAT
+"Vorheriger Spieler"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_STAT
+"Nächster Wert"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_STAT
+"Vorheriger Wert"
 END
 
 GUI:HotkeysCommandTOGGLE_COMMAND_TAB_AIRCRAFT

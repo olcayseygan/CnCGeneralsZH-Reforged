@@ -3757,6 +3757,26 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			break;
 
 		//-----------------------------------------------------------------------------------------
+		// The observer HUD's keys (MetaEventTranslator hands them on only while the local player watches)
+		case GameMessage::MSG_META_OBSERVER_CAMERA_FREE:
+		case GameMessage::MSG_META_OBSERVER_CAMERA_FOLLOW:
+		case GameMessage::MSG_META_OBSERVER_CAMERA_DIRECTOR:
+		case GameMessage::MSG_META_OBSERVER_VISION_ALL:
+		case GameMessage::MSG_META_OBSERVER_VISION_TEAM:
+		case GameMessage::MSG_META_OBSERVER_VISION_PLAYER:
+		case GameMessage::MSG_META_OBSERVER_TOGGLE_RADAR:
+		case GameMessage::MSG_META_OBSERVER_TOGGLE_BOARD:
+		case GameMessage::MSG_META_OBSERVER_TOGGLE_DOSSIER:
+		case GameMessage::MSG_META_OBSERVER_TOGGLE_HUD:
+		case GameMessage::MSG_META_OBSERVER_NEXT_SEAT:
+		case GameMessage::MSG_META_OBSERVER_PREV_SEAT:
+		case GameMessage::MSG_META_OBSERVER_NEXT_STAT:
+		case GameMessage::MSG_META_OBSERVER_PREV_STAT:
+			if( TheInGameUI && TheInGameUI->runObserverCommand( (Int)t ) )
+				disp = DESTROY_MESSAGE;
+			break;
+
+		//-----------------------------------------------------------------------------------------
 		case GameMessage::MSG_META_OPTIONS:
 		{
 

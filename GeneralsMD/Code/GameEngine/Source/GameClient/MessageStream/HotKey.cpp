@@ -1004,6 +1004,15 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 		snprintf( name, sizeof( name ), "COMMAND_SLOT%02d", slot );
 		unbound.push_back( commandRow( name, "GRID" ) );
 	}
+	// the observer HUD's keys, the game's own (MetaMap::keepArrowsForCamera puts them on with no file),
+	// in a space of their own: a player's command on the same chord is no clash (Hotkeys_canClash)
+	static const char *const OBSERVER[][ 2 ] = { { "OBSERVER_CAMERA_FREE", "KEY_F" }, { "OBSERVER_CAMERA_FOLLOW", "KEY_G" },
+		{ "OBSERVER_CAMERA_DIRECTOR", "KEY_D" }, { "OBSERVER_VISION_ALL", "KEY_A" }, { "OBSERVER_VISION_TEAM", "KEY_T" },
+		{ "OBSERVER_VISION_PLAYER", "KEY_P" }, { "OBSERVER_TOGGLE_RADAR", "KEY_1" }, { "OBSERVER_TOGGLE_BOARD", "KEY_2" },
+		{ "OBSERVER_TOGGLE_DOSSIER", "KEY_3" }, { "OBSERVER_TOGGLE_HUD", "KEY_0" }, { "OBSERVER_NEXT_SEAT", "KEY_RIGHT" },
+		{ "OBSERVER_PREV_SEAT", "KEY_LEFT" }, { "OBSERVER_NEXT_STAT", "KEY_DOWN" }, { "OBSERVER_PREV_STAT", "KEY_UP" } };
+	for( size_t each = 0; each < sizeof( OBSERVER ) / sizeof( OBSERVER[ 0 ] ); each++ )
+		unbound.push_back( commandRow( OBSERVER[ each ][ 0 ], "OBSERVER", OBSERVER[ each ][ 1 ], "ALT" ) );
 	// LAUNCHER_DEFAULTS: I, free in the shipped map, for the next idle worker, and Alt with Z, X and C,
 	// which nothing in the shipped map holds, for the signals to the allies. Request money has no key:
 	// Alt+V is evacuate in place. Ctrl with Q, W and E, free too, for the bar's command tabs, and Ctrl+R
@@ -1043,6 +1052,11 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 			all.push_back( unbound[ each ] );
 	}
 	return all;
+}
+
+Bool Hotkeys_canClash( const std::string& one, const std::string& other )
+{
+	return startsWith( one, "OBSERVER_" ) == startsWith( other, "OBSERVER_" );
 }
 
 HotkeysFile Hotkeys_parse( const std::string& text, const std::vector< HotkeyCommandRow >& rows )

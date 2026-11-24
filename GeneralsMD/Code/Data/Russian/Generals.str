@@ -17349,6 +17349,10 @@ GUI:HotkeysCategoryMISC
 "Камера и чат"
 END
 
+GUI:HotkeysCategoryOBSERVER
+"Наблюдатель"
+END
+
 GUI:HotkeysFamilySaveView
 "Задать закладку %d"
 END
@@ -20971,6 +20975,62 @@ END
 
 GUI:HotkeysCommandREQUEST_MONEY
 "Попросить денег у союзников"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FREE
+"Свободная камера"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FOLLOW
+"Следить за игроком"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_DIRECTOR
+"Режиссёрская камера"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_ALL
+"Видеть всё"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_TEAM
+"Обзор команды"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_PLAYER
+"Обзор игрока"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_RADAR
+"Радар вкл/выкл"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_BOARD
+"Таблица вкл/выкл"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_DOSSIER
+"Досье вкл/выкл"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_HUD
+"Интерфейс вкл/выкл"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_SEAT
+"Следующий игрок"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_SEAT
+"Предыдущий игрок"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_STAT
+"Следующий показатель"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_STAT
+"Предыдущий показатель"
 END
 
 GUI:HotkeysCommandTOGGLE_COMMAND_TAB_AIRCRAFT

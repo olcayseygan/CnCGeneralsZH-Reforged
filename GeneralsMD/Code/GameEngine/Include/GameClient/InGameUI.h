@@ -1205,6 +1205,9 @@ public:  // ********************************************************************
 	Bool handleConsoleWheel( const ICoord2D *mouse, Real notches );
 	/// what a press on the observer HUD or one of its hotkeys does (InGameUI.cpp's ConsoleAction)
 	void runConsoleAction( Int action, Int arg );
+	/// one of the observer HUD's CommandMap commands (MSG_META_OBSERVER_*): TRUE when the local player
+	/// watches and the command was his, FALSE for anyone else, whose key goes on to the next record
+	Bool runObserverCommand( Int meta );
 	/// a command bar key while watching: TRUE when it picked a stat, Q W E R T Y A as shipped
 	Bool pickSpectatorStat( Int commandSlot );
 	/// a raw Q W E R T Y A press or release while watching: TRUE when the rack's stat keys took it

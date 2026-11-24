@@ -141,7 +141,8 @@ void HotkeyScheme_applyToRows( std::vector< HotkeyCommandRow > &rows, Int scheme
 		if( inTable[ each ] || rows[ each ].binding.key.empty() )
 			continue;
 		for( Int key = 0; key < count; key++ )
-			if( keys[ key ].key[ 0 ] && rows[ each ].binding == HotkeyBinding( keys[ key ].key, keys[ key ].modifiers ) )
+			if( keys[ key ].key[ 0 ] && rows[ each ].binding == HotkeyBinding( keys[ key ].key, keys[ key ].modifiers )
+					&& Hotkeys_canClash( rows[ each ].id, keys[ key ].command ) )
 			{
 				rows[ each ].binding = HotkeyBinding();
 				break;

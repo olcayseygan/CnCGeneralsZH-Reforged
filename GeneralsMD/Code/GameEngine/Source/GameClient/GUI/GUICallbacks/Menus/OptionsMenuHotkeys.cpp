@@ -401,7 +401,8 @@ std::vector< UnicodeString > sameChord( const HotkeyCommandRow& row )
 	if( binding.key.empty() && binding.modifiers == "NONE" )
 		return others;
 	for( size_t each = 0; each < s_rows.size(); each++ )
-		if( !s_rows[ each ].barOnly && s_rows[ each ].id != row.id && bindingOf( s_rows[ each ] ) == binding )
+		if( !s_rows[ each ].barOnly && s_rows[ each ].id != row.id && Hotkeys_canClash( row.id, s_rows[ each ].id )
+				&& bindingOf( s_rows[ each ] ) == binding )
 			others.push_back( commandName( s_rows[ each ] ) );
 	return others;
 }
@@ -430,7 +431,7 @@ void fillCommands( void )
 	s_filling = TRUE;
 	const Int top = GadgetListBoxGetTopVisibleEntry( s_commandList );
 	GadgetListBoxReset( s_commandList );
-	static const char *const ORDER[] = { "SELECTION", "TEAM", "INFORMATION", "CONTROL", "INTERFACE", "SHORTCUTS", "GRID", "MISC" };
+	static const char *const ORDER[] = { "SELECTION", "TEAM", "INFORMATION", "CONTROL", "INTERFACE", "SHORTCUTS", "GRID", "OBSERVER", "MISC" };
 	Int selectedRow = -1;
 	for( size_t category = 0; category < sizeof( ORDER ) / sizeof( ORDER[ 0 ] ); category++ )
 	{

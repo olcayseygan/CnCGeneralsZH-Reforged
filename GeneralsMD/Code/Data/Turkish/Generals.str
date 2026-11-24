@@ -17038,6 +17038,10 @@ GUI:HotkeysCategoryMISC
 "Kamera ve sohbet"
 END
 
+GUI:HotkeysCategoryOBSERVER
+"Gözlemci"
+END
+
 GUI:HotkeysFamilySaveView
 "%d. yer imini kaydet"
 END
@@ -17216,6 +17220,62 @@ END
 
 GUI:HotkeysCommandREQUEST_MONEY
 "Müttefiklerden para iste"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FREE
+"Serbest kamera"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FOLLOW
+"Oyuncuyu takip et"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_DIRECTOR
+"Yönetmen kamerası"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_ALL
+"Her şeyi gör"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_TEAM
+"Takımın gördüğü"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_PLAYER
+"Oyuncunun gördüğü"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_RADAR
+"Radar aç/kapa"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_BOARD
+"Tablo aç/kapa"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_DOSSIER
+"Dosya aç/kapa"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_HUD
+"Arayüz aç/kapa"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_SEAT
+"Sonraki oyuncu"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_SEAT
+"Önceki oyuncu"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_STAT
+"Sonraki istatistik"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_STAT
+"Önceki istatistik"
 END
 
 GUI:HotkeysCommandBEGIN_WAYPOINTS

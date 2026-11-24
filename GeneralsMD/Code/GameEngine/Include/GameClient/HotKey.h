@@ -226,6 +226,9 @@ struct HotkeysFile
 	* and the holds it puts on a modifier alone: Force Attack, waypoints and prefer selection
 	* (loadCommands in hotkeys.js). */
 std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandMapText );
+/** Whether two commands on one chord clash: the observer HUD's OBSERVER_ commands keep a space of
+	* their own, so one of them and a player's command share a key freely (MetaEventTranslator). */
+Bool Hotkeys_canClash( const std::string& one, const std::string& other );
 /** The player's part of a Hotkeys.ini text, and the launcher's part as it stands (parseOverrides). */
 HotkeysFile Hotkeys_parse( const std::string& text, const std::vector< HotkeyCommandRow >& rows );
 /** The file for these keys, byte for byte what the launcher writes for the same player part. */

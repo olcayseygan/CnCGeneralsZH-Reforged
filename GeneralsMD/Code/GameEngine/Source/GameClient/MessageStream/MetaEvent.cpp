@@ -223,6 +223,20 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "REPAIR_MODE",															GameMessage::MSG_META_REPAIR_MODE },
 	{ "BEGIN_WAYPOINTS_KEY",											GameMessage::MSG_META_BEGIN_WAYPOINTS_KEY },
 	{ "END_WAYPOINTS_KEY",												GameMessage::MSG_META_END_WAYPOINTS_KEY },
+	{ "OBSERVER_CAMERA_FREE",											GameMessage::MSG_META_OBSERVER_CAMERA_FREE },
+	{ "OBSERVER_CAMERA_FOLLOW",										GameMessage::MSG_META_OBSERVER_CAMERA_FOLLOW },
+	{ "OBSERVER_CAMERA_DIRECTOR",									GameMessage::MSG_META_OBSERVER_CAMERA_DIRECTOR },
+	{ "OBSERVER_VISION_ALL",											GameMessage::MSG_META_OBSERVER_VISION_ALL },
+	{ "OBSERVER_VISION_TEAM",											GameMessage::MSG_META_OBSERVER_VISION_TEAM },
+	{ "OBSERVER_VISION_PLAYER",										GameMessage::MSG_META_OBSERVER_VISION_PLAYER },
+	{ "OBSERVER_TOGGLE_RADAR",										GameMessage::MSG_META_OBSERVER_TOGGLE_RADAR },
+	{ "OBSERVER_TOGGLE_BOARD",										GameMessage::MSG_META_OBSERVER_TOGGLE_BOARD },
+	{ "OBSERVER_TOGGLE_DOSSIER",									GameMessage::MSG_META_OBSERVER_TOGGLE_DOSSIER },
+	{ "OBSERVER_TOGGLE_HUD",											GameMessage::MSG_META_OBSERVER_TOGGLE_HUD },
+	{ "OBSERVER_NEXT_SEAT",												GameMessage::MSG_META_OBSERVER_NEXT_SEAT },
+	{ "OBSERVER_PREV_SEAT",												GameMessage::MSG_META_OBSERVER_PREV_SEAT },
+	{ "OBSERVER_NEXT_STAT",												GameMessage::MSG_META_OBSERVER_NEXT_STAT },
+	{ "OBSERVER_PREV_STAT",												GameMessage::MSG_META_OBSERVER_PREV_STAT },
 	{ "OPTIONS",																	GameMessage::MSG_META_OPTIONS },
 	{ "TOGGLE_LOWER_DETAILS",											GameMessage::MSG_META_TOGGLE_LOWER_DETAILS },
 	{ "TOGGLE_CONTROL_BAR",												GameMessage::MSG_META_TOGGLE_CONTROL_BAR },
@@ -501,6 +515,22 @@ static Bool metaUpIgnoresModifiers( const MetaMapRec *map )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The observer HUD's commands keep their own keys: a watcher's chord never takes a player's, and
+	* they only answer while the local player watches (Hotkeys_canClash says the same for the page). */
+//-------------------------------------------------------------------------------------------------
+static Bool isObserverMeta( GameMessage::Type meta )
+{
+	return meta >= GameMessage::MSG_META_OBSERVER_CAMERA_FREE && meta <= GameMessage::MSG_META_OBSERVER_PREV_STAT;
+}
+
+/// an observer, or knocked out and stayed (InGameUI's localPlayerWatching)
+static Bool localPlayerWatches( void )
+{
+	const Player *local = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	return local != NULL && !local->isPlayerActive();
+}
+
+//-------------------------------------------------------------------------------------------------
 GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessage *msg)
 {
 	GameMessageDisposition disp = KEEP_MESSAGE;
@@ -554,6 +584,8 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 			barKey = HotKeyManager::strokeToBar( key );
 		}
 
+		const Bool watching = localPlayerWatches();
+
 		if( isModifierKey && ( keyState & KEY_STATE_UP ) )
 		{
 			for( Int keyIndex = 0; keyIndex < NUM_MAPPABLE_KEYS; ++keyIndex )
@@ -575,7 +607,7 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 
 					for( const MetaMapRec *map = TheMetaMap->getFirstMetaMapRec(); map; map = map->m_next )
 					{
-						if( map->m_key != keyIndex || map->m_transition != UP )
+						if( map->m_key != keyIndex || map->m_transition != UP || ( isObserverMeta( map->m_meta ) && !watching ) )
 							continue;
 
 						const Int wantedModState = metaIgnoresShift( map ) ? ( heldModState & ~SHIFT ) : heldModState;
@@ -612,11 +644,18 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 			disp = DESTROY_MESSAGE;
 		}
 
-    for (const MetaMapRec *map = TheMetaMap->getFirstMetaMapRec(); map && !replayPause && !laneTab; map = map->m_next)
+		// a watcher's records go first, so his chord beats a player's command on the same key wherever
+		// Hotkeys.ini left either record in the list; a player never sees them
+		Bool keyTaken = FALSE;
+		for( Int pass = watching ? 0 : 1; pass < 2 && !keyTaken; ++pass )
+    for (const MetaMapRec *map = TheMetaMap->getFirstMetaMapRec(); map && !replayPause && !laneTab && !keyTaken; map = map->m_next)
 		{
 			DEBUG_ASSERTCRASH(map->m_meta > GameMessage::MSG_BEGIN_META_MESSAGES &&
 				map->m_meta < GameMessage::MSG_END_META_MESSAGES, ("hmm, expected only meta-msgs here"));
-			
+
+			if( isObserverMeta( map->m_meta ) != ( pass == 0 ) )
+				continue;
+
 			//
 			// if this command is *only* usable in the game, we will ignore it if the game client
 			// has not yet incremented to frame 1 (keeps us from doing in-game commands during
@@ -702,6 +741,7 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
   				      TheInGameUI->message( TheGlobalData->m_TiVOFastMode ? TheGameText->fetch("GUI:FF_ON") : TheGameText->fetch("GUI:FF_OFF") );
 			      }  
 			      disp = KEEP_MESSAGE; // cause for goodness sake, this key gets used a lot by non-replay hotkeys
+			      keyTaken = TRUE;
 			      break;
 		      }  
 
@@ -713,6 +753,7 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 				if( keyState & KEY_STATE_DOWN )
 					HotKeyManager::strokeToCommand( key );
 				disp = DESTROY_MESSAGE;
+				keyTaken = TRUE;
 				break;
 			}
 		}
@@ -972,13 +1013,31 @@ void MetaMap::keepArrowsForCamera()
 		{ GameMessage::MSG_META_TOGGLE_COMMAND_TAB_AIRCRAFT, MK_E, CTRL },
 		// and the sidebar's fourth tab, R beside them
 		{ GameMessage::MSG_META_TOGGLE_COMMAND_TAB_DEFENSE, MK_R, CTRL },
+		// the observer HUD on Alt, in their own space: a player's command on the same chord takes nothing
+		{ GameMessage::MSG_META_OBSERVER_CAMERA_FREE, MK_F, ALT },
+		{ GameMessage::MSG_META_OBSERVER_CAMERA_FOLLOW, MK_G, ALT },
+		{ GameMessage::MSG_META_OBSERVER_CAMERA_DIRECTOR, MK_D, ALT },
+		{ GameMessage::MSG_META_OBSERVER_VISION_ALL, MK_A, ALT },
+		{ GameMessage::MSG_META_OBSERVER_VISION_TEAM, MK_T, ALT },
+		{ GameMessage::MSG_META_OBSERVER_VISION_PLAYER, MK_P, ALT },
+		{ GameMessage::MSG_META_OBSERVER_TOGGLE_RADAR, MK_1, ALT },
+		{ GameMessage::MSG_META_OBSERVER_TOGGLE_BOARD, MK_2, ALT },
+		{ GameMessage::MSG_META_OBSERVER_TOGGLE_DOSSIER, MK_3, ALT },
+		{ GameMessage::MSG_META_OBSERVER_TOGGLE_HUD, MK_0, ALT },
+		{ GameMessage::MSG_META_OBSERVER_NEXT_SEAT, MK_RIGHT, ALT },
+		{ GameMessage::MSG_META_OBSERVER_PREV_SEAT, MK_LEFT, ALT },
+		{ GameMessage::MSG_META_OBSERVER_NEXT_STAT, MK_DOWN, ALT },
+		{ GameMessage::MSG_META_OBSERVER_PREV_STAT, MK_UP, ALT },
 	};
 	for( size_t each = 0; each < sizeof( DEFAULTS ) / sizeof( DEFAULTS[ 0 ] ); ++each )
 	{
+		// a chord is taken only by a command of the same space, the players' or the watchers'
+		const Bool observer = isObserverMeta( DEFAULTS[ each ].meta );
 		Bool taken = FALSE;
 		for( const MetaMapRec *map = m_metaMaps; map && !taken; map = map->m_next )
 			taken = map->m_meta == DEFAULTS[ each ].meta ||
-				( map->m_key == DEFAULTS[ each ].key && map->m_modState == DEFAULTS[ each ].mods && map->m_usableIn != COMMANDUSABLE_NONE );
+				( isObserverMeta( map->m_meta ) == observer &&
+					map->m_key == DEFAULTS[ each ].key && map->m_modState == DEFAULTS[ each ].mods && map->m_usableIn != COMMANDUSABLE_NONE );
 		if( taken )
 			continue;
 		MetaMapRec *rec = getMetaMapRec( DEFAULTS[ each ].meta );
@@ -1044,7 +1103,8 @@ void MetaMap::applyScheme( Int scheme )
 	// then whatever else sat on one of those chords comes off it, or one key would do two things
 	for( MetaMapRec *map = m_metaMaps; map; map = map->m_next )
 	{
-		if( map->m_key == MK_NONE )
+		// the scheme hands out players' chords, which a watcher's command shares without a clash
+		if( map->m_key == MK_NONE || isObserverMeta( map->m_meta ) )
 			continue;
 		Bool mine = FALSE, clash = FALSE;
 		for( size_t at = 0; at < placed.size(); ++at )

@@ -502,6 +502,20 @@ public:
 		MSG_META_REPAIR_MODE,												///< enter the sidebar's repair cursor (Red Alert scheme, fork)
 		MSG_META_BEGIN_WAYPOINTS_KEY,								///< second waypoint-mode key held, Z under Red Alert (fork)
 		MSG_META_END_WAYPOINTS_KEY,									///< that key let go (fork)
+		MSG_META_OBSERVER_CAMERA_FREE,							///< observer HUD: free camera (fork; only while watching)
+		MSG_META_OBSERVER_CAMERA_FOLLOW,						///< observer HUD: follow the selected seat
+		MSG_META_OBSERVER_CAMERA_DIRECTOR,					///< observer HUD: director camera
+		MSG_META_OBSERVER_VISION_ALL,								///< observer HUD: see everything
+		MSG_META_OBSERVER_VISION_TEAM,							///< observer HUD: see the seat's team
+		MSG_META_OBSERVER_VISION_PLAYER,						///< observer HUD: see the seat alone
+		MSG_META_OBSERVER_TOGGLE_RADAR,							///< observer HUD: radar on/off
+		MSG_META_OBSERVER_TOGGLE_BOARD,							///< observer HUD: board on/off
+		MSG_META_OBSERVER_TOGGLE_DOSSIER,						///< observer HUD: dossier on/off
+		MSG_META_OBSERVER_TOGGLE_HUD,								///< observer HUD: the whole HUD on/off
+		MSG_META_OBSERVER_NEXT_SEAT,								///< observer HUD: next seat
+		MSG_META_OBSERVER_PREV_SEAT,								///< observer HUD: previous seat
+		MSG_META_OBSERVER_NEXT_STAT,								///< observer HUD: next board stat
+		MSG_META_OBSERVER_PREV_STAT,								///< observer HUD: previous board stat
 
 		MSG_END_META_MESSAGES,											///< Marker to delineate "meta" messages
 

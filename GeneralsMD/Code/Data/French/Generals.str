@@ -17365,6 +17365,10 @@ GUI:HotkeysCategoryMISC
 "Caméra et discussion"
 END
 
+GUI:HotkeysCategoryOBSERVER
+"Observateur"
+END
+
 GUI:HotkeysFamilySaveView
 "Créer le signet %d"
 END
@@ -21027,6 +21031,62 @@ END
 
 GUI:HotkeysCommandREQUEST_MONEY
 "Demander de l'argent aux alliés"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FREE
+"Caméra libre"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FOLLOW
+"Suivre le joueur"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_DIRECTOR
+"Caméra réalisateur"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_ALL
+"Tout voir"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_TEAM
+"Vision de l'équipe"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_PLAYER
+"Vision du joueur"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_RADAR
+"Afficher/masquer le radar"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_BOARD
+"Afficher/masquer le tableau"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_DOSSIER
+"Afficher/masquer le dossier"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_HUD
+"Afficher/masquer l'interface"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_SEAT
+"Joueur suivant"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_SEAT
+"Joueur précédent"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_STAT
+"Statistique suivante"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_STAT
+"Statistique précédente"
 END
 
 GUI:HotkeysCommandTOGGLE_COMMAND_TAB_AIRCRAFT

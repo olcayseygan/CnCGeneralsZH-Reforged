@@ -2394,6 +2394,10 @@ GUI:HotkeysCategoryMISC
 "Camera and chat"
 END
 
+GUI:HotkeysCategoryOBSERVER
+"Observer"
+END
+
 GUI:HotkeysFamilySaveView
 "Set bookmark %d"
 END
@@ -2572,6 +2576,62 @@ END
 
 GUI:HotkeysCommandREQUEST_MONEY
 "Ask allies for money"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FREE
+"Free camera"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FOLLOW
+"Follow player"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_DIRECTOR
+"Director camera"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_ALL
+"See everything"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_TEAM
+"Team's vision"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_PLAYER
+"Player's vision"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_RADAR
+"Radar on/off"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_BOARD
+"Board on/off"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_DOSSIER
+"Dossier on/off"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_HUD
+"HUD on/off"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_SEAT
+"Next player"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_SEAT
+"Previous player"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_STAT
+"Next stat"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_STAT
+"Previous stat"
 END
 
 GUI:HotkeysCommandBEGIN_WAYPOINTS

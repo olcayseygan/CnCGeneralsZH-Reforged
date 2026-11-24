@@ -70,6 +70,11 @@ TEST(hotkey_scheme_rows_show_red_alert_defaults)
 	}
 	CHECK( !anyLauncher );
 	CHECK( zHold != NULL && zHold->pair == "END_WAYPOINTS_KEY" && zHold->usableIn == "GAME" && !zHold->hold );
+	// Red Alert's Alt+F is a bar slot, which leaves the watcher's free camera on it (Hotkeys_canClash)
+	const HotkeyCommandRow *freeCamera = NULL;
+	for( size_t each = 0; each < rows.size(); each++ )
+		freeCamera = rows[ each ].id == "OBSERVER_CAMERA_FREE" ? &rows[ each ] : freeCamera;
+	CHECK( freeCamera != NULL && freeCamera->binding == HotkeyBinding( "KEY_F", "ALT" ) );
 }
 
 /* Classic keeps Hotkeys.ini, which the launcher reads byte for byte; Red Alert has its own file. */

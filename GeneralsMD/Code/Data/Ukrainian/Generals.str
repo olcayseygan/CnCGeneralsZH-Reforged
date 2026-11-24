@@ -17285,6 +17285,10 @@ GUI:HotkeysCategoryMISC
 "Камера і чат"
 END
 
+GUI:HotkeysCategoryOBSERVER
+"Спостерігач"
+END
+
 GUI:HotkeysFamilySaveView
 "Встановити закладку %d"
 END
@@ -20775,6 +20779,62 @@ END
 
 GUI:HotkeysCommandREQUEST_MONEY
 "Попросити гроші в союзників"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FREE
+"Вільна камера"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_FOLLOW
+"Стежити за гравцем"
+END
+
+GUI:HotkeysCommandOBSERVER_CAMERA_DIRECTOR
+"Режисерська камера"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_ALL
+"Бачити все"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_TEAM
+"Огляд команди"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_PLAYER
+"Огляд гравця"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_RADAR
+"Радар увімк/вимк"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_BOARD
+"Таблиця увімк/вимк"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_DOSSIER
+"Досьє увімк/вимк"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_HUD
+"Інтерфейс увімк/вимк"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_SEAT
+"Наступний гравець"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_SEAT
+"Попередній гравець"
+END
+
+GUI:HotkeysCommandOBSERVER_NEXT_STAT
+"Наступний показник"
+END
+
+GUI:HotkeysCommandOBSERVER_PREV_STAT
+"Попередній показник"
 END
 
 GUI:HotkeysCommandTOGGLE_COMMAND_TAB_AIRCRAFT

@@ -2724,6 +2724,30 @@ TEST(hotkeys_every_row_the_page_lists_is_a_command_the_game_knows)
 	CHECK_EQ( orders, 5 );
 }
 
+/* The observer HUD's keys are rows on Alt in their own group, and a watcher's chord never clashes
+   with a player's: Alt+A is select all for one and see everything for the other. */
+TEST(hotkeys_observer_rows_keep_their_own_chords)
+{
+	const std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( HOTKEYS_COMMAND_MAP );
+	Int observer = 0;
+	Bool freeCamera = FALSE, nextSeat = FALSE;
+	for( size_t each = 0; each < rows.size(); each++ )
+	{
+		if( rows[ each ].category != "OBSERVER" )
+			continue;
+		observer++;
+		CHECK( rows[ each ].binding.modifiers == "ALT" && !rows[ each ].launcherDefault );
+		freeCamera = freeCamera || ( rows[ each ].id == "OBSERVER_CAMERA_FREE" && rows[ each ].binding.key == "KEY_F" );
+		nextSeat = nextSeat || ( rows[ each ].id == "OBSERVER_NEXT_SEAT" && rows[ each ].binding.key == "KEY_RIGHT" );
+	}
+	CHECK_EQ( observer, 14 );
+	CHECK( freeCamera && nextSeat );
+	CHECK( !Hotkeys_canClash( "OBSERVER_VISION_ALL", "SELECT_ALL" ) );
+	CHECK( !Hotkeys_canClash( "COMMAND_SLOT11", "OBSERVER_VISION_ALL" ) );
+	CHECK( Hotkeys_canClash( "OBSERVER_VISION_ALL", "OBSERVER_CAMERA_FREE" ) );
+	CHECK( Hotkeys_canClash( "SELECT_ALL", "SCATTER" ) );
+}
+
 /* OptionsHotkeysKey gives a bar button a digit as well as a letter, so the file has to keep one:
    a digit read back as no key made the next write drop it. */
 TEST(hotkeys_file_keeps_a_digit_on_a_button)

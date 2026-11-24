@@ -3007,36 +3007,14 @@ Bool InGameUI::pickSpectatorStat( Int commandSlot )
 //-------------------------------------------------------------------------------------------------
 /** The same keys as letters, so the stat keys answer Q W E R T Y A with no CommandMap binding: the
 	* shipped one binds no command slot to a letter.  A plain press only, while the console is up and the
-	* local player watches; a player's letters never come here.  With Alt alone the observer HUD's own keys
-	* answer (PIECES.md's hotkeys): F, G and D the camera, A, T and P the vision, 1, 2 and 3 hide the
-	* radar, the board and the dossier, 0 all three, the arrows step the seat and the stat. */
+	* local player watches; a player's letters never come here.  The observer HUD's other keys are
+	* CommandMap commands a player rebinds (MSG_META_OBSERVER_*, runObserverCommand). */
 //-------------------------------------------------------------------------------------------------
 Bool InGameUI::pickSpectatorStatKey( Int key, Int keyState )
 {
 	static const Int KEYS[ SPECTATOR_STAT_COUNT ] = { KEY_Q, KEY_W, KEY_E, KEY_R, KEY_T, KEY_Y, KEY_A };
-	if( !theConsoleShown || !localPlayerWatching() || ( keyState & ( KEY_STATE_CONTROL | KEY_STATE_SHIFT ) ) )
+	if( !theConsoleShown || !localPlayerWatching() || ( keyState & ( KEY_STATE_CONTROL | KEY_STATE_SHIFT | KEY_STATE_ALT ) ) )
 		return FALSE;
-	if( keyState & KEY_STATE_ALT )
-	{
-		struct AltKey { Int key; Int action; Int arg; };
-		static const AltKey ALT_KEYS[] =
-		{
-			{ KEY_F, CON_CAMERA, 0 }, { KEY_G, CON_CAMERA, 1 }, { KEY_D, CON_CAMERA, 2 },
-			{ KEY_A, CON_VISION, 0 }, { KEY_T, CON_VISION, 1 }, { KEY_P, CON_VISION, 2 },
-			{ KEY_1, CON_HIDE, CON_MODULE_RADAR }, { KEY_2, CON_HIDE, CON_MODULE_BOARD }, { KEY_3, CON_HIDE, CON_MODULE_DOSSIER },
-			{ KEY_0, CON_HIDE_ALL, 0 },
-			{ KEY_RIGHT, CON_SEAT_STEP, 1 }, { KEY_LEFT, CON_SEAT_STEP, -1 }, { KEY_DOWN, CON_STAT_STEP, 1 }, { KEY_UP, CON_STAT_STEP, -1 }
-		};
-		for( Int each = 0; each < ARRAY_SIZE( ALT_KEYS ); each++ )
-		{
-			if( ALT_KEYS[ each ].key != key )
-				continue;
-			if( keyState & KEY_STATE_DOWN )
-				runConsoleAction( ALT_KEYS[ each ].action, ALT_KEYS[ each ].arg );
-			return TRUE;
-		}
-		return FALSE;
-	}
 	for( Int stat = 0; stat < SPECTATOR_STAT_COUNT; stat++ )
 	{
 		if( KEYS[ stat ] != key )
@@ -13236,6 +13214,24 @@ static void gatherConsoleFactory( Object *obj, void *userData )
 	factories->push_back( factory );
 }
 
+/// an upgrade under research in one of a player's buildings, and its share done
+struct ConsoleResearch { const Image *cameo; Int percent; };
+
+/// the upgrade a building is researching now, the head of its queue; the ones waiting behind it are not
+/// under research yet
+static void gatherConsoleResearch( Object *obj, void *userData )
+{
+	std::vector< ConsoleResearch > *research = (std::vector< ConsoleResearch > *)userData;
+	if( obj->isEffectivelyDead() || obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+		return;
+	ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
+	const ProductionEntry *head = pu != NULL ? pu->firstProduction() : NULL;
+	if( head == NULL || head->getProductionType() != PRODUCTION_UPGRADE || head->getProductionUpgrade() == NULL )
+		return;
+	const ConsoleResearch entry = { head->getProductionUpgrade()->getButtonImage(), REAL_TO_INT( head->getPercentComplete() ) };
+	research->push_back( entry );
+}
+
 /// a stat's sum over a team, as the team's header line writes it
 static UnicodeString consoleTeamTotal( Int stat, Int total )
 {
@@ -13336,6 +13332,10 @@ static IRegion2D drawObserverDossier( const ConsoleLayout &l, const SpectatorSta
 		if( upgrade->getUpgradeType() == UPGRADE_TYPE_PLAYER && upgrade->getButtonImage() != NULL && upgrade->getUpgradeMask().any()
 				&& done.testForAll( upgrade->getUpgradeMask() ) )
 			upgrades.push_back( upgrade );
+	// and after them the ones under research, each with its share done
+	std::vector< ConsoleResearch > research;
+	player->iterateObjects( gatherConsoleResearch, &research );
+	const Int upgradeCells = (Int)upgrades.size() + (Int)research.size();
 
 	// the queue's groups flowed along 256 wide lines of 38 pitch: a factory never ends a line alone
 	struct Cell { Int column, line, factory, run; };
@@ -13369,7 +13369,7 @@ static IRegion2D drawObserverDossier( const ConsoleLayout &l, const SpectatorSta
 	}
 	const Int armyLines = ( (Int)units.size() + 5 ) / 6, powerLines = ( (Int)powers.size() + 1 ) / 2;
 	const Int height1080 = 8 + 26 + 78 + ( armyLines > 0 ? 31 * armyLines + 6 : 0 ) + ( queueLines > 0 ? 31 * queueLines + 6 : 0 )
-		+ 31 * powerLines + ( upgrades.empty() ? 0 : 35 ) + 10;
+		+ 31 * powerLines + ( upgradeCells == 0 ? 0 : 35 ) + 10;
 	const Int cardW = P( CON_CARD_W ), cardH = P( height1080 );
 	const Int cx = boardX - P( 342 ), cy = max( 0, min( lineY - P( 40 ), l.bottom - cardH ) );
 	const IRegion2D card = ConsoleLayout::box( cx, cy, cx + cardW, cy + cardH );
@@ -13510,13 +13510,20 @@ static IRegion2D drawObserverDossier( const ConsoleLayout &l, const SpectatorSta
 		top += P( 31 * powerLines );
 	}
 
-	if( !upgrades.empty() )
+	// the upgrades he owns, then the ones under research ringed by their share done
+	if( upgradeCells > 0 )
 	{
 		TheDisplay->beginBatch2D();
-		for( Int each = 0; each < (Int)upgrades.size() && cellX + P( each * 32 + 28 ) <= right; each++ )
+		for( Int each = 0; each < upgradeCells && cellX + P( each * 32 + 28 ) <= right; each++ )
 		{
 			const Int ux = cellX + P( each * 32 ), uy = top + P( 6 );
-			TheDisplay->drawImage( upgrades[ each ]->getButtonImage(), ux, uy, ux + P( 28 ), uy + P( 22 ) );
+			const Bool owned = each < (Int)upgrades.size();
+			const Image *cameo = owned ? upgrades[ each ]->getButtonImage() : research[ each - upgrades.size() ].cameo;
+			if( cameo != NULL )
+				TheDisplay->drawImage( cameo, ux, uy, ux + P( 28 ), uy + P( 22 ) );
+			if( !owned )
+				drawProgressRing( ConsoleLayout::box( ux - P( 1 ), uy - P( 1 ), ux + P( 29 ), uy + P( 23 ) ),
+					research[ each - upgrades.size() ].percent / 100.0f, GOLD_INK, max( P( 2 ), 1 ) );
 		}
 		TheDisplay->endBatch2D();
 	}
@@ -14013,6 +14020,38 @@ void InGameUI::runConsoleAction( Int action, Int arg )
 				TheTacticalView->lookAt( thing->getPosition() );
 			break;
 	}
+}
+
+/// the observer HUD's CommandMap commands, each the press of one of its keys; nobody but a watcher's
+Bool InGameUI::runObserverCommand( Int meta )
+{
+	if( !localPlayerWatching() )
+		return FALSE;
+	struct Command { Int meta; Int action; Int arg; };
+	static const Command COMMANDS[] =
+	{
+		{ GameMessage::MSG_META_OBSERVER_CAMERA_FREE, CON_CAMERA, 0 },
+		{ GameMessage::MSG_META_OBSERVER_CAMERA_FOLLOW, CON_CAMERA, 1 },
+		{ GameMessage::MSG_META_OBSERVER_CAMERA_DIRECTOR, CON_CAMERA, 2 },
+		{ GameMessage::MSG_META_OBSERVER_VISION_ALL, CON_VISION, 0 },
+		{ GameMessage::MSG_META_OBSERVER_VISION_TEAM, CON_VISION, 1 },
+		{ GameMessage::MSG_META_OBSERVER_VISION_PLAYER, CON_VISION, 2 },
+		{ GameMessage::MSG_META_OBSERVER_TOGGLE_RADAR, CON_HIDE, CON_MODULE_RADAR },
+		{ GameMessage::MSG_META_OBSERVER_TOGGLE_BOARD, CON_HIDE, CON_MODULE_BOARD },
+		{ GameMessage::MSG_META_OBSERVER_TOGGLE_DOSSIER, CON_HIDE, CON_MODULE_DOSSIER },
+		{ GameMessage::MSG_META_OBSERVER_TOGGLE_HUD, CON_HIDE_ALL, 0 },
+		{ GameMessage::MSG_META_OBSERVER_NEXT_SEAT, CON_SEAT_STEP, 1 },
+		{ GameMessage::MSG_META_OBSERVER_PREV_SEAT, CON_SEAT_STEP, -1 },
+		{ GameMessage::MSG_META_OBSERVER_NEXT_STAT, CON_STAT_STEP, 1 },
+		{ GameMessage::MSG_META_OBSERVER_PREV_STAT, CON_STAT_STEP, -1 }
+	};
+	for( Int each = 0; each < ARRAY_SIZE( COMMANDS ); each++ )
+		if( COMMANDS[ each ].meta == meta )
+		{
+			runConsoleAction( COMMANDS[ each ].action, COMMANDS[ each ].arg );
+			return TRUE;
+		}
+	return FALSE;
 }
 
 /// the wheel over the board steps the picked stat; TRUE when the board took it

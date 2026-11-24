@@ -68,6 +68,7 @@
 #include "GameClient/UIStyle.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
+#include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/VictoryConditions.h"
 #include "GameNetwork/GameInfo.h"
@@ -313,6 +314,7 @@ static Bool s_banded = FALSE;								///< every team carries a band (ScoreScreen
 static Bool s_prepared = FALSE;
 static Bool s_anyWinner = FALSE;
 static Bool s_campaign = FALSE;
+static Bool s_apocalypse = FALSE;		///< an Apocalypse match: no winner, every verdict a time held
 static std::vector< GraphText > s_texts;
 static std::vector< GraphMark > s_marks;
 static std::vector< GraphLine > s_lines;
@@ -615,6 +617,14 @@ static UnsignedInt matchEndFrame( void )
 	return s_endFrame;
 }
 
+/// "Survived 24:10": to the fall, or to the match's end for one still standing
+static UnicodeString survivedText( UnsignedInt fell )
+{
+	UnicodeString text;
+	text.format( fetchText( "GUI:ApocalypseSurvived" ), clockText( fell != SCORE_STILL_STANDING ? fell : matchEndFrame() ).str() );
+	return text;
+}
+
 /** The charts' time axis ends where the header's length does. */
 static UnsignedInt historyEnd( void )
 {
@@ -809,6 +819,17 @@ static void prepareStandings( void )
 		verdict = UIStyle::capitals( fetchText( won ? "GUI:Victory" : "GUI:Defeat" ) );
 		s_verdictColor = won ? UIStyle::GOLD : UIStyle::MUTED;
 	}
+	else if( s_apocalypse )
+	{
+		// nobody wins Apocalypse (the owner, 2026-11-23): the verdict is how long the local seat held, or the
+		// last seat for anyone watching
+		UnsignedInt fell = SCORE_STILL_STANDING;
+		for( Int a = 0; a < count; a++ )
+			if( !watching && s_players[ a ].player == local )
+				fell = s_players[ a ].fell;
+		verdict = UIStyle::capitals( survivedText( fell ) );
+		s_verdictColor = UIStyle::GOLD;
+	}
 	else if( !watching )
 	{
 		const Bool won = TheVictoryConditions->isLocalAlliedVictory();
@@ -847,6 +868,14 @@ static void prepareStandings( void )
 /** The verdict a card or a team band carries, or FALSE for none: a match left early has none. */
 static Bool chipFor( Bool winner, Bool disconnected, UnsignedInt fell, UnicodeString &label, Color &color, Color &edge )
 {
+	// Apocalypse: no winner and no defeat, every seat or team carries how long it held
+	if( s_apocalypse && !disconnected )
+	{
+		edge = UIStyle::FRAME;
+		color = UIStyle::MUTED;
+		label = survivedText( fell );
+		return TRUE;
+	}
 	if( !s_anyWinner && !s_campaign )
 		return FALSE;
 	edge = UIStyle::FRAME;
@@ -2258,6 +2287,7 @@ void ScoreScreenGraphsInit( GameWindow *backdrop )
 	s_small = UIStyle::font( UIStyle::TEXT_SMALL );
 	s_smallBold = UIStyle::font( UIStyle::TEXT_SMALL, TRUE );
 	s_campaign = FALSE;		// until ScoreScreenGraphsSinglePlayer says the rows are a mission's
+	s_apocalypse = TheApocalypseDirector != NULL && TheApocalypseDirector->isActive();
 	s_subtitleKey = NULL;
 	readMatchEnd();
 

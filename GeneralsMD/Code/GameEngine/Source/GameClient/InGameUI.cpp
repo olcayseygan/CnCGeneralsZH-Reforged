@@ -124,6 +124,7 @@
 
 #include "GameLogic/AI.h"
 #include "GameLogic/AIGuard.h"
+#include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/VictoryConditions.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameLogic/AIPathfind.h"
@@ -11867,7 +11868,16 @@ void InGameUI::drawDirectorBroadcast( void )
 	{
 		BroadcastPlate title, under;
 		bannerLines( ThePlayerList->getNthPlayer( defeat->player ), &title, &under );
-		DisplayString *word = broadcastText( "bannerdefeated", UnicodeString( u"Defeated" ), BROADCAST_WORDS,
+		UnicodeString defeatWord( u"Defeated" );
+		if( TheApocalypseDirector != NULL && TheApocalypseDirector->isActive() )
+		{
+			// Apocalypse has no defeat (the owner, 2026-11-23): the tab says how long the seat held
+			const UnsignedInt seconds = TheObserverCamera.getDefeatFrame( defeat->player ) / LOGICFRAMES_PER_SECOND;
+			UnicodeString held;
+			held.format( u"%d:%02d", seconds / 60, seconds % 60 );
+			defeatWord.format( TheGameText->fetch( "GUI:ApocalypseSurvived" ), held.str() );
+		}
+		DisplayString *word = broadcastText( "bannerdefeated", defeatWord, BROADCAST_WORDS,
 			broadcastPoints( BROADCAST_BANNER_WORD_POINTS ), TRUE );
 		TheObserverCamera.addBroadcast( drawBroadcastBanner( word, BROADCAST_DEFEAT, BROADCAST_INK, title, under, foot, defeatShown ) );
 	}

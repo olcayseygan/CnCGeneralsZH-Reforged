@@ -74,6 +74,7 @@
 
 #include "GameLogic/AI.h"
 #include "GameLogic/AISkirmishPlayer.h"
+#include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -148,6 +149,16 @@ static void noteView( Bool applies, LogicThread::ViewEffect effect )
 {
 	if( applies && LogicThread::defersView() )
 		LogicThread::noteViewEffect( effect );
+}
+
+/** Apocalypse has no defeat (the owner, 2026-11-23).  Once the local seat has fallen, or every seat for
+	* someone watching, the multiplayer scripts' defeat voice and failure music stay quiet.  Those scripts
+	* follow the local player and the script engine is not in the CRC (ScriptEngine::crc), so the
+	* skip is this machine's alone. */
+static Bool apocalypseLocalFallen( void )
+{
+	return TheApocalypseDirector != NULL && TheApocalypseDirector->isActive() && TheVictoryConditions != NULL
+		&& ( TheVictoryConditions->isLocalDefeat() || TheVictoryConditions->isLocalAlliedDefeat() );
 }
 
 // GLOBALS ////////////////////////////////////////////////////////////////////////////////////////
@@ -278,7 +289,9 @@ void ScriptActions::doDefeat( void )
 	if (!m_suppressNewWindows)
 	{
 		const Player *localPlayer = ThePlayerList->getLocalPlayer();
-		Bool showObserverWindow = localPlayer->isPlayerObserver() || TheScriptEngine->hasShownMPLocalDefeatWindow();
+		// Apocalypse has no defeat: its end is Game Over for every seat
+		Bool showObserverWindow = localPlayer->isPlayerObserver() || TheScriptEngine->hasShownMPLocalDefeatWindow()
+			|| TheApocalypseDirector->isActive();
 		LogicThread::callAfterTick( [showObserverWindow]{
 			m_messageWindow = TheWindowManager->winCreateFromScript(showObserverWindow ? "Menus/ObserverQuit.wnd" : "Menus/Defeat.wnd");
 		} );
@@ -298,7 +311,8 @@ void ScriptActions::doLocalDefeat( void )
 	TheGameLogic->closeWindows();
 	if (!m_suppressNewWindows)
 	{
-		if(!TheVictoryConditions->amIObserver())
+		// a seat fallen in Apocalypse gets no Defeated window: the message line says how long it held
+		if(!TheVictoryConditions->amIObserver() && !TheApocalypseDirector->isActive())
 			LogicThread::callAfterTick( []{ m_messageWindow = TheWindowManager->winCreateFromScript("Menus/LocalDefeat.wnd"); } );
 	}
 	if(TheCampaignManager)
@@ -2860,6 +2874,8 @@ enum
 };
 void ScriptActions::doSpeechPlay(const AsciiString& speechName, Bool allowOverlap)
 {
+	if (apocalypseLocalFallen())
+		return;
 	TheScriptEngine->notifySpeechRequested(speechName);
 	AudioEventRTS speech(speechName);
 	speech.setIsLogicalAudio(true);
@@ -3405,6 +3421,8 @@ void ScriptActions::doAmbientSoundsPause(Bool pausing)	// if true, then pause, i
 //-------------------------------------------------------------------------------------------------
 void ScriptActions::doMusicTrackChange(const AsciiString& newTrackName, Bool fadeout, Bool fadein)
 {
+	if (apocalypseLocalFallen())
+		return;
 	// Stop playing the music
 	if (fadeout) {
 		TheAudio->removeAudioEvent(AHSV_StopTheMusicFade);

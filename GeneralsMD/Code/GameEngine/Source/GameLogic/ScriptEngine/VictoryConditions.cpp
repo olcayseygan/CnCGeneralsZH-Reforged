@@ -220,7 +220,17 @@ void VictoryConditions::update( void )
 				LogicThread::callAfterTick( []() { TheGameClient->updateFakeDrawables(); } );
 
 				UnicodeString defeated;
-				defeated.format( TheGameText->fetch( "GUI:PlayerHasBeenDefeated" ), p->getPlayerDisplayName().str() );
+				if ( ISSET(APOCALYPSE) )
+				{
+					// Apocalypse has no winner and so no defeat, only how long a seat held (the owner, 2026-11-23);
+					// the time is the score screen's clock, wall seconds
+					const UnsignedInt seconds = TheGameLogic->getFrame() / LOGICFRAMES_PER_SECOND;
+					UnicodeString held;
+					held.format( u"%d:%02d", seconds / 60, seconds % 60 );
+					defeated.format( TheGameText->fetch( "GUI:ApocalypseHeldOut" ), p->getPlayerDisplayName().str(), held.str() );
+				}
+				else
+					defeated.format( TheGameText->fetch( "GUI:PlayerHasBeenDefeated" ), p->getPlayerDisplayName().str() );
 				TheInGameUI->playerMessage( p, defeated );
 				// People are boneheads. Also play a sound
 				static AudioEventRTS leftGameSound("GUIMessageReceived");

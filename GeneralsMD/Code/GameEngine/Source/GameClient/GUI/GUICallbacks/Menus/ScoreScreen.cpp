@@ -75,6 +75,7 @@
 #include "Common/ScoreKeeper.h"
 #include "Common/SkirmishBattleHonors.h"
 #include "Common/ThingFactory.h"
+#include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/FPUControl.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/ScriptEngine.h"
@@ -1996,6 +1997,9 @@ void populatePlayerInfo( Player *player, Int pos)
 
 	if ( screenType == SCORESCREEN_SKIRMISH && player->isLocalPlayer() )
 	{
+		// Apocalypse has no win or loss to count (the owner, 2026-11-23)
+		if (TheApocalypseDirector != NULL && TheApocalypseDirector->isActive())
+			return;
 		if (TheGameInfo->isSandbox() || !(TheVictoryConditions->isLocalAlliedDefeat() || TheVictoryConditions->isLocalAlliedVictory()))
 		{
 			// If we died, and are watching sparring AIs, we still get the loss.

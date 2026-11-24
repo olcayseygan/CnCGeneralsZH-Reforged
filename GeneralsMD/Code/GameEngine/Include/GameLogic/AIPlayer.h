@@ -74,8 +74,9 @@ struct AIAbilityButton
 	SpecialPowerType power;			///< the button's special power, for a special
 };
 
-/// the unit's buttons the AI has a rule for, kept per template and command set; none for a structure
-std::vector<AIAbilityButton> AIAbility_buttonsOf(const Object *obj);
+/// the unit's buttons the AI has a rule for, kept per template and command set; none for a structure.
+/// The reference lives until the next call: copy it before calling again
+const std::vector<AIAbilityButton> &AIAbility_buttonsOf(const Object *obj);
 
 /** The on-the-spot button rules, for a unit of player's, which aiOrNull runs when an AIPlayer owns it.  Each
 	* orders the button and returns TRUE when it pays.  With no AIPlayer the AI's own extras are left out: the

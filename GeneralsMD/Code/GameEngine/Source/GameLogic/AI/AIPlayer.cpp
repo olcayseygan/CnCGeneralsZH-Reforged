@@ -101,6 +101,7 @@
 #include "GameLogic/Module/LifetimeUpdate.h"		// ... and its fuse the life it is given
 #include "GameLogic/Module/NeutronBlastBehavior.h"	// a neutron shell kills by its blast's kind, not its damage
 #include <map>
+#include <string>
 #include "Platform/MsvcFloatCasts.h"
 
 #ifdef _INTERNAL
@@ -412,12 +413,13 @@ static const char *const theAIAbilityKindName[ AIABILITY_KIND_COUNT ] = { "laser
 /** One template's buttons under one command set.  Kept by template ID, one entry for each set its units
 	* have been seen with: two Helixes on different upgrade sets used to take turns throwing the other's
 	* answer away, and one match read them again 291,000 times.  Filled on the logic thread only, and only
-	* ever indexed or compared. */
+	* ever indexed or compared.  Found by the set's name, the object's own string: looking the set up first
+	* walked every command set in the game by string compare on each call, 6.1% of an Apocalypse night tick.
+	* Two names never share a set but a missing one, and a missing set has no buttons under either name. */
 struct AIAbilityClass
 {
-	const CommandSet *set;
+	std::string name;
 	std::vector<AIAbilityButton> buttons;
-	AIAbilityClass() : set( NULL ) {}
 };
 static std::vector< std::vector<AIAbilityClass> > theAbilityClasses;
 
@@ -20262,22 +20264,24 @@ static Bool slotIsSuicide( const ThingTemplate *tmpl, WeaponSlotType slot )
 }
 
 /** The unit's buttons the AI has a rule for. */
-std::vector<AIAbilityButton> AIAbility_buttonsOf( const Object *obj )
+const std::vector<AIAbilityButton> &AIAbility_buttonsOf( const Object *obj )
 {
+	static const std::vector<AIAbilityButton> none;
 	const ThingTemplate *tmpl = obj->getTemplate();
 	if( tmpl == NULL || tmpl->isKindOf( KINDOF_STRUCTURE ) )
-		return std::vector<AIAbilityButton>();
-	const CommandSet *set = TheCommandStore->findCommandSet( obj->getCommandSetString() );
+		return none;
+	const AsciiString &name = obj->getCommandSetString();
 	const UnsignedInt id = tmpl->getTemplateID();
 	if( id >= theAbilityClasses.size() )
 		theAbilityClasses.resize( id + 1 );
 	std::vector<AIAbilityClass> &seen = theAbilityClasses[ id ];
 	for( size_t s = 0; s < seen.size(); ++s )
-		if( seen[ s ].set == set )
+		if( strcmp( seen[ s ].name.c_str(), name.str() ) == 0 )
 			return seen[ s ].buttons;
+	const CommandSet *set = TheCommandStore->findCommandSet( name );
 	seen.push_back( AIAbilityClass() );
 	AIAbilityClass &entry = seen.back();
-	entry.set = set;
+	entry.name = name.str();
 	Int toggles = 0;
 	for( Int i = 0; set && i < MAX_COMMANDS_PER_SET; ++i )
 	{
@@ -20558,7 +20562,10 @@ Int AIPlayer::walkUpsInFlight( std::vector<ObjectID> *taken ) const
 		const Object *obj = owned[ o ];
 		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_STRUCTURE ) )
 			continue;
-		const std::vector<AIAbilityButton> buttons = AIAbility_buttonsOf( obj );
+		// read in place, nothing below asks for another unit's buttons: a copy a unit was an allocation for each
+		// of 150 to 210 units on every walk-up weighed.  The walk itself stays per call, since an order given
+		// earlier in the same frame starts a special, and a count kept for the frame would miss it
+		const std::vector<AIAbilityButton> &buttons = AIAbility_buttonsOf( obj );
 		for( size_t b = 0; b < buttons.size(); ++b )
 		{
 			if( buttons[ b ].kind != AIABILITY_WALKUP )

@@ -17,6 +17,9 @@
 60    laneplace  1  ChinaInfantryHacker  5 3
 60    laneplace  1  ChinaInfantryHacker  9 3
 90    laneability 1 ChinaInfantryHacker  2 1
+# and a satellite scan for slot 0 at the lane's middle, so replay-check (-ExtraArgs -takeover -side 0
+# FactionAmerica -side 1 FactionChina -scenario lanewar_cashhack) plays both through a recording
+3000  lanereveal 0  0 0
 4400  lanecash   1  1
 5000  lanecash   1  1
 5600  lanecash   1  1

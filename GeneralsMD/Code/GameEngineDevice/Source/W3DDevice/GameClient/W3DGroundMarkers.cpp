@@ -85,6 +85,7 @@ static const Real AREA_FADE = 0.3f;
 static const Real END_FADE = 0.5f;						///< a delivery's, a gunship's and a superweapon's last fade
 static const Real PLANE_WAIT = 10.0f;					///< seconds a click waits for what it sent before it gives up
 static const Real MISSILE_WAIT = 60.0f;
+static const Real CANNON_BEAM_WAIT = 4.0f;				///< seconds past the beam's travel a cannon's marker waits for the beam
 static const Real GUARD_LIFE = 5.0f;
 static const Int MAX_SHOTS = 24;
 static const Int MAX_GUARDS = 16;
@@ -671,16 +672,8 @@ static Int swarmTargetCount( const Object *caster, const SpecialPowerTemplate *p
 		const SwarmStrikeSpecialPowerModuleData *data = (const SwarmStrikeSpecialPowerModuleData *)info.getNthData( i );
 		if( data == NULL || data->m_specialPowerTemplate != power )
 			continue;
-		for( size_t u = 0; u < data->m_upgradeTargetCount.size(); ++u )
-		{
-			const SwarmStrikeSpecialPowerModuleData::UpgradeTargetCount &up = data->m_upgradeTargetCount[ u ];
-			Bool all = player != NULL && !up.m_sciences.empty();
-			for( size_t s = 0; all && s < up.m_sciences.size(); ++s )
-				all = player->hasScience( up.m_sciences[ s ] );
-			if( all )
-				return up.m_count;
-		}
-		return data->m_targetCount;
+		const SwarmStrikeSpecialPowerModuleData::UpgradeTargetCount *up = findFirstOwnedEntry( player, data->m_upgradeTargetCount );
+		return up != NULL ? up->m_count : data->m_targetCount;
 	}
 	return 3;
 }
@@ -1089,6 +1082,10 @@ static void describeDesign( Marker &m, const Object *caster, const SpecialPowerT
 		m.cx0 = m.x - 300.0f;
 		m.cy0 = m.y - 300.0f;
 	}
+	// a missile out of the caster's own silo (the cruise missile, the nuke, the Scud Storm) flies from
+	// there, never from the map's edge the OCL module's default create location names
+	if( m.lane && caster && findTemplateModule( caster->getTemplate(), "MissileLauncherBuildingUpdate" ) != NULL )
+		m.lane = FALSE;
 	Coord3D target;
 	target.x = m.x;  target.y = m.y;  target.z = m.z;
 	switch( m.design )
@@ -1458,6 +1455,8 @@ static void followSuperweapon( Marker &m, UnsignedInt now, Real tl )
 		}
 		else if( m.beamSeen && m.fadeMs == 0 )
 			startFade( m, now, END_FADE );
+		else if( !m.beamSeen && m.impactMs != 0 && secondsSince( now, m.impactMs ) > CANNON_BEAM_WAIT )
+			startFade( m, now, END_FADE );		// the beam never came: a cannon that lost its power
 	}
 	if( m.impactMs != 0 )
 		return;
@@ -1516,7 +1515,10 @@ static void followSuperweapon( Marker &m, UnsignedInt now, Real tl )
 		m.pingMs = now;
 		m.pingR = 0.9f * m.R;
 		m.pingTint = TINT_GOLD;
-		startFade( m, now + 100, 0.4f );		// gone between 0.1 and 0.5 s after it lands
+		// gone between 0.1 and 0.5 s after it lands; a cannon waits for its beam (above), which in a
+		// network game the run-ahead can show after the travel frames are counted
+		if( m.super != SUPER_CANNON || m.beamSeen )
+			startFade( m, now + 100, 0.4f );
 	}
 }
 
@@ -1560,7 +1562,21 @@ static Real zoneReach( const Marker &m )
 		reach = MAX( reach, 2.0f * m.rmax + 40.0f );
 	if( m.design != DESIGN_NONE )		// a capsule, a wide box, a racetrack: the frames reach past the radius
 		reach = MAX( reach, 1.8f * R + 40.0f * m.k );
-	return reach + 4.0f;
+	if( m.beamSeen )		// a driven beam goes where the player steers it: its head and every scorch it left
+	{
+		Real far2 = ( m.beamX - m.x ) * ( m.beamX - m.x ) + ( m.beamY - m.y ) * ( m.beamY - m.y );
+		for( size_t i = 0; i < m.beamTrail.size(); ++i )
+			far2 = MAX( far2, ( m.beamTrail[ i ].x - m.x ) * ( m.beamTrail[ i ].x - m.x ) + ( m.beamTrail[ i ].y - m.y ) * ( m.beamTrail[ i ].y - m.y ) );
+		reach = MAX( reach, (Real)sqrt( far2 ) + 20.0f * m.k );
+	}
+	// a square wider than MAX_GRID_SIDE heights would be cut short by fillSquare and refilled every take
+	return MIN( reach + 4.0f, 0.5f * GROUND_STEP * (Real)( MAX_GRID_SIDE - 1 ) - GRID_PAD - 2.0f * GROUND_STEP );
+}
+
+/// a frame with a line from its caster and no lane to lay it on: the cruise missile's route, the rocket pods' guide
+static Bool designDrawsRoute( const Marker &m )
+{
+	return !m.lane && ( m.design == DESIGN_CRUISE || m.design == DESIGN_COMANCHE );
 }
 
 /// seconds an area power's own marker holds after the click before its fade: as long as its after-click runs
@@ -1599,20 +1615,48 @@ static void takeGround( Marker &m, UnsignedInt now )
 		m.gridMs = now;
 	}
 	m.wet = m.wet || m.zoneWet;
-	if( !m.lane )
+	if( m.lane )
+	{
+		// the lane's: every ten units along it, five lines across it from rail to rail and a little past
+		const Real across = m.half + 16.0f * m.k;
+		const Real key[ 5 ] = { m.ex, m.ey, m.endX, m.endY, across };
+		Bool same = m.laneGrid.valid() && now - m.laneMs <= 3000;
+		for( Int i = 0; same && i < 5; ++i )
+			same = fabs( key[ i ] - m.laneKey[ i ] ) < 2.0f;
+		if( !same )
+		{
+			const Real length = m.L + m.R + 300.0f;
+			const Real x0 = m.ex + m.uy * across, y0 = m.ey - m.ux * across;		// E, across to the right
+			m.laneGrid.fill( x0, y0, m.ux, m.uy, GROUND_STEP, MIN( 1000, (Int)ceilf( length / GROUND_STEP ) + 1 ), 0.5f * across, 5 );
+			m.laneWet = m.laneWater.fill( x0, y0, m.ux, m.uy, WATER_STEP, MIN( 500, (Int)ceilf( length / WATER_STEP ) + 1 ), across, 3, TRUE );
+			for( Int i = 0; i < 5; ++i )
+				m.laneKey[ i ] = key[ i ];
+			m.laneMs = now;
+		}
+		m.wet = m.wet || m.laneWet;
 		return;
-	// the lane's: every ten units along it, five lines across it from rail to rail and a little past
-	const Real across = m.half + 16.0f * m.k;
-	const Real key[ 5 ] = { m.ex, m.ey, m.endX, m.endY, across };
+	}
+	if( !designDrawsRoute( m ) )
+		return;
+	// a route from the caster with no lane (the cruise missile's from its launcher, bent up to 110 units
+	// either side; the Comanche's guide line): the lane grids hold its ground, a terrain cell apart across
+	const Real across = m.design == DESIGN_CRUISE ? 135.0f : 24.0f;
+	const Real dx = m.x - m.cx0, dy = m.y - m.cy0;
+	const Real length = (Real)sqrt( dx * dx + dy * dy );
+	if( length < 1.0f )
+		return;
+	const Real ux = dx / length, uy = dy / length;
+	const Real key[ 5 ] = { m.cx0, m.cy0, m.x, m.y, across };
 	Bool same = m.laneGrid.valid() && now - m.laneMs <= 3000;
 	for( Int i = 0; same && i < 5; ++i )
 		same = fabs( key[ i ] - m.laneKey[ i ] ) < 2.0f;
 	if( !same )
 	{
-		const Real length = m.L + m.R + 300.0f;
-		const Real x0 = m.ex + m.uy * across, y0 = m.ey - m.ux * across;		// E, across to the right
-		m.laneGrid.fill( x0, y0, m.ux, m.uy, GROUND_STEP, MIN( 1000, (Int)ceilf( length / GROUND_STEP ) + 1 ), 0.5f * across, 5 );
-		m.laneWet = m.laneWater.fill( x0, y0, m.ux, m.uy, WATER_STEP, MIN( 500, (Int)ceilf( length / WATER_STEP ) + 1 ), across, 3, TRUE );
+		const Real x0 = m.cx0 + uy * across, y0 = m.cy0 - ux * across;		// the caster, across to the right
+		const Int rows = MIN( 32, (Int)ceilf( 2.0f * across / GROUND_STEP ) + 1 );
+		const Int wetRows = MIN( 16, (Int)ceilf( 2.0f * across / WATER_STEP ) + 1 );
+		m.laneGrid.fill( x0, y0, ux, uy, GROUND_STEP, MIN( 1000, (Int)ceilf( length / GROUND_STEP ) + 2 ), 2.0f * across / (Real)( rows - 1 ), rows );
+		m.laneWet = m.laneWater.fill( x0, y0, ux, uy, WATER_STEP, MIN( 500, (Int)ceilf( length / WATER_STEP ) + 2 ), 2.0f * across / (Real)( wetRows - 1 ), wetRows, TRUE );
 		for( Int i = 0; i < 5; ++i )
 			m.laneKey[ i ] = key[ i ];
 		m.laneMs = now;
@@ -4763,8 +4807,10 @@ static void drawSwarm( const DesignDraw &d )
 		bandSegment( d, oct.x[ j ] + dx * cut + ox, oct.y[ j ] + dy * cut + oy, oct.x[ jn ] - dx * cut + ox, oct.y[ jn ] - dy * cut + oy,
 								 14.0f * k, d.tint, 1.0f );
 	}
-	static const Real targetU[ 5 ] = { 0.15f, -0.45f, 0.5f, -0.2f, 0.35f }, targetV[ 5 ] = { 0.05f, 0.3f, -0.35f, -0.55f, 0.55f };
-	const Int n = MAX( 1, MIN( 5, m.swarmCount ) );
+	// as many as the strike sends: up to seven with the rank 9 card and the third tier (TalentsReforged.ini)
+	static const Real targetU[ 7 ] = { 0.15f, -0.45f, 0.5f, -0.2f, 0.35f, -0.62f, 0.62f };
+	static const Real targetV[ 7 ] = { 0.05f, 0.3f, -0.35f, -0.55f, 0.55f, -0.15f, 0.18f };
+	const Int n = MAX( 1, MIN( 7, m.swarmCount ) );
 	for( Int i = 0; i < n; ++i )
 	{
 		const Real fi = (Real)i;
@@ -5080,10 +5126,11 @@ static void drawMarker( const Marker &m )
 	const Real R = currentRadius( m, now );
 	const Bool quiet = m.guarding || ( m.family == FAMILY_GUARD && tl >= 1.4f );
 
+	const Bool along = m.lane || designDrawsRoute( m );		// the lane's grids, or a route's in them
 	s_ctx.g1 = &m.grid;
-	s_ctx.g2 = m.lane ? &m.laneGrid : NULL;
+	s_ctx.g2 = along ? &m.laneGrid : NULL;
 	s_ctx.w1 = &m.water;
-	s_ctx.w2 = m.lane ? &m.laneWater : NULL;
+	s_ctx.w2 = along ? &m.laneWater : NULL;
 	s_ctx.flatZ = m.z;
 
 	if( app > 0.002f )

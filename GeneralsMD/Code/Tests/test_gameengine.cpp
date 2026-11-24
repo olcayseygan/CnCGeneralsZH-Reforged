@@ -31732,3 +31732,219 @@ TEST(apocalypse_kind_unlocks_on_its_night)
 		CHECK_EQ( apocalypseKindNamed( Apocalypse_kind( k ).name ), k );
 	}
 }
+
+//-------------------------------------------------------------------------------------------------
+/** Batch 3 (ApocalypseDirector.cpp): the Hounds hunt the weakest front.  Of the gates before a living
+	  seat's start, the one with the least defence; the lower gate on a tie; a gate no seat holds never. */
+TEST(apocalypse_hounds_pick_the_weakest_front)
+{
+	const Int defence[ 6 ] = { 4000, 0, 900, 0, 0, 2500 };
+	CHECK_EQ( Apocalypse_weakestGate( defence, 0x01u | 0x04u | 0x20u, 6 ), 2 );		// 900 beats 4000 and 2500
+	CHECK_EQ( Apocalypse_weakestGate( defence, 0x01u | 0x02u | 0x08u, 6 ), 1 );		// a tie at 0: the lower gate
+	CHECK_EQ( Apocalypse_weakestGate( defence, 0x01u, 6 ), 0 );										// one front is its own weakest
+	CHECK_EQ( Apocalypse_weakestGate( defence, 0u, 6 ), -1 );											// no living seat on a gate
+	CHECK_EQ( Apocalypse_weakestGate( defence, 0x20u, 5 ), -1 );									// a bit past the map's gates is no gate
+
+	// the Hound comes in packs of four on the weak front from night 2; the Crawler from night 1; the
+	// Gas Diver is a flyer, from night 3
+	const Int hound = apocalypseKindNamed( "ApocalypseZombieHound" );
+	CHECK( hound > 0 );
+	CHECK_EQ( Apocalypse_kind( hound ).group, 4 );
+	CHECK( ( Apocalypse_kind( hound ).flags & APOCALYPSE_KIND_WEAKFRONT ) != 0 );
+	CHECK( !Apocalypse_kindAllowed( hound, APOCALYPSE_NIGHT, 0 ) );
+	CHECK( Apocalypse_kindAllowed( hound, APOCALYPSE_DUSK, 1 ) );
+	const Int crawler = apocalypseKindNamed( "ApocalypseZombieCrawler" );
+	CHECK( crawler > 0 );
+	CHECK( Apocalypse_kindAllowed( crawler, APOCALYPSE_NIGHT, 0 ) );
+	const Int diver = apocalypseKindNamed( "ApocalypseZombieGasDiver" );
+	CHECK( diver > 0 );
+	CHECK( ( Apocalypse_kind( diver ).flags & APOCALYPSE_KIND_FLYER ) != 0 );
+	CHECK( !Apocalypse_kindAllowed( diver, APOCALYPSE_NIGHT, 1 ) );
+	CHECK( Apocalypse_kindAllowed( diver, APOCALYPSE_NIGHT, 2 ) );
+}
+
+/** Batch 5's hosts: the elites never by day, the Brood Carrier both elite and flyer from night 6, and a
+	  host's brood on the table for its kill score but never rolled. */
+TEST(apocalypse_hosts_roll_but_their_brood_never)
+{
+	const char *const elites[] = { "ApocalypseZombieAbomination", "ApocalypseZombieBroodmother", "ApocalypseZombieBroodCarrier" };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( elites ); ++i )
+	{
+		const Int k = apocalypseKindNamed( elites[ i ] );
+		CHECK( k > 0 );
+		CHECK( ( Apocalypse_kind( k ).flags & APOCALYPSE_KIND_ELITE ) != 0 );
+		CHECK_EQ( Apocalypse_kind( k ).weight[ APOCALYPSE_DAY ], 0 );
+		CHECK( !Apocalypse_kindAllowed( k, APOCALYPSE_DAY, 9 ) );
+	}
+
+	// night 5's at its dusk (cycle 4), not the night before; the Carrier on night 6 (cycle 5)
+	const Int abomination = apocalypseKindNamed( "ApocalypseZombieAbomination" );
+	CHECK( !Apocalypse_kindAllowed( abomination, APOCALYPSE_NIGHT, 3 ) );
+	CHECK( Apocalypse_kindAllowed( abomination, APOCALYPSE_DUSK, 4 ) );
+	const Int carrier = apocalypseKindNamed( "ApocalypseZombieBroodCarrier" );
+	CHECK( ( Apocalypse_kind( carrier ).flags & APOCALYPSE_KIND_FLYER ) != 0 );
+	CHECK( !Apocalypse_kindAllowed( carrier, APOCALYPSE_NIGHT, 4 ) );
+	CHECK( Apocalypse_kindAllowed( carrier, APOCALYPSE_NIGHT, 5 ) );
+
+	// the Bloat Sack pays for its ten walkers; the Spore Drifter is a flyer
+	CHECK_EQ( Apocalypse_kind( apocalypseKindNamed( "ApocalypseZombieBloatSack" ) ).points, 12 );
+	CHECK( ( Apocalypse_kind( apocalypseKindNamed( "ApocalypseZombieSporeDrifter" ) ).flags & APOCALYPSE_KIND_FLYER ) != 0 );
+
+	// the brood: a walker's points for the kill, no weight in any phase
+	const char *const brood[] = { "ApocalypseZombieBroodling", "ApocalypseZombieBroodBat" };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( brood ); ++i )
+	{
+		const Int k = apocalypseKindNamed( brood[ i ] );
+		CHECK( k > 0 );
+		CHECK_EQ( Apocalypse_kind( k ).points, (Int)APOCALYPSE_POINTS_WALKER );
+		for( Int phase = 0; phase < APOCALYPSE_PHASES; ++phase )
+			CHECK_EQ( Apocalypse_kind( k ).weight[ phase ], 0 );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The Blood Moon and its bosses (ApocalypseDirector.cpp): every third night, half as many points
+	  again, the night's boss, two of the three from night 12, the boss's health by the seats alive,
+	  and no roll ever drawing a boss. */
+TEST(apocalypse_blood_moon_brings_its_boss)
+{
+	// night 3 is cycle 2: its dusk and night, not its dawn or the day before
+	CHECK( !Apocalypse_isBloodMoon( APOCALYPSE_NIGHT, 0 ) );
+	CHECK( !Apocalypse_isBloodMoon( APOCALYPSE_NIGHT, 1 ) );
+	CHECK( !Apocalypse_isBloodMoon( APOCALYPSE_DAY, 2 ) );
+	CHECK( Apocalypse_isBloodMoon( APOCALYPSE_DUSK, 2 ) );
+	CHECK( Apocalypse_isBloodMoon( APOCALYPSE_NIGHT, 2 ) );
+	CHECK( !Apocalypse_isBloodMoon( APOCALYPSE_DAWN, 2 ) );
+	CHECK( Apocalypse_isBloodMoon( APOCALYPSE_NIGHT, 5 ) );
+	CHECK( Apocalypse_isBloodMoon( APOCALYPSE_NIGHT, 8 ) );
+
+	// a Blood Moon wave is half as many points again as the plain formula gives: one seat's first wave,
+	// 34 plain points, 153 at night, 244 on night 2 (cycle 1, +60%), 336 on night 3 (+120%), and 504
+	CHECK_EQ( Apocalypse_wavePoints( 1, 1, APOCALYPSE_NIGHT, 1, 100 ), 244 );
+	CHECK_EQ( Apocalypse_wavePoints( 1, 1, APOCALYPSE_NIGHT, 2, 100 ), 504 );
+	CHECK( Apocalypse_wavePoints( 200, 4, APOCALYPSE_NIGHT, 8, 600 ) <= (Int)APOCALYPSE_WAVE_MOST );
+
+	// the night's boss: Colossus 3, Wyrm 6, Plague King 9; none on a plain night; two of three from 12
+	const Int colossus = apocalypseKindNamed( "ApocalypseZombieColossus" );
+	const Int wyrm = apocalypseKindNamed( "ApocalypseZombieWyrm" );
+	const Int king = apocalypseKindNamed( "ApocalypseZombiePlagueKing" );
+	CHECK( colossus > 0 && wyrm > 0 && king > 0 );
+	Int kinds[ 2 ] = { -1, -1 };
+	CHECK_EQ( Apocalypse_bossesOfNight( 1, 0, kinds ), 0 );
+	CHECK_EQ( Apocalypse_bossesOfNight( 4, 0, kinds ), 0 );
+	CHECK_EQ( Apocalypse_bossesOfNight( 3, 0, kinds ), 1 );
+	CHECK_EQ( kinds[ 0 ], colossus );
+	CHECK_EQ( Apocalypse_bossesOfNight( 6, 0, kinds ), 1 );
+	CHECK_EQ( kinds[ 0 ], wyrm );
+	CHECK_EQ( Apocalypse_bossesOfNight( 9, 2, kinds ), 1 );
+	CHECK_EQ( kinds[ 0 ], king );
+	CHECK_EQ( Apocalypse_bossesOfNight( 12, 1, kinds ), 2 );
+	CHECK_EQ( kinds[ 0 ], colossus );
+	CHECK_EQ( kinds[ 1 ], king );
+	CHECK_EQ( Apocalypse_bossesOfNight( 15, 0, kinds ), 2 );
+	CHECK_EQ( kinds[ 0 ], wyrm );
+	CHECK_EQ( kinds[ 1 ], king );
+
+	// a boss is never rolled: weight 0 in every phase, and it carries the boss flag
+	const Int bosses[ 3 ] = { colossus, wyrm, king };
+	for( Int b = 0; b < 3; ++b )
+	{
+		CHECK( ( Apocalypse_kind( bosses[ b ] ).flags & APOCALYPSE_KIND_BOSS ) != 0 );
+		for( Int phase = 0; phase < APOCALYPSE_PHASES; ++phase )
+			CHECK_EQ( Apocalypse_kind( bosses[ b ] ).weight[ phase ], 0 );
+	}
+
+	// health by the seats alive: alone as written, half again for each seat past the first
+	CHECK_EQ( Apocalypse_bossHealthPercent( 0 ), 100 );
+	CHECK_EQ( Apocalypse_bossHealthPercent( 1 ), 100 );
+	CHECK_EQ( Apocalypse_bossHealthPercent( 2 ), 150 );
+	CHECK_EQ( Apocalypse_bossHealthPercent( 4 ), 250 );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The scatter of a wave's spots in the fog (ApocalypseDirector.cpp): the Perlin noise is the same for
+	  the same seed, stays in 0..1, moves smoothly, has both bare ground and clumps, and changes with the
+	  seed; the keep share is the stragglers' on thin ground and all of them in a clump. */
+TEST(apocalypse_spawns_scatter_in_clumps_not_rows)
+{
+	const UnsignedInt seed = 0x1234567u;
+	Real lowest = 1.0f, highest = 0.0f;
+	Int moved = 0;
+	for( Int y = 0; y < 30; ++y )
+		for( Int x = 0; x < 30; ++x )
+		{
+			const Real wx = 1000.0f + (Real)x * 37.0f, wy = 2000.0f + (Real)y * 41.0f;
+			const Real d = Apocalypse_scatterNoise( wx, wy, seed );
+			CHECK( d >= 0.0f && d <= 1.0f );
+			CHECK_EQ( d, Apocalypse_scatterNoise( wx, wy, seed ) );
+			// one world unit on, nearly the same: a field, not a dice roll
+			CHECK( fabs( Apocalypse_scatterNoise( wx + 1.0f, wy, seed ) - d ) < 0.08f );
+			if( Apocalypse_scatterNoise( wx, wy, seed + 1 ) != d )
+				++moved;
+			lowest = d < lowest ? d : lowest;
+			highest = d > highest ? d : highest;
+		}
+	CHECK( lowest < 0.2f );
+	CHECK( highest > 0.8f );
+	CHECK( moved > 600 );		// of 900; where both seeds push the noise to an end it reads the same
+
+	CHECK_EQ( Apocalypse_scatterKeepPercent( 0.0f ), (Int)APOCALYPSE_SCATTER_STRAGGLE );
+	CHECK_EQ( Apocalypse_scatterKeepPercent( (Real)APOCALYPSE_SCATTER_THIN_PERMILLE / 1000.0f ), (Int)APOCALYPSE_SCATTER_STRAGGLE );
+	CHECK_EQ( Apocalypse_scatterKeepPercent( 1.0f ), 100 );
+	for( Int p = 0; p < 1000; p += 50 )
+		CHECK( Apocalypse_scatterKeepPercent( (Real)p / 1000.0f ) <= Apocalypse_scatterKeepPercent( (Real)( p + 50 ) / 1000.0f ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A wave's shape and theme (ApocalypseDirector.cpp): the night opens small, peaks two thirds in and
+	  eases; a Blood Moon's peak is wider than the longest gap between two of its waves, so its boss
+	  always comes; the peak is mixed, the first day a horde, no theme twice running; and every kind a
+	  roll can draw leans on some theme. */
+TEST(apocalypse_waves_build_to_a_peak_with_a_theme)
+{
+	const UnsignedInt night = 2400;
+	CHECK( Apocalypse_waveShapePercent( APOCALYPSE_NIGHT, 0, night, FALSE ) < 100 );
+	CHECK( Apocalypse_waveShapePercent( APOCALYPSE_NIGHT, night * 65 / 100, night, FALSE ) >= (Int)APOCALYPSE_PEAK_PERCENT );
+	CHECK( Apocalypse_waveShapePercent( APOCALYPSE_NIGHT, night, night, FALSE ) < (Int)APOCALYPSE_PEAK_PERCENT );
+	CHECK( Apocalypse_waveShapePercent( APOCALYPSE_NIGHT, night * 65 / 100, night, TRUE ) > Apocalypse_waveShapePercent( APOCALYPSE_NIGHT, night * 65 / 100, night, FALSE ) );
+	CHECK( Apocalypse_waveShapePercent( APOCALYPSE_DAWN, 0, 600, FALSE ) > Apocalypse_waveShapePercent( APOCALYPSE_DAWN, 600, 600, FALSE ) );
+	CHECK( Apocalypse_waveShapePercent( APOCALYPSE_DAY, 0, 4800, FALSE ) < Apocalypse_waveShapePercent( APOCALYPSE_DAY, 4800, 4800, FALSE ) );
+	// past the phase's end reads as its end, a phase of no length as its end
+	CHECK_EQ( Apocalypse_waveShapePercent( APOCALYPSE_NIGHT, night * 2, night, FALSE ), Apocalypse_waveShapePercent( APOCALYPSE_NIGHT, night, night, FALSE ) );
+	CHECK_EQ( Apocalypse_waveShapePercent( APOCALYPSE_NIGHT, 5, 0, FALSE ), Apocalypse_waveShapePercent( APOCALYPSE_NIGHT, night, night, FALSE ) );
+
+	// the Blood Moon's peak lasts longer than the gap after its biggest wave, in game seconds
+	Int peakSeconds = 0, biggest = 0;
+	for( Int s = 0; s < APOCALYPSE_NIGHT_SECONDS; ++s )
+	{
+		const Int shape = Apocalypse_waveShapePercent( APOCALYPSE_NIGHT, (UnsignedInt)s, APOCALYPSE_NIGHT_SECONDS, TRUE );
+		if( shape >= APOCALYPSE_PEAK_PERCENT )
+			++peakSeconds;
+		biggest = shape > biggest ? shape : biggest;
+	}
+	CHECK( peakSeconds > Apocalypse_phaseRules( APOCALYPSE_NIGHT ).waveSeconds * ( 100 + biggest ) / 200 );
+
+	CHECK_EQ( Apocalypse_waveTheme( APOCALYPSE_NIGHT, 3, APOCALYPSE_PEAK_PERCENT, APOCALYPSE_THEME_HUNT, 7 ), (Int)APOCALYPSE_THEME_MIXED );
+	CHECK_EQ( Apocalypse_waveTheme( APOCALYPSE_DAY, 0, 90, APOCALYPSE_THEME_HORDE, 7 ), (Int)APOCALYPSE_THEME_HORDE );
+	for( Int phase = 0; phase < APOCALYPSE_PHASES; ++phase )
+		for( Int last = 0; last < APOCALYPSE_THEMES; ++last )
+			for( Int roll = 0; roll < 1000; roll += 37 )
+			{
+				const Int theme = Apocalypse_waveTheme( phase, 2, 100, last, roll );
+				CHECK( theme >= 0 && theme < APOCALYPSE_THEMES );
+				CHECK( theme != last );
+			}
+
+	// every kind a roll can draw leans on a theme, the walker on the horde
+	CHECK( ( Apocalypse_themesOfKind( "ApocalypseZombie" ) & ( 1u << APOCALYPSE_THEME_HORDE ) ) != 0 );
+	CHECK_EQ( Apocalypse_themesOfKind( "NoSuchZombie" ), 0u );
+	for( Int k = 0; k < Apocalypse_kindCount(); ++k )
+	{
+		const ApocalypseKind &kind = Apocalypse_kind( k );
+		Int weight = 0;
+		for( Int phase = 0; phase < APOCALYPSE_PHASES; ++phase )
+			weight += kind.weight[ phase ];
+		if( weight > 0 )
+			CHECK( Apocalypse_themesOfKind( kind.name ) != 0 );
+	}
+}

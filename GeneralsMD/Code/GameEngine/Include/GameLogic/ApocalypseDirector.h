@@ -38,8 +38,15 @@
 // a weight a phase, a group size (the Carrion Bats fly in flocks) and flags.  Day 1 sends walkers
 // only; a kind that unlocks on night N walks at dusk and night from then and by day from the day
 // after.  Elites never come by day, one a living seat a wave; flyers take at most a share of a
-// wave's points.  Anything else of the dead's that walks (a spawn line, what a death leaves) is
-// adopted as a stray, counted under the cap and sent on.  Every cycle
+// wave's points.  A pack that hunts the weak front (the Hounds) comes at the gate of the living seat
+// with the least defence instead of the wave's own gates.  Anything else of the dead's that walks (a spawn line, what a death leaves) is
+// adopted as a stray, counted under the cap and sent on.  Every third night is a Blood Moon: its
+// waves bring half as many points again and twice the elites, the fog goes a deeper red, and its
+// peak wave brings a boss no roll draws (the Colossus, the Wyrm, the Plague King; two of them from
+// night 12).  The dead that fall near a living Plague King rise again as walkers.  A wave has a
+// shape and a theme: its size rises and falls through its phase (a night's probe, build, peak and
+// breath; Apocalypse_waveShapePercent), the gap after it with it, and its roll leans on one role
+// (horde, hunt, siege, plague, sky) but the peak's, which takes everything at every gate.  Every cycle
 // sends more and ranks them one level higher, to Heroic.  The light follows: the director hands the
 // client a night amount after each tick (LogicThread::callAfterTick), the client tints the map's own
 // light toward a dim red and puts every drawable in its NIGHT state once it is past half; nothing in
@@ -49,7 +56,9 @@
 // for every player whoever looks (PartitionManager::setAlwaysShroudedOutside), drawn as a thin red
 // fog, and deadly: a unit of anyone but the dead that stands in it APOCALYPSE_FOG_GRACE_SECONDS dies,
 // save a plane flying a general's power in from off the map (a supply drop, a paradrop, a strike).
-// The dead rise anywhere in it and walk in.  The fog's red and the smoke's follow the night.
+// The dead rise anywhere in it and walk in, a wave's spots kept or thrown by a Perlin noise seeded
+// for that wave, so they come out in clumps with stragglers and bare ground between, never in rows.
+// The fog's red and the smoke's follow the night.
 //
 // The HEADLESS APOCALYPSE lines carry the phase, the wave, the counts and the kills.
 //
@@ -99,6 +108,12 @@ enum
 	APOCALYPSE_FLYER_SHARE_EARLY = 15,		///< percent of a wave's points flyers may take, before APOCALYPSE_FLYER_LATE_NIGHT,
 	APOCALYPSE_FLYER_SHARE_LATE = 25,			///< and from that night on
 	APOCALYPSE_FLYER_LATE_NIGHT = 4,
+	APOCALYPSE_BLOOD_MOON_EVERY = 3,			///< every third night is a Blood Moon: half as many points again, twice the elites, a boss
+	APOCALYPSE_BLOOD_MOON_PERCENT = 150,	///< a Blood Moon wave's points, percent of the plain night's
+	APOCALYPSE_BOSS_SEAT_PERCENT = 50,		///< a boss's health grows this much, percent, for every living seat past the first
+	APOCALYPSE_BOSS_PAIR_NIGHT = 12,			///< from this Blood Moon on two of the three bosses come, drawn from the logic stream
+	APOCALYPSE_KING_REACH = 250,					///< world units round a living Plague King inside which the dead that fall rise again
+	APOCALYPSE_KING_RISE_SECONDS = 4,			///< game seconds the Plague King lies after his first death before he stands (ZBKING_SPA)
 	APOCALYPSE_GROUP_SPACING = 12,				///< world units between two of a flock or a pack as they come out
 	APOCALYPSE_ADAPT_START = 100,					///< the adaptive share, percent: where it starts,
 	APOCALYPSE_ADAPT_LEAST = 100,					///< how low it falls when waves reach the bases: never under the plain wave,
@@ -120,7 +135,15 @@ enum
 	APOCALYPSE_BASE_REACH = 200,					///< world units past the farthest start from the middle that count as having reached the bases
 	APOCALYPSE_FOG_GRACE_SECONDS = 4,			///< game seconds anything but the dead may stand in the fog ring before it dies there
 	APOCALYPSE_FOG_EDGE_IN = 40,					///< world units a ring spawn keeps off the map's edge and off the clear area
-	APOCALYPSE_FOG_TRIES = 16,						///< spots drawn for a ring spawn before it falls back on a spawn waypoint
+	APOCALYPSE_FOG_TRIES = 32,						///< spots drawn for a ring spawn before it falls back on a spawn waypoint,
+	APOCALYPSE_SCATTER_NOISE_TRIES = 24,	///< the first this many of them kept or thrown by the wave's scatter noise, the rest taken as they fall
+	APOCALYPSE_SCATTER_CELL = 140,				///< world units across one cell of the scatter noise: a clump of the dead is about this wide
+	APOCALYPSE_SCATTER_CONTRAST_PERCENT = 140,	///< how hard the noise is pushed to its ends: more bare ground and fuller clumps
+	APOCALYPSE_SCATTER_THIN_PERMILLE = 550,	///< noise under this (of 1000) is thin ground, where only stragglers stand
+	APOCALYPSE_SCATTER_STRAGGLE = 3,			///< percent of the spots drawn on thin ground that are kept: the stragglers
+	APOCALYPSE_SCATTER_LOG_MOST = 600,		///< spawn spots a wave keeps for its scatter line in the log, at most
+	APOCALYPSE_THEME_BOOST = 4,						///< a kind of the wave's theme rolls this many times its weight
+	APOCALYPSE_PEAK_PERCENT = 140,				///< a wave this big against the plain one (Apocalypse_waveShapePercent) is the peak: every kind, every gate it may, the Blood Moon's boss
 	APOCALYPSE_LIGHT_STEPS = 32,					///< the night amount the client is handed, in steps
 	APOCALYPSE_LIGHT_TINT_EVERY = 4,			///< steps between two retints of the light tables, each a full relight of the ground
 	APOCALYPSE_FIELD_CELLS_PER_FRAME = 10000,	///< flow field cells a logic frame builds or repairs
@@ -147,7 +170,12 @@ enum
 	APOCALYPSE_KIND_ELITE = 1 << 0,				///< flags: never by day or dawn
 	APOCALYPSE_KIND_FLYER = 1 << 1,
 	APOCALYPSE_KIND_BOSS = 1 << 2,
+	APOCALYPSE_KIND_WEAKFRONT = 1 << 3,		///< comes at the gate of the living seat with the least defence (Apocalypse_weakestGate), not the wave's
 };
+
+/** Of the gates set in `fronts` (one bit a gate, `gates` of them), the one with the least `defence`, the
+	  lower gate on a tie; -1 when no bit is set. */
+extern Int Apocalypse_weakestGate( const Int *defence, UnsignedInt fronts, Int gates );
 
 /** One kind of the dead: its template, what it costs of a wave's points, the first night it comes
 	  (0 from the start), how often a roll picks it in each phase (weights, summed over the kinds allowed),
@@ -173,6 +201,18 @@ extern Bool Apocalypse_kindAllowed( Int kind, Int phase, UnsignedInt cycle );
 	  counts as for an unlock, so the late share starts at the dusk before night APOCALYPSE_FLYER_LATE_NIGHT */
 extern Int Apocalypse_flyerSharePercent( Int phase, UnsignedInt cycle );
 
+/** A Blood Moon: the dusk and night of every APOCALYPSE_BLOOD_MOON_EVERY-th night (night 3, 6, 9...).
+	  A pure function of the clock, so it needs no state. */
+extern Bool Apocalypse_isBloodMoon( Int phase, UnsignedInt cycle );
+
+/** The bosses a Blood Moon night (from 1) brings, as roster rows into `kinds` (two at most); how many.
+	  Night 3 the Colossus, 6 the Wyrm, 9 the Plague King; from APOCALYPSE_BOSS_PAIR_NIGHT two of the
+	  three, all but `skip` (0 to 2, the caller's draw).  None on a night that is no Blood Moon. */
+extern Int Apocalypse_bossesOfNight( UnsignedInt night, Int skip, Int kinds[ 2 ] );
+
+/// a boss's health, percent of its own, with that many seats alive
+inline Int Apocalypse_bossHealthPercent( Int seatsAlive ) { return 100 + APOCALYPSE_BOSS_SEAT_PERCENT * ( seatsAlive > 1 ? seatsAlive - 1 : 0 ); }
+
 /// the threat points a wave of that number (from 1) brings for that many seats, in that phase of that cycle (from 0), at that adaptive share
 extern Int Apocalypse_wavePoints( UnsignedInt wave, Int seats, Int phase, UnsignedInt cycle, Int adaptPercent );
 
@@ -182,6 +222,42 @@ extern Int Apocalypse_adapt( Int adaptPercent, Bool reachedBases, Bool cleared )
 
 /// the rank a zombie of that cycle walks in, 0 Regular to 3 Heroic
 inline Int Apocalypse_cycleRank( UnsignedInt cycle ) { return cycle < 3 ? (Int)cycle : 3; }
+
+/** A wave's theme: what kinds its roll leans on (APOCALYPSE_THEME_BOOST times their weight).  Mixed leans
+	  on none and is the peak's: everything the night has. */
+enum ApocalypseTheme
+{
+	APOCALYPSE_THEME_MIXED = 0,
+	APOCALYPSE_THEME_HORDE,								///< the shambling mass: walkers, crawlers, the swollen
+	APOCALYPSE_THEME_HUNT,								///< the fast and the hidden: runners, hounds, stalkers, leeches
+	APOCALYPSE_THEME_SIEGE,								///< the wall breakers: brutes, juggernauts, rams, mortars
+	APOCALYPSE_THEME_PLAGUE,							///< the spitters and the burning: acid, bile, gas, fire, spears
+	APOCALYPSE_THEME_SKY,									///< the flyers, with twice the flyer room
+	APOCALYPSE_THEMES
+};
+
+extern const char *Apocalypse_themeName( Int theme );
+
+/// the themes (one bit each, 1 << ApocalypseTheme) a kind of that template name belongs to; 0 for none
+extern UnsignedInt Apocalypse_themesOfKind( const char *name );
+
+/** How big a wave is against the plain one, percent, by where it falls in its phase: the day builds
+	  towards dusk, the night opens with a probe, peaks two thirds in and eases before dawn, the dawn
+	  falls away.  A Blood Moon's night peaks higher.  Its gap to the next wave grows with it, so a peak
+	  is followed by a breath and a probe by pressure. */
+extern Int Apocalypse_waveShapePercent( Int phase, UnsignedInt intoPhase, UnsignedInt phaseFrames, Bool bloodMoon );
+
+/** The theme of a wave of that shape in that phase of that cycle, `roll` 0 to 999 from the logic
+	  stream: the peak is mixed, the first day a horde, else one of the phase's themes but the last one. */
+extern Int Apocalypse_waveTheme( Int phase, UnsignedInt cycle, Int shapePercent, Int lastTheme, Int roll );
+
+/** The scatter noise: two octaves of Perlin gradient noise over world units, seeded per wave, pushed
+	  out to 0 (bare ground) and 1 (a clump).  Integer hash and + - * / floor only, so every machine
+	  agrees; no table and no state. */
+extern Real Apocalypse_scatterNoise( Real x, Real y, UnsignedInt seed );
+
+/// percent of the spawn spots drawn at that noise that are kept: APOCALYPSE_SCATTER_STRAGGLE on thin ground, up to 100 in a clump
+extern Int Apocalypse_scatterKeepPercent( Real density );
 
 /// how far into the night that point of a phase is: 0 by day, rising through dusk, 1 at night, falling at dawn
 extern Real Apocalypse_nightAmount( Int phase, UnsignedInt intoPhase, UnsignedInt phaseFrames );
@@ -369,6 +445,7 @@ private:
 	Object *makeZombie( Int kind, const Coord3D &pos, UnsignedInt now, Object *made = NULL );
 	Int kindOf( const Object *obj ) const;	///< its row in the roster, -1 for none
 	Int sectorOf( Real x, Real y ) const;
+	Int weakestFront( UnsignedInt now, const char *who ) const;	///< the gate a WEAKFRONT kind comes at, -1 for the wave's own draw
 	void gatherWave( UnsignedInt now );
 	void sendWave( UnsignedInt now );
 	void watchTheFallen( UnsignedInt now );
@@ -377,6 +454,10 @@ private:
 	Bool inRing( const Coord3D *pos ) const;
 	void killInFog( UnsignedInt now );
 	void sendOn( Object *obj );
+	void sendBosses( UnsignedInt now, Bool peak );	///< the peak wave of a Blood Moon night brings its boss, once a night
+	void logScatter( UnsignedInt now );	///< the last wave's spawn spots, measured, to the log; then forgotten
+	void scaleBoss( Object *boss ) const;	///< a boss's health for the seats alive, the share it has kept
+	void watchTheKings( UnsignedInt now );	///< a Plague King's fall and rise, and the dead that fall near one rise again
 	Int seatsAlive( void ) const;
 	void advancePhase( UnsignedInt now );
 	void handLight( UnsignedInt now );
@@ -399,6 +480,8 @@ private:
 	Int m_zombiePlayer;									///< the civilian player's index
 	Int m_seats;												///< seats at the start
 	std::vector<const ThingTemplate *> m_kinds;	///< one a roster row, NULL where the data lacks it; a missing walker spawns nothing, a missing kind walks as a walker
+	Int m_colossusKind;									///< the Colossus's and the Plague King's roster rows, -1 for none
+	Int m_kingKind;
 
 	// logic state, saved and in the CRC
 	Int m_phase;												///< ApocalypsePhase
@@ -434,6 +517,10 @@ private:
 	std::vector<ApocalypseFlowField::Change> m_fieldLoadedChanges;
 	Int m_eliteRoom;										///< elites the waves out now may still send: one a living seat, reset by each wave
 	Int m_flyerRoom;										///< threat points flyers may still take of them: the flyer share of the last wave
+	UnsignedInt m_bossNight;						///< the last night (from 1) whose Blood Moon boss has come, so a load sends no second
+	UnsignedInt m_waveSeed;							///< the scatter noise's seed for the waves out now, drawn as each wave comes
+	Int m_waveTheme;										///< ApocalypseTheme of the waves out now
+	std::vector<UnsignedInt> m_kindThemes;	///< Apocalypse_themesOfKind of each roster row; from the data on every load, not saved
 
 	// what was last handed to the client, so the retint and the log run only on a change; nothing else reads them
 	Int m_lightLevel;
@@ -441,6 +528,10 @@ private:
 	Int m_fogLevel;											///< the fog ring's and the smoke's tint, last handed to the client
 	Bool m_fallLogged;
 	UnsignedInt m_straysLogged;					///< strays adopted, for the log alone; not saved
+	UnsignedInt m_kingRaisesLogged;			///< the dead a Plague King has raised, for the log alone; not saved
+	std::vector<Coord2D> m_scatterLog;	///< this wave's spawn spots, for the log alone (logScatter); not saved, never read by a decision
+	Int m_scatterFallbacks;							///< of them, those that found no ring spot and stood at a spawn waypoint; log only
+	Int m_waveShapeLogged;							///< the wave's shape, percent, for its scatter line; log only
 };
 
 extern ApocalypseDirector *TheApocalypseDirector;

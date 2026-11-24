@@ -148,10 +148,11 @@ class AIGuardInnerState : public State
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(AIGuardInnerState, "AIGuardInnerState")		
 public:
-	AIGuardInnerState( StateMachine *machine ) : State( machine, "AIGuardInner" ) 
-	{ 
+	AIGuardInnerState( StateMachine *machine ) : State( machine, "AIGuardInner" )
+	{
 		m_attackState = 0;
 		m_enterState = 0;
+		m_subStatesFromSave = FALSE;
 	}
 	virtual Bool isAttack() const { return m_attackState ? m_attackState->isAttack() : FALSE; }
 	virtual StateReturnType onEnter( void );
@@ -165,9 +166,10 @@ protected:
 private:
 	AIGuardMachine* getGuardMachine() { return (AIGuardMachine*)getMachine(); }
 
-	ExitConditions m_exitConditions; 
+	ExitConditions m_exitConditions;
 	AIAttackState *m_attackState;
 	AIEnterState *m_enterState;
+	Bool m_subStatesFromSave;		///< the load read them (xfer 2), so loadPostProcess does not build them again
 };
 EMPTY_DTOR(AIGuardInnerState)
 
@@ -200,9 +202,10 @@ class AIGuardOuterState : public State
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(AIGuardOuterState, "AIGuardOuterState")		
 public:
-	AIGuardOuterState( StateMachine *machine ) : State( machine, "AIGuardOuter" ) 
+	AIGuardOuterState( StateMachine *machine ) : State( machine, "AIGuardOuter" )
 	{
 		m_attackState = NULL;
+		m_subStatesFromSave = FALSE;
 	}
 	virtual Bool isAttack() const { return m_attackState ? m_attackState->isAttack() : FALSE; }
 	virtual StateReturnType onEnter( void );
@@ -216,8 +219,9 @@ protected:
 private:
 	AIGuardMachine* getGuardMachine() { return (AIGuardMachine*)getMachine(); }
 
-	ExitConditions m_exitConditions; 
+	ExitConditions m_exitConditions;
 	AIAttackState *m_attackState;
+	Bool m_subStatesFromSave;		///< the load read it (xfer 2), so loadPostProcess does not build it again
 };
 EMPTY_DTOR(AIGuardOuterState)
 
@@ -279,8 +283,9 @@ protected:
 	virtual void loadPostProcess();
 private:
 	AIGuardMachine* getGuardMachine() { return (AIGuardMachine*)getMachine(); }
-	ExitConditions m_exitConditions; 
+	ExitConditions m_exitConditions;
 	AIAttackState *m_attackState;
+	Bool m_subStatesFromSave;		///< the load read it (xfer 2), so loadPostProcess does not build it again
 };
 
 EMPTY_DTOR(AIGuardAttackAggressorState)

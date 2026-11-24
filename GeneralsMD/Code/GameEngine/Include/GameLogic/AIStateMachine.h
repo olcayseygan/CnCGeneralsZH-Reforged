@@ -271,6 +271,7 @@ public:
 	virtual StateReturnType onEnter();
 	virtual void onExit( StateExitType status );
 	virtual StateReturnType update();
+	virtual void xferIdle( Xfer *xfer );	///< m_adjustDestinations, which onEnter reads before it sets it
 
 protected:
 
@@ -1167,6 +1168,15 @@ public:
 	virtual void onExit( StateExitType status );
 };
 EMPTY_DTOR(AIEnterState)
+
+/** The attack state (and the enter state, for the states that have one) a guard state builds in its
+	* onEnter and runs inside its own update, saved whole: AIGuard, AIGuardRetaliate and AITNGuard, xfer
+	* version 2 of their inner, outer and attack-aggressor states.  A load used to build them again by
+	* calling onEnter, which entered the attack afresh: the approach asked the path queue for a path the
+	* saved game was not waiting for, and the chase leash started over.  The attack state is made with
+	* the arguments its onEnter gives it (attackingObject TRUE, forceAttacking FALSE). */
+void AIGuard_xferSubStates( Xfer *xfer, StateMachine *machine, AttackExitConditionsInterface *exitConditions,
+	Bool follow, AIAttackState *&attackState, AIEnterState **enterState );
 
 //-----------------------------------------------------------------------------------------------------------
 class AIExitState : public State

@@ -190,6 +190,12 @@ protected:
 	inline void setName(AsciiString n) { m_name = n; }
 #endif
 
+public:
+	/** What a state that is not the current one carries into its next turn: a member its onEnter
+		* does not set again.  The machine's xfer saves only the current state whole (StateMachine xfer
+		* 2 calls this for every other one); a state with no such member writes nothing. */
+	virtual void xferIdle( Xfer *xfer ) {}
+
 protected:
 	// snapshot interface	 - pure virtual here.
 	// Essentially all the member data gets set up on creation and shouldn't change.

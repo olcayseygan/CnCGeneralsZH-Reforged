@@ -120,7 +120,11 @@ class AITNGuardInnerState : public State
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(AITNGuardInnerState, "AITNGuardInnerState")		
 public:
-	AITNGuardInnerState( StateMachine *machine ) : State( machine, "AITNGuardInner" ) { }
+	AITNGuardInnerState( StateMachine *machine ) : State( machine, "AITNGuardInner" )
+	{
+		m_attackState = NULL;
+		m_subStatesFromSave = FALSE;
+	}
 	virtual StateReturnType onEnter( void );
 	virtual StateReturnType update( void );
 	virtual void onExit( StateExitType status );
@@ -135,6 +139,7 @@ private:
 	TunnelNetworkExitConditions m_exitConditions; 
 	Bool			m_scanForEnemy;
 	AIAttackState *m_attackState;
+	Bool m_subStatesFromSave;		///< the load read it (xfer 2), so loadPostProcess does not build it again
 };
 EMPTY_DTOR(AITNGuardInnerState)
 
@@ -165,9 +170,10 @@ class AITNGuardOuterState : public State
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(AITNGuardOuterState, "AITNGuardOuterState")		
 public:
-	AITNGuardOuterState( StateMachine *machine ) : State( machine, "AITNGuardOuter" ) 
+	AITNGuardOuterState( StateMachine *machine ) : State( machine, "AITNGuardOuter" )
 	{
 		m_attackState = NULL;
+		m_subStatesFromSave = FALSE;
 	}
 	virtual StateReturnType onEnter( void );
 	virtual StateReturnType update( void );
@@ -180,8 +186,9 @@ protected:
 private:
 	AITNGuardMachine* getGuardMachine() { return (AITNGuardMachine*)getMachine(); }
 
-	TunnelNetworkExitConditions m_exitConditions; 
+	TunnelNetworkExitConditions m_exitConditions;
 	AIAttackState *m_attackState;
+	Bool m_subStatesFromSave;		///< the load read it (xfer 2), so loadPostProcess does not build it again
 };
 EMPTY_DTOR(AITNGuardOuterState)
 
@@ -240,8 +247,9 @@ protected:
 	virtual void loadPostProcess();
 private:
 	AITNGuardMachine* getGuardMachine() { return (AITNGuardMachine*)getMachine(); }
-	TunnelNetworkExitConditions m_exitConditions; 
+	TunnelNetworkExitConditions m_exitConditions;
 	AIAttackState *m_attackState;
+	Bool m_subStatesFromSave;		///< the load read it (xfer 2), so loadPostProcess does not build it again
 };
 
 EMPTY_DTOR(AITNGuardAttackAggressorState)

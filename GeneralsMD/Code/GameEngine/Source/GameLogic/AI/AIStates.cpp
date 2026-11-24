@@ -1651,6 +1651,12 @@ void AIInternalMoveToState::xfer( Xfer *xfer )
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------
+void AIInternalMoveToState::xferIdle( Xfer *xfer )
+{
+	xfer->xferBool(&m_adjustDestinations);
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Load post process */
 // ------------------------------------------------------------------------------------------------
 void AIInternalMoveToState::loadPostProcess( void )
@@ -6562,6 +6568,31 @@ void AIAttackState::xfer( Xfer *xfer )
 	Bool										m_isForceAttacking
 	*/
 }  // end xfer
+
+// ------------------------------------------------------------------------------------------------
+void AIGuard_xferSubStates( Xfer *xfer, StateMachine *machine, AttackExitConditionsInterface *exitConditions,
+	Bool follow, AIAttackState *&attackState, AIEnterState **enterState )
+{
+	Bool hasAttack = attackState != NULL;
+	xfer->xferBool( &hasAttack );
+	if (hasAttack)
+	{
+		if (attackState == NULL)
+			attackState = newInstance(AIAttackState)( machine, follow, TRUE, FALSE, exitConditions );
+		xfer->xferSnapshot( attackState );
+	}
+	if (enterState)
+	{
+		Bool hasEnter = *enterState != NULL;
+		xfer->xferBool( &hasEnter );
+		if (hasEnter)
+		{
+			if (*enterState == NULL)
+				*enterState = newInstance(AIEnterState)( machine );
+			xfer->xferSnapshot( *enterState );
+		}
+	}
+}
 
 // ------------------------------------------------------------------------------------------------
 /** Load post process */

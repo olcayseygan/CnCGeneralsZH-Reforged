@@ -871,13 +871,14 @@ void StateMachine::crc( Xfer *xfer )
 /** Xfer Method
 	* Version Info
 	* 1: Initial version
+	* 2: what each state other than the current one keeps for its next turn (State::xferIdle)
 	*/
 // ------------------------------------------------------------------------------------------------
 void StateMachine::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -946,6 +947,26 @@ void StateMachine::xfer( Xfer *xfer )
 	xfer->xferCoord3D(&m_goalPosition);
 	xfer->xferBool(&m_locked);
 	xfer->xferBool(&m_defaultStateInited);
+
+	if (version >= 2 && !snapshotAllStates)
+	{
+		/* A state left keeps its members until it is entered again, and some are read before its
+			 onEnter sets them (AIFollowPathState's m_adjustDestinations, cleared mid-path and left so).
+			 A load used to give every state but the current one its constructor's values. */
+		Int count = (Int)m_stateMap.size();
+		xfer->xferInt(&count);
+		if (count != (Int)m_stateMap.size())
+			throw SC_INVALID_DATA;
+		for (StateList::iterator i = m_stateMap.begin(); i != m_stateMap.end(); ++i)
+		{
+			StateID id = i->first;
+			xfer->xferUnsignedInt(&id);
+			if (id != i->first)
+				throw SC_INVALID_DATA;
+			if (i->second != NULL && i->second != m_currentState)
+				i->second->xferIdle(xfer);
+		}
+	}
 }  // end xfer
 
 

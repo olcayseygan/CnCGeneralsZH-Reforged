@@ -441,12 +441,29 @@ void AIGuardInnerState::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer Method */
 // ------------------------------------------------------------------------------------------------
+static void xferGuardExitConditions( Xfer *xfer, ExitConditions &exit )
+{
+	xfer->xferInt( &exit.m_conditionsToConsider );
+	xfer->xferCoord3D( &exit.m_center );
+	xfer->xferReal( &exit.m_radiusSqr );
+	xfer->xferUnsignedInt( &exit.m_attackGiveUpFrame );
+}
+
+// 2: the attack (or enter) state and its exit conditions (AIGuard_xferSubStates)
 void AIGuardInnerState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 1;
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
+
+	if (version >= 2)
+	{
+		xferGuardExitConditions( xfer, m_exitConditions );
+		AIGuard_xferSubStates( xfer, getMachine(), &m_exitConditions, FALSE, m_attackState, &m_enterState );
+		if (xfer->getXferMode() == XFER_LOAD)
+			m_subStatesFromSave = TRUE;
+	}
 
 }  // end xfer
 
@@ -455,7 +472,11 @@ void AIGuardInnerState::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void AIGuardInnerState::loadPostProcess( void )
 {
-	onEnter();
+	// a save older than version 2 has no attack in it, so it is built again
+	if (m_subStatesFromSave)
+		m_subStatesFromSave = FALSE;
+	else
+		onEnter();
 }  // end loadPostProcess
 
 //--------------------------------------------------------------------------------------
@@ -565,12 +586,21 @@ void AIGuardOuterState::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer Method */
 // ------------------------------------------------------------------------------------------------
+// 2: the attack state and its exit conditions (AIGuard_xferSubStates)
 void AIGuardOuterState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 1;
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
+
+	if (version >= 2)
+	{
+		xferGuardExitConditions( xfer, m_exitConditions );
+		AIGuard_xferSubStates( xfer, getMachine(), &m_exitConditions, FALSE, m_attackState, NULL );
+		if (xfer->getXferMode() == XFER_LOAD)
+			m_subStatesFromSave = TRUE;
+	}
 
 }  // end xfer
 
@@ -581,8 +611,12 @@ void AIGuardOuterState::loadPostProcess( void )
 {
 	// the stray class name that used to sit here turned the next line into a declaration
 	// (AIGuardOuterState onEnter();), so this whole function was a no-op and a guarding unit
-	// never rebuilt m_attackState after a load - it just dropped the chase.
-	onEnter();
+	// never rebuilt m_attackState after a load - it just dropped the chase.  From version 2 the
+	// save holds the chase itself.
+	if (m_subStatesFromSave)
+		m_subStatesFromSave = FALSE;
+	else
+		onEnter();
 }  // end loadPostProcess
 
 //--------------------------------------------------------------------------------------
@@ -952,6 +986,7 @@ AIGuardAttackAggressorState::AIGuardAttackAggressorState( StateMachine *machine 
 	State( machine, "AIGuardAttackAggressorState" )
 {
 	m_attackState = NULL;
+	m_subStatesFromSave = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1032,18 +1067,30 @@ void AIGuardAttackAggressorState::crc( Xfer *xfer )
 }
 
 //-------------------------------------------------------------------------------------------------
+// 2: the attack state and its exit conditions (AIGuard_xferSubStates)
 void AIGuardAttackAggressorState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 1;
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
+
+	if (version >= 2)
+	{
+		xferGuardExitConditions( xfer, m_exitConditions );
+		AIGuard_xferSubStates( xfer, getMachine(), &m_exitConditions, TRUE, m_attackState, NULL );
+		if (xfer->getXferMode() == XFER_LOAD)
+			m_subStatesFromSave = TRUE;
+	}
 
 }
 
 //-------------------------------------------------------------------------------------------------
 void AIGuardAttackAggressorState::loadPostProcess()
 {
-	onEnter();
+	if (m_subStatesFromSave)
+		m_subStatesFromSave = FALSE;
+	else
+		onEnter();
 }
 

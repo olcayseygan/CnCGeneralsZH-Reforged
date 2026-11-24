@@ -137,6 +137,7 @@ public:
 	{ 
 		m_attackState = 0;
 		m_enterState = 0;
+		m_subStatesFromSave = FALSE;
 	}
 	virtual StateReturnType onEnter( void );
 	virtual StateReturnType update( void );
@@ -152,6 +153,7 @@ private:
 	GuardRetaliateExitConditions m_exitConditions; 
 	AIAttackState *m_attackState;
 	AIEnterState *m_enterState;
+	Bool m_subStatesFromSave;		///< the load read them (xfer 2), so loadPostProcess does not build them again
 };
 EMPTY_DTOR(AIGuardRetaliateInnerState)
 
@@ -182,9 +184,10 @@ class AIGuardRetaliateOuterState : public State
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(AIGuardRetaliateOuterState, "AIGuardRetaliateOuterState")		
 public:
-	AIGuardRetaliateOuterState( StateMachine *machine ) : State( machine, "AIGuardRetaliateOuter" ) 
+	AIGuardRetaliateOuterState( StateMachine *machine ) : State( machine, "AIGuardRetaliateOuter" )
 	{
 		m_attackState = NULL;
+		m_subStatesFromSave = FALSE;
 	}
 	virtual StateReturnType onEnter( void );
 	virtual StateReturnType update( void );
@@ -199,6 +202,7 @@ private:
 
 	GuardRetaliateExitConditions m_exitConditions; 
 	AIAttackState *m_attackState;
+	Bool m_subStatesFromSave;		///< the load read it (xfer 2), so loadPostProcess does not build it again
 };
 EMPTY_DTOR(AIGuardRetaliateOuterState)
 
@@ -260,6 +264,7 @@ private:
 	AIGuardRetaliateMachine* getGuardMachine() { return (AIGuardRetaliateMachine*)getMachine(); }
 	GuardRetaliateExitConditions m_exitConditions; 
 	AIAttackState *m_attackState;
+	Bool m_subStatesFromSave;		///< the load read it (xfer 2), so loadPostProcess does not build it again
 };
 
 EMPTY_DTOR(AIGuardRetaliateAttackAggressorState)

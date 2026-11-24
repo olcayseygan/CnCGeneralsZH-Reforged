@@ -319,12 +319,22 @@ void AITNGuardInnerState::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer Method */
 // ------------------------------------------------------------------------------------------------
+// 2: the attack state, its give-up frame and the one scan (AIGuard_xferSubStates)
 void AITNGuardInnerState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 1;
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
+
+	if (version >= 2)
+	{
+		xfer->xferUnsignedInt( &m_exitConditions.m_attackGiveUpFrame );
+		xfer->xferBool( &m_scanForEnemy );
+		AIGuard_xferSubStates( xfer, getMachine(), &m_exitConditions, FALSE, m_attackState, NULL );
+		if (xfer->getXferMode() == XFER_LOAD)
+			m_subStatesFromSave = TRUE;
+	}
 
 }  // end xfer
 
@@ -333,7 +343,11 @@ void AITNGuardInnerState::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void AITNGuardInnerState::loadPostProcess( void )
 {
-	onEnter();
+	// a save older than version 2 has no attack in it, so it is built again
+	if (m_subStatesFromSave)
+		m_subStatesFromSave = FALSE;
+	else
+		onEnter();
 }  // end loadPostProcess
 
 //--------------------------------------------------------------------------------------
@@ -460,12 +474,21 @@ void AITNGuardOuterState::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer Method */
 // ------------------------------------------------------------------------------------------------
+// 2: the attack state and its give-up frame (AIGuard_xferSubStates)
 void AITNGuardOuterState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 1;
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
+
+	if (version >= 2)
+	{
+		xfer->xferUnsignedInt( &m_exitConditions.m_attackGiveUpFrame );
+		AIGuard_xferSubStates( xfer, getMachine(), &m_exitConditions, FALSE, m_attackState, NULL );
+		if (xfer->getXferMode() == XFER_LOAD)
+			m_subStatesFromSave = TRUE;
+	}
 
 }  // end xfer
 
@@ -475,7 +498,10 @@ void AITNGuardOuterState::xfer( Xfer *xfer )
 void AITNGuardOuterState::loadPostProcess( void )
 {
 	// see AIGuardOuterState::loadPostProcess - the stray class name made this a no-op.
-	onEnter();
+	if (m_subStatesFromSave)
+		m_subStatesFromSave = FALSE;
+	else
+		onEnter();
 }  // end loadPostProcess
 
 //--------------------------------------------------------------------------------------
@@ -814,6 +840,7 @@ AITNGuardAttackAggressorState::AITNGuardAttackAggressorState( StateMachine *mach
 	State( machine, "AITNGuardAttackAggressorState" )
 {
 	m_attackState = NULL;
+	m_subStatesFromSave = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -894,18 +921,30 @@ void AITNGuardAttackAggressorState::crc( Xfer *xfer )
 }
 
 //-------------------------------------------------------------------------------------------------
+// 2: the attack state and its give-up frame (AIGuard_xferSubStates)
 void AITNGuardAttackAggressorState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 1;
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
+
+	if (version >= 2)
+	{
+		xfer->xferUnsignedInt( &m_exitConditions.m_attackGiveUpFrame );
+		AIGuard_xferSubStates( xfer, getMachine(), &m_exitConditions, TRUE, m_attackState, NULL );
+		if (xfer->getXferMode() == XFER_LOAD)
+			m_subStatesFromSave = TRUE;
+	}
 
 }
 
 //-------------------------------------------------------------------------------------------------
 void AITNGuardAttackAggressorState::loadPostProcess()
 {
-	onEnter();
+	if (m_subStatesFromSave)
+		m_subStatesFromSave = FALSE;
+	else
+		onEnter();
 }
 

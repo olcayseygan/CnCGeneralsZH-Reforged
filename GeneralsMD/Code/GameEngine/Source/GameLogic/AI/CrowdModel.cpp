@@ -28,6 +28,37 @@
 #include "GameLogic/CrowdModel.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Object.h"
+#include "Common/GameState.h"
+#include "Common/Xfer.h"
+
+//-------------------------------------------------------------------------------------------------
+void CrowdCorridor::xferSamples( Xfer *xfer )
+{
+	UnsignedInt count = (UnsignedInt)m_samples.size();
+	xfer->xferUnsignedInt( &count );
+	if( xfer->getXferMode() == XFER_LOAD )
+	{
+		// build() caps the samples at CROWD_MAX_SAMPLES; a count far past that is a damaged save
+		if( count > 4 * (UnsignedInt)CROWD_MAX_SAMPLES )
+			throw SC_INVALID_DATA;
+		m_samples.resize( count );
+	}
+	for( UnsignedInt i = 0; i < count; ++i )
+	{
+		Sample &s = m_samples[ i ];
+		xfer->xferCoord3D( &s.pos );
+		xfer->xferReal( &s.tan.x );
+		xfer->xferReal( &s.tan.y );
+		xfer->xferReal( &s.left );
+		xfer->xferReal( &s.right );
+		xfer->xferReal( &s.along );
+		Int layer = (Int)s.layer;
+		xfer->xferInt( &layer );
+		if( xfer->getXferMode() == XFER_LOAD && ( layer < LAYER_GROUND || layer > LAYER_LAST ) )
+			throw SC_INVALID_DATA;
+		s.layer = (PathfindLayerEnum)layer;
+	}
+}
 
 //-------------------------------------------------------------------------------------------------
 CrowdCorridor::CrowdCorridor( void )

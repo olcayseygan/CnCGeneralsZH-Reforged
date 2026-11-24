@@ -588,6 +588,7 @@ public:
 
 	Bool isInNeedOfUpdatingCells() const { return m_dirtyStatus == NEED_CELL_UPDATE_AND_COLLISION_CHECK; }
 	Bool isInNeedOfCollisionCheck() const { return m_dirtyStatus != NOT_DIRTY; }
+	PartitionData *friend_getNextDirty() const { return m_nextDirty; }	///< the dirty list's order, for a save
 
 	void invalidateShroudedStatusForPlayer(Int playerIndex);
 	void invalidateShroudedStatusForAllPlayers();
@@ -1436,6 +1437,12 @@ private:
 	PartitionData*	m_dirtyModules;
 	Bool						m_updatedSinceLastReset;	///< Used to force a return of OBJECTSHROUD_INVALID before update has been called.
 	Bool						m_cellsFromSave;					///< see isKeepingCellsFromSave
+	/* The objects waiting in m_dirtyModules when the game was saved, head first, and whether each wanted
+		 its cells updated as well (xfer 4).  Two units standing in each other mark each other dirty on
+		 every collision, so the next frame tests them again; a load that dropped the list let them stand
+		 overlapped and never tested, and the loaded game played a different match.  stopKeepingCellsFromSave
+		 lays it back, once the update that ends the load has emptied the list. */
+	std::vector< std::pair<ObjectID, Bool> > m_loadedDirty;
 
 	std::deque<SightingInfo *> m_pendingUndoShroudReveals;	///< Undos waiting for their frame, sorted by it: an unlook waits a constant and goes on the back, a timed reveal is inserted in order
 
@@ -1604,7 +1611,7 @@ public:
 			once, so every looker counted twice for a few seconds and a look the save did not have was
 			added.  GameState clears it again after that update. */
 	Bool isKeepingCellsFromSave( void ) const { return m_cellsFromSave; }
-	void stopKeepingCellsFromSave( void ) { m_cellsFromSave = FALSE; }
+	void stopKeepingCellsFromSave( void );	///< and puts the saved dirty list back (xfer 4)
 
 	/// return the number of PartitionCells in the x-dimension.
 	Int getCellCountX() { DEBUG_ASSERTCRASH(m_cellCountX != 0, ("partition not inited")); return m_cellCountX; }

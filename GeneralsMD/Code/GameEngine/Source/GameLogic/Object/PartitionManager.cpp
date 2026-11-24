@@ -2991,6 +2991,7 @@ void PartitionManager::shutdown()
 {
 	m_updatedSinceLastReset = false;
 	m_cellsFromSave = FALSE;
+	m_loadedDirty.clear();
 	ThePartitionManager->removeAllDirtyModules();
 
 	// modules still alive keep stale links, which unlinkCenter never follows while the grid is down
@@ -6254,13 +6255,14 @@ void PartitionManager::crc( Xfer *xfer )
 	* 1: Initial version
 	* 2: m_pendingUndoShroudReveals stores Unlooks waiting to happen.
 	* 3: the cells are kept as saved through the update that ends the load
+	* 4: the dirty list, which carries collisions from one frame's update into the next
 	*/
 // ------------------------------------------------------------------------------------------------
 void PartitionManager::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 3;
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -6362,7 +6364,52 @@ void PartitionManager::xfer( Xfer *xfer )
 		// Version 1 save games will just not have any SightingInfos in the queue to be undone.
 	}
 
+	if( version >= 4 )
+	{
+		// the dirty list, head first: the objects the next frame's update tests for collisions
+		m_loadedDirty.clear();
+		if( xfer->getXferMode() == XFER_SAVE )
+		{
+			for( PartitionData *d = m_dirtyModules; d; d = d->friend_getNextDirty() )
+				if( d->getObject() )
+					m_loadedDirty.push_back( std::make_pair( d->getObject()->getID(), d->isInNeedOfUpdatingCells() ) );
+		}
+		UnsignedInt count = (UnsignedInt)m_loadedDirty.size();
+		xfer->xferUnsignedInt( &count );
+		if( xfer->getXferMode() == XFER_LOAD )
+		{
+			UnsignedInt objects = 0;
+			for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+				++objects;
+			if( count > objects )
+				throw SC_INVALID_DATA;
+			m_loadedDirty.resize( count );
+		}
+		for( UnsignedInt i = 0; i < count; ++i )
+		{
+			xfer->xferObjectID( &m_loadedDirty[ i ].first );
+			xfer->xferBool( &m_loadedDirty[ i ].second );
+		}
+		if( xfer->getXferMode() != XFER_LOAD )
+			m_loadedDirty.clear();
+	}
+
 }  // end xfer
+
+// ------------------------------------------------------------------------------------------------
+void PartitionManager::stopKeepingCellsFromSave( void )
+{
+	m_cellsFromSave = FALSE;
+	// back to front, each in front, so the list comes out in the saved order
+	for( size_t i = m_loadedDirty.size(); i > 0; --i )
+	{
+		Object *obj = TheGameLogic->findObjectByID( m_loadedDirty[ i - 1 ].first );
+		PartitionData *d = obj ? obj->friend_getPartitionData() : NULL;
+		if( d )
+			d->makeDirty( m_loadedDirty[ i - 1 ].second );
+	}
+	m_loadedDirty.clear();
+}
 
 // ------------------------------------------------------------------------------------------------
 /** Load post process */

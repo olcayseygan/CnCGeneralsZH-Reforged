@@ -1296,7 +1296,7 @@ UpdateSleepTime AIUpdateInterface::update( void )
 	//DEBUG_LOG(("AIUpdateInterface frame %d: %08lx\n",TheGameLogic->getFrame(),getObject()));
 
 	USE_PERF_TIMER(AIUpdateInterface_update)
-	
+
 	m_isInUpdate = TRUE;
 
 	m_completedWaypoint = NULL; // Reset so state machine update can set it if we just completed the path.
@@ -1914,10 +1914,10 @@ Bool AIUpdateInterface::processCollision(PhysicsBehavior *physics, Object *other
 	return false;
 #endif
 
-	if (m_ignoreCollisionsUntil > TheGameLogic->getFrame()) 
+	if (m_ignoreCollisionsUntil > TheGameLogic->getFrame())
 		return FALSE;
 
-	if (m_canPathThroughUnits) 
+	if (m_canPathThroughUnits)
 		return FALSE;
 
 	AIUpdateInterface* aiOther = other->getAI();
@@ -8036,12 +8036,17 @@ void AIUpdateInterface::crc( Xfer *x )
 	* 21: the player's orders held until the exit path is done
 	* 22: the auto garrison search
 	* 23: the stuck ladder's state, the closest-path retry flag and the compact group goal
-	* 24: the crowd scan kept between looks */
+	* 24: the crowd scan kept between looks
+	* 25: the last path's frame, the blocked state, the bump cap, the goal path index, the crowd
+	*     filters and the route's band, none of them in the CRC (see the version line) */
 // ------------------------------------------------------------------------------------------------
 void AIUpdateInterface::xfer( Xfer *xfer )
 {
   // version
-  const XferVersion currentVersion = 24;
+	/* crc() runs this same function, so every byte written here is also the object's CRC, and a new
+		 field would split the CRC from every replay and pin recorded before it.  The CRC therefore sees
+		 version 24 and none of what 25 adds, which is movement state the CRC'd positions already follow. */
+  const XferVersion currentVersion = ( xfer->getXferMode() == XFER_CRC ) ? 24 : 25;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
  
@@ -8129,15 +8134,17 @@ void AIUpdateInterface::xfer( Xfer *xfer )
 	xfer->xferCoord3D(&m_requestedDestination);
 	xfer->xferCoord3D(&m_requestedDestination2);
 
-	// Not needed - we will recompute paths on load.
-	//xfer->xferUnsignedInt(&m_pathTimestamp);		
+	// EA left it out ("we will recompute paths on load"), but the repath debounce reads it: a unit
+	// ordered again within a tenth of a second of its last path waits on the retry timer, and a
+	// loaded one queued at once.  Saved from version 25 on, at the end.
+	//xfer->xferUnsignedInt(&m_pathTimestamp);
 	
 	xfer->xferObjectID(&m_ignoreObstacleID);
 	xfer->xferReal(&m_pathExtraDistance);
 	xfer->xferICoord2D(&m_pathfindGoalCell);
 	xfer->xferICoord2D(&m_pathfindCurCell);
 
-	// Not needed - jba.
+	// Not needed - jba.  (The first four are saved from version 25 on, at the end.)
 	//Int					m_blockedFrames;						///< Number of frames we've been blocked.
 	//Real				m_curMaxBlockedSpeed;				///< Max speed we can have and not run into blocking things.
 	//Bool				m_isBlocked;
@@ -8455,6 +8462,38 @@ void AIUpdateInterface::xfer( Xfer *xfer )
 		xfer->xferBool(&s.packAny);
 		xfer->xferReal(&s.packLo);
 		xfer->xferReal(&s.packHi);
+	}
+
+	if (version >= 25)
+	{
+		/* What the movement carries from one frame to the next and a load used to start afresh: the
+			 repath debounce's clock, the blocked state and its speed caps, the goal path's next index, the
+			 crowd model's filters and the band measured along the route.  The band is not measured again
+			 on load: it probes the ground beside the route as it stood when the route was handed out. */
+		xfer->xferUnsignedInt(&m_pathTimestamp);
+		xfer->xferInt(&m_blockedFrames);
+		xfer->xferReal(&m_curMaxBlockedSpeed);
+		xfer->xferBool(&m_isBlocked);
+		xfer->xferBool(&m_isBlockedAndStuck);
+		xfer->xferReal(&m_bumpSpeedLimit);
+		xfer->xferInt(&m_nextGoalPathIndex);
+		xfer->xferInt(&m_crowdFit);
+		xfer->xferInt(&m_crowdSample);
+		xfer->xferReal(&m_crowdSepSmooth);
+		xfer->xferReal(&m_crowdCap);
+		xfer->xferBool(&m_crowdCapValid);
+		xfer->xferReal(&m_crowdAim);
+		xfer->xferBool(&m_crowdAimValid);
+		Bool hasCorridor = m_corridor != NULL;
+		xfer->xferBool(&hasCorridor);
+		if (xfer->getXferMode() == XFER_LOAD)
+		{
+			if (m_corridor)
+				delete m_corridor;
+			m_corridor = hasCorridor ? new CrowdCorridor : NULL;
+		}
+		if (hasCorridor)
+			m_corridor->xferSamples(xfer);
 	}
 
 }  // end xfer

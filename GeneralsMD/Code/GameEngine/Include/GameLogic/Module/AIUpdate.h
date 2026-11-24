@@ -933,9 +933,9 @@ private:
 	Int					m_crowdSample;							///< whichsample of the band we were beside last frame (search hint; -1 = no band).
 	Int					m_crowdQueued;							///< consecutiveframes spent braking or stuck behind somebody.
 	Int					m_crowdSide;								///< whichside we prefer to pass on, +1 left, -1 right.
-	/* The rest of the crowd state is transient and deliberately not saved, for the same reason the
-		 band itself is not: a filter, a stuck count and a half-finished backing-out manoeuvre are all
-		 rebuilt within a second of the load, and a saved one restarts a jam that is over. */
+	/* The filters below were left out of the save as rebuilt within a second of a load.  Rebuilt is not
+		 the same: a loaded game drove differently for that second and never came back to the match that
+		 was saved.  They are saved from AIUpdateInterface xfer 25 on, with the band (m_corridor). */
 	Real				m_crowdSepSmooth;						///< low-passedsideways push from the neighbours.
 	Real				m_crowdCap;									///< the speed cap held from last frame: a brake lowers it at once, only a ramp raises it.
 	Bool				m_crowdCapValid;						///< FALSE until there is a held cap to ramp up from.

@@ -2870,6 +2870,19 @@ void Team::loadPostProcess( void )
 
 	// since we prepended the object member pointers, reverse that list so it's just like before
 //	reverse_TeamMemberList();
+	//
+	// The objects put themselves on the team in the order they loaded, each one in front, and that
+	// is not the order the saved game had: a script's "team stop" groups the members in list order
+	// (AIGroup::addTeam), so the loaded game made a group whose members ran the other way round and
+	// moved them differently from the next frame on.  Laid out again in the saved order, back to
+	// front, each to the front.
+	//
+	for( std::list< ObjectID >::const_reverse_iterator rit = m_xferMemberIDList.rbegin(); rit != m_xferMemberIDList.rend(); ++rit )
+	{
+		obj = TheGameLogic->findObjectByID( *rit );
+		removeFrom_TeamMemberList( obj );
+		prependTo_TeamMemberList( obj );
+	}
 
 	// we're done with the xfer list now
 	m_xferMemberIDList.clear();

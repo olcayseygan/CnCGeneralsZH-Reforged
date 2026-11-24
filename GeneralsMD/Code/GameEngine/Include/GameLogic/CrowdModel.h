@@ -42,6 +42,8 @@
 
 #include <vector>
 
+class Xfer;
+
 class Object;
 class Path;
 
@@ -164,6 +166,9 @@ public:
 
 	/// close the band on every bridge deck and on the ground either side of one
 	void sealBridges( void );
+
+	/// the samples as measured, for a save (AIUpdateInterface xfer 25): a load does not probe the ground again
+	void xferSamples( Xfer *xfer );
 
 private:
 	/// the sample at or before `along`, with the fraction of the way to the next one

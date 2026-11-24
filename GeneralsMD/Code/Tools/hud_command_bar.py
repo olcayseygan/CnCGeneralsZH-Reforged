@@ -4677,30 +4677,26 @@ def paint_guard_shields():
 
 
 # ---------------------------------------------------------------------------------------------- the observer's console
-# Concept B, "Command Console" (the owner's pick of 2026-11-24): the whole bottom bar rebuilt for the watcher in
-# the common frame's Forged Alloy.  The radar box, the deck with its selector tab and the match box are one
-# painting at 1080 (screen pixels, OBS_CON_TOP the painting's top), cut into pieces the code lays out: the boxes
-# whole, the deck a 3-slice whose middle is made uniform along x so it stretches on a wide screen.  Beside them
-# the 32 seats' tiles, the dossier's panel and well 9-slices, the masks the code draws clocks under, the lamps and
-# label glyphs it tints, and every key in four states with its glyph laid on flat.  The owner cut the console to
-# about 240 px the same day (two-line seats, a collapse key folding it to a 40 px strip, OBS_CON_STRIP).  No text
-# anywhere: the code writes every word and number.  ReforgedHudObsConsole.ini is the sheet's layout.
+# V1 "Ledger" (the owner's pick of 2026-11-24, after turning concept B's full-width console down for its empty
+# space): separate small modules, each anchored on its own and sized to its content.  The radar in the bottom left
+# corner, a board flush on the right edge whose height follows the seats (its header the match chip, the operator
+# keys and the stat selector) and a dossier card that opens left of the board only while a seat is picked.  One thin
+# Forged Alloy frame, 4 px, no rim on a side that touches the screen's edge, China's notch only on a corner facing
+# the battlefield, the wear turned down.  The code draws the rows, every word and number and the game's cameos;
+# the sheet holds the frames, the heat scale, the label icons the code tints, Turkiye's badge and the keys.  The
+# layout the code follows is the piece contract kept with the art; ReforgedHudObsConsole.ini is the sheet's.
 
-OBS_CON_SIZE = (1024, 1024)
-OBS_CON_TOP = 830
-OBS_CON_CUTS = {"RadarBox": (0, 834, 236, 1080), "DeckL": (236, 852, 276, 1080), "DeckR": (1700, 852, 1740, 1080),
-                "Tab": (604, 830, 1372, 870), "MatchBox": (1740, 842, 1920, 1080)}
-OBS_CON_DECK_C = 500                            # the deck column DeckC is averaged from: rail and floor, no fitting
-OBS_CON_RADAR_GLASS = (8, 852, 228, 1072)
-OBS_CON_STRIP = 1040                            # the collapsed strip's top; its pieces start 8 higher (the skirt)
-# The console must read on a broadcast, where nobody hovers (the owner, 2026-11-24): the stat keys carry the
-# stat's name in words the code writes, so they are blank; the camera, vision and system keys are the operator's
-# and keep the usual glyphs.  The label icons are the ones a player knows (power's bolt, rank stars, a skull for a
-# defeated seat, a crown for the leader); a seat's other icons are the game's own cameos.
-OBS_CON_KEYS = {"Cam": ((50, 28), ("Free", "Follow", "Director")), "Vis": ((50, 28), ("All", "Team", "Player")),
-                "": ((36, 30), ("Options", "Chat", "Quit", "Collapse", "Expand")), "Nav": (None, ("All", "Prev", "Next"))}
-OBS_CON_NAV = {"All": (38, 20), "Prev": (28, 20), "Next": (28, 20)}
-OBS_CON_ICONS = ("Power", "Star", "StarOff", "Crown")
+OBS_CON_SIZE = (512, 512)
+OBS_CON_FRAME = 4                               # the frame's width: shell, lip and the glass's lip
+OBS_CON_RADAR = 232                             # the radar module, its glass 6..226 inside
+OBS_CON_BOARD_W = 304
+OBS_CON_CARD = 48                               # the dossier card's master, cut as a 9-slice with 16 corners
+OBS_CON_KEY = (22, 22)
+OBS_CON_KEYS = ("Free", "Follow", "Director", "VisAll", "VisTeam", "VisPlayer", "HideRadar", "HideBoard", "HideDossier",
+                "Options", "Chat", "Quit")
+OBS_CON_KEY_STATES = ("", "H", "P", "L")        # up, hover, pressed, lit (the mode in force, read on a stream)
+OBS_CON_ICONS = ("Power", "Crown", "Star", "StarOff")
+OBS_CON_LOOK = "ObsMinimal"                     # Forged Alloy with its wear turned down
 
 
 def con_notch(x0, y0, x1, y1, c, corners="1111"):
@@ -4835,6 +4831,25 @@ def con_glyphs():
         d.polygon([(11 * k, 2 * k), (21 * k, 10 * k), (18 * k, 10 * k), (18 * k, 20 * k), (4 * k, 20 * k), (4 * k, 10 * k), (1 * k, 10 * k)], fill=255)
         d.rectangle((9 * k, 13 * k, 13 * k, 20 * k), fill=0)
 
+    def radar(d, k):                            # a framed map square with a sweep: the radar module
+        d.rectangle((2 * k, 2 * k, 20 * k, 20 * k), fill=255)
+        d.rectangle((4 * k, 4 * k, 18 * k, 18 * k), fill=0)
+        d.pieslice((4 * k, 4 * k, 18 * k, 18 * k), -90, -20, fill=255)
+        d.ellipse((9.6 * k, 9.6 * k, 12.4 * k, 12.4 * k), fill=255)
+
+    def board(d, k):                            # list lines with a colour tick each: the seat board
+        for y in (4, 10, 16):
+            d.rectangle((2 * k, y * k, 5 * k, (y + 3) * k), fill=255)
+            d.rectangle((7 * k, (y + 0.4) * k, 20 * k, (y + 2.6) * k), fill=255)
+
+    def dossier(d, k):                          # a card with a portrait: the dossier
+        d.rectangle((2 * k, 3 * k, 20 * k, 19 * k), fill=255)
+        d.rectangle((3.8 * k, 4.8 * k, 18.2 * k, 17.2 * k), fill=0)
+        d.ellipse((6 * k, 6.5 * k, 10 * k, 10.5 * k), fill=255)
+        d.pieslice((4.5 * k, 11 * k, 11.5 * k, 19 * k), 180, 360, fill=255)
+        for y in (8, 12):
+            d.rectangle((12.5 * k, y * k, 17 * k, (y + 1.6) * k), fill=255)
+
     def crown(d, k):                            # the leader of the picked stat
         d.polygon([(2 * k, 17 * k), (2 * k, 6 * k), (7 * k, 11 * k), (11 * k, 3 * k), (15 * k, 11 * k), (20 * k, 6 * k), (20 * k, 17 * k)], fill=255)
         d.rectangle((2 * k, 18.5 * k, 20 * k, 20.5 * k), fill=255)
@@ -4850,7 +4865,8 @@ def con_glyphs():
             "Free": move, "Follow": person, "Director": film, "All": eye(True), "Team": team, "Player": eye(False),
             "Options": sliders, "Chat": chat, "Quit": leave, "NavAll": grid, "Prev": prev, "Next": nxt, "Star": star,
             "StarOff": star_off, "Skull": skull, "Losses": skull, "Buildings": house, "Vision": eye(False), "Alive": person,
-            "Collapse": chevrons(False), "Expand": chevrons(True), "Crown": crown}
+            "Collapse": chevrons(False), "Expand": chevrons(True), "Crown": crown, "VisAll": eye(True), "VisTeam": team,
+            "VisPlayer": eye(False), "HideRadar": radar, "HideBoard": board, "HideDossier": dossier}
 
 
 def con_glyph(draw, size, colour):
@@ -4863,100 +4879,33 @@ def con_glyph(draw, size, colour):
     return g
 
 
-def obs_console_painting():
-    """The console's shell at 1080 in screen pixels from OBS_CON_TOP down: one outline (the radar box, the deck with
-    its selector tab and shoulders, the match box), China's step raised inside the lip, the radar's bay and glass,
-    the deck's recessed floor, the tab's key bed and the match box's wells and key beds.  Fittings only where a box
-    piece holds them, never in the deck's stretched middle."""
+def obs_frame(w, h, open_="", notch="1111", scan=True):
+    """A module's thin frame round its glass: the near-black shell, a brushed lip, the glass sunk inside.  Sides in
+    open_ ('l', 'r', 'b', 't') are the screen's edge and take no rim; notch flags the corners (tl, tr, br, bl) that get
+    China's notch, the ones facing the battlefield."""
     import hud_direct_strike_theme as T
-    pal = T.PALETTE["ForgedAlloy"]
-    p = Painter(1920, 1080 - OBS_CON_TOP)
+    T.PALETTE.setdefault(OBS_CON_LOOK, dict(T.PALETTE["ForgedAlloy"], wear=0.05, rust=0.1, grit=0.025))
+    ext = {k: (30 if k in open_ else 0) for k in "lrbt"}
+    x0, y0, x1, y1 = -ext["l"], -ext["t"], w + ext["r"], h + ext["b"]
+    g = OBS_CON_FRAME
 
-    def P(poly):
-        return [(x, y - OBS_CON_TOP) for x, y in poly]
-    polys = [con_notch(0, 844, 236, 1120, 10, "0100"), con_notch(230, 862, 1746, 1120, 8, "0000"),
-             con_notch(626, 838, 1350, 880, 7, "1100"), con_notch(612, 848, 1364, 880, 5, "1100"),
-             con_notch(1740, 852, 1960, 1120, 10, "1000")]
-    sl, m, d = p.tiers([P(q) for q in polys], (False, True, True, True), T.SHELL_TOP + 1, T.LIP_TOP, 3.4, 1.3, T.SHELL_BEVEL)
-    p.h[sl] = np.where(d > 6.0, np.maximum(p.h[sl], T.LIP_TOP + np.clip((d - 6.0) / 0.9, 0, 1) * 1.4), p.h[sl])
-    g = OBS_CON_RADAR_GLASS
-    p.recess([P(con_notch(g[0] - 5, g[1] - 5, g[2] + 5, 1100, 4, "1100"))], (False, True, False, False), 2.4, 1.6)
-    p.sink([P(plate(g[0] - 1, g[1] - 1, g[2] + 1, g[3] + 1))], 3.4, 1.1)
-    p.recess([P(con_notch(244, 870, 1732, 1110, 5, "1100"))], (False, True, False, False), 2.6, 1.6)
-    p.recess([P(con_notch(632, 841, 1344, 861, 3, "1100"))], None, 1.6, 1.0)
-    for x in (619, 1357):
-        p.rivet(x, 855 - OBS_CON_TOP, 1.5)
-    p.sink([P(con_notch(1750, 860, 1910, 890, 3))], 3.4, 1.1)
-    for y0, y1 in ((896, 924), (928, 956), (1040, 1070)):
-        p.recess([P(con_notch(1746, y0 - 3, 1914, y1 + 3, 3))], None, 1.6, 1.0)
-    p.sink([P(con_notch(1750, 960, 1910, 1032, 3))], 3.2, 1.1)
-    p.rivet(1912, 858 - OBS_CON_TOP, 1.5)
-    img = bar_finish(shade(p, pal, shadow=True, falloff=True), p, pal, scan=True, gloss=False)
-    return worn(img, p, pal, 1924)
-
-
-def obs_console_strip():
-    """The collapsed console: one plate across the screen's foot from OBS_CON_STRIP, open on three sides, from 8
-    higher for its skirt."""
-    import hud_direct_strike_theme as T
-    pal = T.PALETTE["ForgedAlloy"]
-    top = OBS_CON_STRIP - 8
-    p = Painter(1920, 1080 - top)
-    sl, m, d = p.tiers([[(x, y - top) for x, y in plate(-40, OBS_CON_STRIP, 1960, 1120)]], (False, True, True, True),
-                       T.SHELL_TOP + 1, T.LIP_TOP, 3.4, 1.3, T.SHELL_BEVEL)
-    p.h[sl] = np.where(d > 6.0, np.maximum(p.h[sl], T.LIP_TOP + np.clip((d - 6.0) / 0.9, 0, 1) * 1.4), p.h[sl])
-    img = bar_finish(shade(p, pal, shadow=True, falloff=True), p, pal, scan=False, gloss=False)
-    return worn(img, p, pal, 1040)
+    def draw(o, b):
+        o.tiers([con_notch(x0, y0, x1, y1, 5, notch)], (False,) * 4, 2.4, 4.4, 1.4, 0.9, 1.2)
+        o.sink([con_notch(x0 + (0 if "l" in open_ else g), y0 + (0 if "t" in open_ else g), x1 - (0 if "r" in open_ else g),
+                          y1 - (0 if "b" in open_ else g), 2.5, notch)], 2.6, 0.8)
+    return T.small(OBS_CON_LOOK, w, h, draw, scan=scan)
 
 
 def obs_console_pieces():
     """Every piece of ReforgedHudObsConsole by its name past ObserverCon."""
     import hud_direct_strike_theme as T
-    pal = T.PALETTE["ForgedAlloy"]
     ink = T.INK
-    out = {}
-    paint = obs_console_painting()
-    for name, (x0, y0, x1, y1) in OBS_CON_CUTS.items():
-        out[name] = paint.crop((x0, y0 - OBS_CON_TOP, x1, y1 - OBS_CON_TOP))
-    out["DeckC"] = T.uniform(paint.crop((OBS_CON_DECK_C, 852 - OBS_CON_TOP, OBS_CON_DECK_C + 8, 1080 - OBS_CON_TOP)), 1)
-    strip = obs_console_strip()
-    out["StripL"], out["StripR"] = strip.crop((0, 0, 40, strip.height)), strip.crop((1880, 0, 1920, strip.height))
-    out["StripC"] = T.uniform(strip.crop((400, 0, 408, strip.height)), 1)
-
-    def tile(w, h, lit=False, gold=False, c=4):  # a seat or team tile: shell, lip, glass well
-        def draw(o, b):
-            o.tiers([con_notch(0, 0, w, h, c)], (False,) * 4, 3.0, 5.4, 1.6, 1.1, 1.4, lip_mat=BRIGHT if lit else None)
-            o.sink([con_notch(3, 3, w - 3, h - 3, max(c - 2, 1))], 3.4, 1.0)
-            if gold:
-                o.inlay([plate(10, h - 2.4, w - 10, h - 1.2)], GOLDM, 0.2)
-        return T.small("ForgedAlloy", w, h, draw, scan=True)
-    out["Seat"], out["SeatH"], out["Team"] = tile(176, 49), tile(176, 49, True, True), tile(30, 49)
-    out["StripSeat"] = tile(36, 26, c=3)
-    a = np.asarray(tile(176, 49), np.float32)
-    a[..., :3] *= 0.55                          # a defeated seat: the whole tile sits back
-    out["SeatD"] = Image.fromarray(a.astype(np.uint8), "RGBA")
-    def rim(colour, glow, notch):               # a rim and its bloom round a seat, drawn 8 out; the code pulses it
-        img = Image.new("RGBA", (192, 65), (0, 0, 0, 0))
-        ImageDraw.Draw(img).rectangle((5, 5, 186, 59), outline=glow + (210,), width=4)
-        img = img.filter(ImageFilter.GaussianBlur(3))
-        dd = ImageDraw.Draw(img)
-        dd.rectangle((7, 7, 184, 57), outline=colour + (255,), width=3)
-        if notch:
-            dd.polygon([(7, 7), (19, 7), (7, 19)], fill=colour + (255,))
-        return img
-    out["SeatAlert"] = rim((236, 52, 38), (240, 40, 30), True)
-    out["SeatLead"] = rim(tuple(ink["gold"]), (242, 180, 40), False)
-
-    def panel(o, b):
-        o.tiers([con_notch(0, 0, 48, 48, 6)], (False,) * 4, 3.0, 5.4, 2.0, 1.1, 1.4)
-    for k, v in T.nine_cut(T.small("ForgedAlloy", 48, 48, panel), 16, 8).items():
-        out["Panel" + k] = v
-
-    def well(o, b):                             # the panel's lip run off all four sides, a glass well sunk in it
-        o.tiers([plate(-30, -30, 62, 62)], (False,) * 4, 3.0, 5.4, 2.0, 1.1, 1.4)
-        o.sink([con_notch(3, 3, 29, 29, 2)], 3.0, 1.2)
-    for k, v in T.nine_cut(T.small("ForgedAlloy", 32, 32, well), 8, 8).items():
-        out["Well" + k] = v
+    out = {"Radar": obs_frame(OBS_CON_RADAR, OBS_CON_RADAR, "lb", "0100")}
+    board = obs_frame(OBS_CON_BOARD_W, 64, "rb", "1000", scan=False)     # the board: its top, and a band that stretches
+    out["BoardT"] = board.crop((0, 0, OBS_CON_BOARD_W, 16))
+    out["BoardC"] = T.uniform(board.crop((0, 40, OBS_CON_BOARD_W, 48)), 0)
+    for k, v in T.nine_cut(obs_frame(OBS_CON_CARD, OBS_CON_CARD, scan=False), 16, 8).items():
+        out["Card" + k] = v
 
     heat = Image.new("RGBA", (192, 10), ink["keyline"] + (255,))
     stops = [(0.0, (34, 58, 88)), (0.45, (52, 96, 112)), (0.7, (170, 128, 40)), (1.0, (226, 82, 30))]
@@ -4968,20 +4917,6 @@ def obs_console_pieces():
                 break
         ImageDraw.Draw(heat).line([(i + 1, 1), (i + 1, 8)], fill=c + (255,))
     out["Heat"] = heat
-
-    big = 8
-    lamp = Image.new("RGBA", (10 * big, 10 * big), (0, 0, 0, 0))
-    ld = ImageDraw.Draw(lamp)
-    ld.ellipse((0.3 * big, 0.3 * big, 9.7 * big, 9.7 * big), fill=(8, 9, 10, 255))
-    ld.ellipse((1.6 * big, 1.6 * big, 8.4 * big, 8.4 * big), fill=(255, 255, 255, 255))
-    out["Lamp"] = lamp.resize((10, 10), Image.BOX)
-    glass = tuple(int(v) for v in np.asarray(out["Seat"], np.float32)[8:40, 60:150, :3].reshape(-1, 3).mean(0))
-    for name, s, hole in (("DialL", 64, 52),):                       # a mask: glass corners, a dark rim, a hole
-        m = Image.new("RGBA", (s * big, s * big), glass + (255,))
-        md = ImageDraw.Draw(m)
-        md.ellipse((0, 0, s * big - 1, s * big - 1), fill=(6, 7, 8, 255))
-        md.ellipse(((s - hole) / 2 * big, (s - hole) / 2 * big, (s + hole) / 2 * big - 1, (s + hole) / 2 * big - 1), fill=(0, 0, 0, 0))
-        out[name] = m.resize((s, s), Image.BOX)
 
     # Turkiye's badge: its PlayerTemplate names America's picture, so the seat takes the side's own Command Center
     # cameo (TRCameoCommandCenter_L), squared and keylined as the SSObserver pictures are
@@ -4998,21 +4933,31 @@ def obs_console_pieces():
         out["Icon" + k] = con_glyph(glyphs[k], 14, (255, 255, 255))
     out["IconSkull"] = con_glyph(glyphs["Skull"], 18, (255, 255, 255))
 
-    colour = {"": ink["paper"], "H": ink["gold"], "P": ink["on_lit"], "I": ink["dim"]}
-    for group, (size, kinds) in OBS_CON_KEYS.items():
-        for kind in kinds:
-            w, h = size or OBS_CON_NAV[kind]
-            draw = glyphs["NavAll" if group == "Nav" and kind == "All" else kind]
-            for st in ("", "H", "P", "I"):
-                img = T.key("ForgedAlloy", w, h, st)
-                s = int(min(w, h) * (0.72 if h <= 20 else 0.64))
-                g = con_glyph(draw, s, colour[st])
-                off = 0.6 if st == "P" else 0
-                img.alpha_composite(g, (int(round(w / 2 - s / 2 + off)), int(round(h / 2 - s / 2 + off))))
-                out[group + kind + st] = img
-    for st in ("", "H", "P", "I"):              # blank keys: the code writes the stat's name and the team's numeral
-        out["StatKey" + st] = T.key("ForgedAlloy", 66, 20, st)
-        out["TeamKey" + st] = T.key("ForgedAlloy", 26, 46, st)
+    def glyph_key(w, h, draw, state, size):
+        """The theme's key with a flat glyph.  Pressed: the lit face sunk and dimmed, a pale glyph pushed down a
+        pixel.  Lit: the full gold face and a dark glyph, the mode in force, read from across a stream."""
+        if state == "P":
+            img = T.key("ForgedAlloy", w, h, "P")
+            a = np.asarray(img, np.float32)
+            a[..., :3] *= 0.62
+            img, colour, off = Image.fromarray(a.astype(np.uint8), "RGBA"), ink["paper"], 1
+        elif state == "L":                      # the bezel goes gold with the face: at 22 px the face alone is a sliver
+            a = np.asarray(T.key("ForgedAlloy", w, h, "P"), np.float32)
+            lum = a[..., :3].mean(2, keepdims=True) / 160.0
+            a[..., :3] = a[..., :3] * 0.35 + np.clip(lum * np.asarray(ink["gold"], np.float32), 0, 255) * 0.65
+            img, colour, off = Image.fromarray(a.astype(np.uint8), "RGBA"), ink["on_lit"], 0
+        else:
+            img = T.key("ForgedAlloy", w, h, state)
+            colour, off = {"": ink["paper"], "H": ink["gold"], "I": ink["dim"]}[state], 0
+        g = con_glyph(draw, size, colour)
+        img.alpha_composite(g, ((w - size) // 2 + off, (h - size) // 2 + off))
+        return img
+    for kind in OBS_CON_KEYS:
+        for st in OBS_CON_KEY_STATES:
+            out["Key" + kind + st] = glyph_key(*OBS_CON_KEY, glyphs[kind], st, 15)
+    for kind in ("Prev", "Next"):
+        for st in ("", "H", "P", "I"):
+            out["Stat" + kind + st] = glyph_key(18, 18, glyphs[kind], st, 12)
     return out
 
 
@@ -5030,24 +4975,28 @@ def paint_observer_console():
 
 
 def check_observer_console(pieces):
-    """The deck's middle stretches clean, the three box pieces meet at one shade, the seats' glass is dark and even
-    enough for the heat tint, the dials' holes are open and the radar's glass is sunk where the code letterboxes."""
-    for name in ("DeckC", "StripC"):
-        c = np.asarray(pieces[name], np.int32)
-        assert (c == c[:, :1]).all(), "ObserverCon%s is not uniform along x" % name
-    for left, right in (("RadarBox", "DeckL"), ("DeckR", "MatchBox")):
-        a = np.asarray(pieces[left], np.float32)[-150:, -1, :3]
-        b = np.asarray(pieces[right], np.float32)[-150:, 0, :3]
-        assert np.abs(a - b).mean() < 24, "%s and %s do not meet (%.1f)" % (left, right, np.abs(a - b).mean())
-    s = np.asarray(pieces["Seat"], np.float32)[7:43, 12:165, :3].mean(2)
-    assert s.mean() < 40 and s.std() < 14, "the seat's glass is %.1f +- %.1f, too light for the heat tint" % (s.mean(), s.std())
-    a = np.asarray(pieces["DialL"])[..., 3]
-    assert a[32, 32] == 0 and a[0, 0] == 255, "ObserverConDialL's hole or corners are wrong"
-    g, top = OBS_CON_RADAR_GLASS, OBS_CON_CUTS["RadarBox"][1]
-    r = np.asarray(pieces["RadarBox"], np.float32)[g[1] - top + 20:g[3] - top - 20, g[0] + 20:g[2] - 20, :3]
-    assert r.mean() < 40, "the radar box's glass is not sunk where the code draws the map"
-    assert all(img.size == (w, h) for img, (w, h) in ((pieces["Seat"], (176, 49)), (pieces["StripSeat"], (36, 26)))), \
-        "the seats' sizes left PIECES.md's"
+    """The board's band stretches clean and meets its top piece, the card's middles are uniform, the board's glass is
+    dark enough for the rows' heat tint, the sides on the screen's edge have no rim (the glass runs to the radar's
+    left and bottom and the board's right), the radar's glass is where the code draws the map, and a lit key is far
+    brighter than an idle one."""
+    c = np.asarray(pieces["BoardC"], np.int32)
+    assert (c == c[:1]).all(), "ObserverConBoardC is not uniform along y"
+    assert np.abs(np.asarray(pieces["BoardT"], np.float32)[-1] - c[0]).mean() < 24, "ObserverConBoardT does not meet the band"
+    for k in ("T", "B", "L", "R", "C"):
+        a = np.asarray(pieces["Card" + k], np.int32)
+        assert (a == a[:1]).all() or (a == a[:, :1]).all(), "ObserverConCard%s is not uniform along its stretch" % k
+    glass = c[0, 40:260, :3].mean()
+    assert glass < 40, "the board's glass is %.1f, too light for the heat tint" % glass
+    r = np.asarray(pieces["Radar"], np.float32)
+    assert r[100:130, 0, :3].mean() < 40 and r[-1, 100:130, :3].mean() < 40, "the radar has a rim on the screen's edge"
+    assert c[0, -1, :3].mean() < 40, "the board has a rim on the screen's right edge"
+    assert r[30:200, 30:200, :3].mean() < 40, "the radar's glass is not where the code draws the map"
+    def gold(name):                             # the share of the key that reads gold: red well over blue
+        a = np.asarray(pieces[name], np.float32)
+        return float(((a[..., 0] - a[..., 2]) > 50).mean())
+    for kind in OBS_CON_KEYS:
+        up, lit = gold("Key" + kind), gold("Key" + kind + "L")
+        assert lit > up + 0.25, "ObserverConKey%sL does not stand out from its up state (%.2f vs %.2f gold)" % (kind, lit, up)
 
 
 def main():

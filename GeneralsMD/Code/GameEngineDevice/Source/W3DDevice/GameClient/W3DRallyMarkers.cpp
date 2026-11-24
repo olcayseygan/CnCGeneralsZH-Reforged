@@ -19,12 +19,17 @@
 
 #include "Lib/Clock.h"
 #include "WWMath/matrix3d.h"
+#include "Common/AudioEventRTS.h"		// BodyModule.h holds these by value and leaves them to PreRTS.h,
+#include "GameClient/RadiusDecal.h"		// which no device file includes (W3DGroundMarkers does the same)
+#include "GameLogic/Damage.h"
+#include "GameLogic/Module/BodyModule.h"	// BODY_RUBBLE: a fallen bridge takes no rail
 #include "Common/Debug.h"
 #include "Common/FileSystem.h"
 #include "Common/GlobalData.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "GameClient/CinemaDirector.h"
+#include "GameClient/ControlBar.h"
 #include "GameClient/Image.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/Mouse.h"
@@ -271,7 +276,8 @@ struct RallyGrid
 
 	Bool valid( void ) const { return na > 1 && nb > 1; }
 
-	Bool fill( Real x0, Real y0, Real dirX, Real dirY, Real sa, Int countA, Real sb, Int countB, Bool water )
+	/// with `bridges` a healthy bridge's deck where one spans the point, so a rail runs over it, not under it
+	Bool fill( Real x0, Real y0, Real dirX, Real dirY, Real sa, Int countA, Real sb, Int countB, Bool water, Bool bridges = FALSE )
 	{
 		ox = x0;  oy = y0;  ax = dirX;  ay = dirY;
 		stepA = MAX( 0.5f, sa );  stepB = MAX( 0.5f, sb );
@@ -291,7 +297,19 @@ struct RallyGrid
 					wet = wet || on;
 				}
 				else
-					h[ j * na + i ] = groundHeight( x, y );
+				{
+					Real z = groundHeight( x, y );
+					if( bridges )
+					{
+						// the deck itself: getHighestLayerForDestination answers only for a point already on top
+						Coord3D at;
+						at.set( x, y, z );
+						Bridge *bridge = TheTerrainLogic->findBridgeAt( &at );
+						if( bridge != NULL && bridge->peekBridgeInfo()->curDamageState != BODY_RUBBLE )
+							z = MAX( z, bridge->getBridgeHeight( &at, NULL ) );
+					}
+					h[ j * na + i ] = z;
+				}
 			}
 		return wet;
 	}
@@ -372,10 +390,12 @@ void fillAlong( Patch &p, Real ax, Real ay, Real bx, Real by, Real half )
 	const Real pad = half;
 	const Real x0 = ax - ux * pad + uy * half;		// minus the left
 	const Real y0 = ay - uy * pad - ux * half;
-	const Int na = (Int)ceilf( ( len + 2.0f * pad ) / SAMPLE_STEP ) + 1;
+	// a grid holds 400 samples a side: a rail across the map spaces them out rather than run off the grid
+	const Real step = MAX( SAMPLE_STEP, ( len + 2.0f * pad ) / 398.0f );
+	const Int na = (Int)ceilf( ( len + 2.0f * pad ) / step ) + 1;
 	const Int nb = (Int)ceilf( 2.0f * half / SAMPLE_STEP ) + 1;
-	p.ground.fill( x0, y0, ux, uy, SAMPLE_STEP, na, SAMPLE_STEP, nb, FALSE );
-	p.wet = p.water.fill( x0, y0, ux, uy, 2.0f * SAMPLE_STEP, na / 2 + 2, 2.0f * SAMPLE_STEP, nb / 2 + 2, TRUE );
+	p.ground.fill( x0, y0, ux, uy, step, na, SAMPLE_STEP, nb, FALSE, TRUE );
+	p.wet = p.water.fill( x0, y0, ux, uy, 2.0f * step, na / 2 + 2, 2.0f * SAMPLE_STEP, nb / 2 + 2, TRUE );
 	if( !p.wet )
 		p.water = RallyGrid();
 }
@@ -693,6 +713,14 @@ struct DrawCtx
 };
 DrawCtx s_ctx;
 
+/** The looping animations' clock: the wall clock wrapped every 1000 s, so it stays small and positive.
+	* Clock_Milliseconds counts from boot, and taken whole into a float it stepped at days of uptime and went
+	* negative past 24.8 days, where pow( sin, 0.7 ) made NaN.  The wrap costs one jump every 16 minutes. */
+Real animationSeconds( void )
+{
+	return (Real)( s_ctx.now % 1000000u ) / 1000.0f;
+}
+
 Vector3 groundPoint( Real x, Real y, Bool &onWater )
 {
 	Real z = s_ctx.flatZ;
@@ -858,7 +886,7 @@ void polyStrip( Int piece, const Real *px, const Real *py, Int n, Bool closed, R
 		if( len < 1.0e-3f )
 			continue;
 		const Real light = lightOf( dy / len, -dx / len );
-		const Int m = MAX( 1, MIN( 200, (Int)ceilf( len / GROUND_STEP ) ) );
+		const Int m = MAX( 1, MIN( 1000, (Int)ceilf( len / GROUND_STEP ) ) );		// 10000 units: past any map's diagonal
 		for( Int j = 0; j < m; ++j )
 		{
 			const Real f0 = (Real)j / (Real)m, f1 = (Real)( j + 1 ) / (Real)m;
@@ -1005,10 +1033,10 @@ void drawRail( const Rail &r )
 	polyStrip( P_BAND_INLAY, px, py, n, FALSE, RAIL * k, inlay );
 
 	// chevrons marching to the point, faded in and out over 10k at either end of what shows
-	const Real t = secondsSince( s_ctx.now, 0u );
+	const Real t = animationSeconds();
 	const Real tl = r.clickMs ? secondsSince( s_ctx.now, r.clickMs ) : 10.0f;
 	const Real pitch = CHEV_PITCH * k;
-	const Real travelled = ( CHEV_SPEED * fmodf( t, 1000.0f ) + CHEV_RUSH * MIN( 0.6f, MAX( 0.0f, tl ) ) / 0.6f ) * k;
+	const Real travelled = ( CHEV_SPEED * t + CHEV_RUSH * MIN( 0.6f, MAX( 0.0f, tl ) ) / 0.6f ) * k;
 	const Real fadeLen = 10.0f * k;
 	for( Real s = fmodf( travelled, pitch ); s < visible; s += pitch )
 	{
@@ -1180,11 +1208,11 @@ void drawBeacon( const Beacon &b )
 	s_ctx.patches = b.deck ? NULL : &b.patch;
 	s_ctx.patchCount = b.deck ? 0 : 1;
 	s_ctx.flatZ = b.z;
-	const Real t = secondsSince( s_ctx.now, 0u );
+	const Real t = animationSeconds();
 	const Real tl = b.clickMs ? secondsSince( s_ctx.now, b.clickMs ) : -1.0f;
-	drawFrame( b, fmodf( t, 1000.0f ), tl < 0.0f || tl > 2.0f ? -1.0f : tl );
+	drawFrame( b, t, tl < 0.0f || tl > 2.0f ? -1.0f : tl );
 	if( b.flag )
-		drawFlag( b, fmodf( t, 1000.0f ), tl < 0.0f || tl > 2.0f ? -1.0f : tl );
+		drawFlag( b, t, tl < 0.0f || tl > 2.0f ? -1.0f : tl );
 }
 
 void drawPass( Bool waterPass )
@@ -1322,6 +1350,14 @@ void W3DRallyMarkers_addPlacement( const Vector3 &door, const Vector3 &natural, 
 
 void W3DRallyMarkers_endTake( void )
 {
+	// Classic switched on or off in a match: the control bar looks again, so EA's flag comes back or goes
+	// with the selection as it stands (ControlBar::showRallyPoint asks InGameUI::rallyMarkersOn)
+	static Int lastOn = -1;
+	const Int on = InGameUI::rallyMarkersOn() ? 1 : 0;
+	if( lastOn >= 0 && on != lastOn && TheControlBar != NULL )
+		TheControlBar->markUIDirty();
+	lastOn = on;
+
 	s_rails.clear();
 	s_beacons.clear();
 	s_wet = FALSE;
@@ -1348,9 +1384,22 @@ void W3DRallyMarkers_endTake( void )
 		const Handed &h = s_handed[ i ];
 		if( h.placement )
 		{
-			// the rail from where the door will be to the natural rally point, and a quiet frame there
-			makeRail( h.x, h.y, h.tint, now - 1000u, 0, 0.6f, 0.6f * RAIL_STOP * s_k, FALSE );
-			makeBeacon( h.x.back(), h.y.back(), h.z.back(), h.finish, h.tint, 1, 0, 0.6f, 0.6f, FALSE, FALSE );
+			// the rail out of where the door will be, and a quiet frame past the natural rally point along
+			// the way out: at the point itself the ghost's own model stood over most of it
+			const Real scale = 0.8f;
+			Real dx = h.x.back() - h.x[ 0 ], dy = h.y.back() - h.y[ 0 ];
+			const Real len = (Real)sqrt( dx * dx + dy * dy );
+			if( len > 1.0f )
+			{
+				dx /= len;
+				dy /= len;
+			}
+			const Real push = ( FRAME_REACH + 6.0f ) * s_k * scale;
+			std::vector<Real> px( h.x ), py( h.y );
+			px.back() += dx * push;
+			py.back() += dy * push;
+			makeRail( px, py, h.tint, now - 1000u, 0, 0.6f, scale * RAIL_STOP * s_k, FALSE );
+			makeBeacon( px.back(), py.back(), h.z.back(), h.finish, h.tint, 1, 0, 0.6f, scale, FALSE, FALSE );
 			continue;
 		}
 		Seen *seen = findSeen( h.id );

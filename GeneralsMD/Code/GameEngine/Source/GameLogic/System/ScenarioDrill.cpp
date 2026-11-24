@@ -62,10 +62,16 @@
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Weapon.h"
 #include "GameClient/ReachOverlay.h"
+#include "Common/Energy.h"
+#include "Common/ProductionPrerequisite.h"
+#include "GameLogic/Module/DozerAIUpdate.h"
+#include "GameLogic/Module/SupplyTruckAIUpdate.h"
+#include "GameLogic/VictoryConditions.h"
 
 #include <algorithm>
 #include <map>
 #include <set>
+#include <string>
 #include <vector>
 
 // ------------------------------------------------------------------------------------------------
@@ -2963,4 +2969,571 @@ const char *ScenarioDrill_report( void )
 					 (Int)theScenarioActions.size(), theScenarioActionsRun,
 					 theScenarioActionsFailed, theScenarioUnitsSpawned );
 	return theScenarioReport;
+}
+
+// ------------------------------------------------------------------------------------------------
+// the control socket's own produce, construct, objects and buildspot
+// ------------------------------------------------------------------------------------------------
+//
+// A script learning a build order needs to know why an order did not take, and the file's verbs only
+// log it.  These are the socket's versions: the same checks the dispatcher and the factory make, each
+// refusal named in the reply.  The file's verbs above are left exactly as they were.
+//
+
+/** A builder that can take an order now: alive, finished, with a dozer's AI.  NULL for anything else. */
+static DozerAIInterface *controlDozerOf( Object *obj )
+{
+	if (obj == NULL || obj->isEffectivelyDead() || obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION )
+			|| obj->testStatus( OBJECT_STATUS_SOLD ))
+		return NULL;
+	AIUpdateInterface *ai = obj->getAI();
+	return ai ? ai->getDozerAIInterface() : NULL;
+}
+
+/** GameLogicDispatch's considerBuilder calls a builder idle when no dozer task is pending and it is
+	  not hauling supplies; the same test here, so the builder named is one the order takes. */
+static Bool controlBuilderIsIdle( Object *obj, DozerAIInterface *dozer )
+{
+	const SupplyTruckAIInterface *supply = obj->getAI()->getSupplyTruckAIInterface();
+	return !dozer->isAnyTaskPending() && !(supply && supply->isCurrentlyFerryingSupplies());
+}
+
+static const char *controlBuilderTask( Object *obj, DozerAIInterface *dozer )
+{
+	static const char *const TASK_NAMES[ DOZER_NUM_TASKS ] = { "build", "repair", "fortify" };
+	const DozerTask current = dozer->getCurrentTask();
+	if (current >= DOZER_TASK_FIRST && current < DOZER_NUM_TASKS)
+		return TASK_NAMES[ current ];
+	for (Int task = DOZER_TASK_FIRST; task < DOZER_NUM_TASKS; ++task)
+	{
+		if (dozer->getTaskTarget( (DozerTask)task ) != INVALID_ID)
+			return TASK_NAMES[ task ];
+	}
+	const SupplyTruckAIInterface *supply = obj->getAI()->getSupplyTruckAIInterface();
+	if (supply && supply->isCurrentlyFerryingSupplies())
+		return "supplies";
+	return obj->getAI()->isIdle() ? "idle" : "busy";
+}
+
+/** The legality construct asks of the ground: the dispatcher's (terrain and overlap, terrain dropped
+	  for the build anywhere cheat), and for a human's builder what DozerAIUpdate::construct adds, a
+	  clear path and revealed shroud. */
+static UnsignedInt controlBuildFlags( Player *player )
+{
+	UnsignedInt flags = BuildAssistant::NO_OBJECT_OVERLAP;
+	if (!player->hasCheat( CHEAT_BUILD_ANYWHERE ))
+		flags |= BuildAssistant::TERRAIN_RESTRICTIONS;
+	if (player->getPlayerType() == PLAYER_HUMAN)
+		flags |= BuildAssistant::CLEAR_PATH | BuildAssistant::SHROUD_REVEALED;
+	return flags;
+}
+
+static const char *controlLegalName( LegalBuildCode code )
+{
+	switch (code)
+	{
+		case LBC_OK:												return "ok";
+		case LBC_RESTRICTED_TERRAIN:				return "restricted terrain or off the map";
+		case LBC_NOT_FLAT_ENOUGH:						return "ground not flat enough";
+		case LBC_OBJECTS_IN_THE_WAY:				return "objects in the way";
+		case LBC_NO_CLEAR_PATH:							return "no path for the builder";
+		case LBC_SHROUD:										return "under the shroud";
+		case LBC_TOO_CLOSE_TO_SUPPLIES:			return "too close to supplies";
+		case LBC_TOO_CLOSE_TO_ENEMY:				return "too close to an enemy structure";
+		case LBC_TOO_MANY_DERRICK_DEFENSES:	return "too many defences at this derrick";
+		default:														return "generic failure";
+	}
+}
+
+/** Why the maker (a factory or a builder) cannot make it, in words, for a CanMakeType that is not OK. */
+static AsciiString controlRefusal( Object *maker, const ThingTemplate *made, CanMakeType code )
+{
+	Player *player = maker->getControllingPlayer();
+	const ThingTemplate *button = TheBuildAssistant->findBuildButtonTemplate( maker, made );
+	const ThingTemplate *priced = button ? button : made;
+	const char *makerName = maker->getTemplate()->getName().str();
+	AsciiString why;
+	switch (code)
+	{
+		case CANMAKE_NO_PREREQ:
+		{
+			if (button == NULL)
+			{
+				why.format( "%s is not on %s's build list", made->getName().str(), makerName );
+				break;
+			}
+			AsciiString missing;
+			for (Int i = 0; i < button->getPrereqCount(); ++i)
+			{
+				const AsciiString names = button->getNthPrereq( i )->getMissingNames( player );
+				if (names.isEmpty())
+					continue;
+				if (missing.isNotEmpty())
+					missing.concat( " " );
+				missing.concat( names );
+			}
+			// the rest of Player::canBuild and offersPlayerBuildButton, each named
+			const char *buttonName = button->getName().str();
+			if (missing.isNotEmpty())
+				why.format( "missing prerequisites: %s", missing.str() );
+			else if (!player->allowedToBuild( button ))
+				why.format( "the player may not build %s now (a script holds it)", buttonName );
+			else if (button->getBuildable() == BSTATUS_NO
+							 || (button->getBuildable() == BSTATUS_ONLY_BY_AI && player->getPlayerType() != PLAYER_COMPUTER))
+				why.format( "%s is not buildable by this player", buttonName );
+			else if (!player->canBuildMoreOfType( button ))
+				why.format( "the player already has as many %s as it may", buttonName );
+			else if (!TheBuildAssistant->offersPlayerBuildButton( maker, made ))
+				why.format( "%s's button for %s is locked: script only, or it waits for an upgrade", makerName, buttonName );
+			else
+				why.format( "%s refused %s", makerName, buttonName );
+			break;
+		}
+		case CANMAKE_NO_MONEY:
+			why.format( "not enough money: %s costs %d, the player has %u", priced->getName().str(),
+									priced->calcCostToBuild( player ), player->getMoney()->countMoney() );
+			break;
+		case CANMAKE_FACTORY_IS_DISABLED:
+			why.format( "%s %d is %s", makerName, maker->getID(),
+									maker->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) ? "still under construction"
+									: (maker->testStatus( OBJECT_STATUS_SOLD ) ? "being sold" : "disabled") );
+			break;
+		case CANMAKE_QUEUE_FULL:
+			why.format( "%s %d has a full production queue", makerName, maker->getID() );
+			break;
+		case CANMAKE_PARKING_PLACES_FULL:
+			why.format( "%s %d has no free parking place", makerName, maker->getID() );
+			break;
+		case CANMAKE_MAXED_OUT_FOR_PLAYER:
+			why.format( "the player already has as many %s as it may", priced->getName().str() );
+			break;
+		default:
+			why.format( "refused (%d)", (Int)code );
+			break;
+	}
+	return why;
+}
+
+/** Of the player's builders, the one that could put this up from its own bar (considerBuilder's
+	  test), nearest the point: the idle one when idleOnly, else any.  Counts every builder and every
+	  capable one, and lists what the busy capable ones are doing as "id:task". */
+static Object *controlPickBuilder( Player *player, const ThingTemplate *build, const Coord3D &at, Bool idleOnly,
+																	 Int *builders, Int *capable, AsciiString *busy, Object **anyBuilder )
+{
+	Object *best = NULL;
+	Real bestDistSqr = 0.0f;
+	*builders = *capable = 0;
+	*anyBuilder = NULL;
+	for (Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject())
+	{
+		if (obj->getControllingPlayer() != player)
+			continue;
+		DozerAIInterface *dozer = controlDozerOf( obj );
+		if (dozer == NULL)
+			continue;
+		++*builders;
+		if (*anyBuilder == NULL)
+			*anyBuilder = obj;
+		if (!TheBuildAssistant->isPossibleToMakeUnit( obj, build ) || !TheBuildAssistant->offersPlayerBuildButton( obj, build ))
+			continue;
+		++*capable;
+		const Bool idle = controlBuilderIsIdle( obj, dozer );
+		if (!idle && busy)
+		{
+			AsciiString piece;
+			piece.format( "%s%d:%s", busy->isEmpty() ? "" : " ", obj->getID(), controlBuilderTask( obj, dozer ) );
+			busy->concat( piece );
+		}
+		if (idleOnly && !idle)
+			continue;
+		const Real dx = obj->getPosition()->x - at.x;
+		const Real dy = obj->getPosition()->y - at.y;
+		const Real distSqr = dx * dx + dy * dy;
+		if (best == NULL || distSqr < bestDistSqr)
+		{
+			best = obj;
+			bestDistSqr = distSqr;
+		}
+	}
+	return best;
+}
+
+static void controlError( AsciiString *members, const AsciiString &why )
+{
+	// concatenated, not formatted: format throws past its buffer, and a list of busy builders has no bound
+	members->set( "\"error\":\"" );
+	members->concat( why );
+	members->concat( "\"" );
+}
+
+/** produce: the building is a template name, the one of them with the shortest queue that takes the
+	  unit getting each, or an object id from objects. */
+static Bool controlProduce( const ScenarioAction &action, Player *player, AsciiString *members )
+{
+	AsciiString why;
+	const ThingTemplate *made = TheThingFactory->findTemplate( action.targetSelector, FALSE );
+	if (made == NULL)
+	{
+		why.format( "no template named %s", action.targetSelector.str() );
+		controlError( members, why );
+		return FALSE;
+	}
+
+	const char *selector = action.selector.str();
+	const Bool byId = *selector && strspn( selector, "0123456789" ) == strlen( selector );
+	const ObjectID wantedId = byId ? (ObjectID)atoi( selector ) : INVALID_ID;
+	std::vector<Object *> factories;
+	Bool sawMatch = FALSE;
+	for (Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject())
+	{
+		if (obj->getControllingPlayer() != player || obj->isEffectivelyDead())
+			continue;
+		if (byId ? obj->getID() != wantedId : !selectorMatches( action.selector, obj ))
+			continue;
+		sawMatch = TRUE;
+		if (obj->getProductionUpdateInterface() != NULL)
+			factories.push_back( obj );
+	}
+	if (factories.empty())
+	{
+		if (sawMatch)
+			why.format( "%s produces nothing", selector );
+		else
+			why.format( "slot %d has no %s", action.slot, selector );
+		controlError( members, why );
+		return FALSE;
+	}
+
+	Int queued = 0;
+	Object *lastFactory = NULL;
+	for (Int each = 0; each < action.count; ++each)
+	{
+		Object *best = NULL;
+		UnsignedInt bestCount = 0;
+		Object *refuser = NULL;
+		CanMakeType refusal = CANMAKE_OK;
+		for (size_t i = 0; i < factories.size(); ++i)
+		{
+			const CanMakeType code = TheBuildAssistant->canMakeUnit( factories[ i ], made );
+			if (code != CANMAKE_OK)
+			{
+				// an unfinished factory says less than a finished one that refused
+				if (refuser == NULL || refusal == CANMAKE_FACTORY_IS_DISABLED)
+				{
+					refuser = factories[ i ];
+					refusal = code;
+				}
+				continue;
+			}
+			const UnsignedInt inQueue = factories[ i ]->getProductionUpdateInterface()->getProductionCount();
+			if (best == NULL || inQueue < bestCount)
+			{
+				best = factories[ i ];
+				bestCount = inQueue;
+			}
+		}
+		if (best == NULL)
+		{
+			why = controlRefusal( refuser, made, refusal );
+			break;
+		}
+		ProductionUpdateInterface *queue = best->getProductionUpdateInterface();
+		if (!queue->queueCreateUnit( made, queue->requestUniqueUnitID() ))
+		{
+			why.format( "%s %d has no free exit door", best->getTemplate()->getName().str(), best->getID() );
+			break;
+		}
+		++queued;
+		lastFactory = best;
+	}
+
+	DEBUG_LOG(("CONTROL: frame %d produce slot %d '%s' queued %d of %d '%s'%s%s\n", TheGameLogic->getFrame(), action.slot,
+						 selector, queued, action.count, action.targetSelector.str(), why.isEmpty() ? "" : ": ", why.str()));
+	if (queued == 0)
+	{
+		controlError( members, why );
+		return FALSE;
+	}
+	members->format( "\"queued\":%d,\"producer\":%d", queued, lastFactory->getID() );
+	if (why.isNotEmpty())
+	{
+		AsciiString refused;
+		refused.format( ",\"refused\":\"%s\"", why.str() );
+		members->concat( refused );
+	}
+	return TRUE;
+}
+
+/** construct: an idle builder only, named to the dispatcher by the ObjectID it takes after the fixed
+	  arguments, and the message handed straight to it inside this frame for the player in that slot,
+	  so the outcome is known when the call returns.  Like every other socket world command it is not
+	  in the recorded command stream. */
+static Bool controlConstruct( const ScenarioAction &action, Player *player, const Coord3D &site, AsciiString *members )
+{
+	AsciiString why;
+	const ThingTemplate *build = TheThingFactory->findTemplate( action.selector, FALSE );
+	if (build == NULL)
+	{
+		why.format( "no template named %s", action.selector.str() );
+		controlError( members, why );
+		return FALSE;
+	}
+
+	Int builders = 0, capable = 0;
+	AsciiString busy;
+	Object *anyBuilder = NULL;
+	Object *idle = controlPickBuilder( player, build, site, TRUE, &builders, &capable, &busy, &anyBuilder );
+	if (builders == 0)
+	{
+		why.format( "slot %d has no builder", action.slot );
+		controlError( members, why );
+		return FALSE;
+	}
+	if (capable == 0)
+	{
+		why = controlRefusal( anyBuilder, build, CANMAKE_NO_PREREQ );
+		controlError( members, why );
+		return FALSE;
+	}
+
+	Object *checker = idle;
+	if (checker == NULL)
+		checker = controlPickBuilder( player, build, site, FALSE, &builders, &capable, NULL, &anyBuilder );
+	const CanMakeType canMake = TheBuildAssistant->canMakeUnit( checker, build );
+	if (canMake != CANMAKE_OK)
+	{
+		controlError( members, controlRefusal( checker, build, canMake ) );
+		return FALSE;
+	}
+
+	const LegalBuildCode legal = TheBuildAssistant->isLocationLegalToBuild( &site, build, 0.0f, controlBuildFlags( player ), checker, NULL );
+	TheTerrainVisual->removeAllBibs();	// the check's red feedback, client only
+	if (legal != LBC_OK)
+	{
+		why.format( "illegal location (%.0f,%.0f): %s", site.x, site.y, controlLegalName( legal ) );
+		controlError( members, why );
+		return FALSE;
+	}
+
+	if (idle == NULL)
+	{
+		why.set( "every builder is busy: " );
+		why.concat( busy );
+		controlError( members, why );
+		return FALSE;
+	}
+
+	const UnsignedInt moneyBefore = player->getMoney()->countMoney();
+	GameMessage *msg = newInstance( GameMessage )( GameMessage::MSG_DOZER_CONSTRUCT );
+	msg->friend_setPlayerIndex( player->getPlayerIndex() );
+	msg->appendIntegerArgument( build->getTemplateID() );
+	msg->appendLocationArgument( site );
+	msg->appendRealArgument( 0.0f );
+	msg->appendObjectIDArgument( idle->getID() );
+	TheGameLogic->logicMessageDispatcher( msg, NULL );
+	msg->deleteInstance();
+	const UnsignedInt moneyAfter = player->getMoney()->countMoney();
+
+	DozerAIInterface *dozer = controlDozerOf( idle );
+	const ObjectID siteId = dozer ? dozer->getTaskTarget( DOZER_TASK_BUILD ) : INVALID_ID;
+	Object *placed = TheGameLogic->findObjectByID( siteId );
+	DEBUG_LOG(("CONTROL: frame %d construct slot %d '%s' at (%.0f,%.0f) by %d: %s %d\n", TheGameLogic->getFrame(), action.slot,
+						 action.selector.str(), site.x, site.y, idle->getID(), placed ? "site" : "dropped", siteId));
+	if (placed == NULL && moneyAfter == moneyBefore)
+	{
+		controlError( members, AsciiString( "the dispatcher dropped the order (units in the way would not move)" ) );
+		return FALSE;
+	}
+	members->format( "\"id\":%d,\"builder\":%d,\"template\":\"%s\",\"cost\":%u", placed ? placed->getID() : INVALID_ID,
+									 idle->getID(), placed ? placed->getTemplate()->getName().str() : build->getName().str(), moneyBefore - moneyAfter );
+	return TRUE;
+}
+
+Bool ScenarioDrill_controlOrder( const ScenarioAction &action, AsciiString *members )
+{
+	Player *player = findPlayerForSlot( action.slot );
+	if (player == NULL)
+	{
+		AsciiString why;
+		why.format( "nobody is sitting in slot %d", action.slot );
+		controlError( members, why );
+		return FALSE;
+	}
+	if (action.action == SCENARIO_ACTION_PRODUCE)
+		return controlProduce( action, player, members );
+
+	Coord3D site;
+	if (!resolveScenarioPosition( action, &site ))
+	{
+		controlError( members, AsciiString( "this map has no such start position" ) );
+		return FALSE;
+	}
+	return controlConstruct( action, player, site, members );
+}
+
+Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, AsciiString *members )
+{
+	Player *player = findPlayerForSlot( slot );
+	if (player == NULL && slot != SCENARIO_CIVILIAN_SLOT)
+		return FALSE;
+
+	std::string out;
+	char piece[ 512 ];
+	if (player != NULL && slot != SCENARIO_CIVILIAN_SLOT)
+	{
+		snprintf( piece, sizeof( piece ), "\"money\":%u,\"power\":{\"produced\":%d,\"consumed\":%d},\"defeated\":%s,\"objects\":[",
+							player->getMoney()->countMoney(), player->getEnergy()->getProduction(), player->getEnergy()->getConsumption(),
+							TheVictoryConditions->hasSinglePlayerBeenDefeated( player ) ? "true" : "false" );
+	}
+	else
+		snprintf( piece, sizeof( piece ), "\"money\":0,\"power\":{\"produced\":0,\"consumed\":0},\"defeated\":false,\"objects\":[" );
+	out += piece;
+
+	Int count = 0;
+	Bool truncated = FALSE;
+	for (Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject())
+	{
+		if (obj->isEffectivelyDead() || obj->getTemplate() == NULL)
+			continue;
+		const Player *owner = obj->getControllingPlayer();
+		if (slot == SCENARIO_CIVILIAN_SLOT)
+		{
+			// the map's own: the civilians' and the neutral player's structures (supply docks, oil, tech)
+			if (owner == NULL || !obj->isKindOf( KINDOF_STRUCTURE ) || ThePlayerList->getSlotIndex( owner->getPlayerIndex() ) >= 0)
+				continue;
+		}
+		else if (owner != player)
+			continue;
+
+		if (count >= maxObjects)
+		{
+			truncated = TRUE;
+			continue;
+		}
+
+		const Bool structure = obj->isKindOf( KINDOF_STRUCTURE );
+		AIUpdateInterface *ai = obj->getAI();
+		DozerAIInterface *dozer = (!structure && ai) ? ai->getDozerAIInterface() : NULL;
+		const Bool building = obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION );
+		const Real built = building ? obj->getConstructionPercent() : 100.0f;
+		snprintf( piece, sizeof( piece ), "%s{\"template\":\"%s\",\"id\":%d,\"x\":%.0f,\"y\":%.0f,\"kind\":\"%s\",\"underConstruction\":%s,\"built\":%.0f,\"queue\":[",
+							count ? "," : "", obj->getTemplate()->getName().str(), obj->getID(), obj->getPosition()->x, obj->getPosition()->y,
+							structure ? "structure" : (dozer ? "builder" : "unit"), building ? "true" : "false", built < 0.0f ? 100.0f : built );
+		out += piece;
+
+		Real headPercent = 0.0f;
+		const ProductionUpdateInterface *queue = obj->getProductionUpdateInterface();
+		Int entries = 0;
+		for (const ProductionEntry *entry = queue ? queue->firstProduction() : NULL; entry; entry = queue->nextProduction( entry ))
+		{
+			const char *name = entry->getProductionObject() ? entry->getProductionObject()->getName().str()
+											 : (entry->getProductionUpgrade() ? entry->getProductionUpgrade()->getUpgradeName().str() : "");
+			if (entries == 0)
+				headPercent = entry->getPercentComplete();
+			snprintf( piece, sizeof( piece ), "%s\"%s\"", entries ? "," : "", name );
+			out += piece;
+			++entries;
+		}
+		snprintf( piece, sizeof( piece ), "],\"headPercent\":%.0f", headPercent );
+		out += piece;
+		if (dozer)
+		{
+			snprintf( piece, sizeof( piece ), ",\"idle\":%s,\"task\":\"%s\"",
+								controlDozerOf( obj ) && controlBuilderIsIdle( obj, dozer ) ? "true" : "false", controlBuilderTask( obj, dozer ) );
+			out += piece;
+		}
+		out += "}";
+		++count;
+	}
+
+	snprintf( piece, sizeof( piece ), "],\"count\":%d,\"truncated\":%s", count, truncated ? "true" : "false" );
+	out += piece;
+	members->set( out.c_str() );
+	return TRUE;
+}
+
+Bool ScenarioDrill_findBuildSpot( Int slot, const AsciiString &templateName, Real x, Real y, Real radius,
+																	Coord3D *found, AsciiString *why )
+{
+	Player *player = findPlayerForSlot( slot );
+	if (player == NULL || slot == SCENARIO_CIVILIAN_SLOT)
+	{
+		why->format( "nobody who builds is sitting in slot %d", slot );
+		return FALSE;
+	}
+	const ThingTemplate *build = TheThingFactory->findTemplate( templateName, FALSE );
+	if (build == NULL)
+	{
+		why->format( "no template named %s", templateName.str() );
+		return FALSE;
+	}
+
+	// the builder construct would send, so the overlap and path tests answer for the same one; a human's
+	// shroud test needs one, so without a builder there is nothing to ask
+	Coord3D centre;
+	centre.x = x;
+	centre.y = y;
+	centre.z = TheTerrainLogic->getGroundHeight( x, y );
+	Int builders = 0, capable = 0;
+	Object *anyBuilder = NULL;
+	Object *builder = controlPickBuilder( player, build, centre, TRUE, &builders, &capable, NULL, &anyBuilder );
+	if (builder == NULL)
+		builder = controlPickBuilder( player, build, centre, FALSE, &builders, &capable, NULL, &anyBuilder );
+	if (builder == NULL)
+	{
+		if (builders == 0)
+			why->format( "slot %d has no builder", slot );
+		else
+			*why = controlRefusal( anyBuilder, build, CANMAKE_NO_PREREQ );
+		return FALSE;
+	}
+
+	/* Every point of a grid over the circle, nearest first.  A pathfind cell apart, coarser on a wide
+		 circle so a search stays near 12000 checks; ties broken on y then x so the answer is the same
+		 every time it is asked. */
+	// ponytail: a flat sorted grid; a ring walk that stops at the first legal ring if this ever shows up in a profile
+	const Real step = radius > 600.0f ? radius / 60.0f : PATHFIND_CELL_SIZE_F;
+	const Int reach = (Int)(radius / step);
+	struct Candidate { Real distSqr; Int dy; Int dx; };
+	std::vector<Candidate> candidates;
+	for (Int dy = -reach; dy <= reach; ++dy)
+	{
+		for (Int dx = -reach; dx <= reach; ++dx)
+		{
+			const Real distSqr = (dx * step) * (dx * step) + (dy * step) * (dy * step);
+			if (distSqr > radius * radius)
+				continue;
+			Candidate c = { distSqr, dy, dx };
+			candidates.push_back( c );
+		}
+	}
+	struct CandidateIsNearer
+	{
+		bool operator()( const Candidate &a, const Candidate &b ) const
+		{
+			if (a.distSqr != b.distSqr)
+				return a.distSqr < b.distSqr;
+			return a.dy != b.dy ? a.dy < b.dy : a.dx < b.dx;
+		}
+	};
+	std::sort( candidates.begin(), candidates.end(), CandidateIsNearer() );
+
+	const UnsignedInt flags = controlBuildFlags( player );
+	Bool ok = FALSE;
+	for (size_t i = 0; i < candidates.size() && !ok; ++i)
+	{
+		Coord3D pos;
+		pos.x = x + candidates[ i ].dx * step;
+		pos.y = y + candidates[ i ].dy * step;
+		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+		if (TheBuildAssistant->isLocationLegalToBuild( &pos, build, 0.0f, flags, builder, NULL ) == LBC_OK)
+		{
+			*found = pos;
+			ok = TRUE;
+		}
+	}
+	TheTerrainVisual->removeAllBibs();	// the checks' red feedback, client only
+	if (!ok)
+		why->format( "no legal spot for %s within %.0f of (%.0f,%.0f)", build->getName().str(), radius, x, y );
+	return ok;
 }

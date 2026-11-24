@@ -52,6 +52,47 @@
 // ControlServer_poll and carried out by ControlServer_runCommands on the next logic frame.  That is
 // also what keeps the game deterministic while something is driving it.
 //
+// The verbs a reinforcement learner drives an offline skirmish with (a build order against the AI):
+//
+//   step <frames>          lockstep.  The first step holds the match: from then on the logic runs
+//                          only the frames a step asks for (1 to 300), as fast as the machine goes,
+//                          and the reply {"ok":true,"cmd":"step","frame":F} comes once they have run.
+//                          One step at a time.  Refused in a network match, a replay and a guarded
+//                          match; let go by the end of the match.  Under -headless nothing is drawn.
+//   step release           back to the wall clock: {"ok":true,"cmd":"step","released":true,"frame":F}
+//   objects <slot>         read now: {"ok":true,"cmd":"objects","frame":F,"slot":S,"money":M,
+//                          "power":{"produced":P,"consumed":C},"defeated":false,"objects":[{"template",
+//                          "id","x","y","kind":"structure|builder|unit","underConstruction","built",
+//                          "queue":[names],"headPercent"}, a builder also "idle" and "task":
+//                          "idle|build|repair|fortify|supplies|busy"],"count":N,"truncated":false}.
+//                          Slot -1 is the map's own structures (civilian and neutral).
+//   produce <slot> <building> <unit> <count>
+//                          the building a template (each unit to the one of them with the shortest
+//                          queue that takes it) or an object id.  {"ok":true,"cmd":"produce",
+//                          "queued":N,"producer":id[,"refused":"why the rest did not"]}, or ok false
+//                          with "error": the cost and the money, the missing prerequisites by name,
+//                          a full queue, an unfinished factory, the unit limit.
+//   construct <slot> <template> <x> <y>
+//                          an idle builder only, the one nearest the site, named to the dispatcher by
+//                          the ObjectID MSG_DOZER_CONSTRUCT takes, which is handed the message inside
+//                          the frame for that seat.  {"ok":true,"cmd":"construct","id":site,"builder":
+//                          id,"template":"...","cost":C}, or "error": money, prerequisites, the ground
+//                          and why ("illegal location (x,y): objects in the way"), or "every builder
+//                          is busy: id:task ...".  The -scenario file's construct is unchanged.
+//   buildspot <slot> <template> <x> <y> <radius>
+//                          read now: the legal spot nearest (x,y) within radius by construct's own
+//                          test, {"ok":true,"cmd":"buildspot","x":..,"y":..}, or ok false.
+//
+// produce and construct reply after the logic frame that ran them, not where they arrive.  In
+// lockstep that frame is the first of the next step, so their replies come inside that step, ahead
+// of the step's own, in the order sent: a client sends its orders, then step, and reads until the
+// reply whose "cmd" is "step".  Like spawn, they act outside the recorded command stream, so a match
+// driven this way does not replay; a -scenario file and every replay play exactly as before.
+//
+// A new match without a new process: leave back to the shell (it lets lockstep go, since its message
+// needs a logic frame to land), wait for status to say inGame false, then skirmish.
+// -side 0 FactionAmerica -side 1 <faction> -aidiff easy on the command line set the seats it makes.
+//
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma once
@@ -67,6 +108,13 @@ extern void ControlServer_poll( void );
 /** Carry out the world commands that arrived since the last logic frame.  Called from
 	  GameLogic::update, which is the only place it is safe to make an object. */
 extern void ControlServer_runCommands( void );
+
+/** Whether a step holds the match in lockstep: GameEngine then runs logic frames only while
+	  ControlServer_stepFramesOwed says some are owed, back to back. */
+extern Bool ControlServer_isLockstep( void );
+
+/** How many logic frames the running step still owes, 0 between steps. */
+extern Int ControlServer_stepFramesOwed( void );
 
 /** Close the socket.  Called when the engine shuts down. */
 extern void ControlServer_shutdown( void );

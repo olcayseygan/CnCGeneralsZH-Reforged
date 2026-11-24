@@ -3352,6 +3352,16 @@ void GameEngine::planLogicPass( LogicPassPlan &plan )
 		mayCatchUp = (m_maxFPS > 0);
 	}
 
+	/* -control's step holds an offline match in lockstep: no clock, the frames a step asks for run back
+		 to back and nothing runs between steps.  Never a network game; step refuses one. */
+	if (ControlServer_isLockstep() && !networkPaced)
+	{
+		s_logicAccumMs = 0.0f;
+		fastMode = TRUE;
+		logicFrameDue = ControlServer_stepFramesOwed() > 0;
+		mayCatchUp = TRUE;
+	}
+
 	if (!logicMayRun)
 	{
 		// A paused game, or one waiting on the network, is not falling behind - it is stopped.
@@ -3378,8 +3388,9 @@ void GameEngine::planLogicPass( LogicPassPlan &plan )
 	 draw would move the frame the picture is numbered by while it is drawn. */
 Bool GameEngine::planOverlappedTick( void )
 {
+	// a -control step runs its frames back to back after the draw, in planLogicPass's lockstep branch
 	if (!TheGameLogic->isInGame() || TheGameLogic->isInShellGame()
-			|| TheGameLogic->isLoadingMap() || isVideoPass())
+			|| TheGameLogic->isLoadingMap() || isVideoPass() || ControlServer_isLockstep())
 		return FALSE;
 #ifdef DEBUG_CRC
 	// VERIFY_CRC's two CRCs stand round the client update, and a tick beside its draw would be inside them
@@ -3582,6 +3593,18 @@ void GameEngine::update( void )
 				// -maxframes' frame ends the burst, its CRC logged as it finishes (noteFrameLimit)
 				if (noteFrameLimit() && frameLimitOvershoot() == 0)
 					break;
+
+				/* -control's step: its frames back to back, no picture between them, until it has had them
+					 all.  A long one hands the pass back now and then, so the window keeps answering Windows. */
+				if (ControlServer_isLockstep() && !networkPaced)
+				{
+					const Real LOCKSTEP_BURST_MS = 250.0f;
+					tCatchupNow = Clock_Ticks();
+					if (ControlServer_stepFramesOwed() <= 0 || !TheGameLogic->isInGame()
+							|| engineElapsedMS( tCatchupStart, tCatchupNow ) > LOCKSTEP_BURST_MS)
+						break;
+					continue;
+				}
 
 				if (!mayCatchUp)
 					break;

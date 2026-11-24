@@ -172,6 +172,23 @@ extern void ScenarioDrill_tick( void );
 	  from inside a logic frame, and only while a match is running. */
 extern Bool ScenarioDrill_execute( const ScenarioAction &action );
 
+/** -control's produce and construct, the socket's own versions of those two lines: the same work, but
+	  every refusal named (money with the cost, the missing prerequisites by name, why the ground is
+	  illegal, which builders are busy at what), and construct sends only an idle builder, named to the
+	  dispatcher.  Writes the reply's JSON members, without braces, to members ("error" on a refusal) and
+	  returns whether the order took.  The file's verbs are untouched.  Only from inside a logic frame. */
+extern Bool ScenarioDrill_controlOrder( const ScenarioAction &action, AsciiString *members );
+
+/** -control's objects: the seat's money, power and every living object (template, id, position, kind,
+	  construction, production queue; a builder's idle and task) as JSON members, at most maxObjects of
+	  them.  Slot -1 is the map's own structures.  Read-only; FALSE when nobody sits there. */
+extern Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, AsciiString *members );
+
+/** -control's buildspot: the legal spot for the template nearest (x, y) within radius, by the same test
+	  construct makes, with the builder construct would send.  Read-only. */
+extern Bool ScenarioDrill_findBuildSpot( Int slot, const AsciiString &templateName, Real x, Real y, Real radius,
+																				 Coord3D *found, AsciiString *why );
+
 /** One line for the end-of-run summary: how much of the file actually happened. */
 extern const char *ScenarioDrill_report( void );
 

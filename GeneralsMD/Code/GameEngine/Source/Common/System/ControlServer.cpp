@@ -291,8 +291,23 @@ static Bool theWinsockStarted = FALSE;
 #endif
 static Bool theHandshakeDone = FALSE;
 static std::vector<char> theIncoming;
-static std::vector<AsciiString> thePendingCommands;
+
+/// a world command waiting for the next logic frame; produce and construct reply only once they ran
+struct PendingCommand
+{
+	AsciiString line;
+	Bool replyWhenRun;
+};
+static std::vector<PendingCommand> thePendingCommands;
 static Bool theQuitRequested = FALSE;
+
+/// step: the logic runs only the frames a step asks for (GameEngine asks ControlServer_stepFramesOwed)
+static Bool theLockstep = FALSE;
+static Bool theStepPending = FALSE;			///< a step is running and owes its reply
+static UnsignedInt theStepTarget = 0;		///< the frame that step ends on
+static const Int STEP_MAX_FRAMES = 300;
+/// objects lists at most this many, then says truncated
+static const Int OBJECTS_MAX = 600;
 static UnsignedInt theSaveAtFrame = 0;		///< saveat: the first poll at or past this frame saves, 0 for none
 static AsciiString theSaveAtName;
 
@@ -619,6 +634,70 @@ static void replyError( const char *why )
 	char reply[ 512 ];
 	sprintf( reply, "{\"ok\":false,\"error\":\"%s\"}", why );
 	sendText( reply );
+}
+
+/** {"ok":..,"cmd":"<verb>",<members>}, of any length. */
+static void replyMembers( Bool ok, const char *verb, const char *members )
+{
+	AsciiString reply( ok ? "{\"ok\":true,\"cmd\":\"" : "{\"ok\":false,\"cmd\":\"" );
+	reply.concat( verb );
+	reply.concat( "\"" );
+	if (members && *members)
+	{
+		reply.concat( "," );
+		reply.concat( members );
+	}
+	reply.concat( "}" );
+	sendText( reply.str() );
+}
+
+static Bool isMatchRunning( void )
+{
+	return TheGameLogic && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && !TheGameLogic->isLoadingMap();
+}
+
+Bool ControlServer_isLockstep( void )
+{
+	return theLockstep;
+}
+
+Int ControlServer_stepFramesOwed( void )
+{
+	if (!theLockstep || !theStepPending || TheGameLogic == NULL)
+		return 0;
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	return theStepTarget > frame ? (Int)(theStepTarget - frame) : 0;
+}
+
+/** Once a pass: answer the step whose frames have run, and let go of lockstep, and of the produce and
+	  construct orders still waiting, when the match they were for has gone. */
+static void updateLockstep( void )
+{
+	if (!isMatchRunning() && !(TheGameLogic && TheGameLogic->isLoadingMap()))
+	{
+		for (std::vector<PendingCommand>::const_iterator it = thePendingCommands.begin(); it != thePendingCommands.end(); ++it)
+		{
+			if (it->replyWhenRun)
+				replyMembers( FALSE, strncmp( it->line.str(), "produce", 7 ) == 0 ? "produce" : "construct",
+											"\"error\":\"the match ended before the order ran\"" );
+		}
+		thePendingCommands.clear();
+		if (theLockstep)
+			DEBUG_LOG(("CONTROL: the match ended, lockstep released\n"));
+		theLockstep = FALSE;
+		if (theStepPending)
+			replyMembers( FALSE, "step", "\"error\":\"the match ended during the step; lockstep released\"" );
+		theStepPending = FALSE;
+		return;
+	}
+
+	if (theStepPending && TheGameLogic->getFrame() >= theStepTarget)
+	{
+		theStepPending = FALSE;
+		char members[ 64 ];
+		sprintf( members, "\"frame\":%u", TheGameLogic->getFrame() );
+		replyMembers( TRUE, "step", members );
+	}
 }
 
 /** Share of the map, in percent, the player can see right now, from a grid of samples.  Fogged
@@ -1022,6 +1101,8 @@ static void handleCommand( const AsciiString &command )
 			surrender->appendBooleanArgument( TRUE );
 		}
 		TheMessageStream->appendMessage( GameMessage::MSG_CLEAR_GAME_DATA );
+		// the message needs a logic frame to land, and lockstep would hold the match until the next step
+		theLockstep = FALSE;
 		replyOk( "\"leaving\":true" );
 		return;
 	}
@@ -1208,6 +1289,117 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
+	/* step <frames> | step release
+		 Lockstep: from the first step the logic runs only the frames a step asks for, as fast as the
+		 machine goes, and the reply comes once they have run.  An offline skirmish only: a network game
+		 has its own clock, and a replay or a guarded match is not this machine's to hold. */
+	if (command == "step" || strncmp( command.str(), "step ", 5 ) == 0)
+	{
+		AsciiString arg( command.str() + 4 );
+		arg.trim();
+		if (arg == "release")
+		{
+			const Bool was = theLockstep;
+			theLockstep = FALSE;
+			if (theStepPending)
+				replyMembers( FALSE, "step", "\"error\":\"released before its frames ran\"" );
+			theStepPending = FALSE;
+			char members[ 64 ];
+			sprintf( members, "\"released\":%s,\"frame\":%d", was ? "true" : "false", TheGameLogic ? (Int)TheGameLogic->getFrame() : 0 );
+			replyMembers( TRUE, "step", members );
+			return;
+		}
+		const Int frames = atoi( arg.str() );
+		if (arg.isEmpty() || strspn( arg.str(), "0123456789" ) != (size_t)arg.getLength() || frames < 1 || frames > STEP_MAX_FRAMES)
+		{
+			replyMembers( FALSE, "step", "\"error\":\"step wants a frame count from 1 to 300, or release\"" );
+			return;
+		}
+		if (!isMatchRunning())
+		{
+			replyMembers( FALSE, "step", "\"error\":\"no match is running\"" );
+			return;
+		}
+		if (TheNetwork != NULL || TheGameLogic->isInMultiplayerGame() || TheGameLogic->isInReplayGame() || isGuardedMatch())
+		{
+			replyMembers( FALSE, "step", "\"error\":\"step only holds an offline skirmish: not a network match, a replay or a guarded match\"" );
+			return;
+		}
+		if (theStepPending)
+		{
+			replyMembers( FALSE, "step", "\"error\":\"a step is already running\"" );
+			return;
+		}
+		if (!theLockstep)
+			DEBUG_LOG(("CONTROL: lockstep from frame %u\n", TheGameLogic->getFrame()));
+		theLockstep = TRUE;
+		theStepPending = TRUE;
+		theStepTarget = TheGameLogic->getFrame() + (UnsignedInt)frames;
+		return;		// replied by updateLockstep once the frames have run
+	}
+
+	/* objects <slot>: what a seat owns, read now.  In a guarded match only the local player's seat,
+		 since the rest is behind the fog. */
+	if (strncmp( command.str(), "objects ", 8 ) == 0 || strncmp( command.str(), "buildspot ", 10 ) == 0)
+	{
+		const Bool isObjects = command.str()[ 0 ] == 'o';
+		const char *verb = isObjects ? "objects" : "buildspot";
+		Int slot = 0;
+		char templateName[ 256 ] = "";
+		Real x = 0.0f, y = 0.0f, radius = 0.0f;
+		const Bool parsed = isObjects ? sscanf( command.str() + 8, "%d", &slot ) == 1
+			: sscanf( command.str() + 10, "%d %255s %f %f %f", &slot, templateName, &x, &y, &radius ) == 5;
+		if (!parsed)
+		{
+			replyMembers( FALSE, verb, isObjects ? "\"error\":\"objects wants <slot>\"" : "\"error\":\"buildspot wants <slot> <template> <x> <y> <radius>\"" );
+			return;
+		}
+		if (!isMatchRunning())
+		{
+			replyMembers( FALSE, verb, "\"error\":\"no match is running\"" );
+			return;
+		}
+		const Player *local = ThePlayerList->getLocalPlayer();
+		if (isGuardedMatch() && (local == NULL || ThePlayerList->getSlotIndex( local->getPlayerIndex() ) != slot))
+		{
+			replyMembers( FALSE, verb, "\"error\":\"a guarded match shows only the local player's seat\"" );
+			return;
+		}
+
+		AsciiString members;
+		if (isObjects)
+		{
+			AsciiString list;
+			if (!ScenarioDrill_describeObjects( slot, OBJECTS_MAX, &list ))
+			{
+				replyMembers( FALSE, verb, "\"error\":\"nobody is sitting in that slot\"" );
+				return;
+			}
+			members.format( "\"frame\":%u,\"slot\":%d,", TheGameLogic->getFrame(), slot );
+			members.concat( list );
+			replyMembers( TRUE, verb, members.str() );
+			return;
+		}
+		if (radius < 0.0f || radius > 2000.0f)
+		{
+			replyMembers( FALSE, verb, "\"error\":\"radius runs from 0 to 2000\"" );
+			return;
+		}
+		Coord3D found;
+		AsciiString why;
+		if (!ScenarioDrill_findBuildSpot( slot, AsciiString( templateName ), x, y, radius, &found, &why ))
+		{
+			members.set( "\"error\":\"" );
+			members.concat( why );
+			members.concat( "\"" );
+			replyMembers( FALSE, verb, members.str() );
+			return;
+		}
+		members.format( "\"x\":%.1f,\"y\":%.1f", found.x, found.y );
+		replyMembers( TRUE, verb, members.str() );
+		return;
+	}
+
 	/* skirmish <players> <seed> <map>
 		 The map is whatever is left on the line, spaces and all, because every shipped map has a
 		 space in its name and quoting rules would be one more thing to get wrong at the far end. */
@@ -1283,8 +1475,14 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
-	thePendingCommands.push_back( command );
-	replyOk( "\"queued\":true" );
+	/* produce and construct answer with what happened, once the logic frame has run them
+		 (ScenarioDrill_controlOrder); in lockstep that is inside the next step, ahead of its own reply. */
+	PendingCommand pending;
+	pending.line = command;
+	pending.replyWhenRun = action.action == SCENARIO_ACTION_PRODUCE || action.action == SCENARIO_ACTION_CONSTRUCT;
+	thePendingCommands.push_back( pending );
+	if (!pending.replyWhenRun)
+		replyOk( "\"queued\":true" );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1303,6 +1501,8 @@ void ControlServer_poll( void )
 		DEBUG_LOG(("CONTROL: saveat %s %s at frame %u\n", theSaveAtName.str(), saved ? "saved" : "FAILED", TheGameLogic->getFrame()));
 		theSaveAtFrame = 0;
 	}
+
+	updateLockstep();
 
 	if (theListenSocket == INVALID_SOCKET)
 	{
@@ -1401,17 +1601,24 @@ void ControlServer_runCommands( void )
 	if (theQuitRequested && TheGameEngine)
 		TheGameEngine->setQuitting( TRUE );
 
-	for( std::vector<AsciiString>::iterator it = thePendingCommands.begin();
+	for( std::vector<PendingCommand>::iterator it = thePendingCommands.begin();
 			 it != thePendingCommands.end(); ++it )
 	{
 		AsciiString asScenarioLine;
 		asScenarioLine.set( "0 " );
-		asScenarioLine.concat( *it );
+		asScenarioLine.concat( it->line );
 
 		ScenarioAction action;
 		if (ScenarioDrill_parseLine( asScenarioLine.str(), &action ) != SCENARIO_PARSE_OK)
 			continue;
 
+		if (it->replyWhenRun)
+		{
+			AsciiString members;
+			const Bool took = ScenarioDrill_controlOrder( action, &members );
+			replyMembers( took, action.action == SCENARIO_ACTION_PRODUCE ? "produce" : "construct", members.str() );
+			continue;
+		}
 		ScenarioDrill_execute( action );
 	}
 

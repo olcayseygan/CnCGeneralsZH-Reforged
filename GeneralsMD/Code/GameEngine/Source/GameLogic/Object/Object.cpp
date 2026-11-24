@@ -4816,6 +4816,9 @@ void Object::xfer( Xfer *xfer )
 
 	// geometry info
 	xfer->xferSnapshot( &m_geometryInfo );
+	// newObject registered this one with its template's geometry; a hole wears its building's
+	if( xfer->getXferMode() == XFER_LOAD && m_partitionData )
+		m_partitionData->resizeCoisForGeometry();
 
 	// sighting info, last look - must be saved cause we save PartitionCell::m_shroudLevel
 	xfer->xferSnapshot( m_partitionLastLook );
@@ -4831,9 +4834,6 @@ void Object::xfer( Xfer *xfer )
 
 	// vision spied by mask
 	xfer->xferUser( &m_visionSpiedMask, sizeof( PlayerMaskType ) );
-	// newObject registered this one with its template's geometry; a hole wears its building's
-	if( xfer->getXferMode() == XFER_LOAD && m_partitionData )
-		m_partitionData->resizeCoisForGeometry();
 
 	if( version >= 10 )
 	{
@@ -5134,6 +5134,8 @@ void Object::xfer( Xfer *xfer )
 
 		// do the weaponSet itself after all the weapon-related stuff, just in case
 		xfer->xferSnapshot(&m_weaponSet);
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_weaponSet.friend_takeOwnTemplateSet( getTemplate() );
 
 		m_specialPowerBits.xfer( xfer );
 
@@ -5149,8 +5151,6 @@ void Object::xfer( Xfer *xfer )
 	else
 		m_isReceivingDifficultyBonus = FALSE;
 
-		if( xfer->getXferMode() == XFER_LOAD )
-			m_weaponSet.friend_takeOwnTemplateSet( getTemplate() );
 	// The partition's threat and value maps are not saved, they are the sum of what every object last
 	// put on them.  So each object carries its own part and puts it back, and the load no longer
 	// has every object take its old part off and add a new one where it stands (PartitionManager::xfer).

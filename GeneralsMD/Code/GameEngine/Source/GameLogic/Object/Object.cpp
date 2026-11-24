@@ -4983,6 +4983,10 @@ void Object::xfer( Xfer *xfer )
 	}
 	// Layer object is pathing on.
 	xfer->xferUser(&m_layer, sizeof(m_layer));
+	// the height above ground is measured from the layer (setLayer drops it too): a read earlier in
+	// this load cached it over the ground layer, and a tank on a bridge came back flying
+	if (xfer->getXferMode() == XFER_LOAD)
+		invalidateAltitudeCache();
 
 	// Layer of current path goal.
 	xfer->xferUser(&m_destinationLayer, sizeof(m_destinationLayer));

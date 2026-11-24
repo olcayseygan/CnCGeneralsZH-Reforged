@@ -2865,9 +2865,17 @@ static void drawManeuver( const Marker &m, Real t, Real est )
 	Real qx, qy, qh;
 	turnPoint( m, m.rnom, lastA, qx, qy, qh );
 	const Real ox = (Real)cos( qh ), oy = (Real)sin( qh );
-	dashLine( qx, qy, qx + ox * MANEUVER_EXIT, qy + oy * MANEUVER_EXIT, 3.0f * k, 22.0f * k, 0.5f, 60.0f * k * t, m.tint, 0.8f * est );
-	quadPiece( P_CHEVRON, qx + ox * ( MANEUVER_EXIT + 10.0f * k ), qy + oy * ( MANEUVER_EXIT + 10.0f * k ), qh, 12.0f * k, 18.0f * k,
-						 m.tint, est, CHEVRON_ANCHOR_U, 0.5f );
+	// the exit stops where the zone's square of heights and water does (zoneReach, capped), chevron and
+	// all, or past it the dashes take the edge's clamped height and a tail over the sea the seabed's
+	const Real room = zoneReach( m ) - 30.0f * k;
+	const Real dx = qx - m.x, dy = qy - m.y;
+	const Real along = dx * ox + dy * oy, rest = room * room - ( dx * dx + dy * dy );
+	const Real exitLen = rest > 0.0f ? MIN( MANEUVER_EXIT, -along + (Real)sqrt( along * along + rest ) ) : 0.0f;
+	if( exitLen > 0.0f )
+		dashLine( qx, qy, qx + ox * exitLen, qy + oy * exitLen, 3.0f * k, 22.0f * k, 0.5f, 60.0f * k * t, m.tint, 0.8f * est );
+	if( exitLen > 40.0f * k )
+		quadPiece( P_CHEVRON, qx + ox * ( exitLen + 10.0f * k ), qy + oy * ( exitLen + 10.0f * k ), qh, 12.0f * k, 18.0f * k,
+							 m.tint, est, CHEVRON_ANCHOR_U, 0.5f );
 
 	// the drop span: where the first bomb leaves the plane and where the last does
 	const Real ends[ 2 ] = { m.drops.front(), m.drops.back() };
@@ -2890,7 +2898,7 @@ static void drawManeuver( const Marker &m, Real t, Real est )
 	if( !m.darts.empty() )
 		return;
 	const Real lead = MIN( L, 600.0f );
-	const Real total = lead + lastA + MANEUVER_EXIT;
+	const Real total = lead + lastA + exitLen;
 	const Real real = m.planeSpeed > 0.01f ? m.planeSpeed * (Real)LOGICFRAMES_PER_SECOND : 150.0f;
 	const Real v = MAX( real, total / 4.0f );
 	const Real period = total / v + 0.5f;

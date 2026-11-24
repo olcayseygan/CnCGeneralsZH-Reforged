@@ -77,6 +77,8 @@ public:
 
 	// rendering
 	void renderShadows( Bool forceStencilFill );
+	/// A volume already in world space, inside renderShadows' stencil passes (W3DFractureDraw's fragments).
+	void renderWorldVolume( const Vector3 *vertices, Int numVerts, const short *indices, Int numIndex );
 
 	/// Draw every caster into the sun's depth buffer, before the frame itself is drawn.  Nothing
 	/// reads that buffer yet; SHADOW-MAP-PLAN.md phase 2 is what makes it a shadow.

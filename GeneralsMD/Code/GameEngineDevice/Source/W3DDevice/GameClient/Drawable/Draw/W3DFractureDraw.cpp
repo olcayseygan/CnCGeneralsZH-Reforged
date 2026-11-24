@@ -50,6 +50,8 @@
 #include "W3DDevice/GameClient/W3DAssetManager.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
 #include "W3DDevice/GameClient/W3DScene.h"
+#include "W3DDevice/GameClient/W3DShadow.h"
+#include "W3DDevice/GameClient/W3DVolumetricShadow.h"
 #include "Platform/SunShadow.h"
 #include "WW3D2/coltest.h"
 #include "WW3D2/dx8indexbuffer.h"
@@ -116,6 +118,11 @@ const Int MAX_DUST = 24;						// puffs a structure, over its life
 const char *const DUST_SYSTEM = "TreeBounceDust";
 const Int PILE_CELLS = 64;					// the rubble heights a plain collapse lands on, round the structure
 const Real PILE_CELL = 4.0f;
+const Real VOLUME_UNDER_GROUND = 2.0f;	// a stencil volume ends this far under the map's lowest ground, so no end is in view
+const Real VOLUME_REACH = 3000.0f;		// and never reaches further than this, however low the sun
+const Real VOLUME_LOWEST_SUN = 0.05f;	// a sun lower than this (the light's way, straight down 1) takes VOLUME_REACH
+const Int VOLUME_EDGES_A_DRAW = 16384;	// the shadow pass's streaming buffers: 65536 corners, 98304 indices
+const Real VOLUME_MOVING_STEP = 1.0f / 20.0f;	// game seconds between two builds of what moves: a logic frame at 1.5x
 
 // matrix3d.h keeps its operators behind ALLOW_TEMPORARIES
 Vector3 operator*( const Matrix3D &matrix, const Vector3 &point )
@@ -148,6 +155,14 @@ struct Range
 	unsigned start, count;
 };
 
+/** One edge of a fragment for its stencil volume: its ends as the left triangle winds them (fragment
+	vertices, welded by position) and the triangle on each side, right -1 on an open edge. */
+struct VolumeEdge
+{
+	unsigned short a, b;
+	Int left, right;
+};
+
 /// One fracture file, shared by every structure drawn from it.
 struct Shared
 {
@@ -165,7 +180,99 @@ struct Shared
 	std::vector<ShaderClass> shaders;
 	VertexMaterialClass *material;
 	Int users;																			///< structures drawn from it now
+	std::vector<VolumeEdge> edges;									///< the stencil volumes', made at the first need
+	std::vector<unsigned> firstEdge;								///< per fragment and one past the last
+	std::vector<Vector3> faceNormal;								///< per triangle, model space, as W3DShadowGeometry crosses them
 };
+
+/** The edges the stencil volumes' silhouettes are found on, every fragment's once.  A fragment's
+	vertices are split where its normals or its UVs are, so they are welded by position first; an edge
+	two triangles share the opposite way round joins them, any other edge is open. */
+void makeVolumeEdges( Shared &s )
+{
+	if( !s.firstEdge.empty() )
+		return;
+	const Fracture::Asset &a = s.asset;
+	s.faceNormal.resize( a.triangles.size() );
+	struct Side { unsigned lo, hi; Int triangle; unsigned short a, b; };
+	std::vector<unsigned short> weld;
+	std::vector<unsigned> order;
+	std::vector<Side> sides;
+	for( size_t i = 0; i < a.fragments.size(); ++i )
+	{
+		s.firstEdge.push_back( (unsigned)s.edges.size() );
+		const Fracture::Fragment &f = a.fragments[i];
+		const Fracture::Vertex *v = &a.vertices[f.firstVertex];
+		order.resize( f.vertices );
+		for( unsigned k = 0; k < f.vertices; ++k )
+			order[k] = k;
+		struct ByPosition
+		{
+			const Fracture::Vertex *v;
+			bool operator()( unsigned l, unsigned r ) const
+			{
+				for( Int c = 0; c < 3; ++c )
+					if( v[l].pos[c] != v[r].pos[c] )
+						return v[l].pos[c] < v[r].pos[c];
+				return l < r;
+			}
+		};
+		const ByPosition byPosition = { v };
+		std::sort( order.begin(), order.end(), byPosition );
+		weld.resize( f.vertices );
+		for( unsigned k = 0; k < f.vertices; ++k )
+			weld[order[k]] = ( k > 0 && memcmp( v[order[k]].pos, v[order[k - 1]].pos, sizeof( v[0].pos ) ) == 0 )
+				? weld[order[k - 1]] : (unsigned short)order[k];
+		sides.clear();
+		for( unsigned t = 0; t < f.triangles; ++t )
+		{
+			const Fracture::Triangle &tri = a.triangles[f.firstTriangle + t];
+			const Vector3 p0( v[tri.index[0]].pos[0], v[tri.index[0]].pos[1], v[tri.index[0]].pos[2] );
+			const Vector3 p1( v[tri.index[1]].pos[0], v[tri.index[1]].pos[1], v[tri.index[1]].pos[2] );
+			const Vector3 p2( v[tri.index[2]].pos[0], v[tri.index[2]].pos[1], v[tri.index[2]].pos[2] );
+			Vector3 n;
+			Vector3::Cross_Product( p1 - p0, p2 - p0, &n );
+			if( n.Length2() > 0.0f )
+				n.Normalize();
+			s.faceNormal[f.firstTriangle + t] = n;
+			for( Int k = 0; k < 3; ++k )
+			{
+				const unsigned short from = weld[tri.index[k]], to = weld[tri.index[( k + 1 ) % 3]];
+				if( from == to )
+					continue;
+				const Side side = { std::min( from, to ), std::max( from, to ), (Int)( f.firstTriangle + t ), from, to };
+				sides.push_back( side );
+			}
+		}
+		struct ByEdge
+		{
+			bool operator()( const Side &l, const Side &r ) const { return l.lo != r.lo ? l.lo < r.lo : l.hi != r.hi ? l.hi < r.hi : l.triangle < r.triangle; }
+		};
+		std::sort( sides.begin(), sides.end(), ByEdge() );
+		for( size_t k = 0; k < sides.size(); )
+		{
+			size_t end = k + 1;
+			while( end < sides.size() && sides[end].lo == sides[k].lo && sides[end].hi == sides[k].hi )
+				++end;
+			if( end - k == 2 && sides[k].a == sides[k + 1].b )
+			{
+				const VolumeEdge e = { sides[k].a, sides[k].b, sides[k].triangle, sides[k + 1].triangle };
+				s.edges.push_back( e );
+			}
+			else
+			{
+				for( size_t o = k; o < end; ++o )
+				{
+					const VolumeEdge e = { sides[o].a, sides[o].b, sides[o].triangle, -1 };
+					s.edges.push_back( e );
+				}
+			}
+			k = end;
+		}
+	}
+	s.firstEdge.push_back( (unsigned)s.edges.size() );
+	DEBUG_LOG( ( "FRACTURE VOLUME EDGES %s: %d edges over %d fragments\n", s.name.str(), (Int)s.edges.size(), (Int)a.fragments.size() ) );
+}
 
 std::vector<Shared *> s_shared;
 
@@ -173,6 +280,7 @@ std::vector<Shared *> s_shared;
 const UnsignedInt COST_REPORT_MS = 1000;
 double s_costUs = 0.0;
 UnsignedInt s_costReportStart = 0;
+Int s_volumeEdges = 0;								///< silhouette edges the stencil volumes built pictures held, since the last line
 
 struct CostTimer
 {
@@ -478,6 +586,20 @@ Vector3 randomAxis( void )
 	return axis;
 }
 
+/** Whether the stencil volumes give this structure a shadow whole: a volume its template asks for, or
+	one Shadows For Props hands an immobile thing with none (fillShadowInfoFromTemplate in W3DModelDraw).
+	Classic has that option off, and its tower and fortress cast nothing standing or fallen. */
+Bool castsVolumeWhole( const Drawable *draw )
+{
+	const ThingTemplate *tmplate = draw ? draw->getTemplate() : NULL;
+	if( tmplate == NULL || !TheGlobalData->m_useShadowVolumes )
+		return FALSE;
+	if( tmplate->getShadowType() == SHADOW_VOLUME )
+		return TRUE;
+	return tmplate->getShadowType() == SHADOW_NONE && TheGlobalData->m_shadowsForProps && tmplate->isKindOf( KINDOF_IMMOBILE )
+		&& !tmplate->isKindOf( KINDOF_PROJECTILE );
+}
+
 W3DModelDraw *modelDrawOf( Drawable *draw )
 {
 	for( DrawModule **dm = draw->getDrawModulesNonDirty(); *dm; ++dm )
@@ -516,6 +638,7 @@ public:
 	void beforeRender( void );									///< outside the draw: the look and the index buffers
 	Bool isCollapsing( void ) const { return m_collapsing; }
 	void renderCaster( RenderInfoClass &sunInfo );
+	void renderVolumes( Bool build );						///< the stencil volumes; build: what changed since the last picture
 	/// What a save keeps: the fragments standing, or at the death those that stood, and the way it fell.
 	const std::vector<unsigned char> &standingSet( void ) const { return m_collapsing ? m_present : m_standing; }
 	Int collapseWay( void ) const { return m_collapse ? m_way : -1; }
@@ -574,6 +697,8 @@ private:
 	void bakeRuin( void );
 	void drawGeometry( Bool materials );
 	void applyMaterial( unsigned short m );
+	Bool castsShadow( void );
+	void addVolume( std::vector<Vector3> &out, unsigned fragment, const Matrix3D &world, const Vector3 &toward, Real floorZ );
 
 	Shared *m_shared;
 	const Fracture::Collapse *m_collapse;		///< the way down it takes, chosen at the death; NULL: a plain fall
@@ -602,6 +727,12 @@ private:
 	VertexMaterialClass *m_houseMaterial;		///< the colour the model's house meshes wear, for MATERIAL_HOUSE
 	Matrix3D m_ruinRoot;										///< an orphan's root when its ruin settled
 	Real m_ruinAt;													///< an orphan's: game seconds its ruin settled, -1 before
+	UnsignedInt m_shownVersion;							///< moves at each rebuild of what is shown
+	/// The stencil volumes, world space, four corners a silhouette edge: one a bone (the ruin: one), then what moves
+	std::vector< std::vector<Vector3> > m_volumes;
+	std::vector< std::vector<Real> > m_volumeKeys;	///< what each was built from: the sun, the shown set, the root, its bone
+	Real m_movingVolumeAt;									///< game seconds the moving volume was built
+	Bool m_castsVolume;											///< the model it stands in for had a stencil volume (W3DModelDraw's rule)
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -609,7 +740,7 @@ FractureRenderObjClass::FractureRenderObjClass( Shared *shared, Drawable *drawab
 	m_shared( shared ), m_collapse( NULL ), m_way( -1 ), m_source( 0, 0, 0 ), m_hasSource( FALSE ), m_drawable( drawable ), m_model( NULL ), m_root( true ), m_pileOrigin( 0, 0, 0 ),
 	m_now( -1.0f ), m_deathTime( 0.0f ), m_removedVolume( 0.0f ), m_dustLeft( MAX_DUST ), m_dirty( TRUE ),
 	m_collapsing( FALSE ), m_dropped( FALSE ), m_settled( FALSE ), m_ruin( FALSE ), m_damagedLook( FALSE ),
-	m_houseMaterial( NULL ), m_ruinRoot( true ), m_ruinAt( -1.0f )
+	m_houseMaterial( NULL ), m_ruinRoot( true ), m_ruinAt( -1.0f ), m_shownVersion( 0 ), m_movingVolumeAt( 0.0f ), m_castsVolume( castsVolumeWhole( drawable ) )
 {
 	++shared->users;
 	const size_t count = shared->asset.fragments.size();
@@ -1440,6 +1571,7 @@ void FractureRenderObjClass::step( Real now )
 void FractureRenderObjClass::rebuild( void )
 {
 	m_dirty = FALSE;
+	++m_shownVersion;
 	m_groups.clear();
 	const std::vector<unsigned char> &shown = m_ruin ? m_present : m_standing;
 	const size_t slots = m_ruin ? 1 : m_shared->boneNames.size();
@@ -1750,15 +1882,21 @@ void FractureRenderObjClass::Render( RenderInfoClass &rinfo )
 }
 
 //-------------------------------------------------------------------------------------------------
-void FractureRenderObjClass::renderCaster( RenderInfoClass &sunInfo )
+Bool FractureRenderObjClass::castsShadow( void )
 {
 	if( !Is_In_Scene() || ( m_drawable && m_drawable->isDrawableEffectivelyHidden() ) )
-		return;		// an orphan (no drawable) casts while it lies
-	const CostTimer timer;
+		return FALSE;		// an orphan (no drawable) casts while it lies
 	// a building in the fog keeps its shadow under its ghost, by the model's own rule
 	const W3DModelDraw *modelDraw = m_drawable ? modelDrawOf( m_drawable ) : NULL;
-	if( modelDraw && modelDraw->isShadowHiddenByShroud() )
+	return modelDraw == NULL || !modelDraw->isShadowHiddenByShroud();
+}
+
+//-------------------------------------------------------------------------------------------------
+void FractureRenderObjClass::renderCaster( RenderInfoClass &sunInfo )
+{
+	if( !castsShadow() )
 		return;
+	const CostTimer timer;
 	step( gameSeconds() );		// off the screen the debris still falls, and so does its shadow
 	if( m_dirty )
 		rebuild();
@@ -1766,6 +1904,153 @@ void FractureRenderObjClass::renderCaster( RenderInfoClass &sunInfo )
 	DX8Wrapper::Set_Material( m_shared->material );
 	DX8Wrapper::Set_Texture( 1, NULL );
 	drawGeometry( TRUE );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** One fragment's silhouette from the sun, by W3DShadowGeometry's rules: a triangle faces the sun when
+	its normal points against the light's way, an edge between a lit and an unlit triangle, or an open
+	edge of a lit one, is wound as the lit triangle winds it and pushed away from the sun until it is
+	under the lowest ground of the map.  Four corners an edge, drawn as constructVolume's two triangles. */
+//-------------------------------------------------------------------------------------------------
+void FractureRenderObjClass::addVolume( std::vector<Vector3> &out, unsigned fragment, const Matrix3D &world, const Vector3 &toward, Real floorZ )
+{
+	const Fracture::Asset &a = m_shared->asset;
+	const Fracture::Fragment &f = a.fragments[fragment];
+	const Fracture::Vertex *v = &a.vertices[f.firstVertex];
+	Vector3 local;
+	Matrix3D::Inverse_Rotate_Vector( world, toward, &local );
+	static std::vector<unsigned char> lit;
+	lit.resize( f.triangles );
+	for( unsigned t = 0; t < f.triangles; ++t )
+		lit[t] = Vector3::Dot_Product( m_shared->faceNormal[f.firstTriangle + t], local ) < 0.0f ? 1 : 0;
+	const Real reach = toward.Z < -VOLUME_LOWEST_SUN ? 1.0f / -toward.Z : VOLUME_REACH;
+	for( unsigned e = m_shared->firstEdge[fragment]; e < m_shared->firstEdge[fragment + 1]; ++e )
+	{
+		const VolumeEdge &edge = m_shared->edges[e];
+		const Bool left = lit[edge.left - f.firstTriangle] != 0;
+		const Bool right = edge.right >= 0 && lit[edge.right - f.firstTriangle] != 0;
+		unsigned short from, to;
+		if( left && !right )
+		{
+			from = edge.a;
+			to = edge.b;
+		}
+		else if( right && !left )
+		{
+			from = edge.b;
+			to = edge.a;
+		}
+		else
+			continue;
+		const Vector3 p0 = world * Vector3( v[from].pos[0], v[from].pos[1], v[from].pos[2] );
+		const Vector3 p1 = world * Vector3( v[to].pos[0], v[to].pos[1], v[to].pos[2] );
+		out.push_back( p0 );
+		out.push_back( p1 );
+		out.push_back( p0 + toward * WWMath::Clamp( ( p0.Z - floorZ ) * reach, 0.0f, VOLUME_REACH ) );
+		out.push_back( p1 + toward * WWMath::Clamp( ( p1.Z - floorZ ) * reach, 0.0f, VOLUME_REACH ) );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The stencil volumes (-d3d9, Classic), the casters the sun's map has in renderCaster: whatever is
+	drawn, standing, falling or lying, at the pose it is drawn in.  Built again only when that pose, the
+	sun or the set shown moved, and every picture while anything falls. */
+//-------------------------------------------------------------------------------------------------
+void FractureRenderObjClass::renderVolumes( Bool build )
+{
+	if( build )
+	{
+		const CostTimer timer;
+		if( m_drawable )
+			m_castsVolume = castsVolumeWhole( m_drawable );		// the options can change; an orphan keeps its last
+		if( !m_castsVolume || !castsShadow() || TheW3DShadowManager == NULL || TheTerrainRenderObject == NULL )
+		{
+			m_volumes.clear();
+			m_volumeKeys.clear();
+			return;
+		}
+		const Real now = gameSeconds();
+		step( now );
+		if( m_dirty )
+			rebuild();
+		computeSlots();
+		makeVolumeEdges( *m_shared );
+		const Vector3 light = TheW3DShadowManager->getLightPosWorld( 0 );
+		Vector3 toward = m_root.Get_Translation() - light;
+		if( toward.Length2() < 1e-6f )
+			toward.Set( 0.0f, 0.0f, -1.0f );
+		toward.Normalize();
+		const Real floorZ = TheTerrainRenderObject->getMinHeight() - VOLUME_UNDER_GROUND;
+		// what stands, one volume a bone (the ruin: one), each built again only when its key moved, so a
+		// turning gun rebuilds its own fragments and no others
+		const size_t slots = m_ruin ? 1 : m_slotWorld.size();
+		m_volumes.resize( slots + 1 );
+		m_volumeKeys.resize( slots + 1 );
+		const std::vector<unsigned char> &shown = m_ruin ? m_present : m_standing;
+		static std::vector<Real> key;
+		for( size_t s = 0; s <= slots; ++s )
+		{
+			key.clear();
+			key.push_back( light.X );
+			key.push_back( light.Y );
+			key.push_back( light.Z );
+			key.push_back( (Real)m_shownVersion );
+			key.push_back( m_ruin ? 1.0f : 0.0f );
+			key.insert( key.end(), (const Real *)&m_root, (const Real *)&m_root + 12 );
+			if( s == slots )
+			{
+				// what moves, at most once a logic frame's worth of game time: a shadow a frame behind its
+				// piece is not seen, a rebuild of every falling piece every picture is
+				if( m_moving.empty() )
+				{
+					m_volumes[s].clear();
+					m_volumeKeys[s].clear();
+					continue;
+				}
+				if( m_volumeKeys[s] == key && fabs( now - m_movingVolumeAt ) < VOLUME_MOVING_STEP )
+					continue;
+				m_movingVolumeAt = now;
+				m_volumeKeys[s] = key;
+				m_volumes[s].clear();
+				for( size_t k = 0; k < m_moving.size(); ++k )
+					addVolume( m_volumes[s], m_moving[k].fragment, movingWorld( m_moving[k] ), toward, floorZ );
+				continue;
+			}
+			if( !m_ruin )
+				key.insert( key.end(), (const Real *)&m_slotWorld[s], (const Real *)&m_slotWorld[s] + 12 );
+			if( key == m_volumeKeys[s] )
+				continue;
+			m_volumeKeys[s] = key;
+			m_volumes[s].clear();
+			for( size_t i = 0; i < shown.size(); ++i )
+				if( shown[i] && ( m_ruin || m_shared->slotOf[i] == s ) )
+					addVolume( m_volumes[s], (unsigned)i, m_ruin ? m_root * m_ruinPose[i] : fragmentWorld( (unsigned)i ), toward, floorZ );
+		}
+		for( size_t s = 0; s < m_volumes.size(); ++s )
+			s_volumeEdges += (Int)( m_volumes[s].size() / 4 );
+	}
+	if( TheW3DVolumetricShadowManager == NULL )
+		return;
+	static std::vector<short> indices;
+	if( indices.empty() )
+	{
+		for( Int q = 0; q < VOLUME_EDGES_A_DRAW; ++q )
+		{
+			const short k = (short)( q * 4 );
+			const short quad[6] = { k, (short)( k + 2 ), (short)( k + 1 ), (short)( k + 1 ), (short)( k + 2 ), (short)( k + 3 ) };
+			indices.insert( indices.end(), quad, quad + 6 );
+		}
+	}
+	for( size_t s = 0; s < m_volumes.size(); ++s )
+	{
+		const std::vector<Vector3> &volume = m_volumes[s];
+		const size_t edges = volume.size() / 4;
+		for( size_t at = 0; at < edges; at += VOLUME_EDGES_A_DRAW )
+		{
+			const Int count = (Int)std::min( edges - at, (size_t)VOLUME_EDGES_A_DRAW );
+			TheW3DVolumetricShadowManager->renderWorldVolume( &volume[at * 4], count * 4, &indices[0], count * 6 );
+		}
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1852,10 +2137,10 @@ void W3DFractureDraw::doDrawModule( const Matrix3D *transformMtx )
 	m_fracture->follow( modelOf( draw ) );
 	if( rubble )
 		m_fracture->collapse( FALSE );
-	if( m_fracture->isCollapsing() && !SunShadow::OwnsSceneShadows( DX8Wrapper::_Get_D3D_Device() ) )
+	if( !SunShadow::OwnsSceneShadows( DX8Wrapper::_Get_D3D_Device() ) )
 	{
-		// the stencil volumes (-d3d9, Classic) have no caster for the fragments: a holed structure keeps
-		// the intact model's shadow, a fallen one has none rather than the standing tower's
+		// the stencil volumes (-d3d9, Classic): the fragments cast their own (renderStencilVolumes), so
+		// the intact model's volume, still standing whole under its hidden model, goes
 		for( DrawModule **dm = draw->getDrawModulesNonDirty(); *dm; ++dm )
 			if( (*dm)->getObjectDrawInterface() )
 				(*dm)->setShadowsEnabled( FALSE );
@@ -1952,9 +2237,11 @@ void W3DFractureDraw::updateAll( void )
 		if( s_modules[i]->m_fracture && s_modules[i]->m_fracture->isCollapsing() )
 			++falling;
 	if( !s_modules.empty() || !s_orphans.empty() )
-		DEBUG_LOG( ( "FRACTURE COST frame %d: %d structures in fragments, %d of them fallen, %.2f ms of CPU in %u ms\n",
-			(Int)TheGameLogic->getFrame(), (Int)( s_modules.size() + s_orphans.size() ), falling, s_costUs / 1000.0, now - s_costReportStart ) );
+		DEBUG_LOG( ( "FRACTURE COST frame %d: %d structures in fragments, %d of them fallen, %.2f ms of CPU in %u ms, %d stencil volume edges\n",
+			(Int)TheGameLogic->getFrame(), (Int)( s_modules.size() + s_orphans.size() ), falling, s_costUs / 1000.0, now - s_costReportStart,
+			s_volumeEdges ) );
 	s_costUs = 0.0;
+	s_volumeEdges = 0;
 	s_costReportStart = now;
 }
 
@@ -1974,6 +2261,16 @@ void W3DFractureDraw::renderShadowCasters( RenderInfoClass &sunInfo )
 			s_modules[i]->m_fracture->renderCaster( sunInfo );
 	for( size_t i = 0; i < s_orphans.size(); ++i )
 		s_orphans[i]->renderCaster( sunInfo );
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DFractureDraw::renderStencilVolumes( Bool build )
+{
+	for( size_t i = 0; i < s_modules.size(); ++i )
+		if( s_modules[i]->m_fracture )
+			s_modules[i]->m_fracture->renderVolumes( build );
+	for( size_t i = 0; i < s_orphans.size(); ++i )
+		s_orphans[i]->renderVolumes( build );
 }
 
 //-------------------------------------------------------------------------------------------------

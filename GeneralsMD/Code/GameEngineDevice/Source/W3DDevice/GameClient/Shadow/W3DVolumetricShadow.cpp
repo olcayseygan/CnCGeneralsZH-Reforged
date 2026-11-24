@@ -1786,6 +1786,62 @@ void W3DVolumetricShadow::RenderDynamicMeshVolume(Int meshIndex, Int lightIndex,
 	nShadowStartBatchIndex=nShadowIndicesInBuf;
 }
 
+/** A volume already in world space, through the same streaming buffers and states as a dynamic mesh
+		volume: a pre-fractured structure's fragments (W3DFractureDraw), which are no mesh of an HLOD and
+		so have no W3DVolumetricShadow.  Called only from inside renderShadows' two passes. */
+void W3DVolumetricShadowManager::renderWorldVolume( const Vector3 *vertices, Int numVerts, const short *indices, Int numIndex )
+{
+	static_assert( sizeof( SHADOW_DYNAMIC_VOLUME_VERTEX ) == sizeof( Vector3 ), "a world volume is handed over as bare positions" );
+	LPDIRECT3DDEVICE9 dev = DX8Wrapper::_Get_D3D_Device();
+	if( dev == NULL || shadowVertexBufferD3D == NULL || shadowIndexBufferD3D == NULL
+			|| numVerts <= 0 || numIndex < 3 || numVerts > SHADOW_VERTEX_SIZE || numIndex > SHADOW_INDEX_SIZE )
+		return;
+	const UnsignedInt vertexStride = sizeof( SHADOW_DYNAMIC_VOLUME_VERTEX );
+	const Bool vertexDiscard = nShadowVertsInBuf > ( SHADOW_VERTEX_SIZE - numVerts );
+	if( !uploadStreamingRange( shadowVertexBufferD3D, shadowVertexTwin, vertices, vertexDiscard ? 0 : nShadowVertsInBuf * vertexStride,
+			numVerts * vertexStride, vertexDiscard ? D3DLOCK_DISCARD : D3DLOCK_NOOVERWRITE ) )
+		return;
+	if( vertexDiscard )
+	{
+		nShadowVertsInBuf = 0;
+		nShadowStartBatchVertex = 0;
+	}
+	const Bool indexDiscard = nShadowIndicesInBuf > ( SHADOW_INDEX_SIZE - numIndex );
+	if( !uploadStreamingRange( shadowIndexBufferD3D, shadowIndexTwin, indices, indexDiscard ? 0 : nShadowIndicesInBuf * sizeof( short ),
+			numIndex * sizeof( short ), indexDiscard ? D3DLOCK_DISCARD : D3DLOCK_NOOVERWRITE ) )
+		return;
+	if( indexDiscard )
+	{
+		nShadowIndicesInBuf = 0;
+		nShadowStartBatchIndex = 0;
+	}
+	Matrix4x4 identity( true );
+	if( !Direct3D11_Present_Is_Enabled() )
+	{
+		dev->SetIndices( shadowIndexBufferD3D );
+		dev->SetTransform( D3DTS_WORLD, (D3DMATRIX *)&identity );
+		if( shadowVertexBufferD3D != lastActiveVertexBuffer )
+		{
+			dev->SetStreamSource( 0, shadowVertexBufferD3D, 0, vertexStride );
+			lastActiveVertexBuffer = shadowVertexBufferD3D;
+		}
+	}
+	Direct3D11_Mirror_Indices( shadowIndexTwin );
+	Direct3D11_Mirror_Transform( D3DTS_WORLD, (const float *)&identity );
+	Direct3D11_Mirror_Stream_Source( shadowVertexTwin, vertexStride, 0 );
+	if( DX8Wrapper::_Is_Triangle_Draw_Enabled() )
+	{
+		Debug_Statistics::Record_DX8_Polys_And_Vertices( numIndex / 3, numVerts, ShaderClass::_PresetOpaqueShader );
+		if( !Direct3D11_Present_Is_Enabled() )
+			dev->DrawIndexedPrimitive( D3DPT_TRIANGLELIST, nShadowStartBatchVertex, 0, numVerts, nShadowStartBatchIndex, numIndex / 3 );
+		Direct3D11_Draw_Indexed_Triangles( numIndex, nShadowStartBatchIndex, nShadowStartBatchVertex );
+	}
+	nShadowVertsInBuf += numVerts;
+	nShadowStartBatchVertex = nShadowVertsInBuf;
+	nShadowIndicesInBuf += numIndex;
+	nShadowStartBatchIndex = nShadowIndicesInBuf;
+}
+
 /** Debug function to draw bounding boxes around shadow volumes */
 void W3DVolumetricShadow::RenderMeshVolumeBounds(Int meshIndex, Int lightIndex, const Matrix3D *meshXform)
 {
@@ -5162,6 +5218,8 @@ void W3DVolumetricShadowManager::renderShadows( Bool forceStencilFill )
 																												shadowDynamicTask->m_lightIndex );
 				numRenderedShadows++;
 			}
+			// a pre-fractured structure's fragments, in world space through the same buffers
+			W3DFractureDraw::renderStencilVolumes( TRUE );
 		}
 
 		// Set vertex format to that used by static shadow volumes
@@ -5210,6 +5268,7 @@ void W3DVolumetricShadowManager::renderShadows( Bool forceStencilFill )
 			shadowDynamicTask->m_parentShadow->RenderVolume(shadowDynamicTask->m_meshIndex,shadowDynamicTask->m_lightIndex);
 			shadowDynamicTask=(W3DVolumetricShadowRenderTask *)shadowDynamicTask->m_nextTask;
 		}
+		W3DFractureDraw::renderStencilVolumes( FALSE );
 
 		//Reset all render tasks for next frame.
 		for (nextVb=TheW3DBufferManager->getNextVertexBuffer(NULL,W3DBufferManager::VBM_FVF_XYZ);nextVb != NULL; nextVb=TheW3DBufferManager->getNextVertexBuffer(nextVb,W3DBufferManager::VBM_FVF_XYZ))

@@ -25,8 +25,8 @@
 // it landed (FractureCore.h) and throws them as debris; at zero health the whole structure comes down
 // by its baked collapse, or by a plain fall when it has none, and the fragments lie as its ruin.
 // Client only: the logic says where a hit landed (Drawable::reactToImpact) and nothing goes back.
-// The pick follows the fragments' boxes, a save keeps the holes (the drawable's xfer) and the intact
-// model's stencil shadow goes once the fragments stand in for it.
+// The pick follows the fragments' boxes, a save keeps the holes (the drawable's xfer), and the
+// fragments cast the shadow in the sun's map and in the stencil volumes alike once they stand in for it.
 
 #pragma once
 
@@ -79,6 +79,9 @@ public:
 	static void takeReadsForRender( void );
 	/// Every fractured structure's fragments into the sun's depth map (W3DVolumetricShadowManager).
 	static void renderShadowCasters( RenderInfoClass &sunInfo );
+	/// And their stencil volumes (-d3d9, Classic), once in each of renderShadows' two passes: the first
+	/// builds what changed.
+	static void renderStencilVolumes( Bool build );
 	/// TRUE for a drawable whose fall this module draws, which the Collapse option then leaves alone.
 	static Bool stagesCollapse( const Drawable *draw );
 

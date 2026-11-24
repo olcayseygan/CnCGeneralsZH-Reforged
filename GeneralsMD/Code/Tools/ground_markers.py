@@ -649,7 +649,7 @@ def side_bands():
     h = int(4 * T)
     d = (h / 2 - (np.arange(h) + 0.5))[:, None] / T * np.ones((1, 8))
     L = Layer(8, h)
-    L.over(DARK, cov(np.abs(d) - 1.3, px) * 0.4)        # a soft shadow, not an ink line (2026-11-24 refine)
+    L.over(DARK, cov(np.abs(d) - 1.3, px) * 0.85)       # the cursors' dark line round every mark, thin (2026-11-24)
     L.over((1, 1, 1), cov(np.abs(d) - 0.7, px))
     piece("MarkerHair", L, kind="strip", across_k=4, blend="alpha", tint=True)
     L = Layer(8, 8)
@@ -721,7 +721,7 @@ def shapes():
     }
     for name, d in tinted.items():
         L = Layer(s, s)
-        L.over(DARK, cov(d - 1.0, px) * 0.45)               # a hairline keyline: crisp marks, no cartoon outline
+        L.over(DARK, cov(d - 1.0, px) * 0.85)               # a hairline keyline as dark as the cursors' line round a mark
 
         Hf = 1.6 * T * np.clip(-d / 1.8, 0, 1)
         L.over(np.ones(3)[None, None] * (0.55 + 0.45 * bevel(Hf))[..., None], cov(d, px))

@@ -11,7 +11,8 @@
     tensorboard --logdir runs
 
 Each env with --envs N runs its own generals.exe on port --port + rank, launched and killed by the
-env itself (GeneralsMD/Run/generals.exe, or --exe / ZHR_GENERALS_EXE). Needs sb3-contrib.
+env itself (GeneralsMD/Run/generals.exe, or --exe / ZHR_GENERALS_EXE). eval starts on port 8900, so
+a watch window never lands on a running training's game. Needs sb3-contrib.
 """
 
 import argparse
@@ -23,7 +24,8 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
-from env import BUILDINGS, DEFAULT_MAP, DEFAULT_PORT, FRAMES_PER_GAME_SECOND, UNITS, BuildOrderEnv
+from env import (DEFAULT_EVAL_PORT, DEFAULT_MAP, DEFAULT_PORT, FRAMES_PER_GAME_SECOND, STRUCTURES, TRAINED,
+                 BuildOrderEnv)
 
 
 def env_kwargs(args, rank):
@@ -83,19 +85,22 @@ def evaluate(args):
                 total, done = total + reward, terminated or truncated
                 dealt, taken = dealt + info.get("dealt", 0), taken + info.get("taken", 0)
                 razed += info.get("razed", 0)
-                if info["action"] != "wait" or args.watch:
+                if info["action"] != "wait" or info.get("script") or args.watch:
                     seconds = (info.get("frame", start) - start) / args.frames_per_game_second
-                    print("  %02d:%02d  %-9s %s" % (seconds // 60, seconds % 60, info["action"],
-                                                    "REFUSED: %s" % info.get("why") if info.get("refused")
-                                                    else "$%d left" % info.get("money", 0)), flush=True)
+                    script = "  (economy: %s)" % ", ".join(info["script"]) if info.get("script") else ""
+                    print("  %02d:%02d  %-20s %s%s" % (seconds // 60, seconds % 60, info["action"],
+                                                       "REFUSED: %s" % info.get("why") if info.get("refused")
+                                                       else "$%d left" % info.get("money", 0), script), flush=True)
             s = env.state
             seconds = (s["frame"] - start) / args.frames_per_game_second
             print("  return %.2f, %s at %02d:%02d%s" % (total, "lost" if info.get("lost") else "won" if info.get("won") else "time up",
                                                        seconds // 60, seconds % 60, " (%s)" % info["error"] if "error" in info else ""))
             print("  enemy structures %d -> %d, %d destroyed; unit value dealt %d, ours lost %d" % (
                 enemy_start, s["enemy"]["structures"], razed, dealt, taken))
-            print("  built %s" % {k: s["built"][k] for k in BUILDINGS})
-            print("  units %s" % {k: s["units"][k] for k in UNITS})
+            print("  built %s" % {k: s["built"][k] for k in STRUCTURES})
+            print("  units %s" % {k: s["units"][k] for k in TRAINED})
+            print("  groups %s, reserve %d, piles claimed %d" % (
+                [(len(g["ids"]), g["order"], g["category"]) for g in env.groups], len(env._reserve()), len(env.claimed)))
     finally:
         env.close()
 
@@ -133,6 +138,7 @@ def main():
     t.add_argument("--checkpoint", type=int, default=10000, help="save a checkpoint every this many decisions")
 
     e = commands.add_parser("eval", parents=[shared], help="play a saved model and print its build order")
+    e.set_defaults(port=DEFAULT_EVAL_PORT)  # a watch window must never land on a training run's port
     e.add_argument("--model", help="a saved model .zip; without one, masked random actions (a baseline)")
     e.add_argument("--episodes", type=int, default=1)
     e.add_argument("--sample", action="store_true", help="sample actions instead of taking the likeliest")

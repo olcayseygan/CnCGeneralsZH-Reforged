@@ -2560,6 +2560,11 @@ Bool AIPlayer::isLocationSafe(const Coord3D *pos, const ThingTemplate *tthing )
 	if (runsOwnAI() && m_baseCenterSet && !(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) &&
 			sqr(pos->x - m_baseCenter.x) + sqr(pos->y - m_baseCenter.y) <= sqr(BASE_EDGE_REACH * m_baseRadius))
 		filters[numFilters++] = &filterHarmless;
+	// Nor is a marker: an America's Spy Satellite, aimed at a China's start from frame 1 and every 30 seconds after,
+	// left its INERT ping there and made the China's own plan spots unsafe while it showed (seed 306, 2026-11-24).
+	PartitionFilterRejectByKindOf filterInert(MAKE_KINDOF_MASK(KINDOF_INERT), KINDOFMASK_NONE);
+	if (runsOwnAI() && !(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()))
+		filters[numFilters++] = &filterInert;
 	filters[numFilters] = NULL;
 
 	Object *enemy = ThePartitionManager->getClosestObject(  pos, radius, FROM_BOUNDINGSPHERE_2D, filters );
@@ -7920,6 +7925,36 @@ static const Int DEFENSE_PLACE_TRIES = 12;
 static const Real ROUTE_SLACK = 1.15f;
 static const Real ROUTE_BONUS = 1.0f;
 
+/** Ground nearer an enemy's start than the middle of this base is his side of the map, and nothing of a
+	* base goes up there.  Rings and reaches scaled by the base's radius put a base's guns and factories one
+	* and a half radii out, which on a 96-cell map with the starts 500 apart is inside the enemy's base: an
+	* Air Force General put a Patriot 155 from the other America's command center at frame 713, and a China
+	* a Gattling Cannon 270 from it, and every Chinook the America sent to its docks died under them (earned
+	* 1,800 all match on seed 306, 2,400 on 309).  The enemy's own guns then made every spot round his base
+	* unsafe for him.  The middle line alone was not enough there: a Patriot on the America's side, 238 from
+	* the Air Force General's first supply center spot, kept that spot unsafe and the seat earned nothing, so
+	* nothing goes up within twice the safe radius of an enemy's start either, or within ENEMY_START_KEEP_OUT
+	* of the way to it where the starts stand closer than that: a generated map that put the two command
+	* centers 30 apart left no ground at all under the plain radius.  That second test changes nothing where
+	* the starts stand 625 or more apart.  A seat in Apocalypse or Direct Strike builds as it did. */
+static const Real ENEMY_START_KEEP_OUT = 0.8f;
+static Bool onEnemySide( const Coord3D *pos, const Coord3D *base, const Coord3D *threats, Int threatCount )
+{
+	if( (TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) ||
+			(TheLaneWarDirector != NULL && TheLaneWarDirector->isActive()) )
+		return FALSE;
+	const Real ownSqr = sqr( pos->x - base->x ) + sqr( pos->y - base->y );
+	const Real keepOutSqr = sqr( 2.0f * TheAI->getAiData()->m_supplyCenterSafeRadius );
+	for( Int t = 0; t < threatCount; ++t )
+	{
+		const Real theirsSqr = sqr( pos->x - threats[ t ].x ) + sqr( pos->y - threats[ t ].y );
+		const Real apartSqr = sqr( base->x - threats[ t ].x ) + sqr( base->y - threats[ t ].y );
+		if( theirsSqr < ownSqr || theirsSqr < min( keepOutSqr, sqr( ENEMY_START_KEEP_OUT ) * apartSqr ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+
 //----------------------------------------------------------------------------------------------------------
 /** A defence goes where its guns see the most of the ground an enemy comes over.  A spot on a ring
 	* round the base is scored by the open ground inside its reach: each sample point on clear,
@@ -8015,6 +8050,9 @@ Bool AIPlayer::placeDefenseAround( const ThingTemplate *defense, const Coord3D *
 				continue;
 			// the Turtle's line stands on our side of its pass
 			if( choke && groundAt( fromBase, &spot[ s ] ) > chokeGround + frontGround )
+				continue;
+			// and every other gun on our side of the map
+			if( !choke && onEnemySide( &spot[ s ], &m_baseCenter, threats, threatCount ) )
 				continue;
 			// the rest failed on the clearance kept round another building, ours or anybody's
 			PartitionFilterAcceptByKindOf structuresOnly( MAKE_KINDOF_MASK( KINDOF_STRUCTURE ), KINDOFMASK_NONE );
@@ -10261,6 +10299,9 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 	Coord3D enemyWay;
 	enemyWay.zero();
 	const Bool behindOnly = stretched && m_baseCenterSet && enemyDirection( &enemyWay );
+	// and a home building stays on this base's side of the map (onEnemySide)
+	Coord3D threats[ MAX_PLAYER_COUNT ];
+	const Int threatCount = home && m_baseCenterSet ? enemyStarts( threats ) : 0;
 
 	// as far as the outermost ring reached, by the ground with half again for the way round; the
 	// outward walk goes as far as the ground does
@@ -10315,7 +10356,8 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 			++refusedReach;
 			continue;
 		}
-		if( behindOnly && ( pos.x - m_baseCenter.x ) * enemyWay.x + ( pos.y - m_baseCenter.y ) * enemyWay.y > m_baseRadius )
+		if( ( behindOnly && ( pos.x - m_baseCenter.x ) * enemyWay.x + ( pos.y - m_baseCenter.y ) * enemyWay.y > m_baseRadius ) ||
+				onEnemySide( &pos, &m_baseCenter, threats, threatCount ) )
 		{
 			++refusedFront;
 			continue;

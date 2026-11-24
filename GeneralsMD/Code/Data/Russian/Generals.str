@@ -22545,6 +22545,42 @@ OBJECT:ApocalypseZombieRunner
 "Зомби-бегун"
 END
 
+OBJECT:ApocalypseZombieSpitter
+"Плевун"
+END
+
+OBJECT:ApocalypseZombieBloater
+"Раздутый"
+END
+
+OBJECT:ApocalypseZombieCarrionBat
+"Трупная мышь"
+END
+
+OBJECT:ApocalypseZombieScreecher
+"Крикун"
+END
+
+OBJECT:ApocalypseZombieJuggernaut
+"Джаггернаут"
+END
+
+OBJECT:ApocalypseZombieShieldBearer
+"Щитоносец"
+END
+
+OBJECT:ApocalypseZombieBoneMortar
+"Костяная мортира"
+END
+
+OBJECT:ApocalypseZombieSiegeRam
+"Таран"
+END
+
+OBJECT:ApocalypseZombieSpineLancer
+"Копейщик"
+END
+
 OBJECT:LaneWarFortress
 "Крепость"
 END

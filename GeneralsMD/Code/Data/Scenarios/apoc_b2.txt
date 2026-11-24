@@ -1,0 +1,62 @@
+# Apocalypse batch 2: the tank front. The Juggernaut, the Spine Lancer, the Shield-bearer, the Bone
+# Mortar and the Siege Ram against their counters, staged before the first wave (2026-11-23).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 2 normal apocalypse -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 3 -maxframes 3000
+#     -scenario apoc_b2 -logPrefix apoc_b2_
+#
+# As apoc_b1: game frames, the first wave at 1800, every zombie a civilian spawn the director adopts
+# as a stray and sends at the nearest enemy; one fight a corner.
+#
+# Read: the HEADLESS TALLY lines and the director's 10 s 'alive by kind' line. Pass:
+#   A 20 Rangers vs one Juggernaut: the Rangers' 1700 tally under 5 with a Juggernaut still alive
+#     (bone armour takes 15% of rifle fire). If the Rangers win, the small-arms share is too high.
+#   B 3 Crusaders vs one Juggernaut: Crusaders' 1700 tally at least 2, the Juggernaut dead.
+#   C 4 Crusaders vs 4 Spine Lancers: the Crusaders' 1700 tally at most 1.
+#   D 8 Rangers vs 3 Spine Lancers: the Rangers' 1700 tally at least 6.
+#   E 6 Tank Hunters vs a Shield-bearer leading 6 walkers: the Shield-bearer alive at 1200 (rockets
+#     die on his darts); F 2 Paladins vs a Shield-bearer: dead by 1700 (shells pass the darts).
+#   G a Bone Mortar against a Gattling Cannon: the cannon's 900 tally lower than its health at 10 (the
+#     Mortar outranges it); the two Gattlings sent at 900 kill the Mortar by 1700.
+#   H a Siege Ram at a wall line: the ChinaWall 1700 tally under 4; I a Siege Ram against 4 Paladins:
+#     dead by 1700, the Paladins' tally at least 2.
+# 'alive by kind' at 1700 holds no Juggernaut from B, no Lancer from D, no Ram from I: read it with the
+# tallies, since a kind's count is the sum of its corners.
+
+# seat 0, USA
+10    spawn      0         AmericaInfantryRanger        20  start0:-150:150   10
+10    spawn      civilian  ApocalypseZombieJuggernaut   1   start0:-150:330
+10    spawn      0         AmericaTankCrusader          3   start0:150:150    30
+10    spawn      civilian  ApocalypseZombieJuggernaut   1   start0:150:330
+10    spawn      0         AmericaTankCrusader          4   start0:150:-150   30
+10    spawn      civilian  ApocalypseZombieSpineLancer  4   start0:150:-330   12
+10    spawn      0         AmericaInfantryRanger        8   start0:-150:-150  12
+10    spawn      civilian  ApocalypseZombieSpineLancer  3   start0:-150:-330  12
+10    spawn      0         AmericaTankPaladin           2   start0:-300:0     30
+10    spawn      civilian  ApocalypseZombieShieldBearer 1   start0:-470:0
+10    spawn      0         AmericaTankPaladin           4   start0:300:0      30
+10    spawn      civilian  ApocalypseZombieSiegeRam     1   start0:470:0
+20    stance     0         *                            defensive
+
+# seat 1, China (and the Tank Hunters it builds)
+10    spawn      1         ChinaInfantryTankHunter      6   start1:0:150      12
+10    spawn      civilian  ApocalypseZombieShieldBearer 1   start1:0:320
+10    spawn      civilian  ApocalypseZombie             6   start1:0:345      10
+10    spawn      1         ChinaGattlingCannon          1   start1:-150:0
+10    spawn      civilian  ApocalypseZombieBoneMortar   1   start1:-480:0
+900   spawn      1         ChinaTankGattling            2   start1:-150:-80   30
+910   attackmove 1         ChinaTankGattling            start1:-480:0
+10    spawn      1         ChinaWall                    4   start1:0:-200     20
+10    spawn      civilian  ApocalypseZombieSiegeRam     1   start1:0:-360
+20    stance     1         *                            defensive
+
+10    tally      1         ChinaGattlingCannon          1
+900   tally      1         ChinaGattlingCannon          1
+1200  tally      1         ChinaInfantryTankHunter
+1700  tally      0         AmericaInfantryRanger
+1700  tally      0         AmericaTankCrusader
+1700  tally      0         AmericaTankPaladin
+1700  tally      1         ChinaInfantryTankHunter
+1700  tally      1         ChinaWall                    4
+1700  tally      1         ChinaTankGattling            2

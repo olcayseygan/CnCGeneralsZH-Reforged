@@ -22553,6 +22553,42 @@ OBJECT:ApocalypseZombieRunner
 "Zombie coureur"
 END
 
+OBJECT:ApocalypseZombieSpitter
+"Cracheur"
+END
+
+OBJECT:ApocalypseZombieBloater
+"Gonflé"
+END
+
+OBJECT:ApocalypseZombieCarrionBat
+"Chauve-souris charognarde"
+END
+
+OBJECT:ApocalypseZombieScreecher
+"Hurleur"
+END
+
+OBJECT:ApocalypseZombieJuggernaut
+"Mastodonte"
+END
+
+OBJECT:ApocalypseZombieShieldBearer
+"Porte-bouclier"
+END
+
+OBJECT:ApocalypseZombieBoneMortar
+"Mortier d'os"
+END
+
+OBJECT:ApocalypseZombieSiegeRam
+"Bélier"
+END
+
+OBJECT:ApocalypseZombieSpineLancer
+"Lancier d'échine"
+END
+
 OBJECT:LaneWarFortress
 "Forteresse"
 END

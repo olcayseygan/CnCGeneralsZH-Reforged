@@ -7469,6 +7469,42 @@ OBJECT:ApocalypseZombieBrute
 "Brute Zombie"
 END
 
+OBJECT:ApocalypseZombieSpitter
+"Spitter"
+END
+
+OBJECT:ApocalypseZombieBloater
+"Bloater"
+END
+
+OBJECT:ApocalypseZombieCarrionBat
+"Carrion Bat"
+END
+
+OBJECT:ApocalypseZombieScreecher
+"Screecher"
+END
+
+OBJECT:ApocalypseZombieJuggernaut
+"Juggernaut"
+END
+
+OBJECT:ApocalypseZombieShieldBearer
+"Shield-bearer"
+END
+
+OBJECT:ApocalypseZombieBoneMortar
+"Bone Mortar"
+END
+
+OBJECT:ApocalypseZombieSiegeRam
+"Siege Ram"
+END
+
+OBJECT:ApocalypseZombieSpineLancer
+"Spine Lancer"
+END
+
 // EA's text asked for DirectX 8.1; the device is refused for other reasons now (driver, a held screen).
 ERROR:D3DFailureMessage
 "The graphics card did not start.\n\nUpdate the graphics driver. Close overlays and other fullscreen programs. Do not start the game over remote desktop or on a locked screen. Restart the PC, or start the game with -win."

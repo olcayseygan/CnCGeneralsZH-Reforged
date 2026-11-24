@@ -21691,5 +21691,41 @@ OBJECT:ApocalypseZombieRunner
 END
 
 OBJECT:ApocalypseZombieBrute
-"Dev Zombi"
+"Kaba Zombi"
+END
+
+OBJECT:ApocalypseZombieSpitter
+"Tükürükçü"
+END
+
+OBJECT:ApocalypseZombieBloater
+"Şişko"
+END
+
+OBJECT:ApocalypseZombieCarrionBat
+"Yarasa"
+END
+
+OBJECT:ApocalypseZombieScreecher
+"Çığırtkan"
+END
+
+OBJECT:ApocalypseZombieJuggernaut
+"Kabuklu"
+END
+
+OBJECT:ApocalypseZombieShieldBearer
+"Kalkancı"
+END
+
+OBJECT:ApocalypseZombieBoneMortar
+"Kemikatar"
+END
+
+OBJECT:ApocalypseZombieSiegeRam
+"Koçbaşı"
+END
+
+OBJECT:ApocalypseZombieSpineLancer
+"Mızrakçı"
 END

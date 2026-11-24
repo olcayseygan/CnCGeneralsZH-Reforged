@@ -1,0 +1,63 @@
+# Apocalypse batch 1: the Spitter, the Bloater, the Carrion Bat and the Screecher against their
+# counters and their prey, staged before the first wave (2026-11-23).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 2 normal apocalypse -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 3 -maxframes 3000
+#     -scenario apoc_b1 -logPrefix apoc_b1_
+#
+# Scenario frames are game frames, 1.5 a logic frame at game speed 150; the first wave comes at game
+# second 60, scenario frame 1800, so every fight here is over by 1700. A zombie made by a civilian
+# spawn line belongs to the dead player and the director adopts it on its next pass ('HEADLESS
+# APOCALYPSE: frame N stray ... joins the dead'), so it is sent at the nearest enemy like any other.
+# The fights stand in separate corners of the two lobes so each finds its own enemy first.
+#
+# Read: the HEADLESS TALLY lines below and the director's 10 s 'alive by kind' line. Pass:
+#   A Spitters vs Comanches: the Comanches' 1700 tally is under 4 (the gob reaches aircraft).
+#   B Spitters vs Crusaders: no Spitter in the 1700 'alive by kind' line from fight B's corner, and
+#     the Crusaders' 1700 tally at least 2 (lost one at most). The 'alive by kind' line counts A and B
+#     together: Spitters alive at 1700 come from A only if B's tally is full.
+#   C Bloater shot at range: the Rangers' 1700 tally is 6 or 5, and the four walkers beside the Bloater
+#     are gone with it (alive by kind, walkers 0 once the C walkers and the D Bloaters are dead).
+#   D Bloaters at a wall line: the ChinaWall 1700 tally is under 4 (one section broken at least).
+#   E flock and Screechers vs Comanches: seat 1's Comanche 900 tally under 4; then the Gattlings sent
+#     at 900 leave no ApocalypseZombieCarrionBat in the 1700 line.
+#   Every flyer that died lies on the ground: no CarrionBat or Screecher left hanging (a drawn run
+#     looks; headless shows only that the counts fall).
+
+# A: seat 0's north-west corner, four Comanches and six Spitters
+10    spawn      0         AmericaVehicleComanche       4   start0:-150:150   30
+10    spawn      civilian  ApocalypseZombieSpitter      6   start0:-150:320   12
+
+# B: seat 0's south-east corner, three Crusaders and four Spitters
+10    spawn      0         AmericaTankCrusader          3   start0:150:-150   30
+10    spawn      civilian  ApocalypseZombieSpitter      4   start0:150:-320   12
+
+# C: seat 0's north-east corner, six Rangers; a Bloater with four walkers at its side
+10    spawn      0         AmericaInfantryRanger        6   start0:150:150    12
+10    spawn      civilian  ApocalypseZombieBloater      1   start0:150:330
+10    spawn      civilian  ApocalypseZombie             4   start0:150:345    8
+
+20    stance     0         *                            defensive
+
+# D: seat 1's north side, a wall line and two Bloaters
+10    spawn      1         ChinaWall                    4   start1:0:200      20
+10    spawn      civilian  ApocalypseZombieBloater      2   start1:0:340      20
+
+# E: seat 1's west side, four Comanches against a flock and two Screechers; two Gattlings join at 900
+10    spawn      1         AmericaVehicleComanche       4   start1:-180:0     30
+10    spawn      civilian  ApocalypseZombieCarrionBat   6   start1:-340:0     12
+10    spawn      civilian  ApocalypseZombieScreecher    2   start1:-340:40    20
+900   spawn      1         ChinaTankGattling            2   start1:-120:-60   30
+910   attackmove 1         ChinaTankGattling            start1:-300:0
+
+20    stance     1         *                            defensive
+
+900   tally      0         AmericaVehicleComanche       4
+900   tally      1         AmericaVehicleComanche       4
+1700  tally      0         AmericaVehicleComanche
+1700  tally      0         AmericaTankCrusader          3
+1700  tally      0         AmericaInfantryRanger        6
+1700  tally      1         ChinaWall                    4
+1700  tally      1         AmericaVehicleComanche
+1700  tally      1         ChinaTankGattling            2

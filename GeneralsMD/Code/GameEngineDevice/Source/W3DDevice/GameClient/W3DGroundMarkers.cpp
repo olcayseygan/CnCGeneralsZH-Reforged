@@ -1143,8 +1143,8 @@ static void describeDesign( Marker &m, const Object *caster, const SpecialPowerT
 		case DESIGN_SPYSAT:
 		case DESIGN_SPYDRONE:
 		case DESIGN_RADAR:
-		case DESIGN_GPS:			m.tint = TINT_RECON;	break;
-		case DESIGN_UAV:
+		case DESIGN_GPS:
+		case DESIGN_UAV:			m.tint = TINT_RECON;	break;
 		case DESIGN_AMBULANCE:
 		case DESIGN_DEMINE:
 		case DESIGN_REPAIR:		m.tint = TINT_WARM;	break;
@@ -1568,6 +1568,33 @@ static void followGuard( Marker &m, UnsignedInt now, InGameUI *ui, Real tl )
 	}
 }
 
+/** Where a design's frame stands for the cursors' four triangles (cursorTris): its reach along the
+	* triangles' axis and square to it.  A round frame at its own radius, a strip at its length and half
+	* width; a frame with fittings on the axes (the repair's teeth, the paradrop's bulge, the neutron's
+	* countdown) a clear step outside them.  zoneReach reads it too, so no frame outruns its heights. */
+static void cursorFrame( const Marker &m, Real R, Real &along, Real &across )
+{
+	along = across = R;
+	switch( m.design )
+	{
+		case DESIGN_CRATE:			along = across = 0.36f * R;	break;
+		case DESIGN_SPYSAT:			along = across = 0.92f * R;	break;
+		case DESIGN_ARTILLERY:	along = across = 0.9f * R;	break;
+		case DESIGN_TANKDROP:		along = across = 0.8f * R;	break;
+		case DESIGN_COMMANDO:		along = across = 0.8f * R;	break;
+		case DESIGN_CRUISE:			along = across = 0.744f * R;	break;
+		case DESIGN_NEUTRON:		along = across = R + 40.0f * m.k;	break;		// clear outside its countdown ring at R + 26k
+		case DESIGN_REPAIR:			along = across = R + 20.0f * m.k;	break;		// outside the gear's teeth, R + 6k to 14k
+		case DESIGN_PARADROP:		along = across = 1.07f * R;	break;		// outside the canopy's bulge
+		case DESIGN_RAPID:			along = across = 0.62f * R;	break;
+		case DESIGN_NAPALM:			along = 0.55f * R;	across = 1.15f * R;	break;
+		case DESIGN_B3:					along = across = 52.0f;	break;
+		case DESIGN_CCARPET:		along = across = 46.0f;	break;
+		case DESIGN_ALLYAID:		along = 60.0f;	across = 140.0f;	break;
+		default:								break;
+	}
+}
+
 /// how far a zone reaches from its middle, everything it draws round it counted
 static Real zoneReach( const Marker &m )
 {
@@ -1579,7 +1606,12 @@ static Real zoneReach( const Marker &m )
 	if( m.turn )
 		reach = MAX( reach, 2.0f * m.rmax + MANEUVER_EXIT + 40.0f );		// the turn and the straight exit off it (drawManeuver)
 	if( m.design != DESIGN_NONE )		// a capsule, a wide box, a racetrack: the frames reach past the radius
+	{
 		reach = MAX( reach, 1.8f * R + 40.0f * m.k );
+		Real along, across;
+		cursorFrame( m, R, along, across );		// the cursor triangles past the frame: 0.92 of their 26k at most, and their 4k breath
+		reach = MAX( reach, MAX( along, across ) + ( 0.92f * 26.0f + 8.0f ) * m.k );
+	}
 	if( m.beamSeen )		// a driven beam goes where the player steers it: its head and every scorch it left
 	{
 		Real far2 = ( m.beamX - m.x ) * ( m.beamX - m.x ) + ( m.beamY - m.y ) * ( m.beamY - m.y );
@@ -3283,8 +3315,8 @@ static void drawCrate( const DesignDraw &d )
 	for( Int i = 0; i < 4; ++i )
 	{
 		Real px, py;
-		const Real a = 0.5f * MARKER_PI * (Real)i;
-		d.along( 0.36f * R * (Real)cos( a ), 0.36f * R * (Real)sin( a ), px, py );
+		const Real a = 0.25f * MARKER_PI + 0.5f * MARKER_PI * (Real)i;		// on the diagonals, off the cursor triangles
+		d.at( a, 0.36f * R, px, py );
 		studAt( d, px, py, 0.8f );
 	}
 	const Marker &m = *d.m;
@@ -3439,7 +3471,7 @@ static void drawSpySat( const DesignDraw &d )
 	const Real hs = 0.92f * R * sc;
 	for( Int sx = -1; sx <= 1; sx += 2 )
 	{
-		const Real mid = sx < 0 ? MARKER_PI : 0.0f, half = 0.16f + 0.2f * u;
+		const Real mid = sx < 0 ? 1.25f * MARKER_PI : 0.25f * MARKER_PI, half = 0.16f + 0.2f * u;		// off the cursor triangles
 		const Real rp = hs + 0.1f * R;
 		bandArc( d.fin, d.x, d.y, rp, 10.0f * k, d.yaw + mid - half, d.yaw + mid + half, TINT_STEEL, 0.8f * d.app, 1.0f, FALSE );
 		for( Int c = -1; c <= 1; ++c )
@@ -3490,10 +3522,10 @@ static void drawSpySat( const DesignDraw &d )
 		s_ctx.additive = was;
 	}
 	bandCircle( d.fin, d.x, d.y, hs, 18.0f * k, d.tint, d.app );
-	for( Int i = 0; i < 4; ++i )
+	for( Int i = 0; i < 2; ++i )		// the free diagonals: the panels hold the other two, the cursor triangles N, E, S, W
 	{
 		Real px, py;
-		d.at( 0.25f * MARKER_PI + 0.5f * MARKER_PI * (Real)i, hs, px, py );
+		d.at( 0.75f * MARKER_PI + MARKER_PI * (Real)i, hs, px, py );
 		studAt( d, px, py, 0.9f );
 	}
 }
@@ -3806,7 +3838,7 @@ static void drawLaser( const DesignDraw &d )
 		d.at( a, 1.75f * R, bx, by );
 		quadPiece( P_CHEVRON, bx, by, d.yaw + a, 10.0f * k, 15.0f * k, d.tint, d.app, CHEVRON_ANCHOR_U, 0.5f );
 		Real sx, sy;
-		d.at( (Real)j * 0.5f * MARKER_PI, 1.2f * R, sx, sy );
+		d.at( 0.25f * MARKER_PI + (Real)j * 0.5f * MARKER_PI, 1.2f * R, sx, sy );		// on the arms, off the cursor triangles
 		studAt( d, sx, sy, 0.8f );
 	}
 	const Real hd = d.aim ? ( 0.2f + 0.02f * (Real)sin( 6.0f * d.t ) ) * R : 0.2f * R * ( 1.0f - 0.8f * d.snap );
@@ -3973,9 +4005,9 @@ static void drawComanche( const DesignDraw &d )
 	dashLine( m.cx0, m.cy0, gx, gy, 3.0f * k, 18.0f * k, 0.5f, 60.0f * k * d.t, d.tint, 0.8f * d.app );
 	bandCircle( d.fin, d.x, d.y, a, 10.0f * k, d.tint, d.app );
 	Real px, py;
-	d.along( a, 0.0f, px, py );
+	d.along( 0.7071f * a, 0.7071f * a, px, py );		// 45 degrees off the run, clear of the cursor triangles
 	studAt( d, px, py, 0.9f );
-	d.along( -a, 0.0f, px, py );
+	d.along( -0.7071f * a, -0.7071f * a, px, py );
 	studAt( d, px, py, 0.9f );
 	Real ps[ 24 ], qs[ 24 ];
 	for( Int i = 0; i < 24; ++i )
@@ -4076,7 +4108,7 @@ static void drawArtillery( const DesignDraw &d )
 	for( Int j = 0; j < 6; ++j )
 	{
 		Real px, py;
-		const Real a = (Real)j * MARKER_PI / 3.0f;
+		const Real a = ( 15.0f + 60.0f * (Real)j ) * MARKER_DEG;		// off the run's axes, where the cursor triangles sit
 		d.along( rr * (Real)cos( a ), rr * (Real)sin( a ), px, py );
 		studAt( d, px, py, 0.9f );
 	}
@@ -4094,7 +4126,7 @@ static void drawArtillery( const DesignDraw &d )
 	{
 		// the shells' arrival marches in while aiming and while they are on their way
 		const Bool incoming = d.aim || d.impact < 0.0f;
-		const Real s = -rr - 22.0f * k - wrap( (Real)j * 22.0f * k + ( incoming ? 50.0f * k * d.t : 0.0f ), 66.0f * k );
+		const Real s = -rr - 40.0f * k - wrap( (Real)j * 22.0f * k + ( incoming ? 50.0f * k * d.t : 0.0f ), 66.0f * k );		// behind the cursor triangle
 		Real px, py;
 		d.along( s, 0.0f, px, py );
 		quadPiece( P_CHEVRON, px, py, h, 13.0f * k, 20.0f * k, d.tint, d.app, CHEVRON_ANCHOR_U, 0.5f );
@@ -4411,7 +4443,7 @@ static void drawHelixNapalm( const DesignDraw &d )
 	bandCircle( d.fin, cx, cy, R, 10.0f * k, d.tint, d.app );
 	for( Int j = 0; j < 6; ++j )
 	{
-		const Real a = d.yaw + MARKER_PI / 6.0f + (Real)j * MARKER_PI / 3.0f;
+		const Real a = d.yaw + MARKER_PI / 12.0f + (Real)j * MARKER_PI / 3.0f;		// off N, E, S and W
 		part( P_SHAPE_TONGUE, cx + ( R + 10.0f * k ) * (Real)cos( a ), cy + ( R + 10.0f * k ) * (Real)sin( a ), a, 16.0f * k, 16.0f * k, d.tint, d.app );
 	}
 	if( d.aim )
@@ -4434,7 +4466,7 @@ static void drawHelixNuke( const DesignDraw &d )
 	ring( P_HAIR, cx, cy, R - 10.0f * k, 3.0f * k, TINT_LACQ, d.app, FALSE );
 	for( Int i = 0; i < 6; ++i )
 	{
-		const Real a = d.yaw + 0.5f * MARKER_PI + (Real)i * MARKER_PI / 3.0f;
+		const Real a = d.yaw + MARKER_PI / 12.0f + (Real)i * MARKER_PI / 3.0f;		// off N, E, S and W
 		studAt( d, cx + R * (Real)cos( a ), cy + R * (Real)sin( a ), 0.9f );
 	}
 	const Real flash = d.aim ? 0.0f : MAX( 0.0f, 1.0f - (Real)fabs( d.tl - 0.55f ) / 0.3f );
@@ -4506,7 +4538,7 @@ static void drawScud( const DesignDraw &d )
 	}
 	for( Int i = 0; i < 10; ++i )		// hazard slashes on the top edge only
 	{
-		const Real a = 1.15f + 0.085f * (Real)i;
+		const Real a = 0.36f + 0.085f * (Real)i;		// the top right edge, clear of the N cursor triangle
 		Real px, py;
 		d.at( a, ragged( yaw + a ) + 13.0f * k, px, py );
 		part( P_SHAPE_PARA, px, py, yaw + a + 0.5f * MARKER_PI, 9.0f * k, 7.0f * k, ( i & 1 ) ? TINT_DARK : TINT_AMBER, d.app );
@@ -4517,7 +4549,7 @@ static void drawScud( const DesignDraw &d )
 	{
 		const Real a = 0.3f + 2.0f * MARKER_PI * ( (Real)i + 0.35f * hashOf( i + 71 ) ) / 9.0f;
 		Real px, py;
-		d.at( a, R + 26.0f * k, px, py );
+		d.at( a, R + 34.0f * k, px, py );		// outside the cursor triangles
 		part( P_SHAPE_RING, px, py, yaw + a, 15.0f * k, 15.0f * k, TINT_STEEL, d.app );
 		const Bool on = i < nl && !( i == nl - 1 && blinkOff );
 		part( P_SHAPE_DISC, px, py, yaw + a, 9.0f * k, 9.0f * k, on ? d.tint : scaled( d.tint, 0.22f ), d.app );
@@ -4753,7 +4785,7 @@ static void drawKargu( const DesignDraw &d )
 	const Real gap = 0.12f * R / MAX( 1.0f, rr );
 	for( Int j = 0; j < 6; ++j )
 	{
-		const Real a = d.yaw + (Real)j * MARKER_PI / 3.0f;
+		const Real a = d.yaw + MARKER_PI / 12.0f + (Real)j * MARKER_PI / 3.0f;		// breaks and studs off N, E, S and W
 		bandArc( d.fin, d.x, d.y, rr, 14.0f * k, a + gap, a + MARKER_PI / 3.0f - gap, d.tint, d.app );
 		studAt( d, d.x + 0.98f * rr * (Real)cos( a ), d.y + 0.98f * rr * (Real)sin( a ), 0.85f );
 	}
@@ -5004,9 +5036,10 @@ static void drawRapid( const DesignDraw &d )
 	const Real k = d.k, R = d.R;
 	Poly w;
 	Real px, py;
-	d.along( -0.33f * R, 0.5f * R, px, py );		w.add( px, py );
-	d.along( 0.62f * R, 0.0f, px, py );				w.add( px, py );
-	d.along( -0.33f * R, -0.5f * R, px, py );		w.add( px, py );
+	// inside the landing circle, so its tip stays clear of the cursor triangle on the run's axis
+	d.along( -0.25f * R, 0.38f * R, px, py );		w.add( px, py );
+	d.along( 0.45f * R, 0.0f, px, py );				w.add( px, py );
+	d.along( -0.25f * R, -0.38f * R, px, py );		w.add( px, py );
 	ring( P_HAIR, d.x, d.y, 0.62f * R, 3.0f * k, d.tint, 0.8f * d.app, FALSE );		// the landing circle the wedge points across
 	bandPoly( d.fin, w.x, w.y, w.n, FALSE, 16.0f * k, d.tint, d.app );
 	studAt( d, w.x[ 0 ], w.y[ 0 ], 0.9f );
@@ -5190,22 +5223,19 @@ static void drawDesign( const Marker &m, Real R, Real t, Real tl, Real app, Real
 
 	// the cursors' four triangles on the frame: a round frame on the screen's axes at its own radius,
 	// a strip on the run's axis at its reach along and its half width across
-	Real along = R, across = R, axis = d.yaw;
+	Real along, across, axis = d.yaw;
+	cursorFrame( m, R, along, across );
 	switch( m.design )
 	{
-		case DESIGN_CRATE:			along = across = 0.36f * R;	break;
-		case DESIGN_SPYSAT:			along = across = 0.92f * R;	break;
-		case DESIGN_ARTILLERY:	along = across = 0.9f * R;	axis = d.heading();	break;
-		case DESIGN_TANKDROP:		along = across = 0.8f * R;	break;
-		case DESIGN_COMMANDO:		along = across = 0.8f * R;	break;
-		case DESIGN_CRUISE:			along = across = 0.744f * R;	break;
-		case DESIGN_NEUTRON:		along = across = R + 40.0f * d.k;	break;		// clear outside its countdown ring at R + 26k
-		case DESIGN_RAPID:			along = across = 0.62f * R;	axis = d.heading();	break;
-		case DESIGN_NAPALM:			along = 0.55f * R;	across = 1.15f * R;	axis = d.heading();	break;
-		case DESIGN_B3:					along = across = 52.0f;	axis = d.heading();	break;
-		case DESIGN_CCARPET:		along = across = 46.0f;	axis = d.heading();	break;
-		case DESIGN_ALLYAID:		along = 60.0f;	across = 140.0f;	axis = d.heading();	break;
-		default:								break;
+		case DESIGN_ARTILLERY:
+		case DESIGN_RAPID:
+		case DESIGN_NAPALM:
+		case DESIGN_B3:
+		case DESIGN_CCARPET:
+		case DESIGN_ALLYAID:	axis = d.heading();	break;
+		case DESIGN_COMMANDO:	axis = d.heading() + 0.25f * MARKER_PI;	break;		// its brackets stalk on the run's axes
+		case DESIGN_FRENZY:		axis = d.yaw + MARKER_PI / 20.0f;	break;		// between the sunburst's rays, 18 degrees apart
+		default:							break;
 	}
 	cursorTris( d.x, d.y, along, across, axis, d.k, t, tl, d.tint, app );
 }

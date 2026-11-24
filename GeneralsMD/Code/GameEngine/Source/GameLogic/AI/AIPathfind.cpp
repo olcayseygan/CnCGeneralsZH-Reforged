@@ -2055,6 +2055,41 @@ Bool PathfindCell::removeObstacle( Object *obstacle )
 	return true;
 }
 
+enum
+{
+	SAVED_GROUND_TYPE = 0x0F,
+	SAVED_GROUND_PINCHED = 0x10,
+	SAVED_GROUND_FENCE = 0x20,
+	SAVED_GROUND_TRANSPARENT = 0x40,
+	SAVED_GROUND_OBSTACLE = 0x80
+};
+
+UnsignedByte PathfindCell::savedGround( void ) const
+{
+	UnsignedByte saved = (UnsignedByte)( m_type & SAVED_GROUND_TYPE );
+	if (m_pinched)
+		saved |= SAVED_GROUND_PINCHED;
+	if (m_obstacleIsFence)
+		saved |= SAVED_GROUND_FENCE;
+	if (m_obstacleIsTransparent)
+		saved |= SAVED_GROUND_TRANSPARENT;
+	if (m_obstacleID != INVALID_ID)
+		saved |= SAVED_GROUND_OBSTACLE;
+	return saved;
+}
+
+/// the cell's info is left to Pathfinder::restoreInfoCells, which runs after this
+void PathfindCell::restoreSavedGround( UnsignedByte saved, ObjectID obstacle )
+{
+	const UnsignedInt type = saved & SAVED_GROUND_TYPE;
+	noteWalkChange( m_type, type );
+	m_type = type;
+	m_pinched = ( saved & SAVED_GROUND_PINCHED ) != 0;
+	m_obstacleIsFence = ( saved & SAVED_GROUND_FENCE ) != 0;
+	m_obstacleIsTransparent = ( saved & SAVED_GROUND_TRANSPARENT ) != 0;
+	m_obstacleID = obstacle;
+}
+
 /// put self on "open" list in ascending cost order, return new list
 /* EA walked this list from the head on every insert and stopped only past the last cell of equal
 	 cost, so a search with a wide frontier paid O(open list) per cell it expanded.  Measured with the
@@ -4663,6 +4698,15 @@ void PathfindLayer::xferZones( Xfer *xfer )
 				m_layerCells[i][j].setZone( zones[n++] );
 }
 
+void PathfindLayer::collectCells( std::vector<PathfindCell *> &cells )
+{
+	if (m_layerCells == NULL)
+		return;
+	for (Int i = 0; i < m_width; i++)
+		for (Int j = 0; j < m_height; j++)
+			cells.push_back( &m_layerCells[i][j] );
+}
+
 
 /**
  * Return the bridge's object id.
@@ -4859,7 +4903,7 @@ Pathfinder::Pathfinder( void ) :m_map(NULL),
 	m_traffic(NULL), m_trafficCells(NULL), m_numTrafficCells(0), m_trafficDecayFrame(0),
 	m_claims(NULL), m_claimTouch(NULL),
 	m_flowCosts(false), m_flowSpeed(0), m_flowNow(0), m_flowNowBucket(0),
-	m_queueOwnerID(INVALID_ID), m_infoCellsFromSave(FALSE), m_unitMapFromSave(FALSE)
+	m_queueOwnerID(INVALID_ID), m_infoCellsFromSave(FALSE), m_cellGroundFromSave(FALSE), m_unitMapFromSave(FALSE)
 {
 	debugPath = NULL;
 	m_search.owner = INVALID_ID;
@@ -5659,6 +5703,10 @@ void Pathfinder::reset( void )
 	m_loadedQueueLine.clear();
 	m_loadedInfoCells.clear();
 	m_infoCellsFromSave = FALSE;
+	m_loadedCellGround.clear();
+	m_loadedCellObstacles.clear();
+	m_loadedCellLayers.clear();
+	m_cellGroundFromSave = FALSE;
 	m_queueOwnerID = INVALID_ID;
 	m_unitCells.clear();
 	m_unitMapFromSave = FALSE;
@@ -14295,12 +14343,15 @@ static Int64 loadedSearchKey( Int layer, const ICoord2D &cell )
 	*		 so its unit searched again from the first cell and spent the frame's cells elsewhere.  Then
 	*		 every cell that holds an info: a search pays its budget only for a cell it has to give one to,
 	*		 and a structure's cell keeps the one it was once given, so the loaded game's searches stopped a
-	*		 cell or two from where the saved game's did. */
+	*		 cell or two from where the saved game's did.
+	* 5: Every cell's structure ground (xferCellGround).  A load had each structure classify itself onto
+	*		 the bare map, and a GLA hole that went down while the building it replaces still stood had marked
+	*		 nothing in the game that was saved: the building's cells were taken, and its going cleared them. */
 void Pathfinder::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 4;
+	XferVersion currentVersion = 5;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	if (version < 2)
@@ -14447,6 +14498,8 @@ void Pathfinder::xfer( Xfer *xfer )
 		else
 			keys.clear();
 	}
+	if (version >= 5)
+		xferCellGround( xfer );
 	if (xfer->getXferMode() == XFER_LOAD)
 		m_loadedQueueLine.clear();
 
@@ -14458,10 +14511,148 @@ void Pathfinder::xfer( Xfer *xfer )
 }  // end xfer
 
 //-----------------------------------------------------------------------------
+/** Every cell of one layer whatever its type: the ground's over the extent, a bridge's or the wall's block.
+	* getUnitCell hands back no cell for an impassable one of a layer, and a wall piece's going or a bridge's
+	* fall makes cells impassable between the save, its load and the post-process, so it cannot count them. */
+void Pathfinder::collectLayerCells( Int layer, std::vector<PathfindCell *> &cells )
+{
+	cells.clear();
+	if (layer != LAYER_GROUND)
+	{
+		m_layers[layer].collectCells( cells );
+		return;
+	}
+	for (Int x = m_extent.lo.x; x <= m_extent.hi.x; ++x)
+		for (Int y = m_extent.lo.y; y <= m_extent.hi.y; ++y)
+			cells.push_back( &m_map[x][y] );
+}
+
+//-----------------------------------------------------------------------------
+/** For each layer: how many cells it has, each cell's PathfindCell::savedGround in collectLayerCells'
+	* order as runs of one value, and the obstacle of every cell that names one.  A layer whose grid the
+	* load lays out at another size is read and left alone: a loaded game builds its wall layer only from
+	* the wall pieces the map placed, not the ones the save brings back. */
+void Pathfinder::xferCellGround( Xfer *xfer )
+{
+	const Bool load = xfer->getXferMode() == XFER_LOAD;
+	m_loadedCellGround.clear();
+	m_loadedCellObstacles.clear();
+	m_loadedCellLayers.clear();
+	std::vector<PathfindCell *> cells;
+	std::vector<UnsignedByte> ground;
+	std::vector<ObjectID> obstacles;
+	for (Int layer = LAYER_GROUND; layer <= LAYER_LAST; ++layer)
+	{
+		collectLayerCells( layer, cells );
+		const UnsignedInt cellCount = (UnsignedInt)cells.size();
+		UnsignedInt savedCount = cellCount;
+		xfer->xferUnsignedInt( &savedCount );
+		if (load && savedCount > (UnsignedInt)( ( m_extent.hi.x + 1 ) * ( m_extent.hi.y + 1 ) ))
+			throw SC_INVALID_DATA;
+		ground.clear();
+		obstacles.clear();
+		if (!load)
+			for (UnsignedInt i = 0; i < cellCount; ++i)
+			{
+				ground.push_back( cells[ i ]->savedGround() );
+				if (cells[ i ]->getObstacleID() != INVALID_ID)
+					obstacles.push_back( cells[ i ]->getObstacleID() );
+			}
+
+		std::vector< std::pair<UnsignedInt, UnsignedByte> > runs;
+		for (size_t at = 0; at < ground.size(); )
+		{
+			size_t end = at + 1;
+			while (end < ground.size() && ground[ end ] == ground[ at ])
+				++end;
+			runs.push_back( std::make_pair( (UnsignedInt)( end - at ), ground[ at ] ) );
+			at = end;
+		}
+		UnsignedInt runCount = (UnsignedInt)runs.size();
+		xfer->xferUnsignedInt( &runCount );
+		if (load && runCount > savedCount)
+			throw SC_INVALID_DATA;
+		for (UnsignedInt r = 0; r < runCount; ++r)
+		{
+			UnsignedInt length = load ? 0 : runs[ r ].first;
+			UnsignedByte value = load ? 0 : runs[ r ].second;
+			xfer->xferUnsignedInt( &length );
+			xfer->xferUnsignedByte( &value );
+			if (load)
+			{
+				if (length == 0 || length > savedCount - (UnsignedInt)ground.size())
+					throw SC_INVALID_DATA;
+				ground.insert( ground.end(), length, value );
+			}
+		}
+		if (load && ground.size() != savedCount)
+			throw SC_INVALID_DATA;
+
+		UnsignedInt obstacleCount = (UnsignedInt)obstacles.size();
+		xfer->xferUnsignedInt( &obstacleCount );
+		if (load)
+		{
+			UnsignedInt named = 0;
+			for (size_t i = 0; i < ground.size(); ++i)
+				if (ground[ i ] & SAVED_GROUND_OBSTACLE)
+					++named;
+			if (named != obstacleCount)
+				throw SC_INVALID_DATA;
+			obstacles.resize( obstacleCount );
+		}
+		for (UnsignedInt i = 0; i < obstacleCount; ++i)
+			xfer->xferObjectID( &obstacles[ i ] );
+
+		if (load && savedCount != cellCount)
+			DEBUG_LOG(( "Pathfinder::xferCellGround - layer %d held %u cells when saved, the load has %u: left as the load built it\n",
+				layer, savedCount, cellCount ));
+		if (load && savedCount > 0 && savedCount == cellCount)
+		{
+			m_loadedCellLayers.push_back( std::make_pair( layer, savedCount ) );
+			m_loadedCellGround.insert( m_loadedCellGround.end(), ground.begin(), ground.end() );
+			m_loadedCellObstacles.insert( m_loadedCellObstacles.end(), obstacles.begin(), obstacles.end() );
+		}
+	}
+	if (load)
+		m_cellGroundFromSave = TRUE;
+}
+
+//-----------------------------------------------------------------------------
+/** First of the pathfinder's post-process: the cells as the save holds them, over whatever the objects
+	* classified onto the map as they loaded.  Their infos are restoreInfoCells' business, after this. */
+void Pathfinder::restoreCellGround( void )
+{
+	if (!m_cellGroundFromSave)
+		return;
+	m_cellGroundFromSave = FALSE;
+	std::vector<PathfindCell *> cells;
+	size_t at = 0;
+	size_t obstacleAt = 0;
+	for (size_t l = 0; l < m_loadedCellLayers.size(); ++l)
+	{
+		collectLayerCells( m_loadedCellLayers[ l ].first, cells );
+		const size_t count = m_loadedCellLayers[ l ].second;
+		const Bool sameGrid = cells.size() == count;
+		DEBUG_ASSERTCRASH( sameGrid, ("Pathfinder layer %d changed size during the load", m_loadedCellLayers[ l ].first) );
+		for (size_t i = 0; i < count; ++i, ++at)
+		{
+			const UnsignedByte saved = m_loadedCellGround[ at ];
+			const ObjectID obstacle = ( saved & SAVED_GROUND_OBSTACLE ) ? m_loadedCellObstacles[ obstacleAt++ ] : INVALID_ID;
+			if (sameGrid)
+				cells[ i ]->restoreSavedGround( saved, obstacle );
+		}
+	}
+	m_loadedCellGround.clear();
+	m_loadedCellObstacles.clear();
+	m_loadedCellLayers.clear();
+}
+
+//-----------------------------------------------------------------------------
 /** After every object's own post-processing, which puts each unit where it stands (AIUpdate): off
 	* with all of that, and the save's cells back in. */
 void Pathfinder::loadPostProcess( void )
 {
+	restoreCellGround();
 	m_zoneManager.loadPostProcess();
 	m_loadedQueueLine.clear();
 

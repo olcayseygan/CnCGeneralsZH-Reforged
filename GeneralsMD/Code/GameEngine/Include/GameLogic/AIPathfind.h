@@ -470,6 +470,9 @@ public:
 	Bool startPathfind( PathfindCell *goalCell ); 
 	Bool getPinched(void) const {return m_pinched;}
 	void setPinched(Bool pinch) {m_pinched = pinch;	}
+	/// the type, pinched, fence and transparent bits, and whether an obstacle is named: what a save holds
+	UnsignedByte savedGround( void ) const;
+	void restoreSavedGround( UnsignedByte saved, ObjectID obstacle );
 
 	Bool allocateInfo(const ICoord2D &pos);
 	void releaseInfo(void);
@@ -556,6 +559,8 @@ public:
 	void setZone(Int zone) {m_zone = zone;}
 	void applyZone(void); // Propagates m_zone to all cells.
 	void xferZones( Xfer *xfer );	///< m_zone and the zone each cell reads (PathfindZoneManager::xfer)
+	/// every cell the layer holds, whatever its type, in xferZones' order (Pathfinder::collectLayerCells)
+	void collectCells( std::vector<PathfindCell *> &cells );
 	void getStartCellIndex(ICoord2D *start) {*start = m_startCell;}
 	void getEndCellIndex(ICoord2D *end) {*end = m_endCell;}
 
@@ -1582,6 +1587,17 @@ private:
 	std::vector<Int64> m_loadedInfoCells;
 	Bool					m_infoCellsFromSave;
 	void restoreInfoCells( void );
+	/* Every cell's structure ground as the save holds it (xfer, version 5): PathfindCell::savedGround for
+		 each cell of each layer the load has the same grid for, the obstacle of each that names one, and
+		 which layers those are with their cell counts.  Put back by loadPostProcess over what the objects
+		 classified onto the map while they loaded. */
+	std::vector<UnsignedByte> m_loadedCellGround;
+	std::vector<ObjectID> m_loadedCellObstacles;
+	std::vector< std::pair<Int, UnsignedInt> > m_loadedCellLayers;
+	Bool					m_cellGroundFromSave;
+	void collectLayerCells( Int layer, std::vector<PathfindCell *> &cells );
+	void xferCellGround( Xfer *xfer );
+	void restoreCellGround( void );
 
 	/// one cell's units as the save holds them (xfer); a load keeps them until every object has loaded
 	struct UnitCell

@@ -188,6 +188,9 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 			// the menus and the chat among them, took the wheel before it got here
 			if( TheInGameUI->handleAirliftWheel( &msg->getArgument( 0 )->pixel, msg->getArgument( 1 )->real ) )
 				return DESTROY_MESSAGE;
+			// over the observer board it steps the picked stat and never zooms
+			if( TheInGameUI->handleConsoleWheel( &msg->getArgument( 0 )->pixel, msg->getArgument( 1 )->real ) )
+				return DESTROY_MESSAGE;
 			if( TheInGameUI->getPendingPlaceType() && TheInGameUI->isPlacementAnchored() &&
 					TheInGameUI->placesRow() )
 			{

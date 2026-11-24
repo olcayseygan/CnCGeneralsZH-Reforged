@@ -1630,10 +1630,6 @@ GUI:ObsConStatSuper
 "SUPER"
 END
 
-GUI:ObsConGeneral
-"GENERAL"
-END
-
 GUI:ObsConQueue
 "QUEUE"
 END
@@ -1642,12 +1638,12 @@ GUI:ObsConPowers
 "POWERS"
 END
 
-GUI:ObsConDefeated
-"DEFEATED"
-END
-
 GUI:ObsConLost
 "LOST"
+END
+
+GUI:ObsConOut
+"OUT"
 END
 
 GUI:ObsConPerMinute

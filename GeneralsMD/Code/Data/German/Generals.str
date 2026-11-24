@@ -18989,10 +18989,6 @@ GUI:ObsConStatSuper
 "SUPER"
 END
 
-GUI:ObsConGeneral
-"GENERAL"
-END
-
 GUI:ObsConQueue
 "PRODUKTION"
 END
@@ -19001,12 +18997,12 @@ GUI:ObsConPowers
 "KRÄFTE"
 END
 
-GUI:ObsConDefeated
-"BESIEGT"
-END
-
 GUI:ObsConLost
 "VERLOREN"
+END
+
+GUI:ObsConOut
+"RAUS"
 END
 
 GUI:ObsConPerMinute

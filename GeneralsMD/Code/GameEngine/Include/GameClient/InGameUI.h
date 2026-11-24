@@ -1200,6 +1200,11 @@ public:  // ********************************************************************
 	/// The wheel over the airlift panel, drawn on the last pass: TRUE when the panel is under it; over a
 	/// unit's cell it moves the count
 	Bool handleAirliftWheel( const ICoord2D *mouse, Real notches );
+	/// The wheel over the observer board, drawn on the last pass: TRUE when the board is under it; it steps
+	/// the picked stat
+	Bool handleConsoleWheel( const ICoord2D *mouse, Real notches );
+	/// what a press on the observer HUD or one of its hotkeys does (InGameUI.cpp's ConsoleAction)
+	void runConsoleAction( Int action, Int arg );
 	/// a command bar key while watching: TRUE when it picked a stat, Q W E R T Y A as shipped
 	Bool pickSpectatorStat( Int commandSlot );
 	/// a raw Q W E R T Y A press or release while watching: TRUE when the rack's stat keys took it

@@ -21025,10 +21025,6 @@ GUI:ObsConStatSuper
 "СУПЕР"
 END
 
-GUI:ObsConGeneral
-"ГЕНЕРАЛ"
-END
-
 GUI:ObsConQueue
 "ОЧЕРЕДЬ"
 END
@@ -21037,12 +21033,12 @@ GUI:ObsConPowers
 "СПОСОБНОСТИ"
 END
 
-GUI:ObsConDefeated
-"ПОВЕРЖЕН"
-END
-
 GUI:ObsConLost
 "ПОТЕРЯНО"
+END
+
+GUI:ObsConOut
+"ВЫБЫЛ"
 END
 
 GUI:ObsConPerMinute

@@ -21081,10 +21081,6 @@ GUI:ObsConStatSuper
 "SUPER"
 END
 
-GUI:ObsConGeneral
-"GÉNÉRAL"
-END
-
 GUI:ObsConQueue
 "FILE"
 END
@@ -21093,12 +21089,12 @@ GUI:ObsConPowers
 "POUVOIRS"
 END
 
-GUI:ObsConDefeated
-"VAINCU"
-END
-
 GUI:ObsConLost
 "PERDUS"
+END
+
+GUI:ObsConOut
+"HORS"
 END
 
 GUI:ObsConPerMinute

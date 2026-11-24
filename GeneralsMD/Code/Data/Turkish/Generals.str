@@ -16326,10 +16326,6 @@ GUI:ObsConStatSuper
 "SÜPER"
 END
 
-GUI:ObsConGeneral
-"GENERAL"
-END
-
 GUI:ObsConQueue
 "SIRA"
 END
@@ -16338,12 +16334,12 @@ GUI:ObsConPowers
 "GÜÇLER"
 END
 
-GUI:ObsConDefeated
-"YENİLDİ"
-END
-
 GUI:ObsConLost
 "KAYIP"
+END
+
+GUI:ObsConOut
+"BİTTİ"
 END
 
 GUI:ObsConPerMinute

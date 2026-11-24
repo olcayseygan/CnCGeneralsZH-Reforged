@@ -16290,96 +16290,8 @@ GUI:HudStatPower
 "Elektrik"
 END
 
-GUI:HudStatIncomeValue
-"%ls/dk"
-END
-
-GUI:HudStatRankValue
-"Rütbe %d"
-END
-
-GUI:HudWatch
-"Kamera"
-END
-
-GUI:HudCamStateFree
-"Serbest kamera"
-END
-
-GUI:HudCamStateDirector
-"Direktör"
-END
-
-GUI:HudCamStatePlayer
-"Oyuncu ekranı: %ls"
-END
-
-GUI:HudCamNextDirector
-"Kamera en büyük çatışmaya kendisi gider"
-END
-
-GUI:HudCamNextDirectorFollowed
-"Çatışmaları izlenen oyuncu: %ls"
-END
-
-GUI:HudCamNextWaiting
-"Oyuncunun kamerası bekleniyor"
-END
-
-GUI:HudCamNextComputer
-"Bilgisayarın ekranı yok, Direktör izliyor"
-END
-
-GUI:HudCamHintFree
-"Kamerayı kendin gezdirirsin"
-END
-
-GUI:HudCamHintPlayer
-"Seçtiğin oyuncunun ekranını görürsün"
-END
-
-GUI:HudCamHintFog
-"Yalnızca izlenen oyuncunun gördüğünü gösterir"
-END
-
-GUI:HudCamHintArmies
-"Her oyuncunun birliklerini listenin yanında açar"
-END
-
-GUI:HudCamHintRow
-"Tıkla: bu oyuncunun ekranını gör"
-END
-
-GUI:HudCamHintRowLive
-"Tıkla: bırak"
-END
-
-GUI:HudPlayerCamera
-"OYUNCU KAMERASI"
-END
-
-GUI:HudCameraFree
-"Serbest"
-END
-
-GUI:HudCameraDirector
-"Direktör"
-END
-
-GUI:HudCameraPlayer
-"Oyuncu"
-END
-
-GUI:HudFog
-"Sis"
-END
-
 GUI:HudArmies
 "Ordular"
-END
-
-GUI:HudStandings
-"Sıralama"
 END
 
 GUI:ObsConTeam
@@ -18047,18 +17959,6 @@ END
 
 GUI:SummarySpent_Short
 "Harc."
-END
-
-GUI:HudCameraFree_Short
-"Serb."
-END
-
-GUI:HudCameraDirector_Short
-"Dir."
-END
-
-GUI:HudCameraPlayer_Short
-"Oync."
 END
 
 GUI:ScoreHighlights

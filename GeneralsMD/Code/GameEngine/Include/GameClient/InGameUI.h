@@ -1197,11 +1197,6 @@ public:  // ********************************************************************
 	/// items off that building's queue; one of your own superweapons takes the camera to it
 	Bool handleHudCellClick( const ICoord2D *mouse, Bool cancel );
 
-	/// A press on the spectator's rack, at `mouse` in screen pixels: TRUE when the rack is under it,
-	/// whatever button it was; only `act`, the left button, works its controls
-	Bool handleSpectatorRackClick( const ICoord2D *mouse, Bool act );
-	/// The wheel over the rack: TRUE when the rack is under it; over the standings' head it steps the stat
-	Bool handleSpectatorRackWheel( const ICoord2D *mouse, Real notches );
 	/// The wheel over the airlift panel, drawn on the last pass: TRUE when the panel is under it; over a
 	/// unit's cell it moves the count
 	Bool handleAirliftWheel( const ICoord2D *mouse, Real notches );
@@ -1730,50 +1725,14 @@ protected:
 	UnsignedInt									m_hudCellPass;						///< client passes, counted by update()
 	UnsignedInt									m_hudCellDrawnPass;				///< m_hudCellPass when postDraw last laid the cells out
 
-	//
-	// The spectator's rack (drawSpectatorRack), drawers hung off the right edge under the superweapon
-	// tray while the local player watches: the camera, the fog and the armies drawer, then every
-	// player ranked by the stat its keys pick.  Where the last draw put it, for the clicks.
-	//
-	enum { RACK_ROWS = 32, RACK_ARMY_UNITS = 6 };	///< a row for every seat MAX_SLOTS allows
-	enum
-	{
-		RACK_TEXT_WATCH, RACK_TEXT_STANDINGS, RACK_TEXT_STOP, RACK_TEXT_FOG = RACK_TEXT_STOP + 3, RACK_TEXT_ARMIES,
-		RACK_TEXT_KEY, RACK_TEXT_STAT = RACK_TEXT_KEY + 7, RACK_TEXT_HINT, RACK_TEXT_PLACE_HEAD, RACK_TEXT_PLAYER_HEAD,
-		RACK_TEXT_VALUE_HEAD, RACK_TEXT_PLACE, RACK_TEXT_NAME = RACK_TEXT_PLACE + RACK_ROWS,
-		RACK_TEXT_VALUE = RACK_TEXT_NAME + RACK_ROWS, RACK_TEXT_UNITS = RACK_TEXT_VALUE + RACK_ROWS,
-		RACK_TEXT_STATE = RACK_TEXT_UNITS + RACK_ROWS * RACK_ARMY_UNITS, RACK_TEXT_STATE_NAME, RACK_TEXT_STATE_TAIL, RACK_TEXT_NEXT,
-		RACK_TEXT_PLATE_NAME, RACK_TEXT_PLATE_WORD,
-		RACK_TEXT_COUNT
-	};
-	void drawSpectatorRack( Int plateTop );	///< plateTop: the watch drawer's plate, 8 under the superweapon tray's foot
 	/// while watching: the observer console along the screen's foot (its radar bay under the windows)
 	void drawObserverConsole( void );
 	void drawObserverConsoleBay( void );
-	/// the status well under the mode cells: what the camera does, and the next step or the hovered
-	/// control's use; well FALSE when the drawer's own piece already has the well painted in
-	void drawRackStatus( Int left, Int top, Int right, const UnicodeString &hover, Bool well );
 	/// a player's own screen on the camera, the fog left as the watcher set it; the mode before is kept
 	void takePlayerCamera( Int playerIndex );
 	/// the player let go of: nobody followed, the camera the watcher had before
 	void letGoOfPlayerCamera( void );
-	/// while a player's screen is on the camera, his name and "player camera" at the top of the picture
-	void drawPlayerCameraPlate( Int top );
-	/// the kept string `slot` holding text in the bold face at px pixels at 1080, or a pixel smaller
-	/// where that fits room (0: any width), else abbreviated at that size (UIStyle::fitText, shortText
-	/// first, keep's words left whole); a player's name is only ever cut with an ellipsis
-	DisplayString *rackText( Int slot, const UnicodeString &text, Int px, Int room,
-		const UnicodeString &shortText = UnicodeString::TheEmptyString, const UnicodeString &keep = UnicodeString::TheEmptyString );
-	Bool												m_rackShown;							///< the last postDraw drew it
-	Int													m_rackX, m_rackY;					///< its pieces' left and the watch drawer's top
-	Int													m_rackRows;
-	Int													m_rackRowPlayer[ RACK_ROWS ];	///< the player index on each row, top down
-	Int													m_rackStat;								///< the picked SPECTATOR_STATS index
-	Bool												m_rackArmies;							///< the armies drawer is out
-	DisplayString *							m_rackText[ RACK_TEXT_COUNT ];
-	Int													m_rackTextPx[ RACK_TEXT_COUNT ];		///< the size and room each was laid out for
-	Int													m_rackTextRoom[ RACK_TEXT_COUNT ];
-	UnicodeString								m_rackTextSource[ RACK_TEXT_COUNT ];	///< the text before any shortening
+	Int													m_rackStat;								///< the console's picked SPECTATOR_STATS index
 
 	Coord2D											m_superweaponPosition;
 	DurationFramesReal												m_superweaponFlashDuration;

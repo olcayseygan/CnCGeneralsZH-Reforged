@@ -167,7 +167,6 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 			m_cellRightClickTaken = FALSE;
 			if( LaneWarEndScreen_press( &msg->getArgument(0)->pixel, TRUE )
 					|| LaneHud_press( &msg->getArgument(0)->pixel, TRUE )
-					|| TheInGameUI->handleSpectatorRackClick( &msg->getArgument(0)->pixel, FALSE )
 					|| TheInGameUI->handleHudCellClick( &msg->getArgument(0)->pixel, TRUE ) )
 			{
 				m_cellRightClickTaken = TRUE;
@@ -188,9 +187,6 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 			// over the airlift panel it picks a unit's count and never zooms; a window under the pointer,
 			// the menus and the chat among them, took the wheel before it got here
 			if( TheInGameUI->handleAirliftWheel( &msg->getArgument( 0 )->pixel, msg->getArgument( 1 )->real ) )
-				return DESTROY_MESSAGE;
-			// over the spectator's rack the wheel turns the stat dial and never zooms
-			if( TheInGameUI->handleSpectatorRackWheel( &msg->getArgument( 0 )->pixel, msg->getArgument( 1 )->real ) )
 				return DESTROY_MESSAGE;
 			if( TheInGameUI->getPendingPlaceType() && TheInGameUI->isPlacementAnchored() &&
 					TheInGameUI->placesRow() )
@@ -224,7 +220,6 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 			m_cellClickTaken = FALSE;
 			if( LaneWarEndScreen_press( &msg->getArgument(0)->pixel, FALSE )
 					|| LaneHud_press( &msg->getArgument(0)->pixel, FALSE )
-					|| TheInGameUI->handleSpectatorRackClick( &msg->getArgument(0)->pixel, TRUE )
 					|| TheInGameUI->handleHudCellClick( &msg->getArgument(0)->pixel, TheKeyboard->isCtrl() ) )
 			{
 				m_cellClickTaken = TRUE;

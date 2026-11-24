@@ -744,9 +744,13 @@ void W3DRadar::drawBoxLines( const ICoord2D *corners, const IRegion2D *picture )
 	//
 	if( !TheGlobalData->m_classicGraphics )
 	{
-		const Int core = max( 1, REAL_TO_INT_FLOOR( max( clipRegion.width(), clipRegion.height() ) / 165.0f ) );
+		// a watcher looking through a picked player's camera sees that camera's box in the console's gold,
+		// a pixel heavier, so the radar says whose screen is up
+		const Player *local = ThePlayerList->getLocalPlayer();
+		const Bool followed = local != NULL && !local->isPlayerActive() && TheObserverCamera.isShowingPlayerView();
+		const Int core = max( 1, REAL_TO_INT_FLOOR( max( clipRegion.width(), clipRegion.height() ) / 165.0f ) ) + ( followed ? 1 : 0 );
 		const Int keyline = core + 2;
-		const Color coreColor = GameMakeColor( 255, 236, 90, 255 );
+		const Color coreColor = followed ? GameMakeColor( 242, 194, 48, 255 ) : GameMakeColor( 255, 236, 90, 255 );
 		const Color keylineColor = GameMakeColor( 10, 10, 6, 255 );	// opaque: translucent ends blend twice where they meet
 
 		// A line is drawn w wide about its centre, so the box is cut as a polygon to the picture brought

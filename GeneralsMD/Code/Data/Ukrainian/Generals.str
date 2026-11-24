@@ -20793,96 +20793,8 @@ GUI:HudArmies
 "Армії"
 END
 
-GUI:HudCameraDirector
-"Режисер"
-END
-
-GUI:HudCameraDirector_Short
-"Реж."
-END
-
-GUI:HudCameraFree
-"Вільна"
-END
-
-GUI:HudCameraFree_Short
-"Вільна"
-END
-
-GUI:HudCameraPlayer
-"Гравець"
-END
-
-GUI:HudCameraPlayer_Short
-"Грав."
-END
-
-GUI:HudCamHintArmies
-"Відкриває війська кожного гравця поруч зі списком"
-END
-
-GUI:HudCamHintFog
-"Показує лише те, що бачить гравець, за яким ви стежите"
-END
-
-GUI:HudCamHintFree
-"Камеру рухаєте ви самі"
-END
-
-GUI:HudCamHintPlayer
-"Ви бачите екран вибраного гравця"
-END
-
-GUI:HudCamHintRow
-"Клацніть, щоб побачити екран цього гравця"
-END
-
-GUI:HudCamHintRowLive
-"Клацніть, щоб відпустити"
-END
-
-GUI:HudCamNextComputer
-"У комп'ютера немає екрана. Стежить режисер"
-END
-
-GUI:HudCamNextDirector
-"Камера сама переходить до найбільшого бою"
-END
-
-GUI:HudCamNextDirectorFollowed
-"Стежимо за боями гравця %ls"
-END
-
-GUI:HudCamNextWaiting
-"Чекаємо на камеру цього гравця"
-END
-
-GUI:HudCamStateDirector
-"Режисер"
-END
-
-GUI:HudCamStateFree
-"Вільна камера"
-END
-
-GUI:HudCamStatePlayer
-"Екран: %ls"
-END
-
-GUI:HudFog
-"Туман"
-END
-
 GUI:HudNetWorth
 "Статки"
-END
-
-GUI:HudPlayerCamera
-"КАМЕРА ГРАВЦЯ"
-END
-
-GUI:HudStandings
-"Таблиця"
 END
 
 GUI:ObsConTeam
@@ -20949,10 +20861,6 @@ GUI:HudStatIncome
 "Дохід за хвилину"
 END
 
-GUI:HudStatIncomeValue
-"%ls/хв"
-END
-
 GUI:HudStatKills
 "Знищено / втрачено"
 END
@@ -20963,14 +20871,6 @@ END
 
 GUI:HudStatRank
 "Звання генерала"
-END
-
-GUI:HudStatRankValue
-"Звання %d"
-END
-
-GUI:HudWatch
-"Камера"
 END
 
 GUI:IncomeSharing_Short

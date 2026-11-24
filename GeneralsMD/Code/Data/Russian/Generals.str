@@ -20989,96 +20989,8 @@ GUI:HudArmies
 "Армии"
 END
 
-GUI:HudCameraDirector
-"Режиссёр"
-END
-
-GUI:HudCameraDirector_Short
-"Реж."
-END
-
-GUI:HudCameraFree
-"Свободная"
-END
-
-GUI:HudCameraFree_Short
-"Своб."
-END
-
-GUI:HudCameraPlayer
-"Игрок"
-END
-
-GUI:HudCameraPlayer_Short
-"Игрок"
-END
-
-GUI:HudCamHintArmies
-"Открывает юниты каждого игрока рядом со списком"
-END
-
-GUI:HudCamHintFog
-"Показывает только то, что видит наблюдаемый игрок"
-END
-
-GUI:HudCamHintFree
-"Камерой управляете вы сами"
-END
-
-GUI:HudCamHintPlayer
-"Вы видите экран выбранного игрока"
-END
-
-GUI:HudCamHintRow
-"Щёлкните, чтобы увидеть экран этого игрока"
-END
-
-GUI:HudCamHintRowLive
-"Щёлкните, чтобы отпустить"
-END
-
-GUI:HudCamNextComputer
-"У компьютера нет экрана. Ведёт режиссёр"
-END
-
-GUI:HudCamNextDirector
-"Камера сама летит к самому крупному бою"
-END
-
-GUI:HudCamNextDirectorFollowed
-"Следим за боями игрока %ls"
-END
-
-GUI:HudCamNextWaiting
-"Ожидание камеры этого игрока"
-END
-
-GUI:HudCamStateDirector
-"Режиссёр"
-END
-
-GUI:HudCamStateFree
-"Свободная камера"
-END
-
-GUI:HudCamStatePlayer
-"Экран: %ls"
-END
-
-GUI:HudFog
-"Туман"
-END
-
 GUI:HudNetWorth
 "Состояние"
-END
-
-GUI:HudPlayerCamera
-"КАМЕРА ИГРОКА"
-END
-
-GUI:HudStandings
-"Положение"
 END
 
 GUI:ObsConTeam
@@ -21145,10 +21057,6 @@ GUI:HudStatIncome
 "Доход в минуту"
 END
 
-GUI:HudStatIncomeValue
-"%ls/мин"
-END
-
 GUI:HudStatKills
 "Убито / потеряно"
 END
@@ -21159,14 +21067,6 @@ END
 
 GUI:HudStatRank
 "Звание генерала"
-END
-
-GUI:HudStatRankValue
-"Звание %d"
-END
-
-GUI:HudWatch
-"Камера"
 END
 
 GUI:IncomeSharing_Short

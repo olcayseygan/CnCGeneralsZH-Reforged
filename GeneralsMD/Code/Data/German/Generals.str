@@ -18949,100 +18949,12 @@ GUI:HudArmies
 "Armeen"
 END
 
-GUI:HudCameraDirector
-"Regie"
-END
-
-GUI:HudCameraDirector_Short
-"Regie"
-END
-
-GUI:HudCameraFree
-"Frei"
-END
-
-GUI:HudCameraFree_Short
-"Frei"
-END
-
-GUI:HudCameraPlayer
-"Spieler"
-END
-
-GUI:HudCameraPlayer_Short
-"Spl."
-END
-
-GUI:HudCamHintArmies
-"Öffnet die Einheiten jedes Spielers neben der Liste"
-END
-
-GUI:HudCamHintFog
-"Zeigt nur, was der beobachtete Spieler sieht"
-END
-
-GUI:HudCamHintFree
-"Du bewegst die Kamera selbst"
-END
-
-GUI:HudCamHintPlayer
-"Du siehst den Bildschirm des gewählten Spielers"
-END
-
-GUI:HudCamHintRow
-"Klicken, um den Bildschirm dieses Spielers zu sehen"
-END
-
-GUI:HudCamHintRowLive
-"Klicken zum Loslassen"
-END
-
-GUI:HudCamNextComputer
-"Computer haben keinen Bildschirm. Regie folgt"
-END
-
-GUI:HudCamNextDirector
-"Die Kamera geht von selbst zum größten Kampf"
-END
-
-GUI:HudCamNextDirectorFollowed
-"Folgt den Kämpfen von %ls"
-END
-
-GUI:HudCamNextWaiting
-"Warte auf die Kamera dieses Spielers"
-END
-
-GUI:HudCamStateDirector
-"Regie"
-END
-
-GUI:HudCamStateFree
-"Freie Kamera"
-END
-
-GUI:HudCamStatePlayer
-"Bildschirm von %ls"
-END
-
-GUI:HudFog
-"Kriegsnebel"
-END
-
 GUI:HudNetWorth
 "Gesamtwert"
 END
 
-GUI:HudPlayerCamera
-"SPIELERKAMERA"
-END
-
 GUI:HudReconSiha
 "SIHA-AUFKLÄRUNG"
-END
-
-GUI:HudStandings
-"Stand"
 END
 
 GUI:ObsConTeam
@@ -19109,10 +19021,6 @@ GUI:HudStatIncome
 "Einkommen pro Minute"
 END
 
-GUI:HudStatIncomeValue
-"%ls/Min."
-END
-
 GUI:HudStatKills
 "Abschüsse / Verluste"
 END
@@ -19123,14 +19031,6 @@ END
 
 GUI:HudStatRank
 "Generalsrang"
-END
-
-GUI:HudStatRankValue
-"Rang %d"
-END
-
-GUI:HudWatch
-"Kamera"
 END
 
 GUI:IncomeSharing_Short

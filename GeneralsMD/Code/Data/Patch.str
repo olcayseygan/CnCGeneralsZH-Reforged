@@ -1592,109 +1592,9 @@ GUI:HudStatPower
 "Power"
 END
 
-// a row's number under the income stat, "$1,840/min"
-GUI:HudStatIncomeValue
-"%ls/min"
-END
-
-// a row's number under the rank stat
-GUI:HudStatRankValue
-"Rank %d"
-END
-
-// the rack's top drawer: the camera lever, the fog and the armies drawer
-GUI:HudWatch
-"Camera"
-END
-
-// The camera drawer's status well: its first line says what the camera does, its second the next
-// step, or what the control under the pointer does.  %ls is a player's name
-GUI:HudCamStateFree
-"Free camera"
-END
-
-GUI:HudCamStateDirector
-"Director"
-END
-
-GUI:HudCamStatePlayer
-"Screen of %ls"
-END
-
-// also the Director stop's explanation under the pointer
-GUI:HudCamNextDirector
-"The camera goes to the biggest fight by itself"
-END
-
-GUI:HudCamNextDirectorFollowed
-"Following the fights of %ls"
-END
-
-GUI:HudCamNextWaiting
-"Waiting for this player's camera"
-END
-
-GUI:HudCamNextComputer
-"Computers have no screen. Director follows"
-END
-
-GUI:HudCamHintFree
-"You move the camera yourself"
-END
-
-GUI:HudCamHintPlayer
-"You see the screen of the player you pick"
-END
-
-GUI:HudCamHintFog
-"Shows only what the watched player sees"
-END
-
-GUI:HudCamHintArmies
-"Opens each player's units beside the list"
-END
-
-GUI:HudCamHintRow
-"Click to see this player's screen"
-END
-
-GUI:HudCamHintRowLive
-"Click to let go"
-END
-
-// the plate at the top of the picture while a player's own screen is on the camera, beside his name
-GUI:HudPlayerCamera
-"PLAYER CAMERA"
-END
-
-// the camera's own again
-GUI:HudCameraFree
-"Free"
-END
-
-// the camera goes to the biggest fight on the map by itself
-GUI:HudCameraDirector
-"Director"
-END
-
-// the camera shows what the followed player's own screen shows
-GUI:HudCameraPlayer
-"Player"
-END
-
-// the followed player's fog of war, so the spectator sees only what he sees
-GUI:HudFog
-"Fog"
-END
-
 // each player's units, most first, with how many he has
 GUI:HudArmies
 "Armies"
-END
-
-// the rack's drawer of every player ranked by the picked stat
-GUI:HudStandings
-"Standings"
 END
 
 // the picked player's card beside the radar while watching: a word over each number
@@ -3431,19 +3331,6 @@ END
 
 GUI:SummarySpent_Short
 "Spent"
-END
-
-// the rack lever's three stops where the whole word does not fit
-GUI:HudCameraFree_Short
-"Free"
-END
-
-GUI:HudCameraDirector_Short
-"Dir."
-END
-
-GUI:HudCameraPlayer_Short
-"Plyr"
 END
 
 // the score screen's map column: what stood out of the match, a line each, "label: player"

@@ -21045,96 +21045,8 @@ GUI:HudArmies
 "Armées"
 END
 
-GUI:HudCameraDirector
-"Réalisateur"
-END
-
-GUI:HudCameraDirector_Short
-"Réal."
-END
-
-GUI:HudCameraFree
-"Libre"
-END
-
-GUI:HudCameraFree_Short
-"Libre"
-END
-
-GUI:HudCameraPlayer
-"Joueur"
-END
-
-GUI:HudCameraPlayer_Short
-"Joueur"
-END
-
-GUI:HudCamHintArmies
-"Affiche les unités de chaque joueur à côté de la liste"
-END
-
-GUI:HudCamHintFog
-"N'affiche que ce que voit le joueur suivi"
-END
-
-GUI:HudCamHintFree
-"Vous déplacez la caméra vous-même"
-END
-
-GUI:HudCamHintPlayer
-"Vous voyez l'écran du joueur choisi"
-END
-
-GUI:HudCamHintRow
-"Cliquez pour voir l'écran de ce joueur"
-END
-
-GUI:HudCamHintRowLive
-"Cliquez pour le lâcher"
-END
-
-GUI:HudCamNextComputer
-"Les ordinateurs n'ont pas d'écran. Le réalisateur prend le relais"
-END
-
-GUI:HudCamNextDirector
-"La caméra va d'elle-même au plus gros combat"
-END
-
-GUI:HudCamNextDirectorFollowed
-"Suit les combats de %ls"
-END
-
-GUI:HudCamNextWaiting
-"En attente de la caméra de ce joueur"
-END
-
-GUI:HudCamStateDirector
-"Réalisateur"
-END
-
-GUI:HudCamStateFree
-"Caméra libre"
-END
-
-GUI:HudCamStatePlayer
-"Écran de %ls"
-END
-
-GUI:HudFog
-"Brouillard"
-END
-
 GUI:HudNetWorth
 "Valeur nette"
-END
-
-GUI:HudPlayerCamera
-"CAMÉRA JOUEUR"
-END
-
-GUI:HudStandings
-"Classement"
 END
 
 GUI:ObsConTeam
@@ -21201,10 +21113,6 @@ GUI:HudStatIncome
 "Revenu par minute"
 END
 
-GUI:HudStatIncomeValue
-"%ls/min"
-END
-
 GUI:HudStatKills
 "Victimes / pertes"
 END
@@ -21215,14 +21123,6 @@ END
 
 GUI:HudStatRank
 "Grade du général"
-END
-
-GUI:HudStatRankValue
-"Grade %d"
-END
-
-GUI:HudWatch
-"Caméra"
 END
 
 GUI:IncomeSharing_Short

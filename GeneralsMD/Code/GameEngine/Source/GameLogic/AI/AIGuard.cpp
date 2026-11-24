@@ -722,14 +722,24 @@ void AIGuardReturnState::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer Method */
 // ------------------------------------------------------------------------------------------------
+/** Version Info
+	* 1: Initial version
+	* 2: the move it inherits (where it walks back to, the path it waits on) and whether onEnter started
+	*    none.  Version 1 left them out, so a unit loaded walking back to an area it guards set off for
+	*    the corner of the map on its next repath */
 void AIGuardReturnState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 1;
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
-	
+
 	xfer->xferUnsignedInt(&m_nextReturnScanTime);
+	if( version >= 2 )
+	{
+		AIInternalMoveToState::xfer( xfer );
+		xfer->xferBool( &m_stayedAtPost );
+	}
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------
@@ -769,7 +779,7 @@ StateReturnType AIGuardReturnState::onEnter( void )
 	m_goalPosition = targetToGuard ? *targetToGuard->getPosition() : *getGuardMachine()->getPositionToGuard();
 
 	const PolygonTrigger *area = getGuardMachine()->getAreaToGuard();
-	if (area) 
+	if (area)
 	{
 		area->getCenterPoint(&m_goalPosition);
 	}

@@ -634,14 +634,19 @@ void AIGuardRetaliateReturnState::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer Method */
 // ------------------------------------------------------------------------------------------------
+/** Version Info
+	* 1: Initial version
+	* 2: the move it inherits, where it walks back to and the path it waits on (AIGuardReturnState::xfer) */
 void AIGuardRetaliateReturnState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 1;
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
-	
+
 	xfer->xferUnsignedInt(&m_nextReturnScanTime);
+	if( version >= 2 )
+		AIInternalMoveToState::xfer( xfer );
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------

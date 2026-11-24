@@ -1286,6 +1286,7 @@ void TeamPrototype::xfer( Xfer *xfer )
 		//
 
 		// read each block
+		std::vector< Team * > loadedTeams;
 		for( UnsignedShort i = 0; i < teamInstanceCount; ++i )
 		{
 
@@ -1312,8 +1313,21 @@ void TeamPrototype::xfer( Xfer *xfer )
 
 			// xfer team data
 			xfer->xferSnapshot( teamInstance );
+			loadedTeams.push_back( teamInstance );
 
 		}  // end for, i
+
+		//
+		// A team made here goes in front of the list, so the loaded list ran the other way round from
+		// the saved one, and every frame's team scripts ran in that order: two one-man teams starting
+		// their sequential scripts on the same frame took each other's group numbers.  Laid out again
+		// in the saved order, back to front, each to the front.
+		//
+		for( size_t i = loadedTeams.size(); i > 0; --i )
+		{
+			removeFrom_TeamInstanceList( loadedTeams[ i - 1 ] );
+			prependTo_TeamInstanceList( loadedTeams[ i - 1 ] );
+		}
 
 	}  // end else, load
 	

@@ -76,9 +76,12 @@ POWER_SURPLUS_MAX = 10     # no more power plants once this much power is spare 
 HOME_RADIUS = 700.0        # an army unit further than this from our CC counts as away
 FRONT_DISTANCE = 350.0     # the defence point and the Patriot line, out from our CC toward theirs
 COMMIT_DECISIONS = 12      # an attack may not be recalled for this many decisions (a minute at 5 s)
+COOLDOWN_DECISIONS = 6     # and no new attack for this many after a recall (half a minute)
+THREAT_RADIUS = 1400.0     # enemy army inside this of our CC is at the door...
+THREAT_SHARE = 0.4         # ...and a threat once it is worth this share of our army
 # ponytail: the enemy's templates have no cost table here, so an object we cannot price counts by its
 # kind; a table of GLA and China costs from INIZH.big would make damage dealt exact
-NOMINAL_VALUE = {"structure": 1000, "builder": 1000, "unit": 600}
+NOMINAL_VALUE = {"structure": 1000, "builder": 600, "unit": 300}  # for what load_costs cannot price
 # `objects` lists every object a seat owns, shots and effects included (ToxinTruckStreamProjectile,
 # SCUDMissile, PoisonFieldSmall, ReforgedTankWreckFire...), and each one that expires would count
 # as a kill. Our side needs no filter (only ITEMS templates are read); theirs does.
@@ -87,8 +90,8 @@ NOT_A_UNIT = re.compile(r"Projectile|Missile$|Field|Wreck|Debris|Shell$|Bomb$|Ro
 # Per 1000 credits: what we finish (economy full, army half), income, the enemy value we destroy and
 # ours that is destroyed; a kill, a refused order and the end of the match are flat. Combat outweighs
 # economy on purpose: a base is only worth what it lets the army do.
-REWARD = {"economy": 0.5, "army": 0.25, "income": 0.5, "dealt": 2.0, "taken": 1.0,
-          "kill": 0.05, "refused": 0.05, "loss": 20.0, "win": 50.0}
+REWARD = {"economy": 1.0, "army": 0.25, "income": 0.5, "razed": 3.0, "razed_each": 0.5, "dealt": 0.5,
+          "taken": 1.0, "refused": 0.05, "loss": 20.0, "win": 50.0}
 
 
 def base_template(template):
@@ -96,9 +99,41 @@ def base_template(template):
     return template.split("_", 1)[1] if "_" in template else template
 
 
-def value_of(o):
-    key = KEY_OF_TEMPLATE.get(base_template(o["template"]))
-    return ITEMS[key].cost if key else NOMINAL_VALUE.get(o.get("kind"), 600)
+def load_costs(run_dir):
+    """BuildCost of every Object the game knows: the retail Object INIs in INIZH.big, then the loose
+    Data/INI files beside the exe (the fork's Reforged edits). Empty when the Run folder has neither."""
+    import bigfile
+    texts = []
+    try:
+        with open(os.path.join(run_dir, "INIZH.big"), "rb") as archive:
+            members = [(path, offset, size) for path, offset, size in bigfile._read_index(archive)
+                       if path.lower().replace("/", "\\").startswith("data\\ini\\object\\")]
+            for _, offset, size in members:
+                archive.seek(offset)
+                texts.append(archive.read(size).decode("latin-1"))
+    except OSError:
+        pass
+    loose = os.path.join(run_dir, "Data", "INI")
+    if os.path.isdir(loose):
+        for name in sorted(os.listdir(loose)):
+            if name.lower().endswith(".ini"):
+                with open(os.path.join(loose, name), "r", encoding="latin-1") as f:
+                    texts.append(f.read())
+    costs, name = {}, None
+    for text in texts:
+        for line in text.splitlines():
+            start = re.match(r"(Object|ObjectReskin)\s+(\S+)(?:\s+(\S+))?", line)
+            if start:
+                name = start.group(2)
+                if start.group(1) == "ObjectReskin" and start.group(3) in costs:
+                    costs[name] = costs[start.group(3)]
+            elif re.match(r"End\b", line):
+                name = None
+            elif name:
+                cost = re.match(r"\s*BuildCost\s*=\s*(\d+)", line)
+                if cost:
+                    costs[name] = int(cost.group(1))
+    return costs
 
 
 def default_exe():
@@ -182,12 +217,14 @@ class BuildOrderEnv(gym.Env):
         self.step_frames = max(1, round(decision_seconds * frames_per_game_second))
         self.episode_frames = round(episode_minutes * 60 * frames_per_game_second)
         self.reward_weights = dict(REWARD, **(reward or {}))
+        # the enemy's prices; the mock has no Run folder and prices by kind
+        self.costs = {} if mock else load_costs(os.path.dirname(exe or default_exe()))
         self.slot = 0
         self.game = None
         self.broken = False
         self.episodes = 0
         self.action_space = gym.spaces.Discrete(len(ACTIONS))
-        size = 4 + 2 * len(BUILDINGS) + len(UNITS) + len(PRODUCERS) + 1 + 8
+        size = 4 + 2 * len(BUILDINGS) + len(UNITS) + len(PRODUCERS) + 1 + 9
         self.observation_space = gym.spaces.Box(-1.0, 1.0, (size,), np.float32)
 
     # -- the game -----------------------------------------------------------------------------------
@@ -294,7 +331,7 @@ class BuildOrderEnv(gym.Env):
     def _read_enemy(self, home):
         """What the AI seat has: structures and army by count and value, its CC, and how near its army is."""
         e = {"structures": 0, "structure_value": 0, "army": 0, "army_value": 0, "ids": {}, "cc": None,
-             "targets": [], "nearest": None, "defeated": False}
+             "targets": [], "nearest": None, "near_value": 0, "defeated": False}
         reply = self.send("objects %d" % ENEMY_SLOT)
         if not reply.get("ok"):
             return e
@@ -302,8 +339,10 @@ class BuildOrderEnv(gym.Env):
         for o in reply["objects"]:
             if NOT_A_UNIT.search(o["template"]):
                 continue
-            value = value_of(o)
-            e["ids"][o["id"]] = value
+            # BuildCost from the game's INI (a general's copy shares the stock price), else by kind
+            value = self.costs.get(o["template"]) or self.costs.get(base_template(o["template"])) \
+                or NOMINAL_VALUE.get(o["kind"], 300)
+            e["ids"][o["id"]] = (value, o["kind"] == "structure" and not o.get("underConstruction"))
             if o["kind"] == "structure":
                 e["structures"] += 1
                 e["structure_value"] += value
@@ -315,6 +354,8 @@ class BuildOrderEnv(gym.Env):
                 e["army_value"] += value
                 distance = math.hypot(o["x"] - home[0], o["y"] - home[1])
                 e["nearest"] = distance if e["nearest"] is None else min(e["nearest"], distance)
+                if distance < THREAT_RADIUS:
+                    e["near_value"] += value
         return e
 
     def _outcome(self):
@@ -413,17 +454,21 @@ class BuildOrderEnv(gym.Env):
         mask[0] = True
         army = len(s["soldiers"])
         for index, key in enumerate(ACTIONS[1:], 1):
-            # an attack is a commitment: no second order to the same target, and no recall for
-            # COMMIT_DECISIONS unless their army is at our door; otherwise a policy dithers between the
-            # two and the army never arrives anywhere
+            # an attack is a commitment: no second order to the same target, no recall for
+            # COMMIT_DECISIONS unless a real threat is at our door, and no new attack for
+            # COOLDOWN_DECISIONS after a recall; otherwise a policy flips between the two, trickles units
+            # forward and the army never arrives anywhere
             attacking = self.army_order == 1
+            since = self.decisions - self.order_decision
             if key == "attack":
                 target = self._attack_target()
-                mask[index] = army >= ATTACK_MIN and target is not None and not (attacking and target == self.order_target)
+                cooling = self.army_order == -1 and since < COOLDOWN_DECISIONS
+                mask[index] = (army >= ATTACK_MIN and target is not None and not cooling
+                               and not (attacking and target == self.order_target))
                 continue
             if key == "defend":
-                threatened = s["enemy"]["nearest"] is not None and s["enemy"]["nearest"] < 2 * HOME_RADIUS
-                committed = attacking and self.decisions - self.order_decision < COMMIT_DECISIONS
+                threatened = s["enemy"]["near_value"] > THREAT_SHARE * max(s["army"], 1)
+                committed = attacking and since < COMMIT_DECISIONS
                 mask[index] = army > 0 and (s["away"] > 0 or attacking) and (threatened or not committed)
                 continue
             item = ITEMS[key]
@@ -449,7 +494,7 @@ class BuildOrderEnv(gym.Env):
         v += [s["units"][k] / 10.0 for k in UNITS] + [s["queue"][k] / 5.0 for k in PRODUCERS] + [s["idle"] / 3.0]
         e = s["enemy"]
         v += [e["structures"] / 20.0, e["structure_value"] / 20000.0, e["army"] / 30.0, e["army_value"] / 15000.0,
-              1.0 if e["nearest"] is None else e["nearest"] / 4000.0,
+              1.0 if e["nearest"] is None else e["nearest"] / 4000.0, e["near_value"] / 5000.0,
               s["army"] / 15000.0, s["away"] / max(1, len(s["soldiers"])), float(self.army_order)]
         return np.clip(np.asarray(v, dtype=np.float32), -1.0, 1.0)
 
@@ -517,7 +562,8 @@ class BuildOrderEnv(gym.Env):
         except (OSError, ControlError, KeyError, ValueError) as error:
             # a game that died or answered nonsense ends the episode; the next reset relaunches it
             self.broken = True
-            info["error"] = str(error)
+            # every key a caller logs (Monitor's info_keywords) is here too, or one dead game kills training
+            info.update(error=str(error), refused=False, lost=False, won=False, dealt=0, taken=0, razed=0, kills=0)
             return self._obs(), 0.0, False, True, info
         s, w = self.state, self.reward_weights
         income = s["money"] - before["money"] + self.spent
@@ -526,16 +572,19 @@ class BuildOrderEnv(gym.Env):
         # are what was destroyed (a structure counts once it is finished)
         new = [s["ids"][i] for i in s["ids"].keys() - before["ids"].keys()]
         taken = sum(before["ids"][i][0] for i in before["ids"].keys() - s["ids"].keys())
-        gone = before["enemy"]["ids"].keys() - s["enemy"]["ids"].keys()
-        dealt = sum(before["enemy"]["ids"][i] for i in gone)
+        gone = [before["enemy"]["ids"][i] for i in before["enemy"]["ids"].keys() - s["enemy"]["ids"].keys()]
+        razed = [value for value, finished_structure in gone if finished_structure]
+        dealt = sum(value for value, finished_structure in gone if not finished_structure)
         economy = sum(value for value, part in new if part == "economy")
         army = sum(value for value, part in new if part == "army")
+        # a rebuilt dozer or supply centre is a new id and earns the economy term again, so a raided
+        # economy is worth restoring; the base is the target, the units in front of it only half count
         reward = (w["economy"] * economy + w["army"] * army + w["income"] * max(income, 0)
-                  + w["dealt"] * dealt - w["taken"] * taken) / 1000.0
-        reward += w["kill"] * len(gone) - w["refused"] * refused - w["loss"] * lost + w["win"] * won
+                  + w["razed"] * sum(razed) + w["dealt"] * dealt - w["taken"] * taken) / 1000.0
+        reward += w["razed_each"] * len(razed) - w["refused"] * refused - w["loss"] * lost + w["win"] * won
         truncated = s["frame"] - self.start_frame >= self.episode_frames
         info.update(frame=s["frame"], money=s["money"], refused=refused, lost=lost, won=won,
-                    dealt=dealt, taken=taken, kills=len(gone))
+                    dealt=dealt, taken=taken, razed=len(razed), kills=len(gone) - len(razed))
         return self._obs(), float(reward), lost or won, truncated and not (lost or won), info
 
     def close(self):
@@ -576,25 +625,29 @@ def check():
     _, _, _, _, info = env.step(ACTIONS.index("attack"))
     assert not info["refused"] and env.army_order == 1 and not masks()["attack"], info  # no second order
     for _ in range(COMMIT_DECISIONS):
-        assert env.state["enemy"]["nearest"] < 2 * HOME_RADIUS or not masks()["defend"]  # committed
+        threat = env.state["enemy"]["near_value"] > THREAT_SHARE * max(env.state["army"], 1)
+        assert threat or not masks()["defend"]  # committed
         env.step(0)
     assert env.state["away"] > 0 and masks()["defend"], env.state["away"]
     _, _, _, _, info = env.step(ACTIONS.index("defend"))
     assert not info["refused"] and env.army_order == -1, info
+    for _ in range(COOLDOWN_DECISIONS - 1):  # no new attack straight after a recall
+        assert not masks()["attack"]
+        env.step(0)
 
     # a masked random episode: the mask and the game must agree, so nothing masked-in is refused
     rng = np.random.default_rng(0)
     env.reset(seed=2)
-    total, steps, done, dealt, taken = 0.0, 0, False, 0, 0
+    total, steps, done, dealt, taken, razed = 0.0, 0, False, 0, 0, 0
     while not done:
         mask = env.action_masks()
         assert mask[0]
         obs, reward, terminated, truncated, info = env.step(rng.choice(np.flatnonzero(mask)))
         assert env.observation_space.contains(obs) and not info["refused"], info
         total, steps, done = total + reward, steps + 1, terminated or truncated
-        dealt, taken = dealt + info["dealt"], taken + info["taken"]
-    print("check passed: masked random episode of %d decisions, return %.2f, %s, dealt %d taken %d, %s" % (
-        steps, total, "lost" if info["lost"] else "won" if info["won"] else "time up", dealt, taken,
+        dealt, taken, razed = dealt + info["dealt"], taken + info["taken"], razed + info["razed"]
+    print("check passed: masked random episode of %d decisions, return %.2f, %s, razed %d, dealt %d taken %d, %s" % (
+        steps, total, "lost" if info["lost"] else "won" if info["won"] else "time up", razed, dealt, taken,
         {k: env.state["built"][k] for k in BUILDINGS} | {k: env.state["units"][k] for k in UNITS}))
     env.close()
 

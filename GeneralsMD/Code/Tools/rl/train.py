@@ -33,7 +33,10 @@ def env_kwargs(args, rank):
 
 
 def make_env(args, rank):
-    return lambda: Monitor(BuildOrderEnv(**env_kwargs(args, rank)))
+    # one CSV per env beside the tensorboard logs: return, length, and how each episode ended
+    log = os.path.join(args.logdir, "%s_env%d" % (args.name, rank))
+    os.makedirs(args.logdir, exist_ok=True)
+    return lambda: Monitor(BuildOrderEnv(**env_kwargs(args, rank)), filename=log, info_keywords=("won", "lost"))
 
 
 def train(args):
@@ -65,7 +68,7 @@ def evaluate(args):
     try:
         for episode in range(args.episodes):
             obs, info = env.reset(seed=args.seed + episode)
-            start, total, done, dealt, taken = info["frame"], 0.0, False, 0, 0
+            start, total, done, dealt, taken, razed = info["frame"], 0.0, False, 0, 0, 0
             enemy_start = env.state["enemy"]["structures"]
             print("episode %d (seed %d)" % (episode, info["seed"]))
             while not done:
@@ -76,6 +79,7 @@ def evaluate(args):
                 obs, reward, terminated, truncated, info = env.step(action)
                 total, done = total + reward, terminated or truncated
                 dealt, taken = dealt + info.get("dealt", 0), taken + info.get("taken", 0)
+                razed += info.get("razed", 0)
                 if info["action"] != "wait" or args.watch:
                     seconds = (info.get("frame", start) - start) / args.frames_per_game_second
                     print("  %02d:%02d  %-9s %s" % (seconds // 60, seconds % 60, info["action"],
@@ -85,7 +89,8 @@ def evaluate(args):
             seconds = (s["frame"] - start) / args.frames_per_game_second
             print("  return %.2f, %s at %02d:%02d%s" % (total, "lost" if info.get("lost") else "won" if info.get("won") else "time up",
                                                        seconds // 60, seconds % 60, " (%s)" % info["error"] if "error" in info else ""))
-            print("  enemy structures %d -> %d, value dealt %d, taken %d" % (enemy_start, s["enemy"]["structures"], dealt, taken))
+            print("  enemy structures %d -> %d, %d destroyed; unit value dealt %d, ours lost %d" % (
+                enemy_start, s["enemy"]["structures"], razed, dealt, taken))
             print("  built %s" % {k: s["built"][k] for k in BUILDINGS})
             print("  units %s" % {k: s["units"][k] for k in UNITS})
     finally:

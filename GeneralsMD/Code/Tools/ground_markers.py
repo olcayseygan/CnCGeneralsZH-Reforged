@@ -649,8 +649,8 @@ def side_bands():
     h = int(4 * T)
     d = (h / 2 - (np.arange(h) + 0.5))[:, None] / T * np.ones((1, 8))
     L = Layer(8, h)
-    L.over(DARK, cov(np.abs(d) - 1.6, px) * 0.75)
-    L.over((1, 1, 1), cov(np.abs(d) - 0.65, px))
+    L.over(DARK, cov(np.abs(d) - 1.3, px) * 0.4)        # a soft shadow, not an ink line (2026-11-24 refine)
+    L.over((1, 1, 1), cov(np.abs(d) - 0.7, px))
     piece("MarkerHair", L, kind="strip", across_k=4, blend="alpha", tint=True)
     L = Layer(8, 8)
     L.over((1, 1, 1), np.ones((8, 8)))
@@ -715,20 +715,21 @@ def shapes():
         "Plus": np.minimum(box(X, Y, 9, 2.6), box(X, Y, 2.6, 9)),
         "Cross": np.minimum(sd_seg(X, Y, -7, -7, 7, 7), sd_seg(X, Y, -7, 7, 7, -7)) - 2.2,
         "Diamond": np.minimum(box(xr, yr, 7.5, 5.0), box(xr, yr, 5.0, 7.5)),
-        "Ring": np.abs(r - 8) - 1.6,
+        "Ring": np.abs(r - 8) - 1.0,
         "Tongue": np.minimum(np.hypot(X + 4, Y) - 5.2, sd_poly(X, Y, [(10, 0), (-4, 5.2), (-4, -5.2)])),
         "Tank": U(box(X + 1, Y, 8, 5.5), r - 3.6, sd_seg(X, Y, 0, 0, 10.5, 0) - 1.2),
     }
     for name, d in tinted.items():
         L = Layer(s, s)
-        L.over(DARK, cov(d - 1.6, px) * 0.85)
+        L.over(DARK, cov(d - 1.0, px) * 0.45)               # a hairline keyline: crisp marks, no cartoon outline
+
         Hf = 1.6 * T * np.clip(-d / 1.8, 0, 1)
         L.over(np.ones(3)[None, None] * (0.55 + 0.45 * bevel(Hf))[..., None], cov(d, px))
         piece("MarkerShape" + name, L, kind="quad", size_k=[24, 24], anchor=[0.5, 0.5], blend="alpha", tint=True)
     steel = {"Block": box(X, Y, 9, 6), "Lid": r - 9}
     for name, d in steel.items():
         L = Layer(s, s)
-        L.over(DARK, cov(d - 2.0, px) * 0.85)
+        L.over(DARK, cov(d - 1.2, px) * 0.5)
         Hf = 2.2 * T * np.clip(-d / 2.4, 0, 1)
         face = STEEL[None, None] * bevel(Hf)[..., None]
         if name == "Lid":

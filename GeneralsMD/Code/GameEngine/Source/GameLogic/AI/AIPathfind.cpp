@@ -13281,6 +13281,12 @@ void Pathfinder::removePos( Object *obj)
  */
 void Pathfinder::removeUnitFromPathfindMap(  Object *obj )
 {
+	// Inside a load whose save holds the unit map (xfer, version 2), loadPostProcess puts every cell's
+	// units back as saved, so taking a unit off here changes nothing on the map.  What it did change
+	// was the unit's own idea of its cells: a passenger the container's post-process takes out of the
+	// world again came back with both set to -1, where the game that was saved still had them.
+	if (m_unitMapFromSave && TheGameState->isInLoadGame())
+		return;
 	removePos(obj);
 	removeGoal(obj);
 }

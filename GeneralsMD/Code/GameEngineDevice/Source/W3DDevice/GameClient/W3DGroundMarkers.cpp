@@ -2481,15 +2481,24 @@ static void pingRing( Real cx, Real cy, Real r, Real k, Real age, const Tint &ti
 	s_ctx.additive = was;
 }
 
-/// a side's band layer: 0 shell, 1 steel lit from outside, 2 steel lit from inside, 3 inlay
-static Int bandPiece( Int finish, Int layer )
+/** The cursors' mark on every marker (the owner's pick, 2026-11-24): four small triangles in the
+	* power's colour, flat with the dark line and a lit and a half-bright half (MarkerShapeTri), on the
+	* frame at `axis` and its quarter turns, their tips on the frame pointing in, as the Target, Move and
+	* Uplink cursors close on their hotspot.  `along` and `across` are the frame's reach on the axis and
+	* square to it, equal on a ring.  While aiming they breathe out and in; on the click they close in a
+	* little and hold.  Nothing here times anything: the marker's fade still ends them. */
+static void cursorTris( Real cx, Real cy, Real along, Real across, Real axis, Real k, Real t, Real tl, const Tint &tint, Real alpha )
 {
-	if( finish == FINISH_USA )
+	if( alpha <= 0.002f )
+		return;
+	const Real side = MIN( 26.0f * k, MAX( 16.0f * k, 0.14f * MIN( along, across ) ) );
+	const Real out = tl < 0.0f ? 4.0f * k * ( 0.5f + 0.5f * (Real)sin( 5.0f * t ) ) : -0.3f * side * easeOut( tl / 0.25f );
+	for( Int j = 0; j < 4; ++j )
 	{
-		static const Int usa[ 4 ] = { P_BAND_SHELL, P_BAND_STEEL_A, P_BAND_STEEL_B, P_BAND_INLAY };
-		return usa[ layer ];
+		const Real a = axis + 0.5f * MARKER_PI * (Real)j;
+		const Real r = ( ( j & 1 ) ? across : along ) + 0.42f * side + out;
+		quadPiece( P_SHAPE_TRI, cx + r * (Real)cos( a ), cy + r * (Real)sin( a ), a + MARKER_PI, side, side, tint, alpha );
 	}
-	return P_SIDE_BANDS + ( finish - 1 ) * 4 + layer;
 }
 
 static Int studPiece( Int finish )
@@ -2504,25 +2513,30 @@ static Int studPiece( Int finish )
 }
 
 /** The thin and refined look (the owner's pick, 2026-11-24): every power's band is drawn at BAND_THIN
-	* of the width its design names, its dark shell only a faint shadow (SHELL_FAINT), and its coloured
-	* inlay from a strip INLAY_WIDE times as wide as the steel's, so the colour keeps its presence on the
-	* thinner steel.  The guard's zone and the lanes keep their own widths. */
+	* of the width its design names.  The lanes keep their own widths. */
 static const Real BAND_THIN = 0.5f;
-static const Real SHELL_FAINT = 0.28f;
-static const Real INLAY_WIDE = 1.8f;
 static const Real LED_SHIFT = -0.19f;		///< Turkiye's LED line, times the steel's width, from the band's middle
 static const Real LED_WIDTH = 0.06f;
 
-/// the three tiers round a circle from a0 to a1, in a side's finish; the inlay glows by `glow`
+/** The cursor look (the owner's pick, 2026-11-24, over cursor_vs_marker.png): a band is one flat stroke
+	* in the power's colour with the cursors' dark line round it (MarkerHair, FLAT_WIDE times the steel's
+	* width), no steel gradient; a band drawn without its inlay is the same stroke dimmed to FLAT_DIM, for
+	* the countdowns lit on top of it.  The side shows only in its trim: studs, Turkiye's LED line. */
+static const Real FLAT_WIDE = 1.3f;
+static const Real FLAT_DIM = 0.3f;
+
+/// a flat stroke round a circle from a0 to a1, as wide as a band of `across` (a countdown's lit piece)
+static void flatArc( Real cx, Real cy, Real r, Real across, Real a0, Real a1, const Tint &tint, Real alpha )
+{
+	arcStrip( P_HAIR, cx, cy, r, FLAT_WIDE * BAND_THIN * across, a0, a1, FALSE, tint, alpha, FALSE );
+}
+
+/// the band round a circle from a0 to a1: a flat stroke, glowing by `glow`, in the side's trim
 static void bandArc( Int finish, Real cx, Real cy, Real r, Real across, Real a0, Real a1, const Tint &tint, Real alpha,
 										 Real glow = 1.0f, Bool inlay = TRUE )
 {
 	const Real s = BAND_THIN * across;
-	arcStrip( bandPiece( finish, 0 ), cx, cy, r, s, a0, a1, FALSE, TINT_WHITE, SHELL_FAINT * alpha, FALSE );
-	arcStrip( bandPiece( finish, 2 ), cx, cy, r, s, a0, a1, FALSE, TINT_WHITE, alpha, FALSE );
-	arcStrip( bandPiece( finish, 1 ), cx, cy, r, s, a0, a1, FALSE, TINT_WHITE, alpha, TRUE );
-	if( inlay )
-		arcStrip( bandPiece( finish, 3 ), cx, cy, r, INLAY_WIDE * s, a0, a1, FALSE, scaled( tint, glow ), alpha, FALSE );
+	flatArc( cx, cy, r, across, a0, a1, scaled( tint, inlay ? glow : FLAT_DIM ), alpha );
 	if( finish == FINISH_TUR )
 		arcStrip( P_HAIR, cx, cy, r + LED_SHIFT * s, LED_WIDTH * s * 4.0f, a0, a1, FALSE, TINT_LED, alpha, FALSE );
 }
@@ -2547,10 +2561,7 @@ static void bandRadial( Int finish, Real cx, Real cy, const RadiusAt &radiusAt, 
 												Real glow = 1.0f, Real stepDeg = 2.0f, Real a0 = 0.0f, Real a1 = 2.0f * MARKER_PI )
 {
 	const Real s = BAND_THIN * across;
-	radialStrip( bandPiece( finish, 0 ), cx, cy, radiusAt, s, a0, a1, TINT_WHITE, SHELL_FAINT * alpha, FALSE, stepDeg );
-	radialStrip( bandPiece( finish, 2 ), cx, cy, radiusAt, s, a0, a1, TINT_WHITE, alpha, FALSE, stepDeg );
-	radialStrip( bandPiece( finish, 1 ), cx, cy, radiusAt, s, a0, a1, TINT_WHITE, alpha, TRUE, stepDeg );
-	radialStrip( bandPiece( finish, 3 ), cx, cy, radiusAt, INLAY_WIDE * s, a0, a1, scaled( tint, glow ), alpha, FALSE, stepDeg );
+	radialStrip( P_HAIR, cx, cy, radiusAt, FLAT_WIDE * s, a0, a1, scaled( tint, glow ), alpha, FALSE, stepDeg );
 	if( finish == FINISH_TUR )
 		radialStrip( P_HAIR, cx, cy, ShiftedRadius<RadiusAt>( radiusAt, LED_SHIFT * s ), LED_WIDTH * s * 4.0f, a0, a1, TINT_LED, alpha, FALSE, stepDeg );
 }
@@ -2560,11 +2571,7 @@ static void bandPoly( Int finish, const Real *px, const Real *py, Int n, Bool cl
 											Real glow = 1.0f, Bool inlay = TRUE )
 {
 	const Real s = BAND_THIN * across;
-	polyStrip( bandPiece( finish, 0 ), px, py, n, closed, s, TINT_WHITE, SHELL_FAINT * alpha, FALSE );
-	polyStrip( bandPiece( finish, 2 ), px, py, n, closed, s, TINT_WHITE, alpha, FALSE );
-	polyStrip( bandPiece( finish, 1 ), px, py, n, closed, s, TINT_WHITE, alpha, TRUE );
-	if( inlay )
-		polyStrip( bandPiece( finish, 3 ), px, py, n, closed, INLAY_WIDE * s, scaled( tint, glow ), alpha, FALSE );
+	polyStrip( P_HAIR, px, py, n, closed, FLAT_WIDE * s, scaled( tint, inlay ? glow : FLAT_DIM ), alpha, FALSE );
 	if( finish == FINISH_TUR )
 		polyStrip( P_HAIR, px, py, n, closed, LED_WIDTH * s * 4.0f, TINT_LED, alpha, FALSE, LED_SHIFT * s );
 }
@@ -2604,30 +2611,19 @@ static void drawDart( Real x, Real y, Real heading, Real scale, Real k, const Ti
 	quadPiece( P_DART_INLAY, x, y, heading, side, side, tint, alpha );
 }
 
-/// the zone: shell, the lit steel, the inlay, the studs, the range scale and the brackets
+/// the zone: a flat ring, the cursors' four triangles, the range scale and the brackets
 static void drawZone( const Marker &m, Real R, Real t, Real tl, Bool quiet, Real app )
 {
 	const Real k = m.k, x = m.x, y = m.y, yaw = s_ctx.yaw;
 	const Real al = app * ( quiet ? 0.6f : 1.0f );
 	if( al <= 0.002f )
 		return;
-	// the refined look (2026-11-24): a thinner band, the shell a faint shadow, the inlay a wider core
-	ring( P_BAND_SHELL, x, y, R, 12.0f * k, TINT_WHITE, 0.3f * al, FALSE );
-	ring( P_BAND_STEEL_B, x, y, R, 12.0f * k, TINT_WHITE, al, FALSE );
-	ring( P_BAND_STEEL_A, x, y, R, 12.0f * k, TINT_WHITE, al, TRUE );
+	// the cursor look (2026-11-24): one flat stroke in the colour with the dark line, no steel
 	const Real glow = ( tl >= 0.0f || quiet ) ? 1.0f : 0.78f + 0.22f * (Real)sin( 7.5f * t );
-	ring( P_BAND_INLAY, x, y, R, 20.0f * k, scaled( m.tint, glow ), al, FALSE );
+	ring( P_HAIR, x, y, R, FLAT_WIDE * 6.0f * k, scaled( m.tint, glow ), al, FALSE );
 
-	const Int studs = quiet ? 4 : 8;
 	const Real flash = tl >= 0.0f ? MAX( 0.0f, 1.0f - tl / 0.5f ) : 0.0f;
-	const Tint dot = scaled( m.tint, 1.0f + 0.4f * flash );
-	for( Int j = 0; j < studs; ++j )
-	{
-		const Real a = yaw + 0.5f * MARKER_PI + (Real)j * 2.0f * MARKER_PI / (Real)studs;
-		const Real sx = x + R * (Real)cos( a ), sy = y + R * (Real)sin( a );
-		quadPiece( P_STUD, sx, sy, yaw, 12.0f * k, 12.0f * k, TINT_WHITE, al );
-		quadPiece( P_STUD_DOT, sx, sy, yaw, 4.0f * k, 4.0f * k, dot, al );
-	}
+	cursorTris( x, y, R, R, yaw, k, t, tl, scaled( m.tint, 1.0f + 0.4f * flash ), al );
 	if( quiet )
 		return;
 
@@ -2666,7 +2662,30 @@ static void drawGlyph( const Marker &m, Real t, Real tl, Real app )
 	switch( m.glyph )
 	{
 		case GLYPH_NONE:		return;
-		case GLYPH_GUARD:		base = P_GLYPH_GUARD;		break;
+		case GLYPH_GUARD:
+		{
+			// the guard cursor's shield as a thin outline with its diagonal band, flat with the dark line,
+			// never the solid plate (the owner's pick, 2026-11-24)
+			const Real s = 1.4f * m.glyphS, c = (Real)cos( s_ctx.yaw ), sn = (Real)sin( s_ctx.yaw );
+			static const Real su[ 7 ] = { -0.42f, 0.42f, 0.42f, 0.30f, 0.0f, -0.30f, -0.42f };
+			static const Real sv[ 7 ] = { 0.46f, 0.46f, 0.02f, -0.24f, -0.50f, -0.24f, 0.02f };
+			Real px[ 7 ], py[ 7 ];
+			for( Int i = 0; i < 7; ++i )
+			{
+				px[ i ] = m.x + ( c * su[ i ] - sn * sv[ i ] ) * s;
+				py[ i ] = m.y + ( sn * su[ i ] + c * sv[ i ] ) * s;
+			}
+			polyStrip( P_HAIR, px, py, 7, TRUE, 0.12f * s, m.tint, app, FALSE );
+			const Real bu[ 2 ] = { -0.24f, 0.30f }, bv[ 2 ] = { -0.22f, 0.36f };
+			Real bx[ 2 ], by[ 2 ];
+			for( Int i = 0; i < 2; ++i )
+			{
+				bx[ i ] = m.x + ( c * bu[ i ] - sn * bv[ i ] ) * s;
+				by[ i ] = m.y + ( sn * bu[ i ] + c * bv[ i ] ) * s;
+			}
+			polyStrip( P_HAIR, bx, by, 2, FALSE, 0.12f * s, m.tint, app, FALSE );
+			return;
+		}
 		case GLYPH_DROP:		base = P_GLYPH_DROP;		break;
 		case GLYPH_STRIKE:	base = P_GLYPH_STRIKE;	break;
 		case GLYPH_BARRAGE:	base = P_GLYPH_BARRAGE00;	steps = 4;	stepDeg = 22.5f;	rate = 0.6f;	break;
@@ -3865,8 +3884,7 @@ static void drawCruise( const DesignDraw &d )
 	{
 		const Bool on = e < lit && !( e == lit - 1 && blinkOff );
 		const Real a1 = d.yaw + 0.5f * MARKER_PI - 0.5f * MARKER_PI * (Real)e;		// top, then clockwise
-		arcStrip( bandPiece( d.fin, 3 ), d.x, d.y, rc, INLAY_WIDE * BAND_THIN * 12.0f * k, a1 - 0.5f * MARKER_PI + gap, a1 - gap, FALSE,
-							on ? d.tint : scaled( d.tint, 0.25f ), d.app, FALSE );
+		flatArc( d.x, d.y, rc, 12.0f * k, a1 - 0.5f * MARKER_PI + gap, a1 - gap, on ? d.tint : scaled( d.tint, 0.25f ), d.app );
 	}
 	Real ca;
 	if( d.aim )
@@ -3997,8 +4015,7 @@ static void drawDemine( const DesignDraw &d )
 	const Real step = 2.0f * MARKER_PI / (Real)n;
 	bandArc( d.fin, d.x, d.y, R, 18.0f * k, 0.0f, 2.0f * MARKER_PI, d.tint, d.app, 1.0f, FALSE );
 	for( Int j = 0; j < n; ++j )
-		arcStrip( bandPiece( d.fin, 3 ), d.x, d.y, R, 18.0f * k, d.yaw + (Real)j * step, d.yaw + (Real)( j + 1 ) * step, FALSE,
-							( j & 1 ) ? TINT_AMBER : TINT_DARK, d.app, FALSE );
+		flatArc( d.x, d.y, R, 18.0f * k, d.yaw + (Real)j * step, d.yaw + (Real)( j + 1 ) * step, ( j & 1 ) ? TINT_AMBER : TINT_DARK, d.app );
 	Real phi, dphi;
 	if( d.aim )
 	{
@@ -4359,8 +4376,7 @@ static void drawNeutron( const DesignDraw &d )
 			on = j == (Int)floor( d.t * 8.0f ) % 12;
 		else
 			on = j < lit && !( j == lit - 1 && blinkOff );
-		arcStrip( bandPiece( d.fin, 3 ), d.x, d.y, rc, INLAY_WIDE * BAND_THIN * 14.0f * k, a - 0.85f * half, a + 0.85f * half, FALSE,
-							on ? d.tint : scaled( d.tint, 0.25f ), d.app, FALSE );
+		flatArc( d.x, d.y, rc, 14.0f * k, a - 0.85f * half, a + 0.85f * half, on ? d.tint : scaled( d.tint, 0.25f ), d.app );
 	}
 }
 
@@ -4871,16 +4887,7 @@ static void drawTayfun( const DesignDraw &d )
 		const Int order = ( ( 1 - m ) % 6 + 6 ) % 6;		// clockwise from the top arc
 		const Bool on = order < lit && !( order == lit - 1 && blinkOff );
 		const Real a0 = d.yaw + (Real)m * MARKER_PI / 3.0f;
-		arcStrip( bandPiece( d.fin, 3 ), d.x, d.y, R, INLAY_WIDE * BAND_THIN * 18.0f * k, a0 + 0.05f, a0 + MARKER_PI / 3.0f - 0.05f, FALSE,
-							on ? d.tint : scaled( d.tint, 0.22f ), d.app, FALSE );
-	}
-	const Real rt = d.aim ? R + 24.0f * k : R + 24.0f * k - 12.0f * k * d.snap;
-	for( Int j = 0; j < 3; ++j )
-	{
-		const Real a = 0.5f * MARKER_PI + (Real)j * 2.0f * MARKER_PI / 3.0f;
-		Real px, py;
-		d.at( a, rt, px, py );
-		part( P_SHAPE_TRI, px, py, d.yaw + a + MARKER_PI, 20.0f * k, 20.0f * k, d.tint, d.app );
+		flatArc( d.x, d.y, R, 18.0f * k, a0 + 0.05f, a0 + MARKER_PI / 3.0f - 0.05f, on ? d.tint : scaled( d.tint, 0.22f ), d.app );
 	}
 	const Bool landed = !d.aim && d.frac <= 0.0f;
 	if( !landed )
@@ -5179,6 +5186,26 @@ static void drawDesign( const Marker &m, Real R, Real t, Real tl, Real app, Real
 		case DESIGN_COMMANDO:		drawCommando( d );		break;
 		default:								break;
 	}
+
+	// the cursors' four triangles on the frame: a round frame on the screen's axes at its own radius,
+	// a strip on the run's axis at its reach along and its half width across
+	Real along = R, across = R, axis = d.yaw;
+	switch( m.design )
+	{
+		case DESIGN_CRATE:			along = across = 0.36f * R;	break;
+		case DESIGN_SPYSAT:			along = across = 0.92f * R;	break;
+		case DESIGN_ARTILLERY:	along = across = 0.9f * R;	axis = d.heading();	break;
+		case DESIGN_TANKDROP:		along = across = 0.8f * R;	break;
+		case DESIGN_COMMANDO:		along = across = 0.8f * R;	break;
+		case DESIGN_CRUISE:			along = across = 0.744f * R;	break;
+		case DESIGN_RAPID:			along = across = 0.62f * R;	axis = d.heading();	break;
+		case DESIGN_NAPALM:			along = 0.55f * R;	across = 1.15f * R;	axis = d.heading();	break;
+		case DESIGN_B3:					along = across = 52.0f;	axis = d.heading();	break;
+		case DESIGN_CCARPET:		along = across = 46.0f;	axis = d.heading();	break;
+		case DESIGN_ALLYAID:		along = 60.0f;	across = 140.0f;	axis = d.heading();	break;
+		default:								break;
+	}
+	cursorTris( d.x, d.y, along, across, axis, d.k, t, tl, d.tint, app );
 }
 
 static void drawMarker( const Marker &m )

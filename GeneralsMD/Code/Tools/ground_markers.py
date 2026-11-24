@@ -722,9 +722,12 @@ def shapes():
     for name, d in tinted.items():
         L = Layer(s, s)
         L.over(DARK, cov(d - 1.0, px) * 0.85)               # a hairline keyline as dark as the cursors' line round a mark
-
-        Hf = 1.6 * T * np.clip(-d / 1.8, 0, 1)
-        L.over(np.ones(3)[None, None] * (0.55 + 0.45 * bevel(Hf))[..., None], cov(d, px))
+        # flat as the cursors draw (2026-11-24): no bevel; the triangle takes cursors.py's lit half and
+        # half-bright half, split along its axis, the lit one on the +v side
+        face = np.ones((s, s))
+        if name == "Tri":
+            face = np.where(Y > 0, 1.0, 0.55)
+        L.over(np.ones(3)[None, None] * face[..., None], cov(d, px))
         piece("MarkerShape" + name, L, kind="quad", size_k=[24, 24], anchor=[0.5, 0.5], blend="alpha", tint=True)
     steel = {"Block": box(X, Y, 9, 6), "Lid": r - 9}
     for name, d in steel.items():

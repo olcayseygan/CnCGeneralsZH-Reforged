@@ -1584,7 +1584,7 @@ static void cursorFrame( const Marker &m, Real R, Real &along, Real &across )
 		case DESIGN_COMMANDO:		along = across = 0.8f * R;	break;
 		case DESIGN_CRUISE:			along = across = 0.744f * R;	break;
 		case DESIGN_NEUTRON:		along = across = R + 40.0f * m.k;	break;		// clear outside its countdown ring at R + 26k
-		case DESIGN_REPAIR:			along = across = R + 20.0f * m.k;	break;		// outside the gear's teeth, R + 6k to 14k
+		case DESIGN_REPAIR:			along = across = R + 30.0f * m.k;	break;		// outside the gear's teeth (to R + 17k), close-in included
 		case DESIGN_PARADROP:		along = across = 1.07f * R;	break;		// outside the canopy's bulge
 		case DESIGN_RAPID:			along = across = 0.62f * R;	break;
 		case DESIGN_NAPALM:			along = 0.55f * R;	across = 1.15f * R;	break;
@@ -1611,6 +1611,8 @@ static Real zoneReach( const Marker &m )
 		Real along, across;
 		cursorFrame( m, R, along, across );		// the cursor triangles past the frame: 0.92 of their 26k at most, and their 4k breath
 		reach = MAX( reach, MAX( along, across ) + ( 0.92f * 26.0f + 8.0f ) * m.k );
+		if( m.design == DESIGN_ARTILLERY )		// the incoming chevrons march in from 0.9R + 106k behind the frame
+			reach = MAX( reach, 0.9f * R + 120.0f * m.k );
 	}
 	if( m.beamSeen )		// a driven beam goes where the player steers it: its head and every scorch it left
 	{
@@ -2520,11 +2522,71 @@ static void pingRing( Real cx, Real cy, Real r, Real k, Real age, const Tint &ti
 	* Uplink cursors close on their hotspot.  `along` and `across` are the frame's reach on the axis and
 	* square to it, equal on a ring.  While aiming they breathe out and in; on the click they close in a
 	* little and hold.  Nothing here times anything: the marker's fade still ends them. */
+static Real cursorTriSide( Real along, Real across, Real k )
+{
+	return MIN( 26.0f * k, MAX( 16.0f * k, 0.14f * MIN( along, across ) ) );
+}
+
+/** Where the cursor triangles of the marker being drawn stand, so no fitting lands on them.  The
+	* triangles live in screen space or on the run's axis while a design places its fittings in its own
+	* (the run's heading, a hash, a sway, a turning canopy): studAt and part send every fitting through
+	* keepOffTris, which turns one that falls within KEEP_OFF of a triangle's axis, inside the band the
+	* triangle sweeps (its close-in on the click to its breath while aiming), round the middle to the edge
+	* of that wedge.  A debug build logs each design that needed it once, so a new design shows up. */
+struct TriKeepOut
+{
+	Bool on;
+	Real cx, cy, along, across, axis, side, k;
+	Int design;
+};
+static TriKeepOut s_keep = { FALSE, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0 };
+static const Real KEEP_OFF = 15.0f * MARKER_DEG;
+
+static void keepOffTris( Real &x, Real &y, Real size )
+{
+	if( !s_keep.on )
+		return;
+	const Real dx = x - s_keep.cx, dy = y - s_keep.cy;
+	const Real r = (Real)sqrt( dx * dx + dy * dy );
+	if( r < 1.0f )
+		return;
+	const Real ang = (Real)atan2( dy, dx );
+	for( Int j = 0; j < 4; ++j )
+	{
+		const Real reach = ( j & 1 ) ? s_keep.across : s_keep.along;
+		if( r < reach - 0.3f * s_keep.side - 2.0f * s_keep.k - size || r > reach + 0.84f * s_keep.side + 4.0f * s_keep.k + size )
+			continue;
+		const Real a = s_keep.axis + 0.5f * MARKER_PI * (Real)j;
+		Real diff = (Real)fmod( ang - a + MARKER_PI, 2.0f * MARKER_PI );
+		if( diff < 0.0f )
+			diff += 2.0f * MARKER_PI;
+		diff -= MARKER_PI;
+		// the wedge: the triangle's half width, the fitting's own and a 2k gap as arc at this radius, and
+		// never under KEEP_OFF, so a small fitting on a wide ring still stands clearly aside
+		const Real clear = MIN( 0.5f * MARKER_PI - KEEP_OFF, MAX( KEEP_OFF, ( 0.4f * s_keep.side + size + 2.0f * s_keep.k ) / r ) );
+		if( fabs( diff ) >= clear )
+			continue;
+		const Real to = a + ( diff < 0.0f ? -clear : clear );
+		x = s_keep.cx + r * (Real)cos( to );
+		y = s_keep.cy + r * (Real)sin( to );
+#if defined( _DEBUG )
+		static UnsignedInt s_logged[ 2 ] = { 0, 0 };		// one bit a design, up to 64
+		const Int bit = s_keep.design & 63;
+		if( !( s_logged[ bit >> 5 ] & ( 1u << ( bit & 31 ) ) ) )
+		{
+			s_logged[ bit >> 5 ] |= 1u << ( bit & 31 );
+			DEBUG_LOG(( "GROUNDMARKERS: design %d put a fitting on a cursor triangle's axis; turned clear\n", s_keep.design ));
+		}
+#endif
+		return;
+	}
+}
+
 static void cursorTris( Real cx, Real cy, Real along, Real across, Real axis, Real k, Real t, Real tl, const Tint &tint, Real alpha )
 {
 	if( alpha <= 0.002f )
 		return;
-	const Real side = MIN( 26.0f * k, MAX( 16.0f * k, 0.14f * MIN( along, across ) ) );
+	const Real side = cursorTriSide( along, across, k );
 	const Real out = tl < 0.0f ? 4.0f * k * ( 0.5f + 0.5f * (Real)sin( 5.0f * t ) ) : -0.3f * side * easeOut( tl / 0.25f );
 	for( Int j = 0; j < 4; ++j )
 	{
@@ -3244,6 +3306,7 @@ static void studAt( const DesignDraw &d, Real x, Real y, Real scale = 1.0f, Real
 {
 	scale *= STUD_SMALL;
 	const Real s = 18.0f * d.k * scale;
+	keepOffTris( x, y, 0.5f * s );
 	quadPiece( studPiece( d.fin ), x, y, d.yaw, s, s, TINT_WHITE, alpha * d.app );
 	if( d.fin == FINISH_USA )
 		quadPiece( P_STUD_DOT, x, y, d.yaw, 6.0f * d.k * scale, 6.0f * d.k * scale, d.tint, alpha * d.app );
@@ -3252,6 +3315,13 @@ static void studAt( const DesignDraw &d, Real x, Real y, Real scale = 1.0f, Real
 static void part( Int piece, Real x, Real y, Real ang, Real sx, Real sy, const Tint &tint, Real alpha )
 {
 	// the refined look: every part a smaller, crisper mark than the designs first drew it
+	keepOffTris( x, y, 0.5f * PART_SMALL * MAX( sx, sy ) );
+	quadPiece( piece, x, y, ang, PART_SMALL * sx, PART_SMALL * sy, tint, alpha );
+}
+
+/// a part that stands for data, where a drop falls or a pallet lands: never turned off its place
+static void dataPart( Int piece, Real x, Real y, Real ang, Real sx, Real sy, const Tint &tint, Real alpha )
+{
 	quadPiece( piece, x, y, ang, PART_SMALL * sx, PART_SMALL * sy, tint, alpha );
 }
 
@@ -3328,7 +3398,7 @@ static void drawCrate( const DesignDraw &d )
 		const Real dd = m.drops[ i ];
 		if( dd < 0.0f )
 			continue;
-		part( P_SHAPE_DISC, d.x - d.hx * dd, d.y - d.hy * dd, d.heading(), 22.0f * k, 22.0f * k, scaled( d.tint, 1.3f ), 0.8f * d.app );
+		dataPart( P_SHAPE_DISC, d.x - d.hx * dd, d.y - d.hy * dd, d.heading(), 22.0f * k, 22.0f * k, scaled( d.tint, 1.3f ), 0.8f * d.app );
 	}
 }
 
@@ -3365,7 +3435,8 @@ static void drawLeaflet( const DesignDraw &d )
 			sc = 1.0f - 0.25f * fall;
 			alpha = 1.0f - smoothstep( 2.0f + 0.02f * i, 2.4f + 0.02f * i, d.tl );
 		}
-		part( P_SHAPE_TILE, px, py, ang, 16.0f * k * sc, 11.0f * k * sc, paper, alpha * d.app );
+		// sheets in flight drift past the triangles, under them, rather than hop round them (not part())
+		quadPiece( P_SHAPE_TILE, px, py, ang, PART_SMALL * 16.0f * k * sc, PART_SMALL * 11.0f * k * sc, paper, alpha * d.app );
 	}
 }
 
@@ -3393,7 +3464,7 @@ static void drawA10( const DesignDraw &d )
 	for( Int j = 0; j < 4; ++j )
 	{
 		Real px, py;
-		d.along( rr * (Real)cos( 0.25f * MARKER_PI + 0.5f * MARKER_PI * (Real)j ), rr * (Real)sin( 0.25f * MARKER_PI + 0.5f * MARKER_PI * (Real)j ), px, py );
+		d.at( 0.25f * MARKER_PI + 0.5f * MARKER_PI * (Real)j, rr, px, py );		// the screen's diagonals, as the triangles stand
 		studAt( d, px, py, 0.9f );
 	}
 	const Real rc = 0.34f * R - 0.2f * R * d.snap;
@@ -3748,7 +3819,7 @@ static void drawB3( const DesignDraw &d )
 		if( passed )
 			pingRing( px, py, 30.0f, k, ( plane + dd ) / 320.0f, d.tint, 0.5f, 0.8f, 5.0f );
 		else
-			part( P_SHAPE_DISC, px, py, h, 9.0f * k, 9.0f * k, scaled( d.tint, 0.9f ), d.app );
+			dataPart( P_SHAPE_DISC, px, py, h, 9.0f * k, 9.0f * k, scaled( d.tint, 0.9f ), d.app );
 	}
 	quadPiece( P_CHEVRON, d.x, d.y, h, 15.0f * k, 26.0f * k, d.tint, d.app, CHEVRON_ANCHOR_U, 0.5f );
 }
@@ -3792,7 +3863,7 @@ static void drawParticle( const DesignDraw &d )
 	if( m.beamSeen )
 	{
 		for( size_t i = 0; i < m.beamTrail.size(); ++i )
-			part( P_SHAPE_DISC, m.beamTrail[ i ].x, m.beamTrail[ i ].y, d.yaw, 12.0f * k, 12.0f * k, TINT_SCORCH, 0.6f * d.app );
+			dataPart( P_SHAPE_DISC, m.beamTrail[ i ].x, m.beamTrail[ i ].y, d.yaw, 12.0f * k, 12.0f * k, TINT_SCORCH, 0.6f * d.app );
 		bx = m.beamX;
 		by = m.beamY;
 	}
@@ -3904,7 +3975,7 @@ static void drawCruise( const DesignDraw &d )
 								3.0f * k, 22.0f * k, 0.5f, phase - ( s0 - acc ) - acc, d.tint, 0.85f * d.app );
 		}
 		if( i > 0 )
-			part( P_SHAPE_DISC, route.x[ i ], route.y[ i ], d.yaw, 11.0f * k, 11.0f * k, d.tint, d.app );
+			dataPart( P_SHAPE_DISC, route.x[ i ], route.y[ i ], d.yaw, 11.0f * k, 11.0f * k, d.tint, d.app );
 		acc += lens[ i ];
 	}
 	// the blast is round: four quarter arcs, clockwise from the top, the lit ones the flight still to come
@@ -3962,7 +4033,7 @@ static void drawAmbulance( const DesignDraw &d )
 	const Int pulse = (Int)( d.t * 10.0f ) % 12;
 	for( Int j = 0; j < 12; ++j )
 	{
-		const Real a = (Real)j * MARKER_PI / 6.0f;
+		const Real a = MARKER_PI / 12.0f + (Real)j * MARKER_PI / 6.0f;		// nozzles between the cursor triangles' axes
 		Real px, py;
 		d.at( a, R * sc - 11.0f * k, px, py );
 		part( P_SHAPE_TONGUE, px, py, d.yaw + a + MARKER_PI, 17.0f * k, 17.0f * k, scaled( d.tint, j == pulse ? 1.35f : 0.8f ), d.app );
@@ -4005,9 +4076,9 @@ static void drawComanche( const DesignDraw &d )
 	dashLine( m.cx0, m.cy0, gx, gy, 3.0f * k, 18.0f * k, 0.5f, 60.0f * k * d.t, d.tint, 0.8f * d.app );
 	bandCircle( d.fin, d.x, d.y, a, 10.0f * k, d.tint, d.app );
 	Real px, py;
-	d.along( 0.7071f * a, 0.7071f * a, px, py );		// 45 degrees off the run, clear of the cursor triangles
+	d.at( 0.25f * MARKER_PI, a, px, py );		// the screen's diagonals, where the cursor triangles never stand
 	studAt( d, px, py, 0.9f );
-	d.along( -0.7071f * a, -0.7071f * a, px, py );
+	d.at( 1.25f * MARKER_PI, a, px, py );
 	studAt( d, px, py, 0.9f );
 	Real ps[ 24 ], qs[ 24 ];
 	for( Int i = 0; i < 24; ++i )
@@ -4284,13 +4355,13 @@ static void drawChinaCarpet( const DesignDraw &d )
 			pingRing( px, py, nuke ? 34.0f : 22.0f, k, ( plane + dd ) / 300.0f, d.tint, 0.5f, 0.9f, 5.0f );
 			if( nuke )
 				pingRing( px, py, 12.0f, k, ( plane + dd ) / 300.0f - 0.15f, d.tint, 0.5f, 2.5f, 4.0f );
-			part( P_SHAPE_DIAMOND, px, py, h, 24.0f * k, 24.0f * k, TINT_SCORCH, d.app );
+			dataPart( P_SHAPE_DIAMOND, px, py, h, 24.0f * k, 24.0f * k, TINT_SCORCH, d.app );
 			continue;
 		}
 		if( d.aim && fabs( (Real)i - wave ) < 1.2f )
-			part( P_SHAPE_DIAMOND, px, py, h, 28.0f * k, 28.0f * k, scaled( d.tint, 1.3f ), d.app );
+			dataPart( P_SHAPE_DIAMOND, px, py, h, 28.0f * k, 28.0f * k, scaled( d.tint, 1.3f ), d.app );
 		if( nuke )
-			part( P_GLYPH_NUKE00, px, py, d.yaw, 16.0f * k, 16.0f * k, TINT_DARK, 0.85f * d.app );
+			dataPart( P_GLYPH_NUKE00, px, py, d.yaw, 16.0f * k, 16.0f * k, TINT_DARK, 0.85f * d.app );
 	}
 	part( P_SHAPE_PLUS, d.x, d.y, h + 0.25f * MARKER_PI, 30.0f * k, 30.0f * k, d.tint, d.app );
 }
@@ -4315,7 +4386,7 @@ static void drawNapalm( const DesignDraw &d )
 				const Real fl = 0.7f + 0.3f * (Real)sin( 13.0f * d.t + 6.28f * hv );
 				Real px, py;
 				d.along( cs, cq, px, py );
-				part( P_SHAPE_TONGUE, px, py, h, 15.0f * k * fl, 12.0f * k * fl, scaled( d.tint, 1.1f ), d.app );
+				dataPart( P_SHAPE_TONGUE, px, py, h, 15.0f * k * fl, 12.0f * k * fl, scaled( d.tint, 1.1f ), d.app );
 			}
 	}
 	Poly front;
@@ -4364,8 +4435,10 @@ static void drawFrenzy( const DesignDraw &d )
 		const Real a = (Real)j * 2.0f * MARKER_PI / 20.0f;
 		Real px, py;
 		d.at( a, Rs + ( 12.0f + 2.5f * p ) * k, px, py );
-		const Real s = ( 16.0f + 5.0f * p ) * k;
-		part( P_SHAPE_TRI, px, py, d.yaw + a, s, s, scaled( d.tint, 0.8f + 0.5f * p ), fade * d.app );
+		const Real s = ( 16.0f + 5.0f * p ) * PART_SMALL * k;
+		// even rays: the triangles stand half a ray step (9 degrees) between them, clear by their own size,
+		// so these skip keepOffTris's 15 degree wedge, which would bunch the two rays beside each triangle
+		quadPiece( P_SHAPE_TRI, px, py, d.yaw + a, s, s, scaled( d.tint, 0.8f + 0.5f * p ), fade * d.app );
 	}
 	ring( P_HAIR, d.x, d.y, 0.72f * Rs, 5.0f * k, TINT_LACQ, fade * d.app, FALSE );
 	for( Int j = 0; j < 8; ++j )
@@ -4501,13 +4574,13 @@ static void drawTankDrop( const DesignDraw &d )
 	{
 		const Real a = h + 0.25f * MARKER_PI + 0.5f * MARKER_PI * (Real)i;
 		const Real ca = (Real)cos( a ), sa = (Real)sin( a );
-		hairLine( d.x + 0.92f * hs * ca, d.y + 0.92f * hs * sa, d.x + 0.2f * hs * ca, d.y + 0.2f * hs * sa, 2.4f * k, TINT_STEEL, 0.9f * d.app );
+		hairLine( d.x + 0.85f * hs * ca, d.y + 0.85f * hs * sa, d.x + 0.2f * hs * ca, d.y + 0.2f * hs * sa, 2.4f * k, TINT_STEEL, 0.9f * d.app );
 	}
 	bandCircle( d.fin, d.x, d.y, hs, 16.0f * k, d.tint, d.app );
 	bandCircle( d.fin, d.x, d.y, 0.14f * R * sc, 10.0f * k, d.tint, d.app );
 	for( Int i = 0; i < 4; ++i )
 	{
-		const Real a = h + 0.25f * MARKER_PI + 0.5f * MARKER_PI * (Real)i;
+		const Real a = d.yaw + 0.25f * MARKER_PI + 0.5f * MARKER_PI * (Real)i;		// the screen's diagonals: neither the run nor the sway moves them under a triangle
 		studAt( d, d.x + hs * (Real)cos( a ), d.y + hs * (Real)sin( a ), 0.8f );
 	}
 	if( d.aim )
@@ -4531,7 +4604,9 @@ static void drawScud( const DesignDraw &d )
 	bandRadial( d.fin, d.x, d.y, ragged, 20.0f * k, d.tint, d.app, 1.0f, 3.0f );
 	for( Int i = 0; i < 5; ++i )
 	{
-		const Real a = 2.0f * MARKER_PI * hashOf( i + 61 );
+		// fixed angles, not a hash (which put two under triangles); five 72 degrees apart always leave one
+		// within 9 degrees of an axis (92 here), which studAt's keepOffTris turns clear
+		const Real a = ( 20.0f + 72.0f * (Real)i ) * MARKER_DEG;
 		Real px, py;
 		d.at( a, ragged( yaw + a ), px, py );
 		studAt( d, px, py, 1.2f + 0.5f * hashOf( i + 63 ) );		// odd-sized round bolts, no square plates on a round strike
@@ -4823,7 +4898,8 @@ static void drawKargu( const DesignDraw &d )
 			pingRing( px, py, 7.0f * k, k, d.tl - 0.08f * (Real)i - 0.6f, d.tint, 0.4f, 1.6f, 3.6f );
 			continue;
 		}
-		part( P_SHAPE_TRI, px, py, h, 26.0f * k * sz, 26.0f * k * sz, scaled( d.tint, 1.15f ), d.app );		// drones keep their presence
+		// drones keep their presence; they fly past the triangles rather than hop round them (not part())
+		quadPiece( P_SHAPE_TRI, px, py, h, PART_SMALL * 26.0f * k * sz, PART_SMALL * 26.0f * k * sz, scaled( d.tint, 1.15f ), d.app );
 	}
 }
 
@@ -5049,7 +5125,7 @@ static void drawRapid( const DesignDraw &d )
 	const Int n = (Int)m.drops.size();
 	const Int lit = (Int)wrap( d.t * 6.0f, (Real)( n + 2 ) );
 	if( lit < n && m.drops[ lit ] >= 0.0f )
-		part( P_SHAPE_PARA, d.x - d.hx * m.drops[ lit ], d.y - d.hy * m.drops[ lit ], d.heading(), 28.0f * k, 28.0f * k, scaled( d.tint, 1.35f ), d.app );
+		dataPart( P_SHAPE_PARA, d.x - d.hx * m.drops[ lit ], d.y - d.hy * m.drops[ lit ], d.heading(), 28.0f * k, 28.0f * k, scaled( d.tint, 1.35f ), d.app );
 }
 
 /// a line abreast: four planes' tracks side by side, a pallet at the end of each, between two brackets
@@ -5076,9 +5152,9 @@ static void drawAllyAid( const DesignDraw &d )
 													 : 1.0f + 0.35f * ( 1.0f - easeOut( ( d.tl - 0.06f * (Real)i ) / 0.2f ) );
 		Real px, py;
 		d.along( 0.0f, o, px, py );
-		part( P_SHAPE_PARA, px, py, h + 0.5f * MARKER_PI, 30.0f * k * bob, 30.0f * k * bob, d.tint, d.app );
+		dataPart( P_SHAPE_PARA, px, py, h + 0.5f * MARKER_PI, 30.0f * k * bob, 30.0f * k * bob, d.tint, d.app );
 		if( sp > 0.0f )
-			part( P_SHAPE_PLUS, px, py, d.yaw, 16.0f * k, 16.0f * k, TINT_WHITE, d.app );
+			dataPart( P_SHAPE_PLUS, px, py, d.yaw, 16.0f * k, 16.0f * k, TINT_WHITE, d.app );
 		if( sp > -800.0f && sp < 400.0f )
 		{
 			d.along( sp, o, px, py );
@@ -5105,8 +5181,9 @@ static void drawCommando( const DesignDraw &d )
 	Real ang;
 	if( d.aim )
 	{
-		const Real f = d.t / 0.7f;
-		ang = ( (Real)floor( f ) + easeOut( MIN( 1.0f, ( f - (Real)floor( f ) ) / 0.25f ) ) ) * 0.5f * MARKER_PI;
+		// a quarter step at a time with no ease between, so a bracket never sweeps through the cursor
+		// triangles standing between its stops
+		ang = (Real)floor( d.t / 0.7f ) * 0.5f * MARKER_PI;
 	}
 	else
 		ang = (Real)floor( d.tc / 0.7f + 1.0f ) * 0.5f * MARKER_PI;
@@ -5177,6 +5254,33 @@ static void drawDesign( const Marker &m, Real R, Real t, Real tl, Real app, Real
 		d.frac = d.aim ? 1.0f : MAX( 0.0f, 1.0f - tl / 3.0f );
 	d.impact = m.impactMs != 0 ? secondsSince( s_ctx.now, m.impactMs ) : -1.0f;
 
+	// the cursors' four triangles on the frame: a round frame on the screen's axes at its own radius,
+	// a strip on the run's axis at its reach along and its half width across.  Known before the design
+	// draws, so every fitting it places keeps off them (keepOffTris); drawn after it, on top
+	Real along, across, axis = d.yaw;
+	cursorFrame( m, R, along, across );
+	switch( m.design )
+	{
+		case DESIGN_ARTILLERY:
+		case DESIGN_RAPID:
+		case DESIGN_NAPALM:
+		case DESIGN_B3:
+		case DESIGN_CCARPET:
+		case DESIGN_ALLYAID:	axis = d.heading();	break;
+		case DESIGN_COMMANDO:	axis = d.heading() + 0.25f * MARKER_PI;	break;		// its brackets stalk on the run's axes
+		case DESIGN_FRENZY:		axis = d.yaw + MARKER_PI / 20.0f;	break;		// between the sunburst's rays, 18 degrees apart
+		default:							break;
+	}
+	s_keep.on = TRUE;
+	s_keep.cx = d.x;
+	s_keep.cy = d.y;
+	s_keep.along = along;
+	s_keep.across = across;
+	s_keep.axis = axis;
+	s_keep.k = d.k;
+	s_keep.side = cursorTriSide( along, across, d.k );
+	s_keep.design = (Int)m.design;
+
 	switch( m.design )
 	{
 		case DESIGN_PARADROP:		drawParadrop( d );		break;
@@ -5220,23 +5324,7 @@ static void drawDesign( const Marker &m, Real R, Real t, Real tl, Real app, Real
 		case DESIGN_COMMANDO:		drawCommando( d );		break;
 		default:								break;
 	}
-
-	// the cursors' four triangles on the frame: a round frame on the screen's axes at its own radius,
-	// a strip on the run's axis at its reach along and its half width across
-	Real along, across, axis = d.yaw;
-	cursorFrame( m, R, along, across );
-	switch( m.design )
-	{
-		case DESIGN_ARTILLERY:
-		case DESIGN_RAPID:
-		case DESIGN_NAPALM:
-		case DESIGN_B3:
-		case DESIGN_CCARPET:
-		case DESIGN_ALLYAID:	axis = d.heading();	break;
-		case DESIGN_COMMANDO:	axis = d.heading() + 0.25f * MARKER_PI;	break;		// its brackets stalk on the run's axes
-		case DESIGN_FRENZY:		axis = d.yaw + MARKER_PI / 20.0f;	break;		// between the sunburst's rays, 18 degrees apart
-		default:							break;
-	}
+	s_keep.on = FALSE;
 	cursorTris( d.x, d.y, along, across, axis, d.k, t, tl, d.tint, app );
 }
 

@@ -86,8 +86,13 @@
 // produce and construct reply after the logic frame that ran them, not where they arrive.  In
 // lockstep that frame is the first of the next step, so their replies come inside that step, ahead
 // of the step's own, in the order sent: a client sends its orders, then step, and reads until the
-// reply whose "cmd" is "step".  Like spawn, they act outside the recorded command stream, so a match
-// driven this way does not replay; a -scenario file and every replay play exactly as before.
+// reply whose "cmd" is "step".  A world command sent while a step is running waits for that step's
+// reply and runs on the first frame of the next, since a long step hands the pass back between its
+// frames and the frame it landed on would otherwise depend on how fast the machine went.  Like spawn,
+// they act outside the recorded command stream, so a match driven this way does not replay; a
+// -scenario file and every replay play exactly as before.  Unlike spawn, produce and construct are
+// refused in a -netgame match and on an online test server: they act for any seat, and one machine's
+// order would split the match.
 //
 // A new match without a new process: leave back to the shell (it lets lockstep go, since its message
 // needs a logic frame to land), wait for status to say inGame false, then skirmish.

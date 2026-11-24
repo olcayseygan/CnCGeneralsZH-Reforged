@@ -299,6 +299,10 @@ struct PendingCommand
 	Bool replyWhenRun;
 };
 static std::vector<PendingCommand> thePendingCommands;
+/* What arrives while a step runs waits here until the step is answered.  A step can hand the pass back
+	 between its frames (GameEngine's lockstep burst), so a command queued straight away would land on a
+	 frame that depends on how fast the machine went. */
+static std::vector<PendingCommand> theHeldCommands;
 static Bool theQuitRequested = FALSE;
 
 /// step: the logic runs only the frames a step asks for (GameEngine asks ControlServer_stepFramesOwed)
@@ -671,17 +675,30 @@ Int ControlServer_stepFramesOwed( void )
 
 /** Once a pass: answer the step whose frames have run, and let go of lockstep, and of the produce and
 	  construct orders still waiting, when the match they were for has gone. */
+static void dropCommands( std::vector<PendingCommand> &commands )
+{
+	for (std::vector<PendingCommand>::const_iterator it = commands.begin(); it != commands.end(); ++it)
+	{
+		if (it->replyWhenRun)
+			replyMembers( FALSE, strncmp( it->line.str(), "produce", 7 ) == 0 ? "produce" : "construct",
+										"\"error\":\"the match ended before the order ran\"" );
+	}
+	commands.clear();
+}
+
+/** The commands held during a step go to the next logic frame, behind any already waiting. */
+static void releaseHeldCommands( void )
+{
+	thePendingCommands.insert( thePendingCommands.end(), theHeldCommands.begin(), theHeldCommands.end() );
+	theHeldCommands.clear();
+}
+
 static void updateLockstep( void )
 {
 	if (!isMatchRunning() && !(TheGameLogic && TheGameLogic->isLoadingMap()))
 	{
-		for (std::vector<PendingCommand>::const_iterator it = thePendingCommands.begin(); it != thePendingCommands.end(); ++it)
-		{
-			if (it->replyWhenRun)
-				replyMembers( FALSE, strncmp( it->line.str(), "produce", 7 ) == 0 ? "produce" : "construct",
-											"\"error\":\"the match ended before the order ran\"" );
-		}
-		thePendingCommands.clear();
+		dropCommands( thePendingCommands );
+		dropCommands( theHeldCommands );
 		if (theLockstep)
 			DEBUG_LOG(("CONTROL: the match ended, lockstep released\n"));
 		theLockstep = FALSE;
@@ -694,6 +711,7 @@ static void updateLockstep( void )
 	if (theStepPending && TheGameLogic->getFrame() >= theStepTarget)
 	{
 		theStepPending = FALSE;
+		releaseHeldCommands();
 		char members[ 64 ];
 		sprintf( members, "\"frame\":%u", TheGameLogic->getFrame() );
 		replyMembers( TRUE, "step", members );
@@ -868,6 +886,8 @@ static void handleCommand( const AsciiString &command )
 		// a driven run never reaches the unattended report: net_check reads the census from here
 		LogicThread::report();
 		theQuitRequested = TRUE;
+		// the quit is taken up in a logic frame (ControlServer_runCommands), which lockstep would never run
+		theLockstep = FALSE;
 		replyOk( "\"quitting\":true" );
 		return;
 	}
@@ -1304,6 +1324,7 @@ static void handleCommand( const AsciiString &command )
 			if (theStepPending)
 				replyMembers( FALSE, "step", "\"error\":\"released before its frames ran\"" );
 			theStepPending = FALSE;
+			releaseHeldCommands();
 			char members[ 64 ];
 			sprintf( members, "\"released\":%s,\"frame\":%d", was ? "true" : "false", TheGameLogic ? (Int)TheGameLogic->getFrame() : 0 );
 			replyMembers( TRUE, "step", members );
@@ -1469,18 +1490,30 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
-	if ((Int)thePendingCommands.size() >= CONTROL_MAX_COMMANDS_PER_FRAME)
+	/* The socket's produce and construct act for any seat, outside the command stream, so in a -netgame
+		 match or on an online test server they would put this machine's game on its own.  spawn and the
+		 rest keep the terms above on purpose; these two are an offline learner's. */
+	const Bool replyWhenRun = action.action == SCENARIO_ACTION_PRODUCE || action.action == SCENARIO_ACTION_CONSTRUCT;
+	if (replyWhenRun && (TheGameLogic->isInMultiplayerGame() || TheNetwork != NULL))
+	{
+		replyMembers( FALSE, action.action == SCENARIO_ACTION_PRODUCE ? "produce" : "construct",
+									"\"error\":\"produce and construct run only in an offline skirmish: one machine's order would split a network match\"" );
+		return;
+	}
+
+	if ((Int)(thePendingCommands.size() + theHeldCommands.size()) >= CONTROL_MAX_COMMANDS_PER_FRAME)
 	{
 		replyError( "too many commands queued for one frame" );
 		return;
 	}
 
 	/* produce and construct answer with what happened, once the logic frame has run them
-		 (ScenarioDrill_controlOrder); in lockstep that is inside the next step, ahead of its own reply. */
+		 (ScenarioDrill_controlOrder); in lockstep that is inside the next step, ahead of its own reply.
+		 Sent during a step, a command waits for that step's reply and runs on the next one's first frame. */
 	PendingCommand pending;
 	pending.line = command;
-	pending.replyWhenRun = action.action == SCENARIO_ACTION_PRODUCE || action.action == SCENARIO_ACTION_CONSTRUCT;
-	thePendingCommands.push_back( pending );
+	pending.replyWhenRun = replyWhenRun;
+	(theStepPending ? theHeldCommands : thePendingCommands).push_back( pending );
 	if (!pending.replyWhenRun)
 		replyOk( "\"queued\":true" );
 }

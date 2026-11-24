@@ -574,6 +574,8 @@ public:
 	void attachToObject( Object* object );
 	void detachFromObject( void );
 	void attachToGhostObject(GhostObject* object);
+	/// as many cell intersections as the object's geometry needs now (Object::xfer, a loaded geometry)
+	void resizeCoisForGeometry( void );
 	void detachFromGhostObject(void);
 
 	void setNext( PartitionData *next ) { m_next = next; }			///< set next pointer

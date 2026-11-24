@@ -4831,6 +4831,9 @@ void Object::xfer( Xfer *xfer )
 
 	// vision spied by mask
 	xfer->xferUser( &m_visionSpiedMask, sizeof( PlayerMaskType ) );
+	// newObject registered this one with its template's geometry; a hole wears its building's
+	if( xfer->getXferMode() == XFER_LOAD && m_partitionData )
+		m_partitionData->resizeCoisForGeometry();
 
 	if( version >= 10 )
 	{

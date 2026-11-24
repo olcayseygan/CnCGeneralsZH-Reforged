@@ -2611,6 +2611,20 @@ void PartitionData::attachToObject(Object* object)
 	DEBUG_ASSERTCRASH(m_coiArrayCount == 0 && m_coiArray == NULL, ("hmm, coi should probably be null here"));
 	DEBUG_ASSERTCRASH(m_coiInUseCount == 0, ("hmm, coi count mismatch"));
 	freeCoiArray();
+//-----------------------------------------------------------------------------
+/** The intersections are counted from the geometry an object registers with.  A load registers every
+	* object with its template's and reads its own after: a GLA rebuild hole, which takes the size of the
+	* building it replaces, came back able to stand in only as many cells as the bare hole, kept no record
+	* of the rest, and a sighting saw over it there. */
+void PartitionData::resizeCoisForGeometry( void )
+{
+	if( m_object == NULL || calcMaxCoiForObject() == m_coiArrayCount )
+		return;
+	removeAllTouchedCells();
+	freeCoiArray();
+	allocCoiArray();	// may throw!
+}
+
 	allocCoiArray();	// may throw!
 
 	if (object)

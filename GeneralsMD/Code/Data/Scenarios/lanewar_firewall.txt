@@ -1,0 +1,69 @@
+# Direct Strike proof for the owner's report of 2026-11-24: a Dragon tank's wall of fire burnt its own
+# team's fortress down. Ten Crusaders and six Rangers go out for the USA on every tick and push up to
+# China's fortress; three Dragons go out for China on every tick from behind that fortress, so each fresh
+# Dragon meets the American wave at its own walls. The drill tops China's fortress up every few seconds
+# so the fight there lasts. A FireWallSegment hurts everything in it, its own side's buildings too, and
+# the wall runs 70 to 180 past the tank.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 15000 -scenario lanewar_firewall -logPrefix lanewar_firewall_
+#
+# Count "LANEWAR FRIENDLY FIRE: ... 'LaneWarFortress'" lines and "FireWall'" presses. On 2026-11-24 before
+# the fix: 22 walls, 758 hits by FireWallSegment for 1516 health and 29 by the Dragons' flame for 14.5,
+# and the fire the walls lit burnt the fortress for another 1000 (80 burns of 12.5, which a building
+# names itself as the source of). After it: 3 walls, all out in the lane, and no hit on the fortress
+# from its own side.
+#
+# The frames below are this file's 30 Hz frames, which the drill scales by the game speed: at 1.5x a
+# file frame is two thirds of a logic frame (first tick logic 2700 = file 4050).
+
+30    lanecash   0  20000
+30    lanecash   1  20000
+30    laneplace  0  AmericaTankCrusader   0 0
+30    laneplace  0  AmericaTankCrusader   2 0
+30    laneplace  0  AmericaTankCrusader   4 0
+30    laneplace  0  AmericaTankCrusader   6 0
+30    laneplace  0  AmericaTankCrusader   8 0
+30    laneplace  0  AmericaTankCrusader   10 0
+30    laneplace  0  AmericaTankCrusader   12 0
+30    laneplace  0  AmericaTankCrusader   14 0
+30    laneplace  0  AmericaTankCrusader   2 3
+30    laneplace  0  AmericaTankCrusader   10 3
+30    laneplace  0  AmericaInfantryRanger 4 3
+30    laneplace  0  AmericaInfantryRanger 5 3
+30    laneplace  0  AmericaInfantryRanger 6 3
+30    laneplace  0  AmericaInfantryRanger 7 3
+30    laneplace  0  AmericaInfantryRanger 8 3
+30    laneplace  0  AmericaInfantryRanger 9 3
+30    laneplace  1  ChinaTankDragon       4 0
+30    laneplace  1  ChinaTankDragon       7 0
+30    laneplace  1  ChinaTankDragon       10 0
+# China's fortress topped up from the first American arrival to the end
+6000  health     1  LaneWarFortress       100
+6600  health     1  LaneWarFortress       100
+7200  health     1  LaneWarFortress       100
+7800  health     1  LaneWarFortress       100
+8400  health     1  LaneWarFortress       100
+9000  health     1  LaneWarFortress       100
+9600  health     1  LaneWarFortress       100
+10200 health     1  LaneWarFortress       100
+10800 health     1  LaneWarFortress       100
+11400 health     1  LaneWarFortress       100
+12000 health     1  LaneWarFortress       100
+12600 health     1  LaneWarFortress       100
+13200 health     1  LaneWarFortress       100
+13800 health     1  LaneWarFortress       100
+14400 health     1  LaneWarFortress       100
+15000 health     1  LaneWarFortress       100
+15600 health     1  LaneWarFortress       100
+16200 health     1  LaneWarFortress       100
+16800 health     1  LaneWarFortress       100
+17400 health     1  LaneWarFortress       100
+18000 health     1  LaneWarFortress       100
+18600 health     1  LaneWarFortress       100
+19200 health     1  LaneWarFortress       100
+19800 health     1  LaneWarFortress       100
+20400 health     1  LaneWarFortress       100
+21000 health     1  LaneWarFortress       100
+21600 health     1  LaneWarFortress       100

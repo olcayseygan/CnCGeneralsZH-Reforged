@@ -298,6 +298,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_LANEUNITUPGRADE;
 	else if (token == "lanecash")
 		*action = SCENARIO_ACTION_LANECASH;
+	else if (token == "lanereveal")
+		*action = SCENARIO_ACTION_LANEREVEAL;
 	else if (token == "groupqueue")
 		*action = SCENARIO_ACTION_GROUPQUEUE;
 	else
@@ -425,6 +427,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_LANEGARRISON:	return SCENARIO_TOKENS_ATTACK + 1;
 		case SCENARIO_ACTION_LANEUNITUPGRADE:	return SCENARIO_TOKENS_ATTACK + 1;
 		case SCENARIO_ACTION_LANECASH:		return SCENARIO_TOKENS_STOP;
+		case SCENARIO_ACTION_LANEREVEAL:	return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_GROUPQUEUE:	return SCENARIO_TOKENS_MOVE;
 	}
 	return SCENARIO_TOKENS_STOP;
@@ -647,6 +650,7 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 		case SCENARIO_ACTION_LANESELL:
 		case SCENARIO_ACTION_LANEMOVE:
 		case SCENARIO_ACTION_LANEVET:
+		case SCENARIO_ACTION_LANEREVEAL:
 		{
 			// the order's integers, kept as written and read again when it runs; a sale and a rank take
 			// a passenger's index after the slot
@@ -2500,6 +2504,7 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 		case SCENARIO_ACTION_LANEGARRISON:
 		case SCENARIO_ACTION_LANEUNITUPGRADE:
 		case SCENARIO_ACTION_LANECASH:
+		case SCENARIO_ACTION_LANEREVEAL:
 			ordered = FALSE;		// handled before the group is built
 			break;
 	}
@@ -2796,6 +2801,20 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 	{
 		player->getMoney()->deposit( (UnsignedInt)action.count, FALSE );
 		DEBUG_LOG(("SCENARIO: frame %d lanecash slot %d %d, %u now\n", action.frame, action.slot, action.count, player->getMoney()->countMoney()));
+		return TRUE;
+	}
+
+	if (action.action == SCENARIO_ACTION_LANEREVEAL)
+	{
+		Int args[ 2 ] = { -1, -1 };
+		sscanf( action.name.str(), "%d %d", &args[ 0 ], &args[ 1 ] );
+		if (args[ 0 ] == 0 && args[ 1 ] == 0)
+		{
+			// 0 0: the lane's middle, which the map knows and the file does not
+			args[ 0 ] = REAL_TO_INT( TheLaneWarDirector->getMiddle()->x );
+			args[ 1 ] = REAL_TO_INT( TheLaneWarDirector->getMiddle()->y );
+		}
+		TheLaneWarDirector->onOrder( player, LANEWAR_ORDER_REVEAL, args, 2 );
 		return TRUE;
 	}
 

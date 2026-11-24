@@ -68,6 +68,7 @@ struct LaneHudLayout
 	LaneHudBox hand;										///< the hero and the cards with their rise: where a plot unit dragged back is sold
 	LaneHudBox deck;										///< the upgrades, a stack that opens on a click
 	LaneHudBox abilitiesKey;
+	LaneHudBox revealKey;								///< the satellite scan, right of the abilities key
 	LaneHudBox upgradeRow;							///< the open deck's row of cards, the most it holds, its right end on the deck's
 	int abilitiesRight, abilitiesBottom, abilitiesWidth;	///< the abilities panel grows up from here by its rows
 	int abilityRowH, abilityPad;
@@ -142,6 +143,7 @@ inline void LaneHud_layout( int width, int height, LaneHudLayout *out )
 	out->hand = LaneHud_place( left + 72.0f, handY - LANEHUD_CARD_RISE - 4.0f, left + 1046.0f, 1080, 0, width, height );
 	out->deck = LaneHud_place( left + 1054.0f, handY, left + 1154.0f, handY + 116.0f, 0, width, height );
 	out->abilitiesKey = LaneHud_place( left + 1170.0f, 994, left + 1214.0f, 1038, 0, width, height );
+	out->revealKey = LaneHud_place( left + 1222.0f, 994, left + 1266.0f, 1038, 0, width, height );
 
 	// the open deck: a row of cards over the hand, its right end on the deck's (whose top copy sits 6 right)
 	const float deckRight = left + 1160.0f, upgradeLeft = deckRight - 106.0f * LANEHUD_UPGRADE_CELLS + 6.0f;

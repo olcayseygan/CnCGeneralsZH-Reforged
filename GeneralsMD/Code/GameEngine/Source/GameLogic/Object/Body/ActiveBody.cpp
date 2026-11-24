@@ -589,6 +589,12 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 				obj->isKindOf( KINDOF_STRUCTURE ), obj->isKindOf( KINDOF_INFANTRY ) );
 			if( percent != 100 )
 				amount = amount * (Real)percent / 100.0f;
+			// a fortress or tower hit by its own side, the fire wall of the owner's report of 2026-11-24 (a
+			// building burning names itself, whoever lit it, so that is left out)
+			if( amount > 0.0f && damager != obj && obj->isKindOf( KINDOF_STRUCTURE ) && damager->getControllingPlayer() != NULL && victimPlayer != NULL
+					&& ( damager->getControllingPlayer() == victimPlayer || damager->getControllingPlayer()->getRelationship( obj->getTeam() ) == ALLIES ) )
+				DEBUG_LOG(( "LANEWAR FRIENDLY FIRE: frame %u '%s' %d hits its own side's '%s' %d for %.1f\n", TheGameLogic->getFrame(),
+										damager->getTemplate()->getName().str(), (Int)damager->getID(), obj->getTemplate()->getName().str(), (Int)obj->getID(), amount ));
 		}
 
 		// one hit kill: anything that got through the armour at all takes the whole bar

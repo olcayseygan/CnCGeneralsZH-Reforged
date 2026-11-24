@@ -88,6 +88,10 @@ enum
 	LANEWAR_PRESS_COOLDOWN_SECONDS = 20,	///< game seconds a Dragon's fire wall or a Toxin Truck's slime waits before that copy presses it again
 	LANEWAR_HERO_COOLDOWN_SECONDS = 30,		///< game seconds a hero's copy waits after any of its buttons before the next
 	LANEWAR_HACK_RANGE = 250,							///< how far a Hacker starts his building hack, just past the Watch Tower's 225 (SpecialAbilityUpdate::getStartAbilityRange)
+	LANEWAR_FIELD_CLEAR = 250,						///< a copy fires no button weapon that can hurt its own side closer than this to its team's fortress or tower (a fire wall lands up to 180 out)
+	LANEWAR_REVEAL_PRICE = 200,						///< a satellite scan bought from the HUD (LANEWAR_ORDER_REVEAL)
+	LANEWAR_REVEAL_RADIUS = 300,					///< what it uncovers and where it detects the hidden: EA's SpySatellitePing, 10 game seconds then 5 shrinking
+	LANEWAR_REVEAL_COOLDOWN_SECONDS = 45,	///< game seconds before the same seat may buy the next
 };
 
 /** A span the mode was tuned for in wall seconds at the native 1.5x, as game time: the same share of the
@@ -126,6 +130,7 @@ enum LaneWarOrderKind
 	LANEWAR_ORDER_VETERANCY = 6,					///< (grid, column, row[, passenger]): raise the sender's plot unit covering that slot, or that passenger of it, one rank; its wave copies go out at it
 	LANEWAR_ORDER_GARRISON = 7,						///< (grid, column, row, template id): buy an infantryman into the sender's plot unit covering that slot, one whose passengers fire out
 	LANEWAR_ORDER_UNIT_UPGRADE = 8,				///< (grid, column, row, button slot): buy the object upgrade on that command set slot of the sender's plot unit covering that slot
+	LANEWAR_ORDER_REVEAL = 9,							///< (x, y): a satellite scan of the world there for the sender's team, LANEWAR_REVEAL_PRICE, once a LANEWAR_REVEAL_COOLDOWN_SECONDS
 };
 // LANEWAR_ORDER_SELL takes a fourth integer too, a passenger's index (-1 or none for the unit and all it carries)
 
@@ -378,6 +383,8 @@ public:
 	Int getTechLevel( Int team, Int seat ) const { return m_techLevel[ team ][ seat ]; }
 	Int getMiddleHolder( void ) const { return m_middleHolder; }
 	Bool isHeroBought( Int team, Int seat ) const { return m_heroBought[ team ][ seat ]; }
+	/// the first frame the seat may buy its next satellite scan
+	UnsignedInt getRevealReady( Int team, Int seat ) const { return m_revealReady[ team ][ seat ]; }
 	/// what the seat is paid on the next tick if the middle stays with whoever holds it now
 	UnsignedInt getIncome( Int team, Int seat ) const
 	{
@@ -464,6 +471,8 @@ private:
 	Bool walkUp( Object *obj, const CommandButton *button, Int team );
 	Bool enteredByAnother( const Object *obj, const Object *target ) const;
 	void march( Object *obj, Int team );
+	Bool nearOwnBuilding( const Object *obj, Int team ) const;
+	void passOwnBuildings( Object *obj, Int team ) const;
 	Bool setAbility( Player *player, const Int *args, Int argCount );
 	void refillJets( void );
 	/// a wave's jet copy waits off the map with its seat's squadron instead of marching
@@ -486,6 +495,7 @@ private:
 	Bool moveUnit( Player *player, Int grid, Int fromCol, Int fromRow, Int toCol, Int toRow );
 	Bool buyUpgrade( Player *player, Int index );
 	Bool buyVeterancy( Player *player, const Int *args, Int argCount );
+	Bool reveal( Player *player, const Int *args, Int argCount );
 	Bool readGrid( const char *prefix, Int team, Int seat, Int grid );
 
 	// read from the map on every load, so not saved
@@ -512,6 +522,7 @@ private:
 	Int m_incomeLevel[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];		///< 0 to LANEWAR_INCOME_TIERS, bought
 	Int m_techLevel[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];			///< 1 to LANEWAR_TECH_TIERS
 	Bool m_heroBought[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];		///< the seat's one hero is bought, once a match
+	UnsignedInt m_revealReady[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];	///< the first frame the seat may buy its next satellite scan, 0 at once
 	Int m_middleHolder;																		///< the team the last tick found holding the middle, -1 nobody
 	std::vector<LaneWarAbilityToggle> m_abilityToggles;					///< the players' switches away from LaneWar_abilityDefaultOn, sorted
 	std::vector<Jet> m_jets;																	///< every seat's squadron, in the order its copies joined

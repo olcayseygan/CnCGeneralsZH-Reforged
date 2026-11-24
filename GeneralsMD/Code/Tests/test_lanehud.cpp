@@ -103,7 +103,7 @@ TEST(lanehud_no_box_leaves_the_screen_or_meets_another)
 		LaneHud_layout( w, h, &l );
 
 		// the boxes that stand at once: the top chips, the menu keys and the bottom row
-		LaneHudBox boxes[ 8 + LANEHUD_TIERS + 1 + LANEHUD_CARDS + 2 ];
+		LaneHudBox boxes[ 8 + LANEHUD_TIERS + 1 + LANEHUD_CARDS + 3 ];
 		int count = 0;
 		boxes[ count++ ] = l.money;
 		boxes[ count++ ] = l.map;
@@ -120,6 +120,7 @@ TEST(lanehud_no_box_leaves_the_screen_or_meets_another)
 			boxes[ count++ ] = l.cards[ c ];
 		boxes[ count++ ] = l.deck;
 		boxes[ count++ ] = l.abilitiesKey;
+		boxes[ count++ ] = l.revealKey;
 		for( int i = 0; i < count; ++i )
 		{
 			CHECK( onScreen( boxes[ i ], w, h ) );
@@ -148,7 +149,7 @@ TEST(lanehud_no_box_leaves_the_screen_or_meets_another)
 			const int rise = LaneHud_px( LANEHUD_CARD_RISE, l.scale );
 			for( int c = 0; c < LANEHUD_CARDS; ++c )
 				CHECK( !overlap( panel, LaneHud_box( l.cards[ c ].x, l.cards[ c ].y - rise, l.cards[ c ].w, l.cards[ c ].h + rise ) ) );
-			CHECK( !overlap( panel, l.deck ) && !overlap( panel, l.abilitiesKey ) );
+			CHECK( !overlap( panel, l.deck ) && !overlap( panel, l.abilitiesKey ) && !overlap( panel, l.revealKey ) );
 		}
 		for( int c = 0; c < LANEHUD_UPGRADE_CELLS; ++c )
 		{

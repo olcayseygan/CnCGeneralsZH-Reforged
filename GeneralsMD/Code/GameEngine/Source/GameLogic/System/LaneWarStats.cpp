@@ -345,7 +345,7 @@ void LaneWarStats::onOrder( const Player *player, Int kind, UnsignedInt moneyBef
 	const Int spendKind = kind == LANEWAR_ORDER_TIER ? LANEWAR_SPEND_TIERS
 											: kind == LANEWAR_ORDER_VETERANCY ? LANEWAR_SPEND_RANKS
 											: kind == LANEWAR_ORDER_GARRISON ? LANEWAR_SPEND_PASSENGERS
-											: kind == LANEWAR_ORDER_UPGRADE || kind == LANEWAR_ORDER_UNIT_UPGRADE ? LANEWAR_SPEND_UPGRADES
+											: kind == LANEWAR_ORDER_UPGRADE || kind == LANEWAR_ORDER_UNIT_UPGRADE || kind == LANEWAR_ORDER_REVEAL ? LANEWAR_SPEND_UPGRADES
 											: LANEWAR_SPEND_UNITS;
 	st->spent[ spendKind ] += (Int)( moneyBefore - moneyAfter );
 }

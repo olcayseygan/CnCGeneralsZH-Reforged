@@ -1648,8 +1648,10 @@ Data/Scenarios/lanewar.txt
 Data/Scenarios/lanewar_air.txt
 Data/Scenarios/lanewar_buy.txt
 Data/Scenarios/lanewar_cargo.txt
+Data/Scenarios/lanewar_cashhack.txt
 Data/Scenarios/lanewar_cooldowns.txt
 Data/Scenarios/lanewar_end.txt
+Data/Scenarios/lanewar_firewall.txt
 Data/Scenarios/lanewar_hack.txt
 Data/Scenarios/lanewar_hacklone.txt
 Data/Scenarios/lanewar_hacktower.txt
@@ -1657,6 +1659,7 @@ Data/Scenarios/lanewar_lotus.txt
 Data/Scenarios/lanewar_microwave.txt
 Data/Scenarios/lanewar_onejet.txt
 Data/Scenarios/lanewar_ranks.txt
+Data/Scenarios/lanewar_reveal.txt
 Data/Scenarios/lanewar_scales.txt
 Data/Scenarios/lanewar_speed.txt
 Data/Scenarios/lanewar_strays.txt

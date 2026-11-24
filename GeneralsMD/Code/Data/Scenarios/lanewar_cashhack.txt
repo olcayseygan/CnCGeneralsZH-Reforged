@@ -1,0 +1,23 @@
+# Direct Strike proof of the Hacker's internet hack rule (TODO Direct Strike, Abilities 2): the switch
+# is off by default; turned on, a Hacker's wave copy stays where it came out and hacks for cash for its
+# whole life instead of marching. Two Hackers on China's plot (slot 1) with the switch on (command set
+# slot 3, 2 counted from 0), nothing else on either side. "lanecash 1 1" pays one and prints the seat's
+# money, so the hack's cash shows between ticks.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 9000 -scenario lanewar_cashhack -logPrefix lanewar_cashhack_
+#
+# Passes on "LANEWAR ABILITY USE: ... 'ChinaInfantryHacker' ... hacks the internet" once a copy (two
+# lines a wave) and slot 1's money climbing between the ticks after it (the first tick is logic frame
+# 2700 at 1.5x, file 4050; the next 4050, file 6075).
+
+30    lanecash   1  5000
+30    lanetier   1  1 2
+60    laneplace  1  ChinaInfantryHacker  5 3
+60    laneplace  1  ChinaInfantryHacker  9 3
+90    laneability 1 ChinaInfantryHacker  2 1
+4400  lanecash   1  1
+5000  lanecash   1  1
+5600  lanecash   1  1
+6000  lanecash   1  1

@@ -174,6 +174,9 @@ namespace
 
 	// the tooltip the draw found under the pointer, drawn last
 	UnicodeString s_tip;
+
+	// the satellite scan key pressed: the next click on the world buys the scan there
+	Bool s_revealArmed = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -354,7 +357,7 @@ static void sendOrder( Int kind, Int a, Int b = -1, Int c = -1, Int d = -1, Int 
 	msg->appendIntegerArgument( kind );
 	const Int args[] = { a, b, c, d, e };
 	// a sale or a rank takes a fourth integer only for a passenger
-	Int count = kind == LANEWAR_ORDER_UPGRADE ? 1 : kind == LANEWAR_ORDER_TIER ? 2 : kind == LANEWAR_ORDER_MOVE ? 5 : 3;
+	Int count = kind == LANEWAR_ORDER_UPGRADE ? 1 : kind == LANEWAR_ORDER_TIER || kind == LANEWAR_ORDER_REVEAL ? 2 : kind == LANEWAR_ORDER_MOVE ? 5 : 3;
 	if( kind == LANEWAR_ORDER_GARRISON || kind == LANEWAR_ORDER_UNIT_UPGRADE
 			|| ( ( kind == LANEWAR_ORDER_SELL || kind == LANEWAR_ORDER_VETERANCY ) && d >= 0 ) )
 		count = 4;
@@ -370,6 +373,7 @@ static void dropHeld( void )
 	s_moving = INVALID_ID;
 	s_passengerOf = INVALID_ID;
 	s_passenger = -1;
+	s_revealArmed = FALSE;
 }
 
 static Int localMoney( void )
@@ -447,7 +451,7 @@ static Bool overHud( const ICoord2D *mouse )
 	for( Int t = 0; t < LANEHUD_TIERS; ++t )
 		if( inside( l.tiers[ t ], mouse ) )
 			return TRUE;
-	if( inside( l.hand, mouse ) || inside( l.deck, mouse ) || inside( l.abilitiesKey, mouse ) )
+	if( inside( l.hand, mouse ) || inside( l.deck, mouse ) || inside( l.abilitiesKey, mouse ) || inside( l.revealKey, mouse ) )
 		return TRUE;
 	if( s_upgradesOpen )
 		for( Int c = 0; c < s_upgradeCount; ++c )
@@ -1306,6 +1310,42 @@ static void drawAbilitiesKey( void )
 	tip( b, label( "GUI:LaneAbilities" ) );
 }
 
+/// the wall seconds before the seat may buy its next satellite scan, 0 when it may now
+static Int revealWait( void )
+{
+	const UnsignedInt ready = TheLaneWarDirector->getRevealReady( s_team, s_seat ), now = TheGameLogic->getFrame();
+	return ready > now ? (Int)( ( ready - now + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND ) : 0;
+}
+
+/** The satellite scan key (LANEWAR_ORDER_REVEAL): a flat key with an eye until the art has a piece for it,
+	* lit while armed, greyed with the seconds left while it recharges or the money is short. */
+static void drawRevealKey( void )
+{
+	const LaneHudBox &b = s_layout.revealKey;
+	const Int wait = revealWait();
+	const Bool off = wait > 0 || localMoney() < LANEWAR_REVEAL_PRICE;
+	const Bool hot = !off && inside( b, mousePos() );
+	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, s_revealArmed ? KEY_FACE_LIT : hot ? KEY_FACE_HOT : KEY_FACE );
+	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, hot || s_revealArmed ? UIStyle::EDGE_LIT : PLATE_EDGE );
+	// an eye: two lids and the pupil
+	line( 0.15f, 0.5f, 0.5f, 0.28f, b, WHITE );
+	line( 0.5f, 0.28f, 0.85f, 0.5f, b, WHITE );
+	line( 0.15f, 0.5f, 0.5f, 0.72f, b, WHITE );
+	line( 0.5f, 0.72f, 0.85f, 0.5f, b, WHITE );
+	TheDisplay->drawFillRect( b.x + b.w * 2 / 5, b.y + b.h * 2 / 5, b.w / 5, b.h / 5, PRICE );
+	if( off )
+		TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, GREYED );
+	if( wait > 0 )
+	{
+		UnicodeString text;
+		text.format( u"%d", wait );
+		drawText( text, bodyFont(), b.x + b.w / 2, b.y, b.h, WHITE, 0 );
+	}
+	UnicodeString name;
+	name.format( label( "GUI:LaneReveal" ).str(), (Int)LANEWAR_REVEAL_PRICE );
+	tip( b, name );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** The abilities panel: one row a roster unit's button the director presses, the unit's picture, the
 	* button's and its switch.  A click on the row turns it; the order goes out as LANEWAR_ORDER_ABILITY
@@ -2020,6 +2060,7 @@ void LaneHud_draw( void )
 		drawCards();
 		drawDeck();
 		drawAbilitiesKey();
+		drawRevealKey();
 		drawUpgrades();
 		drawAbilities();
 		drawCluster();
@@ -2152,6 +2193,15 @@ static Bool pressRow( const ICoord2D *mouse )
 		LaneHud_abilitiesPanelSetOpen( !s_abilitiesOpen );
 		return TRUE;
 	}
+	if( inside( l.revealKey, mouse ) )
+	{
+		// armed for the next click on the world; pressed again, or not ready, or too dear, nothing held
+		const Bool arm = !s_revealArmed && revealWait() == 0 && localMoney() >= LANEWAR_REVEAL_PRICE;
+		dropHeld();
+		s_upgradesOpen = s_abilitiesOpen = FALSE;
+		s_revealArmed = arm;
+		return TRUE;
+	}
 	return FALSE;
 }
 
@@ -2164,7 +2214,7 @@ Bool LaneHud_press( const ICoord2D *mouse, Bool right )
 	if( right )
 	{
 		// a right press takes back whatever is held or open, and is the HUD's over any of its boxes
-		const Bool held = s_armed != NULL || s_moving != INVALID_ID || s_upgradesOpen || s_abilitiesOpen;
+		const Bool held = s_armed != NULL || s_moving != INVALID_ID || s_upgradesOpen || s_abilitiesOpen || s_revealArmed;
 		dropHeld();
 		s_upgradesOpen = s_abilitiesOpen = FALSE;
 		return held || overHud( mouse );
@@ -2206,7 +2256,14 @@ Bool LaneHud_press( const ICoord2D *mouse, Bool right )
 	// the world
 	Coord3D world;
 	if( !TheTacticalView->screenToTerrain( mouse, &world ) )
-		return s_armed != NULL || s_moving != INVALID_ID;
+		return s_armed != NULL || s_moving != INVALID_ID || s_revealArmed;
+
+	if( s_revealArmed )
+	{
+		sendOrder( LANEWAR_ORDER_REVEAL, REAL_TO_INT( world.x ), REAL_TO_INT( world.y ) );
+		s_revealArmed = FALSE;
+		return TRUE;
+	}
 
 	if( s_armed != NULL && s_garrisonIndex >= 0 )
 	{
@@ -2333,7 +2390,7 @@ Bool LaneHud_escape( void )
 {
 	if( !s_showing )
 		return FALSE;
-	const Bool any = s_armed != NULL || s_moving != INVALID_ID || s_upgradesOpen || s_abilitiesOpen;
+	const Bool any = s_armed != NULL || s_moving != INVALID_ID || s_upgradesOpen || s_abilitiesOpen || s_revealArmed;
 	dropHeld();
 	s_upgradesOpen = s_abilitiesOpen = FALSE;
 	return any;

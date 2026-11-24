@@ -50,6 +50,7 @@
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/CreateModule.h"
+#include "GameLogic/Module/HackInternetAIUpdate.h"
 #include "GameLogic/Module/JetAIUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
@@ -604,6 +605,19 @@ static Bool isWalkUpButton( const CommandButton *button )
 	return ( button->getOptions() & NEED_TARGET_ENEMY_OBJECT ) && isWalkUpPower( specialPowerOf( button ) );
 }
 
+/// the unit's internet hack button, NULL when its command set has none
+static const CommandButton *internetHackOf( const Object *obj )
+{
+	const CommandSet *set = TheCommandStore->findCommandSet( obj->getCommandSetString() );
+	for( Int i = 0; set != NULL && i < MAX_COMMANDS_PER_SET; ++i )
+	{
+		const CommandButton *button = set->getCommandButton( i );
+		if( button != NULL && button->getCommandType() == GUI_COMMAND_HACK_INTERNET )
+			return button;
+	}
+	return NULL;
+}
+
 /** The abilities in one command set: what the AI's rules weigh (AIAbility_buttonsOf) and the walk-ups,
 	  read off the INI alone.  No movement order, upgrade or mine clearing, nothing only a script presses,
 	  and no special with nothing to aim at in a lane (the booby trap, the disguise, the Helix's bomb). */
@@ -638,13 +652,14 @@ static Int abilitiesOfSet( const ThingTemplate *tmpl, const CommandSet *set, Lan
 				break;
 			case GUICOMMANDMODE_HIJACK_VEHICLE:
 			case GUICOMMANDMODE_SABOTAGE_BUILDING:
+			// the internet hack, off by default: a Hacker switched to it stays behind and hacks for cash
+			// instead of marching (useAbilities)
+			case GUI_COMMAND_HACK_INTERNET:
 				kind = LANEWAR_ABILITY_COMMAND;
 				break;
-			// left off the list, since nothing in a lane game gives them a use: the car bomb turns one of
-			// the player's own wave vehicles into a bomb (the suicide units already blow themselves up on
-			// the enemy), and the internet hack makes money the director pays out by its own rule
+			// left off the list, since a lane has nothing for it: only EA's civilian cars carry the
+			// CARBOMB weapon set (ConvertToCarBombCrateCollide::isValidToExecute), and a lane map has none
 			case GUICOMMANDMODE_CONVERT_TO_CARBOMB:
-			case GUI_COMMAND_HACK_INTERNET:
 			default:
 				break;
 		}
@@ -691,6 +706,7 @@ void LaneWarDirector::reset( void )
 			m_incomeLevel[ t ][ s ] = 0;
 			m_techLevel[ t ][ s ] = 1;
 			m_heroBought[ t ][ s ] = FALSE;
+			m_revealReady[ t ][ s ] = 0;
 		}
 		m_spawn[ t ].zero();
 		m_fortress[ t ] = INVALID_ID;
@@ -1058,6 +1074,9 @@ void LaneWarDirector::onOrder( Player *player, Int kind, const Int *args, Int ar
 		case LANEWAR_ORDER_UNIT_UPGRADE:
 			done = buyUnitUpgrade( player, args, argCount );
 			break;
+		case LANEWAR_ORDER_REVEAL:
+			done = reveal( player, args, argCount );
+			break;
 		default:
 			DEBUG_LOG(( "LANEWAR ORDER: frame %u player %d kind %d with %d arguments is no order\n",
 									now, player->getPlayerIndex(), kind, argCount ));
@@ -1374,6 +1393,63 @@ Bool LaneWarDirector::buyUpgrade( Player *player, Int index )
 
 	player->getMoney()->withdraw( (UnsignedInt)price, FALSE );
 	player->addUpgrade( upgrade, UPGRADE_STATUS_COMPLETE );
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** (x, y): the players' suggestion of 2026-11-22 and 2026-11-23, a scan bought from the HUD like the USA
+	  Spy Satellite.  Every plot is in sight already, so what it buys is the lane: EA's own SpySatellitePing
+	  put down for the sender, which uncovers LANEWAR_REVEAL_RADIUS round the spot for 10 game seconds,
+	  shrinks away over 5 and detects the hidden in it (a camouflaged Rebel, Burton, a Stealth Fighter)
+	  where only the tower's 250 and the fortress's 325 do otherwise.  LANEWAR_REVEAL_PRICE a scan, one a
+	  seat every LANEWAR_REVEAL_COOLDOWN_SECONDS of game time. */
+Bool LaneWarDirector::reveal( Player *player, const Int *args, Int argCount )
+{
+	Int team, seat;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const ThingTemplate *ping = TheThingFactory->findTemplate( "SpySatellitePing", FALSE );
+	Region3D ext;
+	TheTerrainLogic->getExtentIncludingBorder( &ext );
+	const char *refused = NULL;
+	if( !m_active || !seatOf( player, &team, &seat ) )
+		refused = "not seated in a lane game";
+	else if( argCount < 2 || (Real)args[ 0 ] < ext.lo.x || (Real)args[ 0 ] > ext.hi.x || (Real)args[ 1 ] < ext.lo.y || (Real)args[ 1 ] > ext.hi.y )
+		refused = "not on the map";
+	else if( ping == NULL )
+		refused = "no SpySatellitePing";
+	else if( now < m_revealReady[ team ][ seat ] )
+		refused = "not ready";
+	else if( (Int)player->getMoney()->countMoney() < LANEWAR_REVEAL_PRICE )
+		refused = "too dear";
+
+	DEBUG_LOG(( "LANEWAR REVEAL: frame %u player %d at (%d,%d) for %d %s%s\n", now, player ? (Int)player->getPlayerIndex() : -1,
+							argCount >= 2 ? args[ 0 ] : 0, argCount >= 2 ? args[ 1 ] : 0, (Int)LANEWAR_REVEAL_PRICE,
+							refused ? "refused: " : "bought", refused ? refused : "" ));
+	if( refused != NULL )
+		return FALSE;
+
+	Object *scan = TheThingFactory->newObject( ping, player->getDefaultTeam() );
+	if( scan == NULL )
+		return FALSE;
+	Coord3D at;
+	at.x = (Real)args[ 0 ];
+	at.y = (Real)args[ 1 ];
+	at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
+	scan->setPosition( &at );
+	player->getMoney()->withdraw( (UnsignedInt)LANEWAR_REVEAL_PRICE, FALSE );
+	m_revealReady[ team ][ seat ] = now + (UnsignedInt)( LANEWAR_REVEAL_COOLDOWN_SECONDS * LOGICFRAMES_PER_GAME_SECOND );
+
+	// the log's count of what it will catch: the enemy's hidden units inside it now
+	Int hidden = 0;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		const Real dx = obj->getPosition()->x - at.x, dy = obj->getPosition()->y - at.y;
+		if( obj->testStatus( OBJECT_STATUS_STEALTHED ) && !obj->isEffectivelyDead() && dx * dx + dy * dy <= (Real)( LANEWAR_REVEAL_RADIUS * LANEWAR_REVEAL_RADIUS )
+				&& player->getRelationship( obj->getTeam() ) == ENEMIES )
+			++hidden;
+	}
+	DEBUG_LOG(( "LANEWAR REVEAL: frame %u scan %d of player %d up, %d hidden enemies inside, next at frame %u\n", now, (Int)scan->getID(),
+							(Int)player->getPlayerIndex(), hidden, m_revealReady[ team ][ seat ] ));
 	return TRUE;
 }
 
@@ -1870,6 +1946,81 @@ static UnsignedInt pressCooldown( const Player *player, const Object *obj, Int s
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A button weapon that can hurt its own side where it lands: one that leaves something burning, the
+	  Dragon tank's wall of fire (each FireWallSegment hits ALLIES, and the wall runs 70 to 180 past the tank,
+	  dragonfirewall.txt), or one whose blast hits allies, rocket pods, neutron shells and the like.  The
+	  owner's report of 2026-11-24: a Dragon fighting at its own fortress burnt the fortress down; and his
+	  rule of that day, after the Warcraft III Direct Strike guide, that a button able to harm its own side
+	  is gated by range. */
+static Bool harmsOwnSide( const Object *obj, Int slot )
+{
+	const Weapon *weapon = slot >= 0 && slot < WEAPONSLOT_COUNT ? obj->getWeaponInWeaponSlot( (WeaponSlotType)slot ) : NULL;
+	if( weapon == NULL )
+		return FALSE;
+	const WeaponTemplate *wt = weapon->getTemplate();
+	if( wt->getProjectileDetonationOCL( obj->getVeterancyLevel() ) != NULL )
+		return TRUE;
+	const WeaponBonus bonus;
+	return ( wt->getAffectsMask() & WEAPON_AFFECTS_ALLIES ) != 0 && max( wt->getPrimaryDamageRadius( bonus ), wt->getSecondaryDamageRadius( bonus ) ) > 0.0f;
+}
+
+/// a building of the copy's own team within LANEWAR_FIELD_CLEAR of it, measured to the building's edge
+Bool LaneWarDirector::nearOwnBuilding( const Object *obj, Int team ) const
+{
+	const ObjectID own[ 3 ] = { m_fortress[ team ], m_tower[ team ][ 0 ], m_tower[ team ][ 1 ] };
+	for( Int i = 0; i < 3; ++i )
+	{
+		const Object *building = own[ i ] != INVALID_ID ? TheGameLogic->findObjectByID( own[ i ] ) : NULL;
+		if( building == NULL || building->isEffectivelyDead() )
+			continue;
+		const Real reach = (Real)LANEWAR_FIELD_CLEAR + building->getGeometryInfo().getBoundingCircleRadius();
+		const Real dx = building->getPosition()->x - obj->getPosition()->x, dy = building->getPosition()->y - obj->getPosition()->y;
+		if( dx * dx + dy * dy < reach * reach )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+/** The suggestion of 2026-11-22: a wave walks through its own team's fortress and Watch Tower instead of
+	  squeezing round them, while the enemy still has to fight them.  The pathfinder and the collisions
+	  already skip one obstacle a unit names (AIUpdateInterface::ignoreObstacleID, what a unit leaving its
+	  factory uses), so a copy names its own fortress until it is past it, then its own tower nearest ahead.
+	  Logic state saved with the unit's AI, nothing of the director's. */
+void LaneWarDirector::passOwnBuildings( Object *obj, Int team ) const
+{
+	AIUpdateInterface *ai = obj->getAI();
+	if( ai == NULL || obj->isKindOf( KINDOF_AIRCRAFT ) )
+		return;
+	const Real ahead = towardEnemy( team );
+	ObjectID pass = INVALID_ID;
+	const Object *fortress = TheGameLogic->findObjectByID( m_fortress[ team ] );
+	if( fortress != NULL && ( obj->getPosition()->x - fortress->getPosition()->x ) * ahead < fortress->getGeometryInfo().getBoundingCircleRadius() )
+		pass = fortress->getID();
+	else
+	{
+		Real best = 0.0f;
+		for( Int k = 0; k < 2; ++k )
+		{
+			const Object *tower = m_tower[ team ][ k ] != INVALID_ID ? TheGameLogic->findObjectByID( m_tower[ team ][ k ] ) : NULL;
+			if( tower == NULL )
+				continue;
+			const Real dx = tower->getPosition()->x - obj->getPosition()->x, dy = tower->getPosition()->y - obj->getPosition()->y;
+			if( pass == INVALID_ID || dx * dx + dy * dy < best )
+			{
+				pass = tower->getID();
+				best = dx * dx + dy * dy;
+			}
+		}
+	}
+	// what an entering unit or a contact weapon's approach names (AIEnterState, AIAttackApproachTargetState) is
+	// left alone: they set it back to none when done
+	const ObjectID now = ai->getIgnoredObstacleID();
+	const Bool ours = now == INVALID_ID || now == m_fortress[ team ] || now == m_tower[ team ][ 0 ] || now == m_tower[ team ][ 1 ];
+	if( ours && now != pass )
+		ai->ignoreObstacleID( pass );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The wave units' own buttons, each copy looked at every half game second on its own frame of the
 	  stride (ObjectID and frame, no state).  The skirmish AI's on-the-spot rules go first, at the rung that
 	  weighs every target in reach, then the walk-ups, the remote charges before the rest; only what the
@@ -1891,6 +2042,7 @@ void LaneWarDirector::useAbilities( UnsignedInt now )
 		Int team, seat;
 		if( !seatOf( player, &team, &seat ) )
 			continue;
+		passOwnBuildings( obj, team );
 		const Int me = player->getPlayerIndex();
 		if( copy.owner != me )
 		{
@@ -1903,6 +2055,17 @@ void LaneWarDirector::useAbilities( UnsignedInt now )
 				march( obj, team );
 				continue;
 			}
+		}
+		/* The owner's report of 2026-11-24, Burton standing idle in a wave, neither marching nor shooting: a
+			 button weapon locks the unit onto its slot for the clip (Burton's knife, from laneShortVolley), and
+			 when the target dies before the clip is spent the lock stays and the unit goes idle with it.
+			 AIAbility_unitBusy then read him as busy on every pass, so he never marched again, and with the
+			 knife locked his rifle never fired.  A player's next order clears that lock; the lane's is this. */
+		if( ai->isIdle() && obj->getCurWeaponLockStatus() == LOCKED_TEMPORARILY && obj->getCurWeaponSlot() != PRIMARY_WEAPON )
+		{
+			DEBUG_LOG(( "LANEWAR ABILITY: frame %u '%s' %d stood idle locked on weapon slot %d: lock released\n", now,
+									obj->getTemplate()->getName().str(), (Int)obj->getID(), (Int)obj->getCurWeaponSlot() ));
+			obj->releaseWeaponLock( LOCKED_TEMPORARILY );
 		}
 		if( AIAbility_unitBusy( obj ) )
 			continue;
@@ -1918,12 +2081,32 @@ void LaneWarDirector::useAbilities( UnsignedInt now )
 		if( victim != NULL && ( victim->isEffectivelyDead() || player->getRelationship( victim->getTeam() ) != ENEMIES ) )
 			victim = NULL;
 		const ThingTemplate *tmpl = plotTemplateOf( obj->getTemplate() );	// the switches are the plot unit's
+
+		// a Hacker switched to the internet hack (off by default) stays where he came out and hacks for cash
+		// for his whole life, instead of marching to switch the enemy's buildings off
+		const HackInternetAIInterface *hacker = ai->getHackInternetAIInterface();
+		const CommandButton *cashHack = hacker != NULL ? internetHackOf( obj ) : NULL;
+		if( cashHack != NULL && buttonOn( me, tmpl, cashHack ) )
+		{
+			if( !hacker->isHackingPackingOrUnpacking() )
+			{
+				DEBUG_LOG(( "LANEWAR ABILITY USE: frame %u player %d '%s' %d hacks the internet at (%.0f,%.0f)\n", now, me,
+										tmpl->getName().str(), (Int)obj->getID(), obj->getPosition()->x, obj->getPosition()->y ));
+				ai->aiHackInternet( CMD_FROM_AI );
+			}
+			continue;
+		}
+
 		Bool used = FALSE;
 		const std::vector<AIAbilityButton> buttons = AIAbility_buttonsOf( obj );
 		for( size_t b = 0; b < buttons.size() && !used; ++b )
 		{
 			const AIAbilityButton &entry = buttons[ b ];
 			if( entry.kind == AIABILITY_WALKUP || !buttonOn( me, tmpl, entry.button ) )
+				continue;
+			// no fire wall or blast laid at the team's own buildings (harmsOwnSide)
+			if( ( entry.kind == AIABILITY_AREA || entry.kind == AIABILITY_SHOT || entry.kind == AIABILITY_TOGGLE )
+					&& entry.slot != PRIMARY_WEAPON && harmsOwnSide( obj, entry.slot ) && nearOwnBuilding( obj, team ) )
 				continue;
 			switch( entry.kind )
 			{
@@ -2769,6 +2952,7 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 		}
 		owner->setActive();
 		TheAI->pathfinder()->addObjectToPathfindMap( copy );
+		passOwnBuildings( copy, team );		// its first path already goes through its own fortress
 
 		AIUpdateInterface *ai = copy->getAI();
 		if( ai && !copy->isKindOf( KINDOF_AIRCRAFT )
@@ -2845,10 +3029,11 @@ void LaneWarDirector::crc( Xfer *xfer )
 	  Version 7: each jet's object upgrades.
 	  Version 8: each jet's plot unit, and how far adoptStrays has looked.
 	  Version 9: which towers' bounties are paid.
-	  Version 10: each copy's next press frame. */
+	  Version 10: each copy's next press frame.
+	  Version 11: when each seat may buy its next satellite scan. */
 void LaneWarDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 10;
+	XferVersion currentVersion = 11;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -3069,5 +3254,15 @@ void LaneWarDirector::xfer( Xfer *xfer )
 				xfer->xferBool( &m_towerPaid[ t ][ k ] );
 			else
 				m_towerPaid[ t ][ k ] = TRUE;
+		}
+
+	// a match saved before the scan may buy one at once
+	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+		for( Int s = 0; s < LANEWAR_SEATS; ++s )
+		{
+			if( version >= 11 )
+				xfer->xferUnsignedInt( &m_revealReady[ t ][ s ] );
+			else
+				m_revealReady[ t ][ s ] = 0;
 		}
 }

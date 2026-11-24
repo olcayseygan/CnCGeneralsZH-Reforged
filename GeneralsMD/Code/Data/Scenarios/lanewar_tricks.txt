@@ -4,6 +4,12 @@
 # them. Read the LANEWAR ABILITY USE lines ("on the spot ... KnifeAttack", "... FireWall"), KILLXP for
 # what the knife killed and SCENARIO SHOT for DragonTankFireWallWeapon.
 #
+# It is also the proof of the owner's report of 2026-11-24, Burton standing idle in a wave: a knife whose
+# Red Guard died before it struck left him idle and locked on the knife, read as busy forever, from
+# logic frame 3954 to the end of his life (a temporary probe, 533 samples a half second apart over two
+# copies). Now "LANEWAR ABILITY: ... 'AmericaInfantryColonelBurton' ... stood idle locked on weapon slot
+# ...: lock released" and he walks on.
+#
 #   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
 #     -seed 1 -maxframes 6000 -scenario lanewar_tricks -logPrefix lanewar_tricks_

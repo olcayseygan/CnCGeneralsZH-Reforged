@@ -44,6 +44,7 @@
 #include "GameClient/Line2D.h"
 
 #include "GameLogic/AI.h"
+#include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Module/ContainModule.h"
@@ -5952,6 +5953,8 @@ void Pathfinder::classifyFence( Object *obj, Bool insert )
 		m_zoneManager.markZonesDirty( insert );
 		m_zoneManager.updateZonesForModify(m_map, m_layers, cellBounds, m_extent);
 		markClearanceDirty();
+		if (TheApocalypseDirector->isActive())
+			TheApocalypseDirector->noteGroundChange(cellBounds);		// the Apocalypse dead's flow field
 	}
 #if 0 
 	// Perhaps it would make more sense to use the iteratecellsalongpath() provided in this class,
@@ -6210,6 +6213,15 @@ void Pathfinder::internal_classifyObjectFootprint( Object *obj, Bool insert )
 	} // switch
 	m_zoneManager.updateZonesForModify(m_map, m_layers, cellBounds, m_extent);
 	markClearanceDirty();
+	// the Apocalypse dead walk a field laid over this ground; the pinched marks below reach two cells out
+	if (TheApocalypseDirector->isActive()) {
+		IRegion2D changed = cellBounds;
+		changed.lo.x -= 2;
+		changed.lo.y -= 2;
+		changed.hi.x += 2;
+		changed.hi.y += 2;
+		TheApocalypseDirector->noteGroundChange(changed);
+	}
 
 	Int i, j;
 	cellBounds.lo.x -= 2;
@@ -9068,6 +9080,15 @@ Path *Pathfinder::findPath( Object *obj, const LocomotorSet& locomotorSet, const
 			return path;
 		}
 		return continueFindPath(obj, locomotorSet, TRUE);
+	}
+	/* One of the Apocalypse dead going where the director sent it: the route is a walk down its flow
+		 field and no search, so nothing held is touched (ApocalypseDirector::fieldPath).  NULL when the
+		 field has no such route, and the search below answers as it always did. */
+	if (obj && TheApocalypseDirector->isActive()) {
+		Path *field = TheApocalypseDirector->fieldPath(obj, from, rawTo);
+		if (field) {
+			return field;
+		}
 	}
 	// the main search's state is about to be laid out again; only the queue asks for it, so whatever
 	// is held is the head unit's and it has just asked for something else (or an answer another

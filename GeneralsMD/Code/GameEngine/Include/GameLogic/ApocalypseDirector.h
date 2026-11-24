@@ -26,8 +26,10 @@
 // Every seat starts in the walled clearing in the middle, allied with every other seat.  The
 // civilian player owns the dead: on a new game the director makes it every seat's enemy, and it
 // builds nothing.  Waves come from the spawns at the map's edges without end, trickled out a few a
-// game second under a cap on how many may walk at once.  Every zombie attack-moves to the middle;
-// one that has gone idle is sent at the nearest thing of a seat's.  The seats lose when everything
+// game second under a cap on how many may walk at once.  Every zombie attack-moves down a flow
+// field (ApocalypseFlowField) to the seats' nearest structure by the way there, and takes its route
+// from the field instead of the path queue; one the field cannot route goes to the middle, and one
+// gone idle beside its structure at the nearest thing of a seat's.  The seats lose when everything
 // of theirs is dead (VICTORY_APOCALYPSE); the dead never lose.
 //
 // The match runs a day and night cycle in game seconds: day, dusk, night, dawn, and day again.  By
@@ -59,6 +61,7 @@
 #include <vector>
 
 class Object;
+class Path;
 class ThingTemplate;
 
 enum ApocalypsePhase
@@ -109,6 +112,8 @@ enum
 	APOCALYPSE_FOG_TRIES = 16,						///< spots drawn for a ring spawn before it falls back on a spawn waypoint
 	APOCALYPSE_LIGHT_STEPS = 32,					///< the night amount the client is handed, in steps
 	APOCALYPSE_LIGHT_TINT_EVERY = 4,			///< steps between two retints of the light tables, each a full relight of the ground
+	APOCALYPSE_FIELD_CELLS_PER_FRAME = 10000,	///< flow field cells a logic frame builds or repairs
+	APOCALYPSE_REACHED_LEAST = 10,				///< the dead that must reach a seat's structure between two waves for the adaptive share to read the bases as reached
 };
 
 /// how one phase plays: its length, how often a wave comes and how big, how fast it comes out, the cap
@@ -151,6 +156,112 @@ extern void Apocalypse_heatGrid( Int *blocksX, Int *blocksY );
 extern Int Apocalypse_heatOfBlock( Int blockX, Int blockY );
 
 //-------------------------------------------------------------------------------------------------
+/** The way in for the dead: one integer Dijkstra field over the pathfind grid's ground layer, from
+	  every cell beside a seat's structure, so a zombie's route is a walk down the field instead of a
+	  search of its own (measured in source/Tools/PathLab/apocflow.py, TODO Apocalypse > Performance 4).
+	  The step costs are the search's (examineNeighboringCells) without its turn, traffic and wall hug
+	  charges: 10 and 14 and a pinched cell +24.  Every body walks the same field, since the search
+	  reads the ground under the centre cell only.
+
+	  The field reads its own copy of the ground (walkable, pinched, the structure a cell is beside),
+	  refreshed only where the pathfinder changed it (Pathfinder::internal_classifyObjectFootprint)
+	  and only when a repair begins, so the field is a function of that copy alone: a cell keeps its
+	  distance, its step, the first of its eight neighbours in examineNeighboringCells' order that
+	  gives that distance, and the structure the step's cell leads to.  A repair clears every cell
+	  whose route ran over ground that got dearer or closed, floods those again from their rim and
+	  lets every cheaper or tied way spread from the changed ground, re-reading a cell's step whenever
+	  it is reached: it ends on exactly the field a build from scratch makes
+	  (apocalypse_flow_field_repair_matches_a_rebuild).  So a load needs only the copy and the repair
+	  in hand: it builds the field the repair began from and runs that repair again to where it
+	  stood.  It runs a slice a frame (stepRepair); a cell it has not refilled yet answers no route
+	  and its zombie asks the pathfinder as before.
+
+	  Built only while the director is on, from logic state only, in a fixed order with ties broken
+	  on the cell: every machine holds the same field. */
+class ApocalypseFlowField
+{
+public:
+	enum { WALKABLE = 0x01, PINCHED = 0x02 };
+	/// one cell of the ground copy changed: what it was and what the pathfinder says now
+	struct Change
+	{
+		Int cell;
+		UnsignedByte oldGround, newGround;
+		ObjectID oldSource, newSource;
+	};
+
+	ApocalypseFlowField( void );
+	void clear( void );																		///< nothing kept, memory given back
+	/// a grid of that size: no ground, no route, no repair
+	void setup( Int width, Int height );
+	Bool isStarted( void ) const { return !m_dist.empty(); }
+	Bool isRepairing( void ) const { return m_phase != PHASE_IDLE; }
+	Bool isBuilding( void ) const { return m_phase != PHASE_IDLE && m_all; }
+	Int getWidth( void ) const { return m_width; }
+	Int getHeight( void ) const { return m_height; }
+
+	/// the ground copy, set directly before a build (or by a load)
+	UnsignedByte groundOf( Int cell ) const { return m_ground[ cell ]; }
+	ObjectID sourceOf( Int cell ) const { return m_source[ cell ]; }
+	void setGround( Int cell, UnsignedByte ground, ObjectID source ) { m_ground[ cell ] = ground; m_source[ cell ] = source; }
+
+	/// every route forgotten and a build of the whole grid begun from the ground copy
+	void beginBuild( void );
+	/// apply these changes to the ground copy and begin the repair they need; only when none runs
+	void beginRepair( const std::vector<Change> &changes );
+	/// carry the running build or repair on by about `budget` cells; the cells it spent
+	Int stepRepair( Int budget );
+	const std::vector<Change> &repairChanges( void ) const { return m_changes; }
+
+	/** The cells from (x, y) down to a structure's side, the first and last included; FALSE when the
+		  cell has no route yet, or the walk meets ground that has changed under it. */
+	Bool route( Int x, Int y, std::vector<Int> *cells ) const;
+	Int cellX( Int index ) const { return index / m_height; }
+	Int cellY( Int index ) const { return index % m_height; }
+	Int distOf( Int index ) const { return m_dist[ index ]; }
+	UnsignedByte stepOf( Int index ) const { return m_step[ index ]; }
+	ObjectID targetOf( Int index ) const { return m_label[ index ]; }
+	enum { UNREACHED = 0x7FFFFFFF, NO_STEP = 0xFF };
+
+private:
+	enum Phase { PHASE_IDLE, PHASE_MARK, PHASE_SEED, PHASE_FLOOD };
+	enum { MARK_UNKNOWN = 0, MARK_IN = 1, MARK_OUT = 2, SCAN_PER_CELL = 16 };
+	struct Open
+	{
+		Int dist;
+		Int index;
+		Bool operator>( const Open &that ) const { return dist != that.dist ? dist > that.dist : index > that.index; }
+	};
+
+	Bool walkable( Int x, Int y ) const;
+	Bool stepAllowed( Int x, Int y, Int direction ) const;		///< walkable there, and a diagonal not through a closed corner
+	Int enterCost( Int index, Int direction ) const;
+	void push( Int dist, Int index );
+	void settle( Int index );															///< the step and structure from the neighbours, then offer itself to them
+	void markChain( Int index );
+	void clearCell( Int index );
+
+	Int m_width, m_height;					///< the pathfinder's grid; a cell is x * m_height + y, as its clearance
+	std::vector<UnsignedByte> m_ground;	///< WALKABLE, PINCHED: the ground copy
+	std::vector<ObjectID> m_source;	///< the seat's structure a walkable cell is beside, INVALID_ID for none
+	std::vector<Int> m_dist;				///< the route's cost from here, UNREACHED for none
+	std::vector<UnsignedByte> m_step;	///< which of the eight neighbours the route goes on to, NO_STEP at a source
+	std::vector<ObjectID> m_label;	///< the structure the route ends beside
+
+	// the running build or repair
+	Phase m_phase;
+	Int m_cursor;
+	Bool m_all;											///< the whole grid: a build
+	std::vector<Change> m_changes;	///< what the repair applied, kept for a save
+	std::vector<UnsignedByte> m_mark;	///< MARK_*: does the cell's route run over ground that got dearer
+	std::vector<UnsignedByte> m_queued;	///< queued since it last settled: a second entry for the same distance settles nothing
+	std::vector<Int> m_region;			///< the cells cleared to be filled again
+	std::vector<Int> m_cheaper;			///< changed cells that only got cheaper or became sources
+	std::vector<Int> m_chain;				///< markChain's walk
+	std::vector<Open> m_open;				///< a min-heap on (dist, index)
+};
+
+//-------------------------------------------------------------------------------------------------
 class ApocalypseDirector : public Snapshot
 {
 public:
@@ -167,6 +278,12 @@ public:
 	/// one of the dead: while the mode is on, an object of the dead player made from one of the zombie templates
 	Bool isZombie( const Object *obj ) const;
 
+	/// the pathfinder changed the ground under a structure there (cell rectangle): the flow field repairs it
+	void noteGroundChange( const IRegion2D &cells );
+	/** One of the dead's route from `from` down the flow field, as an optimized path, when it ends at
+		  `to`, the goal the director sent it to; NULL otherwise, and the search answers as before. */
+	Path *fieldPath( const Object *obj, const Coord3D *from, const Coord3D *to );
+
 	/// once a logic frame, from GameLogic::update
 	void update( void );
 
@@ -182,13 +299,13 @@ public:
 protected:
 	virtual void crc( Xfer *xfer );
 	virtual void xfer( Xfer *xfer );
-	virtual void loadPostProcess( void ) { }
+	virtual void loadPostProcess( void );
 
 private:
 	struct Zombie
 	{
 		ObjectID id;
-		Bool reached;										///< it has been within m_reachRadius of the middle, among the bases
+		Bool reached;										///< it has stood beside a seat's structure or hit one (hasReachedBases)
 	};
 	enum { KIND_WALKER, KIND_RUNNER, KIND_BRUTE, KINDS };
 
@@ -219,6 +336,13 @@ private:
 	Int seatsAlive( void ) const;
 	void advancePhase( UnsignedInt now );
 	void handLight( UnsignedInt now );
+	Bool fieldRoute( const Object *obj, const Coord3D *from, std::vector<Int> *cells ) const;
+	Bool fieldGoal( const Object *obj, Coord3D *goal ) const;	///< where its route ends, when that is somewhere to walk to
+	void readGround( Int x, Int y, UnsignedByte *ground, ObjectID *source ) const;	///< the pathfinder's ground as the field copies it
+	void startField( void );
+	void stepField( void );
+	Bool hasReachedBases( const Object *obj ) const;	///< beside a seat's structure, or hitting one
+	void xferField( Xfer *xfer, Bool withChanges );
 
 	// from the map and the data on every load
 	Bool m_active;
@@ -253,6 +377,17 @@ private:
 	std::vector<Zombie> m_zombies;			///< the living, in the order they came out
 	std::vector<FogStay> m_fogStays;		///< what of the seats' stands in the ring now, by ObjectID
 	UnsignedInt m_fogKills;							///< what of the seats' the ring has killed
+	UnsignedInt m_fieldRepairs;					///< flow field repairs finished, the build included (in the CRC as a check)
+
+	// the flow field: saved as its ground copy, the repair in hand and the changes waiting (xfer)
+	ApocalypseFlowField m_field;
+	Bool m_fieldWanted;									///< build it on the next tick
+	UnsignedInt m_fieldSteps;						///< slices the running build or repair has had, for a load to run it again
+	std::vector<IRegion2D> m_groundChanges;	///< ground changed since the running repair began
+	UnsignedInt m_fieldAnswered, m_fieldRefused, m_fieldCells;	///< for the log only
+	// what a load read, for loadPostProcess to build the field from
+	Bool m_fieldLoaded, m_fieldLoadedRepair, m_fieldLoadedBuild;
+	std::vector<ApocalypseFlowField::Change> m_fieldLoadedChanges;
 
 	// what was last handed to the client, so the retint and the log run only on a change; nothing else reads them
 	Int m_lightLevel;

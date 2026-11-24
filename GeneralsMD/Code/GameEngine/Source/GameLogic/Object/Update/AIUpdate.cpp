@@ -60,6 +60,7 @@
 
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
+#include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/CrowdModel.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -706,6 +707,31 @@ void AIUpdateInterface::requestPath( Coord3D *destination, Bool isFinalGoal )
 			m_isBlockedAndStuck = FALSE;
 		}
 		return;
+	}
+	/* One of the Apocalypse dead going where the director sent it walks down the director's flow
+		 field: the route costs a walk of its cells, so it is answered now rather than from the back
+		 of the queue, and set up as computePath sets up a path the search found. */
+	if (TheApocalypseDirector->isActive() && !m_isBlockedAndStuck) {
+		Path *fieldPath = TheApocalypseDirector->fieldPath(getObject(), getObject()->getPosition(), destination);
+		if (fieldPath) {
+			m_waitingForPath = FALSE;
+			m_retryPath = false;
+			m_pathfindFoundNothing = FALSE;
+			destroyPath();
+			m_path = fieldPath;
+			setLocomotorGoalPositionOnPath();
+			if (!getObject()->isKindOf(KINDOF_NO_COLLIDE))
+				TheAI->pathfinder()->moveAllies(getObject(), fieldPath);
+			m_pathTimestamp = TheGameLogic->getFrame();
+			m_blockedFrames = 0;
+			m_isBlockedAndStuck = FALSE;
+			if (m_isFinalGoal && isDoingGroundMovement())
+				TheAI->pathfinder()->updateGoal(getObject(), m_path->getLastNode()->getPosition(), m_path->getLastNode()->getLayer());
+#ifdef SLEEPY_AI
+			wakeUpNow();		// as doPathfind does once a path is in
+#endif
+			return;
+		}
 	}
 	queueForPathOrRetry();
 

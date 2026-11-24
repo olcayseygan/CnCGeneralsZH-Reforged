@@ -31490,3 +31490,159 @@ TEST(day_night_box_is_saved_ahead_of_the_objects)
 
 	TheGameLogic = savedLogic;
 }
+
+//-------------------------------------------------------------------------------------------------
+/** The Apocalypse flow field (ApocalypseDirector.h), the C++ twin of PathLab's test_apocflow.  A repair,
+	  in slices of any size, ends on exactly the field a build from scratch makes: distance, step and the
+	  structure it leads to, every cell.  And a load, which builds the field the repair began from out
+	  of the ground copy and runs the repair again for as many slices, holds what the live one held. */
+#include "GameLogic/ApocalypseDirector.h"
+
+namespace
+{
+struct FieldRng
+{
+	UnsignedInt s;
+	Int next( Int n ) { s = s * 1664525u + 1013904223u; return (Int)( ( s >> 8 ) % (UnsignedInt)n ); }
+};
+
+void fieldRandomCell( FieldRng &rng, UnsignedByte *ground, ObjectID *source )
+{
+	const Int roll = rng.next( 100 );
+	*ground = roll < 18 ? 0 : (UnsignedByte)( ApocalypseFlowField::WALKABLE | ( roll < 32 ? ApocalypseFlowField::PINCHED : 0 ) );
+	*source = ( *ground != 0 && rng.next( 100 ) < 4 ) ? (ObjectID)( 1 + rng.next( 6 ) ) : INVALID_ID;
+}
+
+void fieldFinish( ApocalypseFlowField &field, Int budget )
+{
+	while( field.isRepairing() )
+		field.stepRepair( budget );
+}
+
+void fieldCopyGround( const ApocalypseFlowField &from, ApocalypseFlowField &to )
+{
+	to.setup( from.getWidth(), from.getHeight() );
+	for( Int c = 0; c < from.getWidth() * from.getHeight(); ++c )
+		to.setGround( c, from.groundOf( c ), from.sourceOf( c ) );
+}
+
+Bool fieldSame( const ApocalypseFlowField &a, const ApocalypseFlowField &b )
+{
+	for( Int c = 0; c < a.getWidth() * a.getHeight(); ++c )
+		if( a.distOf( c ) != b.distOf( c ) || a.stepOf( c ) != b.stepOf( c ) || a.targetOf( c ) != b.targetOf( c ) )
+			return FALSE;
+	return TRUE;
+}
+
+/// a few rectangles of new ground: built on, freed, pinched or not, a structure's side gone or moved
+std::vector<ApocalypseFlowField::Change> fieldRandomChanges( const ApocalypseFlowField &field, FieldRng &rng )
+{
+	const Int w = field.getWidth(), h = field.getHeight();
+	std::vector<ApocalypseFlowField::Change> changes;
+	std::vector<char> seen( w * h, 0 );
+	const Int areas = 1 + rng.next( 3 );
+	for( Int a = 0; a < areas; ++a )
+	{
+		const Int x0 = rng.next( w ), y0 = rng.next( h ), aw = 1 + rng.next( 5 ), ah = 1 + rng.next( 5 );
+		for( Int x = x0; x < x0 + aw && x < w; ++x )
+			for( Int y = y0; y < y0 + ah && y < h; ++y )
+			{
+				const Int cell = x * h + y;
+				if( seen[ cell ] )
+					continue;
+				seen[ cell ] = 1;
+				ApocalypseFlowField::Change change;
+				change.cell = cell;
+				change.oldGround = field.groundOf( cell );
+				change.oldSource = field.sourceOf( cell );
+				fieldRandomCell( rng, &change.newGround, &change.newSource );
+				if( change.newGround != change.oldGround || change.newSource != change.oldSource )
+					changes.push_back( change );
+			}
+	}
+	return changes;
+}
+}
+
+TEST(apocalypse_flow_field_repair_matches_a_rebuild)
+{
+	Int repairs = 0, held = 0, routes = 0;
+	for( UnsignedInt seed = 1; seed <= 60; ++seed )
+	{
+		FieldRng rng = { seed };
+		const Int w = 20 + rng.next( 20 ), h = 16 + rng.next( 20 );
+		ApocalypseFlowField live;
+		live.setup( w, h );
+		for( Int c = 0; c < w * h; ++c )
+		{
+			UnsignedByte ground;
+			ObjectID source;
+			fieldRandomCell( rng, &ground, &source );
+			live.setGround( c, ground, source );
+		}
+		live.beginBuild();
+		fieldFinish( live, 1 + rng.next( 60 ) );
+		for( Int round = 0; round < 10; ++round )
+		{
+			const std::vector<ApocalypseFlowField::Change> changes = fieldRandomChanges( live, rng );
+			if( changes.empty() )
+				continue;
+			live.beginRepair( changes );
+			const Int budget = 1 + rng.next( 40 );
+			const Int cut = rng.next( 8 );
+			Int steps = 0;
+			for( ; steps < cut && live.isRepairing(); ++steps )
+				live.stepRepair( budget );
+
+			// the load: the copy as it was before the repair, built, then the repair again to the same slice
+			ApocalypseFlowField loaded;
+			fieldCopyGround( live, loaded );
+			for( Int k = (Int)changes.size() - 1; k >= 0; --k )
+				loaded.setGround( changes[ k ].cell, changes[ k ].oldGround, changes[ k ].oldSource );
+			loaded.beginBuild();
+			fieldFinish( loaded, 1000 );
+			loaded.beginRepair( changes );
+			for( Int s = 0; s < steps; ++s )
+				loaded.stepRepair( budget );
+			CHECK( fieldSame( live, loaded ) );
+			CHECK( live.isRepairing() == loaded.isRepairing() );
+			fieldFinish( live, budget );
+			fieldFinish( loaded, budget );
+			CHECK( fieldSame( live, loaded ) );
+			held += fieldSame( live, loaded ) ? 1 : 0;
+
+			ApocalypseFlowField fresh;
+			fieldCopyGround( live, fresh );
+			fresh.beginBuild();
+			fieldFinish( fresh, 1000 );
+			CHECK( fieldSame( live, fresh ) );
+			++repairs;
+
+			// every route ends at a structure's side, on that structure
+			std::vector<Int> cells;
+			for( Int c = 0; c < w * h; ++c )
+			{
+				if( live.distOf( c ) == ApocalypseFlowField::UNREACHED )
+					continue;
+				CHECK( live.route( live.cellX( c ), live.cellY( c ), &cells ) );
+				CHECK( !cells.empty() && live.distOf( cells.back() ) == 0 && live.targetOf( c ) == live.sourceOf( cells.back() ) );
+				++routes;
+			}
+		}
+	}
+	CHECK( repairs > 400 );
+	CHECK_EQ( held, repairs );
+	CHECK( routes > 100000 );
+
+	// open ground is all ties: a build settles each cell once, not once for every way it was reached
+	ApocalypseFlowField open;
+	open.setup( 300, 300 );
+	for( Int c = 0; c < 300 * 300; ++c )
+		open.setGround( c, ApocalypseFlowField::WALKABLE, c == 150 * 300 + 150 ? (ObjectID)1 : INVALID_ID );
+	open.beginBuild();
+	Int spent = 0;
+	while( open.isRepairing() && spent < 100 * 300 * 300 )
+		spent += open.stepRepair( 10000 );
+	CHECK( !open.isRepairing() );
+	CHECK( spent < 10 * 300 * 300 );
+}

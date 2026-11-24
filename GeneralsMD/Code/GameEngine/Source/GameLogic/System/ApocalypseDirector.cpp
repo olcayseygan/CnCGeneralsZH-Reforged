@@ -54,8 +54,393 @@
 #include "GameLogic/PolygonTrigger.h"
 #include "GameClient/ParticleSys.h"
 #include <algorithm>
+#include <functional>
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Weapon.h"
+
+//=================================================================================================
+// The flow field
+//=================================================================================================
+
+// examineNeighboringCells' neighbour order and its corner rule: a diagonal needs one of its two sides open
+static const Int FIELD_DX[ 8 ] = { 1, 0, -1, 0, 1, -1, -1, 1 };
+static const Int FIELD_DY[ 8 ] = { 0, 1, 0, -1, 1, 1, -1, -1 };
+static const Int FIELD_OPPOSITE[ 8 ] = { 2, 3, 0, 1, 6, 7, 4, 5 };
+static const Int FIELD_ORTHOGONAL = 10;		// the search's COST_ORTHOGONAL and COST_DIAGONAL (AIPathfind.cpp)
+static const Int FIELD_DIAGONAL = 14;
+
+//-------------------------------------------------------------------------------------------------
+ApocalypseFlowField::ApocalypseFlowField( void ) :
+	m_width( 0 ), m_height( 0 ), m_phase( PHASE_IDLE ), m_cursor( 0 ), m_all( FALSE )
+{
+}
+
+//-------------------------------------------------------------------------------------------------
+void ApocalypseFlowField::clear( void )
+{
+	std::vector<UnsignedByte>().swap( m_ground );
+	std::vector<ObjectID>().swap( m_source );
+	std::vector<Int>().swap( m_dist );
+	std::vector<UnsignedByte>().swap( m_step );
+	std::vector<ObjectID>().swap( m_label );
+	std::vector<Change>().swap( m_changes );
+	std::vector<UnsignedByte>().swap( m_mark );
+	std::vector<UnsignedByte>().swap( m_queued );
+	std::vector<Int>().swap( m_region );
+	std::vector<Int>().swap( m_cheaper );
+	std::vector<Int>().swap( m_chain );
+	std::vector<Open>().swap( m_open );
+	m_width = m_height = 0;
+	m_phase = PHASE_IDLE;
+	m_cursor = 0;
+	m_all = FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void ApocalypseFlowField::setup( Int width, Int height )
+{
+	clear();
+	if( width <= 0 || height <= 0 )
+		return;
+	m_width = width;
+	m_height = height;
+	const Int cells = m_width * m_height;
+	m_ground.assign( cells, 0 );
+	m_source.assign( cells, INVALID_ID );
+	m_dist.assign( cells, UNREACHED );
+	m_step.assign( cells, NO_STEP );
+	m_label.assign( cells, INVALID_ID );
+	m_mark.assign( cells, MARK_UNKNOWN );
+	m_queued.assign( cells, 0 );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ApocalypseFlowField::walkable( Int x, Int y ) const
+{
+	return x >= 0 && y >= 0 && x < m_width && y < m_height && ( m_ground[ x * m_height + y ] & WALKABLE ) != 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+/// examineNeighboringCells' test, which reads the same from either end: a diagonal needs one of the two cells beside both open
+Bool ApocalypseFlowField::stepAllowed( Int x, Int y, Int direction ) const
+{
+	if( !walkable( x + FIELD_DX[ direction ], y + FIELD_DY[ direction ] ) )
+		return FALSE;
+	if( direction < 4 )
+		return TRUE;
+	return walkable( x + FIELD_DX[ direction ], y ) || walkable( x, y + FIELD_DY[ direction ] );
+}
+
+//-------------------------------------------------------------------------------------------------
+/// what stepping onto that cell costs: the step, and the pinched charge of costSoFar and of the expansion
+Int ApocalypseFlowField::enterCost( Int index, Int direction ) const
+{
+	return ( direction >= 4 ? FIELD_DIAGONAL : FIELD_ORTHOGONAL ) + ( ( m_ground[ index ] & PINCHED ) ? FIELD_DIAGONAL + FIELD_ORTHOGONAL : 0 );
+}
+
+//-------------------------------------------------------------------------------------------------
+void ApocalypseFlowField::clearCell( Int index )
+{
+	m_dist[ index ] = UNREACHED;
+	m_step[ index ] = NO_STEP;
+	m_label[ index ] = INVALID_ID;
+}
+
+//-------------------------------------------------------------------------------------------------
+void ApocalypseFlowField::push( Int dist, Int index )
+{
+	Open open;
+	open.dist = dist;
+	open.index = index;
+	m_open.push_back( open );
+	std::push_heap( m_open.begin(), m_open.end(), std::greater<Open>() );
+	m_queued[ index ] = 1;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A cell whose distance is final takes its step and structure from its neighbours, which are final too
+	  wherever they are nearer, then offers itself to them: a neighbour cheaper through it, or as cheap
+	  through it from a direction earlier in the order, or stepping onto it under another structure's
+	  name, is queued to settle again.  Settling in this order is what makes the field the same however
+	  it was reached, a build or any run of repairs. */
+void ApocalypseFlowField::settle( Int index )
+{
+	const Int x = cellX( index ), y = cellY( index );
+	const Int dist = m_dist[ index ];
+	if( m_source[ index ] != INVALID_ID )
+	{
+		m_step[ index ] = NO_STEP;
+		m_label[ index ] = m_source[ index ];
+	}
+	else
+	{
+		for( Int i = 0; i < 8; ++i )
+		{
+			if( !stepAllowed( x, y, i ) )
+				continue;
+			const Int next = ( x + FIELD_DX[ i ] ) * m_height + y + FIELD_DY[ i ];
+			if( m_dist[ next ] != UNREACHED && m_dist[ next ] + enterCost( next, i ) == dist )
+			{
+				m_step[ index ] = (UnsignedByte)i;
+				m_label[ index ] = m_label[ next ];
+				break;
+			}
+		}
+	}
+	for( Int i = 0; i < 8; ++i )
+	{
+		if( !stepAllowed( x, y, i ) )
+			continue;
+		const Int next = ( x + FIELD_DX[ i ] ) * m_height + y + FIELD_DY[ i ];
+		if( m_source[ next ] != INVALID_ID )
+			continue;		// a structure's side, nought by its own right
+		const Int through = dist + enterCost( index, i );
+		const Int back = FIELD_OPPOSITE[ i ];
+		if( through < m_dist[ next ] )
+		{
+			m_dist[ next ] = through;
+			push( through, next );
+		}
+		else if( through == m_dist[ next ] && ( back < m_step[ next ] || ( back == m_step[ next ] && m_label[ next ] != m_label[ index ] ) ) )
+			push( through, next );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/// whether this cell's route runs over a cell marked in, marking every cell on the way the same
+void ApocalypseFlowField::markChain( Int index )
+{
+	if( m_mark[ index ] != MARK_UNKNOWN )
+		return;
+	m_chain.clear();
+	Int cell = index;
+	UnsignedByte answer = MARK_OUT;
+	for( ;; )
+	{
+		if( m_mark[ cell ] != MARK_UNKNOWN )
+		{
+			answer = m_mark[ cell ];
+			break;
+		}
+		m_chain.push_back( cell );
+		const Int s = m_step[ cell ];
+		if( m_dist[ cell ] == UNREACHED || m_dist[ cell ] == 0 || s == NO_STEP )
+			break;
+		const Int nx = cellX( cell ) + FIELD_DX[ s ], ny = cellY( cell ) + FIELD_DY[ s ];
+		if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height )
+			break;
+		const Int next = nx * m_height + ny;
+		if( m_dist[ next ] >= m_dist[ cell ] )
+			break;
+		cell = next;
+	}
+	for( size_t k = 0; k < m_chain.size(); ++k )
+	{
+		m_mark[ m_chain[ k ] ] = answer;
+		if( answer == MARK_IN )
+			m_region.push_back( m_chain[ k ] );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void ApocalypseFlowField::beginBuild( void )
+{
+	if( !isStarted() )
+		return;
+	std::fill( m_dist.begin(), m_dist.end(), (Int)UNREACHED );
+	std::fill( m_step.begin(), m_step.end(), (UnsignedByte)NO_STEP );
+	std::fill( m_label.begin(), m_label.end(), (ObjectID)INVALID_ID );
+	m_changes.clear();
+	m_region.clear();
+	m_cheaper.clear();
+	m_open.clear();
+	m_all = TRUE;
+	m_phase = PHASE_SEED;
+	m_cursor = 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+void ApocalypseFlowField::beginRepair( const std::vector<Change> &changes )
+{
+	if( !isStarted() || isRepairing() )
+		return;
+	m_all = FALSE;
+	m_changes = changes;
+	m_region.clear();
+	m_cheaper.clear();
+	m_open.clear();
+	std::fill( m_mark.begin(), m_mark.end(), (UnsignedByte)MARK_UNKNOWN );
+	for( size_t k = 0; k < changes.size(); ++k )
+	{
+		const Change &change = changes[ k ];
+		m_ground[ change.cell ] = change.newGround;
+		m_source[ change.cell ] = change.newSource;
+		const Bool wasWalkable = ( change.oldGround & WALKABLE ) != 0;
+		const Bool isWalkable = ( change.newGround & WALKABLE ) != 0;
+		// closed, dearer to step onto, or no longer the side of the structure it was: every route over it goes;
+		// freed ground has none yet and is filled the same way
+		const Bool dearer = wasWalkable != isWalkable ||
+			( isWalkable && !( change.oldGround & PINCHED ) && ( change.newGround & PINCHED ) ) ||
+			( change.oldSource != INVALID_ID && change.oldSource != change.newSource );
+		if( dearer )
+		{
+			if( m_mark[ change.cell ] != MARK_IN )
+			{
+				m_mark[ change.cell ] = MARK_IN;
+				m_region.push_back( change.cell );
+			}
+		}
+		else
+			m_cheaper.push_back( change.cell );		// cheaper to step onto, or a structure's side now
+		if( wasWalkable && !isWalkable )
+		{
+			// a closed cell can be the last open corner of a diagonal step beside it: the cells either side
+			// of it that step diagonally lose that step, and their routes go with it
+			const Int x = cellX( change.cell ), y = cellY( change.cell );
+			for( Int i = 0; i < 4; ++i )
+			{
+				const Int nx = x + FIELD_DX[ i ], ny = y + FIELD_DY[ i ];
+				if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height )
+					continue;
+				const Int beside = nx * m_height + ny;
+				if( m_step[ beside ] >= 4 && m_step[ beside ] != NO_STEP && m_mark[ beside ] != MARK_IN )
+				{
+					m_mark[ beside ] = MARK_IN;
+					m_region.push_back( beside );
+				}
+			}
+		}
+	}
+	m_cursor = 0;
+	m_phase = PHASE_MARK;
+}
+
+//-------------------------------------------------------------------------------------------------
+Int ApocalypseFlowField::stepRepair( Int budget )
+{
+	Int spent = 0;
+	const Int cells = m_width * m_height;
+	while( spent < budget && m_phase != PHASE_IDLE )
+	{
+		if( m_phase == PHASE_MARK )
+		{
+			// every cell whose route runs over the dearer ground joins it; a plain walk, so many a unit
+			const Int end = min( cells, m_cursor + ( budget - spent ) * SCAN_PER_CELL );
+			const Int from = m_cursor;
+			for( ; m_cursor < end; ++m_cursor )
+				markChain( m_cursor );
+			spent += ( m_cursor - from + SCAN_PER_CELL - 1 ) / SCAN_PER_CELL;
+			if( m_cursor >= cells )
+			{
+				// only now, once every route has been read: the marked cells lose theirs
+				for( size_t k = 0; k < m_region.size(); ++k )
+					clearCell( m_region[ k ] );
+				m_phase = PHASE_SEED;
+				m_cursor = 0;
+			}
+		}
+		else if( m_phase == PHASE_SEED )
+		{
+			// the sources, and what floods back in: round the cleared cells their settled rim, and the
+			// changed cells that only got cheaper
+			const Int cleared = m_all ? cells : (Int)m_region.size();
+			const Int count = m_all ? cells : cleared + (Int)m_cheaper.size();
+			for( ; m_cursor < count && spent < budget; ++m_cursor )
+			{
+				if( m_all )
+				{
+					if( ( m_cursor & ( SCAN_PER_CELL - 1 ) ) == 0 )
+						++spent;
+					if( m_source[ m_cursor ] != INVALID_ID && ( m_ground[ m_cursor ] & WALKABLE ) )
+					{
+						m_dist[ m_cursor ] = 0;
+						push( 0, m_cursor );
+					}
+					continue;
+				}
+				++spent;
+				const Bool isCleared = m_cursor < cleared;
+				const Int index = isCleared ? m_region[ m_cursor ] : m_cheaper[ m_cursor - cleared ];
+				if( m_source[ index ] != INVALID_ID && ( m_ground[ index ] & WALKABLE ) )
+				{
+					m_dist[ index ] = 0;
+					push( 0, index );
+				}
+				else if( !isCleared && m_dist[ index ] != UNREACHED )
+					push( m_dist[ index ], index );
+				if( !isCleared )
+					continue;
+				const Int x = cellX( index ), y = cellY( index );
+				for( Int i = 0; i < 8; ++i )
+				{
+					const Int nx = x + FIELD_DX[ i ], ny = y + FIELD_DY[ i ];
+					if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height )
+						continue;
+					const Int rim = nx * m_height + ny;
+					if( m_mark[ rim ] != MARK_IN && m_dist[ rim ] != UNREACHED )
+						push( m_dist[ rim ], rim );
+				}
+			}
+			if( m_cursor >= count )
+				m_phase = PHASE_FLOOD;
+		}
+		else
+		{
+			while( !m_open.empty() && spent < budget )
+			{
+				std::pop_heap( m_open.begin(), m_open.end(), std::greater<Open>() );
+				const Open open = m_open.back();
+				m_open.pop_back();
+				++spent;
+				if( open.dist != m_dist[ open.index ] || !m_queued[ open.index ] )
+					continue;		// a cheaper way in reached it since, or it settled at this distance already
+				m_queued[ open.index ] = 0;
+				settle( open.index );
+			}
+			if( m_open.empty() )
+			{
+				m_phase = PHASE_IDLE;
+				m_all = FALSE;
+				m_region.clear();
+				m_cheaper.clear();
+			}
+		}
+	}
+	return spent;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ApocalypseFlowField::route( Int x, Int y, std::vector<Int> *cells ) const
+{
+	cells->clear();
+	if( !isStarted() || x < 0 || y < 0 || x >= m_width || y >= m_height )
+		return FALSE;
+	Int index = x * m_height + y;
+	// distances fall strictly along a route, so this ends; the bound is only a guard
+	for( Int steps = 0; steps < m_width * m_height; ++steps )
+	{
+		if( m_dist[ index ] == UNREACHED || !walkable( cellX( index ), cellY( index ) ) )
+			return FALSE;
+		cells->push_back( index );
+		if( m_dist[ index ] == 0 )
+			return TRUE;
+		const Int s = m_step[ index ];
+		if( s == NO_STEP )
+			return FALSE;
+		const Int nx = cellX( index ) + FIELD_DX[ s ], ny = cellY( index ) + FIELD_DY[ s ];
+		if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height )
+			return FALSE;
+		const Int next = nx * m_height + ny;
+		if( m_dist[ next ] >= m_dist[ index ] )
+			return FALSE;
+		index = next;
+	}
+	return FALSE;
+}
+
+//=================================================================================================
+// The director
+//=================================================================================================
 
 static ApocalypseDirector theApocalypseDirector;
 ApocalypseDirector *TheApocalypseDirector = &theApocalypseDirector;
@@ -392,6 +777,15 @@ void ApocalypseDirector::reset( void )
 	m_playHi = m_clearLo;
 	m_fogStays.clear();
 	m_fogKills = 0;
+	m_fieldRepairs = 0;
+	m_field.clear();
+	m_fieldWanted = FALSE;
+	m_fieldSteps = 0;
+	m_fieldLoaded = FALSE;
+	m_fieldLoadedRepair = FALSE;
+	m_fieldLoadedBuild = FALSE;
+	m_groundChanges.clear();
+	m_fieldAnswered = m_fieldRefused = m_fieldCells = 0;
 	m_waveSectors = 0;
 	m_warnSectors = 0;
 	m_adapt = APOCALYPSE_ADAPT_START;
@@ -525,6 +919,7 @@ void ApocalypseDirector::newMap( Bool loadingSaveGame )
 
 	m_phaseStartFrame = TheGameLogic->getFrame();
 	m_nextWaveFrame = TheGameLogic->getFrame() + APOCALYPSE_FIRST_WAVE_SECONDS * gameSecond();
+	m_fieldWanted = TRUE;		// on the first tick, once the map's structures are all in
 	// the map has just put its own light in; a save load overwrites the clock below, not the light
 	LogicThread::callAfterTick( []() { apocalypseKeepBaseLight(); } );
 	DEBUG_LOG(( "HEADLESS APOCALYPSE: on; %d seats, %d spawns, centre (%.0f,%.0f), zombies of player %d, first wave at frame %u\n",
@@ -569,12 +964,20 @@ static Bool isOffMapDelivery( const Object *obj )
 }
 
 //-------------------------------------------------------------------------------------------------
-/// an idle zombie goes at the nearest thing a seat has, or back to the middle when nothing is left
+/** An idle zombie goes down the flow field to the nearest structure of a seat's by the way there; one
+	  already beside it, or off the field, at the nearest thing a seat has, or back to the middle when
+	  nothing is left. */
 void ApocalypseDirector::sendOn( Object *obj )
 {
 	AIUpdateInterface *ai = obj->getAI();
 	if( ai == NULL || !ai->isIdle() )
 		return;
+	Coord3D goal;
+	if( fieldGoal( obj, &goal ) )
+	{
+		ai->aiAttackMoveToPosition( &goal, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+		return;
+	}
 	PartitionFilterRelationship enemies( obj, PartitionFilterRelationship::ALLOW_ENEMIES );
 	PartitionFilterAlive alive;
 	PartitionFilter *filters[] = { &enemies, &alive, NULL };
@@ -690,7 +1093,13 @@ Object *ApocalypseDirector::makeZombie( Int kind, const Coord3D &pos, UnsignedIn
 		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u first of the dead '%s' %d selectable %d\n", now,
 								obj->getTemplate()->getName().str(), (Int)z.id, obj->isSelectable() ? 1 : 0 ));
 	if( obj->getAI() != NULL )
-		obj->getAI()->aiAttackMoveToPosition( &m_centre, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+	{
+		// down the flow field when it reaches this far, else to the middle as before it was built
+		Coord3D goal;
+		if( !fieldGoal( obj, &goal ) )
+			goal = m_centre;
+		obj->getAI()->aiAttackMoveToPosition( &goal, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+	}
 	return obj;
 }
 
@@ -807,7 +1216,9 @@ void ApocalypseDirector::sendWave( UnsignedInt now )
 		gatherWave( now );
 	if( m_wave > 0 )
 	{
-		const Bool reached = m_reached > m_reachedAtWave;
+		// the dead now walk at the nearest structure and a few always get there: a wave reached the bases
+		// when a band of them did, as one zombie walking in to the middle used to be rare
+		const Bool reached = m_reached >= m_reachedAtWave + APOCALYPSE_REACHED_LEAST;
 		const Bool cleared = m_pending <= 0 && (Int)m_zombies.size() <= m_seats * 2;
 		m_adapt = Apocalypse_adapt( m_adapt, reached, cleared );
 	}
@@ -1060,11 +1471,11 @@ void ApocalypseDirector::update( void )
 	const UnsignedInt second = gameSecond();
 
 	advancePhase( now );
+	stepField();
 	const ApocalypsePhaseRules &rules = Apocalypse_phaseRules( m_phase );
 
 	// the dead come off the list, the living are checked for the middle and, now and then, sent on
 	const UnsignedInt retarget = APOCALYPSE_RETARGET_SECONDS * second;
-	const Real reach2 = m_reachRadius * m_reachRadius;
 	UnsignedInt kept = 0;
 	for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
 	{
@@ -1075,16 +1486,12 @@ void ApocalypseDirector::update( void )
 			++m_kills;
 			continue;
 		}
-		if( !z.reached )
+		if( !z.reached && hasReachedBases( obj ) )
 		{
-			const Real dx = obj->getPosition()->x - m_centre.x, dy = obj->getPosition()->y - m_centre.y;
-			if( dx * dx + dy * dy < reach2 )
-			{
-				z.reached = TRUE;
-				++m_reached;
-				if( m_reached <= 3 || m_reached % 50 == 0 )
-					DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u zombie %d reached the bases, %u have\n", now, (Int)z.id, m_reached ));
-			}
+			z.reached = TRUE;
+			++m_reached;
+			if( m_reached <= 3 || m_reached % 50 == 0 )
+				DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u zombie %d reached the bases, %u have\n", now, (Int)z.id, m_reached ));
 		}
 		if( ( now + (UnsignedInt)z.id ) % retarget == 0 )
 			sendOn( obj );
@@ -1134,6 +1541,9 @@ void ApocalypseDirector::update( void )
 		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %s cycle %u wave %u walking %d spawned %u kills %u reached %u to come %d seats standing %d of %d, fog took %u, risen %u, share %d%%\n",
 								now, Apocalypse_phaseName( m_phase ), m_cycle, m_wave, (Int)m_zombies.size(), m_spawned, m_kills, m_reached,
 								m_pending, standing, m_seats, m_fogKills, m_infected, m_adapt ));
+		DEBUG_LOG(( "HEADLESS APOCALYPSE FIELD: frame %u repairs %u%s, routes %u, refused %u, cells %u, waiting changes %d\n",
+								now, m_fieldRepairs, m_field.isRepairing() ? " (one running)" : "",
+								m_fieldAnswered, m_fieldRefused, m_fieldCells, (Int)m_groundChanges.size() ));
 		Int inFog = 0, idle = 0;
 		// the ones out of the fog that have not reached the bases, by what they do: where a wave stalls
 		Int outIdle = 0, outOnStructure = 0, outOnUnit = 0, outWalking = 0;
@@ -1207,6 +1617,238 @@ void ApocalypseDirector::update( void )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** One cell of the pathfinder's ground layer as the field copies it: walkable for the dead (what
+	  validLocomotorSurfacesForCellType gives GROUND or RUBBLE), pinched, and the first seat's structure
+	  standing beside it in examineNeighboringCells' order. */
+void ApocalypseDirector::readGround( Int x, Int y, UnsignedByte *ground, ObjectID *source ) const
+{
+	*ground = 0;
+	*source = INVALID_ID;
+	PathfindCell *cell = TheAI->pathfinder()->getCell( LAYER_GROUND, x, y );
+	if( cell == NULL )
+		return;
+	const PathfindCell::CellType type = cell->getType();
+	if( type != PathfindCell::CELL_CLEAR && type != PathfindCell::CELL_RUBBLE )
+		return;
+	*ground = ApocalypseFlowField::WALKABLE | ( cell->getPinched() ? ApocalypseFlowField::PINCHED : 0 );
+	for( Int i = 0; i < 8; ++i )
+	{
+		const PathfindCell *beside = TheAI->pathfinder()->getCell( LAYER_GROUND, x + FIELD_DX[ i ], y + FIELD_DY[ i ] );
+		if( beside == NULL || beside->getType() != PathfindCell::CELL_OBSTACLE )
+			continue;
+		const Object *structure = TheGameLogic->findObjectByID( beside->getObstacleID() );
+		if( structure != NULL && !structure->isEffectivelyDead() && isSeat( structure->getControllingPlayer() ) )
+		{
+			*source = structure->getID();
+			return;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/// the ground copy read whole, once, and its build begun
+void ApocalypseDirector::startField( void )
+{
+	m_fieldWanted = FALSE;
+	m_groundChanges.clear();
+	const ICoord2D *extent = TheAI->pathfinder()->getExtent();
+	m_field.setup( extent->x + 1, extent->y + 1 );
+	if( !m_field.isStarted() )
+		return;
+	for( Int x = 0; x < m_field.getWidth(); ++x )
+		for( Int y = 0; y < m_field.getHeight(); ++y )
+		{
+			UnsignedByte ground;
+			ObjectID source;
+			readGround( x, y, &ground, &source );
+			m_field.setGround( x * m_field.getHeight() + y, ground, source );
+		}
+	m_field.beginBuild();
+	m_fieldSteps = 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+/// a slice of the running build or repair; the next repair, with every change since, once it is done
+void ApocalypseDirector::stepField( void )
+{
+	if( m_fieldWanted )
+		startField();
+	if( !m_field.isStarted() )
+		return;
+	if( !m_field.isRepairing() && !m_groundChanges.empty() )
+	{
+		// the copy against the pathfinder over the changed ground; a cell in two areas is compared once
+		std::vector<ApocalypseFlowField::Change> changes;
+		const Int height = m_field.getHeight();
+		for( size_t a = 0; a < m_groundChanges.size(); ++a )
+		{
+			const IRegion2D &area = m_groundChanges[ a ];
+			for( Int x = max( area.lo.x, (Int)0 ); x <= min( area.hi.x, m_field.getWidth() - 1 ); ++x )
+				for( Int y = max( area.lo.y, (Int)0 ); y <= min( area.hi.y, height - 1 ); ++y )
+				{
+					Bool seen = FALSE;
+					for( size_t b = 0; b < a && !seen; ++b )
+						seen = x >= m_groundChanges[ b ].lo.x && x <= m_groundChanges[ b ].hi.x &&
+							y >= m_groundChanges[ b ].lo.y && y <= m_groundChanges[ b ].hi.y;
+					if( seen )
+						continue;
+					const Int cell = x * height + y;
+					ApocalypseFlowField::Change change;
+					change.cell = cell;
+					change.oldGround = m_field.groundOf( cell );
+					change.oldSource = m_field.sourceOf( cell );
+					readGround( x, y, &change.newGround, &change.newSource );
+					if( change.newGround != change.oldGround || change.newSource != change.oldSource )
+						changes.push_back( change );
+				}
+		}
+		m_groundChanges.clear();
+		if( !changes.empty() )
+		{
+			m_field.beginRepair( changes );
+			m_fieldSteps = 0;
+		}
+	}
+	if( m_field.isRepairing() )
+	{
+		m_fieldCells += (UnsignedInt)m_field.stepRepair( APOCALYPSE_FIELD_CELLS_PER_FRAME );
+		++m_fieldSteps;
+		if( !m_field.isRepairing() )
+			++m_fieldRepairs;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void ApocalypseDirector::noteGroundChange( const IRegion2D &cells )
+{
+	if( !m_active || !m_field.isStarted() )
+		return;		// a build to come reads the ground as it is then
+	m_groundChanges.push_back( cells );
+}
+
+//-------------------------------------------------------------------------------------------------
+/// one of the dead standing beside a seat's structure, by the field's ground copy, or hitting one
+Bool ApocalypseDirector::hasReachedBases( const Object *obj ) const
+{
+	if( m_field.isStarted() )
+	{
+		const Int x = REAL_TO_INT_FLOOR( obj->getPosition()->x / PATHFIND_CELL_SIZE_F );
+		const Int y = REAL_TO_INT_FLOOR( obj->getPosition()->y / PATHFIND_CELL_SIZE_F );
+		if( x >= 0 && y >= 0 && x < m_field.getWidth() && y < m_field.getHeight() &&
+				m_field.sourceOf( x * m_field.getHeight() + y ) != INVALID_ID )
+			return TRUE;
+	}
+	const AIUpdateInterface *ai = obj->getAI();
+	const Object *victim = ai != NULL ? ai->getCurrentVictim() : NULL;
+	if( victim == NULL || !victim->isKindOf( KINDOF_STRUCTURE ) || !isSeat( victim->getControllingPlayer() ) )
+		return FALSE;
+	// in reach of its claws: the victim's edge within a cell
+	const Real dx = victim->getPosition()->x - obj->getPosition()->x, dy = victim->getPosition()->y - obj->getPosition()->y;
+	const Real reach = victim->getGeometryInfo().getBoundingCircleRadius() + PATHFIND_CELL_SIZE_F;
+	return dx * dx + dy * dy <= reach * reach;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ApocalypseDirector::fieldRoute( const Object *obj, const Coord3D *from, std::vector<Int> *cells ) const
+{
+	if( !isZombie( obj ) || obj->getLayer() != LAYER_GROUND )
+		return FALSE;
+	return m_field.route( REAL_TO_INT_FLOOR( from->x / PATHFIND_CELL_SIZE_F ), REAL_TO_INT_FLOOR( from->y / PATHFIND_CELL_SIZE_F ), cells );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ApocalypseDirector::fieldGoal( const Object *obj, Coord3D *goal ) const
+{
+	std::vector<Int> cells;
+	if( !fieldRoute( obj, obj->getPosition(), &cells ) )
+		return FALSE;
+	const ApocalypseFlowField &field = m_field;
+	const Int first = cells.front(), last = cells.back();
+	// beside it already: the old rule picks what to hit
+	if( abs( field.cellX( last ) - field.cellX( first ) ) < 2 && abs( field.cellY( last ) - field.cellY( first ) ) < 2 )
+		return FALSE;
+	goal->x = ( (Real)field.cellX( last ) + 0.5f ) * PATHFIND_CELL_SIZE_F;
+	goal->y = ( (Real)field.cellY( last ) + 0.5f ) * PATHFIND_CELL_SIZE_F;
+	goal->z = TheTerrainLogic->getGroundHeight( goal->x, goal->y );
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The route as the search would have handed it over (buildActualPath, prependCells): a node a cell from
+	  the goal back to the one after the unit's own, the unit's spot first, then Path::optimize.  NULL when
+	  the field has no route from there, or its route does not end at `to`, the goal the zombie walks to. */
+Path *ApocalypseDirector::fieldPath( const Object *obj, const Coord3D *from, const Coord3D *to )
+{
+	if( !m_active || obj == NULL || from == NULL || to == NULL || obj->getAI() == NULL )
+		return NULL;
+	std::vector<Int> cells;
+	if( !fieldRoute( obj, from, &cells ) || cells.size() < 2 )
+		return NULL;
+	const ApocalypseFlowField &field = m_field;
+	const Int last = cells.back();
+	// give or take the cell a move order snaps its goal to
+	if( abs( field.cellX( last ) - REAL_TO_INT_FLOOR( to->x / PATHFIND_CELL_SIZE_F ) ) > 1 ||
+			abs( field.cellY( last ) - REAL_TO_INT_FLOOR( to->y / PATHFIND_CELL_SIZE_F ) ) > 1 )
+	{
+		++m_fieldRefused;
+		return NULL;
+	}
+	Int radius;
+	Bool center;
+	TheAI->pathfinder()->getRadiusAndCenter( obj, radius, center );
+	const Real offset = center ? 0.5f : 0.05f;		// adjustCoordToCell
+	Path *path = newInstance( Path );
+	for( Int n = (Int)cells.size() - 1; n >= 1; --n )
+	{
+		Coord3D pos;
+		pos.x = ( (Real)field.cellX( cells[ n ] ) + offset ) * PATHFIND_CELL_SIZE_F;
+		pos.y = ( (Real)field.cellY( cells[ n ] ) + offset ) * PATHFIND_CELL_SIZE_F;
+		pos.z = TheTerrainLogic->getLayerHeight( pos.x, pos.y, LAYER_GROUND );
+		path->prependNode( &pos, LAYER_GROUND );
+		path->getFirstNode()->setCanOptimize( TRUE );		// a node is born unoptimizable; prependCells says so for each
+	}
+	if( from->x != path->getFirstNode()->getPosition()->x || from->y != path->getFirstNode()->getPosition()->y )
+		path->prependNode( from, LAYER_GROUND );
+	path->optimize( obj, obj->getAI()->getLocomotorSet().getValidSurfaces(), FALSE );
+	++m_fieldAnswered;
+	return path;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The field is not in the save, only its ground copy and the repair in hand, which make it again here
+	  as it stood: the field that repair began from is a build of the copy as it was before the repair's
+	  changes, and the repair is begun again on it and given as many slices as it had had. */
+void ApocalypseDirector::loadPostProcess( void )
+{
+	if( !m_active || !m_fieldLoaded )
+		return;		// a save from before the field: the next tick builds it from the map
+	m_fieldLoaded = FALSE;
+	if( !m_field.isStarted() )
+		return;
+	if( m_fieldLoadedRepair && !m_fieldLoadedBuild )
+		for( Int k = (Int)m_fieldLoadedChanges.size() - 1; k >= 0; --k )
+			m_field.setGround( m_fieldLoadedChanges[ k ].cell, m_fieldLoadedChanges[ k ].oldGround, m_fieldLoadedChanges[ k ].oldSource );
+	m_field.beginBuild();
+	if( m_fieldLoadedRepair && m_fieldLoadedBuild )
+	{
+		for( UnsignedInt s = 0; s < m_fieldSteps; ++s )
+			m_field.stepRepair( APOCALYPSE_FIELD_CELLS_PER_FRAME );
+	}
+	else
+	{
+		while( m_field.isRepairing() )
+			m_field.stepRepair( APOCALYPSE_FIELD_CELLS_PER_FRAME * 64 );
+		if( m_fieldLoadedRepair )
+		{
+			m_field.beginRepair( m_fieldLoadedChanges );
+			for( UnsignedInt s = 0; s < m_fieldSteps; ++s )
+				m_field.stepRepair( APOCALYPSE_FIELD_CELLS_PER_FRAME );
+		}
+	}
+	m_fieldLoadedChanges.clear();
+}
+
+//-------------------------------------------------------------------------------------------------
 void ApocalypseDirector::crc( Xfer *xfer )
 {
 	ApocalypseDirector::xfer( xfer );
@@ -1218,7 +1860,7 @@ void ApocalypseDirector::crc( Xfer *xfer )
 	  is handed to the client again on the first tick after it. */
 void ApocalypseDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 4;
+	XferVersion currentVersion = 5;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1278,4 +1920,129 @@ void ApocalypseDirector::xfer( Xfer *xfer )
 
 	if( version >= 4 )
 		xfer->xferUnsignedInt( &m_frontTurn );
+
+	// version 5: the flow field's ground copy, the repair in hand and the changes waiting; loadPostProcess
+	// makes the field again from these, as it stood (a save from before has none: the next tick builds it)
+	if( version >= 5 )
+	{
+		xfer->xferUnsignedInt( &m_fieldRepairs );
+		xfer->xferBool( &m_fieldWanted );
+		xfer->xferUnsignedInt( &m_fieldSteps );
+		Bool started = m_field.isStarted();
+		xfer->xferBool( &started );
+		Bool repairing = m_field.isRepairing();
+		xfer->xferBool( &repairing );
+		Bool building = m_field.isBuilding();
+		xfer->xferBool( &building );
+		count = (UnsignedInt)m_groundChanges.size();
+		xfer->xferUnsignedInt( &count );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_groundChanges.resize( count );
+		for( UnsignedInt i = 0; i < count; ++i )
+		{
+			xfer->xferInt( &m_groundChanges[ i ].lo.x );
+			xfer->xferInt( &m_groundChanges[ i ].lo.y );
+			xfer->xferInt( &m_groundChanges[ i ].hi.x );
+			xfer->xferInt( &m_groundChanges[ i ].hi.y );
+		}
+		// the ground copy and the repair's changes are the size of the map: saved, not checksummed every frame
+		if( started && xfer->getXferMode() != XFER_CRC )
+			xferField( xfer, repairing && !building );
+		if( xfer->getXferMode() != XFER_CRC )
+			DEBUG_LOG(( "HEADLESS APOCALYPSE FIELD %s: frame %u, %s, %u slices in, %d changes, %d changed areas waiting\n",
+									xfer->getXferMode() == XFER_SAVE ? "SAVE" : "LOAD", TheGameLogic->getFrame(),
+									!started ? "not built" : building ? "building" : repairing ? "repairing" : "idle", m_fieldSteps,
+									repairing && !building ? (Int)m_field.repairChanges().size() + (Int)m_fieldLoadedChanges.size() : 0, (Int)m_groundChanges.size() ));
+		if( xfer->getXferMode() == XFER_LOAD )
+		{
+			m_fieldLoaded = started;
+			m_fieldLoadedRepair = repairing;
+			m_fieldLoadedBuild = building;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/// the field's ground copy, run-length coded, its structures' sides and the running repair's changes
+void ApocalypseDirector::xferField( Xfer *xfer, Bool withChanges )
+{
+	Int width = m_field.getWidth(), height = m_field.getHeight();
+	xfer->xferInt( &width );
+	xfer->xferInt( &height );
+	if( xfer->getXferMode() == XFER_LOAD )
+		m_field.setup( width, height );
+	const Int cells = width * height;
+
+	// runs of equal ground bytes
+	UnsignedInt runs = 0;
+	if( xfer->getXferMode() != XFER_LOAD )
+		for( Int c = 0; c < cells; ++c )
+			if( c == 0 || m_field.groundOf( c ) != m_field.groundOf( c - 1 ) )
+				++runs;
+	xfer->xferUnsignedInt( &runs );
+	Int at = 0;
+	for( UnsignedInt r = 0; r < runs; ++r )
+	{
+		UnsignedByte ground = 0;
+		Int length = 0;
+		if( xfer->getXferMode() != XFER_LOAD )
+		{
+			ground = m_field.groundOf( at );
+			while( at + length < cells && m_field.groundOf( at + length ) == ground )
+				++length;
+		}
+		xfer->xferUnsignedByte( &ground );
+		xfer->xferInt( &length );
+		if( xfer->getXferMode() == XFER_LOAD )
+			for( Int c = at; c < at + length && c < cells; ++c )
+				m_field.setGround( c, ground, INVALID_ID );
+		at += length;
+	}
+
+	// the cells beside a seat's structure
+	UnsignedInt sides = 0;
+	if( xfer->getXferMode() != XFER_LOAD )
+		for( Int c = 0; c < cells; ++c )
+			if( m_field.sourceOf( c ) != INVALID_ID )
+				++sides;
+	xfer->xferUnsignedInt( &sides );
+	Int c = 0;
+	for( UnsignedInt s = 0; s < sides; ++s )
+	{
+		Int cell = 0;
+		ObjectID source = INVALID_ID;
+		if( xfer->getXferMode() != XFER_LOAD )
+		{
+			while( m_field.sourceOf( c ) == INVALID_ID )
+				++c;
+			cell = c;
+			source = m_field.sourceOf( c );
+			++c;
+		}
+		xfer->xferInt( &cell );
+		xfer->xferObjectID( &source );
+		if( xfer->getXferMode() == XFER_LOAD && cell >= 0 && cell < cells )
+			m_field.setGround( cell, m_field.groundOf( cell ), source );
+	}
+
+	// the running repair's changes, applied already to the copy above
+	if( !withChanges )
+		return;
+	if( xfer->getXferMode() != XFER_LOAD )
+		m_fieldLoadedChanges = m_field.repairChanges();
+	UnsignedInt changes = (UnsignedInt)m_fieldLoadedChanges.size();
+	xfer->xferUnsignedInt( &changes );
+	if( xfer->getXferMode() == XFER_LOAD )
+		m_fieldLoadedChanges.resize( changes );
+	for( UnsignedInt k = 0; k < changes; ++k )
+	{
+		ApocalypseFlowField::Change &change = m_fieldLoadedChanges[ k ];
+		xfer->xferInt( &change.cell );
+		xfer->xferUnsignedByte( &change.oldGround );
+		xfer->xferUnsignedByte( &change.newGround );
+		xfer->xferObjectID( &change.oldSource );
+		xfer->xferObjectID( &change.newSource );
+	}
+	if( xfer->getXferMode() != XFER_LOAD )
+		m_fieldLoadedChanges.clear();
 }

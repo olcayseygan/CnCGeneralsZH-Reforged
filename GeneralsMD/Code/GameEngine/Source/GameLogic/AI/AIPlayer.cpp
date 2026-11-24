@@ -2562,8 +2562,10 @@ Bool AIPlayer::isLocationSafe(const Coord3D *pos, const ThingTemplate *tthing )
 		filters[numFilters++] = &filterHarmless;
 	// Nor is a marker: an America's Spy Satellite, aimed at a China's start from frame 1 and every 30 seconds after,
 	// left its INERT ping there and made the China's own plan spots unsafe while it showed (seed 306, 2026-11-24).
+	// Apocalypse and Direct Strike seats keep counting it, as they did.
 	PartitionFilterRejectByKindOf filterInert(MAKE_KINDOF_MASK(KINDOF_INERT), KINDOFMASK_NONE);
-	if (runsOwnAI() && !(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()))
+	if (runsOwnAI() && !(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) &&
+			!(TheLaneWarDirector != NULL && TheLaneWarDirector->isActive()))
 		filters[numFilters++] = &filterInert;
 	filters[numFilters] = NULL;
 

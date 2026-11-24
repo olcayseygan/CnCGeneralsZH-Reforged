@@ -5691,6 +5691,9 @@ Tools/relay/README.md
 Tools/relay/relay.js
 Tools/relay/test.js
 Tools/replay-check.sh
+Tools/rl/env.py
+Tools/rl/mock_game.py
+Tools/rl/train.py
 Tools/root-readonly-check.sh
 Tools/signal_marks.py
 Tools/sprite_flipbook.py

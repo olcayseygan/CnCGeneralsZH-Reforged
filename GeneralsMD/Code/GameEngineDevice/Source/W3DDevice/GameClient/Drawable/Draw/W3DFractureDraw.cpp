@@ -227,6 +227,11 @@ void makeVolumeEdges( Shared &s )
 		for( unsigned t = 0; t < f.triangles; ++t )
 		{
 			const Fracture::Triangle &tri = a.triangles[f.firstTriangle + t];
+			s.faceNormal[f.firstTriangle + t].Set( 0.0f, 0.0f, 0.0f );
+			// alpha tested or blended (railings, nets, decals): no slab of shadow, as initFromHLOD leaves
+			// a translucent mesh out; the triangles beside it see an open edge
+			if( tri.material < a.materials.size() && ( a.materials[tri.material].flags & ( Fracture::MATERIAL_ALPHA_TEST | Fracture::MATERIAL_DECAL ) ) )
+				continue;
 			const Vector3 p0( v[tri.index[0]].pos[0], v[tri.index[0]].pos[1], v[tri.index[0]].pos[2] );
 			const Vector3 p1( v[tri.index[1]].pos[0], v[tri.index[1]].pos[1], v[tri.index[1]].pos[2] );
 			const Vector3 p2( v[tri.index[2]].pos[0], v[tri.index[2]].pos[1], v[tri.index[2]].pos[2] );
@@ -639,6 +644,7 @@ public:
 	Bool isCollapsing( void ) const { return m_collapsing; }
 	void renderCaster( RenderInfoClass &sunInfo );
 	void renderVolumes( Bool build );						///< the stencil volumes; build: what changed since the last picture
+	void holdModelVolume( void );								///< the whole model's stencil volume off while the fragments cast theirs
 	/// What a save keeps: the fragments standing, or at the death those that stood, and the way it fell.
 	const std::vector<unsigned char> &standingSet( void ) const { return m_collapsing ? m_present : m_standing; }
 	Int collapseWay( void ) const { return m_collapse ? m_way : -1; }
@@ -1952,6 +1958,24 @@ void FractureRenderObjClass::addVolume( std::vector<Vector3> &out, unsigned frag
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Where the fragments cast stencil volumes, the whole model's own volume, standing on under its hidden
+	model, goes the moment they stand in: at the first hit, seen or not, and again every stencil picture.
+	Only the volume: the patch under the footprint stays until the fall.  The options can change, so the
+	answer is asked again each time; an orphan keeps its last. */
+//-------------------------------------------------------------------------------------------------
+void FractureRenderObjClass::holdModelVolume( void )
+{
+	if( m_drawable == NULL )
+		return;
+	m_castsVolume = castsVolumeWhole( m_drawable );
+	if( !m_castsVolume || ( TheGlobalData->m_shadowMapOnly && SunShadow::OwnsSceneShadows( DX8Wrapper::_Get_D3D_Device() ) ) )
+		return;		// the sun's map alone: the hidden model is in no shadow pass
+	W3DModelDraw *modelDraw = modelDrawOf( m_drawable );
+	if( modelDraw )
+		modelDraw->holdShadowOff( TRUE );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The stencil volumes (-d3d9, Classic), the casters the sun's map has in renderCaster: whatever is
 	drawn, standing, falling or lying, at the pose it is drawn in.  Built again only when that pose, the
 	sun or the set shown moved, and every picture while anything falls. */
@@ -1961,8 +1985,7 @@ void FractureRenderObjClass::renderVolumes( Bool build )
 	if( build )
 	{
 		const CostTimer timer;
-		if( m_drawable )
-			m_castsVolume = castsVolumeWhole( m_drawable );		// the options can change; an orphan keeps its last
+		holdModelVolume();		// every stencil picture, on the screen or off it: a model swap turns its volume back on
 		if( !m_castsVolume || !castsShadow() || TheW3DShadowManager == NULL || TheTerrainRenderObject == NULL )
 		{
 			m_volumes.clear();
@@ -2137,14 +2160,15 @@ void W3DFractureDraw::doDrawModule( const Matrix3D *transformMtx )
 	m_fracture->follow( modelOf( draw ) );
 	if( rubble )
 		m_fracture->collapse( FALSE );
-	if( !SunShadow::OwnsSceneShadows( DX8Wrapper::_Get_D3D_Device() ) )
+	if( m_fracture->isCollapsing() && !SunShadow::OwnsSceneShadows( DX8Wrapper::_Get_D3D_Device() ) )
 	{
-		// the stencil volumes (-d3d9, Classic): the fragments cast their own (renderStencilVolumes), so
-		// the intact model's volume, still standing whole under its hidden model, goes
+		// fallen, under the stencil volumes (-d3d9, Classic): no standing model's shadow and no patch
+		// under a footprint nothing stands on
 		for( DrawModule **dm = draw->getDrawModulesNonDirty(); *dm; ++dm )
 			if( (*dm)->getObjectDrawInterface() )
 				(*dm)->setShadowsEnabled( FALSE );
 	}
+	m_fracture->holdModelVolume();
 	m_fracture->beforeRender();
 }
 
@@ -2169,6 +2193,7 @@ Bool W3DFractureDraw::makeFracture( void )
 		levels ? ( (HLodClass *)model )->Get_LOD_Count() : 1, model->Get_Num_Polys(), (Int)shared->asset.triangles.size() ) );
 	W3DDisplay::m_3DScene->Add_Render_Object( m_fracture );
 	s_modules.push_back( this );
+	m_fracture->holdModelVolume();		// an off-screen first hit included
 	return TRUE;
 }
 

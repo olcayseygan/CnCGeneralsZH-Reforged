@@ -1123,7 +1123,10 @@ void SpawnBehavior::xfer( Xfer *xfer )
 	// version 3 saves how much of the opening burst is still owed.  Without it a loaded save reset
 	// that counter to the template's full count, so a barracks that had already put its mob on the
 	// street put a whole new one out - fallen members came back at the building.
-	XferVersion currentVersion = 3;
+	// Version 4 saves which of the template names comes next: an Angry Mob takes its members from the
+	// list in turn, and a loaded one started the list again, so the next member came out with another
+	// weapon than the game that was saved gave it.
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1190,6 +1193,19 @@ void SpawnBehavior::xfer( Xfer *xfer )
 
 	// self tasking spawn count
 	xfer->xferUnsignedInt( &m_selfTaskingSpawnCount );
+
+	if( version >= 4 )
+	{
+		const std::vector<AsciiString> &names = getSpawnBehaviorModuleData()->m_spawnTemplateNameData;
+		Int nextName = (Int)( m_templateNameIterator - names.begin() );
+		xfer->xferInt( &nextName );
+		if( xfer->getXferMode() == XFER_LOAD )
+		{
+			if( nextName < 0 || nextName > (Int)names.size() || ( nextName == (Int)names.size() && !names.empty() ) )
+				throw SC_INVALID_DATA;
+			m_templateNameIterator = names.begin() + nextName;
+		}
+	}
 
 }  // end xfer
 

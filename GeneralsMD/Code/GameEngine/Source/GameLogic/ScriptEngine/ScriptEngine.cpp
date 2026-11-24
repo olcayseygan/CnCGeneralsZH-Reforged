@@ -9206,6 +9206,7 @@ void ScriptEngine::setGlobalDifficulty( GameDifficulty difficulty )
 	* 5: add ChooseVictimAlwaysUsesNormal
 	* 6: m_inputHeldByScript (fork)
 	* 7: countdown timers' retail-tick phase, kept through a world freeze (fork)
+	* 8: the scripts queued behind each sequential script (m_nextScriptInSequence) (fork)
 	*/
 // ------------------------------------------------------------------------------------------------
 void ScriptEngine::xfer( Xfer *xfer )
@@ -9213,7 +9214,7 @@ void ScriptEngine::xfer( Xfer *xfer )
 	Int i;
 
 	// version
-	const XferVersion currentVersion = 7;
+	const XferVersion currentVersion = 8;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -9234,6 +9235,18 @@ void ScriptEngine::xfer( Xfer *xfer )
 
 			// xfer data
 			xfer->xferSnapshot( sequentialScript );
+
+			// the scripts queued behind it for the same team or unit, which EA's save dropped: a team
+			// told "attack" while still walking to its staging point forgot the attack after a load
+			if( version >= 8 )
+			{
+				UnsignedShort queued = 0;
+				for( SequentialScript *next = sequentialScript->m_nextScriptInSequence; next; next = next->m_nextScriptInSequence )
+					++queued;
+				xfer->xferUnsignedShort( &queued );
+				for( SequentialScript *next = sequentialScript->m_nextScriptInSequence; next; next = next->m_nextScriptInSequence )
+					xfer->xferSnapshot( next );
+			}
 
 		}  // end for, it
 
@@ -9262,6 +9275,21 @@ void ScriptEngine::xfer( Xfer *xfer )
 
 			// xfer data
 			xfer->xferSnapshot( sequentialScript );
+
+			// the scripts queued behind it, in order
+			if( version >= 8 )
+			{
+				UnsignedShort queued = 0;
+				xfer->xferUnsignedShort( &queued );
+				SequentialScript *tail = sequentialScript;
+				for( UnsignedShort q = 0; q < queued; ++q )
+				{
+					SequentialScript *next = newInstance( SequentialScript );
+					tail->m_nextScriptInSequence = next;
+					tail = next;
+					xfer->xferSnapshot( next );
+				}
+			}
 
 		}  // end for i
 

@@ -72,6 +72,7 @@ Data/Art/Textures/ReforgedHudGlaTabSolo.dds
 Data/Art/Textures/ReforgedHudGlaTalents.dds
 Data/Art/Textures/ReforgedHudHelpbox.dds
 Data/Art/Textures/ReforgedHudObsCommandBar.dds
+Data/Art/Textures/ReforgedHudObsConsole.dds
 Data/Art/Textures/ReforgedHudObsPieces.dds
 Data/Art/Textures/ReforgedHudObsPlayerWindow.dds
 Data/Art/Textures/ReforgedHudObsSpec.dds
@@ -1270,6 +1271,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudGlaTabPanel.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaTalents.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudHelpbox.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsCommandBar.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudObsConsole.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsPieces.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsPlayerWindow.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsSpec.ini

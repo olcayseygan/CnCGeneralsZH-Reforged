@@ -153,8 +153,8 @@ static void noteView( Bool applies, LogicThread::ViewEffect effect )
 
 /** Apocalypse has no defeat (the owner, 2026-11-23).  Once the local seat has fallen, or every seat for
 	* someone watching, the multiplayer scripts' defeat voice and failure music stay quiet.  Those scripts
-	* follow the local player and the script engine is not in the CRC (ScriptEngine::crc), so the
-	* skip is this machine's alone. */
+	* follow the local player.  Only the sound and the subtitle are skipped: the script engine's own
+	* state (the speech it is testing, the current track) is set as before on every machine. */
 static Bool apocalypseLocalFallen( void )
 {
 	return TheApocalypseDirector != NULL && TheApocalypseDirector->isActive() && TheVictoryConditions != NULL
@@ -2874,9 +2874,10 @@ enum
 };
 void ScriptActions::doSpeechPlay(const AsciiString& speechName, Bool allowOverlap)
 {
+	// the script engine hears of the request on every machine alike; only the sound and subtitle are skipped
+	TheScriptEngine->notifySpeechRequested(speechName);
 	if (apocalypseLocalFallen())
 		return;
-	TheScriptEngine->notifySpeechRequested(speechName);
 	AudioEventRTS speech(speechName);
 	speech.setIsLogicalAudio(true);
 	speech.setPlayerIndex(ThePlayerList->getLocalPlayer()->getPlayerIndex());
@@ -3421,6 +3422,8 @@ void ScriptActions::doAmbientSoundsPause(Bool pausing)	// if true, then pause, i
 //-------------------------------------------------------------------------------------------------
 void ScriptActions::doMusicTrackChange(const AsciiString& newTrackName, Bool fadeout, Bool fadein)
 {
+	// the script engine's track changes on every machine alike; only the music itself is skipped
+	TheScriptEngine->setCurrentTrackName(newTrackName);
 	if (apocalypseLocalFallen())
 		return;
 	// Stop playing the music
@@ -3434,8 +3437,6 @@ void ScriptActions::doMusicTrackChange(const AsciiString& newTrackName, Bool fad
 	event.setShouldFade(fadein);
 	event.setPlayerIndex(ThePlayerList->getLocalPlayer()->getPlayerIndex());
 	TheAudio->addAudioEvent(&event);
-
-	TheScriptEngine->setCurrentTrackName(newTrackName);
 }
 
 //-------------------------------------------------------------------------------------------------

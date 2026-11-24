@@ -72,6 +72,8 @@ KEY_OF_TEMPLATE = {item.template: key for key, item in ITEMS.items()}
 QUEUE_MAX = 2
 ENEMY_SLOT = 1
 ATTACK_MIN = 3             # army units before the army may be sent at the enemy base
+ATTACK_VEHICLES = 2        # of which this many Humvees or Crusaders: infantry alone does not take a GLA base,
+                           # and a policy rewarded for razing otherwise never finds the war factory
 POWER_SURPLUS_MAX = 10     # no more power plants once this much power is spare (built and building)
 HOME_RADIUS = 700.0        # an army unit further than this from our CC counts as away
 FRONT_DISTANCE = 350.0     # the defence point and the Patriot line, out from our CC toward theirs
@@ -90,8 +92,11 @@ NOT_A_UNIT = re.compile(r"Projectile|Missile$|Field|Wreck|Debris|Shell$|Bomb$|Ro
 # Per 1000 credits: what we finish (economy full, army half), income, the enemy value we destroy and
 # ours that is destroyed; a kill, a refused order and the end of the match are flat. Combat outweighs
 # economy on purpose: a base is only worth what it lets the army do.
-REWARD = {"economy": 1.0, "army": 0.75, "income": 0.5, "razed": 3.0, "razed_each": 0.5, "dealt": 0.5,
-          "taken": 1.0, "hoard": 0.01, "refused": 0.05, "loss": 20.0, "win": 50.0}
+ARMY_WEIGHT = {"ranger": 0.4, "missile": 0.4, "humvee": 1.0, "crusader": 1.25}
+REWARD = {"economy": 1.0, "army": 1.0, "income": 0.5, "razed": 3.0, "razed_each": 0.5, "dealt": 0.5,
+          "taken": 1.0, "hoard": 0.01, "refused": 0.05, "loss": 20.0, "win": 50.0, "win_early": 150.0}
+# win_early is paid for the share of the episode a win leaves unplayed: the Easy AI rebuilds what is
+# razed, and without it farming its base for the rest of the match pays more than finishing it
 HOARD_FREE = 3000          # money above this costs "hoard" per 1000 per game second: 10000 held for
                            # ten minutes is -42, about what a good economy earns in that time
 
@@ -323,7 +328,9 @@ class BuildOrderEnv(gym.Env):
                 s["units"][key] += 1
                 part = "army" if key in ARMY else "economy"
                 s[part] += item.cost
-                s["ids"][o["id"]] = (item.cost, part)
+                # an army id carries its value weighted by type: it is only read for the "army built"
+                # reward (our combat losses cost nothing), and tanks are what take a base
+                s["ids"][o["id"]] = (item.cost * ARMY_WEIGHT.get(key, 1.0), part)
                 if part == "army":
                     s["soldiers"].append((o["template"], o["x"], o["y"]))
                     s["army_ids"][o["id"]] = o["template"]
@@ -481,7 +488,8 @@ class BuildOrderEnv(gym.Env):
             if key == "attack":
                 target = self._attack_target()
                 cooling = self.army_order == -1 and since < COOLDOWN_DECISIONS
-                mask[index] = (army >= ATTACK_MIN and target is not None and not cooling
+                vehicles = s["units"]["humvee"] + s["units"]["crusader"]
+                mask[index] = (army >= ATTACK_MIN and vehicles >= ATTACK_VEHICLES and target is not None and not cooling
                                and not (attacking and target == self.order_target))
                 continue
             if key == "defend":
@@ -500,6 +508,14 @@ class BuildOrderEnv(gym.Env):
                                and (item.source is None or s["built"][item.source] > 0))
                 if key == "power":
                     mask[index] &= s["power"] + ITEMS["power"].power * s["uc"]["power"] < POWER_SURPLUS_MAX
+        # floors: with no dozer and none coming the next credits buy one, or a raided base can never
+        # rebuild; with power short and a plant buildable, no other structure goes up first
+        if s["units"]["dozer"] == 0 and s["queue"]["cc"] == 0 and s["cc"] is not None:
+            for index, key in enumerate(ACTIONS):
+                mask[index] &= key not in ITEMS or key == "dozer"
+        elif s["power"] < 0 and mask[ACTIONS.index("power")]:
+            for key in ("barracks", "supply", "factory", "patriot"):
+                mask[ACTIONS.index(key)] = False
         return mask
 
     # -- gymnasium ----------------------------------------------------------------------------------
@@ -576,7 +592,7 @@ class BuildOrderEnv(gym.Env):
                 won = self.others_left == 0
                 info.update(ended=True, refused=refused, lost=not won, won=won, frame=self.state["frame"])
                 w = self.reward_weights
-                return self._obs(), -w["refused"] * refused - w["loss"] * (not won) + w["win"] * won, True, False, info
+                return self._obs(), -w["refused"] * refused - w["loss"] * (not won) + self._win_reward() * won, True, False, info
             self.state = self._read()
             lost, won = self._outcome()
         except (OSError, ControlError, KeyError, ValueError) as error:
@@ -604,11 +620,15 @@ class BuildOrderEnv(gym.Env):
         # economy is worth restoring; the base is the target, the units in front of it only half count
         reward = (w["economy"] * economy + w["army"] * army + w["income"] * max(income, 0)
                   + w["razed"] * sum(razed) + w["dealt"] * dealt - w["taken"] * lost_value) / 1000.0
-        reward += w["razed_each"] * len(razed) - hoard - w["refused"] * refused - w["loss"] * lost + w["win"] * won
+        reward += w["razed_each"] * len(razed) - hoard - w["refused"] * refused - w["loss"] * lost + self._win_reward() * won
         truncated = s["frame"] - self.start_frame >= self.episode_frames
         info.update(frame=s["frame"], money=s["money"], refused=refused, lost=lost, won=won,
                     dealt=dealt, taken=lost_value, razed=len(razed), kills=len(gone) - len(razed), hoard=hoard)
         return self._obs(), float(reward), lost or won, truncated and not (lost or won), info
+
+    def _win_reward(self):
+        left = max(0.0, 1.0 - (self.state["frame"] - self.start_frame) / self.episode_frames)
+        return self.reward_weights["win"] + self.reward_weights["win_early"] * left
 
     def close(self):
         if self.game is not None and not self.mock:
@@ -632,6 +652,7 @@ def check():
     assert env.state["enemy"]["structures"] > 0 and env.state["enemy"]["cc"], env.state["enemy"]
     _, reward, _, _, info = env.step(ACTIONS.index("supply"))  # no power plant yet: the game refuses
     assert info["refused"] and reward < 0, (info, reward)
+    assert info["hoard"] > 0, info  # sitting on the starting 10000
     env.step(ACTIONS.index("power"))
     for _ in range(3):  # ten game seconds of building
         env.step(0)
@@ -639,15 +660,27 @@ def check():
     assert env.state["built"]["power"] == 1 and mask["supply"] and mask["patriot"], env.state["built"]
     env.state["power"] = POWER_SURPLUS_MAX  # spare power: no more plants
     assert not masks()["power"]
+    env.state["power"] = -2  # short of power: a plant before any other structure
+    assert masks()["power"] and not masks()["supply"] and not masks()["patriot"], masks()
     env.state["power"] = 5
+    dozers = env.state["units"]["dozer"]
+    env.state["units"]["dozer"] = 0  # no dozer and none queued: only a dozer may be bought
+    assert masks()["dozer"] and not any(masks()[k] for k in ITEMS if k != "dozer" and k in ACTIONS), masks()
+    env.state["units"]["dozer"] = dozers
 
     env.step(ACTIONS.index("barracks"))
     while len(env.state["soldiers"]) < ATTACK_MIN:
         env.step(ACTIONS.index("ranger") if masks()["ranger"] else 0)
+    assert not masks()["attack"]  # infantry only: no attack before the vehicles
+    for key in ("supply", "factory"):
+        while not masks()[key]:
+            env.step(0)
+        env.step(ACTIONS.index(key))
+    while env.state["units"]["crusader"] < ATTACK_VEHICLES:
+        env.step(ACTIONS.index("crusader") if masks()["crusader"] else 0)
     assert masks()["attack"] and not masks()["defend"]
     _, _, _, _, info = env.step(ACTIONS.index("attack"))
     assert not info["refused"] and env.army_order == 1 and not masks()["attack"], info  # no second order
-    assert info["hoard"] > 0, info  # still sitting on most of the starting 10000
     for _ in range(COMMIT_DECISIONS):
         threat = env.state["enemy"]["near_value"] > THREAT_SHARE * max(env.state["army"], 1)
         assert threat or not masks()["defend"]  # committed

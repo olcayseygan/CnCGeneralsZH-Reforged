@@ -46,10 +46,11 @@ def train(args):
     venv = SubprocVecEnv(makers) if args.envs > 1 else DummyVecEnv(makers)
     try:
         if args.resume:
-            model = MaskablePPO.load(args.resume, env=venv, device=args.device, tensorboard_log=args.logdir)
+            model = MaskablePPO.load(args.resume, env=venv, device=args.device, tensorboard_log=args.logdir,
+                                     ent_coef=args.ent_coef)
         else:
             model = MaskablePPO("MlpPolicy", venv, n_steps=args.n_steps, batch_size=64, gamma=0.995,
-                                ent_coef=0.01, learning_rate=3e-4, seed=args.seed, device=args.device,
+                                ent_coef=args.ent_coef, learning_rate=3e-4, seed=args.seed, device=args.device,
                                 tensorboard_log=args.logdir, verbose=1)
         checkpoints = CheckpointCallback(save_freq=max(1, args.checkpoint // args.envs),
                                          save_path=os.path.join(args.save_dir, args.name + "_checkpoints"),
@@ -123,6 +124,8 @@ def main():
     t.add_argument("--envs", type=int, default=1, help="games in parallel (SubprocVecEnv above 1)")
     t.add_argument("--steps", type=int, default=100000, help="decisions to train for")
     t.add_argument("--n-steps", type=int, default=256, help="decisions per env per PPO update")
+    t.add_argument("--ent-coef", type=float, default=0.01,
+                   help="entropy bonus; raise it on a resume to shake a settled policy loose")
     t.add_argument("--resume", help="a saved model .zip to carry on from")
     t.add_argument("--name", default="usa_easy")
     t.add_argument("--save-dir", default="models")

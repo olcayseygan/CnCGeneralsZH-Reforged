@@ -229,6 +229,7 @@ public:
 	virtual Bool isPowerCurrentlyInUse( const CommandButton *command = NULL ) const;
 	virtual Bool getCaptureProgress( ObjectID *targetID, Real *progress ) const;
 	virtual Bool getCaptureTarget( ObjectID *targetID ) const;
+	ObjectID getLastTargetID() const { return m_targetID; }	///< the object the ability was last aimed at, kept after it ends
 
 	// what the skirmish AI weighs a button by (AIPlayer::doAbilities)
 	Real getStartAbilityRange() const;		///< the INI's StartAbilityRange, or Direct Strike's own for the Hacker's building hack

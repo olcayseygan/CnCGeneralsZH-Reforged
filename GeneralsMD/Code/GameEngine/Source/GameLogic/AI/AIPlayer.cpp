@@ -13309,6 +13309,10 @@ static const AIRungReal ALLY_ARMY_SHARE = { { 0.5f, 0.75f, 1.0f }, AIKNOB_SHARE 
 static const Real HUNT_REACH = 9999.9f;
 /** ... and how near a hunter its company stands (sendIdleUnitsHunting). */
 static const Real HUNT_COMPANY_RADIUS = 350.0f;
+/** A soldier out on the map that can take buildings takes the best one in this reach before it hunts or
+	* walks home (aiCaptureNearby). */
+static const Real IDLE_CAPTURE_REACH = 600.0f;
+static Bool aiCaptureNearby( const Player *player, Object *walker );
 
 /** The rungs that park attack teams, and when.  Hard does until it is ahead.  Medium sends each team
 	* as it forms, as it always did, except into an enemy that outmatches it; it knows when to leave a
@@ -15247,6 +15251,7 @@ void AIPlayer::sendIdleUnitsHunting( void )
 	Int hunters = 0;
 	Int guards = 0;
 	Int regrouped = 0;
+	Int captures = 0;
 	std::vector<Object *> hunting;
 	// a unit hunts only with company enough for what guards its victim: the known guns that reach it and what
 	// this AI has lost round it, at the rung's odds.  One sent alone at forty defences was a gift; one short of
@@ -15298,6 +15303,13 @@ void AIPlayer::sendIdleUnitsHunting( void )
 				// an attack team's members at home are sendIdleAttackTeams' to call up together
 				if( attacks ? (state != AI_IDLE || atHome) : (state != AI_IDLE && state != AI_GUARD && state != AI_GUARD_RETALIATE) )
 					continue;
+				// paratroopers, a general's power's drop or a wave's last Ranger stood where they landed, or walked
+				// home past the enemy's buildings: one that can take a building takes the nearest worth it
+				if( attacks && aiCaptureNearby( m_player, obj ) )
+				{
+					++captures;
+					continue;
+				}
 				const Object *victim = TheAI->findClosestEnemy( obj, HUNT_REACH, AI::CAN_ATTACK | AI::ANY_WILL_DO, obj->getAI()->getAttackInfo() );
 				if( victim == NULL )
 					continue;
@@ -15337,6 +15349,9 @@ void AIPlayer::sendIdleUnitsHunting( void )
 	if( regrouped > 0 )
 		DEBUG_LOG(("AI GUNS frame %d player %d sends %d idle units home instead of hunting alone into known guns or losses\n",
 			TheGameLogic->getFrame(), m_player->getPlayerIndex(), regrouped));
+	if( captures > 0 )
+		DEBUG_LOG(("AI CAPTURE frame %d player %d has %d soldiers out on the map taking buildings\n",
+			TheGameLogic->getFrame(), m_player->getPlayerIndex(), captures));
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -24109,6 +24124,53 @@ Object *AIPlayer::enemyBuildingToCapture( const Coord3D *from, Object *walker, R
 	}
 	*bestScoreOut = bestScore;
 	return best;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** A soldier of ours away from home that can take buildings: TRUE while it takes one, or when it was just
+	* sent to the best within IDLE_CAPTURE_REACH (worth halved every FOREIGN_CAPTURE_HALF_AT of the walk).
+	* Paratroopers landed beside an enemy's buildings and stood there, or walked home under his guns: a
+	* Ranger's rifle cannot hurt a building, but the Ranger can own it.  Guarded ones count too: the soldier
+	* is there already, and the walk home is longer than the walk in. */
+static Bool aiCaptureNearby( const Player *player, Object *walker )
+{
+	SpecialPowerModuleInterface *mod = walker->findSpecialPowerModuleInterface( SPECIAL_INFANTRY_CAPTURE_BUILDING );
+	if( mod == NULL )
+		return FALSE;
+	// a capture in progress parks the unit's AI, which reads as idle: ordering it again restarts it
+	const SpecialAbilityUpdate *capture = walker->findSpecialAbilityUpdate( SPECIAL_INFANTRY_CAPTURE_BUILDING );
+	if( walker->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) || (capture && capture->isActive()) )
+		return TRUE;
+	std::vector<Object *> targets;
+	abilityEnemiesNear( player, walker->getPosition(), IDLE_CAPTURE_REACH, &targets, TRUE );
+	Object *best = NULL;
+	Real bestScore = 0.0f;
+	for( size_t t = 0; t < targets.size(); ++t )
+	{
+		Object *target = targets[ t ];
+		if( !target->isKindOf( KINDOF_STRUCTURE ) || target->isKindOf( KINDOF_IMMUNE_TO_CAPTURE ) ||
+				target->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || target->testStatus( OBJECT_STATUS_SOLD ) )
+			continue;
+		// the last capture ended on this one and it is still not ours: the walk in failed (ten Rangers stood
+		// 470 from an Arms Dealer, sent again every two seconds for a minute), so it hunts or goes home instead
+		if( capture && capture->getLastTargetID() == target->getID() )
+			continue;
+		const Real distance = (Real)sqrt( sqr( target->getPosition()->x - walker->getPosition()->x ) + sqr( target->getPosition()->y - walker->getPosition()->y ) );
+		const Real score = AIForeign_captureScore( walkUpWorth( target ), distance, FOREIGN_CAPTURE_HALF_AT );
+		if( best && score <= bestScore )
+			continue;
+		if( !TheActionManager->canCaptureBuilding( walker, target, CMD_FROM_AI ) )
+			continue;
+		best = target;
+		bestScore = score;
+	}
+	if( best == NULL )
+		return FALSE;
+	mod->doSpecialPowerAtObject( best, 0 );
+	DEBUG_LOG(("AI CAPTURE frame %d player %d '%s' %d out on the map takes a '%s' %d %.0f away\n", TheGameLogic->getFrame(),
+		player->getPlayerIndex(), walker->getTemplate()->getName().str(), walker->getID(), best->getTemplate()->getName().str(), best->getID(),
+		(Real)sqrt( sqr( best->getPosition()->x - walker->getPosition()->x ) + sqr( best->getPosition()->y - walker->getPosition()->y ) )));
+	return TRUE;
 }
 
 //----------------------------------------------------------------------------------------------------------

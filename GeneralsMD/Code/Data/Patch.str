@@ -1698,24 +1698,60 @@ GUI:HudStandings
 END
 
 // the picked player's card beside the radar while watching: a word over each number
-GUI:ObsPanelIncome
-"Income"
+GUI:ObsConTeam
+"TEAM %d"
 END
 
-GUI:ObsPanelUnits
-"Units"
+GUI:ObsConStatMoney
+"MONEY"
 END
 
-GUI:ObsPanelBuildings
-"Buildings"
+GUI:ObsConStatIncome
+"INCOME"
 END
 
-GUI:ObsPanelKills
-"Kills"
+GUI:ObsConStatArmy
+"ARMY"
 END
 
-GUI:ObsPanelLosses
-"Losses"
+GUI:ObsConStatKills
+"KILLS"
+END
+
+GUI:ObsConStatPower
+"POWER"
+END
+
+GUI:ObsConStatBuilds
+"BUILDS"
+END
+
+GUI:ObsConStatSuper
+"SUPER"
+END
+
+GUI:ObsConGeneral
+"GENERAL"
+END
+
+GUI:ObsConQueue
+"QUEUE"
+END
+
+GUI:ObsConPowers
+"POWERS"
+END
+
+GUI:ObsConDefeated
+"DEFEATED"
+END
+
+GUI:ObsConLost
+"LOST"
+END
+
+GUI:ObsConPerMinute
+"/MIN"
 END
 
 // The cheat panel the console's "trainer" command opens.

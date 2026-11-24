@@ -21137,24 +21137,60 @@ GUI:HudStandings
 "Classement"
 END
 
-GUI:ObsPanelIncome
-"Revenu"
+GUI:ObsConTeam
+"ÉQUIPE %d"
 END
 
-GUI:ObsPanelUnits
-"Unités"
+GUI:ObsConStatMoney
+"ARGENT"
 END
 
-GUI:ObsPanelBuildings
-"Bâtiments"
+GUI:ObsConStatIncome
+"REVENU"
 END
 
-GUI:ObsPanelKills
-"Éliminations"
+GUI:ObsConStatArmy
+"ARMÉE"
 END
 
-GUI:ObsPanelLosses
-"Pertes"
+GUI:ObsConStatKills
+"TUÉS"
+END
+
+GUI:ObsConStatPower
+"ÉNERGIE"
+END
+
+GUI:ObsConStatBuilds
+"PROD."
+END
+
+GUI:ObsConStatSuper
+"SUPER"
+END
+
+GUI:ObsConGeneral
+"GÉNÉRAL"
+END
+
+GUI:ObsConQueue
+"FILE"
+END
+
+GUI:ObsConPowers
+"POUVOIRS"
+END
+
+GUI:ObsConDefeated
+"VAINCU"
+END
+
+GUI:ObsConLost
+"PERDUS"
+END
+
+GUI:ObsConPerMinute
+"/MIN"
 END
 
 GUI:HudStatCash

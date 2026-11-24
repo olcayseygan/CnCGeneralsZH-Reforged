@@ -1747,8 +1747,9 @@ protected:
 		RACK_TEXT_COUNT
 	};
 	void drawSpectatorRack( Int plateTop );	///< plateTop: the watch drawer's plate, 8 under the superweapon tray's foot
-	/// while watching: every seated player's queue over the radar, and the picked player's card beside it
-	void drawObserverPanels( void );
+	/// while watching: the observer console along the screen's foot (its radar bay under the windows)
+	void drawObserverConsole( void );
+	void drawObserverConsoleBay( void );
 	/// the status well under the mode cells: what the camera does, and the next step or the hovered
 	/// control's use; well FALSE when the drawer's own piece already has the well painted in
 	void drawRackStatus( Int left, Int top, Int right, const UnicodeString &hover, Bool well );

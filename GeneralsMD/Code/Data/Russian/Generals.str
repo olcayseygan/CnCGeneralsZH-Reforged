@@ -21081,24 +21081,60 @@ GUI:HudStandings
 "Положение"
 END
 
-GUI:ObsPanelIncome
-"Доход"
+GUI:ObsConTeam
+"КОМАНДА %d"
 END
 
-GUI:ObsPanelUnits
-"Юниты"
+GUI:ObsConStatMoney
+"ДЕНЬГИ"
 END
 
-GUI:ObsPanelBuildings
-"Здания"
+GUI:ObsConStatIncome
+"ДОХОД"
 END
 
-GUI:ObsPanelKills
-"Убийства"
+GUI:ObsConStatArmy
+"АРМИЯ"
 END
 
-GUI:ObsPanelLosses
-"Потери"
+GUI:ObsConStatKills
+"УБИТО"
+END
+
+GUI:ObsConStatPower
+"ЭНЕРГ."
+END
+
+GUI:ObsConStatBuilds
+"ПРОИЗВ."
+END
+
+GUI:ObsConStatSuper
+"СУПЕР"
+END
+
+GUI:ObsConGeneral
+"ГЕНЕРАЛ"
+END
+
+GUI:ObsConQueue
+"ОЧЕРЕДЬ"
+END
+
+GUI:ObsConPowers
+"СПОСОБНОСТИ"
+END
+
+GUI:ObsConDefeated
+"ПОВЕРЖЕН"
+END
+
+GUI:ObsConLost
+"ПОТЕРЯНО"
+END
+
+GUI:ObsConPerMinute
+"/МИН"
 END
 
 GUI:HudStatCash

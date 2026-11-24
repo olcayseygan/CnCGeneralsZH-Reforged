@@ -55,6 +55,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/ObserverCamera.h"
+#include "GameClient/ControlBar.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/Image.h"
 #include "GameClient/Line2D.h"
@@ -1129,6 +1130,8 @@ void W3DRadar::collectBlips( const RadarObject *listHead, Bool calcHero )
 
 	const Int playerIndex = TheObserverCamera.getShroudPlayerIndex();
 	Player *viewer = ThePlayerList->getNthPlayer( playerIndex );
+	const Player *local = ThePlayerList->getLocalPlayer();
+	const Player *dimOthers = local != NULL && !local->isPlayerActive() && TheControlBar != NULL ? TheControlBar->getObserverLookAtPlayer() : NULL;
 
 	for( const RadarObject *rObj = listHead; rObj; rObj = rObj->friend_getNext() )
 	{
@@ -1204,6 +1207,13 @@ void W3DRadar::collectBlips( const RadarObject *listHead, Bool calcHero )
 				c = GameMakeColor( 230, 30, 30, 255 );
 		}
 
+		// a watcher with a player picked on his console sees that player's marks lit and the rest dimmed
+		if( dimOthers != NULL && apparentPlayerOf( obj ) != dimOthers )
+		{
+			UnsignedByte r, g, b, a;
+			GameGetColorComponents( c, &r, &g, &b, &a );
+			c = GameMakeColor( r / 4 + 20, g / 4 + 20, b / 4 + 20, a );
+		}
 		
 		
 		// adjust the alpha for stealth units so they "fade/blink" on the radar for the controller

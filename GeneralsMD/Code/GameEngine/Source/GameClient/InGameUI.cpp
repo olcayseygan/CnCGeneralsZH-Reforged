@@ -91,6 +91,7 @@
 #include "GameClient/Image.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/PlayerColorScheme.h"
+#include "GameClient/Shell.h"
 #include "GameClient/VideoPlayer.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/ObserverCamera.h"
@@ -2490,6 +2491,7 @@ struct SpectatorStats
 	Int produced;		///< the power his plants make
 	Int unitCount;	///< what the score counts: units, and the buildings EA's observer panel counted
 	Int buildingCount;
+	Bool underAttack;	///< a building of his took damage in the last few seconds
 	std::map< const ThingTemplate *, Int > units;	///< how many of each unit with a cameo he has standing
 };
 
@@ -2527,6 +2529,17 @@ static void addObjectStats( Object *obj, void *userData )
 	{
 		if( obj->isKindOf( KINDOF_SCORE ) || obj->isKindOf( KINDOF_SCORE_CREATE ) || obj->isKindOf( KINDOF_SCORE_DESTROY ) )
 			stats->buildingCount++;
+		// his base under attack: a building hit by an enemy in the last three seconds (not its own fire,
+		// a crush or the sell-off)
+		const BodyModuleInterface *body = obj->getBodyModule();
+		const UnsignedInt hit = body != NULL ? body->getLastDamageTimestamp() : 0;
+		if( hit > 0 && hit <= TheGameLogic->getFrame() && hit + 3 * LOGICFRAMES_PER_SECOND >= TheGameLogic->getFrame() )
+		{
+			const DamageInfo *damage = body->getLastDamageInfo();
+			const Object *source = damage != NULL ? TheGameLogic->findObjectByID( damage->in.m_sourceID ) : NULL;
+			if( source != NULL && source->getRelationship( obj ) == ENEMIES )
+				stats->underAttack = TRUE;
+		}
 		return;
 	}
 	if( obj->isKindOf( KINDOF_SCORE ) )
@@ -2591,6 +2604,7 @@ static std::vector< SpectatorStats > gatherSpectatorStats( const SpectatorStat &
 		stats.produced = player->getEnergy()->getProduction();
 		stats.unitCount = 0;
 		stats.buildingCount = 0;
+		stats.underAttack = FALSE;
 		player->iterateObjects( addObjectStats, &stats );
 
 		for( size_t earlier = 0; earlier < players.size() && stats.team < 0; earlier++ )
@@ -3013,6 +3027,7 @@ static Int theRackStatsStat = -1;
 /// The last draw's, for the clicks and the wheel.
 enum { RACK_ROW_MIN = 24, RACK_NAME_MIN_PX = 12 };
 static Real theRackRowH = 30.0f;
+static Bool theConsoleShown = FALSE;		///< the observer console's last draw put it up (drawObserverConsole)
 static Int theRackFirst = 0;
 static Int theRackRanked = 0;
 
@@ -3784,7 +3799,7 @@ Bool InGameUI::handleAirliftWheel( const ICoord2D *mouse, Real notches )
 Bool InGameUI::pickSpectatorStat( Int commandSlot )
 {
 	// the last draw's flag outlives a pass that drew nothing, a load screen's; the watch is asked again
-	if( !m_rackShown || !localPlayerWatching() || commandSlot >= SPECTATOR_STAT_COUNT )
+	if( !( m_rackShown || theConsoleShown ) || !localPlayerWatching() || commandSlot >= SPECTATOR_STAT_COUNT )
 		return FALSE;
 	m_rackStat = commandSlot;
 	return TRUE;
@@ -3798,7 +3813,7 @@ Bool InGameUI::pickSpectatorStat( Int commandSlot )
 Bool InGameUI::pickSpectatorStatKey( Int key, Int keyState )
 {
 	static const Int KEYS[ SPECTATOR_STAT_COUNT ] = { KEY_Q, KEY_W, KEY_E, KEY_R, KEY_T, KEY_Y, KEY_A };
-	if( !m_rackShown || !localPlayerWatching() || ( keyState & ( KEY_STATE_CONTROL | KEY_STATE_SHIFT | KEY_STATE_ALT ) ) )
+	if( !( m_rackShown || theConsoleShown ) || !localPlayerWatching() || ( keyState & ( KEY_STATE_CONTROL | KEY_STATE_SHIFT | KEY_STATE_ALT ) ) )
 		return FALSE;
 	for( Int stat = 0; stat < SPECTATOR_STAT_COUNT; stat++ )
 	{
@@ -9591,7 +9606,8 @@ void InGameUI::postDraw( void )
 			}
 		}
 
-		if( !m_superweaponHiddenByScript && !listed.empty() )
+		// a watcher reads every clock on the observer console's tiles and dossier: the top of his screen stays clear
+		if( !m_superweaponHiddenByScript && !listed.empty() && !localPlayerWatching() )
 		{
 			// the local player's own first, then everyone else's, each soonest first: twelve cells and a
 			// "+N" must never leave your own nuke behind the tag.  The Classic layout keeps EA's order
@@ -9938,13 +9954,11 @@ void InGameUI::postDraw( void )
 
 	// the spectator's own controls and standings, only while watching: the other side's worth is not
 	// a player's to know
+	// the observer console's radar bay goes under the windows, so the radar paints on its glass; the rest
+	// of the console is drawn over everything in drawHudOverlay
 	m_rackShown = FALSE;
 	if( TheGameLogic->getFrame() > 0 && !TheGameLogic->isInShellGame() && localPlayerWatching() )
-	{
-		drawSpectatorRack( rackPlateTop );
-		if( TheObserverCamera.isShowingPlayerView() )
-			drawPlayerCameraPlate( TheUIRect().y );
-	}
+		drawObserverConsoleBay();
 
 	// a player's squad list on the left, and the picked squad's build tray where a watcher's rack hangs
 	GroupPanel_draw( rackPlateTop );
@@ -12661,13 +12675,13 @@ void InGameUI::drawHudOverlay( void )
 	if( TheGameLogic->getFrame() == 0 )
 		return;
 
-	// the watcher's panels at the radar, here so the health bars and the cash floating off a refinery
-	// go under them
+	// the observer console, here so the health bars and the cash floating off a refinery go under it
 	if( localPlayerWatching() )
-		drawObserverPanels();
+		drawObserverConsole();
 
-	// the match clock at the top middle, under the readout strip while that is up
-	if( MatchClock_wanted() )
+	// the match clock at the top middle, under the readout strip while that is up; a watcher's is on his
+	// console, and the top of his screen stays clear
+	if( MatchClock_wanted() && !localPlayerWatching() )
 	{
 		MatchClockState clock;
 		MatchClock_gather( TheGameLogic->getFrame(), clock );
@@ -13226,51 +13240,14 @@ static void gatherProductionList( Object *obj, void *userData )
 }
 
 //-------------------------------------------------------------------------------------------------
-// The watcher's two panels at the radar (drawObserverPanels), in the common frame every player of a
-// match shares: every seated player's queue over the radar, and beside it the card of the player
-// picked.  Every number is a pixel at 1080, put through the theme's px at the HUD's own scale.
+// What every seated player has coming, for the observer console's tiles (drawObserverConsole).
 //-------------------------------------------------------------------------------------------------
 enum
 {
-	OBS_QUEUE_CELLS		= 6,		///< a player's row: his six soonest
-	OBS_GAP						= 6,		///< between a panel and what it stands beside
-	// a player's band in the queue, QUEUE_BAND: ends 34x32, a lamp slot at x 6..12 of the left end and
-	// one glass channel from x 14 to 15 short of the right end, which the badge and the cameos sit in
-	OBS_BAND_H				= 32,
-	OBS_BAND_PITCH		= 35,		///< the step from one band to the next
-	OBS_BAND_LAMP_X		= 6,
-	OBS_BAND_LAMP_W		= 6,
-	OBS_BAND_GLASS_X	= 14,
-	OBS_BAND_GLASS_END	= 15,	///< the channel stops this far short of the band's right end
-	OBS_BAND_GLASS_Y	= 4,		///< the channel's top and foot inside the band
-	OBS_BAND_CELLS_X	= 50,		///< the first cameo, past the badge at the channel's start
-	OBS_CAMEO_W				= 34,		///< a cameo the channel's height
-	OBS_CAMEO_H				= 24,
-	OBS_CELL_PITCH		= 37,
-	OBS_MORE_W				= 30,		///< the "+N" at a full row's end
-	OBS_BAND_ENDS			= OBS_BAND_CELLS_X + OBS_MORE_W + OBS_BAND_GLASS_END,	///< a band less its cameos
-	OBS_CHIP_W				= 44,		///< an idle seat's chip: his lamp and badge in a sunk well
-	OBS_CHIP_H				= 30,
-	OBS_CHIP_PITCH		= 48,
-	OBS_CHIP_PITCH_Y	= 34,
-	OBS_HEAD_H				= 28,		///< the header strip, DSHead
-	OBS_HEAD_END_W		= 24,		///< each of its end pieces, the lug on the outer side
-	OBS_CARD_W				= 488,
-	OBS_CARD_H				= 300,
-	// the cell piece, DSCell, 85x65 at 1080 round a 71x49 glass at 7,8
-	OBS_CELL_ART_W		= 85,
-	OBS_CELL_ART_H		= 65,
-	OBS_CELL_GLASS_X	= 7,
-	OBS_CELL_GLASS_Y	= 8,
-	OBS_CELL_GLASS_W	= 71,
-	OBS_CELL_GLASS_H	= 49
+	OBS_QUEUE_CELLS		= 6		///< a player's soonest six
 };
-/// the closest the queue's bands come, as a share of their size, before they stand in two columns
-static const Real OBS_BAND_MIN = 0.8f;
-/// and the closest two columns of them come before the last busy seats are left to the standings
-static const Real OBS_BAND_FLOOR = 0.6f;
 
-/// one player's row of the queue panel
+/// one player's queue
 struct ObserverQueue
 {
 	Player *player;
@@ -13285,20 +13262,11 @@ static Bool theObserverQueuesValid = FALSE;
 static UnsignedInt theObserverQueuesFrame = 0;
 static const Player *theObserverQueuesOf = NULL;
 
-/// what a click on the panels takes, from the last draw: a cell looks at its building, a badge picks its player
-struct ObserverHit
-{
-	IRegion2D box;
-	ObjectID look;
-	Int pick;					///< a player index, -1 for none
-};
-static std::vector< ObserverHit > theObserverHits;
-static IRegion2D theObserverPanelBoxes[ 2 ];		///< the queue panel and the card; a press on either is theirs
+static void forgetConsole( void );
 
 static void forgetObserverPanels( void )
 {
-	theObserverHits.clear();
-	theObserverPanelBoxes[ 0 ] = theObserverPanelBoxes[ 1 ] = noHudTab();
+	forgetConsole();
 }
 
 /// the player the watcher has picked, by his button, a standings row or a unit of his; NULL for none
@@ -13638,296 +13606,407 @@ void InGameUI::drawProductionList( void )
 /// a number on a dark plate in a cameo's corner, the theme's small face
 static void drawObserverReadout( const UnicodeString &text, const IRegion2D &cameo, Bool top, Bool right, Color colour )
 {
-	DisplayString *string = DirectStrikeTheme::pooled( text, DirectStrikeTheme::font( DirectStrikeTheme::TYPE_TICK ) );
+	// the broadcast floor: 14 px at 1080, on a dark (8,9,10) chip (PIECES.md)
+	DisplayString *string = DirectStrikeTheme::pooled( text, DirectStrikeTheme::font( 14 ) );
 	if( string == NULL )
 		return;
 	Int width = 0, height = 0;
 	string->getSize( &width, &height );
 	const Int x = right ? cameo.hi.x - width - 2 : cameo.lo.x + 2;
 	const Int y = top ? cameo.lo.y + 1 : cameo.hi.y - height - 1;
-	TheDisplay->drawFillRect( x - 2, y, width + 4, height, GameMakeColor( 2, 4, 5, 220 ) );
+	TheDisplay->drawFillRect( x - 2, y, width + 4, height, GameMakeColor( 8, 9, 10, 230 ) );
 	string->draw( x, y, colour, GameMakeColor( 0, 0, 0, 255 ) );
 }
 
-/// the common frame's cell piece round a cameo, its glass on the cameo; a dark hole while the sheet lacks it
-static void drawObserverCell( const IRegion2D &cameo )
+
+//=================================================================================================
+// The observer console, concept B "Command Console" (the owner's pick of 2026-11-24; the contract is
+// experiments/observer-console/PIECES.md in the wrapper, the mock C:\zhr-proofs\2026-11-24\observer-
+// redesign\B\mock_b_compact.py).  The whole foot of the screen is one console in the common frame: the radar
+// in its box on the left, a deck of one tile a seat in the middle (rows are teams, every seat MAX_SLOTS
+// allows on it at once) with a stat selector tab on its top edge, and the match box on the right.  A
+// picked seat turns the deck into that player's dossier.  Collapsed, the console is a strip of lamps.
+// Every number is a pixel at 1920x1080 (consoleLayout); everything reads the logic and writes nothing
+// back.  The stock observer bar's windows are hidden under it but the radar's, which stands in the
+// glass (keepConsoleWindows).
+//=================================================================================================
+
+static LaneHudBox regionBox( const IRegion2D &r )
 {
-	const Image *cell = DirectStrikeTheme::art( DirectStrikeTheme::CELL );
-	if( cell == NULL )
-	{
-		TheDisplay->drawFillRect( cameo.lo.x, cameo.lo.y, cameo.hi.x - cameo.lo.x, cameo.hi.y - cameo.lo.y, GameMakeColor( 2, 4, 5, 255 ) );
-		return;
-	}
-	const Real sx = ( cameo.hi.x - cameo.lo.x ) / (Real)OBS_CELL_GLASS_W, sy = ( cameo.hi.y - cameo.lo.y ) / (Real)OBS_CELL_GLASS_H;
-	const Int x = cameo.lo.x - REAL_TO_INT( OBS_CELL_GLASS_X * sx + 0.5f );
-	const Int y = cameo.lo.y - REAL_TO_INT( OBS_CELL_GLASS_Y * sy + 0.5f );
-	TheDisplay->drawImage( cell, x, y, x + REAL_TO_INT( OBS_CELL_ART_W * sx + 0.5f ), y + REAL_TO_INT( OBS_CELL_ART_H * sy + 0.5f ) );
+	return LaneHud_box( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y );
 }
 
-static IRegion2D regionOf( const LaneHudBox &box )
+/// a console piece, ObserverCon<name><state>, or the plain one, or NULL while the sheet lacks it
+static const Image *consolePiece( const char *name, const char *state = "" )
 {
-	IRegion2D region;
-	region.lo.x = box.x;
-	region.lo.y = box.y;
-	region.hi.x = box.x + box.w;
-	region.hi.y = box.y + box.h;
-	return region;
+	AsciiString full;
+	if( *state != 0 )
+	{
+		full.format( "ObserverCon%s%s", name, state );
+		if( const Image *image = TheMappedImageCollection->findImageByName( full ) )
+			return image;
+	}
+	full.format( "ObserverCon%s", name );
+	return TheMappedImageCollection->findImageByName( full );
 }
 
-//-------------------------------------------------------------------------------------------------
-/** While the local player watches, two panels at the radar.  Over it, every seated player's row: his
-	* colour, his army's badge, and what he has coming, units, upgrades and buildings going up, soonest
-	* first, each cameo swept as the production bar sweeps it, its seconds in the corner and an "xN" for a
-	* run; once a player is picked, his row alone.  Beside the radar, the picked player's card: his
-	* army's portrait and flag, his name in his colour, his purse, income, power, army and what he has
-	* standing, his kills and losses, his rank, the upgrades his side has finished and his superweapons'
-	* clocks.  Both read the logic and write nothing back: a click on a cell looks at the building, a
-	* click on a badge picks its player as a standings row does. */
-//-------------------------------------------------------------------------------------------------
-void InGameUI::drawObserverPanels( void )
+enum
 {
-	// the panels stand on the radar's frame, which is not up while the bar is hidden
-	if( controlBarTop() >= TheDisplay->getHeight() )
-		return;
+	CON_STATS					= 7,			///< Money, Income, Army, Kills, Power, Prod, Super, as the keys Q W E R T Y A
+	CON_COLUMNS_MAX		= 8,
+	CON_ROWS_MAX			= 4,
+	CON_HISTORY				= 18,			///< income samples the dossier's graph shows
+	CON_HISTORY_SECONDS	= 30,		///< a sample's length
+	CON_COLLAPSED_H		= 40			///< the strip a collapsed console is
+};
 
-	using namespace DirectStrikeTheme;
-	begin( SIDE_COMMON, ControlBarHudPageScale() / 1.8f );
-	Player *picked = observerPickedPlayer();
-	gatherObserverQueues( picked );
+/// the most a seat grows when few seats leave the matrix room, against its size with all 32
+static const Real CON_SEAT_LARGEST = 2.0f;
 
-	const Color WHITE_INK = GameMakeColor( 245, 245, 245, 255 );
-	const Color LOSS = GameMakeColor( 226, 92, 78, 255 );
-	const Color SURPLUS = GameMakeColor( 96, 214, 104, 255 );
+/** Where everything stands.  PIECES.md writes every number at 1920x1080: k turns a length into the
+	* screen's, and a point is placed from the edge its part hangs on: the radar box from the left (L), the
+	* match box from the right (R), the deck's middle (the tab, the seats, the dossier) from the deck's
+	* centre (D), whose x is 988 at 16:9.  Wider than 16:9 the deck stretches between the boxes;
+	* narrower, the whole console shrinks with the width. */
+struct ConsoleLayout
+{
+	Real k;
+	Int left, right, bottom;
+	Int deckMid;
+	Int S( Real at1080 ) const { return REAL_TO_INT_FLOOR( at1080 * k + 0.5f ); }
+	Int L( Real at1920 ) const { return left + S( at1920 ); }
+	Int R( Real at1920 ) const { return right - S( 1920 - at1920 ); }
+	Int D( Real at1920 ) const { return deckMid + S( at1920 - 988 ); }
+	Int Y( Real at1080 ) const { return bottom - S( 1080 - at1080 ); }
+	static IRegion2D box( Int x0, Int y0, Int x1, Int y1 ) { IRegion2D r; r.lo.x = x0; r.lo.y = y0; r.hi.x = x1; r.hi.y = y1; return r; }
+	IRegion2D radarBox, glass, deck, tab, matchBox;
+};
 
-	//
-	// the queues, over the radar against the left edge
-	//
-	// A riveted band for each seat with something coming, as long as what it holds: the jaws, his colour
-	// lamp and badge, the cameos.  A seat with nothing coming is only his badge, a chip in the strip over
-	// the bands.  It all stays in the room over the radar, at most twice the radar's width: the bands
-	// come closer and their cameos smaller, down to OBS_BAND_MIN, before they stand in two columns, and a
-	// band keeps as many cameos as its column's width holds.
-	// ponytail: past what two columns hold at OBS_BAND_FLOOR the last busy seats are left to the standings
-	const Int seats = (Int)theObserverQueues.size();
-	if( seats > 0 )
+static Bool theConsoleCollapsed = FALSE;		///< the watcher's choice, kept for the session
+
+static ConsoleLayout consoleLayout( void )
+{
+	ConsoleLayout l;
+	const IRegion2D play = hudPlay();
+	const Int screenW = play.hi.x - play.lo.x, screenH = TheDisplay->getHeight();
+	l.k = min( screenH / 1080.0f, screenW / 1920.0f );
+	l.left = play.lo.x;
+	l.right = play.hi.x;
+	l.bottom = screenH;
+	l.radarBox = ConsoleLayout::box( l.L( 0 ), l.Y( 844 ), l.L( 236 ), l.Y( 1080 ) );
+	l.glass = ConsoleLayout::box( l.L( 8 ), l.Y( 852 ), l.L( 228 ), l.Y( 1072 ) );
+	l.matchBox = ConsoleLayout::box( l.R( 1740 ), l.Y( 852 ), l.R( 1920 ), l.Y( 1080 ) );
+	l.deck = ConsoleLayout::box( l.L( 230 ), l.Y( 862 ), l.R( 1746 ), l.Y( 1080 ) );
+	l.deckMid = ( l.L( 236 ) + l.R( 1740 ) ) / 2;
+	l.tab = ConsoleLayout::box( l.D( 612 ), l.Y( 838 ), l.D( 1364 ), l.Y( 862 ) );
+	return l;
+}
+
+/// a team row's fixed colour, the same every match so a viewer can say "blue team"; gold is the leader's alone
+static Color consoleTeamColour( Int team )
+{
+	static const Int RGB[ 4 ][ 3 ] = { { 70, 120, 220 }, { 210, 64, 52 }, { 80, 170, 80 }, { 150, 90, 210 } };
+	const Int t = max( 0, team ) % 4;
+	return GameMakeColor( RGB[ t ][ 0 ], RGB[ t ][ 1 ], RGB[ t ][ 2 ], 255 );
+}
+
+/// a pulse on the wall clock, 0 to 1 and back once a period: the motion cues run in real time, the same
+/// on a paused replay, a fast-forward and a slow machine
+static Real consolePulse( UnsignedInt periodMs )
+{
+	const UnsignedInt now = Clock_Milliseconds();
+	return 0.5f - 0.5f * Cos( 2.0f * PI * ( now % periodMs ) / (Real)periodMs );
+}
+
+/// when each player was last seen beaten, on the wall clock, for the defeat's flash
+static Bool theConsoleWasOut[ MAX_PLAYER_COUNT ];
+static UnsignedInt theConsoleOutAtMs[ MAX_PLAYER_COUNT ];
+/// and when each one's superweapon came ready, for its pulse
+static Bool theConsoleWasReady[ MAX_PLAYER_COUNT ];
+static UnsignedInt theConsoleReadyAtMs[ MAX_PLAYER_COUNT ];
+enum { CON_DEFEAT_FLASH_MS = 600, CON_READY_PULSE_MS = 10000 };
+
+/// the heat map's ramp, cold gunmetal blue through amber to hot red-orange (PIECES.md's stops)
+static Color consoleHeat( Real t, Int alpha = 255 )
+{
+	static const Real STOPS[ 4 ] = { 0.0f, 0.45f, 0.7f, 1.0f };
+	static const Int RGB[ 4 ][ 3 ] = { { 34, 58, 88 }, { 52, 96, 112 }, { 170, 128, 40 }, { 226, 82, 30 } };
+	t = max( 0.0f, min( 1.0f, t ) );
+	Int i = 0;
+	while( i < 2 && t > STOPS[ i + 1 ] )
+		i++;
+	const Real f = ( t - STOPS[ i ] ) / ( STOPS[ i + 1 ] - STOPS[ i ] );
+	return GameMakeColor( REAL_TO_INT( RGB[ i ][ 0 ] + ( RGB[ i + 1 ][ 0 ] - RGB[ i ][ 0 ] ) * f ),
+												REAL_TO_INT( RGB[ i ][ 1 ] + ( RGB[ i + 1 ][ 1 ] - RGB[ i ][ 1 ] ) * f ),
+												REAL_TO_INT( RGB[ i ][ 2 ] + ( RGB[ i + 1 ][ 2 ] - RGB[ i ][ 2 ] ) * f ), alpha );
+}
+
+/// "$14k", "$4.2k", "$900"
+static UnicodeString consoleMoney( Int value )
+{
+	UnicodeString text;
+	if( value >= 10000 )
+		text.format( u"$%dk", ( value + 500 ) / 1000 );
+	else if( value >= 1000 )
+		text.format( u"$%d.%dk", value / 1000, value % 1000 / 100 );
+	else
+		text.format( u"$%d", max( value, 0 ) );
+	return text;
+}
+
+/// a count chip's "×N"; the sign is built from its code point, since a literal one in this file reads as
+/// two characters to a compiler without /utf-8
+static UnicodeString consoleTimes( Int count )
+{
+	static const WideChar TIMES_SIGN[ 2 ] = { 0x00D7, 0 };
+	UnicodeString text( TIMES_SIGN ), number;
+	number.format( u"%d", count );
+	text.concat( number );
+	return text;
+}
+
+/// Generals' power bar: square segments seg wide with gap between, lit up to share of the length
+static void drawSegmentBar( Int x0, Int y0, Int x1, Int y1, Real share, Color lit, Int seg, Int gap, Color dark )
+{
+	seg = max( seg, 1 );
+	const Int n = ( x1 - x0 + gap ) / ( seg + gap );
+	const Int on = REAL_TO_INT( n * max( 0.0f, min( 1.0f, share ) ) + 0.5f );
+	for( Int i = 0; i < n; i++ )
+		TheDisplay->drawFillRect( x0 + i * ( seg + gap ), y0, seg, y1 - y0, i < on ? lit : dark );
+}
+
+/// a progress ring round a rectangle, `width` thick, from the top's middle clockwise through share of it
+static void drawProgressRing( const IRegion2D &r, Real share, Color colour, Int width )
+{
+	const Int w = r.hi.x - r.lo.x, h = r.hi.y - r.lo.y;
+	Real left = ( 2 * ( w + h ) ) * max( 0.0f, min( 1.0f, share ) );
+	auto run = [ & ]( Int length, auto paint ) { const Int n = REAL_TO_INT( min( left, (Real)length ) ); if( n > 0 ) paint( n ); left -= length; };
+	const Int midX = r.lo.x + w / 2;
+	run( r.hi.x - midX, [ & ]( Int n ) { TheDisplay->drawFillRect( midX, r.lo.y, n, width, colour ); } );
+	run( h, [ & ]( Int n ) { TheDisplay->drawFillRect( r.hi.x - width, r.lo.y, width, n, colour ); } );
+	run( w, [ & ]( Int n ) { TheDisplay->drawFillRect( r.hi.x - n, r.hi.y - width, n, width, colour ); } );
+	run( h, [ & ]( Int n ) { TheDisplay->drawFillRect( r.lo.x, r.hi.y - n, width, n, colour ); } );
+	run( midX - r.lo.x, [ & ]( Int n ) { TheDisplay->drawFillRect( r.lo.x, r.lo.y, n, width, colour ); } );
+}
+
+/// a lamp of the colour: the sheet's white lamp tinted, or a dark-rimmed square
+static void drawConsoleLamp( Int cx, Int cy, Int size, Color colour )
+{
+	if( const Image *lamp = consolePiece( "Lamp" ) )
 	{
-		std::vector< Int > busy, idle;
-		for( Int each = 0; each < seats; each++ )
-			( theObserverQueues[ each ].count > 0 ? busy : idle ).push_back( each );
+		TheDisplay->drawImage( lamp, cx - size / 2, cy - size / 2, cx - size / 2 + size, cy - size / 2 + size, colour );
+		return;
+	}
+	TheDisplay->drawFillRect( cx - size / 2 - 1, cy - size / 2 - 1, size + 2, size + 2, GameMakeColor( 8, 9, 10, 255 ) );
+	TheDisplay->drawFillRect( cx - size / 2, cy - size / 2, size, size, colour );
+}
 
-		const Int left = hudPlay().lo.x;
-		Int radarW = px( 330 );
-		static NameKeyType radarWindowKey = NAMEKEY( "ControlBar.wnd:LeftHUD" );
-		if( GameWindow *radarWindow = TheWindowManager->winGetWindowFromId( NULL, radarWindowKey ) )
-		{
-			Int w = 0, h = 0;
-			radarWindow->winGetSize( &w, &h );
-			radarW = max( w, px( 200 ) );
-		}
-		const Real k = max( scale(), 0.01f );
-		const Real width1080 = 2 * radarW / k;
-		const Int bottom = radarFrameTop() - px( OBS_GAP );
-		const Real room = max( (Real)( bottom - max( hudStripBottom(), TheUIRect().y ) - px( OBS_GAP ) ), 1.0f ) / k;
+/// a superweapon or power clock: the charged share swept in, the dial's mask over it
+static void drawConsoleDial( const IRegion2D &r, Int percent, Bool ready, const Image *cameo, const char *mask )
+{
+	const Color GOLD_INK = GameMakeColor( 242, 194, 48, 255 );
+	if( cameo != NULL )
+	{
+		TheDisplay->drawImage( cameo, r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+		if( !ready )
+			TheDisplay->drawRemainingRectClock( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, percent, GameMakeColor( 0, 0, 0, 150 ) );
+	}
+	else
+	{
+		TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, GameMakeColor( 30, 33, 38, 255 ) );
+		TheDisplay->drawRectClock( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, ready ? 100 : percent,
+															 ready ? GOLD_INK : GameMakeColor( 200, 206, 214, 255 ) );
+	}
+	if( const Image *dial = consolePiece( mask ) )
+	{
+		const Int grow = ( r.hi.x - r.lo.x ) / 6;
+		TheDisplay->drawImage( dial, r.lo.x - grow, r.lo.y - grow, r.hi.x + grow, r.hi.y + grow );
+	}
+	if( ready )
+		TheDisplay->drawOpenRect( r.lo.x - 1, r.lo.y - 1, r.hi.x - r.lo.x + 2, r.hi.y - r.lo.y + 2, 1.0f, GOLD_INK );
+}
 
-		// the strip of idle seats' chips, wrapping at the panel's width
-		const Int chipsPerRow = max( 1, REAL_TO_INT_FLOOR( width1080 / OBS_CHIP_PITCH ) );
-		const Int chipRows = ( (Int)idle.size() + chipsPerRow - 1 ) / chipsPerRow;
-		const Real stripH = chipRows * OBS_CHIP_PITCH_Y;
-		const Real bandRoom = max( room - stripH, (Real)OBS_BAND_PITCH * OBS_BAND_MIN );
+/// a seat's side badge: the template's observer picture, Turkiye's own from the console sheet
+static const Image *consoleBadge( const Player *player )
+{
+	if( player->getSide().startsWith( "Turkiye" ) )
+		if( const Image *turkiye = consolePiece( "BadgeTurkiye" ) )
+			return turkiye;
+	return player->getPlayerTemplate()->getEnabledImage();
+}
 
-		Int columns = 1, perColumn = max( (Int)busy.size(), 1 );
-		Real q = min( 1.0f, bandRoom / ( perColumn * OBS_BAND_PITCH ) );
-		if( q < OBS_BAND_MIN )
-		{
-			columns = 2;
-			perColumn = ( (Int)busy.size() + 1 ) / 2;
-			q = min( 1.0f, bandRoom / ( perColumn * OBS_BAND_PITCH ) );
-		}
-		// two columns may close up further, to OBS_BAND_FLOOR, before seats are left out
-		if( q < OBS_BAND_FLOOR )
-		{
-			q = OBS_BAND_FLOOR;
-			perColumn = max( 1, REAL_TO_INT_FLOOR( bandRoom / ( OBS_BAND_PITCH * q ) ) );
-		}
-		const Int rows = min( (Int)busy.size(), columns * perColumn );
-		// as many cameos as a column's width takes at this size
-		const Real column1080 = width1080 / columns - OBS_GAP;
-		const Int cells = max( 1, min( (Int)OBS_QUEUE_CELLS, REAL_TO_INT_FLOOR( ( column1080 / q - OBS_BAND_ENDS ) / OBS_CELL_PITCH ) ) );
-		auto qpx = [ q ]( Real at1080 ) { return px( at1080 * q ); };
-		const Int bandH = qpx( OBS_BAND_H ), pitch = qpx( OBS_BAND_PITCH );
-		const Int columnStep = px( column1080 + OBS_GAP );
-		const Int stackTop = bottom - min( rows, perColumn ) * pitch;
-		const Int stripTop = stackTop - px( stripH );
-		auto shownOf = [ & ]( const ObserverQueue &queue ) { return min( queue.count, cells ); };
-		auto moreOf = [ & ]( const ObserverQueue &queue )
-		{
-			Int shown = 0;
-			for( Int cell = 0; cell < shownOf( queue ); cell++ )
-				shown += queue.slot[ cell ].quantity;
-			return queue.total - shown;
-		};
-		// the band's ends are drawn at their own width (threeSlice), so the lamp slot and the channel's ends
-		// sit at the theme's scale; what goes in the channel takes the band's closeness
-		const Int glassInset = qpx( OBS_BAND_GLASS_Y ), glassH = bandH - 2 * glassInset;
-		const Int badgeW = glassH * 4 / 3, cellsX = px( OBS_BAND_GLASS_X + 2 ) + badgeW + qpx( 4 );
-		const Int cameoW = qpx( OBS_CAMEO_W ), cameoH = glassH, cellPitch = qpx( OBS_CELL_PITCH );
-		auto bandAt = [ & ]( Int row )
-		{
-			const ObserverQueue &queue = theObserverQueues[ busy[ row ] ];
-			const Int length = cellsX + shownOf( queue ) * cellPitch + ( moreOf( queue ) > 0 ? qpx( OBS_MORE_W ) : 0 ) + px( OBS_BAND_GLASS_END );
-			return LaneHud_box( left + row / perColumn * columnStep, stackTop + row % perColumn * pitch, length, bandH );
-		};
-		auto cameoAt = [ & ]( Int row, Int cell )
-		{
-			const LaneHudBox band = bandAt( row );
-			IRegion2D at;
-			at.lo.x = band.x + cellsX + cell * cellPitch;
-			at.lo.y = band.y + glassInset;
-			at.hi.x = at.lo.x + cameoW;
-			at.hi.y = at.lo.y + cameoH;
-			return at;
-		};
-		theObserverPanelBoxes[ 0 ].lo.x = left;
-		theObserverPanelBoxes[ 0 ].lo.y = stripTop;
-		theObserverPanelBoxes[ 0 ].hi.x = left + px( width1080 );
-		theObserverPanelBoxes[ 0 ].hi.y = bottom;
+/// a piece stretched over a rect, or the theme's well where the sheet lacks it
+static void drawConsolePiece( const char *name, const char *state, const IRegion2D &r, Color tint = 0xFFFFFFFF )
+{
+	if( const Image *image = consolePiece( name, state ) )
+		TheDisplay->drawImage( image, r.lo.x, r.lo.y, r.hi.x, r.hi.y, tint );
+	else
+		DirectStrikeTheme::nineSlice( regionBox( r ), DirectStrikeTheme::WELL_TL );
+}
 
-		TheDisplay->beginBatch2D();
-		// the idle seats' chips: a sunk well with his lamp and badge
-		for( Int each = 0; each < (Int)idle.size(); each++ )
+/// a 9-slice of ObserverCon<name>TL..BR, corners `corner` at 1080, or the theme's panel
+static void drawConsoleNine( const char *name, const IRegion2D &r, Real k, Int corner )
+{
+	static const char *const PARTS[ 9 ] = { "TL", "T", "TR", "L", "C", "R", "BL", "B", "BR" };
+	const Image *parts[ 9 ];
+	for( Int each = 0; each < 9; each++ )
+	{
+		AsciiString piece;
+		piece.format( "%s%s", name, PARTS[ each ] );
+		parts[ each ] = consolePiece( piece.str() );
+		if( parts[ each ] == NULL )
 		{
-			const ObserverQueue &queue = theObserverQueues[ idle[ each ] ];
-			const LaneHudBox chip = LaneHud_box( left + px( each % chipsPerRow * OBS_CHIP_PITCH ), stripTop + px( each / chipsPerRow * OBS_CHIP_PITCH_Y ),
-				px( OBS_CHIP_W ), px( OBS_CHIP_H ) );
-			nineSlice( chip, WELL_TL );
-			TheDisplay->drawFillRect( chip.x + px( 4 ), chip.y + px( 5 ), px( 4 ), chip.h - px( 10 ), rackColour( queue.player ) );
-			const LaneHudBox badge = LaneHud_box( chip.x + px( 11 ), chip.y + ( chip.h - px( 20 ) ) / 2, px( 28 ), px( 20 ) );
-			if( const Image *emblem = queue.player->getPlayerTemplate()->getEnabledImage() )
-				drawImage( emblem, badge );
-			const ObserverHit pick = { regionOf( chip ), INVALID_ID, queue.player->getPlayerIndex() };
-			theObserverHits.push_back( pick );
-		}
-		for( Int row = 0; row < rows; row++ )
-		{
-			const ObserverQueue &queue = theObserverQueues[ busy[ row ] ];
-			const LaneHudBox band = bandAt( row );
-			threeSlice( band, QUEUE_BAND_L, QUEUE_BAND_C, QUEUE_BAND_R );
-			// his colour in the left end's lamp slot, his army's badge at the channel's start
-			TheDisplay->drawFillRect( band.x + px( OBS_BAND_LAMP_X ), band.y + glassInset, px( OBS_BAND_LAMP_W ), glassH, rackColour( queue.player ) );
-			const LaneHudBox badge = LaneHud_box( band.x + px( OBS_BAND_GLASS_X + 2 ), band.y + glassInset, badgeW, glassH );
-			if( const Image *emblem = queue.player->getPlayerTemplate()->getEnabledImage() )
-				drawImage( emblem, badge );
-			const ObserverHit pick = { regionOf( badge ), INVALID_ID, queue.player->getPlayerIndex() };
-			theObserverHits.push_back( pick );
-			// the channel is the cameos' glass: no cell piece round them
-			for( Int cell = 0; cell < shownOf( queue ); cell++ )
-			{
-				const InGameUI::ProductionListSlot &slot = queue.slot[ cell ];
-				const IRegion2D at = cameoAt( row, cell );
-				if( slot.cameo != NULL )
-					TheDisplay->drawImage( slot.cameo, at.lo.x, at.lo.y, at.hi.x, at.hi.y );
-				TheDisplay->drawRemainingRectClock( at.lo.x, at.lo.y, cameoW, cameoH, slot.percent, GameMakeColor( 0, 0, 0, 110 ) );
-				drawHudCellBorder( at, hudCellBorder( slot.isUpgrade ? COMMAND_BUTTON_BORDER_UPGRADE : COMMAND_BUTTON_BORDER_BUILD ) );
-				const ObserverHit look = { at, slot.producer, -1 };
-				theObserverHits.push_back( look );
-			}
-		}
-		TheDisplay->endBatch2D();
-
-		for( Int row = 0; row < rows; row++ )
-		{
-			const ObserverQueue &queue = theObserverQueues[ busy[ row ] ];
-			for( Int cell = 0; cell < shownOf( queue ); cell++ )
-			{
-				const InGameUI::ProductionListSlot &slot = queue.slot[ cell ];
-				const IRegion2D at = cameoAt( row, cell );
-				UnicodeString seconds;
-				seconds.format( u"%d", max( ControlBar_secondsFromFrames( (Real)slot.remaining ), 0 ) );
-				drawObserverReadout( seconds, at, FALSE, FALSE, WHITE_INK );
-				if( slot.quantity > 1 )
-				{
-					UnicodeString count;
-					count.format( u"x%d", slot.quantity );
-					drawObserverReadout( count, at, TRUE, TRUE, WHITE_INK );
-				}
-			}
-			if( moreOf( queue ) > 0 )
-			{
-				UnicodeString rest;
-				rest.format( u"+%d", moreOf( queue ) );
-				const IRegion2D last = cameoAt( row, shownOf( queue ) - 1 );
-				drawText( rest, font( TYPE_SMALL * max( q, 0.85f ) ), last.hi.x + ( cellPitch - cameoW ) + qpx( OBS_MORE_W ) / 2, last.lo.y, cameoH, TEXT_GREY, 0 );
-			}
+			DirectStrikeTheme::panel( regionBox( r ) );
+			return;
 		}
 	}
+	const Int c = min( max( REAL_TO_INT( corner * k + 0.5f ), 1 ), min( r.hi.x - r.lo.x, r.hi.y - r.lo.y ) / 2 );
+	const Int xs[ 4 ] = { r.lo.x, r.lo.x + c, r.hi.x - c, r.hi.x }, ys[ 4 ] = { r.lo.y, r.lo.y + c, r.hi.y - c, r.hi.y };
+	for( Int row = 0; row < 3; row++ )
+		for( Int col = 0; col < 3; col++ )
+			if( xs[ col + 1 ] > xs[ col ] && ys[ row + 1 ] > ys[ row ] )
+				TheDisplay->drawImage( parts[ row * 3 + col ], xs[ col ], ys[ row ], xs[ col + 1 ], ys[ row + 1 ] );
+}
 
-	if( picked == NULL )
+/// What the console knows of one seat, gathered each draw from the standings the rack's refresh keeps.
+struct ConsoleSeat
+{
+	const SpectatorStats *stats;
+	Player *player;
+	Int index;									///< the player's index
+	Bool out;										///< beaten: the dark tile with the skull
+	Int value[ CON_STATS ];
+	const ObserverQueue *queue;	///< NULL with nothing coming
+	Bool hasSuperweapon, superweaponReady;
+	Int superweaponPercent, superweaponSeconds;
+	const Image *superweaponCameo;	///< the soonest one's picture
+	Int power;									///< 0 enough, 1 short, 2 none
+};
+
+/// the client's own record of each player's earnings, a sample every CON_HISTORY_SECONDS of match
+static Int theIncomeEarned[ MAX_PLAYER_COUNT ][ CON_HISTORY + 1 ];
+static Int theIncomeSamples = 0;
+static UnsignedInt theIncomeFrame = 0;
+
+static void sampleConsoleIncome( void )
+{
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	// a new match, a rewind, a load: the record starts again
+	if( frame < theIncomeFrame || theIncomeSamples == 0 )
+	{
+		theIncomeSamples = 0;
+		theIncomeFrame = frame;
+	}
+	else if( frame < theIncomeFrame + CON_HISTORY_SECONDS * LOGICFRAMES_PER_SECOND )
 		return;
+	theIncomeFrame = frame;
+	const Int keep = min( theIncomeSamples + 1, (Int)CON_HISTORY + 1 );
+	for( Int p = 0; p < ThePlayerList->getPlayerCount() && p < MAX_PLAYER_COUNT; p++ )
+	{
+		Player *player = ThePlayerList->getNthPlayer( p );
+		for( Int i = keep - 1; i > 0; i-- )
+			theIncomeEarned[ p ][ i ] = theIncomeEarned[ p ][ i - 1 ];
+		theIncomeEarned[ p ][ 0 ] = player != NULL ? player->getScoreKeeper()->getTotalMoneyEarned() : 0;
+	}
+	theIncomeSamples = keep;
+}
 
-	//
-	// the picked player's card, beside the radar and the column of players' buttons
-	//
-	SpectatorStats stats;
-	Bool known = FALSE;
-	for( size_t row = 0; row < theRackStats.size() && !known; row++ )
-		if( theRackStats[ row ].player == picked )
-		{
-			stats = theRackStats[ row ];
-			known = TRUE;
-		}
-	if( !known )
-		return;
+/// what a click on the console does
+enum ConsoleAction
+{
+	CON_PICK, CON_STAT, CON_CAMERA, CON_VISION, CON_OPTIONS, CON_CHAT, CON_QUIT, CON_ALL, CON_PREV, CON_NEXT,
+	CON_TEAM, CON_FOLD, CON_LOOK
+};
+struct ConsoleHit
+{
+	IRegion2D box;
+	ConsoleAction action;
+	Int arg;
+};
+static std::vector< ConsoleHit > theConsoleHits;
+static IRegion2D theConsoleBlock[ 4 ];			///< radar box, deck, tab, match box: a press on any is the console's
+static Int theConsoleOrder[ MAX_PLAYER_COUNT ];	///< the player indices in the deck's order, for prev and next
+static Int theConsoleTeam[ MAX_PLAYER_COUNT ];		///< and each one's team
+static Int theConsoleOrderCount = 0;
 
-	Int anchor = hudPlay().lo.x;
+static void forgetConsole( void )
+{
+	theConsoleHits.clear();
+	for( Int each = 0; each < 4; each++ )
+		theConsoleBlock[ each ] = noHudTab();
+	theConsoleShown = FALSE;
+}
+
+static Bool consoleHot( const IRegion2D &r )
+{
+	const ICoord2D mouse = TheMouse->getMouseStatus()->pos;
+	return mouse.x >= r.lo.x && mouse.x < r.hi.x && mouse.y >= r.lo.y && mouse.y < r.hi.y;
+}
+
+/// a key: its piece in the state the pointer and `lit` say, and a click that does `action`
+static void consoleKey( const char *name, const IRegion2D &r, Bool lit, Bool disabled, ConsoleAction action, Int arg )
+{
+	const Bool hot = !disabled && consoleHot( r );
+	const char *state = disabled ? "I" : lit ? "P" : hot ? "H" : "";
+	if( const Image *image = consolePiece( name, state ) )
+		TheDisplay->drawImage( image, r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+	else
+		DirectStrikeTheme::threeSlice( regionBox( r ), DirectStrikeTheme::BUTTON_L, DirectStrikeTheme::BUTTON_C, DirectStrikeTheme::BUTTON_R, state );
+	if( !disabled )
+	{
+		const ConsoleHit hit = { r, action, arg };
+		theConsoleHits.push_back( hit );
+	}
+}
+
+/// Keep the stock observer bar's windows out from under the console: every child of the bar's frame
+/// down but the radar, which stands in the console's glass (or is down too while it is folded).
+static void keepConsoleWindows( const ConsoleLayout &l )
+{
+	static NameKeyType parentKey = NAMEKEY( "ControlBar.wnd:ControlBarParent" );
 	static NameKeyType radarKey = NAMEKEY( "ControlBar.wnd:LeftHUD" );
-	// the column beside the radar holds the options and chat keys now that its player buttons are gone
-	static NameKeyType optionsKey = NAMEKEY( "ControlBar.wnd:ButtonOptions" );
-	const NameKeyType besides[ 2 ] = { radarKey, optionsKey };
-	for( Int each = 0; each < 2; each++ )
+	GameWindow *parent = TheWindowManager->winGetWindowFromId( NULL, parentKey );
+	if( parent == NULL )
+		return;
+	for( GameWindow *child = parent->winGetChild(); child != NULL; child = child->winGetNext() )
 	{
-		GameWindow *window = TheWindowManager->winGetWindowFromId( NULL, besides[ each ] );
-		if( window == NULL || window->winIsHidden() )
-			continue;
-		Int x = 0, y = 0, w = 0, h = 0;
-		window->winGetScreenPosition( &x, &y );
-		window->winGetSize( &w, &h );
-		anchor = max( anchor, x + w );
-	}
-	const LaneHudBox card = LaneHud_box( anchor + px( OBS_GAP + 8 ), TheDisplay->getHeight() - px( OBS_GAP ) - px( OBS_CARD_H ),
-		px( OBS_CARD_W ), px( OBS_CARD_H ) );
-	theObserverPanelBoxes[ 1 ] = regionOf( card );
-	const PlayerTemplate *army = picked->getPlayerTemplate();
-	const Color colour = rackColour( picked );
-	const Int left = card.x + px( 14 ), right = card.x + card.w - px( 14 ), top = card.y + px( 12 );
-
-	// the header strip with flag, name and army; under it the portrait well and, right of it, two
-	// columns of four numbers
-	const LaneHudBox head = LaneHud_box( left, top, right - left, px( OBS_HEAD_H ) );
-	const Int bodyTop = top + px( OBS_HEAD_H + 8 );
-	const LaneHudBox well = LaneHud_box( left, bodyTop, px( 132 ), px( 160 ) );
-	const Int gridLeft = well.x + well.w + px( 14 );
-	const Int columnW = ( right - gridLeft ) / 2;
-	const Int gridRowH = px( 44 );
-	// the strip of finished upgrades on the left, superweapons from the right, at the foot
-	const Int stripH = px( 44 );
-	const Int stripTop = card.y + card.h - px( 12 ) - stripH;
-	const Int smallW = px( 44 ), smallH = px( 31 ), smallPitch = px( 56 );
-
-	struct CardSuperweapon
-	{
-		const Image *cameo;
-		Bool ready;
-		Int seconds;
-		Int percent;
-		ObjectID building;
-	};
-	std::vector< CardSuperweapon > superweapons;
-	const Int index = picked->getPlayerIndex();
-	for( SuperweaponMap::iterator mapIt = m_superweapons[ index ].begin(); mapIt != m_superweapons[ index ].end(); ++mapIt )
-	{
-		for( SuperweaponList::iterator listIt = mapIt->second.begin(); listIt != mapIt->second.end(); ++listIt )
+		const Bool radar = child->winGetWindowId() == radarKey;
+		if( !radar )
 		{
-			SuperweaponInfo *info = *listIt;
+			if( !child->winIsHidden() )
+				child->winHide( TRUE );
+			continue;
+		}
+		if( child->winIsHidden() != theConsoleCollapsed )
+			child->winHide( theConsoleCollapsed );
+		// one pixel in, as W3DLeftHUDDraw draws one in from its window
+		Int px = 0, py = 0, x = 0, y = 0, w = 0, h = 0;
+		parent->winGetScreenPosition( &px, &py );
+		child->winGetScreenPosition( &x, &y );
+		child->winGetSize( &w, &h );
+		const Int wantX = l.glass.lo.x - 1, wantY = l.glass.lo.y - 1;
+		const Int wantW = l.glass.hi.x - l.glass.lo.x + 2, wantH = l.glass.hi.y - l.glass.lo.y + 2;
+		if( x != wantX || y != wantY )
+			child->winSetPosition( wantX - px, wantY - py );
+		if( w != wantW || h != wantH )
+			child->winSetSize( wantW, wantH );
+	}
+}
+
+/// the soonest of a player's superweapon clocks: ready ones first
+static void consoleSuperweapon( const SuperweaponMap &powers, ConsoleSeat *seat )
+{
+	seat->hasSuperweapon = FALSE;
+	seat->superweaponReady = FALSE;
+	seat->superweaponPercent = 0;
+	seat->superweaponSeconds = 0;
+	seat->superweaponCameo = NULL;
+	Int best = -1;
+	for( SuperweaponMap::const_iterator mapIt = powers.begin(); mapIt != powers.end(); ++mapIt )
+	{
+		for( SuperweaponList::const_iterator listIt = mapIt->second.begin(); listIt != mapIt->second.end(); ++listIt )
+		{
+			const SuperweaponInfo *info = *listIt;
 			if( info == NULL || info->m_hiddenByScript || info->m_hiddenByScience )
 				continue;
 			Object *building = TheGameLogic->findObjectByID( info->m_id );
@@ -13939,143 +14018,1097 @@ void InGameUI::drawObserverPanels( void )
 			const UnsignedInt now = TheGameLogic->getFrame();
 			const UnsignedInt wait = module->getReadyFrame() > now ? module->getReadyFrame() - now : 0;
 			const UnsignedInt reload = info->getSpecialPowerTemplate()->getReloadTime();
-			CardSuperweapon line;
-			line.cameo = superweaponCameo( info->getSpecialPowerTemplate() );
-			line.ready = module->isReady();
-			line.seconds = ControlBar_secondsFromFrames( (Real)wait );
-			line.percent = line.ready || reload == 0 ? 100 : ( wait >= reload ? 0 : REAL_TO_INT( 100.0f * ( reload - wait ) / reload ) );
-			line.building = building->getID();
-			superweapons.push_back( line );
-			// a shared power's timers are one clock
-			if( info->getSpecialPowerTemplate()->isSharedNSync() )
-				break;
+			const Int rank = module->isReady() ? 0 : (Int)wait + 1;
+			if( best >= 0 && rank >= best )
+				continue;
+			best = rank;
+			seat->hasSuperweapon = TRUE;
+			seat->superweaponReady = module->isReady();
+			seat->superweaponCameo = superweaponCameo( info->getSpecialPowerTemplate() );
+			seat->superweaponSeconds = ControlBar_secondsFromFrames( (Real)wait );
+			seat->superweaponPercent = seat->superweaponReady || reload == 0 ? 100 : ( wait >= reload ? 0 : REAL_TO_INT( 100.0f * ( reload - wait ) / reload ) );
 		}
 	}
-	const Int swCount = min( (Int)superweapons.size(), max( ( right - left ) / 2 / smallPitch, 1 ) );
+}
 
-	std::vector< const UpgradeTemplate * > upgrades;
-	const UpgradeMaskType done = picked->getCompletedUpgradeMask();
-	for( const UpgradeTemplate *upgrade = TheUpgradeCenter->firstUpgradeTemplate(); upgrade != NULL; upgrade = upgrade->friend_getNext() )
-		if( upgrade->getUpgradeType() == UPGRADE_TYPE_PLAYER && upgrade->getButtonImage() != NULL && upgrade->getUpgradeMask().any()
-				&& done.testForAll( upgrade->getUpgradeMask() ) )
-			upgrades.push_back( upgrade );
-	const Int upgradeRoom = ( right - left - swCount * smallPitch ) / smallPitch;
-	const Int upgradeCount = min( (Int)upgrades.size(), max( upgradeRoom, 0 ) );
-	auto smallCell = [ & ]( Int x )
+/// a seat's value of a console stat as the tile and the tab's scale write it
+static UnicodeString consoleValueText( Int stat, const ConsoleSeat &seat )
+{
+	UnicodeString text;
+	const Int v = seat.value[ stat ];
+	switch( stat )
 	{
-		IRegion2D at;
-		at.lo.x = x;
-		at.lo.y = stripTop + ( stripH - smallH ) / 2;
-		at.hi.x = x + smallW;
-		at.hi.y = at.lo.y + smallH;
-		return at;
-	};
+		case 0: return seat.stats->unlimited ? TheGameText->fetch( "GUI:StartingMoneyUnlimited" ) : consoleMoney( v );
+		case 1: text.format( u"+%d", v ); return text;
+		case 2: return consoleMoney( v );
+		case 4: text.format( u"%+d", v ); return text;
+		case 6:
+			if( !seat.hasSuperweapon )
+				return UnicodeString( u"-" );
+			if( seat.superweaponReady )
+				return TheGameText->fetch( "GUI:SidebarSuperweaponReady" );
+			text.format( u"%d:%02d", seat.superweaponSeconds / 60, seat.superweaponSeconds % 60 );
+			return text;
+		default: text.format( u"%d", v ); return text;
+	}
+}
 
-	TheDisplay->beginBatch2D();
-	panel( card );
-	// his colour along the card's left
-	TheDisplay->drawFillRect( card.x + px( 5 ), card.y + px( 12 ), px( 4 ), card.h - px( 24 ), colour );
-	nineSlice( well, WELL_TL );
-	const Int inset = px( 4 );
-	if( const Image *portrait = UIStyle::armyPortrait( army ) )
-		UIStyle::coverImage( portrait, well.x + inset, well.y + inset, well.w - 2 * inset, well.h - 2 * inset );
-	TheDisplay->drawFillRect( well.x + inset, well.y + well.h - inset - px( 6 ), well.w - 2 * inset, px( 6 ), colour );
-	threeSlice( head, HEAD_L, HEAD_C, HEAD_R );
-	if( const Image *flag = army->getFlagWaterMarkImage() )
-		drawImage( flag, LaneHud_box( left + px( 6 ), top + px( 3 ), px( 32 ), px( OBS_HEAD_H - 6 ) ) );
-	// the power: what his plants make against what his base draws, the share drawn under the number
+/// one factory's line of the dossier: its picture and its queue, a run of the same thing one cameo
+struct ConsoleFactory
+{
+	ObjectID id;
+	const Image *cameo;
+	struct Run { const Image *cameo; Int count; Int percent; };
+	std::vector< Run > queue;
+};
+
+static void gatherConsoleFactory( Object *obj, void *userData )
+{
+	std::vector< ConsoleFactory > *factories = (std::vector< ConsoleFactory > *)userData;
+	if( obj->isEffectivelyDead() )
+		return;
+	ConsoleFactory factory;
+	factory.id = obj->getID();
+	factory.cameo = obj->getTemplate()->getButtonImage();
+	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) && !obj->isKindOf( KINDOF_REBUILD_HOLE ) )
 	{
-		const Int consumed = stats.produced - stats.power;
-		const Int barX = gridLeft + columnW, barY = bodyTop + gridRowH + px( 38 );
-		const Int barW = columnW - px( 12 );
-		TheDisplay->drawFillRect( barX, barY, barW, px( 4 ), GameMakeColor( 2, 4, 5, 255 ) );
-		if( stats.produced > 0 || consumed > 0 )
+		// a building going up is its own line: itself, its share done
+		const ConsoleFactory::Run run = { factory.cameo, 1, REAL_TO_INT( obj->getConstructionPercent() ) };
+		factory.queue.push_back( run );
+		factories->push_back( factory );
+		return;
+	}
+	ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
+	if( pu == NULL || pu->firstProduction() == NULL )
+		return;
+	for( const ProductionEntry *p = pu->firstProduction(); p; p = pu->nextProduction( p ) )
+	{
+		const Image *cameo = NULL;
+		if( p->getProductionType() == PRODUCTION_UNIT && p->getProductionObject() )
+			cameo = p->getProductionObject()->getButtonImage();
+		else if( p->getProductionType() == PRODUCTION_UPGRADE && p->getProductionUpgrade() )
+			cameo = p->getProductionUpgrade()->getButtonImage();
+		else
+			continue;
+		const Int percent = REAL_TO_INT( p->getPercentComplete() );
+		if( !factory.queue.empty() && factory.queue.back().cameo == cameo && percent == 0 && factory.queue.back().percent == 0 )
+			factory.queue.back().count++;
+		else
 		{
-			const Int most = max( stats.produced, consumed );
-			TheDisplay->drawFillRect( barX, barY, barW * min( consumed, most ) / most, px( 4 ), stats.power < 0 ? LOSS : SURPLUS );
+			const ConsoleFactory::Run run = { cameo, 1, percent };
+			factory.queue.push_back( run );
 		}
 	}
-	for( Int each = 0; each < upgradeCount; each++ )
+	factories->push_back( factory );
+}
+
+/// one thing that pays its owner, counted by its template, first seen first
+static void gatherConsoleIncomeSource( Object *obj, void *userData )
+{
+	std::vector< std::pair< const ThingTemplate *, Int > > *payers = (std::vector< std::pair< const ThingTemplate *, Int > > *)userData;
+	if( obj->isEffectivelyDead() || obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+		return;
+	if( !obj->isKindOf( KINDOF_HARVESTER ) && !obj->isKindOf( KINDOF_CASH_GENERATOR ) && !obj->isKindOf( KINDOF_FS_SUPPLY_DROPZONE )
+			&& !obj->isKindOf( KINDOF_FS_BLACK_MARKET ) )
+		return;
+	const ThingTemplate *kind = obj->getTemplate();
+	for( size_t each = 0; each < payers->size(); each++ )
+		if( ( *payers )[ each ].first == kind )
+		{
+			( *payers )[ each ].second++;
+			return;
+		}
+	payers->push_back( std::make_pair( kind, 1 ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The picked seat's dossier in the deck's place: the tab with back, previous, next and his plate, the
+	* team keys, and five panels: his portrait with rank and lamps; his purse, income over the last nine
+	* minutes, power and fight; his army by kind; every factory's queue; his upgrades and power clocks. */
+//-------------------------------------------------------------------------------------------------
+static void drawObserverDossier( const ConsoleLayout &l, const SpectatorStats &stats, Int index, const SuperweaponMap &powers,
+	Int teamCount )
+{
+	using namespace DirectStrikeTheme;
+	const Real k = l.k;
+	auto P = [ k ]( Real at1080 ) { return REAL_TO_INT_FLOOR( at1080 * k + 0.5f ); };
+	auto box = []( Int x0, Int y0, Int x1, Int y1 ) { IRegion2D r; r.lo.x = x0; r.lo.y = y0; r.hi.x = x1; r.hi.y = y1; return r; };
+	const Color WHITE_INK = TEXT_WHITE, GREY_INK = TEXT_GREY, DIM_INK = TEXT_DIM, GOLD_INK = TEXT_GOLD;
+	const Color GREEN_INK = GameMakeColor( 60, 186, 72, 255 ), DARK_SEG = GameMakeColor( 26, 30, 36, 255 );
+	Player *player = stats.player;
+	const Color colour = rackColour( player );
+
+	// the tab: back to every seat, the previous and the next, his colour, badge, name, rank and team
 	{
-		const IRegion2D at = smallCell( left + px( 4 ) + each * smallPitch );
-		drawObserverCell( at );
-		TheDisplay->drawImage( upgrades[ each ]->getButtonImage(), at.lo.x, at.lo.y, at.hi.x, at.hi.y );
-		drawHudCellBorder( at, hudCellBorder( COMMAND_BUTTON_BORDER_UPGRADE ) );
+		const Int y = l.Y( 840 ), h = P( 20 );
+		consoleKey( "NavAll", box( l.D( 636 ), y, l.D( 674 ), y + h ), FALSE, FALSE, CON_ALL, 0 );
+		consoleKey( "NavPrev", box( l.D( 680 ), y, l.D( 708 ), y + h ), FALSE, FALSE, CON_PREV, 0 );
+		consoleKey( "NavNext", box( l.D( 712 ), y, l.D( 740 ), y + h ), FALSE, FALSE, CON_NEXT, 0 );
+		TheDisplay->drawFillRect( l.D( 750 ), l.Y( 842 ), P( 5 ), P( 16 ), colour );
+		if( const Image *badge = consoleBadge( player ) )
+		{
+			const Int bh = P( 14 ), bw = badge->getImageHeight() > 0 ? bh * badge->getImageWidth() / badge->getImageHeight() : bh;
+			TheDisplay->drawImage( badge, l.D( 760 ), l.Y( 843 ), l.D( 760 ) + bw, l.Y( 843 ) + bh );
+		}
+		// his team, while the match has team rows; a free-for-all has none to name
+		const Bool teams = teamCount <= CON_ROWS_MAX;
+		UnicodeString team;
+		team.format( TheGameText->fetch( "GUI:ObsConTeam" ), stats.team + 1 );
+		const Int teamRight = l.D( 1340 );
+		const Int teamW = teams ? drawText( team, font( 14 ), teamRight, l.Y( 840 ), P( 20 ), consoleTeamColour( stats.team ), 1 ) : 0;
+		GameFont *nameFont = font( 16 );
+		const Int nameX = l.D( 778 );
+		const Int starW = P( 15 );
+		const Int stars = max( 0, min( stats.rank, 10 ) );
+		const UnicodeString name = UIStyle::fitName( player->getPlayerDisplayName(), nameFont, max( teamRight - teamW - P( 12 ) - stars * starW - nameX, 1 ) );
+		const Int nameW = drawText( name, nameFont, nameX, l.Y( 840 ), P( 20 ), WHITE_INK );
+		const Image *star = consolePiece( "IconStar" );
+		for( Int each = 0; each < stars; each++ )
+		{
+			const Int s = P( 14 ), sx = nameX + nameW + P( 6 ) + each * starW, sy = l.Y( 850 ) - s / 2;
+			if( star != NULL )
+				TheDisplay->drawImage( star, sx, sy, sx + s, sy + s, GOLD_INK );
+			else
+				TheDisplay->drawFillRect( sx + s / 4, sy + s / 4, s / 2, s / 2, GOLD_INK );
+		}
 	}
-	for( Int each = 0; each < swCount; each++ )
+
+	// the team keys down the left, his team's lit, each with its colour along the top
 	{
-		const CardSuperweapon &line = superweapons[ each ];
-		const IRegion2D at = smallCell( right - px( 4 ) - ( each + 1 ) * smallPitch + ( smallPitch - smallW ) );
-		drawObserverCell( at );
-		if( line.cameo != NULL )
-			TheDisplay->drawImage( line.cameo, at.lo.x, at.lo.y, at.hi.x, at.hi.y );
-		if( !line.ready )
-			TheDisplay->drawRemainingRectClock( at.lo.x, at.lo.y, smallW, smallH, line.percent, GameMakeColor( 0, 0, 0, 130 ) );
-		drawOwnerRing( at, colour, px( 3 ) );
-		const ObserverHit look = { at, line.building, -1 };
-		theObserverHits.push_back( look );
+		const Int keys = teamCount <= CON_ROWS_MAX ? teamCount : 0;
+		TheDisplay->beginBatch2D();
+		drawConsoleNine( "Panel", box( l.D( 248 ), l.Y( 872 ), l.D( 280 ), l.Y( 1076 ) ), k, 16 );
+		TheDisplay->endBatch2D();
+		for( Int t = 0; t < keys; t++ )
+		{
+			const IRegion2D key = box( l.D( 251 ), l.Y( 873 + t * 52 ), l.D( 277 ), l.Y( 919 + t * 52 ) );
+			consoleKey( "TeamKey", key, t == stats.team, FALSE, CON_TEAM, t );
+			TheDisplay->drawFillRect( key.lo.x + P( 3 ), key.lo.y + P( 3 ), key.hi.x - key.lo.x - P( 6 ), P( 3 ), consoleTeamColour( t ) );
+			UnicodeString number;
+			number.format( u"%d", t + 1 );
+			drawText( number, font( 16 ), ( key.lo.x + key.hi.x ) / 2, key.lo.y, key.hi.y - key.lo.y, t == stats.team ? TEXT_DARK : WHITE_INK, 0, t != stats.team );
+		}
+	}
+
+	// the five panels (PIECES.md's dossier table), each with its word on the lip
+	static const Real PANEL_X[ 5 ][ 2 ] = { { 284, 456 }, { 462, 700 }, { 706, 1040 }, { 1046, 1400 }, { 1406, 1732 } };
+	static const char *const PANEL_WORD[ 5 ] = { "GUI:ObsConGeneral", "GUI:ObsConStatMoney", "GUI:ObsConStatArmy", "GUI:ObsConQueue", "GUI:ObsConPowers" };
+	TheDisplay->beginBatch2D();
+	for( Int each = 0; each < 5; each++ )
+		drawConsoleNine( "Panel", box( l.D( PANEL_X[ each ][ 0 ] ), l.Y( 872 ), l.D( PANEL_X[ each ][ 1 ] ), l.Y( 1076 ) ), k, 16 );
+	TheDisplay->endBatch2D();
+	for( Int each = 0; each < 5; each++ )
+		drawText( TheGameText->fetch( PANEL_WORD[ each ] ), font( 14 ), l.D( PANEL_X[ each ][ 0 ] + 10 ), l.Y( 874 ), P( 16 ), GREY_INK );
+
+	// 1. his portrait, and under it his badge, rank stars and the way to the next rank
+	{
+		const IRegion2D well = box( l.D( 293 ), l.Y( 892 ), l.D( 447 ), l.Y( 1010 ) );
+		const IRegion2D side2 = box( l.D( 293 ), l.Y( 1016 ), l.D( 447 ), l.Y( 1067 ) );
+		TheDisplay->beginBatch2D();
+		drawConsoleNine( "Well", well, k, 8 );
+		drawConsoleNine( "Well", side2, k, 8 );
+		TheDisplay->endBatch2D();
+		const Int in = P( 2 );
+		if( const Image *portrait = UIStyle::armyPortrait( player->getPlayerTemplate() ) )
+			UIStyle::coverImage( portrait, well.lo.x + in, well.lo.y + in, well.hi.x - well.lo.x - 2 * in, well.hi.y - well.lo.y - 2 * in );
+		TheDisplay->drawFillRect( well.lo.x + in, well.hi.y - in - P( 4 ), well.hi.x - well.lo.x - 2 * in, P( 4 ), colour );
+		if( const Image *badge = consoleBadge( player ) )
+		{
+			const Int bh = P( 22 ), bw = badge->getImageHeight() > 0 ? bh * badge->getImageWidth() / badge->getImageHeight() : bh;
+			TheDisplay->drawImage( badge, side2.lo.x + P( 6 ), side2.lo.y + P( 6 ), side2.lo.x + P( 6 ) + bw, side2.lo.y + P( 6 ) + bh );
+		}
+		// his rank as stars, lit up to it
+		const Image *star = consolePiece( "IconStar" ), *starOff = consolePiece( "IconStarOff" );
+		const Int shownStars = max( 5, min( stats.rank, 6 ) );
+		for( Int each = 0; each < shownStars; each++ )
+		{
+			const Int s = P( 14 ), sx = side2.lo.x + P( 40 ) + each * P( 16 ), sy = side2.lo.y + P( 17 ) - s / 2;
+			const Bool lit = each < stats.rank;
+			if( lit && star != NULL )
+				TheDisplay->drawImage( star, sx, sy, sx + s, sy + s, GOLD_INK );
+			else if( !lit && starOff != NULL )
+				TheDisplay->drawImage( starOff, sx, sy, sx + s, sy + s );
+			else
+				TheDisplay->drawFillRect( sx + s / 4, sy + s / 4, s / 2, s / 2, lit ? GOLD_INK : GameMakeColor( 70, 72, 78, 255 ) );
+		}
+		// the way to the next rank
+		const Int up = player->getSkillPointsLevelUp(), down = player->getSkillPointsLevelDown();
+		const Real toNext = up > down ? (Real)( player->getSkillPoints() - down ) / ( up - down ) : 1.0f;
+		drawSegmentBar( side2.lo.x + P( 8 ), side2.lo.y + P( 34 ), side2.hi.x - P( 8 ), side2.lo.y + P( 42 ), toNext,
+			GameMakeColor( 226, 186, 70, 255 ), P( 3 ), 1, DARK_SEG );
+	}
+
+	// 2. money: his purse, his income over the last minutes, his power, what pays him
+	{
+		const IRegion2D money = box( l.D( 471 ), l.Y( 892 ), l.D( 691 ), l.Y( 918 ) );
+		const IRegion2D graph = box( l.D( 471 ), l.Y( 924 ), l.D( 691 ), l.Y( 990 ) );
+		const IRegion2D power = box( l.D( 471 ), l.Y( 996 ), l.D( 691 ), l.Y( 1024 ) );
+		const IRegion2D sources = box( l.D( 471 ), l.Y( 1030 ), l.D( 691 ), l.Y( 1067 ) );
+		TheDisplay->beginBatch2D();
+		drawConsoleNine( "Well", money, k, 8 );
+		drawConsoleNine( "Well", graph, k, 8 );
+		drawConsoleNine( "Well", power, k, 8 );
+		drawConsoleNine( "Well", sources, k, 8 );
+		TheDisplay->endBatch2D();
+		UnicodeString purse;
+		if( stats.unlimited )
+			purse = TheGameText->fetch( "GUI:StartingMoneyUnlimited" );
+		else
+			purse = broadcastNumber( "$", stats.cash );
+		drawText( purse, font( 18 ), money.lo.x + P( 8 ), money.lo.y, money.hi.y - money.lo.y, GOLD_INK );
+
+		// the income graph: what he earned in each half minute as a rate a minute, a gold line over a faint gold
+		// fill on a grid every 16, the newest at the right
+		const Int gx0 = graph.lo.x + P( 4 ), gx1 = graph.hi.x - P( 4 ), gy0 = graph.lo.y + P( 4 ), gy1 = graph.hi.y - P( 4 );
+		TheDisplay->beginBatch2D();
+		for( Int gy = gy1 - P( 16 ); gy > gy0; gy -= max( P( 16 ), 1 ) )
+			TheDisplay->drawFillRect( gx0, gy, gx1 - gx0, 1, GameMakeColor( 60, 66, 76, 120 ) );
+		const Int samples = min( theIncomeSamples, (Int)CON_HISTORY + 1 );
+		if( samples >= 2 && index < MAX_PLAYER_COUNT )
+		{
+			Int rate[ CON_HISTORY ];
+			Int most = 1;
+			for( Int i = 0; i < samples - 1; i++ )
+			{
+				rate[ i ] = max( 0, theIncomeEarned[ index ][ samples - 2 - i ] - theIncomeEarned[ index ][ samples - 1 - i ] ) * 60 / CON_HISTORY_SECONDS;
+				most = max( most, rate[ i ] );
+			}
+			const Int points = samples - 1;
+			const Real step = ( gx1 - gx0 ) / (Real)CON_HISTORY;
+			auto pointY = [ & ]( Int i ) { return gy1 - ( gy1 - gy0 - P( 14 ) ) * rate[ i ] / most; };
+			for( Int i = 0; i < points; i++ )
+			{
+				const Int x0 = gx1 - REAL_TO_INT( ( points - i ) * step ), x1 = gx1 - REAL_TO_INT( ( points - 1 - i ) * step );
+				TheDisplay->drawFillRect( x0, pointY( i ), x1 - x0, gy1 - pointY( i ), GameMakeColor( 242, 194, 48, 51 ) );
+				if( i + 1 < points )
+					TheDisplay->drawLine( x1, pointY( i ), x1 + REAL_TO_INT( step ), pointY( i + 1 ), max( 2.0f, 2 * k ), GOLD_INK );
+				TheDisplay->drawFillRect( x0, pointY( i ), x1 - x0, max( P( 2 ), 1 ), GOLD_INK );
+			}
+		}
+		TheDisplay->endBatch2D();
+		UnicodeString income;
+		income.format( u"+%d", stats.income );
+		income.concat( TheGameText->fetch( "GUI:ObsConPerMinute" ) );
+		drawText( income, font( 14 ), l.D( 685 ), graph.lo.y + P( 4 ), P( 16 ), WHITE_INK, 1 );
+
+		// power: what his base draws against what his plants make
+		const Int consumed = stats.produced - stats.power;
+		const Int py = power.lo.y, ph = power.hi.y - power.lo.y;
+		const Color powerInk = stats.power < 0 ? GameMakeColor( 220, 44, 34, 255 ) : GREEN_INK;
+		if( const Image *icon = consolePiece( "IconPower" ) )
+			TheDisplay->drawImage( icon, power.lo.x + P( 6 ), py + ( ph - P( 14 ) ) / 2, power.lo.x + P( 20 ), py + ( ph - P( 14 ) ) / 2 + P( 14 ), powerInk );
+		UnicodeString powerText;
+		powerText.format( u"%d/%d", max( consumed, 0 ), stats.produced );
+		const Int powerW = drawText( powerText, font( 14 ), l.D( 685 ), py, ph, stats.power < 0 ? GameMakeColor( 226, 92, 78, 255 ) : WHITE_INK, 1 );
+		drawSegmentBar( power.lo.x + P( 26 ), py + ph / 3, l.D( 685 ) - P( 8 ) - powerW, py + ph - ph / 3,
+			stats.produced > 0 ? (Real)max( consumed, 0 ) / stats.produced : 1.0f, powerInk, P( 3 ), 1, DARK_SEG );
+
+		// what pays him: harvesters, drop zones, derricks and the like, a cameo a kind with how many
+		std::vector< std::pair< const ThingTemplate *, Int > > payers;
+		player->iterateObjects( gatherConsoleIncomeSource, &payers );
+		const Int sw = P( 30 ), sh = P( 24 );
+		const Int fit = min( (Int)payers.size(), ( sources.hi.x - sources.lo.x - P( 4 ) ) / P( 34 ) );
+		for( Int each = 0; each < fit; each++ )
+		{
+			const Int sx = sources.lo.x + P( 4 + each * 34 ), sy = sources.lo.y + ( sources.hi.y - sources.lo.y - sh ) / 2;
+			const IRegion2D at = box( sx, sy, sx + sw, sy + sh );
+			if( const Image *cameo = payers[ each ].first->getButtonImage() )
+				TheDisplay->drawImage( cameo, at.lo.x, at.lo.y, at.hi.x, at.hi.y );
+			TheDisplay->drawOpenRect( at.lo.x - 1, at.lo.y - 1, sw + 2, sh + 2, 1.0f, GameMakeColor( 8, 9, 10, 255 ) );
+			if( payers[ each ].second > 1 )
+			{
+				drawObserverReadout( consoleTimes( payers[ each ].second ), at, FALSE, TRUE, WHITE_INK );
+			}
+		}
+	}
+
+	// 3. army: its value, his kills and losses, then every kind he has standing with how many
+	{
+		const IRegion2D value = box( l.D( 715 ), l.Y( 892 ), l.D( 1031 ), l.Y( 914 ) );
+		const IRegion2D kinds = box( l.D( 715 ), l.Y( 920 ), l.D( 1031 ), l.Y( 1067 ) );
+		TheDisplay->beginBatch2D();
+		drawConsoleNine( "Well", value, k, 8 );
+		drawConsoleNine( "Well", kinds, k, 8 );
+		TheDisplay->endBatch2D();
+		const Int vy = value.lo.y, vh = value.hi.y - value.lo.y;
+		drawText( consoleMoney( stats.army ), font( 14 ), l.D( 721 ), vy, vh, WHITE_INK );
+		// "142 KILLS  61 LOST" from the right: the count white, the word grey
+		Int right = l.D( 1025 );
+		UnicodeString lostCount, killCount;
+		lostCount.format( u"%d ", stats.losses );
+		killCount.format( u"%d ", stats.kills );
+		right -= drawText( TheGameText->fetch( "GUI:ObsConLost" ), font( 14 ), right, vy, vh, GREY_INK, 1 );
+		right -= drawText( lostCount, font( 14 ), right, vy, vh, GameMakeColor( 226, 92, 78, 255 ), 1 ) + P( 10 );
+		right -= drawText( TheGameText->fetch( "GUI:ObsConStatKills" ), font( 14 ), right, vy, vh, GREY_INK, 1 );
+		drawText( killCount, font( 14 ), right, vy, vh, WHITE_INK, 1 );
+
+		typedef std::pair< const ThingTemplate *, Int > UnitCount;
+		std::vector< UnitCount > units( stats.units.begin(), stats.units.end() );
+		std::stable_sort( units.begin(), units.end(), []( const UnitCount &a, const UnitCount &b ) { return a.second > b.second; } );
+		// 40x32 cameos, seven a row from x 719, 44 across and 48 down from y 924, the count a chip in each corner
+		const Int cw = P( 40 ), ch = P( 32 ), columns = 7, rows = 3;
+		const Int shown = min( (Int)units.size(), columns * rows );
+		auto unitAt = [ & ]( Int each ) { return box( l.D( 719 + each % columns * 44 ), l.Y( 924 + each / columns * 48 ), l.D( 719 + each % columns * 44 ) + cw, l.Y( 924 + each / columns * 48 ) + ch ); };
+		TheDisplay->beginBatch2D();
+		for( Int each = 0; each < shown; each++ )
+		{
+			const IRegion2D at = unitAt( each );
+			TheDisplay->drawImage( units[ each ].first->getButtonImage(), at.lo.x, at.lo.y, at.hi.x, at.hi.y );
+			TheDisplay->drawOpenRect( at.lo.x - 1, at.lo.y - 1, cw + 2, ch + 2, 1.0f, GameMakeColor( 8, 9, 10, 255 ) );
+		}
+		TheDisplay->endBatch2D();
+		for( Int each = 0; each < shown; each++ )
+			drawObserverReadout( consoleTimes( units[ each ].second ), unitAt( each ), FALSE, TRUE, WHITE_INK );
+	}
+
+	// 4. production: a line a factory, its picture then its queue, the build under way ringed
+	{
+		std::vector< ConsoleFactory > factories;
+		player->iterateObjects( gatherConsoleFactory, &factories );
+		// five rows 32 high, 35 apart; the factory's 32x26 cameo, an arrow, the queue from +44 at 36 a cameo
+		const Int lines = 5, fw = P( 32 ), fh = P( 26 );
+		for( Int line = 0; line < lines; line++ )
+		{
+			const IRegion2D row = box( l.D( 1055 ), l.Y( 892 + line * 35 ), l.D( 1391 ), l.Y( 924 + line * 35 ) );
+			drawConsoleNine( "Well", row, k, 8 );
+			if( line >= (Int)factories.size() )
+				continue;
+			const ConsoleFactory &factory = factories[ line ];
+			const IRegion2D cameo = box( row.lo.x + P( 3 ), row.lo.y + P( 3 ), row.lo.x + P( 3 ) + fw, row.lo.y + P( 3 ) + fh );
+			if( factory.cameo != NULL )
+				TheDisplay->drawImage( factory.cameo, cameo.lo.x, cameo.lo.y, cameo.hi.x, cameo.hi.y );
+			TheDisplay->drawOpenRect( cameo.lo.x - 1, cameo.lo.y - 1, fw + 2, fh + 2, 1.0f, GameMakeColor( 8, 9, 10, 255 ) );
+			const ConsoleHit look = { cameo, CON_LOOK, (Int)factory.id };
+			theConsoleHits.push_back( look );
+			const Int qh = fh, qw = fw, lineH = row.hi.y - row.lo.y;
+			TheDisplay->drawFillRect( cameo.hi.x + P( 3 ), row.lo.y + lineH / 2 - P( 3 ), P( 4 ), P( 6 ), DIM_INK );
+			for( Int i = 0; i < (Int)factory.queue.size(); i++ )
+			{
+				const Int qx = row.lo.x + P( 44 + i * 36 );
+				if( qx + qw > row.hi.x - P( 2 ) )
+					break;
+				const ConsoleFactory::Run &run = factory.queue[ i ];
+				const IRegion2D q = box( qx, row.lo.y + P( 3 ), qx + qw, row.lo.y + P( 3 ) + qh );
+				if( run.cameo != NULL )
+					TheDisplay->drawImage( run.cameo, q.lo.x, q.lo.y, q.hi.x, q.hi.y );
+				if( i == 0 && run.percent > 0 )
+					drawProgressRing( box( q.lo.x - P( 2 ), q.lo.y - P( 2 ), q.hi.x + P( 2 ), q.hi.y + P( 2 ) ), run.percent / 100.0f, GOLD_INK, max( P( 2 ), 1 ) );
+				else
+					TheDisplay->drawOpenRect( q.lo.x - 1, q.lo.y - 1, qw + 2, qh + 2, 1.0f, GameMakeColor( 8, 9, 10, 255 ) );
+				if( run.count > 1 )
+				{
+					drawObserverReadout( consoleTimes( run.count ), q, FALSE, TRUE, WHITE_INK );
+				}
+			}
+		}
+	}
+
+	// 5. upgrades his side has finished, and his power clocks
+	{
+		const IRegion2D ups = box( l.D( 1415 ), l.Y( 892 ), l.D( 1723 ), l.Y( 948 ) );
+		const IRegion2D clocks = box( l.D( 1415 ), l.Y( 954 ), l.D( 1723 ), l.Y( 1067 ) );
+		TheDisplay->beginBatch2D();
+		drawConsoleNine( "Well", ups, k, 8 );
+		drawConsoleNine( "Well", clocks, k, 8 );
+		TheDisplay->endBatch2D();
+		std::vector< const UpgradeTemplate * > upgrades;
+		const UpgradeMaskType done = player->getCompletedUpgradeMask();
+		for( const UpgradeTemplate *upgrade = TheUpgradeCenter->firstUpgradeTemplate(); upgrade != NULL; upgrade = upgrade->friend_getNext() )
+			if( upgrade->getUpgradeType() == UPGRADE_TYPE_PLAYER && upgrade->getButtonImage() != NULL && upgrade->getUpgradeMask().any()
+					&& done.testForAll( upgrade->getUpgradeMask() ) )
+				upgrades.push_back( upgrade );
+		// 32x26, eight in a row from x 1421 at 38 apart, y 898; an owned one a green lamp under it at y 938
+		const Int uw = P( 32 ), uh = P( 26 );
+		const Int shown = min( (Int)upgrades.size(), 8 );
+		TheDisplay->beginBatch2D();
+		for( Int each = 0; each < shown; each++ )
+		{
+			const Int ux = l.D( 1421 + each * 38 ), uy = l.Y( 898 );
+			TheDisplay->drawImage( upgrades[ each ]->getButtonImage(), ux, uy, ux + uw, uy + uh );
+			TheDisplay->drawOpenRect( ux - 1, uy - 1, uw + 2, uh + 2, 1.0f, GameMakeColor( 8, 9, 10, 255 ) );
+			drawConsoleLamp( ux + uw / 2, l.Y( 938 ), P( 8 ), GREEN_INK );
+		}
+		TheDisplay->endBatch2D();
+
+		// his power clocks, the soonest first
+		struct Clock { const Image *cameo; Bool ready; Int seconds; Int percent; ObjectID building; };
+		std::vector< Clock > list;
+		for( SuperweaponMap::const_iterator mapIt = powers.begin(); mapIt != powers.end(); ++mapIt )
+			for( SuperweaponList::const_iterator listIt = mapIt->second.begin(); listIt != mapIt->second.end(); ++listIt )
+			{
+				const SuperweaponInfo *info = *listIt;
+				if( info == NULL || info->m_hiddenByScript || info->m_hiddenByScience )
+					continue;
+				Object *building = TheGameLogic->findObjectByID( info->m_id );
+				if( building == NULL || building->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+					continue;
+				SpecialPowerModuleInterface *module = building->getSpecialPowerModule( info->getSpecialPowerTemplate() );
+				if( module == NULL )
+					continue;
+				const UnsignedInt now = TheGameLogic->getFrame();
+				const UnsignedInt wait = module->getReadyFrame() > now ? module->getReadyFrame() - now : 0;
+				const UnsignedInt reload = info->getSpecialPowerTemplate()->getReloadTime();
+				Clock c;
+				c.cameo = superweaponCameo( info->getSpecialPowerTemplate() );
+				c.ready = module->isReady();
+				c.seconds = ControlBar_secondsFromFrames( (Real)wait );
+				c.percent = c.ready || reload == 0 ? 100 : ( wait >= reload ? 0 : REAL_TO_INT( 100.0f * ( reload - wait ) / reload ) );
+				c.building = building->getID();
+				list.push_back( c );
+				if( info->getSpecialPowerTemplate()->isSharedNSync() )
+					break;
+			}
+		std::stable_sort( list.begin(), list.end(), []( const Clock &a, const Clock &b ) { return a.ready != b.ready ? a.ready : a.seconds < b.seconds; } );
+		// four clocks, centres x 1457, 1533, 1609, 1685 at y 992, the dial's hole 52 across, the countdown under
+		// it centred on y 1040; a charged one pulses gold on the wall clock
+		const Int count = min( (Int)list.size(), 4 );
+		const Real pulse = consolePulse( 1000 );
+		for( Int each = 0; each < count; each++ )
+		{
+			const Clock &c = list[ each ];
+			const Int cx = l.D( 1457 + each * 76 ), cy = l.Y( 992 ), half = P( 26 );
+			const IRegion2D r = box( cx - half, cy - half, cx + half, cy + half );
+			drawConsoleDial( r, c.percent, c.ready, c.cameo, "DialL" );
+			if( c.ready )
+				TheDisplay->drawOpenRect( r.lo.x - P( 3 ), r.lo.y - P( 3 ), r.hi.x - r.lo.x + P( 6 ), r.hi.y - r.lo.y + P( 6 ), max( 2.0f, 2 * k ),
+					GameMakeColor( 242, 194, 48, REAL_TO_INT( 90 + 165 * pulse ) ) );
+			const ConsoleHit look = { r, CON_LOOK, (Int)c.building };
+			theConsoleHits.push_back( look );
+			UnicodeString clock;
+			if( c.ready )
+				clock = TheGameText->fetch( "GUI:SidebarSuperweaponReady" );
+			else
+				clock.format( u"%d:%02d", c.seconds / 60, c.seconds % 60 );
+			drawText( clock, font( 14 ), cx, l.Y( 1032 ), P( 16 ), c.ready ? GOLD_INK : WHITE_INK, 0 );
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The radar's bay in the console's left box, drawn before the windows so the radar paints on its glass
+	* (postDraw).  The rest of the console goes over the windows and the world's bars (drawHudOverlay). */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::drawObserverConsoleBay( void )
+{
+	if( theConsoleCollapsed || controlBarTop() >= TheDisplay->getHeight() )
+		return;
+	const ConsoleLayout l = consoleLayout();
+	if( const Image *box = consolePiece( "RadarBox" ) )
+	{
+		// the piece stands 10 over the box for its shadow skirt (PIECES.md)
+		const Int skirt = REAL_TO_INT( 10 * l.k );
+		TheDisplay->drawImage( box, l.radarBox.lo.x, l.radarBox.lo.y - skirt, l.radarBox.hi.x, l.radarBox.hi.y );
+	}
+	else
+	{
+		DirectStrikeTheme::begin( DirectStrikeTheme::SIDE_COMMON, l.k );
+		DirectStrikeTheme::nineSlice( regionBox( l.radarBox ), DirectStrikeTheme::CONSOLE_TL );
+		TheDisplay->drawFillRect( l.glass.lo.x, l.glass.lo.y, l.glass.hi.x - l.glass.lo.x, l.glass.hi.y - l.glass.lo.y, GameMakeColor( 4, 5, 6, 255 ) );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The console over everything but the radar's glass: the deck with its tab, the match box, or the
+	* folded strip.  See the section's head. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::drawObserverConsole( void )
+{
+	forgetConsole();
+	// the console stands where the bar stands, so not while the bar is hidden (hidehud, a script)
+	if( controlBarTop() >= TheDisplay->getHeight() )
+		return;
+	theConsoleShown = TRUE;
+	const ConsoleLayout l = consoleLayout();
+	keepConsoleWindows( l );
+	using namespace DirectStrikeTheme;
+	begin( SIDE_COMMON, l.k );
+	const Real k = l.k;
+	auto P = [ k ]( Real at1080 ) { return REAL_TO_INT_FLOOR( at1080 * k + 0.5f ); };
+	auto box = []( Int x0, Int y0, Int x1, Int y1 ) { IRegion2D r; r.lo.x = x0; r.lo.y = y0; r.hi.x = x1; r.hi.y = y1; return r; };
+	const Color WHITE_INK = TEXT_WHITE, GREY_INK = TEXT_GREY, GOLD_INK = TEXT_GOLD;
+	const Color GREEN_INK = GameMakeColor( 60, 186, 72, 255 ), AMBER = GameMakeColor( 240, 176, 30, 255 ), RED_INK = GameMakeColor( 220, 44, 34, 255 );
+	const Color DARK_SEG = GameMakeColor( 26, 30, 36, 255 );
+
+	// the standings, every seat, at most twice a second, and what each has coming once a frame
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if( theRackStatsStat != 0 || frame < theRackStatsFrame || frame >= theRackStatsFrame + RACK_REFRESH_FRAMES || theRackStats.empty() )
+	{
+		theRackStats = gatherSpectatorStats( SPECTATOR_STATS[ 0 ], ThePlayerList->getLocalPlayer(), PLAYERMASK_ALL, TRUE );
+		theRackStatsFrame = frame;
+		theRackStatsStat = 0;
+	}
+	gatherObserverQueues( NULL );
+	sampleConsoleIncome();
+
+	// the seats in the deck's order: team by team in the order the teams first came, the players in their own order
+	std::vector< ConsoleSeat > seats;
+	for( size_t row = 0; row < theRackStats.size() && seats.size() < (size_t)MAX_SLOTS; row++ )
+	{
+		ConsoleSeat seat;
+		seat.stats = &theRackStats[ row ];
+		seat.player = theRackStats[ row ].player;
+		seat.index = seat.player->getPlayerIndex();
+		seat.out = !seat.player->isPlayerActive();
+		seat.queue = NULL;
+		for( size_t q = 0; q < theObserverQueues.size(); q++ )
+			if( theObserverQueues[ q ].player == seat.player && theObserverQueues[ q ].count > 0 )
+				seat.queue = &theObserverQueues[ q ];
+		consoleSuperweapon( m_superweapons[ seat.index ], &seat );
+		const Energy *energy = seat.player->getEnergy();
+		seat.power = energy->getProduction() == 0 && energy->getConsumption() > 0 ? 2 : ( energy->hasSufficientPower() ? 0 : 1 );
+		seat.value[ 0 ] = seat.stats->unlimited ? 0 : seat.stats->cash;
+		seat.value[ 1 ] = seat.stats->income;
+		seat.value[ 2 ] = seat.stats->army;
+		seat.value[ 3 ] = seat.stats->kills;
+		seat.value[ 4 ] = seat.stats->power;
+		seat.value[ 5 ] = seat.queue != NULL ? seat.queue->total : 0;
+		seat.value[ 6 ] = seat.hasSuperweapon ? seat.superweaponPercent : -1;
+		seats.push_back( seat );
+	}
+	std::stable_sort( seats.begin(), seats.end(), []( const ConsoleSeat &a, const ConsoleSeat &b )
+		{
+			return a.stats->team != b.stats->team ? a.stats->team < b.stats->team : a.index < b.index;
+		} );
+	theConsoleOrderCount = (Int)seats.size();
+	for( Int each = 0; each < theConsoleOrderCount; each++ )
+	{
+		theConsoleOrder[ each ] = seats[ each ].index;
+		theConsoleTeam[ each ] = seats[ each ].stats->team;
+	}
+
+	const Int stat = max( 0, min( m_rackStat, (Int)CON_STATS - 1 ) );
+	Int low = 0, high = 0, largestArmy = 1;
+	Bool any = FALSE;
+	for( size_t each = 0; each < seats.size(); each++ )
+	{
+		largestArmy = max( largestArmy, seats[ each ].stats->army );
+		if( seats[ each ].out )
+			continue;
+		const Int v = seats[ each ].value[ stat ];
+		low = any ? min( low, v ) : v;
+		high = any ? max( high, v ) : v;
+		any = TRUE;
+	}
+	auto heatOf = [ & ]( const ConsoleSeat &seat ) { return high > low ? (Real)( seat.value[ stat ] - low ) / ( high - low ) : 0.5f; };
+
+	const Player *picked = observerPickedPlayer();
+	const ConsoleSeat *pickedSeat = NULL;
+	for( size_t each = 0; each < seats.size(); each++ )
+		if( seats[ each ].player == picked )
+			pickedSeat = &seats[ each ];
+
+	// the motion cues, on the wall clock (PIECES.md's events): an attack pulses at 2 Hz, a defeat flashes
+	// white for 0.6 s, a charged superweapon pulses at 1 Hz for 10 s and then holds
+	const UnsignedInt nowMs = Clock_Milliseconds();
+	const Real alarmAlpha = 0.35f + 0.65f * consolePulse( 500 );
+	const Real readyPulse = 0.4f + 0.6f * consolePulse( 1000 );
+	for( size_t each = 0; each < seats.size(); each++ )
+	{
+		const Int p = seats[ each ].index;
+		if( p < 0 || p >= MAX_PLAYER_COUNT )
+			continue;
+		if( seats[ each ].out && !theConsoleWasOut[ p ] )
+			theConsoleOutAtMs[ p ] = nowMs;
+		theConsoleWasOut[ p ] = seats[ each ].out;
+		if( seats[ each ].superweaponReady && !theConsoleWasReady[ p ] )
+			theConsoleReadyAtMs[ p ] = nowMs;
+		theConsoleWasReady[ p ] = seats[ each ].superweaponReady;
+	}
+	// the white over a fresh defeat, 0.8 falling to nothing; 0 once it is done
+	auto defeatFlash = [ & ]( const ConsoleSeat &seat ) -> Int
+	{
+		if( !seat.out || seat.index < 0 || seat.index >= MAX_PLAYER_COUNT || nowMs - theConsoleOutAtMs[ seat.index ] >= CON_DEFEAT_FLASH_MS )
+			return 0;
+		return REAL_TO_INT( 204.0f * ( 1.0f - ( nowMs - theConsoleOutAtMs[ seat.index ] ) / (Real)CON_DEFEAT_FLASH_MS ) );
+	};
+	auto readyAlpha = [ & ]( const ConsoleSeat &seat ) -> Int
+	{
+		const Bool fresh = seat.index >= 0 && seat.index < MAX_PLAYER_COUNT && nowMs - theConsoleReadyAtMs[ seat.index ] < CON_READY_PULSE_MS;
+		return REAL_TO_INT( 255.0f * ( fresh ? readyPulse : 1.0f ) );
+	};
+	// the leader of the picked stat among the seats still standing, when the stat tells them apart
+	Int leaderIndex = -1;
+	if( any && high > low )
+		for( size_t each = 0; each < seats.size(); each++ )
+			if( !seats[ each ].out && seats[ each ].value[ stat ] == high )
+			{
+				leaderIndex = seats[ each ].index;
+				break;
+			}
+	// which row of eight and which place in it a seat stands at: its team's row, or rows of eight when every
+	// player stands alone
+	Int teamCount = 0, widest = 0;
+	{
+		Int sizes[ MAX_PLAYER_COUNT ] = { 0 };
+		for( size_t each = 0; each < seats.size(); each++ )
+		{
+			const Int t = max( 0, min( seats[ each ].stats->team, (Int)MAX_PLAYER_COUNT - 1 ) );
+			sizes[ t ]++;
+			teamCount = max( teamCount, t + 1 );
+		}
+		for( Int t = 0; t < teamCount; t++ )
+			widest = max( widest, sizes[ t ] );
+	}
+	const Bool byTeam = teamCount > 1 && teamCount <= CON_ROWS_MAX && widest <= CON_COLUMNS_MAX && teamCount < (Int)seats.size();
+	std::vector< Int > seatRow( seats.size() ), seatColumn( seats.size() );
+	{
+		Int inRow[ MAX_PLAYER_COUNT ] = { 0 };
+		for( size_t each = 0; each < seats.size(); each++ )
+		{
+			seatRow[ each ] = byTeam ? seats[ each ].stats->team : (Int)each / CON_COLUMNS_MAX;
+			seatColumn[ each ] = byTeam ? inRow[ seatRow[ each ] ]++ : (Int)each % CON_COLUMNS_MAX;
+		}
+	}
+	Int teamArmy[ MAX_PLAYER_COUNT ] = { 0 };
+	Int leaderTeam = -1;
+	for( size_t each = 0; each < seats.size(); each++ )
+		teamArmy[ max( 0, min( seats[ each ].stats->team, (Int)MAX_PLAYER_COUNT - 1 ) ) ] += seats[ each ].stats->army;
+	for( Int t = 0; t < teamCount; t++ )
+		if( leaderTeam < 0 || teamArmy[ t ] > teamArmy[ leaderTeam ] )
+			leaderTeam = t;
+
+	//
+	// folded: one strip along the foot, a well a seat with its colour lamp and army, the marks; the clock
+	//
+	if( theConsoleCollapsed )
+	{
+		const IRegion2D strip = box( l.left, l.Y( 1040 ), l.right, l.Y( 1080 ) );
+		theConsoleBlock[ 1 ] = strip;
+		{
+			const Image *stripL = consolePiece( "StripL" ), *stripC = consolePiece( "StripC" ), *stripR = consolePiece( "StripR" );
+			const Int top = l.Y( 1032 ), endW = P( 40 );
+			TheDisplay->beginBatch2D();
+			if( stripL != NULL && stripC != NULL && stripR != NULL )
+			{
+				TheDisplay->drawImage( stripL, strip.lo.x, top, strip.lo.x + endW, strip.hi.y );
+				TheDisplay->drawImage( stripC, strip.lo.x + endW, top, strip.hi.x - endW, strip.hi.y );
+				TheDisplay->drawImage( stripR, strip.hi.x - endW, top, strip.hi.x, strip.hi.y );
+			}
+			else
+				nineSlice( regionBox( strip ), CONSOLE_TL );
+			TheDisplay->endBatch2D();
+		}
+		consoleKey( "Expand", box( l.L( 8 ), l.Y( 1045 ), l.L( 44 ), l.Y( 1075 ) ), FALSE, FALSE, CON_FOLD, 0 );
+		// the team labels: the row's colour block and its numeral
+		if( byTeam )
+			for( Int t = 0; t < min( teamCount, (Int)CON_ROWS_MAX ); t++ )
+			{
+				TheDisplay->drawFillRect( l.L( 56 + t * 352 ), l.Y( 1047 ), P( 4 ), P( 26 ), consoleTeamColour( t ) );
+				UnicodeString number;
+				number.format( u"%d", t + 1 );
+				drawText( number, font( 14 ), l.L( 70 + t * 352 ), l.Y( 1052 ), P( 16 ), WHITE_INK, 0 );
+			}
+		for( size_t each = 0; each < seats.size(); each++ )
+		{
+			if( seatRow[ each ] >= CON_ROWS_MAX )
+				continue;
+			const ConsoleSeat &seat = seats[ each ];
+			const Int x = l.L( 84 + seatRow[ each ] * 352 + seatColumn[ each ] * 40 ), y = l.Y( 1047 );
+			const IRegion2D well = box( x, y, x + P( 36 ), y + P( 26 ) );
+			drawConsolePiece( "StripSeat", "", well );
+			const Bool alarm = seat.stats->underAttack && !seat.out;
+			if( seat.out )
+			{
+				const Int flash = defeatFlash( seat );
+				drawConsoleLamp( x + P( 9 ), y + P( 13 ), P( 10 ), flash > 0 ? GameMakeColor( 255, 255, 255, 255 ) : GameMakeColor( 40, 40, 40, 255 ) );
+				const Int s = P( 12 ), cx = x + P( 25 ), cy = y + P( 13 );
+				if( const Image *skull = consolePiece( "IconSkull" ) )
+					TheDisplay->drawImage( skull, cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2, GameMakeColor( 200, 56, 44, 255 ) );
+			}
+			else
+			{
+				drawConsoleLamp( x + P( 9 ), y + P( 13 ), P( 10 ), rackColour( seat.player ) );
+				drawSegmentBar( x + P( 18 ), y + P( 10 ), x + P( 33 ), y + P( 16 ), (Real)seat.stats->army / largestArmy,
+					GameMakeColor( 196, 202, 210, 255 ), max( P( 2 ), 1 ), 1, DARK_SEG );
+			}
+			if( alarm )
+				TheDisplay->drawOpenRect( well.lo.x, well.lo.y, well.hi.x - well.lo.x, well.hi.y - well.lo.y, max( 2.0f, 2 * k ),
+					GameMakeColor( 236, 52, 38, REAL_TO_INT( 255 * alarmAlpha ) ) );
+			else if( seat.superweaponReady && !seat.out )
+				TheDisplay->drawOpenRect( well.lo.x, well.lo.y, well.hi.x - well.lo.x, well.hi.y - well.lo.y, max( 1.0f, k ),
+					GameMakeColor( 242, 194, 48, readyAlpha( seat ) ) );
+			else if( seat.index == leaderIndex )
+				TheDisplay->drawOpenRect( well.lo.x, well.lo.y, well.hi.x - well.lo.x, well.hi.y - well.lo.y, 1.0f, GOLD_INK );
+			if( seat.player == picked )
+				TheDisplay->drawOpenRect( well.lo.x - 1, well.lo.y - 1, well.hi.x - well.lo.x + 2, well.hi.y - well.lo.y + 2, 1.0f, WHITE_INK );
+			const ConsoleHit hit = { well, CON_PICK, seat.index };
+			theConsoleHits.push_back( hit );
+		}
+		// the clock and the seats still standing at the right end
+		UnicodeString clock;
+		clock.translate( AsciiString( spectatorClock( frame ).c_str() ) );
+		drawText( clock, font( 16 ), l.R( 1908 ), l.Y( 1050 ), P( 20 ), WHITE_INK, 1 );
+		Int alive = 0;
+		for( size_t each = 0; each < seats.size(); each++ )
+			alive += seats[ each ].out ? 0 : 1;
+		UnicodeString count;
+		count.format( u"%d/%d", alive, (Int)seats.size() );
+		drawText( count, font( 14 ), l.R( 1830 ), l.Y( 1050 ), P( 20 ), GREY_INK, 1 );
+		return;
+	}
+
+	theConsoleBlock[ 0 ] = l.radarBox;
+	theConsoleBlock[ 1 ] = l.deck;
+	theConsoleBlock[ 2 ] = l.tab;
+	theConsoleBlock[ 3 ] = l.matchBox;
+
+	//
+	// the deck and its tab, the match box: the plates
+	//
+	TheDisplay->beginBatch2D();
+	{
+		// DeckL at the radar box's edge, DeckR against the match box, DeckC stretched between; the tab over
+		// the deck's rail; the match box (PIECES.md's draw order)
+		const Image *deckL = consolePiece( "DeckL" ), *deckC = consolePiece( "DeckC" ), *deckR = consolePiece( "DeckR" );
+		const Int deckTop = l.Y( 852 ), endW = P( 40 ), deckX0 = l.L( 236 ), deckX1 = l.R( 1740 );
+		if( deckL != NULL && deckC != NULL && deckR != NULL )
+		{
+			TheDisplay->drawImage( deckL, deckX0, deckTop, deckX0 + endW, l.bottom );
+			TheDisplay->drawImage( deckC, deckX0 + endW, deckTop, deckX1 - endW, l.bottom );
+			TheDisplay->drawImage( deckR, deckX1 - endW, deckTop, deckX1, l.bottom );
+		}
+		else
+			nineSlice( regionBox( l.deck ), CONSOLE_TL );
+		if( const Image *tab = consolePiece( "Tab" ) )
+			TheDisplay->drawImage( tab, l.D( 604 ), l.Y( 830 ), l.D( 1372 ), l.Y( 870 ) );
+		else
+			nineSlice( regionBox( l.tab ), PLATE_TL );
+		if( const Image *match = consolePiece( "MatchBox" ) )
+			TheDisplay->drawImage( match, l.R( 1740 ), l.Y( 842 ), l.R( 1920 ), l.bottom );
+		else
+			nineSlice( regionBox( l.matchBox ), CONSOLE_TL );
+		if( consolePiece( "MatchBox" ) == NULL )
+		{
+			drawConsoleNine( "Well", box( l.R( 1750 ), l.Y( 860 ), l.R( 1910 ), l.Y( 890 ) ), k, 8 );
+			drawConsoleNine( "Well", box( l.R( 1750 ), l.Y( 960 ), l.R( 1910 ), l.Y( 1032 ) ), k, 8 );
+		}
 	}
 	TheDisplay->endBatch2D();
 
-	// the head: his name in his colour after the flag, his army on the right, both inside the strip's
-	// glass: its end pieces carry the lug that closes it, which beside a word read as a stray letter
-	GameFont *armyFont = font( TYPE_SMALL );
-	const UnicodeString armyName = army->getDisplayName();
-	const Int armyWidth = textWidth( armyName, armyFont );
-	const Int armyRight = right - px( OBS_HEAD_END_W + 6 );
-	drawText( armyName, armyFont, armyRight, top, head.h, TEXT_GREY, 1 );
-	GameFont *nameFont = font( TYPE_LABEL );
-	const Int nameLeft = left + px( 46 );
-	drawText( UIStyle::fitName( picked->getPlayerDisplayName(), nameFont, max( armyRight - armyWidth - px( 12 ) - nameLeft, 1 ) ),
-		nameFont, nameLeft, top, head.h, colour );
-
-	// his rank under the portrait
-	UnicodeString rank;
-	rank.format( TheGameText->fetch( "GUI:HudStatRankValue" ), stats.rank );
-	drawText( UIStyle::capitals( rank ), font( TYPE_BODY ), well.x + well.w / 2, well.y + well.h + px( 4 ), px( 24 ), TEXT_GOLD, 0 );
-
-	// the numbers: a dim word over each, the number large
-	UnicodeString cash, income, power, armyValue, units, buildings, kills, losses;
-	if( stats.unlimited )
-		cash = TheGameText->fetch( "GUI:StartingMoneyUnlimited" );
-	else
-		cash = broadcastNumber( "$", stats.cash );
-	income.format( TheGameText->fetch( "GUI:HudStatIncomeValue" ), broadcastNumber( "$", stats.income ).str() );
-	power.format( u"%+d", stats.power );
-	armyValue = broadcastNumber( "$", stats.army );
-	units.format( u"%d", stats.unitCount );
-	buildings.format( u"%d", stats.buildingCount );
-	kills.format( u"%d", stats.kills );
-	losses.format( u"%d", stats.losses );
-	struct CardNumber { const char *label; const UnicodeString *value; Color colour; };
-	const CardNumber numbers[ 8 ] =
+	// the match box: the clock, the speed, the seats still standing
 	{
-		{ "GUI:HudStatCash", &cash, TEXT_WHITE },					{ "GUI:ObsPanelIncome", &income, TEXT_WHITE },
-		{ "GUI:HudStatArmy", &armyValue, TEXT_WHITE },		{ "GUI:HudStatPower", &power, stats.power < 0 ? LOSS : SURPLUS },
-		{ "GUI:ObsPanelUnits", &units, TEXT_WHITE },			{ "GUI:ObsPanelBuildings", &buildings, TEXT_WHITE },
-		{ "GUI:ObsPanelKills", &kills, TEXT_WHITE },			{ "GUI:ObsPanelLosses", &losses, LOSS }
-	};
-	GameFont *labelFont = font( TYPE_TICK );
-	GameFont *valueFont = font( TYPE_LABEL + 2 );
-	for( Int each = 0; each < 8; each++ )
-	{
-		const Int x = gridLeft + ( each % 2 ) * columnW;
-		const Int y = bodyTop + ( each / 2 ) * gridRowH;
-		const Int room = columnW - px( 8 );
-		drawText( UIStyle::fitText( UIStyle::capitals( TheGameText->fetch( numbers[ each ].label ) ), labelFont, room ), labelFont,
-			x, y, px( 14 ), TEXT_DIM );
-		drawText( UIStyle::fitText( *numbers[ each ].value, valueFont, room ), valueFont, x, y + px( 14 ), px( 26 ), numbers[ each ].colour );
+		Int alive = 0;
+		for( size_t each = 0; each < seats.size(); each++ )
+			alive += seats[ each ].out ? 0 : 1;
+		const Int cy = l.Y( 860 ), ch = P( 30 );
+		UnicodeString clock;
+		clock.translate( AsciiString( spectatorClock( frame ).c_str() ) );
+		drawText( clock, font( 20 ), l.R( 1758 ), cy, ch, WHITE_INK );
+		UnicodeString speed;
+		const Real pace = (Real)TheGameEngine->getFramesPerSecondLimit() / LOGICFRAMES_PER_SECOND * GAME_SPEED_PERCENT / 100.0f;
+		const Int hundredths = REAL_TO_INT( pace * 100.0f + 0.5f );
+		if( hundredths % 100 == 0 )
+			speed.format( u"%d\u00d7", hundredths / 100 );
+		else if( hundredths % 10 == 0 )
+			speed.format( u"%d.%d\u00d7", hundredths / 100, hundredths / 10 % 10 );
+		else
+			speed.format( u"%d.%02d\u00d7", hundredths / 100, hundredths % 100 );
+		drawText( speed, font( 14 ), l.R( 1818 ), cy, ch, GREY_INK );
+		UnicodeString count;
+		count.format( u"%d/%d", alive, (Int)seats.size() );
+		drawText( count, font( 14 ), l.R( 1904 ), cy, ch, WHITE_INK, 1 );
+
+		// the camera: free, following the picked player, the director; the key of what is on screen lit
+		static const char *const CAMS[ 3 ] = { "CamFree", "CamFollow", "CamDirector" };
+		static const ObserverCameraMode MODES[ 3 ] = { OBSERVER_CAMERA_FREE, OBSERVER_CAMERA_PLAYER, OBSERVER_CAMERA_DIRECTOR };
+		for( Int each = 0; each < 3; each++ )
+			consoleKey( CAMS[ each ], box( l.R( 1750 + each * 55 ), l.Y( 896 ), l.R( 1800 + each * 55 ), l.Y( 924 ) ),
+				TheObserverCamera.getMode() == MODES[ each ], FALSE, CON_CAMERA, each );
+		// what the picture shows: all of it, a team's sight (not yet: one player's is the only fog there is), one player's
+		const Bool fog = TheObserverCamera.isFogOn();
+		static const char *const VIS[ 3 ] = { "VisAll", "VisTeam", "VisPlayer" };
+		for( Int each = 0; each < 3; each++ )
+			consoleKey( VIS[ each ], box( l.R( 1750 + each * 55 ), l.Y( 928 ), l.R( 1800 + each * 55 ), l.Y( 956 ) ),
+				each == 0 ? !fog : each == 2 ? fog : FALSE, each == 1 || ( each == 2 && picked == NULL ), CON_VISION, each );
+
+		// the teams' armies against each other: numeral, share of the biggest, net worth; the leader in gold
+		Int teamWorth[ CON_ROWS_MAX ] = { 0 };
+		for( size_t each = 0; each < seats.size(); each++ )
+			if( seats[ each ].stats->team >= 0 && seats[ each ].stats->team < CON_ROWS_MAX )
+				teamWorth[ seats[ each ].stats->team ] += seats[ each ].stats->networth;
+		const Int bestArmy = leaderTeam >= 0 ? max( teamArmy[ leaderTeam ], 1 ) : 1;
+		// a free-for-all has no teams to weigh: its four largest armies stand there instead, each behind its
+		// player's colour
+		if( !byTeam )
+		{
+			std::vector< const ConsoleSeat * > biggest;
+			for( size_t each = 0; each < seats.size(); each++ )
+				if( !seats[ each ].out )
+					biggest.push_back( &seats[ each ] );
+			std::stable_sort( biggest.begin(), biggest.end(), []( const ConsoleSeat *a, const ConsoleSeat *b ) { return a->stats->army > b->stats->army; } );
+			for( Int row = 0; row < min( (Int)biggest.size(), (Int)CON_ROWS_MAX ); row++ )
+			{
+				const ConsoleSeat &seat = *biggest[ row ];
+				const Int y = l.Y( 960 + row * 18 ), rowH = P( 18 );
+				TheDisplay->drawFillRect( l.R( 1756 ), y + P( 3 ), P( 6 ), P( 12 ), rackColour( seat.player ) );
+				drawSegmentBar( l.R( 1770 ), y + P( 5 ), l.R( 1846 ), y + P( 13 ), (Real)seat.stats->army / largestArmy, rackColour( seat.player ), P( 3 ), 1, DARK_SEG );
+				drawText( consoleMoney( seat.stats->army ), font( 14 ), l.R( 1904 ), y, rowH, row == 0 ? GOLD_INK : GREY_INK, 1 );
+			}
+		}
+		for( Int t = 0; byTeam && t < min( teamCount, (Int)CON_ROWS_MAX ); t++ )
+		{
+			const Int y = l.Y( 960 + t * 18 ), rowH = P( 18 );
+			const Bool lead = t == leaderTeam;
+			UnicodeString number;
+			number.format( u"%d", t + 1 );
+			drawText( number, font( 14 ), l.R( 1760 ), y, rowH, consoleTeamColour( t ), 0 );
+			drawSegmentBar( l.R( 1770 ), y + P( 5 ), l.R( 1846 ), y + P( 13 ), (Real)teamArmy[ t ] / bestArmy, consoleTeamColour( t ), P( 3 ), 1, DARK_SEG );
+			drawText( consoleMoney( teamWorth[ t ] ), font( 14 ), l.R( 1904 ), y, rowH, lead ? GOLD_INK : GREY_INK, 1 );
+		}
+
+		static const char *const SYS[ 4 ] = { "Options", "Chat", "Quit", "Collapse" };
+		static const ConsoleAction SYS_ACTIONS[ 4 ] = { CON_OPTIONS, CON_CHAT, CON_QUIT, CON_FOLD };
+		for( Int each = 0; each < 4; each++ )
+			consoleKey( SYS[ each ], box( l.R( 1750 + each * 41 ), l.Y( 1040 ), l.R( 1786 + each * 41 ), l.Y( 1070 ) ), FALSE, FALSE, SYS_ACTIONS[ each ], 0 );
 	}
 
-	// a superweapon's seconds while it charges
-	for( Int each = 0; each < swCount; each++ )
-		if( !superweapons[ each ].ready )
+	if( pickedSeat == NULL )
+	{
+		//
+		// the tab: the seven stat keys with their names in words, the picked one lit, and the heat scale with
+		// its two ends' values
+		//
+		static const char *const STAT_WORDS[ CON_STATS ] = { "GUI:ObsConStatMoney", "GUI:ObsConStatIncome", "GUI:ObsConStatArmy",
+			"GUI:ObsConStatKills", "GUI:ObsConStatPower", "GUI:ObsConStatBuilds", "GUI:ObsConStatSuper" };
+		const Color PAPER_INK = GameMakeColor( 232, 234, 240, 255 ), HOT_END_INK = GameMakeColor( 240, 170, 110, 255 );
+		for( Int each = 0; each < CON_STATS; each++ )
 		{
-			UnicodeString seconds;
-			seconds.format( u"%d", superweapons[ each ].seconds );
-			drawObserverReadout( seconds, smallCell( right - px( 4 ) - ( each + 1 ) * smallPitch + ( smallPitch - smallW ) ), FALSE, FALSE, WHITE_INK );
+			const IRegion2D key = box( l.D( 636 + each * 70 ), l.Y( 840 ), l.D( 702 + each * 70 ), l.Y( 860 ) );
+			const Bool hot = consoleHot( key );
+			consoleKey( "StatKey", key, each == stat, FALSE, CON_STAT, each );
+			const UnicodeString word = UIStyle::fitName( TheGameText->fetch( STAT_WORDS[ each ] ), font( 14 ), key.hi.x - key.lo.x - P( 4 ) );
+			drawText( word, font( 14 ), ( key.lo.x + key.hi.x ) / 2, key.lo.y, key.hi.y - key.lo.y,
+				each == stat ? TEXT_DARK : hot ? GOLD_INK : PAPER_INK, 0, each != stat );
 		}
+		const Int scaleX0 = l.D( 1186 ), scaleX1 = l.D( 1286 ), scaleY0 = l.Y( 844 ), scaleY1 = l.Y( 856 );
+		if( const Image *heat = consolePiece( "Heat" ) )
+			TheDisplay->drawImage( heat, scaleX0, scaleY0, scaleX1, scaleY1 );
+		else
+			for( Int step = 0; step < 24; step++ )
+			{
+				const Int a = scaleX0 + ( scaleX1 - scaleX0 ) * step / 24, b = scaleX0 + ( scaleX1 - scaleX0 ) * ( step + 1 ) / 24;
+				TheDisplay->drawFillRect( a, scaleY0, b - a, scaleY1 - scaleY0, consoleHeat( step / 23.0f ) );
+			}
+		// the ends as the seats holding them write their values
+		const ConsoleSeat *lowSeat = NULL, *highSeat = NULL;
+		for( size_t each = 0; each < seats.size(); each++ )
+		{
+			if( seats[ each ].out )
+				continue;
+			if( lowSeat == NULL && seats[ each ].value[ stat ] == low )
+				lowSeat = &seats[ each ];
+			if( highSeat == NULL && seats[ each ].value[ stat ] == high )
+				highSeat = &seats[ each ];
+		}
+		if( lowSeat != NULL && highSeat != NULL )
+		{
+			drawText( consoleValueText( stat, *lowSeat ), font( 14 ), l.D( 1180 ), l.Y( 842 ), P( 16 ), GREY_INK, 1 );
+			drawText( consoleValueText( stat, *highSeat ), font( 14 ), l.D( 1292 ), l.Y( 842 ), P( 16 ), HOT_END_INK );
+		}
+
+		//
+		// the seats: the 8x4 matrix, a row a team, or rows of eight when every player stands alone. Fewer
+		// seats take a smaller grid and grow with it, every part of a seat by the same factor, up to twice
+		// the size all 32 have
+		//
+		Int deckColumns = CON_COLUMNS_MAX, deckRows = CON_ROWS_MAX;
+		if( byTeam )
+		{
+			deckColumns = max( widest, 1 );
+			deckRows = min( teamCount, (Int)CON_ROWS_MAX );
+		}
+		else
+		{
+			const Int n = max( (Int)seats.size(), 1 );
+			Real best = 0.0f;
+			for( Int rows = 1; rows <= CON_ROWS_MAX; rows++ )
+			{
+				const Int columns = ( n + rows - 1 ) / rows;
+				const Real grow = min( (Real)CON_COLUMNS_MAX / columns, (Real)CON_ROWS_MAX / rows );
+				if( columns <= CON_COLUMNS_MAX && grow > best + 0.001f )
+				{
+					best = grow;
+					deckColumns = columns;
+					deckRows = rows;
+				}
+			}
+		}
+		const Real ss = min( CON_SEAT_LARGEST, min( (Real)CON_COLUMNS_MAX / deckColumns, (Real)CON_ROWS_MAX / deckRows ) );
+		auto SP = [ k, ss ]( Real at1080 ) { return REAL_TO_INT_FLOOR( at1080 * k * ss + 0.5f ); };
+		// centred in the matrix's room: x 284 to 1720, y 872 to 1077
+		const Int gridW = deckColumns * SP( 180 ) - SP( 4 ), gridH = deckRows * SP( 52 ) - SP( 3 );
+		const Int gridX = ( l.D( 284 ) + l.D( 1720 ) - gridW ) / 2, gridY = ( l.Y( 872 ) + l.Y( 1077 ) - gridH ) / 2;
+		auto deckSeat = [ & ]( size_t each, Int *row, Int *column )
+		{
+			*row = byTeam ? seatRow[ each ] : (Int)each / deckColumns;
+			*column = byTeam ? seatColumn[ each ] : (Int)each % deckColumns;
+		};
+
+		// the team tabs: the team's colour block, its numeral and a pip a seat, green while it stands
+		if( byTeam )
+		{
+			Int slot[ CON_ROWS_MAX ] = { 0 };
+			for( Int t = 0; t < deckRows; t++ )
+			{
+				const Int tx = gridX - SP( 36 ), ty = gridY + t * SP( 52 );
+				const IRegion2D tabBox = box( tx, ty, tx + SP( 30 ), ty + SP( 49 ) );
+				TheDisplay->beginBatch2D();
+				drawConsolePiece( "Team", "", tabBox );
+				TheDisplay->drawFillRect( tx + SP( 3 ), ty + SP( 3 ), SP( 24 ), SP( 4 ), consoleTeamColour( t ) );
+				for( size_t each = 0; each < seats.size(); each++ )
+				{
+					if( seats[ each ].stats->team != t || slot[ t ] >= CON_COLUMNS_MAX )
+						continue;
+					const Int i = slot[ t ]++;
+					TheDisplay->drawFillRect( tx + SP( 4 + ( i % 4 ) * 6 ), ty + SP( 34 + ( i / 4 ) * 6 ), SP( 4 ), SP( 4 ),
+						seats[ each ].out ? GameMakeColor( 110, 34, 30, 255 ) : GameMakeColor( 92, 200, 80, 255 ) );
+				}
+				TheDisplay->endBatch2D();
+				UnicodeString number;
+				number.format( u"%d", t + 1 );
+				drawText( number, font( 20 * ss ), ( tabBox.lo.x + tabBox.hi.x ) / 2, ty + SP( 10 ), SP( 24 ), WHITE_INK, 0 );
+			}
+		}
+
+		// each seat, two lines (PIECES.md's seat anatomy): badge, name and the picked stat's value; the lead
+		// build in its ring, the rest counted, the army bar, the power and the superweapon
+		for( size_t each = 0; each < seats.size(); each++ )
+		{
+			Int row = 0, column = 0;
+			deckSeat( each, &row, &column );
+			if( row >= deckRows )
+				continue;
+			const ConsoleSeat &seat = seats[ each ];
+			const Int x0 = gridX + column * SP( 180 ), y0 = gridY + row * SP( 52 );
+			auto X = [ & ]( Real at ) { return x0 + SP( at ); };
+			auto Yat = [ & ]( Real at ) { return y0 + SP( at ); };
+			const IRegion2D tile = box( x0, y0, X( 176 ), Yat( 49 ) );
+			const IRegion2D glass = box( X( 3 ), Yat( 3 ), X( 173 ), Yat( 46 ) );
+			const IRegion2D bloom = box( X( -8 ), Yat( -8 ), X( 184 ), Yat( 57 ) );
+			const Bool hot = consoleHot( tile );
+			const Bool leader = seat.index == leaderIndex;
+			const ConsoleHit hit = { tile, CON_PICK, seat.index };
+			theConsoleHits.push_back( hit );
+			const Color colour = rackColour( seat.player );
+
+			TheDisplay->beginBatch2D();
+			drawConsolePiece( "Seat", seat.out ? "D" : ( hot ? "H" : "" ), tile );
+			if( !seat.out )
+			{
+				// the heat tint at 0.42, 0.75 of it at the glass's top rising to 1.25 at its foot
+				static const Real BANDS[ 4 ] = { 0.75f, 0.92f, 1.08f, 1.25f };
+				const Int gh = glass.hi.y - glass.lo.y;
+				for( Int band = 0; band < 4; band++ )
+					TheDisplay->drawFillRect( glass.lo.x, glass.lo.y + gh * band / 4, glass.hi.x - glass.lo.x, gh * ( band + 1 ) / 4 - gh * band / 4,
+						consoleHeat( heatOf( seat ), REAL_TO_INT( 107 * BANDS[ band ] ) ) );
+			}
+			UnsignedByte r, g, b, a;
+			GameGetColorComponents( colour, &r, &g, &b, &a );
+			TheDisplay->drawFillRect( glass.lo.x, glass.lo.y, SP( 4 ), glass.hi.y - glass.lo.y,
+				seat.out ? GameMakeColor( r * 35 / 100, g * 35 / 100, b * 35 / 100, 255 ) : colour );
+			TheDisplay->drawFillRect( X( 8 ), glass.lo.y, 1, glass.hi.y - glass.lo.y, GameMakeColor( 0, 0, 0, 180 ) );
+			if( const Image *badge = consoleBadge( seat.player ) )
+			{
+				const Int h = SP( 15 ), w = badge->getImageHeight() > 0 ? h * badge->getImageWidth() / badge->getImageHeight() : h;
+				TheDisplay->drawImage( badge, X( 10 ), Yat( 5 ), X( 10 ) + w, Yat( 5 ) + h, seat.out ? GameMakeColor( 120, 120, 120, 200 ) : 0xFFFFFFFF );
+			}
+			if( leader )
+				if( const Image *lead = consolePiece( "SeatLead" ) )
+					TheDisplay->drawImage( lead, bloom.lo.x, bloom.lo.y, bloom.hi.x, bloom.hi.y );
+			TheDisplay->endBatch2D();
+
+			const Int line1 = Yat( 6 ), line1H = SP( 16 ), line2 = Yat( 27 ), line2H = SP( 16 );
+			GameFont *ink14 = font( 14 * ss );
+			const Int nameX = X( 28 );
+			if( seat.out )
+			{
+				const UnicodeString name = UIStyle::fitName( seat.player->getPlayerDisplayName(), ink14, max( X( 169 ) - nameX, 1 ) );
+				const Int nameW = drawText( name, ink14, nameX, line1, line1H, GameMakeColor( 110, 112, 116, 255 ) );
+				TheDisplay->drawFillRect( nameX - 1, line1 + line1H / 2, nameW + 2, max( SP( 1 ), 1 ), GameMakeColor( 170, 40, 34, 255 ) );
+				const Int s = SP( 18 ), cx = X( 20 ), cy = Yat( 35 );
+				if( const Image *skull = consolePiece( "IconSkull" ) )
+					TheDisplay->drawImage( skull, cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2, GameMakeColor( 200, 56, 44, 255 ) );
+				drawText( TheGameText->fetch( "GUI:ObsConDefeated" ), ink14, X( 34 ), line2, line2H, GameMakeColor( 200, 56, 44, 255 ) );
+				if( const Int flash = defeatFlash( seat ) )
+					TheDisplay->drawFillRect( glass.lo.x, glass.lo.y, glass.hi.x - glass.lo.x, glass.hi.y - glass.lo.y, GameMakeColor( 255, 255, 255, flash ) );
+				continue;
+			}
+			// the picked stat's value at the right, the leader's in gold behind a crown; the name in what is left,
+			// never past x 116
+			UnsignedByte hr, hg, hb, ha;
+			GameGetColorComponents( consoleHeat( heatOf( seat ) ), &hr, &hg, &hb, &ha );
+			const Color valueInk = leader ? GOLD_INK
+				: GameMakeColor( min( 255, hr * 6 / 10 + 110 ), min( 255, hg * 6 / 10 + 110 ), min( 255, hb * 6 / 10 + 110 ), 255 );
+			const Int valueW = drawText( consoleValueText( stat, seat ), ink14, X( 169 ), line1, line1H, valueInk, 1 );
+			Int nameRight = min( X( 116 ), X( 169 ) - valueW - SP( 6 ) );
+			if( leader )
+			{
+				const Int s = SP( 14 ), cx = X( 169 ) - valueW - SP( 11 ), cy = Yat( 13 );
+				if( const Image *crown = consolePiece( "IconCrown" ) )
+					TheDisplay->drawImage( crown, cx - s / 2, cy - s / 2, cx - s / 2 + s, cy - s / 2 + s, GOLD_INK );
+				nameRight = min( nameRight, cx - s / 2 - SP( 3 ) );
+			}
+			drawText( UIStyle::fitName( seat.player->getPlayerDisplayName(), ink14, max( nameRight - nameX, 1 ) ), ink14, nameX, line1, line1H, WHITE_INK );
+
+			// line two: the lead build 24x18 at 11,26 in its gold ring, "+N", the army bar, power, the superweapon
+			TheDisplay->beginBatch2D();
+			const IRegion2D leadBuild = box( X( 11 ), Yat( 26 ), X( 35 ), Yat( 44 ) );
+			if( seat.queue != NULL )
+			{
+				const InGameUI::ProductionListSlot &first = seat.queue->slot[ 0 ];
+				if( first.cameo != NULL )
+					TheDisplay->drawImage( first.cameo, leadBuild.lo.x, leadBuild.lo.y, leadBuild.hi.x, leadBuild.hi.y );
+				drawProgressRing( box( X( 9 ), Yat( 24 ), X( 37 ), Yat( 46 ) ), first.percent / 100.0f, GOLD_INK, max( SP( 2 ), 1 ) );
+			}
+			else
+				TheDisplay->drawOpenRect( leadBuild.lo.x, leadBuild.lo.y, leadBuild.hi.x - leadBuild.lo.x, leadBuild.hi.y - leadBuild.lo.y, 1.0f, GameMakeColor( 44, 48, 54, 255 ) );
+			drawSegmentBar( X( 68 ), Yat( 31 ), X( 128 ), Yat( 39 ), (Real)seat.stats->army / largestArmy,
+				GameMakeColor( 196, 202, 210, 255 ), max( SP( 3 ), 1 ), max( SP( 1 ), 1 ), DARK_SEG );
+			const Color powerInk = seat.power == 0 ? GREEN_INK : seat.power == 1 ? AMBER : RED_INK;
+			if( const Image *bolt = consolePiece( "IconPower" ) )
+				TheDisplay->drawImage( bolt, X( 133 ), Yat( 28 ), X( 147 ), Yat( 42 ), powerInk );
+			else
+				drawConsoleLamp( X( 140 ), Yat( 35 ), SP( 8 ), powerInk );
+			if( seat.hasSuperweapon )
+			{
+				const IRegion2D sw = box( X( 150 ), Yat( 27 ), X( 170 ), Yat( 43 ) );
+				if( seat.superweaponCameo != NULL )
+				{
+					TheDisplay->drawImage( seat.superweaponCameo, sw.lo.x, sw.lo.y, sw.hi.x, sw.hi.y );
+					if( !seat.superweaponReady )
+						TheDisplay->drawRemainingRectClock( sw.lo.x, sw.lo.y, sw.hi.x - sw.lo.x, sw.hi.y - sw.lo.y, seat.superweaponPercent, GameMakeColor( 0, 0, 0, 160 ) );
+				}
+				else
+					TheDisplay->drawRectClock( sw.lo.x, sw.lo.y, sw.hi.x - sw.lo.x, sw.hi.y - sw.lo.y, seat.superweaponPercent, GameMakeColor( 200, 206, 214, 255 ) );
+				if( seat.superweaponReady )
+					TheDisplay->drawOpenRect( sw.lo.x - SP( 2 ), sw.lo.y - SP( 2 ), sw.hi.x - sw.lo.x + SP( 4 ), sw.hi.y - sw.lo.y + SP( 4 ), max( 2.0f, 2 * k * ss ),
+						GameMakeColor( 242, 194, 48, readyAlpha( seat ) ) );
+			}
+			if( seat.stats->underAttack )
+			{
+				const Int alpha = REAL_TO_INT( 255 * alarmAlpha );
+				if( const Image *alert = consolePiece( "SeatAlert" ) )
+					TheDisplay->drawImage( alert, bloom.lo.x, bloom.lo.y, bloom.hi.x, bloom.hi.y, GameMakeColor( 255, 255, 255, alpha ) );
+				else
+					TheDisplay->drawOpenRect( tile.lo.x, tile.lo.y, tile.hi.x - tile.lo.x, tile.hi.y - tile.lo.y, max( 2.0f, 2 * k * ss ), GameMakeColor( 236, 52, 38, alpha ) );
+			}
+			TheDisplay->endBatch2D();
+			if( seat.queue != NULL && seat.queue->total > 1 )
+			{
+				UnicodeString rest;
+				rest.format( u"+%d", seat.queue->total - 1 );
+				drawText( rest, ink14, X( 40 ), line2, line2H, GREY_INK );
+			}
+		}
+		return;
+	}
+
+	//
+	// the dossier of the picked seat
+	//
+	drawObserverDossier( l, *pickedSeat->stats, pickedSeat->index, m_superweapons[ pickedSeat->index ], teamCount );
 }
+
 
 //-------------------------------------------------------------------------------------------------
 /** A chevron at the edge of the view pointing at each alarm that is off the screen, in the alarm's
@@ -14341,29 +15374,95 @@ Bool InGameUI::handleHudCellClick( const ICoord2D *mouse, Bool cancel )
 	if( GroupPanel_click( mouse, cancel ) )
 		return TRUE;
 
-	// the watcher's panels: a cell looks at its building, a badge picks its player, the rest is plate
-	for( size_t each = 0; each < theObserverHits.size(); each++ )
+	// the observer console: its keys and seats, and the rest of its steel is its own
+	for( size_t each = 0; each < theConsoleHits.size(); each++ )
 	{
-		const ObserverHit &hit = theObserverHits[ each ];
+		const ConsoleHit &hit = theConsoleHits[ each ];
 		if( !inside( hit.box ) )
 			continue;
-		if( Object *building = TheGameLogic->findObjectByID( hit.look ) )
-			TheTacticalView->lookAt( building->getPosition() );
-		else if( hit.pick >= 0 && !cancel )
+		if( cancel )
+			return TRUE;
+		const Player *picked = observerPickedPlayer();
+		auto follow = [ this ]( Int index )
 		{
-			// the picked player's badge again lets go of him, as Esc does
-			const Player *picked = observerPickedPlayer();
-			AsciiString follow;
-			if( picked != NULL && picked->getPlayerIndex() == hit.pick )
-				follow.format( "%s%s", FOLLOW_ACTION.c_str(), FOLLOW_NOBODY.c_str() );
+			AsciiString action;
+			if( index < 0 )
+				action.format( "%s%s", FOLLOW_ACTION.c_str(), FOLLOW_NOBODY.c_str() );
 			else
-				follow.format( "%s%d", FOLLOW_ACTION.c_str(), hit.pick );
-			runSpectatorAction( follow.str() );
+				action.format( "%s%d", FOLLOW_ACTION.c_str(), index );
+			runSpectatorAction( action.str() );
+		};
+		switch( hit.action )
+		{
+			case CON_PICK:
+				follow( picked != NULL && picked->getPlayerIndex() == hit.arg ? -1 : hit.arg );
+				break;
+			case CON_STAT:
+				m_rackStat = hit.arg;
+				break;
+			case CON_CAMERA:
+				runSpectatorAction( CAMERA_ACTION + ( hit.arg == 0 ? CAMERA_FREE : hit.arg == 1 ? CAMERA_PLAYER : CAMERA_DIRECTOR ) );
+				break;
+			case CON_VISION:
+				TheObserverCamera.setFog( hit.arg == 2 );
+				break;
+			case CON_OPTIONS:
+				if( WindowLayout *options = TheShell->getOptionsLayout( TRUE ) )
+				{
+					options->runInit();
+					options->hide( FALSE );
+					options->bringForward();
+				}
+				break;
+			case CON_CHAT:
+				ToggleInGameChat();
+				break;
+			case CON_QUIT:
+				ToggleQuitMenu();
+				break;
+			case CON_ALL:
+				follow( -1 );
+				break;
+			case CON_PREV:
+			case CON_NEXT:
+			{
+				// the seat before or after the picked one, round the deck's order
+				Int at = 0;
+				for( Int i = 0; i < theConsoleOrderCount; i++ )
+					if( picked != NULL && theConsoleOrder[ i ] == picked->getPlayerIndex() )
+						at = i;
+				if( theConsoleOrderCount > 0 )
+					follow( theConsoleOrder[ ( at + ( hit.action == CON_NEXT ? 1 : theConsoleOrderCount - 1 ) ) % theConsoleOrderCount ] );
+				break;
+			}
+			case CON_TEAM:
+				// the team's first seat still standing, else its first
+				for( Int pass = 0; pass < 2; pass++ )
+					for( Int i = 0; i < theConsoleOrderCount; i++ )
+					{
+						Player *seat = ThePlayerList->getNthPlayer( theConsoleOrder[ i ] );
+						if( theConsoleTeam[ i ] == hit.arg && seat != NULL && ( pass == 1 || seat->isPlayerActive() ) )
+						{
+							follow( theConsoleOrder[ i ] );
+							pass = 2;
+							break;
+						}
+					}
+				break;
+			case CON_FOLD:
+				theConsoleCollapsed = !theConsoleCollapsed;
+				break;
+			case CON_LOOK:
+				if( Object *building = TheGameLogic->findObjectByID( (ObjectID)hit.arg ) )
+					TheTacticalView->lookAt( building->getPosition() );
+				break;
 		}
 		return TRUE;
 	}
-	if( inside( theObserverPanelBoxes[ 0 ] ) || inside( theObserverPanelBoxes[ 1 ] ) )
-		return TRUE;
+	for( Int each = 0; each < 4; each++ )
+		if( inside( theConsoleBlock[ each ] ) )
+			return TRUE;
+
 
 	for( Int each = 0; each < m_productionListCells; each++ )
 	{

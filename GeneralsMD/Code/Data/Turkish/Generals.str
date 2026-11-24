@@ -16382,24 +16382,60 @@ GUI:HudStandings
 "Sıralama"
 END
 
-GUI:ObsPanelIncome
-"Gelir"
+GUI:ObsConTeam
+"TAKIM %d"
 END
 
-GUI:ObsPanelUnits
-"Birlik"
+GUI:ObsConStatMoney
+"PARA"
 END
 
-GUI:ObsPanelBuildings
-"Bina"
+GUI:ObsConStatIncome
+"GELİR"
 END
 
-GUI:ObsPanelKills
-"Öldürme"
+GUI:ObsConStatArmy
+"ORDU"
 END
 
-GUI:ObsPanelLosses
-"Kayıp"
+GUI:ObsConStatKills
+"İMHA"
+END
+
+GUI:ObsConStatPower
+"ENERJİ"
+END
+
+GUI:ObsConStatBuilds
+"ÜRETİM"
+END
+
+GUI:ObsConStatSuper
+"SÜPER"
+END
+
+GUI:ObsConGeneral
+"GENERAL"
+END
+
+GUI:ObsConQueue
+"SIRA"
+END
+
+GUI:ObsConPowers
+"GÜÇLER"
+END
+
+GUI:ObsConDefeated
+"YENİLDİ"
+END
+
+GUI:ObsConLost
+"KAYIP"
+END
+
+GUI:ObsConPerMinute
+"/DK"
 END
 
 GUI:CheatPanelTitle

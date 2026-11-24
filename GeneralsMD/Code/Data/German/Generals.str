@@ -19045,24 +19045,60 @@ GUI:HudStandings
 "Stand"
 END
 
-GUI:ObsPanelIncome
-"Einkommen"
+GUI:ObsConTeam
+"TEAM %d"
 END
 
-GUI:ObsPanelUnits
-"Einheiten"
+GUI:ObsConStatMoney
+"GELD"
 END
 
-GUI:ObsPanelBuildings
-"Gebäude"
+GUI:ObsConStatIncome
+"EINK."
 END
 
-GUI:ObsPanelKills
-"Abschüsse"
+GUI:ObsConStatArmy
+"ARMEE"
 END
 
-GUI:ObsPanelLosses
-"Verluste"
+GUI:ObsConStatKills
+"ABSCH."
+END
+
+GUI:ObsConStatPower
+"STROM"
+END
+
+GUI:ObsConStatBuilds
+"BAU"
+END
+
+GUI:ObsConStatSuper
+"SUPER"
+END
+
+GUI:ObsConGeneral
+"GENERAL"
+END
+
+GUI:ObsConQueue
+"PRODUKTION"
+END
+
+GUI:ObsConPowers
+"KRÄFTE"
+END
+
+GUI:ObsConDefeated
+"BESIEGT"
+END
+
+GUI:ObsConLost
+"VERLOREN"
+END
+
+GUI:ObsConPerMinute
+"/MIN"
 END
 
 GUI:HudStatCash

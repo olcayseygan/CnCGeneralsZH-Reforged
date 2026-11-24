@@ -665,35 +665,13 @@ def obs_card(side, s):
                    corners=CARD_CORNERS, top=CARD_TOP, tab=CARD_TAB, fit=fit)
 
 
-# The observer screen in the neutral HUD (the owner's approval of 2026-11-24, the wrapper's
-# experiments/proofs/2026-11-24/observer/README-observer.md): the lobby's family at the theme's HUD density.  A desk
-# open on the right and the foot with one clamp on its battlefield corner, the radar's housing open on the left and the
-# foot, the operator keys as Riveted Clamp keys, the picked stat's dropdown at HUD_DROP, the Tab screen's mute key, the
-# standings' column marks.  The Ledger's pieces above stay on the sheet until the code stops drawing them.
-SCOPE, SCOPE_GLASS = 264, 14                    # the radar housing; its glass from this far below its top
+# The observer screen's second round (the owner's approval of 2026-11-24, the wrapper's
+# experiments/proofs/2026-11-24/observer/README-obs2.md) is built from the lobby's own pieces after the bug-fix
+# release.  Two of its pieces are on the sheet already: the standings' column marks and the clamp key for a word (the
+# Tab screen's MAIN MENU).  The first round's desk, scope, keys, dropdown and mute key came off on 2026-11-24.
 STAT_MARK = 18
 STAT_MARKS = {"Money": 1, "Income": 2, "Army": 3, "Kills": 4, "Power": 6, "Builds": "placed", "Super": "time"}
-MUTE, STANDINGS_KEY = (40, 40), (T.HUD_KEY[0], T.HUD_DROP)
 CLAMP_WORD, CLAMP_WORD_END = (2 * 24 + 64, 72), 24     # a clamp key for a word (MAIN MENU), the end screen round's
-
-
-def clamp_corner(o, X, Y, sx, sy):
-    """A box's clamp (clamp_box's, bright steel) on one notched corner."""
-    T.clamp(o, X, Y, sx, sy, 6, BOX_ARM, BOX_TH, H.BRIGHT, None, BOX_RIVET, BOX_RISE)
-
-
-def obs_desk(side, s):
-    """The board's glass desk, square for the tiled 9-slice: open on the right and the foot, its battlefield corner
-    notched and clamped, the glass 6 in."""
-    return T.panel(side, s, s, [(6, 6, s, s)], open4=(False, True, False, True), corners=(("notch", 1.0),) * 4, c=6,
-                   fit=lambda o: clamp_corner(o, 0, 0, 1, 1))
-
-
-def obs_scope(side):
-    """The radar's housing: open on the left and the foot, its glass from SCOPE_GLASS below the top to as far in from
-    the right, the top right notched and clamped."""
-    return T.panel(side, SCOPE, SCOPE, [(0, SCOPE_GLASS, SCOPE - SCOPE_GLASS, SCOPE)], open4=(False, True, True, False),
-                   corners=(("notch", 1.0),) * 4, c=6, fit=lambda o: clamp_corner(o, SCOPE, 0, -1, 1))
 
 
 def stat_mark(kind, size, colour=T.INK["white"]):
@@ -711,42 +689,9 @@ def stat_mark(kind, size, colour=T.INK["white"]):
     return T.mask((size, size), draw, colour)
 
 
-def mute_mark(size, colour):
-    """A speaker with two waves."""
-    def draw(d, k):
-        s = size / 22 * k
-        d.polygon([(3 * s, 8 * s), (7 * s, 8 * s), (12 * s, 4 * s), (12 * s, 18 * s), (7 * s, 14 * s), (3 * s, 14 * s)], fill=255)
-        for r in (4.0, 7.0):
-            d.arc(((12 - r) * s, (11 - r) * s, (12 + r) * s, (11 + r) * s), -50, 50, fill=255, width=int(1.8 * s))
-    return T.mask((size, size), draw, colour)
-
-
-def standings_mark(size, colour):
-    """Three bars, longest first: a ranked list."""
-    def draw(d, k):
-        s = size / 22 * k
-        for i, w in enumerate((16, 12, 8)):
-            y = 4 + i * 5.6
-            d.rectangle((3 * s, y * s, (3 + w) * s, (y + 3.2) * s), fill=255)
-    return T.mask((size, size), draw, colour)
-
-
-def marked_key(side, size, state, mark, glyph):
-    img = clamp_key(side, *size, state)
-    img.alpha_composite(mark(glyph, T.KEY_INK[state]), ((size[0] - glyph) // 2, (size[1] - glyph) // 2))
-    return img
-
-
 def observer_neutral(side):
-    """The neutral observer screen's own pieces (Piece OBS_DESK_* to OBS_STAT_MARK_*, CLAMP_WORD_*)."""
-    out = {"ObsScope": obs_scope(side)}
-    out.update(slices("ObsDesk", lambda st: T.nine(side, obs_desk(side, T.master(side, CLAMP_NINE)), CLAMP_NINE)))
-    for st in KEY_STATES:
-        for name, kind in OBS_KEYS.items():
-            out["ObsClampKey" + name + st] = marked_key(side, T.HUD_KEY, st, lambda g, c, kind=kind: stat_glyph(kind, g, c), OBS_KEY_GLYPH)
-        out["ObsClampKeyStandings" + st] = marked_key(side, STANDINGS_KEY, st, standings_mark, 20)
-        out["ObsMute" + st] = marked_key(side, MUTE, st, mute_mark, 20)
-    out.update(slices("ObsDrop", lambda st: T.three_cut_ends(clamp_drop(side, 160, T.HUD_DROP, st), 16, CLAMP_END), KEY_STATES))
+    """The observer screen's second-round pieces already on the sheet (Piece OBS_STAT_MARK_*, CLAMP_WORD_*)."""
+    out = {}
     for kind in STAT_MARKS:
         out["ObsStatMark" + kind] = stat_mark(kind, STAT_MARK, (255, 255, 255))
     out.update(slices("DSClampWord", lambda st: T.three_cut_ends(clamp_key(side, *CLAMP_WORD, st), CLAMP_WORD_END, CLAMP_WORD_END),
@@ -796,24 +741,10 @@ def check_observer(out):
             assert a.shape[0] == T.TILE or a.shape[1] == T.TILE, "%s%s is not a whole tile" % (frame, k)
     warm = lambda a: float(((a[..., 0] - a[..., 2]) > 50).mean())        # the lit face's bronze: red well over blue
     for name in OBS_KEYS:
-        for key in ("ObsKey", "ObsClampKey"):
-            up, lit = rgb(key + name), rgb(key + name + "P")
-            assert warm(lit) > warm(up) + 0.1, "%s%sP does not stand out from its up state (%.2f vs %.2f)" % (key, name, warm(lit), warm(up))
-    # the neutral screen's desk and scope: no rim on the screen's edges, a rim facing the battlefield, dark glass
-    for k in ("R", "BR", "B"):
-        assert rgb("ObsDesk" + k)[-1, -1].mean() < 40, "ObsDesk%s has a rim on the screen's edge" % k
-    assert rgb("ObsDeskC").mean() < 40, "ObsDesk's glass is too light for the rows"
-    assert rgb("ObsDeskL")[:, :8].mean(0).max() > 80, "ObsDesk has no rim facing the battlefield"
-    sc = rgb("ObsScope")
-    assert sc[100:130, 0].mean() < 40 and sc[-1, 100:130].mean() < 40, "ObsScope has a rim on the screen's edge"
-    assert sc[40:240, 20:230].mean() < 40, "ObsScope's glass is not where the code draws the map"
-    assert sc[:6, 100:130].mean(1).max() > 80 and sc[100:130, -6:].mean(0).max() > 80, "ObsScope has no rim facing the battlefield"
-    for k in ("T", "B", "L", "R", "C"):
-        a = out["ObsDesk" + k]
-        assert T.TILE in a.size, "ObsDesk%s is not a whole tile" % k
-    for name in tuple(OBS_KEYS) + ("Standings",):
-        assert out["ObsClampKey" + name].size == (T.HUD_KEY[0], T.HUD_DROP if name == "Standings" else T.HUD_KEY[1])
-    assert out["ObsDropL"].height == T.HUD_DROP and out["ObsMute"].size == MUTE and out["DSClampWordL"].size == (CLAMP_WORD_END, 72)
+        up, lit = rgb("ObsKey" + name), rgb("ObsKey" + name + "P")
+        assert warm(lit) > warm(up) + 0.1, "ObsKey%sP does not stand out from its up state (%.2f vs %.2f)" % (name, warm(lit), warm(up))
+    assert out["DSClampWordL"].size == (CLAMP_WORD_END, 72)
+    assert all(out["ObsStatMark" + kind].size == (STAT_MARK, STAT_MARK) for kind in STAT_MARKS)
 
 
 def end_card(side, won):

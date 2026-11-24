@@ -3,9 +3,10 @@
 One episode is one offline skirmish of Zero Hour, slot 0 America against one AI seat. The env drives
 generals.exe through its -control WebSocket (control_client.py, one folder up) with the training
 verbs `step`, `objects`, `produce`, `construct` and `buildspot`, and makes one decision every few
-game seconds: wait, train a dozer, put up a building, or queue a unit. MaskablePPO only ever picks
-from action_masks(), which says what the state allows (a finished producer, the money, an idle
-dozer, a short queue, the caps).
+game seconds: wait, train a dozer, put up a building, queue a unit, or order the army out against the
+enemy base or back to the front of our own (`attackmove`, the scenario grammar). MaskablePPO only
+ever picks from action_masks(), which says what the state allows (a finished producer, the money, an
+idle dozer, a short queue, the caps, an army big enough to send).
 
 `mock=True` swaps the game for mock_game.py, a small simulation that answers the same verbs, so the
 env and the training loop run without the game.
@@ -21,6 +22,7 @@ import argparse
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -53,29 +55,50 @@ ITEMS = {
     "barracks": Item("AmericaBarracks",                 600, 10, None,       0,  2),
     "supply":   Item("AmericaSupplyCenter",            2000, 10, "power",   -1,  3),
     "factory":  Item("AmericaWarFactory",              2000, 15, "supply",  -1,  2),
+    "patriot":  Item("AmericaPatriotBattery",          1000, 25, "power",   -3,  4),
     "chinook":  Item("AmericaVehicleChinook",          1200, 10, "supply",   0,  6),
     "ranger":   Item("AmericaInfantryRanger",           225,  5, "barracks", 0, 40),
     "missile":  Item("AmericaInfantryMissileDefender",  300,  5, "barracks", 0, 40),
     "humvee":   Item("AmericaVehicleHumvee",            700, 10, "factory",  0, 40),
     "crusader": Item("AmericaTankCrusader",             900, 10, "factory",  0, 40),
 }
-ACTIONS = ["wait", "dozer", "power", "barracks", "supply", "factory",
-           "chinook", "ranger", "missile", "humvee", "crusader"]
-BUILDINGS = ["power", "barracks", "supply", "factory"]
+ACTIONS = ["wait", "dozer", "power", "barracks", "supply", "factory", "patriot",
+           "chinook", "ranger", "missile", "humvee", "crusader", "attack", "defend"]
+BUILDINGS = ["power", "barracks", "supply", "factory", "patriot"]
 UNITS = ["dozer", "chinook", "ranger", "missile", "humvee", "crusader"]
 PRODUCERS = ["cc", "barracks", "supply", "factory"]
 ARMY = {"ranger", "missile", "humvee", "crusader"}
 KEY_OF_TEMPLATE = {item.template: key for key, item in ITEMS.items()}
 QUEUE_MAX = 2
+ENEMY_SLOT = 1
+ATTACK_MIN = 3             # army units before the army may be sent at the enemy base
+POWER_SURPLUS_MAX = 10     # no more power plants once this much power is spare (built and building)
+HOME_RADIUS = 700.0        # an army unit further than this from our CC counts as away
+FRONT_DISTANCE = 350.0     # the defence point and the Patriot line, out from our CC toward theirs
+COMMIT_DECISIONS = 12      # an attack may not be recalled for this many decisions (a minute at 5 s)
+# ponytail: the enemy's templates have no cost table here, so an object we cannot price counts by its
+# kind; a table of GLA and China costs from INIZH.big would make damage dealt exact
+NOMINAL_VALUE = {"structure": 1000, "builder": 1000, "unit": 600}
+# `objects` lists every object a seat owns, shots and effects included (ToxinTruckStreamProjectile,
+# SCUDMissile, PoisonFieldSmall, ReforgedTankWreckFire...), and each one that expires would count
+# as a kill. Our side needs no filter (only ITEMS templates are read); theirs does.
+NOT_A_UNIT = re.compile(r"Projectile|Missile$|Field|Wreck|Debris|Shell$|Bomb$|Rocket$|Flare|Crater")
 
-# Reward per 1000 credits: finished economy (structures, dozers, Chinooks) counts full, army half,
-# income full; a refused order and the end of the match are flat.
-REWARD = {"economy": 1.0, "army": 0.5, "income": 1.0, "refused": 0.05, "loss": 5.0, "win": 5.0}
+# Per 1000 credits: what we finish (economy full, army half), income, the enemy value we destroy and
+# ours that is destroyed; a kill, a refused order and the end of the match are flat. Combat outweighs
+# economy on purpose: a base is only worth what it lets the army do.
+REWARD = {"economy": 0.5, "army": 0.25, "income": 0.5, "dealt": 2.0, "taken": 1.0,
+          "kill": 0.05, "refused": 0.05, "loss": 20.0, "win": 50.0}
 
 
 def base_template(template):
     """AirF_AmericaBarracks -> AmericaBarracks: a general's copy counts as the stock building."""
     return template.split("_", 1)[1] if "_" in template else template
+
+
+def value_of(o):
+    key = KEY_OF_TEMPLATE.get(base_template(o["template"]))
+    return ITEMS[key].cost if key else NOMINAL_VALUE.get(o.get("kind"), 600)
 
 
 def default_exe():
@@ -146,7 +169,7 @@ class GameProcess:
 class BuildOrderEnv(gym.Env):
     metadata = {"render_modes": []}
 
-    def __init__(self, port=DEFAULT_PORT, mock=False, decision_seconds=5.0, episode_minutes=10.0,
+    def __init__(self, port=DEFAULT_PORT, mock=False, decision_seconds=5.0, episode_minutes=20.0,
                  map_name=DEFAULT_MAP, seed=0, opponent="FactionGLA", difficulty="easy", exe=None,
                  user_dir=None, headless=True, frames_per_game_second=FRAMES_PER_GAME_SECOND, reward=None,
                  watch_speed=0.0):
@@ -164,7 +187,7 @@ class BuildOrderEnv(gym.Env):
         self.broken = False
         self.episodes = 0
         self.action_space = gym.spaces.Discrete(len(ACTIONS))
-        size = 4 + 2 * len(BUILDINGS) + len(UNITS) + len(PRODUCERS) + 1
+        size = 4 + 2 * len(BUILDINGS) + len(UNITS) + len(PRODUCERS) + 1 + 8
         self.observation_space = gym.spaces.Box(-1.0, 1.0, (size,), np.float32)
 
     # -- the game -----------------------------------------------------------------------------------
@@ -231,7 +254,9 @@ class BuildOrderEnv(gym.Env):
              "power": power.get("produced", 0) - power.get("consumed", 0),
              "built": dict.fromkeys(ITEMS, 0), "uc": dict.fromkeys(ITEMS, 0), "units": dict.fromkeys(ITEMS, 0),
              "queue": dict.fromkeys(ITEMS, 0), "producers": {key: [] for key in PRODUCERS},
-             "idle": 0, "economy": 0, "army": 0, "cc": None}
+             "idle": 0, "economy": 0, "army": 0, "cc": None,
+             "ids": {},          # every finished object: id -> (value, "economy" or "army")
+             "soldiers": []}     # the army: (template, x, y)
         for o in reply["objects"]:
             key = KEY_OF_TEMPLATE.get(base_template(o["template"]))
             if key is None:
@@ -249,14 +274,48 @@ class BuildOrderEnv(gym.Env):
                     s["queue"][key] += queue
                 if key == "cc":
                     s["cc"] = o
-                else:
+                s["ids"][o["id"]] = (item.cost, "economy")
+                if key != "cc":
                     s["economy"] += item.cost
             else:
                 s["units"][key] += 1
-                s["army" if key in ARMY else "economy"] += item.cost
+                part = "army" if key in ARMY else "economy"
+                s[part] += item.cost
+                s["ids"][o["id"]] = (item.cost, part)
+                if part == "army":
+                    s["soldiers"].append((o["template"], o["x"], o["y"]))
                 if o["kind"] == "builder" and o.get("idle"):
                     s["idle"] += 1
+        home = (s["cc"]["x"], s["cc"]["y"]) if s["cc"] else getattr(self, "home", (0.0, 0.0))
+        s["away"] = sum(math.hypot(x - home[0], y - home[1]) > HOME_RADIUS for _, x, y in s["soldiers"])
+        s["enemy"] = self._read_enemy(home)
         return s
+
+    def _read_enemy(self, home):
+        """What the AI seat has: structures and army by count and value, its CC, and how near its army is."""
+        e = {"structures": 0, "structure_value": 0, "army": 0, "army_value": 0, "ids": {}, "cc": None,
+             "targets": [], "nearest": None, "defeated": False}
+        reply = self.send("objects %d" % ENEMY_SLOT)
+        if not reply.get("ok"):
+            return e
+        e["defeated"] = bool(reply.get("defeated"))
+        for o in reply["objects"]:
+            if NOT_A_UNIT.search(o["template"]):
+                continue
+            value = value_of(o)
+            e["ids"][o["id"]] = value
+            if o["kind"] == "structure":
+                e["structures"] += 1
+                e["structure_value"] += value
+                e["targets"].append((o["x"], o["y"]))
+                if o["template"].endswith("CommandCenter") and not o.get("underConstruction"):
+                    e["cc"] = (o["x"], o["y"])
+            elif o["kind"] == "unit":  # builders (workers, dozers) are no threat
+                e["army"] += 1
+                e["army_value"] += value
+                distance = math.hypot(o["x"] - home[0], o["y"] - home[1])
+                e["nearest"] = distance if e["nearest"] is None else min(e["nearest"], distance)
+        return e
 
     def _outcome(self):
         status = self.send("status")
@@ -266,7 +325,7 @@ class BuildOrderEnv(gym.Env):
         # a match that is no longer running says nothing here; step() ends the episode on it anyway
         self.others_left = sum(p.get("units", 0) for p in others) if others else self.others_left
         lost = self.state["defeated"] or (bool(mine) and mine[0].get("units", 0) == 0)
-        won = not lost and bool(others) and all(p.get("units", 0) == 0 for p in others)
+        won = not lost and (self.state["enemy"]["defeated"] or (bool(others) and all(p.get("units", 0) == 0 for p in others)))
         return lost, won
 
     def _find_supply(self):
@@ -298,6 +357,12 @@ class BuildOrderEnv(gym.Env):
             template = self.prefix + item.template
             if key == "supply":
                 x, y = self.supply_xy
+            elif key == "patriot":
+                # across the line from our CC to theirs, FRONT_DISTANCE out: centre, then left, right, ...
+                n = self.state["built"]["patriot"] + self.state["uc"]["patriot"]
+                side = 140.0 * ((n + 1) // 2) * (1 if n % 2 else -1)
+                x = self.front[0] - self.facing[1] * side
+                y = self.front[1] + self.facing[0] * side
             else:
                 # golden-angle spiral round the CC, one more lap every eight buildings
                 angle = self.placed * 2.39996
@@ -311,11 +376,56 @@ class BuildOrderEnv(gym.Env):
             self.placed += 1
             return "construct %d %s %.0f %.0f" % (self.slot, template, spot["x"], spot["y"])
 
+    def _attack_target(self):
+        """The enemy CC, else their structure nearest our base; None when we know of none."""
+        e = self.state["enemy"]
+        if e["cc"]:
+            return e["cc"]
+        if not e["targets"]:
+            return None
+        return min(e["targets"], key=lambda t: math.hypot(t[0] - self.home[0], t[1] - self.home[1]))
+
+    def _army_order(self, key):
+        """attack: every army template attack-moves on the enemy base. defend: back to our front, fighting
+        on the way. One line per template: a selector is one template or a prefix, and America's
+        prefixes would take the dozers and Chinooks along. True when every line was taken."""
+        target = self._attack_target() if key == "attack" else self.front
+        if target is None:
+            self.why = "no enemy structure known"
+            return False
+        templates = sorted({template for template, _, _ in self.state["soldiers"]})
+        if not templates:
+            self.why = "no army"
+            return False
+        for template in templates:
+            reply = self.send("attackmove %d %s %.0f %.0f" % (self.slot, template, target[0], target[1]))
+            if not reply.get("ok"):
+                self.why = "attackmove: %s" % reply.get("error")
+                return False
+        self.army_order = 1 if key == "attack" else -1
+        self.order_target = target
+        self.order_decision = self.decisions
+        return True
+
     def action_masks(self):
         s = self.state
         mask = np.zeros(len(ACTIONS), dtype=bool)
         mask[0] = True
+        army = len(s["soldiers"])
         for index, key in enumerate(ACTIONS[1:], 1):
+            # an attack is a commitment: no second order to the same target, and no recall for
+            # COMMIT_DECISIONS unless their army is at our door; otherwise a policy dithers between the
+            # two and the army never arrives anywhere
+            attacking = self.army_order == 1
+            if key == "attack":
+                target = self._attack_target()
+                mask[index] = army >= ATTACK_MIN and target is not None and not (attacking and target == self.order_target)
+                continue
+            if key == "defend":
+                threatened = s["enemy"]["nearest"] is not None and s["enemy"]["nearest"] < 2 * HOME_RADIUS
+                committed = attacking and self.decisions - self.order_decision < COMMIT_DECISIONS
+                mask[index] = army > 0 and (s["away"] > 0 or attacking) and (threatened or not committed)
+                continue
             item = ITEMS[key]
             if s["money"] < item.cost:
                 continue
@@ -325,6 +435,8 @@ class BuildOrderEnv(gym.Env):
             else:
                 mask[index] = (s["idle"] > 0 and s["cc"] is not None and s["built"][key] + s["uc"][key] < item.cap
                                and (item.source is None or s["built"][item.source] > 0))
+                if key == "power":
+                    mask[index] &= s["power"] + ITEMS["power"].power * s["uc"]["power"] < POWER_SURPLUS_MAX
         return mask
 
     # -- gymnasium ----------------------------------------------------------------------------------
@@ -335,6 +447,10 @@ class BuildOrderEnv(gym.Env):
              (s["frame"] - self.start_frame) / self.episode_frames]
         v += [s["built"][k] / 4.0 for k in BUILDINGS] + [s["uc"][k] / 2.0 for k in BUILDINGS]
         v += [s["units"][k] / 10.0 for k in UNITS] + [s["queue"][k] / 5.0 for k in PRODUCERS] + [s["idle"] / 3.0]
+        e = s["enemy"]
+        v += [e["structures"] / 20.0, e["structure_value"] / 20000.0, e["army"] / 30.0, e["army_value"] / 15000.0,
+              1.0 if e["nearest"] is None else e["nearest"] / 4000.0,
+              s["army"] / 15000.0, s["away"] / max(1, len(s["soldiers"])), float(self.army_order)]
         return np.clip(np.asarray(v, dtype=np.float32), -1.0, 1.0)
 
     def reset(self, *, seed=None, options=None):
@@ -356,6 +472,14 @@ class BuildOrderEnv(gym.Env):
             raise ControlError("no command center for slot %d" % self.slot)
         self.prefix = self.state["cc"]["template"][:-len(base_template(self.state["cc"]["template"]))]
         self.supply_xy = self._find_supply()
+        self.home = (self.state["cc"]["x"], self.state["cc"]["y"])
+        self.army_order = 0  # 1 the army was last sent to attack, -1 to defend
+        self.order_target, self.order_decision, self.decisions = None, 0, 0
+        enemy = self.state["enemy"]["cc"] or (self.state["enemy"]["targets"] or [None])[0]
+        dx, dy = (enemy[0] - self.home[0], enemy[1] - self.home[1]) if enemy else (1.0, 0.0)
+        length = math.hypot(dx, dy) or 1.0
+        self.facing = (dx / length, dy / length)
+        self.front = (self.home[0] + self.facing[0] * FRONT_DISTANCE, self.home[1] + self.facing[1] * FRONT_DISTANCE)
         self.start_frame = self.state["frame"]
         self.income = 0.0
         self.placed = 0
@@ -365,13 +489,20 @@ class BuildOrderEnv(gym.Env):
     def step(self, action):
         before = self.state
         self.spent = 0
+        self.decisions += 1
         key = ACTIONS[int(action)]
         info = {"action": key}
         self.why = None
         try:
-            command = self._order(key) if key != "wait" else None
-            taken, ended = self._advance((key, command) if command else None)
-            refused = key != "wait" and not taken
+            if key in ("attack", "defend"):
+                # world verbs answer at once and run on the next step's first frame
+                ordered = self._army_order(key)
+                _, ended = self._advance()
+                refused = not ordered
+            else:
+                command = self._order(key) if key != "wait" else None
+                taken, ended = self._advance((key, command) if command else None)
+                refused = key != "wait" and not taken
             if refused:
                 info["why"] = self.why
             if ended:
@@ -391,11 +522,20 @@ class BuildOrderEnv(gym.Env):
         s, w = self.state, self.reward_weights
         income = s["money"] - before["money"] + self.spent
         self.income = 0.7 * self.income + 0.3 * income * 60.0 / self.decision_seconds
-        reward = (w["economy"] * (s["economy"] - before["economy"]) + w["army"] * (s["army"] - before["army"])
-                  + w["income"] * max(income, 0)) / 1000.0
-        reward -= w["refused"] * refused + w["loss"] * lost - w["win"] * won
+        # by object id, so a loss is not mistaken for spending: new ids are what we finished, ids gone
+        # are what was destroyed (a structure counts once it is finished)
+        new = [s["ids"][i] for i in s["ids"].keys() - before["ids"].keys()]
+        taken = sum(before["ids"][i][0] for i in before["ids"].keys() - s["ids"].keys())
+        gone = before["enemy"]["ids"].keys() - s["enemy"]["ids"].keys()
+        dealt = sum(before["enemy"]["ids"][i] for i in gone)
+        economy = sum(value for value, part in new if part == "economy")
+        army = sum(value for value, part in new if part == "army")
+        reward = (w["economy"] * economy + w["army"] * army + w["income"] * max(income, 0)
+                  + w["dealt"] * dealt - w["taken"] * taken) / 1000.0
+        reward += w["kill"] * len(gone) - w["refused"] * refused - w["loss"] * lost + w["win"] * won
         truncated = s["frame"] - self.start_frame >= self.episode_frames
-        info.update(frame=s["frame"], money=s["money"], refused=refused, lost=lost, won=won)
+        info.update(frame=s["frame"], money=s["money"], refused=refused, lost=lost, won=won,
+                    dealt=dealt, taken=taken, kills=len(gone))
         return self._obs(), float(reward), lost or won, truncated and not (lost or won), info
 
     def close(self):
@@ -410,29 +550,52 @@ def check():
     env = BuildOrderEnv(mock=True, episode_minutes=6)
     check_env(env, skip_render_check=True)
 
+    def masks():
+        return dict(zip(ACTIONS, env.action_masks()))
+
     env.reset(seed=1)
-    mask = dict(zip(ACTIONS, env.action_masks()))
+    mask = masks()
     assert mask["wait"] and mask["dozer"] and mask["power"] and mask["barracks"], mask
-    assert not (mask["supply"] or mask["factory"] or mask["chinook"] or mask["ranger"] or mask["humvee"]), mask
+    assert not any(mask[k] for k in ("supply", "factory", "patriot", "chinook", "ranger", "humvee", "attack", "defend")), mask
+    assert env.state["enemy"]["structures"] > 0 and env.state["enemy"]["cc"], env.state["enemy"]
     _, reward, _, _, info = env.step(ACTIONS.index("supply"))  # no power plant yet: the game refuses
     assert info["refused"] and reward < 0, (info, reward)
     env.step(ACTIONS.index("power"))
     for _ in range(3):  # ten game seconds of building
         env.step(0)
-    assert env.state["built"]["power"] == 1 and env.action_masks()[ACTIONS.index("supply")], env.state["built"]
+    mask = masks()
+    assert env.state["built"]["power"] == 1 and mask["supply"] and mask["patriot"], env.state["built"]
+    env.state["power"] = POWER_SURPLUS_MAX  # spare power: no more plants
+    assert not masks()["power"]
+    env.state["power"] = 5
+
+    env.step(ACTIONS.index("barracks"))
+    while len(env.state["soldiers"]) < ATTACK_MIN:
+        env.step(ACTIONS.index("ranger") if masks()["ranger"] else 0)
+    assert masks()["attack"] and not masks()["defend"]
+    _, _, _, _, info = env.step(ACTIONS.index("attack"))
+    assert not info["refused"] and env.army_order == 1 and not masks()["attack"], info  # no second order
+    for _ in range(COMMIT_DECISIONS):
+        assert env.state["enemy"]["nearest"] < 2 * HOME_RADIUS or not masks()["defend"]  # committed
+        env.step(0)
+    assert env.state["away"] > 0 and masks()["defend"], env.state["away"]
+    _, _, _, _, info = env.step(ACTIONS.index("defend"))
+    assert not info["refused"] and env.army_order == -1, info
 
     # a masked random episode: the mask and the game must agree, so nothing masked-in is refused
     rng = np.random.default_rng(0)
     env.reset(seed=2)
-    total, steps, done = 0.0, 0, False
+    total, steps, done, dealt, taken = 0.0, 0, False, 0, 0
     while not done:
         mask = env.action_masks()
         assert mask[0]
         obs, reward, terminated, truncated, info = env.step(rng.choice(np.flatnonzero(mask)))
         assert env.observation_space.contains(obs) and not info["refused"], info
         total, steps, done = total + reward, steps + 1, terminated or truncated
-    print("check passed: masked random episode of %d decisions, return %.2f, %s" % (steps, total,
-          {k: env.state["built"][k] for k in BUILDINGS} | {k: env.state["units"][k] for k in UNITS}))
+        dealt, taken = dealt + info["dealt"], taken + info["taken"]
+    print("check passed: masked random episode of %d decisions, return %.2f, %s, dealt %d taken %d, %s" % (
+        steps, total, "lost" if info["lost"] else "won" if info["won"] else "time up", dealt, taken,
+        {k: env.state["built"][k] for k in BUILDINGS} | {k: env.state["units"][k] for k in UNITS}))
     env.close()
 
 

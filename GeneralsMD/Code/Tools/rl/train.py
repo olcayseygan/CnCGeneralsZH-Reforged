@@ -65,7 +65,8 @@ def evaluate(args):
     try:
         for episode in range(args.episodes):
             obs, info = env.reset(seed=args.seed + episode)
-            start, total, done = info["frame"], 0.0, False
+            start, total, done, dealt, taken = info["frame"], 0.0, False, 0, 0
+            enemy_start = env.state["enemy"]["structures"]
             print("episode %d (seed %d)" % (episode, info["seed"]))
             while not done:
                 if model:
@@ -74,6 +75,7 @@ def evaluate(args):
                     action = rng.choice(np.flatnonzero(env.action_masks()))
                 obs, reward, terminated, truncated, info = env.step(action)
                 total, done = total + reward, terminated or truncated
+                dealt, taken = dealt + info.get("dealt", 0), taken + info.get("taken", 0)
                 if info["action"] != "wait" or args.watch:
                     seconds = (info.get("frame", start) - start) / args.frames_per_game_second
                     print("  %02d:%02d  %-9s %s" % (seconds // 60, seconds % 60, info["action"],
@@ -83,6 +85,7 @@ def evaluate(args):
             seconds = (s["frame"] - start) / args.frames_per_game_second
             print("  return %.2f, %s at %02d:%02d%s" % (total, "lost" if info.get("lost") else "won" if info.get("won") else "time up",
                                                        seconds // 60, seconds % 60, " (%s)" % info["error"] if "error" in info else ""))
+            print("  enemy structures %d -> %d, value dealt %d, taken %d" % (enemy_start, s["enemy"]["structures"], dealt, taken))
             print("  built %s" % {k: s["built"][k] for k in BUILDINGS})
             print("  units %s" % {k: s["units"][k] for k in UNITS})
     finally:
@@ -101,7 +104,7 @@ def main():
     shared.add_argument("--opponent", default="FactionGLA", help="slot 1's faction, e.g. FactionGLA, FactionAmerica")
     shared.add_argument("--difficulty", default="easy", choices=["easy", "medium", "hard"])
     shared.add_argument("--decision-seconds", type=float, default=5.0, help="game seconds between decisions")
-    shared.add_argument("--episode-minutes", type=float, default=10.0, help="game minutes in an episode")
+    shared.add_argument("--episode-minutes", type=float, default=20.0, help="game minutes in an episode")
     shared.add_argument("--frames-per-game-second", type=int, default=FRAMES_PER_GAME_SECOND,
                         help="logic frames a game second: 30 Hz * 100 / GAME_SPEED_PERCENT")
     shared.add_argument("--window", action="store_true", help="draw the game in an 800x600 window instead of -headless")

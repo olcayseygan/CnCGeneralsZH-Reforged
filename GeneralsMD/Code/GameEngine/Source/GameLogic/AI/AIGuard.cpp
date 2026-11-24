@@ -54,6 +54,8 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/PolygonTrigger.h"
+#include "GameLogic/Weapon.h"
+#include "GameLogic/WeaponSet.h"
 
 const Real CLOSE_ENOUGH = (25.0f);
 
@@ -222,6 +224,37 @@ AIGuardMachine::~AIGuardMachine()
 }
 
 //--------------------------------------------------------------------------------------
+/** Refuses what the attack would refuse at once: a computer player's unit (or a player's on the
+	aggressive stance) does not chase a flying aircraft (AIAttackApproachTargetState::onEnter), so
+	one out of every weapon's reach was picked, dropped the same frame, and picked again 1 to 15
+	frames later by the return scan, a base guard cycling Inner, Outer, Return all match. */
+class PartitionFilterAirInReach : public PartitionFilter
+{
+	Object *m_owner;
+public:
+	PartitionFilterAirInReach(Object *owner) : m_owner(owner) { }
+	virtual Bool allow(Object *other)
+	{
+		if (!other->isKindOf(KINDOF_AIRCRAFT) || !other->isAirborneTarget())
+			return TRUE;
+		const AIUpdateInterface *ai = m_owner->getAI();
+		if (m_owner->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN && (ai == NULL || !ai->hasAggressiveStance()))
+			return TRUE;
+		const Int antiMask = WeaponSet::getVictimAntiMask(other);
+		for (Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot)
+		{
+			const Weapon *weapon = m_owner->getWeaponInWeaponSlot((WeaponSlotType)slot);
+			if (weapon && (weapon->getAntiMask() & antiMask) != 0 && weapon->isWithinAttackRange(m_owner, other))
+				return TRUE;
+		}
+		return FALSE;
+	}
+#if defined(_DEBUG) || defined(_INTERNAL)
+	virtual const char* debugGetName() { return "PartitionFilterAirInReach"; }
+#endif
+};
+
+//--------------------------------------------------------------------------------------
 Bool AIGuardMachine::lookForInnerTarget(void)
 {
 	Object* owner = getOwner();
@@ -235,10 +268,24 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 	if (owner->getTeam()->getPrototype()->getTemplateInfo()->m_attackCommonTarget) 
 	{
 		teamVictim = owner->getTeam()->getTeamTargetObject();
-		if (teamVictim) 
+		// Only one the inner attack keeps: this unit can hit it, it stands inside the circle the attack
+		// leaves at once (AIGuardInnerState::onEnter's, the guard range round the post) and, flying, in
+		// reach. A base guard took a teammate's Comanche or a target across the map, its attack ended the
+		// same frame, and it cycled Inner, Outer, Crate, Return every few seconds: 52,257 guard state
+		// changes in one 4-player Hard match, a Microwave Tank 7,616 of them.
+		if (teamVictim)
 		{
-			setNemesisID(teamVictim->getID());
-			return true;	// Transitions to AIGuardInnerState.
+			Object* guarded = findTargetToGuardByID();
+			const Coord3D post = guarded ? *guarded->getPosition() : *getPositionToGuard();
+			const Real range = AIGuardMachine::getGuardRange(owner);
+			PartitionFilterPossibleToAttack canAttack(ATTACK_NEW_TARGET, owner, CMD_FROM_AI);
+			PartitionFilterAirInReach airInReach(owner);
+			if (sqr(teamVictim->getPosition()->x - post.x) + sqr(teamVictim->getPosition()->y - post.y) <= sqr(range) &&
+					canAttack.allow(teamVictim) && airInReach.allow(teamVictim))
+			{
+				setNemesisID(teamVictim->getID());
+				return true;	// Transitions to AIGuardInnerState.
+			}
 		}
 	}
 
@@ -365,7 +412,8 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 		if (getGuardMode() == GUARDMODE_GUARD_FLYING_UNITS_ONLY)
 			gather[g++] = &f4;
 		gather[g] = NULL;
-		PartitionFilter* late[] = { &f2, &filterFogged, NULL };
+		PartitionFilterAirInReach filterAirInReach(owner);
+		PartitionFilter* late[] = { &f2, &filterFogged, &filterAirInReach, NULL };
 		SimpleObjectIterator* iter = ThePartitionManager->iterateObjectsInRange(&pos, visionRange, FROM_CENTER_2D, gather, ITER_FASTEST, searchPlayers);
 		MemoryPoolObjectHolder hold(iter);
 		target = TheAI->pickBestTarget(owner, iter, late);
@@ -374,7 +422,7 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 		target = ThePartitionManager->getClosestObject(&pos, visionRange, FROM_CENTER_2D, filters, NULL, NULL, searchPlayers);
 	if (target)
 	{
-		setNemesisID(target->getID());	
+		setNemesisID(target->getID());
 		return true;	// Transitions to AIGuardInnerState.
 	}
 	else

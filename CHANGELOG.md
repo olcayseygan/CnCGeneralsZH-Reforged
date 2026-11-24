@@ -8,6 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Computer guards, medics and paratroopers stop wasting time
+
+- A computer's base guards kept grabbing a target their teammate had picked, a Comanche overhead or a tank across the map, dropped it the same instant because they could not reach it, and grabbed it again a few seconds later. One four-player Hard match logged 52,257 of those turns, a single Microwave Tank 7,616 of them. A guard now takes the team's target only when it stands inside its own circle and it can hit it, and it no longer picks an aircraft out of its weapons' reach. Over the same twelve four-player matches the turns fell from 60,149 to 18,793.
+- Replays with a computer player recorded before this change will not play back.
+
 ## The levels above Hard stand and fight
 
 - Brutal, Vicious, Savage and Insane grew more careful with every step past Hard. A unit hit by a gun wanted ever better odds before it would go for it (4.4 times the worth of what covers the gun at Insane, twice at Hard), and every unit near it walked away with it, so the extra army the higher levels build spent its fights leaving: one Insane China logged 259 soldiers backing out of fire in a single match. Above Hard a unit under fire now answers it as Hard does. Against Hard, 40 games each at double speed on the same maps: Brutal wins 23 to 11 (17 to 13 before), Vicious 21 to 12 (20 to 12) and Insane 21 to 14 (23 to 12), and Insane now kills 137 units a game to Hard's 108 where both killed 114. Insane against Vicious is 20 to 14. Only Brutal's step clears the noise of 40 games; Vicious is not yet a step above Brutal.

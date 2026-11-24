@@ -3371,7 +3371,7 @@ Bool ScenarioDrill_controlOrder( const ScenarioAction &action, AsciiString *memb
 	return controlConstruct( action, player, site, members );
 }
 
-Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, AsciiString *members )
+Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, std::string *members )
 {
 	Player *player = findPlayerForSlot( slot );
 	if (player == NULL && slot != SCENARIO_CIVILIAN_SLOT)
@@ -3403,6 +3403,11 @@ Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, AsciiString *membe
 				continue;
 		}
 		else if (owner != player)
+			continue;
+		// what a player fields, not the shots, poison fields and wreck fires a seat also owns
+		else if (!(obj->isKindOf( KINDOF_STRUCTURE ) || obj->isKindOf( KINDOF_INFANTRY ) || obj->isKindOf( KINDOF_VEHICLE )
+							 || obj->isKindOf( KINDOF_AIRCRAFT ))
+						 || obj->isKindOf( KINDOF_PROJECTILE ) || obj->isKindOf( KINDOF_INERT ))
 			continue;
 
 		if (count >= maxObjects)
@@ -3448,7 +3453,7 @@ Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, AsciiString *membe
 
 	snprintf( piece, sizeof( piece ), "],\"count\":%d,\"truncated\":%s", count, truncated ? "true" : "false" );
 	out += piece;
-	members->set( out.c_str() );
+	members->swap( out );
 	return TRUE;
 }
 

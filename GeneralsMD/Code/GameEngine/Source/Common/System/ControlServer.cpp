@@ -77,6 +77,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -426,7 +427,34 @@ static void sendFrame( unsigned char opcode, const char *payload, Int length )
 	for( Int i = 0; i < length; ++i )
 		frame.push_back( payload[ i ] );
 
-	send( theClientSocket, &frame[ 0 ], (Int)frame.size(), CONTROL_SEND_FLAGS );
+	// The socket is non-blocking and an objects reply runs to a hundred KB, more than a send buffer
+	// takes at once: a short send would cut the frame and wreck every frame after it, so wait the
+	// buffer out (a second at most per stall, the client is on this machine) and drop the client if not.
+	Int sent = 0;
+	while (sent < (Int)frame.size())
+	{
+		const Int n = (Int)send( theClientSocket, &frame[ sent ], (Int)frame.size() - sent, CONTROL_SEND_FLAGS );
+		if (n > 0)
+		{
+			sent += n;
+			continue;
+		}
+#if !defined(_WIN32)
+		const Bool wouldBlock = n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR);
+#else
+		const Bool wouldBlock = n < 0 && WSAGetLastError() == WSAEWOULDBLOCK;
+#endif
+		fd_set writable;
+		FD_ZERO( &writable );
+		FD_SET( theClientSocket, &writable );
+		timeval wait = { 1, 0 };
+		if (!wouldBlock || select( (int)theClientSocket + 1, NULL, &writable, NULL, &wait ) <= 0)
+		{
+			DEBUG_LOG(("CONTROL: could not send a %d byte reply, closing\n", (Int)frame.size()));
+			closeClient();
+			return;
+		}
+	}
 }
 
 static void sendText( const char *text )
@@ -640,19 +668,20 @@ static void replyError( const char *why )
 	sendText( reply );
 }
 
-/** {"ok":..,"cmd":"<verb>",<members>}, of any length. */
+/** {"ok":..,"cmd":"<verb>",<members>}, of any length: a std::string, since AsciiString throws past 32 KB
+	  and a late army's objects reply runs well past that. */
 static void replyMembers( Bool ok, const char *verb, const char *members )
 {
-	AsciiString reply( ok ? "{\"ok\":true,\"cmd\":\"" : "{\"ok\":false,\"cmd\":\"" );
-	reply.concat( verb );
-	reply.concat( "\"" );
+	std::string reply( ok ? "{\"ok\":true,\"cmd\":\"" : "{\"ok\":false,\"cmd\":\"" );
+	reply += verb;
+	reply += "\"";
 	if (members && *members)
 	{
-		reply.concat( "," );
-		reply.concat( members );
+		reply += ",";
+		reply += members;
 	}
-	reply.concat( "}" );
-	sendText( reply.str() );
+	reply += "}";
+	sendFrame( WS_OPCODE_TEXT, reply.c_str(), (Int)reply.size() );
 }
 
 static Bool isMatchRunning( void )
@@ -1390,15 +1419,14 @@ static void handleCommand( const AsciiString &command )
 		AsciiString members;
 		if (isObjects)
 		{
-			AsciiString list;
+			std::string list;
 			if (!ScenarioDrill_describeObjects( slot, OBJECTS_MAX, &list ))
 			{
 				replyMembers( FALSE, verb, "\"error\":\"nobody is sitting in that slot\"" );
 				return;
 			}
 			members.format( "\"frame\":%u,\"slot\":%d,", TheGameLogic->getFrame(), slot );
-			members.concat( list );
-			replyMembers( TRUE, verb, members.str() );
+			replyMembers( TRUE, verb, (members.str() + list).c_str() );
 			return;
 		}
 		if (radius < 0.0f || radius > 2000.0f)

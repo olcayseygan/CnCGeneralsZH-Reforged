@@ -52,6 +52,8 @@
 #include "Lib/BaseType.h"
 #include "Common/AsciiString.h"
 
+#include <string>
+
 // ------------------------------------------------------------------------------------------------
 /** What one scenario line asks for. */
 // ------------------------------------------------------------------------------------------------
@@ -179,10 +181,12 @@ extern Bool ScenarioDrill_execute( const ScenarioAction &action );
 	  returns whether the order took.  The file's verbs are untouched.  Only from inside a logic frame. */
 extern Bool ScenarioDrill_controlOrder( const ScenarioAction &action, AsciiString *members );
 
-/** -control's objects: the seat's money, power and every living object (template, id, position, kind,
-	  construction, production queue; a builder's idle and task) as JSON members, at most maxObjects of
-	  them.  Slot -1 is the map's own structures.  Read-only; FALSE when nobody sits there. */
-extern Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, AsciiString *members );
+/** -control's objects: the seat's money, power and every living structure, infantry, vehicle and
+	  aircraft (template, id, position, kind, construction, production queue; a builder's idle and task)
+	  as JSON members, at most maxObjects of them; shots, effects and inert things are left out.  Slot -1
+	  is the map's own structures.  A std::string, since a late army runs past AsciiString's 32 KB.
+	  Read-only; FALSE when nobody sits there. */
+extern Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, std::string *members );
 
 /** -control's buildspot: the legal spot for the template nearest (x, y) within radius, by the same test
 	  construct makes, with the builder construct would send.  Read-only. */

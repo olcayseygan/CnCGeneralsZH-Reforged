@@ -41,6 +41,8 @@
 #include "GameNetwork/NetworkDefs.h"
 #include "GameNetwork/DisconnectManager.h"
 #include "GameNetwork/CushionMetrics.h"
+#include <map>
+#include <vector>
 
 class GameInfo;
 class NetCommandWrapperList;
@@ -91,6 +93,13 @@ public:
 	Bool getRejoinAccept(UnsignedInt &frame) const;		///< FALSE until the router has answered
 	Bool getRejoinRoom(UnsignedInt &frame, UnsignedInt &seats, UnsignedInt &router) const;	///< FALSE until the room has taken the seat back
 	Bool hasRejoinLogArrived() const { return m_rejoinLogArrived; }
+	/* A seat that loaded its own checkpoint asks for the log from that frame on (0: the whole match), and the
+		 seat it asks sends its header and the frames from there, in chunks the feed can play as they come.
+		 Should the frames played from the checkpoint come out other than recorded, the seat asks again for the
+		 whole log, a later attempt; chunks of an earlier attempt are dropped. */
+	void setRejoinCheckpointFrame(UnsignedInt frame) { m_rejoinCheckpointFrame = frame; }
+	void askRejoinLogAgain(UnsignedInt fromFrame);	///< the log once more from that frame, the file and what came of it forgotten
+	Bool isRejoinLogComplete() const { return m_rejoinLogArrived && m_rejoinLogWritten >= m_rejoinLogTotal; }
 	void takeRejoinAccept(UnsignedInt seats, UnsignedInt router);	///< the room as the router left it: these seats, that router
 	void readmitPlayer(Int slot, UnsignedInt fromFrame);
 	void sendPendingRejoinLog();				///< the log asked of us, once we stand on the frame the room took the seat back for
@@ -264,6 +273,17 @@ private:
 	Bool m_rejoinLogFor[MAX_SLOTS];			///< the seat asked us for its log
 	Int m_rejoinLogTo;									///< the seat our log goes to, -1 for none
 	UnsignedInt m_rejoinLogAtFrame;			///< once we stand on this frame
+	UnsignedInt m_rejoinLogToFrom;			///< from this frame of ours on, the seat's checkpoint frame (0: the whole match)
+	UnsignedInt m_rejoinLogToAttempt;		///< and the attempt it answers
+	UnsignedInt m_rejoinLogFromFrame[MAX_SLOTS];	///< by slot: the checkpoint frame the seat asked its log from
+	UnsignedInt m_rejoinLogAttemptAsked[MAX_SLOTS];	///< by slot: the attempt of that ask
+	Int m_rejoinLogAttemptSent[MAX_SLOTS];	///< by slot: the attempt our last log answered, -1 for none
+	// the seat coming back: what it asks and what has come of it
+	UnsignedInt m_rejoinCheckpointFrame;	///< the frame of the checkpoint it loaded, 0 for none
+	UnsignedInt m_rejoinLogAttempt;			///< 0, and one more for each ask again
+	UnsignedInt m_rejoinLogWritten;			///< the log's bytes on disk from its start, without a gap
+	UnsignedInt m_rejoinLogTotal;				///< the log's length, from its first chunk; 0 before it
+	std::map<UnsignedInt, std::pair<UnsignedInt, std::vector<char> > > m_rejoinLogChunks;	///< come before their turn: offset to the frames held after it and the bytes
 	UnsignedInt m_packetFromAddr;				///< the address of the packet doRelay is reading, 0 outside it
 	UnsignedInt m_absentSince[MAX_SLOTS];	///< the frame the seat left the lockstep, 0 while it plays
 	Bool m_forfeitSent[MAX_SLOTS];			///< the router sent its forfeit

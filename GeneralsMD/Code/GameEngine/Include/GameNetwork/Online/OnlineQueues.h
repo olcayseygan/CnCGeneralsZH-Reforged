@@ -548,6 +548,10 @@ Bool OnlineGetAIVerdict( OnlineAIVerdict &out );		///< FALSE before the first th
 	 kept after the match ends; empty before one this sign-in.  The score screen shows a verdict only when
 	 its match equals this. */
 AsciiString OnlineGetLastAIMatchId( void );
+/* The server's id of the internet match this client plays or comes back to (game.start, qm.matched,
+	 match.rejoin.ok), empty for none.  A seat's rejoin checkpoints are filed under it, so the copy that
+	 comes back finds them before any replay names the match. */
+AsciiString OnlineCurrentMatchId( void );
 
 /* The mode the custom lobby's Host button was answered with is TheHostGameMode (GUIUtil.h).  It goes out
 	 in game.host, the host popup leaves Limit Armies out under Direct Strike, and the staging room the host

@@ -89,16 +89,26 @@ static std::string theOnlineMatch;
 
 static void finishReplayCRCs(CRCInfo *crcInfo);
 
+/* The bytes appended to the recording so far, which is where the next command starts in the file: every
+	 append goes through replayAppend, and only the header's fixed fields are written over afterwards. */
+static UnsignedInt theReplayBytes = 0;
+
+static void replayAppend(const void *data, size_t length)
+{
+	theReplayQueue.write(data, length);
+	theReplayBytes += (UnsignedInt)length;
+}
+
 template <typename T> static void replayWrite(const T &value)
 {
-	theReplayQueue.write(&value, sizeof(value));
+	replayAppend(&value, sizeof(value));
 }
 
 /// What WideCharFilePut did on the replay's binary stream: the unit's two bytes, low first.
 static void replayWriteWideChar(WideChar c)
 {
 	const unsigned char unit[2] = { (unsigned char)(c & 0xFF), (unsigned char)((c >> 8) & 0xFF) };
-	theReplayQueue.write(unit, sizeof(unit));
+	replayAppend(unit, sizeof(unit));
 }
 
 /// WideCharFileWrite and the WideCharFilePut(0) after it.
@@ -430,6 +440,7 @@ RecorderClass::RecorderClass()
 	m_rejoinNextFrame = (UnsignedInt)-1;
 	m_rejoinReadPos = 0;
 	m_rejoinGameSpeed = 0;
+	m_headerBytes = 0;
 
 	init(); // just for the heck of it.
 }
@@ -634,7 +645,9 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 		return;
 	}
 	theReplayQueue.start(m_file);
-	theReplayQueue.write("GENREP", 6);
+	theReplayBytes = 0;
+	m_frameStarts.clear();
+	replayAppend("GENREP", 6);
 	if (originalGameMode == GAME_INTERNET)
 		theOnlineMatch = OnlineClaimQuickMatch().str();
 	else if (originalGameMode == GAME_SKIRMISH)
@@ -681,8 +694,8 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	replayWriteWideString(versionString.str());
 	replayWriteWideString(versionTimeString.str());
 	replayWrite(versionNumber);
-	theReplayQueue.write(&(TheGlobalData->m_exeCRC), sizeof(UnsignedInt));
-	theReplayQueue.write(&(TheGlobalData->m_iniCRC), sizeof(UnsignedInt));
+	replayAppend(&(TheGlobalData->m_exeCRC), sizeof(UnsignedInt));
+	replayAppend(&(TheGlobalData->m_iniCRC), sizeof(UnsignedInt));
 
 	// Number of players
 	/*
@@ -738,15 +751,16 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	}
 	// the logic rate and game speed the game is recorded at, last in the slot list; readReplayHeader
 	// refuses another rate and plays the speed back
+	m_recordedOptions = theSlotList;
 	theSlotList.concat(replayLogicRateField(gameSpeedPercent));
 	logGameStart(theSlotList);
 	DEBUG_LOG(("RecorderClass::startRecording - theSlotList = %s\n", theSlotList.str()));
 
 	// write slot list (starting spots, color, alliances, etc
-	theReplayQueue.write(theSlotList.str(), theSlotList.getLength() + 1);
+	replayAppend(theSlotList.str(), theSlotList.getLength() + 1);
 	char localIndexText[ 16 ];
 	snprintf(localIndexText, sizeof(localIndexText), "%d", localIndex);
-	theReplayQueue.write(localIndexText, strlen(localIndexText) + 1);	// with its terminator
+	replayAppend(localIndexText, strlen(localIndexText) + 1);	// with its terminator
 
 	/*
 	/// @todo fix this to use starting spots and player alliances when those are put in the game.
@@ -771,7 +785,7 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	*/
 
 	// Write the game difficulty.
-	theReplayQueue.write(&diff, sizeof(Int));
+	replayAppend(&diff, sizeof(Int));
 
 	// Write original game mode
 	replayWrite(originalGameMode);
@@ -782,6 +796,7 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	// Write maxFPS chosen
 	replayWrite(maxFPS);
 
+	m_headerBytes = theReplayBytes;
 	DEBUG_LOG(("RecorderClass::startRecording() - diff=%d, mode=%d, FPS=%d\n", diff, originalGameMode, maxFPS));
 
 	/*
@@ -857,6 +872,13 @@ void RecorderClass::archiveReplay(const AsciiString& fileName)
 void RecorderClass::writeToFile(GameMessage * msg) {
 	// Write the frame number for this command.
 	UnsignedInt frame = TheGameLogic->getFrame();
+	if (m_frameStarts.empty() || m_frameStarts.back().frame != frame)
+	{
+		FrameStart start;
+		start.frame = frame;
+		start.offset = theReplayBytes;
+		m_frameStarts.push_back(start);
+	}
 	replayWrite(frame);
 
 	// Write the command type
@@ -1632,6 +1654,145 @@ void RecorderClass::closeRejoinFeed( void )
 		fclose(m_rejoinFile);
 	m_rejoinFile = NULL;
 	m_rejoinNextFrame = (UnsignedInt)-1;
+}
+
+/// A seat that loaded its checkpoint at frame stands on it; a feed that holds the frames before it reads past them
+Bool RecorderClass::skipRejoinFramesBefore( UnsignedInt frame )
+{
+	if (m_rejoinFile == NULL)
+		return FALSE;
+	FILE *recording = m_file;
+	const Bool analysing = m_doingAnalysis;
+	m_file = m_rejoinFile;
+	m_doingAnalysis = TRUE;		// appendNextCommand reads the command and drops it
+	Int skipped = 0;
+	while (m_rejoinNextFrame != (UnsignedInt)-1 && m_rejoinNextFrame < frame)
+	{
+		appendNextCommand();
+		readRejoinNextFrame();
+		++skipped;
+	}
+	m_doingAnalysis = analysing;
+	m_file = recording;
+	DEBUG_LOG(("REJOIN: %d recorded commands before frame %u passed over\n", skipped, frame));
+	return TRUE;
+}
+
+UnsignedInt RecorderClass::replayFramesOffset( void )
+{
+	return framesOffset;
+}
+
+Bool RecorderClass::getRecordingIndex( UnsignedInt &headerBytes, UnsignedInt &recordedBytes, std::vector< FrameStart > &starts ) const
+{
+	if (m_file == NULL || m_mode != RECORDERMODETYPE_RECORD || m_headerBytes == 0)
+		return FALSE;
+	headerBytes = m_headerBytes;
+	recordedBytes = theReplayBytes;
+	starts = m_frameStarts;
+	return TRUE;
+}
+
+AsciiString RecorderClass::getClaimedOnlineMatch( void ) const
+{
+	return AsciiString( theOnlineMatch.c_str() );
+}
+
+/**
+ * The checkpoint's load reset the engine, and the recording with it.  The checkpoint kept the recording as it
+ * stood on its frame, and this seat's recording goes on from that copy: the frames it never played again are
+ * in it as the crashed copy played them, and the ones the feed plays now are appended to it as they run.
+ */
+Bool RecorderClass::resumeRecording( const std::vector< char > &prefix, UnsignedInt headerBytes, const std::vector< FrameStart > &starts,
+	UnsignedInt frame, Int gameMode, const AsciiString &options, const AsciiString &onlineMatch )
+{
+	if (m_file != NULL || prefix.size() < headerBytes || headerBytes <= framesOffset + sizeof(UnsignedInt))
+		return FALSE;
+	AsciiString path = getReplayDir();
+	TheFileSystem->createDirectory(path);
+	AsciiString leaf = getLastReplayFileName();
+	leaf.concat(getReplayExtention());
+	path.concat(leaf);
+
+	FILE *file = zh_fopen(path.str(), "wb");
+	if (file == NULL)
+		return FALSE;
+	const Bool written = prefix.empty() || fwrite(&prefix[0], prefix.size(), 1, file) == 1;
+	fclose(file);
+	file = written ? zh_fopen(path.str(), "r+b") : NULL;
+	if (file == NULL)
+	{
+		DEBUG_LOG(("REJOIN: the recording '%s' could not be written again\n", path.str()));
+		return FALSE;
+	}
+	fseek(file, 0, SEEK_END);
+
+	m_mode = RECORDERMODETYPE_RECORD;
+	m_file = file;
+	m_fileName = leaf;
+	m_originalGameMode = gameMode;
+	m_headerBytes = headerBytes;
+	m_frameStarts = starts;
+	m_recordedOptions = options;
+	theOnlineMatch = onlineMatch.str();
+	theReplayQueue.start(m_file);
+	theReplayBytes = (UnsignedInt)prefix.size();
+	theReplayQueue.writeAt(framesOffset, &frame, sizeof(frame));
+	DEBUG_LOG(("REJOIN: recording '%s' again from frame %u, %u bytes and %d frames with commands kept\n",
+		path.str(), frame, (UnsignedInt)prefix.size(), (Int)starts.size()));
+	return TRUE;
+}
+
+/**
+ * What a seat coming back from its checkpoint at fromFrame needs of our recording: the header, which names the
+ * match, then every command from fromFrame on.  The frame count in the header stays the one we wrote last, the
+ * frame we stand on, and the commands in front of the cut are simply not there; the feed starts on fromFrame.
+ */
+Bool RecorderClass::buildRejoinTail( UnsignedInt fromFrame, std::vector< char > &bytes, UnsignedInt &headerBytes,
+	std::vector< FrameStart > &starts, UnsignedInt &held )
+{
+	UnsignedInt recordedBytes = 0;
+	std::vector< FrameStart > all;
+	if (!getRecordingIndex( headerBytes, recordedBytes, all ))
+		return FALSE;
+	flushRecording();
+	const AsciiString path = getRecordingPath();
+	FILE *in = path.isEmpty() ? NULL : zh_fopen(path.str(), "rb");
+	if (in == NULL)
+		return FALSE;
+	std::vector< char > file(recordedBytes);
+	const Bool read = file.empty() || fread(&file[0], 1, file.size(), in) == file.size();
+	fclose(in);
+	if (!read || recordedBytes < headerBytes)
+	{
+		DEBUG_LOG(("REJOIN: our recording '%s' does not hold the %u bytes written to it\n", path.str(), recordedBytes));
+		return FALSE;
+	}
+	memcpy(&held, &file[framesOffset], sizeof(held));
+
+	// the first frame from fromFrame on that has commands, or none: the frames from there on had no commands
+	UnsignedInt cut = recordedBytes;
+	size_t first = all.size();
+	for (size_t i = 0; i < all.size(); ++i)
+	{
+		if (all[i].frame >= fromFrame)
+		{
+			cut = all[i].offset;
+			first = i;
+			break;
+		}
+	}
+	bytes.assign(file.begin(), file.begin() + headerBytes);
+	bytes.insert(bytes.end(), file.begin() + cut, file.end());
+	starts.clear();
+	for (size_t i = first; i < all.size(); ++i)
+	{
+		FrameStart start;
+		start.frame = all[i].frame;
+		start.offset = all[i].offset - cut + headerBytes;
+		starts.push_back(start);
+	}
+	return TRUE;
 }
 
 /**

@@ -788,6 +788,27 @@ Bool GameState::saveCheckpoint( AsciiString filepath )
 // ------------------------------------------------------------------------------------------------
 Bool GameState::loadCheckpoint( AsciiString filepath, const std::function< Bool( void ) > &afterReset )
 {
+	if( loadRejoinCheckpoint( filepath, afterReset ) )
+		return TRUE;
+
+	DEBUG_LOG(( "GameState::loadCheckpoint - '%s' could not be loaded, the replay stops\n", filepath.str() ));
+	const AsciiString replayFile = TheRecorder->getCurrentReplayFilename();
+	TheGameLogic->clearGameData();
+
+	UnicodeString ufilepath;
+	ufilepath.translate( replayFile );
+	UnicodeString msg;
+	msg.format( TheGameText->fetch( "GUI:ErrorLoadingGame" ), ufilepath.str() );
+	MessageBoxOk( TheGameText->fetch( "GUI:Error" ), msg, NULL );
+	return FALSE;
+}
+
+// ------------------------------------------------------------------------------------------------
+/** The load itself, shared by both: a failure is only returned, and what the reset left is the
+	* caller's.  A seat coming back to a network match starts its match again from frame 0 then. */
+// ------------------------------------------------------------------------------------------------
+Bool GameState::loadRejoinCheckpoint( AsciiString filepath, const std::function< Bool( void ) > &afterReset )
+{
 	TheGameStateMap->clearScratchPadMaps();
 
 	// the speed the checkpoint was taken at, read before the reset as loadGame has a save's
@@ -800,8 +821,17 @@ Bool GameState::loadCheckpoint( AsciiString filepath, const std::function< Bool(
 	{
 	}
 
+	// a file gone from the disk fails here, before the reset has taken anything down
 	XferLoad xferLoad;
-	xferLoad.open( filepath );
+	try
+	{
+		xferLoad.open( filepath );
+	}
+	catch( ... )
+	{
+		DEBUG_LOG(( "GameState::loadRejoinCheckpoint - '%s' will not open\n", filepath.str() ));
+		return FALSE;
+	}
 
 	TheGameEngine->reset();
 	// the recorder's turn; a replay it cannot reopen ends the rewind as a failed load
@@ -844,17 +874,29 @@ Bool GameState::loadCheckpoint( AsciiString filepath, const std::function< Bool(
 		}
 	}
 
-	if( error )
-	{
-		DEBUG_LOG(( "GameState::loadCheckpoint - '%s' could not be loaded, the replay stops\n", filepath.str() ));
-		const AsciiString replayFile = TheRecorder->getCurrentReplayFilename();
-		TheGameLogic->clearGameData();
+	return !error;
+}
 
-		UnicodeString ufilepath;
-		ufilepath.translate( replayFile );
-		UnicodeString msg;
-		msg.format( TheGameText->fetch( "GUI:ErrorLoadingGame" ), ufilepath.str() );
-		MessageBoxOk( TheGameText->fetch( "GUI:Error" ), msg, NULL );
+// ------------------------------------------------------------------------------------------------
+/** saveCheckpoint into memory: the walk of the world on the frame, the disk for somebody else.  A
+	* reserve the size of the last one keeps the buffer from growing its way up through the save. */
+// ------------------------------------------------------------------------------------------------
+Bool GameState::saveCheckpointToMemory( std::vector< char > &bytes, size_t reserveBytes )
+{
+	getSaveGameInfo()->saveFileType = SAVE_FILE_TYPE_NORMAL;
+	getSaveGameInfo()->missionMapName.clear();
+
+	XferSave xferSave;
+	try
+	{
+		xferSave.openInMemory( AsciiString( "rejoin checkpoint" ), reserveBytes );
+		xferSaveData( &xferSave, SNAPSHOT_SAVELOAD );
+		xferSave.takeMemory( bytes );
+	}
+	catch( ... )
+	{
+		DEBUG_LOG(( "GameState::saveCheckpointToMemory - an object would not save\n" ));
+		bytes.clear();
 		return FALSE;
 	}
 	return TRUE;

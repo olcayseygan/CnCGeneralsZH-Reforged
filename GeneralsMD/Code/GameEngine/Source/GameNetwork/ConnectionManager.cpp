@@ -180,6 +180,9 @@ void ConnectionManager::init()
 		m_lastHeardFrom[i] = 0;
 		m_rejoinFrameFor[i] = 0;
 		m_rejoinLogFor[i] = FALSE;
+		m_rejoinLogFromFrame[i] = 0;
+		m_rejoinLogAttemptAsked[i] = 0;
+		m_rejoinLogAttemptSent[i] = -1;
 		m_absentSince[i] = 0;
 		m_forfeitSent[i] = FALSE;
 		m_lostShown[i] = FALSE;
@@ -196,6 +199,13 @@ void ConnectionManager::init()
 	m_rejoinLogArrived = FALSE;
 	m_rejoinLogTo = -1;
 	m_rejoinLogAtFrame = 0;
+	m_rejoinLogToFrom = 0;
+	m_rejoinLogToAttempt = 0;
+	m_rejoinCheckpointFrame = 0;
+	m_rejoinLogAttempt = 0;
+	m_rejoinLogWritten = 0;
+	m_rejoinLogTotal = 0;
+	m_rejoinLogChunks.clear();
 	m_packetFromAddr = 0;
 	m_awayNoticeSeconds = -1;
 	m_keepAliveRoundStart = 0;
@@ -340,15 +350,37 @@ void ConnectionManager::setRejoining(Bool rejoining, Int logSlot, AsciiString lo
 	m_rejoinLogSlot = logSlot;
 	m_rejoinLogPath = logPath;
 	m_rejoinLogArrived = FALSE;
+	m_rejoinLogWritten = 0;
+	m_rejoinLogTotal = 0;
+	m_rejoinLogChunks.clear();
 }
 
+void ConnectionManager::askRejoinLogAgain(UnsignedInt fromFrame) {
+	++m_rejoinLogAttempt;
+	m_rejoinCheckpointFrame = fromFrame;
+	m_rejoinLogArrived = FALSE;
+	m_rejoinLogWritten = 0;
+	m_rejoinLogTotal = 0;
+	m_rejoinLogChunks.clear();
+	if (m_rejoinLogPath.isNotEmpty()) {
+		zh_remove(m_rejoinLogPath.str());
+	}
+	DEBUG_LOG(("ConnectionManager::askRejoinLogAgain - REJOIN attempt %u: the log from frame %u\n", m_rejoinLogAttempt, fromFrame));
+}
+
+/* The request carries the frame of the checkpoint the seat loaded in its execution frame, 0 for none, and in
+	 its player index the slot it asks the log of, with the attempt above the low byte. */
 void ConnectionManager::sendRejoinRequest() {
 	NetDestroyPlayerCommandMsg *msg = newInstance(NetDestroyPlayerCommandMsg);
 	msg->setNetCommandType(NETCOMMANDTYPE_REJOINREQUEST);
 	msg->setPlayerID(m_localSlot);
 	msg->setID(GenerateNextCommandID());
-	msg->setPlayerIndex(m_rejoinLogArrived ? MAX_SLOTS : m_rejoinLogSlot);
-	DEBUG_LOG(("ConnectionManager::sendRejoinRequest - REJOIN slot %d asks to come back, the log from slot %d\n", m_localSlot, m_rejoinLogSlot));
+	msg->setExecutionFrame(m_rejoinCheckpointFrame);
+	// named until the whole log is here: a seat that drops after the first chunk leaves it to be asked again
+	const UnsignedInt asked = isRejoinLogComplete() ? MAX_SLOTS : (UnsignedInt)m_rejoinLogSlot;
+	msg->setPlayerIndex((asked & 0xFF) | (m_rejoinLogAttempt << 8));
+	DEBUG_LOG(("ConnectionManager::sendRejoinRequest - REJOIN slot %d asks to come back, the log from slot %d from frame %u, attempt %u\n",
+		m_localSlot, m_rejoinLogSlot, m_rejoinCheckpointFrame, m_rejoinLogAttempt));
 	sendLocalCommandDirect(msg, allSlotsBut(m_localSlot));
 	msg->detach();
 }
@@ -376,8 +408,25 @@ void ConnectionManager::processRejoinRequest(NetCommandMsg *msg) {
 		return;
 	}
 	// every seat: the one the log is asked of sends it once the room stands on the seat's frame
-	if (((NetDestroyPlayerCommandMsg *)msg)->getPlayerIndex() == m_localSlot) {
+	const UnsignedInt asked = ((NetDestroyPlayerCommandMsg *)msg)->getPlayerIndex();
+	if ((asked & 0xFF) == m_localSlot) {
+		const UnsignedInt attempt = asked >> 8;
 		m_rejoinLogFor[slot] = TRUE;
+		m_rejoinLogFromFrame[slot] = msg->getExecutionFrame();
+		m_rejoinLogAttemptAsked[slot] = attempt;
+		/* Asked again by a seat already taken back, a later attempt: its checkpoint played out other than
+			 recorded and it starts the match again, so the log goes once more, from the frame it names. */
+		const UnsignedInt from = m_disconnectManager->seatRejoiningFrom(slot);
+		if ((from != 0) && ((Int)attempt > m_rejoinLogAttemptSent[slot]) && (m_connections[slot] != NULL)) {
+			m_rejoinLogFor[slot] = FALSE;
+			m_rejoinLogAttemptSent[slot] = (Int)attempt;
+			m_rejoinLogTo = slot;
+			m_rejoinLogAtFrame = from;
+			m_rejoinLogToFrom = m_rejoinLogFromFrame[slot];
+			m_rejoinLogToAttempt = attempt;
+			DEBUG_LOG(("ConnectionManager::processRejoinRequest - REJOIN slot %d asks for its log again from frame %u, attempt %u\n",
+				slot, m_rejoinLogToFrom, attempt));
+		}
 	}
 	if (m_localSlot != m_packetRouterSlot) {
 		return;
@@ -466,22 +515,69 @@ void ConnectionManager::processRejoinRoom(NetCommandMsg *msg) {
 		m_rejoinRoomFrame, m_rejoinRoomSeats, m_rejoinRoomRouter));
 }
 
-/// the replay of the seat the log was asked of, written where the feed opens it
+/* A REJOINLOG is one chunk of the log: this header, then its bytes.  Chunks end where a frame's commands start,
+	 so every frame below the chunk's held count is whole once the chunk is on disk. */
+struct RejoinLogChunkHeader
+{
+	char magic[4];							///< "RJT1"
+	UnsignedInt attempt;				///< the ask it answers (askRejoinLogAgain)
+	UnsignedInt offset;					///< where its bytes go in the log
+	UnsignedInt held;						///< the frames the log holds whole up to its end
+	UnsignedInt total;					///< the whole log's length
+};
+static const char REJOIN_LOG_CHUNK_MAGIC[4] = { 'R', 'J', 'T', '1' };
+enum { REJOIN_LOG_CHUNK_BYTES = 48 * 1024 };
+
+/**
+ * A chunk of the replay of the seat the log was asked of, written where the feed opens it.  The chunks are
+ * written in order, each with the frame count after it in the header, so the feed plays what is whole while
+ * the rest is on its way; one that comes ahead of its turn waits here.
+ */
 void ConnectionManager::processRejoinLog(NetCommandMsg *msg) {
-	if (!m_rejoining || m_rejoinLogArrived || ((Int)msg->getPlayerID() != m_rejoinLogSlot) || m_rejoinLogPath.isEmpty()) {
+	if (!m_rejoining || ((Int)msg->getPlayerID() != m_rejoinLogSlot) || m_rejoinLogPath.isEmpty()) {
 		return;
 	}
 	NetFileCommandMsg *file = (NetFileCommandMsg *)msg;
-	FILE *out = zh_fopen(m_rejoinLogPath.str(), "wb");
-	if (out == NULL) {
-		DEBUG_LOG(("ConnectionManager::processRejoinLog - REJOIN cannot write '%s'\n", m_rejoinLogPath.str()));
+	RejoinLogChunkHeader header;
+	if (file->getFileLength() < sizeof(header)) {
 		return;
 	}
-	const size_t written = fwrite(file->getFileData(), 1, file->getFileLength(), out);
-	fclose(out);
-	m_rejoinLogArrived = (written == file->getFileLength());
-	DEBUG_LOG(("ConnectionManager::processRejoinLog - REJOIN %u bytes of slot %d's replay in '%s'\n",
-		file->getFileLength(), m_rejoinLogSlot, m_rejoinLogPath.str()));
+	memcpy(&header, file->getFileData(), sizeof(header));
+	if (memcmp(header.magic, REJOIN_LOG_CHUNK_MAGIC, sizeof(header.magic)) != 0 || header.attempt != m_rejoinLogAttempt) {
+		DEBUG_LOG(("ConnectionManager::processRejoinLog - REJOIN a chunk of attempt %u dropped, this is attempt %u\n", header.attempt, m_rejoinLogAttempt));
+		return;
+	}
+	if (header.offset < m_rejoinLogWritten || m_rejoinLogChunks.count(header.offset) != 0) {
+		return;		// a chunk had already
+	}
+	const char *bytes = (const char *)file->getFileData() + sizeof(header);
+	m_rejoinLogChunks[header.offset] = std::make_pair(header.held, std::vector<char>(bytes, bytes + file->getFileLength() - sizeof(header)));
+	m_rejoinLogTotal = header.total;
+
+	while (!m_rejoinLogChunks.empty() && m_rejoinLogChunks.begin()->first == m_rejoinLogWritten) {
+		const UnsignedInt held = m_rejoinLogChunks.begin()->second.first;
+		const std::vector<char> &data = m_rejoinLogChunks.begin()->second.second;
+		FILE *out = zh_fopen(m_rejoinLogPath.str(), m_rejoinLogWritten == 0 ? "wb" : "r+b");
+		if (out == NULL) {
+			DEBUG_LOG(("ConnectionManager::processRejoinLog - REJOIN cannot write '%s'\n", m_rejoinLogPath.str()));
+			return;
+		}
+		fseek(out, (long)m_rejoinLogWritten, SEEK_SET);
+		const Bool written = data.empty() || fwrite(&data[0], data.size(), 1, out) == 1;
+		// the frame count the feed reads, for the frames whole now
+		Bool counted = m_rejoinLogWritten + data.size() > RecorderClass::replayFramesOffset() + sizeof(held)
+			&& fseek(out, (long)RecorderClass::replayFramesOffset(), SEEK_SET) == 0 && fwrite(&held, sizeof(held), 1, out) == 1;
+		fclose(out);
+		if (!written || !counted) {
+			DEBUG_LOG(("ConnectionManager::processRejoinLog - REJOIN could not write a chunk to '%s'\n", m_rejoinLogPath.str()));
+			return;
+		}
+		m_rejoinLogWritten += (UnsignedInt)data.size();
+		m_rejoinLogArrived = TRUE;
+		DEBUG_LOG(("ConnectionManager::processRejoinLog - REJOIN %u of %u bytes of slot %d's replay, frames to %u whole, at %u ms\n",
+			m_rejoinLogWritten, m_rejoinLogTotal, m_rejoinLogSlot, held, (UnsignedInt)Clock_Milliseconds()));
+		m_rejoinLogChunks.erase(m_rejoinLogChunks.begin());
+	}
 }
 
 Bool ConnectionManager::getRejoinAccept(UnsignedInt &frame) const {
@@ -607,6 +703,9 @@ void ConnectionManager::readmitPlayer(Int slot, UnsignedInt fromFrame) {
 		m_rejoinLogFor[slot] = FALSE;
 		m_rejoinLogTo = slot;
 		m_rejoinLogAtFrame = fromFrame;
+		m_rejoinLogToFrom = m_rejoinLogFromFrame[slot];
+		m_rejoinLogToAttempt = m_rejoinLogAttemptAsked[slot];
+		m_rejoinLogAttemptSent[slot] = (Int)m_rejoinLogAttemptAsked[slot];
 	}
 }
 
@@ -630,8 +729,10 @@ void ConnectionManager::sendRejoinRoom(Int slot, UnsignedInt fromFrame) {
 
 /**
  * Our replay to the seat coming back, once our logic stands on the first frame it plays: every frame it
- * has to play is in the file then, and we write no more until it has joined.  One command, split into
- * wrapper pieces like a map transfer, acked piece by piece.
+ * has to play is in the file then, and we write no more until it has joined.  A seat that loaded its own
+ * checkpoint gets the header and the frames from that checkpoint on, the rest the whole file.  It goes in
+ * chunks cut where a frame starts, each a command of its own split into wrapper pieces like a map transfer
+ * and acked piece by piece, so the seat plays the first while the others are on their way.
  */
 void ConnectionManager::sendPendingRejoinLog() {
 	if ((m_rejoinLogTo < 0) || (TheGameLogic->getFrame() < m_rejoinLogAtFrame)) {
@@ -642,32 +743,60 @@ void ConnectionManager::sendPendingRejoinLog() {
 	if ((m_connections[to] == NULL) || m_connections[to]->isQuitting()) {
 		return;
 	}
-	TheRecorder->flushRecording();
-	const AsciiString path = TheRecorder->getRecordingPath();
-	FILE *in = path.isEmpty() ? NULL : zh_fopen(path.str(), "rb");
-	if (in == NULL) {
-		DEBUG_LOG(("ConnectionManager::sendPendingRejoinLog - REJOIN no replay to send slot %d ('%s')\n", to, path.str()));
+	std::vector<char> bytes;
+	UnsignedInt headerBytes = 0;
+	UnsignedInt held = 0;
+	std::vector<RecorderClass::FrameStart> starts;
+	if (!TheRecorder->buildRejoinTail(m_rejoinLogToFrom, bytes, headerBytes, starts, held) || bytes.size() <= headerBytes) {
+		DEBUG_LOG(("ConnectionManager::sendPendingRejoinLog - REJOIN no replay to send slot %d ('%s')\n", to, TheRecorder->getRecordingPath().str()));
 		return;
 	}
-	fseek(in, 0, SEEK_END);
-	const long length = ftell(in);
-	fseek(in, 0, SEEK_SET);
-	std::vector<UnsignedByte> bytes(length > 0 ? (size_t)length : 0);
-	const size_t got = bytes.empty() ? 0 : fread(&bytes[0], 1, bytes.size(), in);
-	fclose(in);
-	if (got != bytes.size() || bytes.empty()) {
-		return;
+
+	Int chunks = 0;
+	UnsignedInt begin = 0;
+	size_t next = 0;		// the first frame start past begin
+	while (begin < bytes.size()) {
+		// the chunk ends on the last frame start that fits, or on the first one past begin when none does
+		while (next < starts.size() && starts[next].offset <= begin) {
+			++next;
+		}
+		size_t end = next;
+		while (end + 1 < starts.size() && starts[end + 1].offset <= begin + REJOIN_LOG_CHUNK_BYTES) {
+			++end;
+		}
+		UnsignedInt stop = (UnsignedInt)bytes.size();
+		UnsignedInt chunkHeld = held;
+		if (end < starts.size() && bytes.size() > begin + REJOIN_LOG_CHUNK_BYTES) {
+			stop = starts[end].offset;
+			chunkHeld = starts[end].frame;
+		}
+		if (begin == 0) {
+			memcpy(&bytes[RecorderClass::replayFramesOffset()], &chunkHeld, sizeof(chunkHeld));
+		}
+
+		RejoinLogChunkHeader header;
+		memcpy(header.magic, REJOIN_LOG_CHUNK_MAGIC, sizeof(header.magic));
+		header.attempt = m_rejoinLogToAttempt;
+		header.offset = begin;
+		header.held = chunkHeld;
+		header.total = (UnsignedInt)bytes.size();
+		std::vector<UnsignedByte> chunk(sizeof(header) + (stop - begin));
+		memcpy(&chunk[0], &header, sizeof(header));
+		memcpy(&chunk[sizeof(header)], &bytes[begin], stop - begin);
+
+		NetFileCommandMsg *log = newInstance(NetFileCommandMsg);
+		log->setNetCommandType(NETCOMMANDTYPE_REJOINLOG);
+		log->setPlayerID(m_localSlot);
+		log->setID(GenerateNextCommandID());
+		log->setPortableFilename("rejoin.rep");
+		log->setFileData(&chunk[0], (UnsignedInt)chunk.size());
+		sendLocalCommandDirect(log, slotBit(to));
+		log->detach();
+		++chunks;
+		begin = stop;
 	}
-	NetFileCommandMsg *log = newInstance(NetFileCommandMsg);
-	log->setNetCommandType(NETCOMMANDTYPE_REJOINLOG);
-	log->setPlayerID(m_localSlot);
-	log->setID(GenerateNextCommandID());
-	log->setPortableFilename("rejoin.rep");
-	log->setFileData(&bytes[0], (UnsignedInt)bytes.size());
-	DEBUG_LOG(("ConnectionManager::sendPendingRejoinLog - REJOIN %u bytes of our replay to slot %d on frame %d\n",
-		(UnsignedInt)bytes.size(), to, TheGameLogic->getFrame()));
-	sendLocalCommandDirect(log, slotBit(to));
-	log->detach();
+	DEBUG_LOG(("ConnectionManager::sendPendingRejoinLog - REJOIN %u bytes of our replay, frames %u to %u, to slot %d in %d chunks on frame %d, attempt %u\n",
+		(UnsignedInt)bytes.size(), m_rejoinLogToFrom, held, to, chunks, TheGameLogic->getFrame(), m_rejoinLogToAttempt));
 }
 
 /// DestroyPlayer for a seat that forfeits, as the drop of a seat voted out sends it

@@ -72,6 +72,7 @@ XferSave::XferSave( void )
 	m_xferMode = XFER_SAVE;
 	m_fileFP = NULL;
 	m_blockStack = NULL;
+	m_inMemory = FALSE;
 
 }  // end XferSave
 
@@ -141,6 +142,38 @@ void XferSave::open( AsciiString identifier )
 }  // end open
 
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+void XferSave::openInMemory( AsciiString identifier, size_t reserveBytes )
+{
+
+	if( m_fileFP != NULL || m_inMemory )
+	{
+
+		DEBUG_CRASH(( "Cannot open '%s' in memory, '%s' is open\n", identifier.str(), m_identifier.str() ));
+		throw XFER_FILE_ALREADY_OPEN;
+
+	}  // end if
+
+	Xfer::open( identifier );
+	m_inMemory = TRUE;
+	m_data.clear();
+	m_data.reserve( reserveBytes );
+
+}  // end openInMemory
+
+//-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+void XferSave::takeMemory( std::vector< char > &bytes )
+{
+
+	bytes.swap( m_data );
+	m_data.clear();
+	m_inMemory = FALSE;
+	m_identifier.clear();
+
+}  // end takeMemory
+
+//-------------------------------------------------------------------------------------------------
 /** Close our current file */
 //-------------------------------------------------------------------------------------------------
 void XferSave::close( void )
@@ -205,7 +238,7 @@ Int XferSave::beginBlock( void )
 {
 
 	// sanity
-	DEBUG_ASSERTCRASH( m_fileFP != NULL, ("Xfer begin block - file pointer for '%s' is NULL\n",
+	DEBUG_ASSERTCRASH( m_fileFP != NULL || m_inMemory, ("Xfer begin block - file pointer for '%s' is NULL\n",
 										 m_identifier.str()) );
 
 	// get the current file position so we can back up here for the next end block call
@@ -243,7 +276,7 @@ void XferSave::endBlock( void )
 {
 
 	// sanity
-	DEBUG_ASSERTCRASH( m_fileFP != NULL, ("Xfer end block - file pointer for '%s' is NULL\n",
+	DEBUG_ASSERTCRASH( m_fileFP != NULL || m_inMemory, ("Xfer end block - file pointer for '%s' is NULL\n",
 										 m_identifier.str()) );
 
 	// sanity, make sure we have a block started
@@ -279,7 +312,7 @@ void XferSave::skip( Int dataSize )
 {
 
 	// sanity
-	DEBUG_ASSERTCRASH( m_fileFP != NULL, ("XferSave - file pointer for '%s' is NULL\n",
+	DEBUG_ASSERTCRASH( m_fileFP != NULL || m_inMemory, ("XferSave - file pointer for '%s' is NULL\n",
 										 m_identifier.str()) );
 
 
@@ -364,7 +397,7 @@ void XferSave::xferImplementation( void *data, Int dataSize )
 {
 
 	// sanity
-	DEBUG_ASSERTCRASH( m_fileFP != NULL, ("XferSave - file pointer for '%s' is NULL\n",
+	DEBUG_ASSERTCRASH( m_fileFP != NULL || m_inMemory, ("XferSave - file pointer for '%s' is NULL\n",
 										 m_identifier.str()) );
 
 	// the file is written out on close

@@ -62,6 +62,11 @@ public:
 	/// into "<identifier>.tmp" and renames that over the identifier only once every byte is down, so
 	/// a full disk or a crash mid-save never costs the save that was there.
 	void discard( void );
+	/// No file at all: the bytes stay in memory for takeMemory, sized up front to reserveBytes.  A
+	/// network match's rejoin checkpoint is written this way on the frame and put on the disk by a
+	/// thread of its own (Network.cpp).
+	void openInMemory( AsciiString identifier, size_t reserveBytes );
+	void takeMemory( std::vector< char > &bytes );			///< what was written, and the xfer closed
 	virtual Int beginBlock( void );									///< write placeholder block size
 	virtual void endBlock( void );									///< backup to last begin block and write size
 	virtual void skip( Int dataSize );							///< skipping during a write is a no-op
@@ -82,6 +87,7 @@ protected:
 	/// sought back to fill its size in and forward again, and each seek emptied the CRT's buffer: a
 	/// replay checkpoint took 30 to 60ms that way and takes 6 to 13 from memory.
 	std::vector< char > m_data;
+	Bool m_inMemory;																			///< openInMemory: no file behind m_data
 
 };
 

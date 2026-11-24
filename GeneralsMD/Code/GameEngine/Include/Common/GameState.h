@@ -43,6 +43,7 @@
 #include "GameNetwork/NetworkDefs.h"
 
 #include <functional>
+#include <vector>
 
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
 class GameWindow;
@@ -196,6 +197,12 @@ public:
 	/// Each says FALSE when it failed: no file from a save, and from a load a match already cleared.
 	Bool saveCheckpoint( AsciiString filepath );
 	Bool loadCheckpoint( AsciiString filepath, const std::function< Bool( void ) > &afterReset );	///< afterReset FALSE stops the load as a failed one
+	/// A network match's rejoin checkpoint (Network.cpp): the save into memory, sized up front, for a
+	/// thread of its own to put on the disk.  FALSE, with nothing in bytes, when an object will not save.
+	Bool saveCheckpointToMemory( std::vector< char > &bytes, size_t reserveBytes );
+	/// loadCheckpoint for a seat coming back to a network match: a failed load says nothing to the
+	/// player and clears nothing, since the seat starts its match again from frame 0 instead.
+	Bool loadRejoinCheckpoint( AsciiString filepath, const std::function< Bool( void ) > &afterReset );
 	SaveGameInfo *getSaveGameInfo( void ) { return &m_gameInfo; }
 
 	// snapshot interaction

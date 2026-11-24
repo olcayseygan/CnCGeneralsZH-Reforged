@@ -73,6 +73,11 @@ Int GameEngine_matchFramesPerSecond( void );
 class GameMessage;
 void GameEngine_appendNewGameRates( GameMessage *msg, Int gameSpeedPercent );
 
+/** A seat coming back loads its own checkpoint, or starts its match again from frame 0, in the middle of
+	a network match (Network::loadRejoinCheckpoint): the reset that comes first keeps TheNetwork, the room's
+	connections and the rejoin under way, where a match's end deletes it. */
+void GameEngine_keepNetworkThroughReset( Bool keep );
+
 /** The logic frames a second a mission runs at after its script's SET_FPS_LIMIT.  EA's cinematics ask
 	for 20 to 28 of retail's 30 and time their voices against that; 0 or 30 and up ask for the game back,
 	which is the match's speed, whatever game speed the mission was started at. */

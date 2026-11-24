@@ -1796,6 +1796,13 @@ void GameEngine::init( int argc, char *argv[] )
 /** -----------------------------------------------------------------------------------------------
 	* Reset all necessary parts of the game engine to be ready to accept new game data 
 	*/
+static Bool theKeepNetworkThroughReset = FALSE;
+
+void GameEngine_keepNetworkThroughReset( Bool keep )
+{
+	theKeepNetworkThroughReset = keep;
+}
+
 void GameEngine::reset( void )
 {
 
@@ -1810,7 +1817,7 @@ void GameEngine::reset( void )
 		background->getFirstWindow()->winClearStatus(WIN_STATUS_IMAGE);
 	}
 	Bool deleteNetwork = false;
-	if (TheGameLogic->isInMultiplayerGame())
+	if (TheGameLogic->isInMultiplayerGame() && !theKeepNetworkThroughReset)
 		deleteNetwork = true;
 
 	// the clear-game tick resets from inside the tick; its sounds and effects have no game to play in

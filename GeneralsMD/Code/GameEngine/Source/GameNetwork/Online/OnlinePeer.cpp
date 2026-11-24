@@ -2151,6 +2151,11 @@ AsciiString OnlineGetLastAIMatchId( void )
 	return OnlineSession::get().aiSentMatch.c_str();
 }
 
+AsciiString OnlineCurrentMatchId( void )
+{
+	return OnlineSession::get().matchId.c_str();
+}
+
 Bool OnlineGetQuickMatchChanceWindow( Real &chanceLo, Real &chanceHi, Int &nextMs )
 {
 	const OnlineSession &s = OnlineSession::get();

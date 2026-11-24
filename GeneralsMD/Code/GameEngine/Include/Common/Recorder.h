@@ -28,6 +28,7 @@
 #pragma once
 
 #include <list>
+#include <vector>
 #include "Common/MessageStream.h"
 #include "GameNetwork/GameInfo.h"
 #include "Common/WallClock.h"
@@ -177,6 +178,28 @@ public:
 	Bool feedRejoinFrame( UnsignedInt frame );				///< that frame's recorded commands onto TheCommandList; FALSE when the file no longer fits the frames played
 	UnsignedInt rejoinFramesHeld( void );							///< the header's count of whole frames, read again
 	void closeRejoinFeed( void );
+	Bool skipRejoinFramesBefore( UnsignedInt frame );	///< the feed's commands of earlier frames read and dropped: a checkpoint holds what they did
+
+	/* A network match's rejoin checkpoint (Network.cpp).  The recording keeps where each frame's commands
+		 start, so a seat that comes back from its own checkpoint at frame C is sent the header and the
+		 frames from C on, and the seat's own recording goes on from the copy of it the checkpoint kept. */
+	struct FrameStart
+	{
+		UnsignedInt frame;
+		UnsignedInt offset;		///< in the file
+	};
+	/// the header's length, the bytes recorded so far and where each frame with commands starts; FALSE with no recording
+	Bool getRecordingIndex( UnsignedInt &headerBytes, UnsignedInt &recordedBytes, std::vector< FrameStart > &starts ) const;
+	AsciiString getRecordedOptions( void ) const { return m_recordedOptions; }	///< the slot list the recording opened with, HZ= and GS= cut off
+	AsciiString getClaimedOnlineMatch( void ) const;	///< the Quick Match the recording goes up under, empty for none
+	/// After the reset of a checkpoint's load: the recording again from the copy the checkpoint kept, standing on frame
+	Bool resumeRecording( const std::vector< char > &prefix, UnsignedInt headerBytes, const std::vector< FrameStart > &starts,
+		UnsignedInt frame, Int gameMode, const AsciiString &options, const AsciiString &onlineMatch );
+	/// The recording's header and its frames from fromFrame on, as one replay file: the frame count in the header is
+	/// held, and starts says where each frame with commands begins in bytes.  FALSE with no recording.
+	Bool buildRejoinTail( UnsignedInt fromFrame, std::vector< char > &bytes, UnsignedInt &headerBytes,
+		std::vector< FrameStart > &starts, UnsignedInt &held );
+	static UnsignedInt replayFramesOffset( void );		///< where a replay's frame count sits in its header
 #if defined _DEBUG || defined _INTERNAL
 	Bool analyzeReplay( AsciiString filename );
 	Bool isAnalysisInProgress( void );
@@ -277,6 +300,13 @@ protected:
 	Int m_rejoinGameSpeed;
 	AsciiString m_rejoinMatch;												///< noteRejoinMatch's slot list, empty for none
 	void readRejoinNextFrame( void );
+
+	UnsignedInt m_headerBytes;												///< the recording's header, up to its first command
+	std::vector< FrameStart > m_frameStarts;					///< where each recorded frame with commands starts
+	AsciiString m_recordedOptions;
+public:
+	void setRejoinMatch( const AsciiString &options ) { m_rejoinMatch = options; }	///< the match a feed has to record, for a seat started from its checkpoint
+	AsciiString getRejoinMatch( void ) const { return m_rejoinMatch; }
 };
 
 extern RecorderClass *TheRecorder;

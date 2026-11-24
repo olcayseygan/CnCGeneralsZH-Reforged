@@ -280,6 +280,8 @@ TEST(dslobby_team_two_is_team_ones_mirror_and_its_lamps_face_the_middle)
 			CHECK( within( DirectStrikeLobby_headChevron( team, i ), head ) );
 		CHECK( within( DirectStrikeLobby_titleChevron( team, 0 ), DirectStrikeLobby_title() ) );
 		CHECK( within( DirectStrikeLobby_titleChevron( team, 1 ), DirectStrikeLobby_title() ) );
+		// clear of the spaced name, about 220 either side of the middle, with a 16 gap
+		CHECK( DirectStrikeLobby_titleChevron( team, 1 ).x1 <= 960.0f - 236.0f || DirectStrikeLobby_titleChevron( team, 1 ).x0 >= 960.0f + 236.0f );
 	}
 }
 

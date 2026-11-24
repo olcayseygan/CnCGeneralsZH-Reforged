@@ -22,12 +22,12 @@
 // DirectStrikeLayout.h, put on the screen by DirectStrike_frame; every piece and colour is the theme's,
 // on the common frame every player of the room sees alike (SIDE_COMMON).
 //
-// A seat is a start, not a slot (DirectStrikeLayout.h): a player moves by clicking an open seat or the
-// other team's head, which presses the room's own hidden start spot for that seat, so the move takes
-// the path a start spot click always took: the host and a skirmish set the start, a joiner asks the
-// host for it ("StartPos=" in LANAPI's and the online room's requests), the host refuses a seat that is
-// not open (DirectStrikeSeatIsOpen), resets everyone's ready and sends the slot list, and
-// FitDirectStrikeRoom gives the team that goes with the seat.
+// A seat is a start, not a slot (DirectStrikeLayout.h): a player moves by clicking an open seat, a
+// computer's seat or the other team's head, which presses the room's own hidden start spot for that
+// seat.  The host and a skirmish take it (DirectStrikeTakeSeat: a computer there swaps starts with the
+// player), a joiner asks the host for it ("StartPos=" in LANAPI's and the online room's requests, which
+// the online server only relays), the host refuses a closed seat or a human's, resets everyone's ready
+// and sends the slot list, and FitDirectStrikeRoom gives the team that goes with the seat.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -383,37 +383,39 @@ namespace
 		return ready;
 	}
 
-	/// whether the local player can move to `at`: he holds a seat of the six and that seat's slot is open.  A
-	/// closed seat, a taken one and his own do nothing.
-	Bool canMoveTo( Int at )
-	{
-		const Int local = localSlot();
-		if( local < 0 || local >= DSLOBBY_SEATS || seat( local ) == NULL || !seat( local )->isOccupied() )
-			return FALSE;
-		const GameSlot *there = seat( s_slotAt[ at ] );
-		return s_slotAt[ at ] != local && there != NULL && there->getState() == SLOT_OPEN;
-	}
+	/// whether the local player can move to `at`: he holds a seat of the six and that seat's slot is open or a
+	/// computer's, who takes the seat he leaves (DirectStrikeCanTakeSeat).  A closed seat, a human's and his own do
+	/// nothing.
+	Bool canMoveTo( Int at ) { return DirectStrikeCanTakeSeat( s_game, localSlot(), at ); }
 
 	/// the seat a click on team `team`'s head moves the local player to: that team's first open seat down its rows,
-	/// -1 for a full team or the player's own (the head of his team takes him nowhere)
+	/// else its first computer's, -1 for a team of humans or the player's own (the head of his team takes him nowhere)
 	Int headMove( Int team )
 	{
 		const Int local = localSlot();
 		if( local < 0 || local >= DSLOBBY_SEATS || DirectStrikeLobby_team( s_seatOf[ local ] ) == team )
 			return -1;
-		for( Int row = 0; row < DSLOBBY_ROWS; ++row )
-			if( canMoveTo( DirectStrikeLobby_seat( team, row ) ) )
-				return DirectStrikeLobby_seat( team, row );
+		for( Int pass = 0; pass < 2; ++pass )
+			for( Int row = 0; row < DSLOBBY_ROWS; ++row )
+			{
+				const Int at = DirectStrikeLobby_seat( team, row );
+				if( canMoveTo( at ) && ( pass == 1 || seat( s_slotAt[ at ] )->getState() == SLOT_OPEN ) )
+					return at;
+			}
 		return -1;
 	}
 
-	/// the plate a click moves the player by: an open seat's whole card, but for the host its seat line, which is the
-	/// seat control
+	/// the plate a click moves the player by: an open or computer seat's whole card, but for the host its seat line,
+	/// which is the seat control, and a computer's army and colour chips
 	Bool overMove( Int at, Real x, Real y )
 	{
 		if( !canMoveTo( at ) || !DirectStrikeLobby_card( at ).contains( x, y ) )
 			return FALSE;
-		return !( editsSeat( s_slotAt[ at ] ) && DirectStrikeLobby_part( at, DSSEAT_LINE, isNetwork() ).contains( x, y ) );
+		const Int slot = s_slotAt[ at ];
+		if( editsSeat( slot ) && DirectStrikeLobby_part( at, DSSEAT_LINE, isNetwork() ).contains( x, y ) )
+			return FALSE;
+		return !( editsArmy( slot ) && ( DirectStrikeLobby_part( at, DSSEAT_ARMY, isNetwork() ).contains( x, y )
+			|| DirectStrikeLobby_part( at, DSSEAT_COLOR, isNetwork() ).contains( x, y ) ) );
 	}
 
 	Bool pointerOverMove( Int at )
@@ -555,14 +557,14 @@ namespace
 		const GameSlot *s = seat( slot );
 		const DirectStrikeRect wellAt = seatPart( slot, DSSEAT_PORTRAIT );
 		const LaneHudBox well = boxOf( wellAt );
+		// the + key, 28 in: the whole open card is its target (overMove), so it lights for the card
+		const Int at = seatOfSlot( slot );
+		const DirectStrikeRect mark = DirectStrike_rect( wellAt.x0 + PLUS_IN, wellAt.y0 + PLUS_IN, wellAt.x1 - PLUS_IN, wellAt.y1 - PLUS_IN );
+		const Bool hot = pointerOverMove( at );
+		const char *plus = canMoveTo( at ) ? stateOf( hot, hot && TheMouse->getMouseStatus()->leftState != MBS_Up, FALSE ) : "I";
 		if( s->getState() == SLOT_OPEN )
 		{
-			// the + key, 28 in: the whole open card is its target (overMove), so it lights for the card
-			const Int at = seatOfSlot( slot );
-			const DirectStrikeRect mark = DirectStrike_rect( wellAt.x0 + PLUS_IN, wellAt.y0 + PLUS_IN, wellAt.x1 - PLUS_IN, wellAt.y1 - PLUS_IN );
-			const Bool hot = pointerOverMove( at );
-			const char *state = canMoveTo( at ) ? stateOf( hot, hot && TheMouse->getMouseStatus()->leftState != MBS_Up, FALSE ) : "I";
-			drawImage( art( CLAMP_PLUS, state ), boxOf( mark ) );
+			drawImage( art( CLAMP_PLUS, plus ), boxOf( mark ) );
 			return;
 		}
 		if( s->getState() == SLOT_CLOSED )
@@ -572,12 +574,15 @@ namespace
 		}
 		const Int pick = s->getPlayerTemplate();
 		if( isRandom( pick ) )
-		{
 			portraitWell( well, art( LOBBY_RANDOM ), LobbySeatColor( s ), FALSE );
-			return;
+		else
+		{
+			const Image *general = generalPortrait( ThePlayerTemplateStore->getNthPlayerTemplate( pick ) );
+			portraitWell( well, general != NULL ? general : headquartersPicture( armySide( pick ) ), LobbySeatColor( s ), TRUE );
 		}
-		const Image *general = generalPortrait( ThePlayerTemplateStore->getNthPlayerTemplate( pick ) );
-		portraitWell( well, general != NULL ? general : headquartersPicture( armySide( pick ) ), LobbySeatColor( s ), TRUE );
+		// a computer's card takes the player too, the computer going to the seat he leaves: its + while it would
+		if( hot )
+			drawImage( art( CLAMP_PLUS, plus ), boxOf( mark ) );
 	}
 
 	void drawSeatLine( Int slot )

@@ -1699,14 +1699,37 @@ void DirectStrikeSeats(const GameInfo *game, Int seatOf[], Int slotAt[])
 	DirectStrikeLobby_seats(start, seatOf, slotAt);
 }
 
-Bool DirectStrikeSeatIsOpen(const GameInfo *game, Int seat)
+Bool DirectStrikeCanTakeSeat(const GameInfo *game, Int slot, Int seat)
 {
-	if (seat < 0 || seat >= DSLOBBY_SEATS)
+	if (seat < 0 || seat >= DSLOBBY_SEATS || slot < 0 || slot >= DSLOBBY_SEATS)
+		return FALSE;
+	const GameSlot *mover = game->getConstSlot(slot);
+	if (mover == NULL || !mover->isOccupied() || mover->getPlayerTemplate() == PLAYERTEMPLATE_OBSERVER)
 		return FALSE;
 	Int seatOf[DSLOBBY_SEATS], slotAt[DSLOBBY_SEATS];
 	DirectStrikeSeats(game, seatOf, slotAt);
-	const GameSlot *slot = game->getConstSlot(slotAt[seat]);
-	return slot != NULL && slot->getState() == SLOT_OPEN;
+	const GameSlot *there = slotAt[seat] != slot ? game->getConstSlot(slotAt[seat]) : NULL;
+	return there != NULL && (there->getState() == SLOT_OPEN || there->isAI());
+}
+
+Bool DirectStrikeTakeSeat(GameInfo *game, Int slot, Int seat)
+{
+	if (!DirectStrikeCanTakeSeat(game, slot, seat))
+		return FALSE;
+	Int seatOf[DSLOBBY_SEATS], slotAt[DSLOBBY_SEATS];
+	DirectStrikeSeats(game, seatOf, slotAt);
+	GameSlot *there = game->getSlot(slotAt[seat]);
+	// a computer takes the seat the player left; an open slot has no start and keeps showing where it is free
+	if (there->isAI())
+	{
+		there->setStartPos(seatOf[slot]);
+		there->setTeamNumber(directStrikeTeamOfSeat(seatOf[slot]));
+	}
+	GameSlot *mover = game->getSlot(slot);
+	mover->setStartPos(seat);
+	mover->setTeamNumber(directStrikeTeamOfSeat(seat));
+	DEBUG_LOG(("Direct Strike: slot %d takes seat %d from slot %d, which goes to seat %d\n", slot, seat, slotAt[seat], seatOf[slot]));
+	return TRUE;
 }
 
 Bool IsDirectStrikeMap(const AsciiString &map)

@@ -13368,6 +13368,60 @@ TEST(lane_war_seats_follow_the_starts_and_alternate_the_ends)
 	CHECK_EQ( LaneWar_seatOfStart( 5 ), 2 );
 }
 
+#include "GameClient/DirectStrikeLayout.h"
+
+TEST(lane_war_lobby_seat_move_swaps_with_a_computer_and_refuses_closed_and_human_seats)
+{
+	/* DirectStrikeTakeSeat, the one path a seat move goes through in skirmish, a LAN host and an online host
+	   (the joiner's "StartPos=" request lands on it too): a computer's seat swaps, the computer taking the seat
+	   the player left; never a closed seat, a human's, his own or one past the six.  (An open seat is not set up
+	   here: SLOT_OPEN's name goes through TheGameText, which no test has; the lobby proofs cover it.) */
+	GlobalData *saved = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;		// GameInfo::reset reads the default starting cash
+	SkirmishGameInfo room;
+	room.init();
+	room.getSlot( 0 )->setState( SLOT_PLAYER, UnicodeString( u"me" ) );
+	room.getSlot( 1 )->setState( SLOT_EASY_AI );
+	room.getSlot( 2 )->setState( SLOT_MED_AI );		// no start yet: shows on seat 2, its own number
+	room.getSlot( 4 )->setState( SLOT_PLAYER, UnicodeString( u"other" ) );
+	room.getSlot( 0 )->setStartPos( 0 );
+	room.getSlot( 1 )->setStartPos( 1 );
+	room.getSlot( 4 )->setStartPos( 4 );
+
+	CHECK( DirectStrikeCanTakeSeat( &room, 0, 2 ) );
+	CHECK( !DirectStrikeCanTakeSeat( &room, 0, 3 ) );		// closed
+	CHECK( !DirectStrikeCanTakeSeat( &room, 0, 4 ) );		// a human's
+	CHECK( !DirectStrikeCanTakeSeat( &room, 0, 0 ) );		// his own
+	CHECK( !DirectStrikeCanTakeSeat( &room, 0, 6 ) );
+	CHECK( !DirectStrikeCanTakeSeat( &room, 3, 1 ) );		// a closed slot moves nobody
+	CHECK( !DirectStrikeTakeSeat( &room, 0, 4 ) );
+	CHECK_EQ( room.getSlot( 0 )->getStartPos(), 0 );
+	CHECK_EQ( room.getSlot( 4 )->getStartPos(), 4 );
+
+	// the computer on team B's first seat goes to the player's seat on team A
+	CHECK( DirectStrikeTakeSeat( &room, 0, 1 ) );
+	CHECK_EQ( room.getSlot( 0 )->getStartPos(), 1 );
+	CHECK_EQ( room.getSlot( 0 )->getTeamNumber(), 1 );
+	CHECK_EQ( room.getSlot( 1 )->getStartPos(), 0 );
+	CHECK_EQ( room.getSlot( 1 )->getTeamNumber(), 0 );
+
+	// and the one with no start yet takes the seat he leaves, as the lobby shows it
+	CHECK( DirectStrikeTakeSeat( &room, 0, 2 ) );
+	Int seatOf[ DSLOBBY_SEATS ], slotAt[ DSLOBBY_SEATS ];
+	DirectStrikeSeats( &room, seatOf, slotAt );
+	CHECK_EQ( seatOf[ 0 ], 2 );
+	CHECK_EQ( seatOf[ 1 ], 0 );
+	CHECK_EQ( seatOf[ 2 ], 1 );
+	CHECK_EQ( room.getSlot( 0 )->getTeamNumber(), 0 );
+	CHECK_EQ( room.getSlot( 2 )->getTeamNumber(), 1 );
+
+	room.getSlot( 0 )->setPlayerTemplate( PLAYERTEMPLATE_OBSERVER );
+	CHECK( !DirectStrikeCanTakeSeat( &room, 0, 1 ) );
+
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = saved;
+}
+
 TEST(lane_war_rotation_takes_seats_in_turn_and_passes_over_empty_ones)
 {
 	const Bool full[ LANEWAR_SEATS ] = { TRUE, TRUE, TRUE };

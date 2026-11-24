@@ -1528,6 +1528,12 @@ static void handleStartPositionSelection(int index, Int position)
 			slot->setStartPos(position);
 			return;
 		}
+		// a Direct Strike seat: an open one, or a computer's, who takes the seat left
+		if (IsDirectStrikeMap(myGame->getMap()))
+		{
+			DirectStrikeTakeSeat(myGame, index, position);
+			return;
+		}
 
 		Bool isAvailable = TRUE;
 		for(Int i = 0; i < MAX_SLOTS; ++i)
@@ -2633,7 +2639,14 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
 				{
 					for (Int i = 0; i < MAX_SLOTS; i++)
 					{
-						if (controlID == buttonMapStartPositionID[i])
+						if (controlID == buttonMapStartPositionID[i] && IsDirectStrikeMap(TheSkirmishGameInfo->getMap()))
+						{
+							// a Direct Strike seat card pressed this spot (DirectStrikeLobby.cpp): the player sits there
+							handleStartPositionSelection(TheSkirmishGameInfo->getLocalSlotNum(), i);
+							skirmishUpdateSlotList();
+							sandboxOk = FALSE;
+						}
+						else if (controlID == buttonMapStartPositionID[i])
 						{
 							Int playerIdxInPos = -1;
 							for (Int j=0; j<MAX_SLOTS; ++j)

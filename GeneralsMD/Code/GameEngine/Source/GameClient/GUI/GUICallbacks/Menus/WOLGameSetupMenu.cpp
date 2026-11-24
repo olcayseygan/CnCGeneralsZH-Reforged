@@ -761,8 +761,13 @@ static void handleStartPositionSelection(Int player, int startPos)
 			skip = TRUE;
 		}
 
-		if(!skip)
-		{	
+		// a Direct Strike seat, open or a computer's: the host takes it (DirectStrikeTakeSeat), a joiner only asks
+		const Bool directStrike = !skip && IsDirectStrikeMap(myGame->getMap());
+		if (directStrike && myGame->amIHost() && !DirectStrikeTakeSeat(myGame, player, startPos))
+			return;
+
+		if(!skip && !directStrike)
+		{
 			Bool isAvailable = TRUE;
 			for(Int i = 0; i < MAX_SLOTS; ++i)
 			{
@@ -775,7 +780,8 @@ static void handleStartPositionSelection(Int player, int startPos)
 			if( !isAvailable )
 				return;
 		}
-		slot->setStartPos(startPos);
+		if (!directStrike)
+			slot->setStartPos(startPos);
 
 		if (myGame->amIHost())
 		{
@@ -791,7 +797,7 @@ static void handleStartPositionSelection(Int player, int startPos)
 			{
 				// request the playerTemplate from the host
 				AsciiString options;
-				options.format("StartPos=%d", slot->getStartPos());
+				options.format("StartPos=%d", startPos);
 				AsciiString hostName;
 				hostName.translate(myGame->getSlot(0)->getName());
 				PeerRequest req;
@@ -3125,9 +3131,20 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 								}
 								else if (key == "StartPos")
 								{
-									// a Direct Strike seat is its start: a player moves only to an open seat (DirectStrikeSeatIsOpen)
-									if (val >= -1 && val < MAX_SLOTS && val != slot->getStartPos() && slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER
-										&& (!IsDirectStrikeMap(game->getMap()) || DirectStrikeSeatIsOpen(game, val)))
+									// a Direct Strike seat is its start: a player moves to an open seat or swaps with a computer
+									if (IsDirectStrikeMap(game->getMap()))
+									{
+										if (DirectStrikeTakeSeat(game, slotNum, val))
+										{
+											change = true;
+											shouldUnaccept = true;
+										}
+										else
+										{
+											DEBUG_LOG(("Rejecting Direct Strike seat %d for slot %d\n", val, slotNum));
+										}
+									}
+									else if (val >= -1 && val < MAX_SLOTS && val != slot->getStartPos() && slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
 									{
 										Bool startPosAvailable = TRUE;
 										if(val != -1)
@@ -3635,6 +3652,12 @@ WindowMsgHandledType WOLGameSetupMenuSystem( GameWindow *window, UnsignedInt msg
 						if (controlID == buttonMapStartPositionID[i])
 						{
 							GameSpyStagingRoom *game = TheGameSpyInfo->getCurrentStagingRoom();
+							if (game && IsDirectStrikeMap(game->getMap()))
+							{
+								// a Direct Strike seat card pressed this spot (DirectStrikeLobby.cpp): the player sits there
+								handleStartPositionSelection(game->getLocalSlotNum(), i);
+								break;
+							}
 							Int playerIdxInPos = -1;
 							for (Int j=0; j<MAX_SLOTS; ++j)
 							{

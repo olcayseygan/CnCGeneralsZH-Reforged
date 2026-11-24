@@ -239,9 +239,12 @@ Bool FitDirectStrikeRoom(GameInfo *game);
 // which of the first six slots shows at which seat, DirectStrikeLobby_seats over the slot list: the
 // same answer on every machine of the room
 void DirectStrikeSeats(const GameInfo *game, Int seatOf[], Int slotAt[]);
-// TRUE when a player may move to `seat`: a seat of the six whose slot is open.  A host checks a
-// joiner's request with it, so a seat closed or taken meanwhile is refused
-Bool DirectStrikeSeatIsOpen(const GameInfo *game, Int seat);
+// TRUE when the player in `slot` may move to `seat`: a seat of the six whose slot is open or holds a
+// computer.  DirectStrikeTakeSeat moves him: an open seat's start becomes his, a computer there swaps
+// starts with him.  The host and a skirmish take a seat with it, and the host takes a joiner's request
+// ("StartPos=") with it, so a seat closed or taken by a human meanwhile is refused.  TRUE when it moved
+Bool DirectStrikeCanTakeSeat(const GameInfo *game, Int slot, Int seat);
+Bool DirectStrikeTakeSeat(GameInfo *game, Int slot, Int seat);
 // The room's look (SkirmishGameOptionsMenu, LanGameOptionsMenu, WOLGameSetupMenu): the Direct Strike
 // lobby over the room's layout, DirectStrikeLobby.h, its three seat cards a team facing each other.  A
 // room calls it after every slot list repaint; ShutdownLobbySeatVisuals takes it off.

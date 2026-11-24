@@ -236,13 +236,15 @@ inline DirectStrikeRect DirectStrikeLobby_console( void )
 
 inline DirectStrikeRect DirectStrikeLobby_title( void )
 {
-	return DirectStrike_rect( 700, DSLOBBY_TITLE_TOP, 1220, DSLOBBY_TITLE_TOP + DSLOBBY_TITLE_H );
+	return DirectStrike_rect( 640, DSLOBBY_TITLE_TOP, 1280, DSLOBBY_TITLE_TOP + DSLOBBY_TITLE_H );
 }
 
-/// the title's chevrons, 14 x 18 on its middle: team 1's two pointing right at its left, team 2's at its right
+/// the title's chevrons, 14 x 18 on its middle: team 1's two pointing right at its left, team 2's at its right,
+/// 24 in from its ends and clear of the spaced name, which runs about 220 either side of the middle at 1080
+/// (on a 520 plate they stood 26 in and ran into the D and the E, 2026-11-24)
 inline DirectStrikeRect DirectStrikeLobby_titleChevron( int team, int i )
 {
-	const float x = team == 0 ? 726.0f + 14.0f * (float)i : 1920.0f - 726.0f - 14.0f * (float)i - 14.0f;
+	const float x = team == 0 ? 664.0f + 14.0f * (float)i : 1920.0f - 664.0f - 14.0f * (float)i - 14.0f;
 	const float y = DSLOBBY_TITLE_TOP + DSLOBBY_TITLE_H / 2 - 9.0f;
 	return DirectStrike_rect( x, y, x + 14.0f, y + 18.0f );
 }

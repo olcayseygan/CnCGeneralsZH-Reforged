@@ -636,8 +636,23 @@ static void handleStartPositionSelection(Int player, int startPos)
 			skip = TRUE;
 		}
 
-		if(!skip)
-		{	
+		// a Direct Strike seat, open or a computer's: the host takes it (DirectStrikeTakeSeat), a joiner only asks
+		const Bool directStrike = !skip && IsDirectStrikeMap(myGame->getMap());
+		if (directStrike && myGame->amIHost() && !DirectStrikeTakeSeat(myGame, player, startPos))
+			return;
+		if (directStrike && !myGame->amIHost())
+		{
+			if (AreSlotListUpdatesEnabled())
+			{
+				AsciiString options;
+				options.format("StartPos=%d", startPos);
+				TheLAN->RequestGameOptions(options, true);
+			}
+			return;
+		}
+
+		if(!skip && !directStrike)
+		{
 			Bool isAvailable = TRUE;
 			for(Int i = 0; i < MAX_SLOTS; ++i)
 			{
@@ -1790,6 +1805,12 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
 							LANGameInfo *game = TheLAN->GetMyGame();
 							if (!game)
 								break;	// the room is already gone: a click that landed as it closed
+							if (IsDirectStrikeMap(game->getMap()))
+							{
+								// a Direct Strike seat card pressed this spot (DirectStrikeLobby.cpp): the player sits there
+								handleStartPositionSelection(game->getLocalSlotNum(), i);
+								break;
+							}
 							Int playerIdxInPos = -1;
 							for (Int j=0; j<MAX_SLOTS; ++j)
 							{

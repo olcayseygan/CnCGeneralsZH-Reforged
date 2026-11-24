@@ -598,9 +598,20 @@ void LANAPI::OnGameOptions( UnsignedInt playerIP, Int playerSlot, AsciiString op
 				else if (key == "StartPos" && slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
 				{
 						
-					// a Direct Strike seat is its start: a player moves only to an open seat (DirectStrikeSeatIsOpen)
-					if (val >= -1 && val < MAX_SLOTS && val != slot->getStartPos()
-						&& (!IsDirectStrikeMap(m_currentGame->getMap()) || DirectStrikeSeatIsOpen(m_currentGame, val)))
+					// a Direct Strike seat is its start: a player moves to an open seat or swaps with a computer
+					if (IsDirectStrikeMap(m_currentGame->getMap()))
+					{
+						if (DirectStrikeTakeSeat(m_currentGame, playerSlot, val))
+						{
+							change = true;
+							shouldUnaccept = true;
+						}
+						else
+						{
+							DEBUG_LOG(("Rejecting Direct Strike seat %d for slot %d\n", val, playerSlot));
+						}
+					}
+					else if (val >= -1 && val < MAX_SLOTS && val != slot->getStartPos())
 					{
 						Bool startPosAvailable = TRUE;
 						if(val != -1)

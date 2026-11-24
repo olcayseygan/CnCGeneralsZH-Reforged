@@ -10199,7 +10199,9 @@ Bool AIPlayer::queueExtraFactory( Object *dozer, KindOfType kind, Bool doctrine 
 	// An Elo 4200 seat banked a median 19,960 between frames 4000 and 9000 against Hard's 6,142 and
 	// failed to place 2,854 War Factories in 40 ladder games: its income outgrew the ground inside two
 	// base radii, and every factory it had stayed full.
-	if( (Int)m_player->getMoney()->countMoney() < FACTORY_STRETCH_BANKS * bankTarget() )
+	// An Apocalypse seat holds a basin with its allies and builds as it did
+	if( (Int)m_player->getMoney()->countMoney() < FACTORY_STRETCH_BANKS * bankTarget() ||
+			(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) )
 		return FALSE;
 	return placeNear( tmpl, &m_baseCenter, m_baseRadius, TRUE, NULL, TRUE, SUPERWEAPON_REACH_SCALE );
 }
@@ -11756,8 +11758,13 @@ void AIPlayer::doSpending( void )
 			m_player->getPlayerIndex(), m_incomePerSecond, bank, bankWindowAgo, bankTarget(), bank > bankTarget() ? "spends the rest" : "keeps it"));
 	}
 
-	if( isBaseUnderAttack() )
-		return;		// defendHome's
+	// a base being hit is defendHome's, unless the bank has piled past the targets an extra factory waits
+	// for: an Elo 4200 GLA held at home by one Ranger kept one War Factory all match, full on every pass,
+	// with 43,535 in the bank.  The modes' seats spend as they did
+	if( isBaseUnderAttack() && ( bank < FACTORY_STRETCH_BANKS * bankTarget() ||
+			(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) ||
+			(TheLaneWarDirector != NULL && TheLaneWarDirector->isActive()) ) )
+		return;
 	addProductionForQueues();
 	if( m_persona != AIPERSONA_NORMAL )
 		trainFavoured();
@@ -12090,7 +12097,9 @@ void AIPlayer::trainSurplus( Int budget )
 	Int depth = 1;
 	// a bank piled past a few targets queues deeper on every personality, by rating: one unit a factory a
 	// pass left an Elo 4200 seat on 19,960 where its Hard opponent held 6,142
-	if( (Int)m_player->getMoney()->countMoney() > RICH_SURPLUS_BANKS * bankTarget() )
+	// (not in an Apocalypse match, whose seats spend as they did)
+	if( (Int)m_player->getMoney()->countMoney() > RICH_SURPLUS_BANKS * bankTarget() &&
+			!(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) )
 		depth = aiRatingLerp( m_rating, RICH_SURPLUS_DEPTH );
 	if( persona )
 	{
@@ -13639,25 +13648,55 @@ void AIPlayer::doWaves( void )
 			m_gunHoldSince = 0;
 		return;
 	}
-	// no wave walks out of a base that is being hit
-	if( isBaseUnderAttack() )
+	// no wave walks out of a base that is being hit, unless what stays behind outweighs the intruders by the
+	// odds defendHome sends at them (DEFEND_ODDS).  Held whenever any known shooter stood at home, a 4200 GLA on
+	// a small map with China's base beside it kept every wave home for the whole match: 463 holds, 0 waves,
+	// 12,150 of army at home against intruders worth 300 to 3,600, and 312,429 in the bank at the frame limit.
+	// A push outweighs what stays, so it still meets the whole home force
+	const Bool baseHit = isBaseUnderAttack();
+	if( baseHit )
 	{
-		DEBUG_LOG(("AI WAVE frame %d player %d keeps %d teams at home, the base is under attack\n", TheGameLogic->getFrame(),
-			m_player->getPlayerIndex(), teams));
-		return;
+		Real intruderWorth = 0.0f;
+		Real staying = 0.0f;
+		const Bool asBefore = !runsOwnAI() || (TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) ||
+			(TheLaneWarDirector != NULL && TheLaneWarDirector->isActive());
+		if( !asBefore )
+		{
+			Int intruders = 0;
+			std::vector<AIVisibleEnemy> army;
+			homeIntruder( &intruders, &army );
+			for( std::vector<AIVisibleEnemy>::const_iterator k = army.begin(); k != army.end(); ++k )
+				intruderWorth += k->m_weight;
+			std::vector<Object *> owned;
+			m_player->iterateObjects( collectOwned, &owned );
+			for( std::vector<Object *>::const_iterator o = owned.begin(); o != owned.end(); ++o )
+				if( !(*o)->isEffectivelyDead() && !(*o)->isKindOf( KINDOF_STRUCTURE ) && isAtHome( (*o)->getPosition() ) && leavesToFinish( *o ) )
+					staying += aiCombatPower( *o );
+			staying -= power;		// the held teams stand at home and are what would leave
+		}
+		if( asBefore || staying < aiRatingLerp( m_rating, DEFEND_ODDS ) * intruderWorth )
+		{
+			DEBUG_LOG(("AI WAVE frame %d player %d keeps %d teams at home, the base is under attack\n", TheGameLogic->getFrame(),
+				m_player->getPlayerIndex(), teams));
+			return;
+		}
+		DEBUG_LOG(("AI WAVE frame %d player %d lets %d teams go though the base is hit: %.0f stays against intruders worth %.0f\n",
+			TheGameLogic->getFrame(), m_player->getPlayerIndex(), teams, staying, intruderWorth));
 	}
 	const UnsignedInt heldFrames = TheGameLogic->getFrame() - m_heldSince;
-	// a full staging point goes whatever it adds up to: sixteen GLA teams of one man each are 3,200, and
-	// every team formed behind them would leave alone
-	// and a rung that does not mass lets go the moment what is parked is worth sending
-	if( teams < MAX_HELD_TEAMS ? !waveGoes( power, heldFrames ) : !readyToPush() )
-		return;
 	// ... and not into guns it does not beat: it waits and grows, a full staging point too, up to GUN_HOLD_MAX_FRAMES.
 	// What idles at home past the rung's share goes with it and counts towards the odds: an Elo 4200 seat held a
-	// staging point of 12,462 at the guns for minutes with 56,312 of its 83,812 standing at home
+	// staging point of 12,462 at the guns for minutes with 56,312 of its 83,812 standing at home.  While the base
+	// is hit the spares count towards the wave's size as well: sendSpareGuards waits for the fight to end, and the
+	// teams defendHome leaves alone are thin
 	std::vector<Object *> spares;
 	Real spareShare, spareIdle, spareArmy;
 	const Real sparePower = collectSpareGuards( &spares, &spareShare, &spareIdle, &spareArmy );
+	// a full staging point goes whatever it adds up to: sixteen GLA teams of one man each are 3,200, and
+	// every team formed behind them would leave alone
+	// and a rung that does not mass lets go the moment what is parked is worth sending
+	if( teams < MAX_HELD_TEAMS ? !waveGoes( baseHit ? power + sparePower : power, heldFrames ) : !readyToPush() )
+		return;
 	if( !attackBeatsGuns( power + sparePower, "wave" ) )
 		return;
 	const char *cause = !holdsTeamsForWaves() ? "press" : teams >= MAX_HELD_TEAMS ? "full" : power >= wavePower() ? "wave" : "timeout";
@@ -14575,6 +14614,7 @@ void AIPlayer::sendWave( AIGroup *wave, const AsciiString &approach, Int pathSuf
 			end = end->getLink( 0 );
 		if( isAtHome( end->getLocation() ) )
 		{
+			m_gunHoldSince = 0;		// the teams are let go either way: the next one held starts the guns' clock afresh
 			const VecObjectID &ids = wave->getAllIDs();
 			Object *first = ids.empty() ? NULL : TheGameLogic->findObjectByID( ids.front() );
 			if( first == NULL || first->getAI() == NULL ||

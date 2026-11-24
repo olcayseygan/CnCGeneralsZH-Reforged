@@ -66,9 +66,11 @@
 //   step release           back to the wall clock: {"ok":true,"cmd":"step","released":true,"frame":F}
 //   objects <slot>         read now: {"ok":true,"cmd":"objects","frame":F,"slot":S,"money":M,
 //                          "power":{"produced":P,"consumed":C},"defeated":false,"objects":[{"template",
-//                          "id","x","y","kind":"structure|builder|unit","underConstruction","built",
-//                          "queue":[names],"headPercent"}, a builder also "idle" and "task":
-//                          "idle|build|repair|fortify|supplies|busy"],"count":N,"truncated":false}.
+//                          "id","x","y","kind":"structure|builder|unit","health":0..100,
+//                          "underConstruction","built","queue":[names],"headPercent"}, a builder also
+//                          "idle" and "task":"idle|build|repair|fortify|supplies|busy", a supply pile
+//                          or dock also "boxes" (left in it)],"count":N,"truncated":false}.  Only
+//                          structures, infantry, vehicles and aircraft: no shots or effects.
 //                          Slot -1 is the map's own structures (civilian and neutral).
 //   produce <slot> <building> <unit> <count>
 //                          the building a template (each unit to the one of them with the shortest
@@ -92,15 +94,23 @@
 //                          sale finishes, as for a player.  Or "error": no such living object, not the
 //                          seat's, not a structure, already being sold, or no sell button (unfinished,
 //                          subdued, unsellable).
+//   science <slot> <SCIENCE_Name>
+//                          the general's powers window's purchase (SCIENCE_PaladinTank) on the seat's
+//                          own rank and points: MSG_PURCHASE_SCIENCE handed to the dispatcher inside the
+//                          frame.  {"ok":true,"cmd":"science","science":"...","cost":C,"pointsLeft":P},
+//                          or "error": no such science, already owned, not open to this seat,
+//                          prerequisites missing (with the rank), not purchasable, or the cost against
+//                          the points.  The -scenario file's purchase, which grants rank and points
+//                          first, is unchanged.
 //
-// produce, construct and sell reply after the logic frame that ran them, not where they arrive.  In
+// produce, construct, sell and science reply after the logic frame that ran them, not where they arrive.  In
 // lockstep that frame is the first of the next step, so their replies come inside that step, ahead
 // of the step's own, in the order sent: a client sends its orders, then step, and reads until the
 // reply whose "cmd" is "step".  A world command sent while a step is running waits for that step's
 // reply and runs on the first frame of the next, since a long step hands the pass back between its
 // frames and the frame it landed on would otherwise depend on how fast the machine went.  Like spawn,
 // they act outside the recorded command stream, so a match driven this way does not replay; a
-// -scenario file and every replay play exactly as before.  Unlike spawn, produce, construct and sell are
+// -scenario file and every replay play exactly as before.  Unlike spawn, produce, construct, sell and science are
 // refused in a -netgame match and on an online test server: they act for any seat, and one machine's
 // order would split the match.
 //

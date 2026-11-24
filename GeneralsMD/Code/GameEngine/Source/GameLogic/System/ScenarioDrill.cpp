@@ -66,6 +66,7 @@
 #include "Common/ProductionPrerequisite.h"
 #include "GameLogic/Module/DozerAIUpdate.h"
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
+#include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/VictoryConditions.h"
 
 #include <algorithm>
@@ -312,6 +313,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_GROUPQUEUE;
 	else if (token == "sell")
 		*action = SCENARIO_ACTION_SELL;
+	else if (token == "science")
+		*action = SCENARIO_ACTION_SCIENCE;
 	else
 		return FALSE;
 
@@ -439,6 +442,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_LANECASH:		return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_GROUPQUEUE:	return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_SELL:				return SCENARIO_TOKENS_STOP;
+		case SCENARIO_ACTION_SCIENCE:			return SCENARIO_TOKENS_STOP;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -741,6 +745,7 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 		case SCENARIO_ACTION_AUTOREPAIR:
 		case SCENARIO_ACTION_PURCHASE:
 		case SCENARIO_ACTION_SELL:
+		case SCENARIO_ACTION_SCIENCE:
 			break;
 	}
 
@@ -2793,8 +2798,6 @@ static Bool executeHandover( const ScenarioAction &action, Player *player, const
 	return arrived;
 }
 
-static Bool controlSell( const ScenarioAction &action, Player *player, AsciiString *members );
-
 Bool ScenarioDrill_execute( const ScenarioAction &action )
 {
 	Player *player = findPlayerForSlot( action.slot );
@@ -2900,10 +2903,10 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 		return TRUE;
 	}
 
-	if (action.action == SCENARIO_ACTION_SELL)
+	if (action.action == SCENARIO_ACTION_SELL || action.action == SCENARIO_ACTION_SCIENCE)
 	{
 		AsciiString members;
-		return controlSell( action, player, &members );
+		return ScenarioDrill_controlOrder( action, &members );
 	}
 
 	Coord3D position;
@@ -3437,6 +3440,53 @@ static Bool controlSell( const ScenarioAction &action, Player *player, AsciiStri
 	return TRUE;
 }
 
+/** science: the general's powers window's purchase on the seat's own rank and points, as
+	  MSG_PURCHASE_SCIENCE handed to the dispatcher inside this frame; every refusal the window would
+	  grey the button for is named first.  The file's purchase grants rank and points; this does not. */
+static Bool controlScience( const ScenarioAction &action, Player *player, AsciiString *members )
+{
+	AsciiString why;
+	// a name the INI never defined still comes back as a key, so ask the store whether it holds it
+	ScienceType science = TheScienceStore->getScienceFromInternalName( action.selector );
+	if (!TheScienceStore->isValidScience( science ))
+		science = SCIENCE_INVALID;
+	const Int cost = (science != SCIENCE_INVALID && !player->isTalent( science )) ? TheScienceStore->getSciencePurchaseCost( science ) : 0;
+	if (science == SCIENCE_INVALID)
+		why.format( "no science named %s", action.selector.str() );
+	else if (player->hasScience( science ))
+		why.format( "%s is already owned", action.selector.str() );
+	else if (player->isScienceDisabled( science ) || player->isScienceHidden( science ))
+		why.format( "%s is not open to this seat", action.selector.str() );
+	else if (!player->hasPrereqsForScience( science ))
+		why.format( "%s: prerequisites missing (rank %d)", action.selector.str(), player->getRankLevel() );
+	else if (!player->isTalent( science ) && cost == 0)
+		why.format( "%s cannot be purchased", action.selector.str() );
+	else if (cost > player->getSciencePurchasePoints())
+		why.format( "%s costs %d points, slot %d has %d", action.selector.str(), cost, action.slot, player->getSciencePurchasePoints() );
+	else if (!player->isCapableOfPurchasingScience( science ))
+		why.format( "%s cannot be purchased now", action.selector.str() );
+	if (why.isEmpty())
+	{
+		GameMessage *msg = newInstance( GameMessage )( GameMessage::MSG_PURCHASE_SCIENCE );
+		msg->friend_setPlayerIndex( player->getPlayerIndex() );
+		msg->appendIntegerArgument( TheScienceStore->getScienceMessageID( science ) );
+		TheGameLogic->logicMessageDispatcher( msg, NULL );
+		msg->deleteInstance();
+		if (!player->hasScience( science ))
+			why.set( "the dispatcher dropped the purchase" );
+	}
+
+	DEBUG_LOG(("CONTROL: frame %d science slot %d '%s': %s\n", TheGameLogic->getFrame(), action.slot, action.selector.str(),
+						 why.isEmpty() ? "bought" : why.str()));
+	if (why.isNotEmpty())
+	{
+		controlError( members, why );
+		return FALSE;
+	}
+	members->format( "\"science\":\"%s\",\"cost\":%d,\"pointsLeft\":%d", action.selector.str(), cost, player->getSciencePurchasePoints() );
+	return TRUE;
+}
+
 Bool ScenarioDrill_controlOrder( const ScenarioAction &action, AsciiString *members )
 {
 	Player *player = findPlayerForSlot( action.slot );
@@ -3451,6 +3501,8 @@ Bool ScenarioDrill_controlOrder( const ScenarioAction &action, AsciiString *memb
 		return controlProduce( action, player, members );
 	if (action.action == SCENARIO_ACTION_SELL)
 		return controlSell( action, player, members );
+	if (action.action == SCENARIO_ACTION_SCIENCE)
+		return controlScience( action, player, members );
 
 	Coord3D site;
 	if (!resolveScenarioPosition( action, &site ))
@@ -3481,6 +3533,7 @@ Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, std::string *membe
 
 	Int count = 0;
 	Bool truncated = FALSE;
+	const NameKeyType warehouseKey = NAMEKEY( "SupplyWarehouseDockUpdate" );
 	for (Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject())
 	{
 		if (obj->isEffectivelyDead() || obj->getTemplate() == NULL)
@@ -3511,9 +3564,13 @@ Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, std::string *membe
 		DozerAIInterface *dozer = (!structure && ai) ? ai->getDozerAIInterface() : NULL;
 		const Bool building = obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION );
 		const Real built = building ? obj->getConstructionPercent() : 100.0f;
-		snprintf( piece, sizeof( piece ), "%s{\"template\":\"%s\",\"id\":%d,\"x\":%.0f,\"y\":%.0f,\"kind\":\"%s\",\"underConstruction\":%s,\"built\":%.0f,\"queue\":[",
+		const BodyModuleInterface *body = obj->getBodyModule();
+		const Real maxHealth = body ? body->getMaxHealth() : 0.0f;
+		Int health = maxHealth > 0.0f ? (Int)(100.0f * body->getHealth() / maxHealth + 0.5f) : 100;
+		health = health < 0 ? 0 : (health > 100 ? 100 : health);
+		snprintf( piece, sizeof( piece ), "%s{\"template\":\"%s\",\"id\":%d,\"x\":%.0f,\"y\":%.0f,\"kind\":\"%s\",\"health\":%d,\"underConstruction\":%s,\"built\":%.0f,\"queue\":[",
 							count ? "," : "", obj->getTemplate()->getName().str(), obj->getID(), obj->getPosition()->x, obj->getPosition()->y,
-							structure ? "structure" : (dozer ? "builder" : "unit"), building ? "true" : "false", built < 0.0f ? 100.0f : built );
+							structure ? "structure" : (dozer ? "builder" : "unit"), health, building ? "true" : "false", built < 0.0f ? 100.0f : built );
 		out += piece;
 
 		Real headPercent = 0.0f;
@@ -3535,6 +3592,13 @@ Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, std::string *membe
 		{
 			snprintf( piece, sizeof( piece ), ",\"idle\":%s,\"task\":\"%s\"",
 								controlDozerOf( obj ) && controlBuilderIsIdle( obj, dozer ) ? "true" : "false", controlBuilderTask( obj, dozer ) );
+			out += piece;
+		}
+		// a supply pile or dock: what is left in it, so a spent one shows while the object stays
+		const SupplyWarehouseDockUpdate *pile = (const SupplyWarehouseDockUpdate *)obj->findUpdateModule( warehouseKey );
+		if (pile)
+		{
+			snprintf( piece, sizeof( piece ), ",\"boxes\":%d", pile->getBoxesStored() );
 			out += piece;
 		}
 		out += "}";

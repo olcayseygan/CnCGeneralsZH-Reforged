@@ -293,7 +293,7 @@ static Bool theWinsockStarted = FALSE;
 static Bool theHandshakeDone = FALSE;
 static std::vector<char> theIncoming;
 
-/// a world command waiting for the next logic frame; produce, construct and sell reply only once they ran
+/// a world command waiting for the next logic frame; produce, construct, sell and science reply only once they ran
 struct PendingCommand
 {
 	AsciiString line;
@@ -308,6 +308,7 @@ static const char *replyWhenRunVerb( ScenarioActionType action )
 		case SCENARIO_ACTION_PRODUCE:		return "produce";
 		case SCENARIO_ACTION_CONSTRUCT:	return "construct";
 		case SCENARIO_ACTION_SELL:			return "sell";
+		case SCENARIO_ACTION_SCIENCE:		return "science";
 		default:												return NULL;
 	}
 }
@@ -1532,15 +1533,15 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
-	/* The socket's produce, construct and sell act for any seat, outside the command stream, so in a -netgame
-		 match or on an online test server they would put this machine's game on its own.  spawn and the
-		 rest keep the terms above on purpose; these three are an offline learner's. */
+	/* The socket's produce, construct, sell and science act for any seat, outside the command stream, so in
+		 a -netgame match or on an online test server they would put this machine's game on its own.  spawn and
+		 the rest keep the terms above on purpose; these are an offline learner's. */
 	const char *orderVerb = replyWhenRunVerb( action.action );
 	const Bool replyWhenRun = orderVerb != NULL;
 	if (replyWhenRun && (TheGameLogic->isInMultiplayerGame() || TheNetwork != NULL))
 	{
 		replyMembers( FALSE, orderVerb,
-									"\"error\":\"produce, construct and sell run only in an offline skirmish: one machine's order would split a network match\"" );
+									"\"error\":\"produce, construct, sell and science run only in an offline skirmish: one machine's order would split a network match\"" );
 		return;
 	}
 
@@ -1550,7 +1551,7 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
-	/* produce, construct and sell answer with what happened, once the logic frame has run them
+	/* produce, construct, sell and science answer with what happened, once the logic frame has run them
 		 (ScenarioDrill_controlOrder); in lockstep that is inside the next step, ahead of its own reply.
 		 Sent during a step, a command waits for that step's reply and runs on the next one's first frame. */
 	PendingCommand pending;

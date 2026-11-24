@@ -300,8 +300,9 @@ static GameWindow *textEntryPlayerName = NULL;
 static GameWindow *textEntryChat = NULL;
 static GameWindow *staticTextGameInfo = NULL;
 
-// Create Game's answer (AskGameMode): the room LanGameOptionsMenu.cpp opens is a classic one, or stands
-// on a Direct Strike island or an Apocalypse map from the start (TheHostGameMode, spent by the room)
+// Create Game makes a classic room; Mods asks the mode (AskGameMode) and its answer comes here too, for a room
+// that stands on a Direct Strike island or an Apocalypse map from the start (TheHostGameMode, spent by the room)
+static NameKeyType buttonModsID = NAMEKEY_INVALID;
 static void hostRoom( Int mode )
 {
 	if (TheLAN == NULL)
@@ -372,6 +373,7 @@ void LanLobbyMenuInit( WindowLayout *layout, void *userData )
 	buttonClearID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonClear" ) );
 	buttonHostID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonHost" ) );
 	buttonJoinID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonJoin" ) );
+	buttonModsID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonMods" ) );
 	buttonDirectConnectID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonDirectConnect" ) );
 	buttonEmoteID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonEmote" ) );
 	staticToolTipID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:StaticToolTip" ) );
@@ -801,10 +803,14 @@ WindowMsgHandledType LanLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 				} //if ( controlID == buttonBack )
 				else if ( controlID == buttonHostID )
 				{
-					// which mode the room is for; the answer creates it (hostRoom)
-					AskGameMode( hostRoom );
+					hostRoom( HOST_MODE_CLASSIC );
 
 				}//else if ( controlID == buttonHostID )
+				else if ( controlID == buttonModsID )
+				{
+					// which mode the room is for; the answer creates it (hostRoom)
+					AskGameMode( hostRoom );
+				}
 				else if ( controlID == buttonClearID )
 				{
 					GadgetTextEntrySetText(textEntryPlayerName, UnicodeString::TheEmptyString);

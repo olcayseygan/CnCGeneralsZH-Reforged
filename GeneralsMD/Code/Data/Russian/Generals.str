@@ -20837,6 +20837,10 @@ GUI:DirectStrikeIslandNote
 "Новый остров в каждом матче"
 END
 
+GUI:DirectStrikeMixed
+"Смешанные армии"
+END
+
 GUI:DirectStrikeMap
 "Случайный остров"
 END
@@ -22753,12 +22757,12 @@ SKIN:UnitUsaDozer
 "Бульдозер США"
 END
 
-TOOLTIP:Apocalypse
-"Держитесь вместе против бесконечных волн мертвецов, до четырёх игроков."
+GUI:Mods
+"МОДЫ"
 END
 
-TOOLTIP:DirectStrike
-"Покупайте юнитов на свой участок. Каждые 30 секунд один игрок каждой команды отправляет копию своего участка вниз по линии, и первая команда, разбившая крепость противника, побеждает. До 3 на 3, на новом острове в каждом матче."
+TOOLTIP:Mods
+"Direct Strike и Apocalypse."
 END
 
 TOOLTIP:Handicap

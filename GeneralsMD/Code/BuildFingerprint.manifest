@@ -1873,6 +1873,7 @@ Data/Window/Menus/GameModeBox.wnd
 Data/Window/Menus/GameSpyGameOptionsMenu.wnd
 Data/Window/Menus/GameSpyLoginProfile.wnd
 Data/Window/Menus/LanGameOptionsMenu.wnd
+Data/Window/Menus/LanLobbyMenu.wnd
 Data/Window/Menus/LanMapSelectMenu.wnd
 Data/Window/Menus/LocalDefeat.wnd
 Data/Window/Menus/MainMenu.wnd
@@ -5732,6 +5733,7 @@ Tools/hud_match_clock.py
 Tools/hud_sidebar.py
 Tools/include_case_check.py
 Tools/install-guard.sh
+Tools/lanlobby_layout.py
 Tools/license-headers.py
 Tools/linux-check.sh
 Tools/linux-menu-entry.sh

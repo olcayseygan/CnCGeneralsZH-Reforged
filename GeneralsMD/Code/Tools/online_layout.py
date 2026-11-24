@@ -260,7 +260,8 @@ SCREENS = {
         reparent=[],
         boxes=[("PanelGames", LOBBY_GAMES, False), ("PanelPlayers", LOBBY_PLAYERS, False)],
         framed=[],
-        adds=[],
+        # Host makes a classic room; Mods asks Direct Strike or Apocalypse first (the owner, 2026-11-24)
+        adds=[button("ButtonMods", "ButtonHost", (676, ROW_TOP, 300, ROW_HEIGHT), "GUI:Mods", "TOOLTIP:Mods")],
         # ListboxGamesLarge is the game list: ZH dropped the small one (LobbyUtils.cpp GrabWindowInfo)
         place={"ParentGameListLarge": LOBBY_GAMES, "ListboxGamesLarge": inset(LOBBY_GAMES),
                "ComboBoxGroupRooms": (MAIN[0], 626, MAIN[1], 34),
@@ -341,7 +342,7 @@ LOOKUPS = {
                           "StaticTextLadder", "StaticTextMatchingProgress", "StaticTextMaxDisconnects",
                           "StaticTextMaxPing", "StaticTextNumPlayers", "StaticTextTitle"] + STATS,
     "WOLCustomLobby": ["WOLLobbyMenuParent", "GadgetParent", "ButtonBack", "ButtonBuddy", "ButtonEmote",
-                       "ButtonGameListToggle", "ButtonHost", "ButtonJoin", "ButtonRefresh", "ComboBoxGroupRooms",
+                       "ButtonGameListToggle", "ButtonHost", "ButtonMods", "ButtonJoin", "ButtonRefresh", "ComboBoxGroupRooms",
                        "ListboxChat", "ListboxPlayers", "SliderChatAdjust", "TextEntryChat", "ParentGameListLarge",
                        "ListboxGamesLarge", "ButtonSortAlpha", "ButtonSortPing", "ButtonSortBuddies",
                        "WindowSortAlpha", "WindowSortPing", "WindowSortBuddies"],

@@ -139,6 +139,7 @@ static const Real LOBBY_PAD = 10.0f;
 static NameKeyType parentWOLLobbyID = NAMEKEY_INVALID;
 static NameKeyType buttonBackID = NAMEKEY_INVALID;
 static NameKeyType buttonHostID = NAMEKEY_INVALID;
+static NameKeyType buttonModsID = NAMEKEY_INVALID;
 static NameKeyType buttonRefreshID = NAMEKEY_INVALID;
 static NameKeyType buttonJoinID = NAMEKEY_INVALID;
 static NameKeyType buttonBuddyID = NAMEKEY_INVALID;
@@ -262,8 +263,8 @@ void SetLobbyAttemptHostJoin(Bool start)
 		LobbySetJoiningGame( 0 );		// the join came back, or the password box was cancelled
 }
 
-/* The Host button's answer (AskGameMode): the host popup for a Classic room, or a Direct Strike or
-	 Apocalypse one, whose staging room stands on that mode's generated map from the start (TheHostGameMode). */
+/* The host popup for a Classic room (the Host button), or the Mods button's answer (AskGameMode): a Direct
+	 Strike or Apocalypse one, whose staging room stands on that mode's generated map from the start (TheHostGameMode). */
 static void hostRoom( Int mode )
 {
 	if (!TheGameSpyInfo || s_tryingToHostOrJoin)
@@ -309,16 +310,17 @@ static void onlineLobbyScript( void )
 			 is made under the popup's own rules.  Building the request here once hid that the popup made
 			 every online room a stats room, with every option locked for its host. */
 		GameWindow *popupName = NULL, *popupCreate = NULL, *popup = NULL;
-		// "ask" presses Host and leaves its mode question up, for a picture of it
-		if (buttonHost && TheGlobalData->m_onlineMap.compareNoCase( "ask" ) == 0)
+		// "ask" presses Mods and leaves its mode question up, for a picture of it
+		GameWindow *buttonMods = TheWindowManager->winGetWindowFromId( parent, buttonModsID );
+		if (buttonMods && TheGlobalData->m_onlineMap.compareNoCase( "ask" ) == 0)
 		{
-			TheWindowManager->winSendSystemMsg( parent, GBM_SELECTED, (WindowMsgData)buttonHost, buttonHostID );
+			TheWindowManager->winSendSystemMsg( parent, GBM_SELECTED, (WindowMsgData)buttonMods, buttonModsID );
 			DEBUG_LOG(("ONLINE HOST asked\n"));
 			return;
 		}
 		if (buttonHost)
 		{
-			// the Host button's mode question, answered as -onlinemap asks: "directstrike" and "apocalypse" are those modes
+			// Host for a classic room, the Mods question's answer as -onlinemap asks: "directstrike" and "apocalypse" are those modes
 			if (TheGlobalData->m_onlineMap.compareNoCase( "directstrike" ) == 0)
 				hostRoom( HOST_MODE_DIRECT_STRIKE );
 			else if (TheGlobalData->m_onlineMap.compareNoCase( "apocalypse" ) == 0)
@@ -1066,6 +1068,7 @@ void WOLLobbyMenuInit( WindowLayout *layout, void *userData )
 
 	buttonHostID = TheNameKeyGenerator->nameToKey(AsciiString("WOLCustomLobby.wnd:ButtonHost"));
 	buttonHost = TheWindowManager->winGetWindowFromId(parent, buttonHostID);
+	buttonModsID = TheNameKeyGenerator->nameToKey(AsciiString("WOLCustomLobby.wnd:ButtonMods"));
 
 	buttonRefreshID = TheNameKeyGenerator->nameToKey(AsciiString("WOLCustomLobby.wnd:ButtonRefresh"));
 	buttonRefresh = TheWindowManager->winGetWindowFromId(parent, buttonRefreshID);
@@ -2020,6 +2023,12 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 					refreshPlayerList(TRUE);
 				}
 				else if ( controlID == buttonHostID )
+				{
+					if (s_tryingToHostOrJoin)
+						break;
+					hostRoom( HOST_MODE_CLASSIC );
+				}
+				else if ( controlID == buttonModsID )
 				{
 					if (s_tryingToHostOrJoin)
 						break;

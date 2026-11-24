@@ -270,9 +270,10 @@ void HideLobbySeatRowsFrom(GameWindow *parent, const char *layoutFilename, Int f
 // (OnlinePeer's game.host and the options it holds back until the mode's map is staged).
 enum HostGameMode { HOST_MODE_CLASSIC = 0, HOST_MODE_DIRECT_STRIKE, HOST_MODE_APOCALYPSE };
 extern Int TheHostGameMode;
-// Create Game's question, which mode the room is for: GameModeBox.wnd's Classic, Direct Strike and
-// Apocalypse, and Cancel, which answers nothing.  The answer gets the HostGameMode picked
-void AskGameMode(void (*answer)(Int mode));
+// The Mods buttons' question (main menu, LAN lobby, online custom lobby): GameModeBox.wnd's Direct
+// Strike and Apocalypse, and Cancel, which answers nothing; Create Game and Host give Classic unasked.
+// `modsOnly` FALSE puts the Classic card back in front of them.  The answer gets the HostGameMode picked
+void AskGameMode(void (*answer)(Int mode), Bool modsOnly = TRUE);
 /// a mode's name with its version tag after it ("Direct Strike v1.0"): the name's key, then the one key
 /// that holds the version for every place the mode is named; the bare name when that key is missing or empty
 UnicodeString ModeNameWithVersion(const char *nameKey, const char *versionKey);

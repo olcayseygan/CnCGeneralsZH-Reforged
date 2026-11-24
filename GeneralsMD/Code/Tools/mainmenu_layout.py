@@ -29,9 +29,9 @@ Both sit where the single player menu does, which is hidden while either shows. 
 are set from GUI:CampaignMission, GUI:CampaignZeroHour and GUI:CampaignGenerals; the transitions
 that flash them in and out are in Data/INI/WindowTransitionsReforged.ini.
 
-Last, the single player menu itself gains ButtonDirectStrike and ButtonApocalypse under Skirmish,
-copies of Skirmish one and two steps down with Back and the frame pushed down after them;
-GameWindowTransitions.cpp copies Skirmish's flash into every transition group for each.
+Last, the single player menu itself gains ButtonMods under Skirmish, a copy of Skirmish one step
+down with Back and the frame pushed down after it; GameWindowTransitions.cpp copies Skirmish's flash
+into every transition group for it.  Mods asks Direct Strike or Apocalypse (AskGameMode).
 
     python bigfile.py extract ../../Run/WindowZH.big "Window\\Menus\\MainMenu.wnd" -o wnd
     python mainmenu_layout.py wnd/Window/Menus ../Data/Window/Menus
@@ -88,20 +88,15 @@ PICK_RENAME = [
 # 800x600 pixels the pick panel and its buttons grow by, leftwards
 PICK_WIDEN = 32
 
-# the single player menu's Direct Strike button, a copy of Skirmish one step under it
-DIRECT_STRIKE = "ButtonDirectStrike"
-DIRECT_STRIKE_LABEL = "GUI:DirectStrike"
-DIRECT_STRIKE_TOOLTIP = "TOOLTIP:DirectStrike"
-# and the Apocalypse button a step under that
-APOCALYPSE = "ButtonApocalypse"
-APOCALYPSE_LABEL = "GUI:Apocalypse"
-APOCALYPSE_TOOLTIP = "TOOLTIP:Apocalypse"
+# the single player menu's Mods button, a copy of Skirmish one step under it: it asks Direct Strike or
+# Apocalypse and opens that mode's skirmish room (the owner, 2026-11-24, in place of a button a mode)
+MODS = "ButtonMods"
+MODS_LABEL = "GUI:Mods"
+MODS_TOOLTIP = "TOOLTIP:Mods"
 # the mode buttons under Skirmish, top first
-MODE_BUTTONS = [(DIRECT_STRIKE, DIRECT_STRIKE_LABEL, DIRECT_STRIKE_TOOLTIP),
-                (APOCALYPSE, APOCALYPSE_LABEL, APOCALYPSE_TOOLTIP)]
+MODE_BUTTONS = [(MODS, MODS_LABEL, MODS_TOOLTIP)]
 
-STRINGS = ["GUI:CampaignMission", "GUI:CampaignZeroHour", "GUI:CampaignGenerals",
-           DIRECT_STRIKE_LABEL, DIRECT_STRIKE_TOOLTIP, APOCALYPSE_LABEL, APOCALYPSE_TOOLTIP]
+STRINGS = ["GUI:CampaignMission", "GUI:CampaignZeroHour", "GUI:CampaignGenerals", MODS_LABEL, MODS_TOOLTIP]
 
 
 def drop_prop(window, key):

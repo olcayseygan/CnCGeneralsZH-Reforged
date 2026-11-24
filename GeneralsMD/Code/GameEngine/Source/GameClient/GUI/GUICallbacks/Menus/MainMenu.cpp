@@ -122,12 +122,10 @@ void DoCompressTest( void );
 // window ids -------------------------------------------------------------------------------------
 static NameKeyType mainMenuID = NAMEKEY_INVALID;
 static NameKeyType skirmishID = NAMEKEY_INVALID;
-// Direct Strike, under Skirmish in the single player menu (Tools/mainmenu_layout.py): the skirmish
-// room in that mode (SkirmishGameOptionsMenu.cpp)
-static NameKeyType directStrikeID = NAMEKEY_INVALID;
+// Mods, under Skirmish in the single player menu (Tools/mainmenu_layout.py): asks Direct Strike or
+// Apocalypse, then the skirmish room in that mode (SkirmishGameOptionsMenu.cpp)
+static NameKeyType modsID = NAMEKEY_INVALID;
 extern Bool skirmishDirectStrike;
-// Apocalypse, under Direct Strike: the skirmish room on a generated Apocalypse map
-static NameKeyType apocalypseID = NAMEKEY_INVALID;
 extern Bool skirmishApocalypse;
 static NameKeyType onlineID = NAMEKEY_INVALID;
 static NameKeyType networkID = NAMEKEY_INVALID;
@@ -523,6 +521,28 @@ static void checkCDBeforeCampaign(GameDifficulty diff)
 	}
 }
 
+/// Skirmish, or the Mods question's answer: the skirmish room in that mode (SkirmishGameOptionsMenu.cpp)
+static void enterSkirmishRoom( Int mode )
+{
+	if(campaignSelected || dontAllowTransitions)
+		return;
+	skirmishDirectStrike = mode == HOST_MODE_DIRECT_STRIKE;
+	skirmishApocalypse = mode == HOST_MODE_APOCALYPSE;
+	buttonPushed = TRUE;
+	campaignSelected = TRUE;
+	dropDownWindows[DROPDOWN_SINGLE]->winHide(FALSE);
+	TheTransitionHandler->remove("MainMenuFactionSkirmish");
+
+	TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBackSkirmish");
+#ifdef _CAMPEA_DEMO
+	TheCampaignManager->setCampaign( "MD_CAMPEA_DEMO" );
+	checkCDBeforeCampaign(DIFFICULTY_NORMAL);
+	return;
+#endif
+	TheShell->push( AsciiString("Menus/SkirmishGameOptionsMenu.wnd") );
+	TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_SKIRMISH_SELECTED]);
+}
+
 static void shutdownComplete( WindowLayout *layout )
 {
 	isShuttingDown = FALSE;
@@ -646,8 +666,7 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 	mainMenuID = TheNameKeyGenerator->nameToKey( AsciiString( "MainMenu.wnd:MainMenuParent" ) );
 //	campaignID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonCampaign") );
 	skirmishID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonSkirmish") );
-	directStrikeID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonDirectStrike") );
-	apocalypseID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonApocalypse") );
+	modsID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonMods") );
 	onlineID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonOnline") );
 	networkID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonNetwork") );
 	optionsID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonOptions") );
@@ -733,11 +752,6 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 	getUpdate = TheWindowManager->winGetWindowFromId( parentMainMenu, getUpdateID );
 //	buttonTRAINING = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonTRAININGID );
 	buttonChallenge = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonChallengeID );
-	// the mode's version beside its name, from the one key the lobbies read too
-	if( GameWindow *directStrike = TheWindowManager->winGetWindowFromId( parentMainMenu, directStrikeID ) )
-		GadgetButtonSetText( directStrike, ModeNameWithVersion( "GUI:DirectStrike", "GUI:DirectStrikeVersion" ) );
-	if( GameWindow *apocalypse = TheWindowManager->winGetWindowFromId( parentMainMenu, apocalypseID ) )
-		GadgetButtonSetText( apocalypse, ModeNameWithVersion( "GUI:Apocalypse", "GUI:ApocalypseVersion" ) );
 	buttonUSA = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonUSAID );
 	buttonGLA = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonGLAID );
 	buttonChina = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonChinaID );
@@ -1350,7 +1364,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 
 				//showSelectiveButtons(SHOW_NONE);
 			}
-*/			else if(controlID == skirmishID || controlID == directStrikeID)
+*/			else if(controlID == skirmishID || controlID == modsID)
 			{
 				if(dontAllowTransitions && !campaignSelected)
 				{
@@ -1468,7 +1482,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				
 				//showSelectiveButtons(SHOW_NONE);
 			}
-*/			else if(controlID == skirmishID || controlID == directStrikeID)
+*/			else if(controlID == skirmishID || controlID == modsID)
 			{
 				if(dontAllowTransitions && !campaignSelected && showLogo)
 				{
@@ -1666,31 +1680,15 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				TheTransitionHandler->reverse("MainMenuLoadReplayMenuBackTransition");
 				TheShell->push(AsciiString("Menus/ReplayMenu.wnd"));
 			}
-			else if( controlID == skirmishID || controlID == directStrikeID || controlID == apocalypseID )
+			else if( controlID == skirmishID )
 			{
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				skirmishDirectStrike = controlID == directStrikeID;
-				skirmishApocalypse = controlID == apocalypseID;
-				buttonPushed = TRUE;
-				campaignSelected = TRUE;
-				dropDownWindows[DROPDOWN_SINGLE]->winHide(FALSE);
-				TheTransitionHandler->remove("MainMenuFactionSkirmish");
-
-				TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBackSkirmish");
-#ifdef _CAMPEA_DEMO
-				TheCampaignManager->setCampaign( "MD_CAMPEA_DEMO" );
-/*
-				TheTransitionHandler->setGroup("MainMenuDifficultyMenuUS");
-				logoIsShown = FALSE;
-				showLogo = FALSE;
-				showSide = SHOW_USA;
-*/
-				checkCDBeforeCampaign(DIFFICULTY_NORMAL);
-				break;
-#endif
-				TheShell->push( AsciiString("Menus/SkirmishGameOptionsMenu.wnd") );
-				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_SKIRMISH_SELECTED]);
+				enterSkirmishRoom( HOST_MODE_CLASSIC );
+			}
+			else if( controlID == modsID )
+			{
+				// which mode; the answer opens its skirmish room
+				if( !campaignSelected && !dontAllowTransitions )
+					AskGameMode( enterSkirmishRoom );
 			}
 			else if( controlID == onlineID )
 			{

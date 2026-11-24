@@ -18765,6 +18765,10 @@ GUI:DirectStrikeIslandNote
 "Jede Partie eine neue Insel"
 END
 
+GUI:DirectStrikeMixed
+"Gemischte Heere"
+END
+
 GUI:DirectStrikeMap
 "Zufällige Insel"
 END
@@ -20873,10 +20877,6 @@ SKIN:UnitUsaDozer
 "USA-Dozer"
 END
 
-TOOLTIP:Apocalypse
-"Haltet gemeinsam gegen endlose Wellen von Untoten durch, mit bis zu vier Spielern."
-END
-
 TOOLTIP:ArmorAFG_Comanche
 "Hubschrauber"
 END
@@ -21073,8 +21073,12 @@ TOOLTIP:DiplomacyNet
 "Ping ist die Rundreise des Spielers zum Host in Millisekunden (der Host hat keinen), FPS, mit wie vielen Spielbildern pro Sekunde sein Rechner mithält. Gelbe Zahlen markieren den langsamsten Spieler, und die ganze Partie läuft in seinem Tempo."
 END
 
-TOOLTIP:DirectStrike
-"Kauf Einheiten auf dein Baufeld. Alle 30 Sekunden schickt ein Spieler jedes Teams eine Kopie seines Baufelds die Bahn hinunter, und das Team, das zuerst die Festung des anderen bricht, gewinnt. Bis zu 3 gegen 3, auf einer neuen Insel in jeder Partie."
+GUI:Mods
+"MODS"
+END
+
+TOOLTIP:Mods
+"Direct Strike und Apocalypse."
 END
 
 TOOLTIP:Handicap

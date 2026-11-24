@@ -20641,6 +20641,10 @@ GUI:DirectStrikeIslandNote
 "Новий острів щоматчу"
 END
 
+GUI:DirectStrikeMixed
+"Змішані армії"
+END
+
 GUI:DirectStrikeMap
 "Випадковий острів"
 END
@@ -22557,10 +22561,6 @@ SKIN:UnitUsaDozer
 "Бульдозер США"
 END
 
-TOOLTIP:Apocalypse
-"Тримайтеся разом проти нескінченних хвиль мерців, до чотирьох гравців."
-END
-
 TOOLTIP:ArmorAFG_Comanche
 "Гелікоптер"
 END
@@ -22753,8 +22753,12 @@ TOOLTIP:ArmorWall
 "Стіна"
 END
 
-TOOLTIP:DirectStrike
-"Купуйте війська на свою ділянку. Кожні 30 секунд один гравець з кожної команди відправляє копію своєї ділянки вниз лінією, і перемагає команда, що першою зламає фортецю суперника. До 3 на 3, щоматчу на новому острові."
+GUI:Mods
+"МОДИ"
+END
+
+TOOLTIP:Mods
+"Direct Strike і Apocalypse."
 END
 
 TOOLTIP:Handicap

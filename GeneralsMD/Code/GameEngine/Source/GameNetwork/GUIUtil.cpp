@@ -2054,9 +2054,11 @@ namespace
 	{
 		PICKER_CARD_W = 300, PICKER_CARD_H = 290, PICKER_GAP = 24, PICKER_PAD = 32, PICKER_TITLE_H = 56,
 		PICKER_CANCEL_W = 220, PICKER_CANCEL_H = 44, PICKER_CANCEL_GAP = 24, PICKER_INSET = 14, PICKER_EMBLEM_H = 170,
-		PICKER_PANEL_W = 2 * PICKER_PAD + 3 * PICKER_CARD_W + 2 * PICKER_GAP,
 		PICKER_PANEL_H = 2 * PICKER_PAD + PICKER_TITLE_H + PICKER_CARD_H + PICKER_CANCEL_GAP + PICKER_CANCEL_H,
 	};
+	/// the panel round `cards` cards in a row
+	Int pickerPanelW(Int cards) { return 2 * PICKER_PAD + cards * PICKER_CARD_W + (cards - 1) * PICKER_GAP; }
+	Bool thePickerModsOnly = TRUE;		///< the box up now is the Mods buttons' (no Classic card)
 	struct PickerCard { const char *button, *nameKey, *versionKey, *factKey; Int mode; };
 	const PickerCard thePickerCards[] =
 	{
@@ -2149,7 +2151,7 @@ namespace
 	{
 		const LaneHudBox b = screenBox(window);
 		DirectStrikeTheme::nineSlice(b, DirectStrikeTheme::PANEL_LIT_TL);
-		DirectStrikeTheme::drawSpaced(TheGameText->fetch("GUI:GameModeTitle"), DirectStrikeTheme::font(DirectStrikeTheme::TYPE_NAME),
+		DirectStrikeTheme::drawSpaced(TheGameText->fetch(thePickerModsOnly ? "GUI:Mods" : "GUI:GameModeTitle"), DirectStrikeTheme::font(DirectStrikeTheme::TYPE_NAME),
 			b.x + b.w / 2, b.y + px(PICKER_PAD) / 2, px(PICKER_TITLE_H), DirectStrikeTheme::TYPE_NAME * DirectStrikeTheme::TRACK_TEAM,
 			DirectStrikeTheme::TEXT_WHITE, 0);
 	}
@@ -2214,8 +2216,9 @@ namespace
 	}
 }
 
-void AskGameMode(void (*answer)(Int mode))
+void AskGameMode(void (*answer)(Int mode), Bool modsOnly)
 {
+	thePickerModsOnly = modsOnly;
 	GameWindow *box = TheWindowManager->winCreateFromScript(AsciiString("Menus/GameModeBox.wnd"));
 	if (box == NULL)
 		return;
@@ -2246,17 +2249,18 @@ void AskGameMode(void (*answer)(Int mode))
 	panel->winSetDrawFunc(drawPickerPanel);
 	panel->winSetInputFunc(pickerInput);
 
-	// the plate centred on the screen, three cards in a row, Cancel centred under them
+	// the plate centred on the screen, the cards in a row (the Mods buttons' without Classic), Cancel centred under them
 	Int rootW, rootH;
 	box->winGetSize(&rootW, &rootH);
-	const Int panelW = px(PICKER_PANEL_W), panelH = px(PICKER_PANEL_H);
+	const Int first = modsOnly ? 1 : 0;
+	const Int panelW = px(pickerPanelW(3 - first)), panelH = px(PICKER_PANEL_H);
 	panel->winSetSize(panelW, panelH);
 	panel->winSetPosition((rootW - panelW) / 2, (rootH - panelH) / 2);
 	const Int cardsY = px(PICKER_PAD + PICKER_TITLE_H);
-	for (Int i = 0; i < 3; ++i)
+	for (Int i = first; i < 3; ++i)
 	{
 		buttons[i]->winSetSize(px(PICKER_CARD_W), px(PICKER_CARD_H));
-		buttons[i]->winSetPosition(px(PICKER_PAD + i * (PICKER_CARD_W + PICKER_GAP)), cardsY);
+		buttons[i]->winSetPosition(px(PICKER_PAD + (i - first) * (PICKER_CARD_W + PICKER_GAP)), cardsY);
 		buttons[i]->winSetDrawFunc(drawPickerCard);
 		buttons[i]->winHide(FALSE);
 	}

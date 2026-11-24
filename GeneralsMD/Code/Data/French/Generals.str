@@ -20933,6 +20933,10 @@ GUI:DirectStrikeIslandNote
 "Une nouvelle île à chaque partie"
 END
 
+GUI:DirectStrikeMixed
+"Armées mixtes"
+END
+
 GUI:DirectStrikeMap
 "Île aléatoire"
 END
@@ -22761,12 +22765,12 @@ SKIN:UnitUsaDozer
 "Engin de chantier USA"
 END
 
-TOOLTIP:Apocalypse
-"Tenez bon ensemble face à des vagues sans fin de morts-vivants, jusqu'à quatre joueurs."
+GUI:Mods
+"Mods"
 END
 
-TOOLTIP:DirectStrike
-"Achetez des unités sur votre parcelle. Toutes les 30 secondes, un joueur de chaque équipe envoie une copie de sa parcelle dans le couloir, et la première équipe qui brise la forteresse adverse gagne. Jusqu'à 3 contre 3, sur une nouvelle île à chaque partie."
+TOOLTIP:Mods
+"Direct Strike et Apocalypse."
 END
 
 TOOLTIP:Handicap

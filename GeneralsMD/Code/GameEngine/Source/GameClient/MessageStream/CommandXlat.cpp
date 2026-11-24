@@ -1441,6 +1441,7 @@ GameMessage::Type CommandTranslator::issueFireWeaponCommand( const CommandButton
 				//Object in way.... some location weapons care, others don't
 				ObjectID targetID = (target && target->getObject()) ? target->getObject()->getID() : INVALID_ID;
 				msg->appendObjectIDArgument( targetID );
+				TheInGameUI->noteGroundMarkerClick( *pos, NULL );
 			}
 		}
 		else
@@ -1477,6 +1478,8 @@ GameMessage::Type CommandTranslator::issueFireWeaponCommand( const CommandButton
 			//Object in way.... some location weapons care, others don't
 			ObjectID targetID = (target && target->getObject()) ? target->getObject()->getID() : INVALID_ID;
 			msg->appendObjectIDArgument( targetID );
+			// the weapon's aimed area snaps down on the clicked point (W3DGroundMarkers); client side only
+			TheInGameUI->noteGroundMarkerClick( *pos, NULL );
 		}
 	}
 	else

@@ -554,6 +554,7 @@ struct Marker
 	Real cx0, cy0;
 	Int dropPiece, fallenPiece;
 	Int swarmCount;
+	Real planeSpeed;					///< the delivery plane's cruise speed, nought when the preview had none
 	Bool beamSeen;						///< a cannon's beam is on the ground at (beamX, beamY)
 	Real beamX, beamY;
 	std::vector<Fallen> beamTrail;	///< where it has burned, for the scorch
@@ -578,7 +579,7 @@ struct Marker
 		lead( INVALID_ID ), planesSeen( FALSE ), initialCarried( 0 ), carried( 0 ), pastT( FALSE ), pastTMs( 0 ),
 		hook( FALSE ), inTurn( FALSE ), circleX( 0.0f ), circleY( 0.0f ), circleR( 0.0f ), planeAngle( 0.0f ), dropSpacing( 0.0f ),
 		orbit( FALSE ), Ro( 0.0f ), gunship( INVALID_ID ), design( 0 ), finish( 0 ), variant( 0 ), hx( 0.0f ), hy( 0.0f ),
-		cx0( 0.0f ), cy0( 0.0f ), dropPiece( P_DROP ), fallenPiece( P_DROP ), swarmCount( 3 ), beamSeen( FALSE ), beamX( 0.0f ), beamY( 0.0f ),
+		cx0( 0.0f ), cy0( 0.0f ), dropPiece( P_DROP ), fallenPiece( P_DROP ), swarmCount( 3 ), planeSpeed( 0.0f ), beamSeen( FALSE ), beamX( 0.0f ), beamY( 0.0f ),
 		gridMs( 0 ), laneMs( 0 ), zoneWet( FALSE ), laneWet( FALSE ), wet( FALSE )
 	{
 		tint = TINT_WARM;
@@ -944,6 +945,7 @@ static void planLane( Marker &m, const Object *caster, const SpecialPowerTemplat
 {
 	m.lane = FALSE;
 	m.fromCaster = FALSE;
+	m.planeSpeed = 0.0f;
 	m.gap = TRUE;
 	m.arrow = TRUE;
 	m.exitStub = TRUE;
@@ -1010,6 +1012,7 @@ static void planLane( Marker &m, const Object *caster, const SpecialPowerTemplat
 	const Real speed = loco->getMaxSpeed();
 	if( speed <= 0.0f )
 		return;
+	m.planeSpeed = speed;
 
 	const Real window = preview.distToTarget + preview.preOpenDistance;
 	const Real first = window - (Real)data->m_doorDelay.get() * speed;
@@ -1273,7 +1276,11 @@ static void followPlanes( Marker &m, UnsignedInt now, Real tl )
 {
 	if( !m.planesSeen )
 	{
-		if( tl > PLANE_WAIT )
+		// as long as a slow plane would take to come in from its edge over the whole run, never less
+		// than PLANE_WAIT: a far target is not given up while its planes are still on their way in
+		const Real speed = m.planeSpeed > 1.0f ? m.planeSpeed : 60.0f;
+		const Real wait = MAX( PLANE_WAIT, 1.5f * ( m.L + 600.0f ) / speed + 3.0f );
+		if( tl > wait )
 		{
 			startFade( m, now, END_FADE );
 			return;
@@ -1473,9 +1480,16 @@ static void followSuperweapon( Marker &m, UnsignedInt now, Real tl )
 		static const NameKeyType key_NeutronMissileUpdate = NAMEKEY( "NeutronMissileUpdate" );
 		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
 		{
-			if( obj->getID() < m.firstNewID || !obj->isLocallyControlled() )
+			if( obj->getID() < m.firstNewID )
 				continue;
-			if( obj->findUpdateModule( key_NeutronMissileUpdate ) == NULL || isClaimed( obj->getID() ) )
+			// a nuke's, a Scud's or the cruise missile's (NeutronMissileUpdate, fired by the silo's OCL as a
+			// temporary weapon, so it may stand on no team of the player's: the silo as producer says whose),
+			// or any other projectile the silo fired
+			const Bool fromSilo = m.caster != INVALID_ID && obj->getProducerID() == m.caster;
+			if( !fromSilo && !obj->isLocallyControlled() )
+				continue;
+			const Bool missileUpdate = obj->findUpdateModule( key_NeutronMissileUpdate ) != NULL;
+			if( ( !missileUpdate && !( fromSilo && obj->isKindOf( KINDOF_PROJECTILE ) ) ) || isClaimed( obj->getID() ) )
 				continue;
 			const Coord3D *p = obj->getPosition();
 			Missile missile;
@@ -1491,7 +1505,8 @@ static void followSuperweapon( Marker &m, UnsignedInt now, Real tl )
 		{
 			Missile &missile = m.missiles[ i ];
 			const Object *obj = TheGameLogic->findObjectByID( missile.id );
-			if( obj == NULL )
+			// a missile that has gone off may linger a while dead (its death modules) before it is removed
+			if( obj == NULL || obj->isEffectivelyDead() )
 				continue;
 			++live;
 			const Coord3D *p = obj->getPosition();
@@ -1664,6 +1679,45 @@ static void takeGround( Marker &m, UnsignedInt now )
 	m.wet = m.wet || m.laneWet;
 }
 
+/** A barrage from the far corner: the shells' carriers its OCL sent (DeliverPayload objects with the
+	* caster as producer, gone once they drop, SelfDestructObject).  The marker holds while any is on its
+	* way, which is about ten seconds, and the impacts start when the last has dropped (impactMs). */
+static void followCarriers( Marker &m, UnsignedInt now, Real tl )
+{
+	if( !m.planesSeen )
+	{
+		if( tl > PLANE_WAIT )
+		{
+			startFade( m, now, AREA_FADE );		// no carrier seen: the power's own ten seconds are up
+			return;
+		}
+		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+		{
+			if( obj->getID() < m.firstNewID || !obj->isLocallyControlled() )
+				continue;
+			if( m.caster != INVALID_ID && obj->getProducerID() != m.caster )
+				continue;
+			DeliverPayloadAIUpdate *ai = findDeliverPayload( obj );
+			if( ai == NULL || isClaimed( obj->getID() ) )
+				continue;
+			m.planes.push_back( obj->getID() );
+		}
+		if( m.planes.empty() )
+			return;
+		m.planesSeen = TRUE;
+	}
+	if( m.impactMs != 0 )
+		return;
+	for( size_t i = 0; i < m.planes.size(); ++i )
+	{
+		const Object *obj = TheGameLogic->findObjectByID( m.planes[ i ] );
+		if( obj != NULL && !obj->isEffectivelyDead() )
+			return;
+	}
+	m.impactMs = now;		// the last shell is falling: the impacts run, then the fade
+	startFade( m, now + 2400, AREA_FADE );
+}
+
 static void updateShot( Marker &m, UnsignedInt now, InGameUI *ui )
 {
 	const Real tl = secondsSince( now, m.clickMs );
@@ -1677,6 +1731,8 @@ static void updateShot( Marker &m, UnsignedInt now, InGameUI *ui )
 		followSuperweapon( m, now, tl );
 	else if( m.family == FAMILY_GUARD )
 		followGuard( m, now, ui, tl );
+	else if( m.design == DESIGN_ARTILLERY )
+		followCarriers( m, now, tl );
 	else
 		startFade( m, m.clickMs + (UnsignedInt)( designHold( m ) * 1000.0f ), AREA_FADE );
 
@@ -3952,22 +4008,26 @@ static void drawArtillery( const DesignDraw &d )
 	}
 	for( Int j = 0; j < 3; ++j )
 	{
-		const Real s = -0.8f * R - 22.0f * k - wrap( (Real)j * 22.0f * k + ( d.aim ? 50.0f * k * d.t : 0.0f ), 66.0f * k );
+		// the shells' arrival marches in while aiming and while they are on their way
+		const Bool incoming = d.aim || d.impact < 0.0f;
+		const Real s = -0.8f * R - 22.0f * k - wrap( (Real)j * 22.0f * k + ( incoming ? 50.0f * k * d.t : 0.0f ), 66.0f * k );
 		Real px, py;
 		d.along( s, 0.0f, px, py );
 		quadPiece( P_CHEVRON, px, py, h, 18.0f * k, 28.0f * k, d.tint, d.app, CHEVRON_ANCHOR_U, 0.5f );
 	}
-	if( d.aim )
+	// the impacts from when the last carrier dropped (followCarriers), or from the click when none was seen
+	const Real te = d.impact >= 0.0f ? d.impact : ( d.m->planesSeen ? -1.0f : d.tl );
+	if( d.aim || te < 0.0f )
 		return;
 	for( Int i = 0; i < 15; ++i )
 	{
-		const Real t0 = 0.4f + 0.75f * (Real)( i / 5 ) + 0.09f * (Real)( i % 5 );
-		if( d.tl <= t0 )
+		const Real t0 = 0.75f * (Real)( i / 5 ) + 0.09f * (Real)( i % 5 );
+		if( te <= t0 )
 			continue;
 		Real px, py;
 		d.at( 2.0f * MARKER_PI * hashOf( i + 43 ), 0.7f * R * (Real)sqrt( hashOf( i + 41 ) ), px, py );
 		part( P_SHAPE_DISC, px, py, d.yaw, 13.0f * k, 13.0f * k, TINT_SCORCH, 0.6f * d.app );
-		pingRing( px, py, 8.0f * k, k, d.tl - t0, d.tint, 0.4f, 1.6f, 3.6f );
+		pingRing( px, py, 8.0f * k, k, te - t0, d.tint, 0.4f, 1.6f, 3.6f );
 	}
 }
 

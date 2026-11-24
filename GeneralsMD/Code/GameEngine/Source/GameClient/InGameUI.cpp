@@ -2154,6 +2154,11 @@ void InGameUI::setRadiusCursor(RadiusCursorType cursorType, const SpecialPowerTe
 		}
 	}
 
+	// a weapon that does not scatter (the Maroon Beret's Kargu drones dive on the point) names no scatter
+	// area: under the Reforged markers its aim is drawn as wide as the blast, so the button has a marker
+	if (radius <= 0.0f && cursorType == RADIUSCURSOR_ATTACK_SCATTER_AREA && w != NULL && groundMarkersOn())
+		radius = MAX( w->getPrimaryDamageRadius( obj ), 40.0f );
+
 	if (radius <= 0.0f)
 		return;
 
@@ -2344,8 +2349,13 @@ void InGameUI::noteGroundMarkerClick( const Coord3D &pos, const SpecialPowerTemp
 	const UnsignedInt MARKER_AIM_KEEP_MS = 250;
 	if( !groundMarkersOn() || m_markerAim.type == RADIUSCURSOR_NONE )
 		return;
-	// only the cursor that aimed this order: the guard's for a guard, the power's own for a power
-	if( power != NULL ? m_markerAim.power != power : m_markerAim.type != RADIUSCURSOR_GUARD_AREA )
+	// only the cursor that aimed this order: the guard's for a guard, the power's own for a power, a
+	// weapon's area (the Comanche's rocket pods, clear mines, the Maroon Beret's Kargu) for a weapon
+	// fired at a location; this is the client's own click and sends nothing
+	const Bool weaponCursor = m_markerAim.power == NULL
+		&& ( m_markerAim.type == RADIUSCURSOR_ATTACK_SCATTER_AREA || m_markerAim.type == RADIUSCURSOR_ATTACK_DAMAGE_AREA
+				|| m_markerAim.type == RADIUSCURSOR_ATTACK_CONTINUE_AREA || m_markerAim.type == RADIUSCURSOR_CLEARMINES );
+	if( power != NULL ? m_markerAim.power != power : ( m_markerAim.type != RADIUSCURSOR_GUARD_AREA && !weaponCursor ) )
 		return;
 	const UnsignedInt now = MAX( 1u, (UnsignedInt)Clock_Milliseconds() );
 	if( m_markerAim.endMs != 0 && now - m_markerAim.endMs >= MARKER_AIM_KEEP_MS )

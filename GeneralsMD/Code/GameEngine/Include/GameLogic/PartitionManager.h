@@ -1445,6 +1445,12 @@ private:
 		 overlapped and never tested, and the loaded game played a different match.  stopKeepingCellsFromSave
 		 lays it back, once the update that ends the load has emptied the list. */
 	std::vector< std::pair<ObjectID, Bool> > m_loadedDirty;
+	/* Each cell's objects in the order its list held them when the game was saved (xfer 5): cell index,
+		 count, IDs head first, for cells listing two or more.  An object goes to the head of a cell's list
+		 every time it moves, and that order is the order collisions and range searches meet the objects
+		 in.  The update that ends a load lists them in load order instead; stopKeepingCellsFromSave puts
+		 the saved order back. */
+	std::vector< Int > m_loadedCellOrder;
 
 	std::deque<SightingInfo *> m_pendingUndoShroudReveals;	///< Undos waiting for their frame, sorted by it: an unlook waits a constant and goes on the back, a timed reveal is inserted in order
 

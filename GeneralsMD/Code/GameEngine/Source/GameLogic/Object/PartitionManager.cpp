@@ -3038,6 +3038,7 @@ void PartitionManager::shutdown()
 	m_updatedSinceLastReset = false;
 	m_cellsFromSave = FALSE;
 	m_loadedDirty.clear();
+	m_loadedCellOrder.clear();
 	ThePartitionManager->removeAllDirtyModules();
 
 	// modules still alive keep stale links, which unlinkCenter never follows while the grid is down
@@ -6304,13 +6305,14 @@ void PartitionManager::crc( Xfer *xfer )
 	* 2: m_pendingUndoShroudReveals stores Unlooks waiting to happen.
 	* 3: the cells are kept as saved through the update that ends the load
 	* 4: the dirty list, which carries collisions from one frame's update into the next
+	* 5: the order of each cell's objects (m_loadedCellOrder)
 	*/
 // ------------------------------------------------------------------------------------------------
 void PartitionManager::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 4;
+	XferVersion currentVersion = 5;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -6442,12 +6444,89 @@ void PartitionManager::xfer( Xfer *xfer )
 			m_loadedDirty.clear();
 	}
 
+	if( version >= 5 )
+	{
+		m_loadedCellOrder.clear();
+		if( xfer->getXferMode() != XFER_LOAD )
+		{
+			std::vector< ObjectID > ids;
+			for( Int i = 0; i < m_totalCellCount; ++i )
+			{
+				if( m_cells[ i ].getCoiCount() < 2 )
+					continue;
+				ids.clear();
+				for( CellAndObjectIntersection *coi = m_cells[ i ].getFirstCoiInCell(); coi; coi = coi->getNextCoi() )
+					if( coi->getModule() && coi->getModule()->getObject() )
+						ids.push_back( coi->getModule()->getObject()->getID() );
+				if( ids.size() < 2 )
+					continue;
+				m_loadedCellOrder.push_back( i );
+				m_loadedCellOrder.push_back( (Int)ids.size() );
+				for( size_t k = 0; k < ids.size(); ++k )
+					m_loadedCellOrder.push_back( (Int)ids[ k ] );
+			}
+		}
+		UnsignedInt count = (UnsignedInt)m_loadedCellOrder.size();
+		xfer->xferUnsignedInt( &count );
+		if( xfer->getXferMode() == XFER_LOAD )
+		{
+			// every entry is a cell index and count, or one of the IDs an object's cells can hold
+			if( count > (UnsignedInt)m_totalCellCount * 2 + 16 * 1024 * 1024 )
+				throw SC_INVALID_DATA;
+			m_loadedCellOrder.resize( count );
+		}
+		if( count > 0 )
+			xfer->xferUser( &m_loadedCellOrder[ 0 ], count * sizeof( Int ) );
+		if( xfer->getXferMode() != XFER_LOAD )
+			m_loadedCellOrder.clear();
+	}
+
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------
 void PartitionManager::stopKeepingCellsFromSave( void )
 {
 	m_cellsFromSave = FALSE;
+
+	// each cell's objects back in their saved order (xfer 5); anything the save did not name, a ghost
+	// say, goes after them in the order it is in now
+	std::vector< CellAndObjectIntersection * > listed;
+	const size_t size = m_loadedCellOrder.size();
+	for( size_t at = 0; at + 2 <= size; )
+	{
+		const Int cellIndex = m_loadedCellOrder[ at ];
+		const Int named = m_loadedCellOrder[ at + 1 ];
+		at += 2;
+		if( cellIndex < 0 || cellIndex >= m_totalCellCount || named < 0 || (size_t)named > size - at )
+			break;
+		PartitionCell &cell = m_cells[ cellIndex ];
+		listed.clear();
+		for( Int k = 0; k < named; ++k )
+		{
+			const ObjectID id = (ObjectID)m_loadedCellOrder[ at + k ];
+			for( CellAndObjectIntersection *coi = cell.getFirstCoiInCell(); coi; coi = coi->getNextCoi() )
+			{
+				const Object *obj = coi->getModule() ? coi->getModule()->getObject() : NULL;
+				if( obj && obj->getID() == id )
+				{
+					if( std::find( listed.begin(), listed.end(), coi ) == listed.end() )
+						listed.push_back( coi );
+					break;
+				}
+			}
+		}
+		at += named;
+		for( CellAndObjectIntersection *coi = cell.getFirstCoiInCell(); coi; coi = coi->getNextCoi() )
+			if( std::find( listed.begin(), listed.end(), coi ) == listed.end() )
+				listed.push_back( coi );
+		// out, then in at the head from the back, so the list reads in the order of 'listed'
+		for( size_t k = 0; k < listed.size(); ++k )
+			cell.friend_removeFromCellList( listed[ k ] );
+		for( size_t k = listed.size(); k > 0; --k )
+			cell.friend_addToCellList( listed[ k - 1 ] );
+	}
+	m_loadedCellOrder.clear();
+
 	// back to front, each in front, so the list comes out in the saved order
 	for( size_t i = m_loadedDirty.size(); i > 0; --i )
 	{

@@ -31646,3 +31646,89 @@ TEST(apocalypse_flow_field_repair_matches_a_rebuild)
 	CHECK( !open.isRepairing() );
 	CHECK( spent < 10 * 300 * 300 );
 }
+
+/** The Apocalypse roster table (ApocalypseDirector.cpp theKinds): which kind may come when, and the
+	  share of a wave the flyers may take.  The night of cycle c is night c + 1. */
+#include "GameLogic/ApocalypseDirector.h"
+
+static Int apocalypseKindNamed( const char *name )
+{
+	for( Int k = 0; k < Apocalypse_kindCount(); ++k )
+		if( strcmp( Apocalypse_kind( k ).name, name ) == 0 )
+			return k;
+	return -1;
+}
+
+TEST(apocalypse_kind_unlocks_on_its_night)
+{
+	// the walker is the first row and always comes, with a weight in every phase
+	CHECK_EQ( apocalypseKindNamed( "ApocalypseZombie" ), (Int)APOCALYPSE_KIND_WALKER );
+	for( Int phase = 0; phase < APOCALYPSE_PHASES; ++phase )
+	{
+		CHECK( Apocalypse_kindAllowed( APOCALYPSE_KIND_WALKER, phase, 0 ) );
+		CHECK( Apocalypse_kind( APOCALYPSE_KIND_WALKER ).weight[ phase ] > 0 );
+	}
+
+	// day 1 sends walkers only
+	for( Int k = 1; k < Apocalypse_kindCount(); ++k )
+		CHECK( !Apocalypse_kindAllowed( k, APOCALYPSE_DAY, 0 ) );
+
+	// night 1's kinds: at dusk and night of cycle 0, not at its dawn, by day from cycle 1
+	const Int runner = apocalypseKindNamed( "ApocalypseZombieRunner" );
+	CHECK( runner > 0 );
+	CHECK( Apocalypse_kindAllowed( runner, APOCALYPSE_DUSK, 0 ) );
+	CHECK( Apocalypse_kindAllowed( runner, APOCALYPSE_NIGHT, 0 ) );
+	CHECK( !Apocalypse_kindAllowed( runner, APOCALYPSE_DAWN, 0 ) );
+	CHECK( Apocalypse_kindAllowed( runner, APOCALYPSE_DAY, 1 ) );
+
+	// night 2's: not on night 1, on night 2, by day from the day after it
+	const Int screecher = apocalypseKindNamed( "ApocalypseZombieScreecher" );
+	CHECK( screecher > 0 );
+	CHECK( !Apocalypse_kindAllowed( screecher, APOCALYPSE_NIGHT, 0 ) );
+	CHECK( Apocalypse_kindAllowed( screecher, APOCALYPSE_NIGHT, 1 ) );
+	CHECK( !Apocalypse_kindAllowed( screecher, APOCALYPSE_DAY, 1 ) );
+	CHECK( Apocalypse_kindAllowed( screecher, APOCALYPSE_DAY, 2 ) );
+	CHECK( ( Apocalypse_kind( screecher ).flags & APOCALYPSE_KIND_FLYER ) != 0 );
+
+	// an elite never by day or dawn, however late (the Siege Ram, from batch 2)
+	const Int ram = apocalypseKindNamed( "ApocalypseZombieSiegeRam" );
+	if( ram > 0 )
+	{
+		CHECK( ( Apocalypse_kind( ram ).flags & APOCALYPSE_KIND_ELITE ) != 0 );
+		CHECK( !Apocalypse_kindAllowed( ram, APOCALYPSE_NIGHT, 2 ) );
+		CHECK( Apocalypse_kindAllowed( ram, APOCALYPSE_DUSK, 3 ) );
+		CHECK( Apocalypse_kindAllowed( ram, APOCALYPSE_NIGHT, 3 ) );
+		CHECK( !Apocalypse_kindAllowed( ram, APOCALYPSE_DAY, 9 ) );
+		CHECK( !Apocalypse_kindAllowed( ram, APOCALYPSE_DAWN, 9 ) );
+	}
+
+	// a flock comes whole: six bats at a point each
+	const Int bat = apocalypseKindNamed( "ApocalypseZombieCarrionBat" );
+	CHECK( bat > 0 );
+	CHECK_EQ( Apocalypse_kind( bat ).points * Apocalypse_kind( bat ).group, 6 );
+
+	// flyers take 15% of a wave before night 4 and 25% from then; night 1's first wave for two seats
+	// still has room for a flock
+	CHECK_EQ( Apocalypse_flyerSharePercent( APOCALYPSE_NIGHT, 0 ), (Int)APOCALYPSE_FLYER_SHARE_EARLY );
+	CHECK_EQ( Apocalypse_flyerSharePercent( APOCALYPSE_NIGHT, 2 ), (Int)APOCALYPSE_FLYER_SHARE_EARLY );
+	CHECK_EQ( Apocalypse_flyerSharePercent( APOCALYPSE_DAY, 3 ), (Int)APOCALYPSE_FLYER_SHARE_EARLY );	// the day before night 4
+	CHECK_EQ( Apocalypse_flyerSharePercent( APOCALYPSE_DUSK, 3 ), (Int)APOCALYPSE_FLYER_SHARE_LATE );
+	CHECK_EQ( Apocalypse_flyerSharePercent( APOCALYPSE_NIGHT, 3 ), (Int)APOCALYPSE_FLYER_SHARE_LATE );
+	CHECK_EQ( Apocalypse_flyerSharePercent( APOCALYPSE_DAY, 4 ), (Int)APOCALYPSE_FLYER_SHARE_LATE );
+	const Int night1 = Apocalypse_wavePoints( 1, 2, APOCALYPSE_NIGHT, 0, 100 );
+	CHECK( night1 * Apocalypse_flyerSharePercent( APOCALYPSE_NIGHT, 0 ) / 100 >= 6 );
+
+	// the owner's rank rate (2026-11-23): 20 skill points a threat point, a boss 10, so a walker pays
+	// 20, a runner 40 and a brute 120
+	CHECK_EQ( (Int)APOCALYPSE_SKILL_PER_POINT, 20 );
+	CHECK_EQ( (Int)APOCALYPSE_SKILL_PER_POINT_BOSS, 10 );
+	CHECK_EQ( Apocalypse_kind( apocalypseKindNamed( "ApocalypseZombieBrute" ) ).points * APOCALYPSE_SKILL_PER_POINT, 120 );
+
+	// every row names a template once, costs a point or more and comes at least one at a time
+	for( Int k = 0; k < Apocalypse_kindCount(); ++k )
+	{
+		CHECK( Apocalypse_kind( k ).points >= 1 );
+		CHECK( Apocalypse_kind( k ).group >= 1 );
+		CHECK_EQ( apocalypseKindNamed( Apocalypse_kind( k ).name ), k );
+	}
+}

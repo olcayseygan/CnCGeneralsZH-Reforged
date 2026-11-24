@@ -445,17 +445,62 @@ Bool ApocalypseFlowField::route( Int x, Int y, std::vector<Int> *cells ) const
 static ApocalypseDirector theApocalypseDirector;
 ApocalypseDirector *TheApocalypseDirector = &theApocalypseDirector;
 
-/// the walker, then the two that come out at night
-static const char *const ZOMBIE_TEMPLATES[] = { "ApocalypseZombie", "ApocalypseZombieRunner", "ApocalypseZombieBrute" };
-static const Int ZOMBIE_POINTS[] = { APOCALYPSE_POINTS_WALKER, APOCALYPSE_POINTS_RUNNER, APOCALYPSE_POINTS_BRUTE };
+/** The roster, the walker first (docs/plans/APOCALYPSE-ZOMBIES.md).  A roll draws over the weights of
+	  the kinds the phase and the night allow and the wave can still pay for, the walker taking the rest.
+	  A weight is how often a roll lands on the kind, not how much of the points it takes: with the night's
+	  walker 40, runner 30 and brute 30 the brutes spent 180 of every 280 points.  A new kind's day and dawn weight is half its night
+	  weight; the walker, runner and brute keep the shares they had before the table. */
+static const ApocalypseKind theKinds[] =
+{
+	//	template											points										night		day	dusk	night	dawn		group	flags
+	{ "ApocalypseZombie",						APOCALYPSE_POINTS_WALKER,		0,		{	95,	65,		40,		85 },		1,		0 },
+	{ "ApocalypseZombieRunner",			APOCALYPSE_POINTS_RUNNER,		1,		{	0,	20,		30,		10 },		1,		0 },
+	{ "ApocalypseZombieBrute",			APOCALYPSE_POINTS_BRUTE,		1,		{	5,	15,		30,		5 },		1,		0 },
+	// batch 1: air and walls
+	{ "ApocalypseZombieSpitter",		4,													1,		{	5,	6,		10,		5 },		1,		0 },
+	{ "ApocalypseZombieBloater",		5,													1,		{	4,	5,		8,		4 },		1,		0 },
+	{ "ApocalypseZombieCarrionBat",	1,													1,		{	2,	3,		4,		2 },		6,		APOCALYPSE_KIND_FLYER },
+	{ "ApocalypseZombieScreecher",	6,													2,		{	2,	2,		4,		2 },		1,		APOCALYPSE_KIND_FLYER },
+	// batch 2: the tank front
+	{ "ApocalypseZombieJuggernaut",		14,												2,		{	2,	2,		4,		2 },		1,		0 },
+	{ "ApocalypseZombieShieldBearer",	10,												3,		{	2,	2,		4,		2 },		1,		0 },
+	{ "ApocalypseZombieBoneMortar",		10,												4,		{	2,	2,		4,		2 },		1,		0 },
+	{ "ApocalypseZombieSiegeRam",			16,												4,		{	0,	1,		2,		0 },		1,		APOCALYPSE_KIND_ELITE },
+	{ "ApocalypseZombieSpineLancer",	8,												4,		{	3,	3,		6,		3 },		1,		0 },
+};
+
+Int Apocalypse_kindCount( void )
+{
+	return (Int)ARRAY_SIZE( theKinds );
+}
+
+const ApocalypseKind &Apocalypse_kind( Int kind )
+{
+	return theKinds[ kind >= 0 && kind < Apocalypse_kindCount() ? kind : APOCALYPSE_KIND_WALKER ];
+}
+
+Bool Apocalypse_kindAllowed( Int kind, Int phase, UnsignedInt cycle )
+{
+	const ApocalypseKind &k = Apocalypse_kind( kind );
+	const Bool dark = phase == APOCALYPSE_DUSK || phase == APOCALYPSE_NIGHT;
+	if( !dark && ( k.flags & APOCALYPSE_KIND_ELITE ) )
+		return FALSE;
+	return (Int)( dark ? cycle + 1 : cycle ) >= k.firstNight;
+}
+
+Int Apocalypse_flyerSharePercent( Int phase, UnsignedInt cycle )
+{
+	const Bool dark = phase == APOCALYPSE_DUSK || phase == APOCALYPSE_NIGHT;
+	return (Int)( dark ? cycle + 1 : cycle ) >= APOCALYPSE_FLYER_LATE_NIGHT ? APOCALYPSE_FLYER_SHARE_LATE : APOCALYPSE_FLYER_SHARE_EARLY;
+}
 
 static const ApocalypsePhaseRules thePhaseRules[ APOCALYPSE_PHASES ] =
 {
-	//	seconds							wave every	points %	out a frame	walking at most	gates		runners	brutes
-	{ APOCALYPSE_DAY_SECONDS,		40,			100,			5,					450,						1, 2,		0,			5 },
-	{ APOCALYPSE_DUSK_SECONDS,	30,			220,			6,					550,						2, 2,		20,			15 },
-	{ APOCALYPSE_NIGHT_SECONDS,	25,			450,			10,					700,						2, 99,	30,			30 },
-	{ APOCALYPSE_DAWN_SECONDS,	30,			200,			6,					550,						1, 2,		10,			5 },
+	//	seconds							wave every	points %	out a frame	walking at most	gates
+	{ APOCALYPSE_DAY_SECONDS,		40,			100,			5,					450,						1, 2 },
+	{ APOCALYPSE_DUSK_SECONDS,	30,			220,			6,					550,						2, 2 },
+	{ APOCALYPSE_NIGHT_SECONDS,	25,			450,			10,					700,						2, 99 },
+	{ APOCALYPSE_DAWN_SECONDS,	30,			200,			6,					550,						1, 2 },
 };
 
 const ApocalypsePhaseRules &Apocalypse_phaseRules( Int phase )
@@ -758,8 +803,7 @@ void ApocalypseDirector::reset( void )
 	m_spawns.clear();
 	m_zombiePlayer = -1;
 	m_seats = 0;
-	for( Int k = 0; k < KINDS; ++k )
-		m_kinds[ k ] = NULL;
+	m_kinds.clear();
 	m_phase = APOCALYPSE_DAY;
 	m_phaseStartFrame = 0;
 	m_cycle = 0;
@@ -786,6 +830,9 @@ void ApocalypseDirector::reset( void )
 	m_fieldLoadedBuild = FALSE;
 	m_groundChanges.clear();
 	m_fieldAnswered = m_fieldRefused = m_fieldCells = 0;
+	m_eliteRoom = 0;
+	m_flyerRoom = 0;
+	m_straysLogged = 0;
 	m_waveSectors = 0;
 	m_warnSectors = 0;
 	m_adapt = APOCALYPSE_ADAPT_START;
@@ -849,14 +896,15 @@ void ApocalypseDirector::newMap( Bool loadingSaveGame )
 		farthest = max( farthest, (Real)sqrtf( dx * dx + dy * dy ) );
 	}
 	m_reachRadius = farthest + (Real)APOCALYPSE_BASE_REACH;
-	for( Int k = 0; k < KINDS; ++k )
+	m_kinds.resize( Apocalypse_kindCount(), NULL );
+	for( Int k = 0; k < Apocalypse_kindCount(); ++k )
 	{
-		m_kinds[ k ] = TheThingFactory->findTemplate( ZOMBIE_TEMPLATES[ k ], FALSE );
+		m_kinds[ k ] = TheThingFactory->findTemplate( Apocalypse_kind( k ).name, FALSE );
 		if( m_kinds[ k ] == NULL )
 		{
-			DEBUG_LOG(( "HEADLESS APOCALYPSE: no '%s' template in the data, %s\n", ZOMBIE_TEMPLATES[ k ],
-									k == KIND_WALKER ? "so nothing will spawn" : "so walkers come in its place" ));
-			DEBUG_CRASH(( "Apocalypse: no '%s' template", ZOMBIE_TEMPLATES[ k ] ));
+			DEBUG_LOG(( "HEADLESS APOCALYPSE: no '%s' template in the data, %s\n", Apocalypse_kind( k ).name,
+									k == APOCALYPSE_KIND_WALKER ? "so nothing will spawn" : "so walkers come in its place" ));
+			DEBUG_CRASH(( "Apocalypse: no '%s' template", Apocalypse_kind( k ).name ));
 		}
 	}
 
@@ -940,14 +988,30 @@ Int ApocalypseDirector::seatsAlive( void ) const
 }
 
 //-------------------------------------------------------------------------------------------------
+Int ApocalypseDirector::kindOf( const Object *obj ) const
+{
+	for( Int k = 0; k < (Int)m_kinds.size(); ++k )
+		if( m_kinds[ k ] != NULL && obj->getTemplate()->isEquivalentTo( m_kinds[ k ] ) )
+			return k;
+	return -1;
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool ApocalypseDirector::isZombie( const Object *obj ) const
 {
 	if( !m_active || obj == NULL || obj->getControllingPlayer() == NULL || obj->getControllingPlayer()->getPlayerIndex() != m_zombiePlayer )
 		return FALSE;
-	for( Int k = 0; k < KINDS; ++k )
-		if( m_kinds[ k ] != NULL && obj->getTemplate()->isEquivalentTo( m_kinds[ k ] ) )
-			return TRUE;
-	return FALSE;
+	return kindOf( obj ) >= 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+Int ApocalypseDirector::skillPointsOf( const Object *zombie ) const
+{
+	const Int k = kindOf( zombie );
+	if( k < 0 )
+		return 0;
+	const ApocalypseKind &kind = Apocalypse_kind( k );
+	return kind.points * ( ( kind.flags & APOCALYPSE_KIND_BOSS ) ? APOCALYPSE_SKILL_PER_POINT_BOSS : APOCALYPSE_SKILL_PER_POINT );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -986,19 +1050,44 @@ void ApocalypseDirector::sendOn( Object *obj )
 }
 
 //-------------------------------------------------------------------------------------------------
-void ApocalypseDirector::spawnOne( UnsignedInt now )
+Int ApocalypseDirector::spawnOne( UnsignedInt now )
 {
-	// the kind out of the phase's mix, a walker whenever the points left cannot pay for it
-	const ApocalypsePhaseRules &rules = Apocalypse_phaseRules( m_phase );
-	Int kind = KIND_WALKER;
-	const Int roll = GameLogicRandomValue( 0, 99 );
-	if( roll < rules.brutePercent )
-		kind = KIND_BRUTE;
-	else if( roll < rules.brutePercent + rules.runnerPercent )
-		kind = KIND_RUNNER;
-	if( m_kinds[ kind ] == NULL || ZOMBIE_POINTS[ kind ] > m_pending )
-		kind = KIND_WALKER;
-	m_pending -= ZOMBIE_POINTS[ kind ];
+	/* The kind out of the phase's mix, drawn only over those the night allows, the data has, the points
+		 left pay for (a whole flock), and the wave's elite and flyer room still takes.  The walker is
+		 always among them, at a point. */
+	const Int kinds = (Int)m_kinds.size();
+	auto eligible = [&]( Int k ) -> Bool
+	{
+		const ApocalypseKind &row = Apocalypse_kind( k );
+		const Int cost = row.points * row.group;
+		return Apocalypse_kindAllowed( k, m_phase, m_cycle ) && m_kinds[ k ] != NULL && cost <= m_pending
+			&& ( !( row.flags & APOCALYPSE_KIND_ELITE ) || m_eliteRoom > 0 )
+			&& ( !( row.flags & APOCALYPSE_KIND_FLYER ) || cost <= m_flyerRoom );
+	};
+	Int total = 0;
+	for( Int k = 0; k < kinds; ++k )
+		if( eligible( k ) )
+			total += Apocalypse_kind( k ).weight[ m_phase ];
+	Int kind = APOCALYPSE_KIND_WALKER;
+	Int roll = GameLogicRandomValue( 0, total > 0 ? total - 1 : 0 );
+	// from the last row up, the walker taking what is left over
+	for( Int k = kinds - 1; k > APOCALYPSE_KIND_WALKER; --k )
+	{
+		if( !eligible( k ) )
+			continue;
+		roll -= Apocalypse_kind( k ).weight[ m_phase ];
+		if( roll < 0 )
+		{
+			kind = k;
+			break;
+		}
+	}
+	const ApocalypseKind &row = Apocalypse_kind( kind );
+	m_pending -= row.points * row.group;
+	if( row.flags & APOCALYPSE_KIND_ELITE )
+		--m_eliteRoom;
+	if( row.flags & APOCALYPSE_KIND_FLYER )
+		m_flyerRoom -= row.points * row.group;
 
 	// one of the gates the wave gathered at
 	Int sector = -1;
@@ -1022,7 +1111,7 @@ void ApocalypseDirector::spawnOne( UnsignedInt now )
 	Team *team = ThePlayerList->getNthPlayer( m_zombiePlayer )->getDefaultTeam();
 	Object *obj = TheThingFactory->newObject( m_kinds[ kind ], team );
 	if( obj == NULL )
-		return;
+		return 0;
 	obj->setOrientation( 0.0f );
 	AIUpdateInterface *ai = obj->getAI();
 
@@ -1046,16 +1135,37 @@ void ApocalypseDirector::spawnOne( UnsignedInt now )
 		}
 	}
 	obj = makeZombie( kind, pos, now, obj );
-	if( obj != NULL && ( m_spawned <= 3 || ( kind != KIND_WALKER && m_spawned % 25 == 0 ) ) )
+	if( obj == NULL )
+		return 0;
+	const Bool logIt = m_spawned <= 3 || ( kind != APOCALYPSE_KIND_WALKER && m_spawned % 25 == 0 ) || row.group > 1;
+	if( logIt )
 	{
 		AsciiString where;
 		if( which >= 0 )
 			where.format( "at spawn %d", which + 1 );
 		else
 			where.format( "in the fog before gate %d", sector + 1 );
-		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u '%s' %d out %s (%.0f,%.0f)\n", now,
-								m_kinds[ kind ]->getName().str(), (Int)obj->getID(), where.str(), pos.x, pos.y ));
+		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u '%s' %d out %s (%.0f,%.0f)%s\n", now,
+								m_kinds[ kind ]->getName().str(), (Int)obj->getID(), where.str(), pos.x, pos.y, row.group > 1 ? ", the first of its group" : "" ));
 	}
+
+	/* The rest of a flock or a pack, three a row round the first's spot, no draw: where one of them
+		 cannot stand (a ground kind on a rock), on the first's spot itself. */
+	Int made = 1;
+	for( Int m = 1; m < row.group; ++m )
+	{
+		Coord3D at = pos;
+		const Int slot = m + 1;		// the first stands on slot 1, the middle of the front row
+		at.x += (Real)( ( slot % 3 ) - 1 ) * (Real)APOCALYPSE_GROUP_SPACING;
+		at.y += (Real)( slot / 3 ) * (Real)APOCALYPSE_GROUP_SPACING;
+		at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
+		AIUpdateInterface *firstAI = obj->getAI();
+		if( firstAI != NULL && !TheAI->pathfinder()->validMovementPosition( obj->getCrusherLevel() > 0, obj->getLayer(), firstAI->getLocomotorSet(), &at ) )
+			at = pos;
+		if( makeZombie( kind, at, now ) != NULL )
+			++made;
+	}
+	return made;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1225,21 +1335,24 @@ void ApocalypseDirector::sendWave( UnsignedInt now )
 	++m_wave;
 	const Int points = Apocalypse_wavePoints( m_wave, m_seats, m_phase, m_cycle, m_adapt );
 	m_pending += points;
+	// each wave brings its own room for elites and flyers; what the last one left unused goes
+	m_eliteRoom = seatsAlive();
+	m_flyerRoom = points * Apocalypse_flyerSharePercent( m_phase, m_cycle ) / 100;
 	m_waveSectors = m_warnSectors;
 	m_warnSectors = 0;
 	m_reachedAtWave = m_reached;
 	m_nextWaveFrame = now + Apocalypse_phaseRules( m_phase ).waveSeconds * gameSecond();
-	DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %s wave %u of cycle %u brings %d points at %d%% share, rank %d; %d walking, %d points to come, next at frame %u\n",
+	DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %s wave %u of cycle %u brings %d points at %d%% share, rank %d; %d walking, %d points to come, next at frame %u; room for %d elites, %d flyer points\n",
 							now, Apocalypse_phaseName( m_phase ), m_wave, m_cycle, points, m_adapt, Apocalypse_cycleRank( m_cycle ),
-							(Int)m_zombies.size(), m_pending, m_nextWaveFrame ));
+							(Int)m_zombies.size(), m_pending, m_nextWaveFrame, m_eliteRoom, m_flyerRoom ));
 	LogicThread::callAfterTick( []() { if( ThePartitionManager ) ThePartitionManager->redrawShroudForLocalPlayer(); } );
 }
 
 //-------------------------------------------------------------------------------------------------
 /** Soldiers the dead killed rise as the dead: a body of a seat's infantry whose last hurt came from
 	  the dead player is noted while it lies, and APOCALYPSE_INFECT_SECONDS later an ApocalypseZombie
-	  stands where it fell, if the cap has room (it waits for room otherwise).  Walked in object list
-	  order; m_rises kept sorted by the victim's ObjectID. */
+	  stands where it fell, if the cap has room (it waits for room otherwise).  The same walk adopts the
+	  dead's strays.  Walked in object list order; m_rises kept sorted by the victim's ObjectID. */
 void ApocalypseDirector::watchTheFallen( UnsignedInt now )
 {
 	const Player *zombies = ThePlayerList->getNthPlayer( m_zombiePlayer );
@@ -1254,7 +1367,7 @@ void ApocalypseDirector::watchTheFallen( UnsignedInt now )
 		Rise r = m_rises[ i ];
 		if( r.frame != 0 && now >= r.frame && (Int)m_zombies.size() < cap )
 		{
-			const Object *made = makeZombie( KIND_WALKER, r.where, now );
+			const Object *made = makeZombie( APOCALYPSE_KIND_WALKER, r.where, now );
 			if( made != NULL )
 			{
 				++m_infected;
@@ -1269,8 +1382,41 @@ void ApocalypseDirector::watchTheFallen( UnsignedInt now )
 	}
 	m_rises.swap( kept );
 
+	// who is on the list now, sorted, to tell a stray by: scratch for this pass, nothing kept
+	std::vector<ObjectID> listed;
+	listed.reserve( m_zombies.size() );
+	for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
+		listed.push_back( m_zombies[ i ].id );
+	std::sort( listed.begin(), listed.end() );
+
+	static const NameKeyType key_SlavedUpdate = NAMEKEY( "SlavedUpdate" );
+	static const NameKeyType key_MobMemberSlavedUpdate = NAMEKEY( "MobMemberSlavedUpdate" );
 	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
 	{
+		/* A stray: something of the dead's that walks and is not on the list (a spawn line's, what a
+			 death leaves behind).  It goes on the end of the list, counted under the cap and sent on.  A
+			 slave is its master's to move; a thrown spear has an AI too (MissileAIUpdate) and is no stray.
+			 Only the dead's own: a roster kind, or something one of them made (its producer on the list,
+			 or a body of a roster kind still lying), so a civilian placed on the map never marches. */
+		const Object *maker = TheGameLogic->findObjectByID( obj->getProducerID() );
+		if( !obj->isEffectivelyDead() && obj->getControllingPlayer() == zombies && obj->getAI() != NULL
+				&& obj->getContainedBy() == NULL && !obj->isKindOf( KINDOF_STRUCTURE ) && !obj->isKindOf( KINDOF_PROJECTILE )
+				&& obj->findUpdateModule( key_SlavedUpdate ) == NULL && obj->findUpdateModule( key_MobMemberSlavedUpdate ) == NULL
+				&& !std::binary_search( listed.begin(), listed.end(), obj->getID() )
+				&& ( kindOf( obj ) >= 0 || std::binary_search( listed.begin(), listed.end(), obj->getProducerID() )
+					|| ( maker != NULL && maker->getControllingPlayer() == zombies && kindOf( maker ) >= 0 ) ) )
+		{
+			Zombie z;
+			z.id = obj->getID();
+			z.reached = FALSE;
+			m_zombies.push_back( z );
+			++m_straysLogged;
+			if( m_straysLogged <= 10 || m_straysLogged % 50 == 0 )
+				DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u stray '%s' %d joins the dead, %u so far\n", now,
+										obj->getTemplate()->getName().str(), (Int)z.id, m_straysLogged ));
+			sendOn( obj );
+			continue;
+		}
 		if( !obj->isEffectivelyDead() || !obj->isKindOf( KINDOF_INFANTRY ) )
 			continue;
 		const Player *owner = obj->getControllingPlayer();
@@ -1500,15 +1646,18 @@ void ApocalypseDirector::update( void )
 	m_zombies.resize( kept );
 
 	// the next wave gathers at its gates a telegraph ahead, then comes as one mass
-	if( m_kinds[ KIND_WALKER ] != NULL )
+	if( !m_kinds.empty() && m_kinds[ APOCALYPSE_KIND_WALKER ] != NULL )
 	{
 		if( m_warnSectors == 0 && now + APOCALYPSE_TELEGRAPH_SECONDS * second >= m_nextWaveFrame )
 			gatherWave( now );
 		if( now >= m_nextWaveFrame )
 			sendWave( now );
 	}
-	for( Int out = 0; out < rules.spawnsPerFrame && m_pending > 0 && (Int)m_zombies.size() < rules.aliveCap; ++out )
-		spawnOne( now );
+	for( Int out = 0; out < rules.spawnsPerFrame && m_pending > 0 && (Int)m_zombies.size() < rules.aliveCap; )
+	{
+		const Int made = spawnOne( now );
+		out += made > 0 ? made : 1;
+	}
 
 	// the fallen rise, five times a game second
 	if( now % max( second / 5, 1U ) == 0 )
@@ -1600,6 +1749,29 @@ void ApocalypseDirector::update( void )
 				++nearMiddle;
 		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u the dead: %d still in the fog, %d idle, %d among the bases; the seats hold %d buildings, %d units\n",
 								now, inFog, idle, nearMiddle, buildings, units ));
+		{
+			// the living by kind, counted off the list now; nothing kept
+			std::vector<Int> byKind( m_kinds.size() + 1, 0 );
+			for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
+			{
+				const Object *obj = TheGameLogic->findObjectByID( m_zombies[ i ].id );
+				if( obj != NULL )
+				{
+					const Int k = kindOf( obj );
+					++byKind[ k >= 0 ? k : m_kinds.size() ];
+				}
+			}
+			AsciiString kinds;
+			for( UnsignedInt k = 0; k < byKind.size(); ++k )
+			{
+				if( byKind[ k ] == 0 )
+					continue;
+				AsciiString one;
+				one.format( " %s %d", k < m_kinds.size() ? Apocalypse_kind( (Int)k ).name : "other", byKind[ k ] );
+				kinds.concat( one );
+			}
+			DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u alive by kind:%s\n", now, kinds.str() ));
+		}
 		for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 		{
 			Player *player = ThePlayerList->getNthPlayer( i );
@@ -1857,10 +2029,10 @@ void ApocalypseDirector::crc( Xfer *xfer )
 //-------------------------------------------------------------------------------------------------
 /** Version 1: the day's clock, the wave clock, the counts and the living zombies.  The centre, the
 	  spawns, the owner and the templates come from the map and the data on every load, and the light
-	  is handed to the client again on the first tick after it. */
+	  is handed to the client again on the first tick after it.  Version 6 adds the elite and flyer room. */
 void ApocalypseDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 5;
+	XferVersion currentVersion = 6;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1959,6 +2131,17 @@ void ApocalypseDirector::xfer( Xfer *xfer )
 			m_fieldLoadedRepair = repairing;
 			m_fieldLoadedBuild = building;
 		}
+	}
+	// version 6: the waves' room for elites and flyers; an older save had neither and loads them empty
+	if( version >= 6 )
+	{
+		xfer->xferInt( &m_eliteRoom );
+		xfer->xferInt( &m_flyerRoom );
+	}
+	else if( xfer->getXferMode() == XFER_LOAD )
+	{
+		m_eliteRoom = 0;
+		m_flyerRoom = 0;
 	}
 }
 

@@ -108,6 +108,7 @@
 #include "GameLogic/Module/TransportContain.h"
 #include "GameLogic/VictoryConditions.h"
 #include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/ApocalypseDirector.h"
 
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GUIUtil.h"		// the SUPERWEAPONS_ modes the lobby sends
@@ -2873,8 +2874,10 @@ Bool Player::addSkillPointsForKill(const Object* killer, const Object* victim)
 		return false;
 	
 	Int victimLevel = victim->getVeterancyLevel();
-	Int skillValue = victim->getTemplate()->getSkillPointValue(victimLevel);
-	
+	// an Apocalypse zombie is worth its threat points, one constant for the whole roster
+	Int skillValue = TheApocalypseDirector->isZombie(victim) ? TheApocalypseDirector->skillPointsOf(victim)
+		: victim->getTemplate()->getSkillPointValue(victimLevel);
+
 	return addSkillPoints(skillValue);
 }
 

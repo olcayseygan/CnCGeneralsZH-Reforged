@@ -33,8 +33,13 @@
 // of theirs is dead (VICTORY_APOCALYPSE); the dead never lose.
 //
 // The match runs a day and night cycle in game seconds: day, dusk, night, dawn, and day again.  By
-// day the waves are light and only ApocalypseZombie walks; at dusk they thicken; at night they come
-// fast and big, and ApocalypseZombieRunner and ApocalypseZombieBrute walk with them.  Every cycle
+// day the waves are light; at dusk they thicken; at night they come fast and big.  The kinds come out
+// of one roster table (theKinds in the .cpp): each has its threat points, the first night it walks,
+// a weight a phase, a group size (the Carrion Bats fly in flocks) and flags.  Day 1 sends walkers
+// only; a kind that unlocks on night N walks at dusk and night from then and by day from the day
+// after.  Elites never come by day, one a living seat a wave; flyers take at most a share of a
+// wave's points.  Anything else of the dead's that walks (a spawn line, what a death leaves) is
+// adopted as a stray, counted under the cap and sent on.  Every cycle
 // sends more and ranks them one level higher, to Heroic.  The light follows: the director hands the
 // client a night amount after each tick (LogicThread::callAfterTick), the client tints the map's own
 // light toward a dim red and puts every drawable in its NIGHT state once it is past half; nothing in
@@ -89,6 +94,12 @@ enum
 	APOCALYPSE_POINTS_WALKER = 1,					///< what each kind costs of a wave's points
 	APOCALYPSE_POINTS_RUNNER = 2,
 	APOCALYPSE_POINTS_BRUTE = 6,
+	APOCALYPSE_SKILL_PER_POINT = 20,			///< the general's skill points a zombie kill is worth, a threat point of it (doubled by the owner, 2026-11-23)
+	APOCALYPSE_SKILL_PER_POINT_BOSS = 10,	///< and a boss's
+	APOCALYPSE_FLYER_SHARE_EARLY = 15,		///< percent of a wave's points flyers may take, before APOCALYPSE_FLYER_LATE_NIGHT,
+	APOCALYPSE_FLYER_SHARE_LATE = 25,			///< and from that night on
+	APOCALYPSE_FLYER_LATE_NIGHT = 4,
+	APOCALYPSE_GROUP_SPACING = 12,				///< world units between two of a flock or a pack as they come out
 	APOCALYPSE_ADAPT_START = 100,					///< the adaptive share, percent: where it starts,
 	APOCALYPSE_ADAPT_LEAST = 100,					///< how low it falls when waves reach the bases: never under the plain wave,
 	APOCALYPSE_ADAPT_MOST = 600,					///< and how high it climbs when they die far out
@@ -125,11 +136,42 @@ struct ApocalypsePhaseRules
 	Int spawnsPerFrame;					///< zombies a wave lets out a logic frame at most, so it comes as one mass
 	Int aliveCap;
 	Int sectorsLeast, sectorsMost;	///< gates a wave gathers at; MOST over the gate count means all of them
-	Int runnerPercent, brutePercent;	///< of what it rolls, the rest walkers
 };
 
 extern const ApocalypsePhaseRules &Apocalypse_phaseRules( Int phase );
 extern const char *Apocalypse_phaseName( Int phase );
+
+enum
+{
+	APOCALYPSE_KIND_WALKER = 0,						///< the roster's first row, what the fallen rise as and what a roll falls back on
+	APOCALYPSE_KIND_ELITE = 1 << 0,				///< flags: never by day or dawn
+	APOCALYPSE_KIND_FLYER = 1 << 1,
+	APOCALYPSE_KIND_BOSS = 1 << 2,
+};
+
+/** One kind of the dead: its template, what it costs of a wave's points, the first night it comes
+	  (0 from the start), how often a roll picks it in each phase (weights, summed over the kinds allowed),
+	  how many come together, and its flags. */
+struct ApocalypseKind
+{
+	const char *name;
+	Int points;
+	Int firstNight;
+	Int weight[ APOCALYPSE_PHASES ];
+	Int group;
+	Int flags;
+};
+
+extern Int Apocalypse_kindCount( void );
+extern const ApocalypseKind &Apocalypse_kind( Int kind );
+
+/** Whether that kind may come in that phase of that cycle (from 0): first night N means at dusk and night
+	  of night N (cycle N - 1) on, by day and dawn from cycle N; an elite never by day or dawn. */
+extern Bool Apocalypse_kindAllowed( Int kind, Int phase, UnsignedInt cycle );
+
+/** percent of a wave's points flyers may take in that phase of that cycle (from 0): the night number
+	  counts as for an unlock, so the late share starts at the dusk before night APOCALYPSE_FLYER_LATE_NIGHT */
+extern Int Apocalypse_flyerSharePercent( Int phase, UnsignedInt cycle );
 
 /// the threat points a wave of that number (from 1) brings for that many seats, in that phase of that cycle (from 0), at that adaptive share
 extern Int Apocalypse_wavePoints( UnsignedInt wave, Int seats, Int phase, UnsignedInt cycle, Int adaptPercent );
@@ -283,6 +325,8 @@ public:
 	/** One of the dead's route from `from` down the flow field, as an optimized path, when it ends at
 		  `to`, the goal the director sent it to; NULL otherwise, and the search answers as before. */
 	Path *fieldPath( const Object *obj, const Coord3D *from, const Coord3D *to );
+	/// the general's skill points a kill of that zombie is worth: its threat points times APOCALYPSE_SKILL_PER_POINT
+	Int skillPointsOf( const Object *zombie ) const;
 
 	/// once a logic frame, from GameLogic::update
 	void update( void );
@@ -307,7 +351,6 @@ private:
 		ObjectID id;
 		Bool reached;										///< it has stood beside a seat's structure or hit one (hasReachedBases)
 	};
-	enum { KIND_WALKER, KIND_RUNNER, KIND_BRUTE, KINDS };
 
 	struct FogStay
 	{
@@ -322,8 +365,9 @@ private:
 		UnsignedInt frame;							///< when he rises; 0 once he has
 	};
 
-	void spawnOne( UnsignedInt now );
+	Int spawnOne( UnsignedInt now );		///< one roll: one of the dead, or a whole flock or pack; how many came out
 	Object *makeZombie( Int kind, const Coord3D &pos, UnsignedInt now, Object *made = NULL );
+	Int kindOf( const Object *obj ) const;	///< its row in the roster, -1 for none
 	Int sectorOf( Real x, Real y ) const;
 	void gatherWave( UnsignedInt now );
 	void sendWave( UnsignedInt now );
@@ -354,7 +398,7 @@ private:
 	std::vector<Coord3D> m_spawns;
 	Int m_zombiePlayer;									///< the civilian player's index
 	Int m_seats;												///< seats at the start
-	const ThingTemplate *m_kinds[ KINDS ];	///< NULL where the data lacks one; a missing walker spawns nothing, a missing night kind walks as a walker
+	std::vector<const ThingTemplate *> m_kinds;	///< one a roster row, NULL where the data lacks it; a missing walker spawns nothing, a missing kind walks as a walker
 
 	// logic state, saved and in the CRC
 	Int m_phase;												///< ApocalypsePhase
@@ -388,12 +432,15 @@ private:
 	// what a load read, for loadPostProcess to build the field from
 	Bool m_fieldLoaded, m_fieldLoadedRepair, m_fieldLoadedBuild;
 	std::vector<ApocalypseFlowField::Change> m_fieldLoadedChanges;
+	Int m_eliteRoom;										///< elites the waves out now may still send: one a living seat, reset by each wave
+	Int m_flyerRoom;										///< threat points flyers may still take of them: the flyer share of the last wave
 
 	// what was last handed to the client, so the retint and the log run only on a change; nothing else reads them
 	Int m_lightLevel;
 	Bool m_lightsOn;
 	Int m_fogLevel;											///< the fog ring's and the smoke's tint, last handed to the client
 	Bool m_fallLogged;
+	UnsignedInt m_straysLogged;					///< strays adopted, for the log alone; not saved
 };
 
 extern ApocalypseDirector *TheApocalypseDirector;

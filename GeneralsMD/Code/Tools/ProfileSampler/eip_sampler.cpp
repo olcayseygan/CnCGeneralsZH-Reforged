@@ -377,7 +377,9 @@ int main(int argc, char **argv)
 			"usage: %s <exe-name|pid> <seconds> [-all] [-callers <leaf substring>] [-under <function substring>]\n"
 			"       -all samples every thread, not just main\n"
 			"       -callers walks the main thread's stack and ranks who calls the matching leaves\n"
-			"       -under ranks the functions the main thread spent its time in below the matching one\n", argv[0]);
+			"       -under ranks the functions the main thread spent its time in below the matching one\n"
+			"       -tid <thread id> samples that thread in main's place: GameLogic::update runs on a thread of\n"
+			"            its own, the busiest one an -all run lists\n", argv[0]);
 		return 2;
 	}
 
@@ -390,9 +392,12 @@ int main(int argc, char **argv)
 	bool all_threads = false;
 	const char *caller_filter = nullptr;
 	const char *under_filter = nullptr;
+	DWORD only_tid = 0;
 	for (int arg = 3; arg < argc; ++arg) {
 		if (_stricmp(argv[arg], "-all") == 0) {
 			all_threads = true;
+		} else if (_stricmp(argv[arg], "-tid") == 0 && arg + 1 < argc) {
+			only_tid = strtoul(argv[++arg], nullptr, 10);
 		} else if (_stricmp(argv[arg], "-callers") == 0 && arg + 1 < argc) {
 			caller_filter = argv[++arg];
 		} else if (_stricmp(argv[arg], "-under") == 0 && arg + 1 < argc) {
@@ -421,7 +426,9 @@ int main(int argc, char **argv)
 		CloseHandle(proc);
 		return 1;
 	}
-	if (!all_threads) {
+	if (only_tid != 0) {
+		threads.assign(1, ThreadRef{only_tid, 0});
+	} else if (!all_threads) {
 		threads.resize(1);   // earliest creation time == the main thread
 	}
 

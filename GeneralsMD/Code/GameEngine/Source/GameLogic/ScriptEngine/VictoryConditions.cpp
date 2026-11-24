@@ -43,6 +43,7 @@
 #include "Common/PlayerTemplate.h"
 #include "Common/Radar.h"
 #include "Common/Recorder.h"
+#include "Common/Xfer.h"
 
 #include "GameClient/InGameUI.h"
 #include "GameClient/Diplomacy.h"
@@ -87,10 +88,14 @@ class VictoryConditions : public VictoryConditionsInterface
 {
 public:
 	VictoryConditions();
-	
+
 	void init( void );
 	void reset( void );
 	void update( void );
+
+	virtual void crc( Xfer *xfer ) { }
+	virtual void xfer( Xfer *xfer );
+	virtual void loadPostProcess( void ) { }
 
 	Bool hasAchievedVictory(Player *player);					///< has a specific player and his allies won?
 	Bool hasBeenDefeated(Player *player);							///< has a specific player and his allies lost?
@@ -330,6 +335,24 @@ Bool VictoryConditions::hasSinglePlayerBeenDefeated(Player *player)
 	}
 
 	return false;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Xfer (fork; EA never saved it, and saves without this block load as before)
+	* 1: who is already out, and whether the end of the match was already signalled.  Without it a
+	*    load knocked every beaten player out a second time on its first frame: his whole map revealed
+	*    twice over (one more looker in every cell), his defeat announced again. */
+void VictoryConditions::xfer( Xfer *xfer )
+{
+	XferVersion currentVersion = 1;
+	XferVersion version = currentVersion;
+	xfer->xferVersion( &version, currentVersion );
+
+	// indexed like m_players, which cachePlayerPtrs fills in player list order before the load gets here
+	xfer->xferUser( m_isDefeated, sizeof( m_isDefeated ) );
+	xfer->xferBool( &m_localPlayerDefeated );
+	xfer->xferBool( &m_singleAllianceRemaining );
+	xfer->xferUnsignedInt( &m_endFrame );
 }
 
 //-------------------------------------------------------------------------------------------------

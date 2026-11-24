@@ -32,6 +32,7 @@
 #define __VICTORYCONDITIONS_H__
 
 #include "Common/SubsystemInterface.h"
+#include "Common/Snapshot.h"
 #include "Lib/BaseType.h"
 
 class Player;
@@ -51,7 +52,7 @@ enum VictoryType
   * VictoryConditionsInterface class - maintains information about the game setup and
 	* the contents of its slot list hroughout the game.
 	*/
-class VictoryConditionsInterface : public SubsystemInterface
+class VictoryConditionsInterface : public SubsystemInterface, public Snapshot	// Snapshot: who is already out, so a load does not knock him out again
 {
 public:
 	VictoryConditionsInterface() { m_victoryConditions = 0; }

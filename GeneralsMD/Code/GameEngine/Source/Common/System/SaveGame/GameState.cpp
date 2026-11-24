@@ -65,6 +65,7 @@
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/SidesList.h"
 #include "GameLogic/TerrainLogic.h"
+#include "GameLogic/VictoryConditions.h"
 #include "GameLogic/Weapon.h"
 
 #ifdef _INTERNAL
@@ -423,6 +424,7 @@ void GameState::init( void )
 	addSnapshotBlock( "CHUNK_TerrainLogic",						TheTerrainLogic,					SNAPSHOT_SAVELOAD );
 	addSnapshotBlock( "CHUNK_TeamFactory",						TheTeamFactory,						SNAPSHOT_SAVELOAD );
 	addSnapshotBlock( "CHUNK_Players",								ThePlayerList,						SNAPSHOT_SAVELOAD );
+	addSnapshotBlock( "CHUNK_VictoryConditions",			TheVictoryConditions,			SNAPSHOT_SAVELOAD );	// absent from older saves, which load without it
 	addSnapshotBlock( "CHUNK_GameLogic",							TheGameLogic,							SNAPSHOT_SAVELOAD );
 	addSnapshotBlock( "CHUNK_Pathfinder",							TheAI->pathfinder(),			SNAPSHOT_SAVELOAD );	// after the objects, which it puts back on the map; absent from older saves
 	addSnapshotBlock( "CHUNK_WeaponStore",						TheWeaponStore,						SNAPSHOT_SAVELOAD );	// absent from older saves, which load without it

@@ -144,6 +144,10 @@ WELL_DEPTH, WELL_LIP, WELL_CORNER = 4, 1.3, 0.5  # a glass well; its corner a sh
 BAND_DEPTH, BAND_LIP = 3, 1.0                   # a square band well (a card's price)
 RULE_DEPTH = 0.4                                # the gold rule inlaid under a winner's picture
 RECESS_CORNER, RECESS_DEPTH, RECESS_EDGE = 0.6, 2.4, 1.6
+# a HUD's density (the observer round of 2026-11-24): the lobby's shapes at half its spacing, since its 48 high
+# controls and gaps of 16 and 20 bury the map.  HUD_KEY a key, HUD_DROP a dropdown's and its companion key's height,
+# HUD_GAP (between keys in a row, between a head's parts and columns, from a plate's battlefield edge to its content)
+HUD_KEY, HUD_DROP, HUD_GAP = (44, 32), 36, (4, 8, 12)
 
 # slices: a 9-slice's corners NINE square and its edges and centre SLICE_EDGE long, every row (column) of an edge the
 # same along its stretch; a 3-slice's ends CAP wide and its middle SLICE_EDGE wide, every column the same

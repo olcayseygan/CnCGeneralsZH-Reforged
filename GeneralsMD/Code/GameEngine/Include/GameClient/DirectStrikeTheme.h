@@ -219,6 +219,7 @@ namespace DirectStrikeTheme
 		CLAMP_CHIP_FIELD_R,	///< a chip's right end without its caret block
 		CLAMP_BOX_TL, CLAMP_BOX_T, CLAMP_BOX_TR, CLAMP_BOX_L, CLAMP_BOX_C, CLAMP_BOX_R, CLAMP_BOX_BL, CLAMP_BOX_B, CLAMP_BOX_BR,
 		CLAMP_BAND_L, CLAMP_BAND_C, CLAMP_BAND_R,
+		CLAMP_WORD_L, CLAMP_WORD_C, CLAMP_WORD_R,	///< a clamp key for a word (MAIN MENU), ends 24, 72 high, "" H P I
 
 		// the observer HUD (the Ledger) on the common sheet: the wrapper's experiments/observer-console/PIECES.md
 		OBS_RADAR,					///< the radar's scope housing, 250 square, open left and bottom, its glass from 18 in
@@ -245,6 +246,32 @@ namespace DirectStrikeTheme
 		OBS_KEY_OPTIONS,
 		OBS_KEY_CHAT,
 		OBS_KEY_QUIT,
+
+		// the observer screen in the neutral HUD: the wrapper's experiments/proofs/2026-11-24/observer/README-observer.md
+		OBS_DESK_TL, OBS_DESK_T, OBS_DESK_TR, OBS_DESK_L, OBS_DESK_C, OBS_DESK_R, OBS_DESK_BL, OBS_DESK_B, OBS_DESK_BR,	///< corners 34, tiled, open right and bottom
+		OBS_SCOPE,					///< the radar's housing, 264 square, open left and bottom, its glass from 14 below the top
+		OBS_CLAMP_KEY_FREE,	///< the operator keys as clamp keys, 44x32, "" H P
+		OBS_CLAMP_KEY_FOLLOW,
+		OBS_CLAMP_KEY_DIRECTOR,
+		OBS_CLAMP_KEY_VIS_ALL,
+		OBS_CLAMP_KEY_VIS_TEAM,
+		OBS_CLAMP_KEY_VIS_PLAYER,
+		OBS_CLAMP_KEY_HIDE_RADAR,
+		OBS_CLAMP_KEY_HIDE_BOARD,
+		OBS_CLAMP_KEY_HIDE_DOSSIER,
+		OBS_CLAMP_KEY_OPTIONS,
+		OBS_CLAMP_KEY_CHAT,
+		OBS_CLAMP_KEY_QUIT,
+		OBS_CLAMP_KEY_STANDINGS,	///< 44x36, beside the stat dropdown; P while the standings are open
+		OBS_DROP_L, OBS_DROP_C, OBS_DROP_R,	///< the stat dropdown, 36 high, ends 16 and 44, "" H P
+		OBS_MUTE,						///< the Tab screen's mute key, 40 square, "" H P (P muted)
+		OBS_STAT_MARK_MONEY,	///< the standings' column marks, 18 square, white, tinted
+		OBS_STAT_MARK_INCOME,
+		OBS_STAT_MARK_ARMY,
+		OBS_STAT_MARK_KILLS,
+		OBS_STAT_MARK_POWER,
+		OBS_STAT_MARK_BUILDS,
+		OBS_STAT_MARK_SUPER,
 
 		PIECE_COUNT
 	};

@@ -106,6 +106,7 @@ static const Tint TINT_AMBER = { 0.99f, 0.62f, 0.17f };	///< offensive area powe
 static const Tint TINT_ORANGE = { 0.98f, 0.43f, 0.12f };	///< air strikes, Spectre
 static const Tint TINT_RED = { 0.93f, 0.19f, 0.12f };		///< superweapons, attack
 static const Tint TINT_BLUE = { 0.46f, 0.62f, 1.00f };	///< the EMP: Generals blue lifted to read on sand
+static const Tint TINT_RECON = { 0.56f, 0.86f, 1.00f };	///< reveals and scans: a pale cyan after the Uplink cursor, more than white on sand
 static const Tint TINT_TOXIN = { 0.50f, 0.93f, 0.30f };	///< anthrax, the retail cursor's green
 static const Tint TINT_GAMMA = { 0.36f, 0.96f, 0.78f };	///< Anthrax Gamma
 static const Tint TINT_LED = { 0.22f, 0.88f, 0.80f };		///< Turkiye's LED line, as on its command bar
@@ -1139,11 +1140,11 @@ static void describeDesign( Marker &m, const Object *caster, const SpecialPowerT
 		case DESIGN_TAYFUN:
 		case DESIGN_PARTICLE:	m.tint = TINT_RED;	break;
 		case DESIGN_BLIND:		m.tint = TINT_AMBER;	break;
-		case DESIGN_UAV:
 		case DESIGN_SPYSAT:
 		case DESIGN_SPYDRONE:
 		case DESIGN_RADAR:
-		case DESIGN_GPS:
+		case DESIGN_GPS:			m.tint = TINT_RECON;	break;
+		case DESIGN_UAV:
 		case DESIGN_AMBULANCE:
 		case DESIGN_DEMINE:
 		case DESIGN_REPAIR:		m.tint = TINT_WARM;	break;
@@ -4122,7 +4123,7 @@ static void drawMines( const DesignDraw &d )
 	for( Int i = 0; i < 6; ++i )
 	{
 		Real px, py;
-		d.at( (Real)i * MARKER_PI / 3.0f, R, px, py );
+		d.at( ( 15.0f + 60.0f * (Real)i ) * MARKER_DEG, R, px, py );		// off N, E, S and W, where the cursor triangles sit
 		studAt( d, px, py, 1.1f );
 	}
 	const Real sp = 0.33f * R;
@@ -5198,6 +5199,7 @@ static void drawDesign( const Marker &m, Real R, Real t, Real tl, Real app, Real
 		case DESIGN_TANKDROP:		along = across = 0.8f * R;	break;
 		case DESIGN_COMMANDO:		along = across = 0.8f * R;	break;
 		case DESIGN_CRUISE:			along = across = 0.744f * R;	break;
+		case DESIGN_NEUTRON:		along = across = R + 40.0f * d.k;	break;		// clear outside its countdown ring at R + 26k
 		case DESIGN_RAPID:			along = across = 0.62f * R;	axis = d.heading();	break;
 		case DESIGN_NAPALM:			along = 0.55f * R;	across = 1.15f * R;	axis = d.heading();	break;
 		case DESIGN_B3:					along = across = 52.0f;	axis = d.heading();	break;

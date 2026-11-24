@@ -11109,6 +11109,8 @@ void AIPlayer::sendAtSquatter( Object *squatter, Real worth, const std::vector<O
 
 /** The odds defendHome wants before it goes at a gun standing still outside the base, Easy the least careful. */
 static const AIRungReal OUTSIDE_BASE_ODDS = { { 1.0f, 1.5f, 2.0f }, AIKNOB_OPEN };
+/** How much worth over the intruders seen defendHome sends out of the idle army at home. */
+static const AIRungReal DEFEND_ODDS = { { 2.0f, 2.5f, 3.0f }, AIKNOB_OPEN };
 
 //----------------------------------------------------------------------------------------------------------
 /** A base under attack spends its bank on the fight.  A Hard USA rushed a minute in had two fighting
@@ -11284,7 +11286,18 @@ void AIPlayer::defendHome( void )
 		return;
 	}
 
-	Int sent = 0;
+	// Only what can hit it, nearest first, and at an aircraft only up to the rung's odds over what is seen of
+	// the intruders, those already on it counted.  Every idle unit at home used to go: a China on the turtle
+	// bench sent 248 at one scout Helix, met the human's 154-unit push in the open away from its guns and lost
+	// its base two minutes after the landing.  A ground push is still met by everything that can shoot it:
+	// capped by what had been seen of it, the first Crusaders over the wall drew 5 of 36 defenders, the rest
+	// came in handfuls and that base fell where it used to hold.  Apocalypse and Direct Strike seats play as
+	// they did: everything idle goes, in the list's order.
+	const Bool asBefore = (TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) ||
+		(TheLaneWarDirector != NULL && TheLaneWarDirector->isActive());
+	const Bool capped = intruder->isKindOf( KINDOF_AIRCRAFT );
+	Real worth = aiRatingLerp( m_rating, DEFEND_ODDS ) * intruderWorth;
+	std::vector<SquatterHunter> hunters;
 	for( std::vector<Object *>::const_iterator o = owned.begin(); o != owned.end(); ++o )
 	{
 		Object *obj = *o;
@@ -11292,14 +11305,43 @@ void AIPlayer::defendHome( void )
 				!isAtHome( obj->getPosition() ) || !leavesToFinish( obj ) )
 			continue;
 		const StateID state = obj->getAI()->getCurrentStateID();
-		if( state != AI_IDLE && state != AI_GUARD && state != AI_GUARD_RETALIATE && state != AI_MOVE_AND_TIGHTEN )
+		if( asBefore )
+		{
+			if( state == AI_IDLE || state == AI_GUARD || state == AI_GUARD_RETALIATE || state == AI_MOVE_AND_TIGHTEN )
+			{
+				SquatterHunter hunter;
+				hunter.unit = obj;
+				hunter.distSqr = 0.0f;
+				hunters.push_back( hunter );
+			}
 			continue;
-		obj->getAI()->aiAttackMoveToPosition( intruder->getPosition(), NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+		}
+		if( state != AI_IDLE && state != AI_GUARD && state != AI_GUARD_RETALIATE && state != AI_MOVE_AND_TIGHTEN )
+		{
+			if( obj->getAI()->getGoalObject() == intruder || obj->getAI()->getCurrentVictim() == intruder )
+				worth -= aiCombatPower( obj );
+			continue;
+		}
+		if( obj->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, intruder, CMD_FROM_AI ) < ATTACKRESULT_POSSIBLE_AFTER_MOVING )
+			continue;
+		SquatterHunter hunter;
+		hunter.unit = obj;
+		hunter.distSqr = sqr( obj->getPosition()->x - intruder->getPosition()->x ) + sqr( obj->getPosition()->y - intruder->getPosition()->y );
+		hunters.push_back( hunter );
+	}
+	if( !asBefore )
+		std::sort( hunters.begin(), hunters.end(), nearerHunter );
+	Int sent = 0;
+	for( size_t h = 0; h < hunters.size() && (asBefore || !capped || worth > 0.0f); ++h )
+	{
+		hunters[ h ].unit->getAI()->aiAttackMoveToPosition( intruder->getPosition(), NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+		worth -= aiCombatPower( hunters[ h ].unit );
 		++sent;
 	}
 	if( sent > 0 )
-		DEBUG_LOG(("AI DEFEND frame %d player %d sends %d idle units at the intruder '%s' at (%.0f,%.0f)\n", TheGameLogic->getFrame(),
-			m_player->getPlayerIndex(), sent, intruder->getTemplate()->getName().str(), intruder->getPosition()->x, intruder->getPosition()->y));
+		DEBUG_LOG(("AI DEFEND frame %d player %d sends %d of %d idle units at the intruder '%s' at (%.0f,%.0f), worth %.0f\n", TheGameLogic->getFrame(),
+			m_player->getPlayerIndex(), sent, (Int)hunters.size(), intruder->getTemplate()->getName().str(), intruder->getPosition()->x, intruder->getPosition()->y,
+			intruderWorth));
 }
 
 /** How often the army is looked at for a part of the enemy's nothing answers, how big a part has to be
@@ -24362,7 +24404,15 @@ void AIPlayer::refreshRatedProfile( void )
 	if( m_rating > AI_RATING_HARD )
 	{
 		AIDifficultyProfile hardScratch;
-		m_ratedProfile.m_minAttackPower = TheAI->getRatedProfile( AI_RATING_HARD, &hardScratch )->m_minAttackPower;
+		const AIDifficultyProfile *hard = TheAI->getRatedProfile( AI_RATING_HARD, &hardScratch );
+		m_ratedProfile.m_minAttackPower = hard->m_minAttackPower;
+		// and a unit under fire answers it as Hard does: on the curve an Elo 4200 seat wanted 4.4 times the
+		// worth of what covers a gun before it would go for it, and every unit within 112 of one hit left with
+		// it, so its larger army spent the fights walking away (259 "still holding, let go" Red Guards in one
+		// 27,000-frame match against Elo 2600)
+		m_ratedProfile.m_fireChargeOdds = hard->m_fireChargeOdds;
+		m_ratedProfile.m_fireWordRadius = hard->m_fireWordRadius;
+		m_ratedProfile.m_retreatTtkRatio = hard->m_retreatTtkRatio;
 	}
 }
 
@@ -26431,6 +26481,7 @@ static const AIRatingTable s_ratingTables[] =
 	AI_TABLE_INT( SCRIPTLESS_SUPERWEAPON_SECONDS ),
 	AI_TABLE_REAL( KILL_ZONE_WEIGHT ),
 	AI_TABLE_REAL( OUTSIDE_BASE_ODDS ),
+	AI_TABLE_REAL( DEFEND_ODDS ),
 	AI_TABLE_INT( PERSONA_FAVOURED_DEPTH ),
 	AI_TABLE_INT( KIND_FAVOURED_DEPTH ),
 	AI_TABLE_INT( INFANTRY_FAVOURED_DEPTH ),

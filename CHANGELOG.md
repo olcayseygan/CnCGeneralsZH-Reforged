@@ -8,6 +8,13 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## The levels above Hard stand and fight
+
+- Brutal, Vicious, Savage and Insane grew more careful with every step past Hard. A unit hit by a gun wanted ever better odds before it would go for it (4.4 times the worth of what covers the gun at Insane, twice at Hard), and every unit near it walked away with it, so the extra army the higher levels build spent its fights leaving: one Insane China logged 259 soldiers backing out of fire in a single match. Above Hard a unit under fire now answers it as Hard does. Against Hard, 40 games each at double speed on the same maps: Brutal wins 23 to 11 (17 to 13 before), Vicious 21 to 12 (20 to 12) and Insane 21 to 14 (23 to 12), and Insane now kills 137 units a game to Hard's 108 where both killed 114. Insane against Vicious is 20 to 14. Only Brutal's step clears the noise of 40 games; Vicious is not yet a step above Brutal.
+- When your helicopter flew over the computer's base, every idle unit it had went after it. A China computer on a small map sent 248 units at one scout Helix, met the 154-tank push behind it out in the open, away from its own guns, and lost its base two minutes later. Now only units that can hit the intruder go, nearest first, and against an aircraft only enough to beat what it sees: 36 went in that match and the base held to the end. A ground push is still met by everything that can shoot it.
+- Against the walled-in player who masses and attacks at minute 15 and 25, nine games a level: he now wins 1 of 9 against Medium, 1 against Hard, 1 against Vicious and none against Insane (0, 1, 2 and 1 before), and the computer wins 5, 5, 6 and 6 (5 at every level before).
+- Replays with a computer player recorded before this change will not play back.
+
 ## The computer builds its base and stays to hold it
 
 - A building you put up near the computer's base used to freeze its own base plan for the whole match. EA's AI treats any enemy building near a spot as danger and skips the spot, every time, and never tries another. On a small map a turtle's power plants stood 350 to 400 from the computer's base: a Medium China never built its first power plant and so built nothing at all, and an Insane China got one barracks, no War Factory and 13 of the 44 guns it wanted, and met a 154-tank push at minute 15 with an army of infantry and 100,000 in the bank. A building that cannot shoot no longer counts as danger inside the computer's own base, and a planned building whose spot is really under the guns moves to the nearest safe spot in the base instead of waiting all match.

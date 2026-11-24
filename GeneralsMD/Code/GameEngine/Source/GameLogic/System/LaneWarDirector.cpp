@@ -55,6 +55,8 @@
 #include "GameLogic/Module/JetAIUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
+#include "GameLogic/Module/SubObjectsUpgrade.h"
+#include "GameLogic/Module/UpgradeModule.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PolygonTrigger.h"
@@ -459,8 +461,69 @@ Bool LaneWar_isHero( const Player *player, const ThingTemplate *tmpl )
 	return FALSE;
 }
 
+/** One of the template's own upgrade modules answers the upgrade, read off its INI: a weapon set, armour,
+	  a weapon bonus and the like.  One that only shows model parts does not count, as in
+	  Object::affectedByUpgrade. */
+static Bool templateTakesUpgrade( const ThingTemplate *tmpl, const UpgradeTemplate *upgrade )
+{
+	const ModuleInfo &info = tmpl->getBehaviorModuleInfo();
+	const char *name = upgrade->getUpgradeName().str();
+	for( Int i = 0; i < info.getCount(); ++i )
+	{
+		const UpgradeModuleData *data = dynamic_cast<const UpgradeModuleData *>( info.getNthData( i ) );
+		if( data == NULL || dynamic_cast<const SubObjectsUpgradeModuleData *>( data ) != NULL )
+			continue;
+		// TriggeredBy sits in the activation names until the first object of the kind works its mask out
+		// (UpgradeMuxData::getUpgradeActivationMasks), then in the trigger names: either list, so the answer
+		// does not hang on whether one has been made yet
+		const UpgradeMuxData &mux = data->m_upgradeMuxData;
+		for( size_t k = 0; k < mux.m_activationUpgradeNames.size(); ++k )
+			if( strcasecmp( mux.m_activationUpgradeNames[ k ].str(), name ) == 0 )
+				return TRUE;
+		for( size_t k = 0; k < mux.m_triggerUpgradeNames.size(); ++k )
+			if( strcasecmp( mux.m_triggerUpgradeNames[ k ].str(), name ) == 0 )
+				return TRUE;
+	}
+	return FALSE;
+}
+
+/** A Mixed seat's player upgrades (the owner's call of 2026-11-24): every entry of the three sides' lists,
+	  whatever general it is tagged for, that one of the seat's rolled units takes, in table order, USA first,
+	  at most LANEWAR_MIXED_UPGRADES_MAX so the HUD's deck shows all of them. */
+static Int mixedUpgrades( Int team, Int seat, const UpgradeTemplate **out, Int maxItems )
+{
+	LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
+	const Int units = TheLaneWarDirector->getMixedRoster( team, seat, roster, LANEWAR_ROSTER_MAX );
+	const UpgradeEntry *const tables[ 3 ] = { USA_UPGRADES, CHINA_UPGRADES, GLA_UPGRADES };
+	const Int sizes[ 3 ] = { (Int)( sizeof( USA_UPGRADES ) / sizeof( USA_UPGRADES[ 0 ] ) ), (Int)( sizeof( CHINA_UPGRADES ) / sizeof( CHINA_UPGRADES[ 0 ] ) ),
+													 (Int)( sizeof( GLA_UPGRADES ) / sizeof( GLA_UPGRADES[ 0 ] ) ) };
+	maxItems = min( maxItems, (Int)LANEWAR_MIXED_UPGRADES_MAX );
+	Int count = 0;
+	for( Int t = 0; t < 3; ++t )
+		for( Int i = 0; i < sizes[ t ] && count < maxItems; ++i )
+		{
+			const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( tables[ t ][ i ].name );
+			if( upgrade == NULL || upgrade->getUpgradeType() != UPGRADE_TYPE_PLAYER )
+				continue;
+			Bool listed = FALSE;
+			for( Int k = 0; k < count && !listed; ++k )
+				listed = out[ k ] == upgrade;
+			Bool taken = FALSE;
+			for( Int u = 0; u < units && !taken && !listed; ++u )
+				taken = templateTakesUpgrade( roster[ u ].thing, upgrade );
+			if( taken )
+				out[ count++ ] = upgrade;
+		}
+	return count;
+}
+
 Int LaneWar_upgrades( const Player *player, const UpgradeTemplate **out, Int maxItems )
 {
+	// a Mixed seat buys what its rolled units take, from whichever side sells it
+	Int team, seat;
+	if( TheLaneWarDirector != NULL && TheLaneWarDirector->isMixed() && TheLaneWarDirector->seatOf( player, &team, &seat ) )
+		return mixedUpgrades( team, seat, out, maxItems );
+
 	AsciiString tag;
 	const Int side = laneSide( player, &tag );
 	const UpgradeEntry *table = side == 0 ? USA_UPGRADES : side == 1 ? CHINA_UPGRADES : GLA_UPGRADES;
@@ -941,6 +1004,18 @@ void LaneWarDirector::newMap( Bool loadingSaveGame )
 			}
 			DEBUG_LOG(( "LANEWAR: player %d %s %sroster of %d:%s\n", player->getPlayerIndex(), player->getSide().str(), m_mixed ? "mixed " : "",
 									count, names.str() ));
+			if( m_mixed )
+			{
+				const UpgradeTemplate *upgrades[ LANEWAR_ROSTER_MAX ];
+				const Int listed = LaneWar_upgrades( player, upgrades, LANEWAR_ROSTER_MAX );
+				names.clear();
+				for( Int i = 0; i < listed; ++i )
+				{
+					names.concat( ' ' );
+					names.concat( upgrades[ i ]->getUpgradeName() );
+				}
+				DEBUG_LOG(( "LANEWAR: player %d mixed upgrades %d:%s\n", player->getPlayerIndex(), listed, names.str() ));
+			}
 		}
 }
 

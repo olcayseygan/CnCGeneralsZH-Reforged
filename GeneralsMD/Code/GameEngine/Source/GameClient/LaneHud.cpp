@@ -1272,6 +1272,8 @@ static void drawDeck( void )
 	tip( d, label( "GUI:LaneUpgrades" ) );
 }
 
+static_assert( LANEWAR_MIXED_UPGRADES_MAX + 1 <= LANEHUD_UPGRADE_CELLS, "the deck shows every upgrade a Mixed seat may buy" );
+
 /// the open deck: the income tier first, then the side's upgrades, each a card with its price or the check
 static void drawUpgrades( void )
 {

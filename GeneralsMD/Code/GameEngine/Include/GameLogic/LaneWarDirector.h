@@ -304,6 +304,7 @@ enum
 	LANEWAR_MIXED_TIER2 = 5,
 	LANEWAR_MIXED_TIER3 = 4,
 	LANEWAR_MIXED_MAX = LANEWAR_MIXED_TIER1 + LANEWAR_MIXED_TIER2 + LANEWAR_MIXED_TIER3 + 1,
+	LANEWAR_MIXED_UPGRADES_MAX = 12,			///< a Mixed seat's player upgrades at most, what the HUD's upgrade deck holds beside the income card (LANEHUD_UPGRADE_CELLS)
 };
 
 /** The pool a Mixed seat draws from for that tier (0 for the heroes): every base-roster entry of the USA,
@@ -313,7 +314,8 @@ extern Int LaneWar_mixedPool( Int tier, const char **out, Int maxItems );
 /// the template is the hero of the player's roster
 extern Bool LaneWar_isHero( const Player *player, const ThingTemplate *tmpl );
 
-/// the player upgrades the player's side or general sells in Lane War, as LaneWar_roster resolves units
+/** the player upgrades the player's side or general sells in Lane War, as LaneWar_roster resolves units; a
+	  Mixed seat's are those of any side that one of its rolled units takes */
 extern Int LaneWar_upgrades( const Player *player, const UpgradeTemplate **out, Int maxItems );
 
 /** Direct Strike's own scale on a few of EA's guns, a percent of what the hit would do: the artillery

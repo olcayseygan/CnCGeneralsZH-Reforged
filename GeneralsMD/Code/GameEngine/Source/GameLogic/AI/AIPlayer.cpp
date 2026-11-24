@@ -14529,6 +14529,8 @@ void AIPlayer::buyGunshipChinook( void )
 }
 
 //----------------------------------------------------------------------------------------------------------
+static const Int WAVE_PATH_MAX_POINTS = 256;	///< a path that links back on itself stops being walked here
+
 void AIPlayer::sendWave( AIGroup *wave, const AsciiString &approach, Int pathSuffix, Int teams, Real power, UnsignedInt heldFrames, const char *cause )
 {
 	Coord3D center;
@@ -14536,6 +14538,30 @@ void AIPlayer::sendWave( AIGroup *wave, const AsciiString &approach, Int pathSuf
 	AsciiString pathLabel;
 	pathLabel.format( "%s%d", approach.str(), pathSuffix );
 	Waypoint *way = TheTerrainLogic->getClosestWaypointOnPath( &center, pathLabel );
+	// an approach that ends at home leads nowhere: on a small map the enemy's start lies inside our own home
+	// ring, and once that base is taken or overrun what is left of the enemy stands elsewhere.  A wave that
+	// walked it went idle at home, was called up again the next wave tick and walked it again; a Savage USA
+	// that had taken a GLA command centre beside its base re-sent the same teams 4,005 times and ran the
+	// match out with 267,000 of army never in a fight.  It hunts instead, which takes it to whatever of the
+	// enemy is nearest, and with nothing it can find it stays where it is without an order
+	if( way )
+	{
+		const Waypoint *end = way;
+		for( Int i = 0; i < WAVE_PATH_MAX_POINTS && end->getNumLinks() > 0; ++i )
+			end = end->getLink( 0 );
+		if( isAtHome( end->getLocation() ) )
+		{
+			const VecObjectID &ids = wave->getAllIDs();
+			Object *first = ids.empty() ? NULL : TheGameLogic->findObjectByID( ids.front() );
+			if( first == NULL || first->getAI() == NULL ||
+					TheAI->findClosestEnemy( first, HUNT_REACH, AI::CAN_ATTACK | AI::ANY_WILL_DO, first->getAI()->getAttackInfo() ) == NULL )
+				return;
+			DEBUG_LOG(("AI WAVE frame %d player %d hunts with %d units, %s ends at home\n", TheGameLogic->getFrame(),
+				m_player->getPlayerIndex(), wave->getCount(), pathLabel.str()));
+			wave->groupHunt( CMD_FROM_AI );
+			return;
+		}
+	}
 	// the ranked units pullOutRanked has out of their teams, mending or on the way, against the whole army
 	Int rankedOut = 0;
 	Real rankedOutPower = 0.0f;
@@ -15211,8 +15237,6 @@ void AIPlayer::sendIdleUnitsHunting( void )
 	* fighting.  The path is ordered first and the tunnel replaces it for whoever can go in, so a
 	* member that cannot - an aircraft, anything the tunnel refuses - still has the path. */
 //----------------------------------------------------------------------------------------------------------
-static const Int WAVE_PATH_MAX_POINTS = 256;	///< a path that links back on itself stops being walked here
-
 void AIPlayer::sendWaveThroughTunnels( AIGroup *wave, const Coord3D *center, Waypoint *way )
 {
 	Real walk = (Real)sqrt( sqr( way->getLocation()->x - center->x ) + sqr( way->getLocation()->y - center->y ) );

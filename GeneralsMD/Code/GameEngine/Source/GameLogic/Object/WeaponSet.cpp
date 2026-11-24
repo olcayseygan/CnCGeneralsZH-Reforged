@@ -358,6 +358,22 @@ void WeaponSet::loadPostProcess( void )
 }  // end loadPostProcess
 
 //-------------------------------------------------------------------------------------------------
+/** A save names a set by the template that declared it, and an ObjectReskin (the Technical's three
+	* chassis) holds copies of the sets of the template it reskins, each still naming that one.  The load
+	* found the original's set, never the object's own copy, so the next updateWeaponSet took the two
+	* for different sets and built every weapon again: full clips and reload timers the game that was
+	* saved never had. */
+void WeaponSet::friend_takeOwnTemplateSet( const ThingTemplate *own )
+{
+	if( m_curWeaponTemplateSet == NULL || own == NULL )
+		return;
+	const WeaponSetFlags &flags = m_curWeaponTemplateSet->friend_getWeaponSetFlags();
+	const WeaponTemplateSet *mine = own->findWeaponTemplateSet( flags );
+	if( mine != NULL && mine->friend_getWeaponSetFlags() == flags )
+		m_curWeaponTemplateSet = mine;
+}
+
+//-------------------------------------------------------------------------------------------------
 void WeaponSet::updateWeaponSet(const Object* obj)
 {
 	const WeaponTemplateSet* set = obj->getTemplate()->findWeaponTemplateSet(obj->getWeaponSetFlags());

@@ -5149,6 +5149,8 @@ void Object::xfer( Xfer *xfer )
 	else
 		m_isReceivingDifficultyBonus = FALSE;
 
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_weaponSet.friend_takeOwnTemplateSet( getTemplate() );
 	// The partition's threat and value maps are not saved, they are the sum of what every object last
 	// put on them.  So each object carries its own part and puts it back, and the load no longer
 	// has every object take its old part off and add a new one where it stands (PartitionManager::xfer).

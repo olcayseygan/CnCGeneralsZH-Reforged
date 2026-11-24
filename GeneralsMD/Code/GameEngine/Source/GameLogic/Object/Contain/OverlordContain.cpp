@@ -35,6 +35,7 @@
 
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Common/GameState.h"
 #include "Common/Player.h"
 #include "Common/Xfer.h"
 #include "Common/ThingTemplate.h"
@@ -112,6 +113,10 @@ OverlordContain::~OverlordContain( void )
 
 void OverlordContain::onObjectCreated( void )
 {
+	// a save holds the payload as an object of its own, put back in here when the contain list loads; made
+	// again here it was a second Avenger turret left loose in the loaded game
+	if( TheGameState->isInLoadGame() )
+		return;
   OverlordContain::createPayload();
 }
 

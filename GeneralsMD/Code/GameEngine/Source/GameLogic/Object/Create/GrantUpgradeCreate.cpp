@@ -31,6 +31,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #define DEFINE_OBJECT_STATUS_NAMES
+#include "Common/GameState.h"
 #include "Common/Player.h"
 #include "Common/Upgrade.h"
 #include "Common/Xfer.h"
@@ -82,6 +83,13 @@ GrantUpgradeCreate::~GrantUpgradeCreate( void )
 //-------------------------------------------------------------------------------------------------
 void GrantUpgradeCreate::onCreate( void )
 {
+	// A save brings the upgrade back with the object, and the object is made on the neutral team at the
+	// map's corner before its own data is read.  Granting it here put an Infantry General bunker's
+	// minefield down twice round (0,0), two real mines nobody saved, and a player upgrade went to the
+	// neutral player.
+	if( TheGameState->isInLoadGame() )
+		return;
+
 
 	ObjectStatusMaskType exemptStatus = getGrantUpgradeCreateModuleData()->m_exemptStatus;
 	ObjectStatusMaskType currentStatus = getObject()->getStatusBits();

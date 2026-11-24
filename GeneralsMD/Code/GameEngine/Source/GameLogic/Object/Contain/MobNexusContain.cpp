@@ -30,6 +30,7 @@
 
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Common/GameState.h"
 #include "Common/Player.h"
 #include "Common/ThingTemplate.h"
 #include "Common/ThingFactory.h"
@@ -314,8 +315,9 @@ void MobNexusContain::onObjectCreated()
 	const ThingTemplate* payloadTemplate = TheThingFactory->findTemplate( self->m_initialPayload.name );
 	Object* object = getObject();
 
-	// a payload the data names but does not define is skipped; newObject throws on it
-	if( payloadTemplate == NULL )
+	// a payload the data names but does not define is skipped; newObject throws on it.  A save holds the
+	// payload and puts it back (see OverlordContain::onObjectCreated)
+	if( payloadTemplate == NULL || TheGameState->isInLoadGame() )
 		return;
 
 	for( int i = 0; i < count; i++ )

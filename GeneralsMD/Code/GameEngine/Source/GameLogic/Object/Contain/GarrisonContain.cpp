@@ -1780,8 +1780,9 @@ void GarrisonContain::onObjectCreated()
 	const ThingTemplate* rosterTemplate = TheThingFactory->findTemplate( self->m_initialRoster.templateName );
 	Object* object = getObject();
 
-	// a roster the data names but does not define is skipped; newObject throws on it
-	if( rosterTemplate == NULL )
+	// a roster the data names but does not define is skipped; newObject throws on it.  A save holds the
+	// roster and puts it back (see OverlordContain::onObjectCreated)
+	if( rosterTemplate == NULL || TheGameState->isInLoadGame() )
 		return;
 
 	for( int i = 0; i < count; i++ )

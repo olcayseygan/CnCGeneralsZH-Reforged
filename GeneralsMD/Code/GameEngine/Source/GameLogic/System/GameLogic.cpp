@@ -7466,7 +7466,12 @@ void GameLogic::loadPostProcess( void )
 	Object *obj;
 	for( obj = getFirstObject(); obj; obj = obj->getNextObject() )
 		if( obj->getID() >= m_nextObjID )
+		{
+			// only an object the load made itself, one the save never held, has an ID past the save's counter
+			DEBUG_LOG(( "GameLogic::loadPostProcess - %s %u was made by the load, past the save's object counter %u\n",
+				obj->getTemplate()->getName().str(), (UnsignedInt)obj->getID(), (UnsignedInt)m_nextObjIDFromSave ));
 			m_nextObjID = (ObjectID)((UnsignedInt)obj->getID() + 1);
+		}
 
 	TheAI->loadPostProcessGroups();
 

@@ -34,6 +34,7 @@
 
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Common/GameState.h"
 #include "Common/Player.h"
 #include "Common/Xfer.h"
 #include "Common/ThingTemplate.h"
@@ -114,6 +115,8 @@ HelixContain::~HelixContain( void )
 
 void HelixContain::onObjectCreated( void )
 {
+	if( TheGameState->isInLoadGame() )
+		return;	// the save holds the payload and puts it back, see OverlordContain::onObjectCreated
   HelixContain::createPayload();
 }
 

@@ -12887,8 +12887,7 @@ static void drawObserverReadout( const UnicodeString &text, const IRegion2D &cam
 
 //=================================================================================================
 // The observer HUD, V1 "Ledger" (the owner's pick of 2026-11-24 after the full-width console; the
-// contract is experiments/observer-console/PIECES.md in the wrapper, the mock C:\zhr-proofs\2026-11-24\
-// observer-minimal\V1\).  Three modules, each anchored on its own, sized to what it holds and hidden on
+// contract is experiments/observer-console/PIECES.md in the wrapper).  Three modules, each anchored on its own, sized to what it holds and hidden on
 // its own: the radar in the bottom left corner, a board flush with the bottom right corner (the match
 // chip, the operator keys and the stat selector as its head, then a 20 px line a seat, team headers only
 // when teams have seats to group) whose height follows the seats, and a dossier card left of the board,

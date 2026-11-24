@@ -293,12 +293,24 @@ static Bool theWinsockStarted = FALSE;
 static Bool theHandshakeDone = FALSE;
 static std::vector<char> theIncoming;
 
-/// a world command waiting for the next logic frame; produce and construct reply only once they ran
+/// a world command waiting for the next logic frame; produce, construct and sell reply only once they ran
 struct PendingCommand
 {
 	AsciiString line;
 	Bool replyWhenRun;
 };
+
+/// the verb a reply-when-run order answers as, or NULL for a world command that answers "queued"
+static const char *replyWhenRunVerb( ScenarioActionType action )
+{
+	switch (action)
+	{
+		case SCENARIO_ACTION_PRODUCE:		return "produce";
+		case SCENARIO_ACTION_CONSTRUCT:	return "construct";
+		case SCENARIO_ACTION_SELL:			return "sell";
+		default:												return NULL;
+	}
+}
 static std::vector<PendingCommand> thePendingCommands;
 /* What arrives while a step runs waits here until the step is answered.  A step can hand the pass back
 	 between its frames (GameEngine's lockstep burst), so a command queued straight away would land on a
@@ -709,8 +721,10 @@ static void dropCommands( std::vector<PendingCommand> &commands )
 	for (std::vector<PendingCommand>::const_iterator it = commands.begin(); it != commands.end(); ++it)
 	{
 		if (it->replyWhenRun)
-			replyMembers( FALSE, strncmp( it->line.str(), "produce", 7 ) == 0 ? "produce" : "construct",
-										"\"error\":\"the match ended before the order ran\"" );
+		{
+			const std::string line( it->line.str() );
+			replyMembers( FALSE, line.substr( 0, line.find( ' ' ) ).c_str(), "\"error\":\"the match ended before the order ran\"" );
+		}
 	}
 	commands.clear();
 }
@@ -1518,14 +1532,15 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
-	/* The socket's produce and construct act for any seat, outside the command stream, so in a -netgame
+	/* The socket's produce, construct and sell act for any seat, outside the command stream, so in a -netgame
 		 match or on an online test server they would put this machine's game on its own.  spawn and the
-		 rest keep the terms above on purpose; these two are an offline learner's. */
-	const Bool replyWhenRun = action.action == SCENARIO_ACTION_PRODUCE || action.action == SCENARIO_ACTION_CONSTRUCT;
+		 rest keep the terms above on purpose; these three are an offline learner's. */
+	const char *orderVerb = replyWhenRunVerb( action.action );
+	const Bool replyWhenRun = orderVerb != NULL;
 	if (replyWhenRun && (TheGameLogic->isInMultiplayerGame() || TheNetwork != NULL))
 	{
-		replyMembers( FALSE, action.action == SCENARIO_ACTION_PRODUCE ? "produce" : "construct",
-									"\"error\":\"produce and construct run only in an offline skirmish: one machine's order would split a network match\"" );
+		replyMembers( FALSE, orderVerb,
+									"\"error\":\"produce, construct and sell run only in an offline skirmish: one machine's order would split a network match\"" );
 		return;
 	}
 
@@ -1535,7 +1550,7 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
-	/* produce and construct answer with what happened, once the logic frame has run them
+	/* produce, construct and sell answer with what happened, once the logic frame has run them
 		 (ScenarioDrill_controlOrder); in lockstep that is inside the next step, ahead of its own reply.
 		 Sent during a step, a command waits for that step's reply and runs on the next one's first frame. */
 	PendingCommand pending;
@@ -1677,7 +1692,7 @@ void ControlServer_runCommands( void )
 		{
 			AsciiString members;
 			const Bool took = ScenarioDrill_controlOrder( action, &members );
-			replyMembers( took, action.action == SCENARIO_ACTION_PRODUCE ? "produce" : "construct", members.str() );
+			replyMembers( took, replyWhenRunVerb( action.action ), members.str() );
 			continue;
 		}
 		ScenarioDrill_execute( action );

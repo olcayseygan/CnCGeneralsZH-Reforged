@@ -140,7 +140,8 @@ static Bool isScenarioSpace( char c )
 }
 
 /** Split a line into whitespace-separated tokens, stopping at a comment.  Returns how many it
-	  found, which may be more than maxTokens - the caller checks the count it wanted. */
+	  found, which may be more than maxTokens - the caller checks the count it wanted.  A '#' that
+	  starts a token and is followed by a digit is an id selector ("#12,40,77"), not a comment. */
 static Int tokenizeScenarioLine( const char *line, AsciiString *tokens, Int maxTokens )
 {
 	Int found = 0;
@@ -151,17 +152,20 @@ static Int tokenizeScenarioLine( const char *line, AsciiString *tokens, Int maxT
 		while (*at != 0 && isScenarioSpace( *at ))
 			++at;
 
-		if (*at == 0 || *at == SCENARIO_COMMENT_CHAR)
+		const Bool idList = *at == SCENARIO_COMMENT_CHAR && at[ 1 ] >= '0' && at[ 1 ] <= '9';
+		if (*at == 0 || (*at == SCENARIO_COMMENT_CHAR && !idList))
 			break;
 
 		const char *start = at;
+		if (idList)
+			++at;
 		while (*at != 0 && !isScenarioSpace( *at ) && *at != SCENARIO_COMMENT_CHAR)
 			++at;
 
 		if (found < maxTokens)
 		{
 			const Int length = (Int)(at - start);
-			char word[ 128 ];
+			char word[ 2048 ];	// an id selector can list a whole army
 			const Int copied = (length < (Int)sizeof( word ) - 1) ? length : (Int)sizeof( word ) - 1;
 			memcpy( word, start, copied );
 			word[ copied ] = 0;
@@ -306,6 +310,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_LANECASH;
 	else if (token == "groupqueue")
 		*action = SCENARIO_ACTION_GROUPQUEUE;
+	else if (token == "sell")
+		*action = SCENARIO_ACTION_SELL;
 	else
 		return FALSE;
 
@@ -432,6 +438,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_LANEUNITUPGRADE:	return SCENARIO_TOKENS_ATTACK + 1;
 		case SCENARIO_ACTION_LANECASH:		return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_GROUPQUEUE:	return SCENARIO_TOKENS_MOVE;
+		case SCENARIO_ACTION_SELL:				return SCENARIO_TOKENS_STOP;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -733,6 +740,7 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 		case SCENARIO_ACTION_AUTOGARRISON:
 		case SCENARIO_ACTION_AUTOREPAIR:
 		case SCENARIO_ACTION_PURCHASE:
+		case SCENARIO_ACTION_SELL:
 			break;
 	}
 
@@ -962,6 +970,31 @@ static Bool selectorMatches( const AsciiString &selector, const Object *obj )
 {
 	if (selector == SCENARIO_SELECTOR_ALL)
 		return TRUE;
+
+	// "#12,40,77": those object ids (the ids objects reports); a missing or dead one simply matches nothing
+	// ponytail: the list is re-read per object, O(objects x ids); parse once into the action if it ever shows in a frame
+	if (selector.str()[ 0 ] == SCENARIO_COMMENT_CHAR)
+	{
+		// digits only and at most nine of them, so every platform reads the same ids (no strtoul: its long differs)
+		const char *at = selector.str() + 1;
+		for (;;)
+		{
+			Int id = 0, digits = 0;
+			for (; *at >= '0' && *at <= '9'; ++at)
+			{
+				if (++digits > 9)
+					return FALSE;
+				id = id * 10 + (*at - '0');
+			}
+			if (digits == 0)
+				return FALSE;
+			if ((ObjectID)id == obj->getID())
+				return TRUE;
+			if (*at != ',')
+				return FALSE;
+			++at;
+		}
+	}
 
 	const ThingTemplate *tmpl = obj->getTemplate();
 	if (tmpl == NULL)
@@ -2760,6 +2793,8 @@ static Bool executeHandover( const ScenarioAction &action, Player *player, const
 	return arrived;
 }
 
+static Bool controlSell( const ScenarioAction &action, Player *player, AsciiString *members );
+
 Bool ScenarioDrill_execute( const ScenarioAction &action )
 {
 	Player *player = findPlayerForSlot( action.slot );
@@ -2863,6 +2898,12 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 		}
 		TheLaneWarDirector->onOrder( player, kind, args, argCount );
 		return TRUE;
+	}
+
+	if (action.action == SCENARIO_ACTION_SELL)
+	{
+		AsciiString members;
+		return controlSell( action, player, &members );
 	}
 
 	Coord3D position;
@@ -3349,6 +3390,53 @@ static Bool controlConstruct( const ScenarioAction &action, Player *player, cons
 	return TRUE;
 }
 
+/** sell: the sell button on one structure, as MSG_SELL with its id handed to the dispatcher for that
+	  seat inside this frame, the checks the dispatcher makes in silence answered out loud first.  The
+	  money comes when the sale finishes, as it does for the player. */
+static Bool controlSell( const ScenarioAction &action, Player *player, AsciiString *members )
+{
+	AsciiString why;
+	const char *text = action.selector.str();
+	if (*text == SCENARIO_COMMENT_CHAR)
+		++text;
+	Int id = 0;
+	const Bool fits = strlen( text ) <= 9;	// parseWholeNumber has no overflow check
+	Object *obj = fits && parseWholeNumber( AsciiString( text ), &id ) ? TheGameLogic->findObjectByID( (ObjectID)id ) : NULL;
+	if (obj == NULL || obj->isEffectivelyDead())
+		why.format( "no living object %s", action.selector.str() );
+	else if (obj->getControllingPlayer() != player)
+		why.format( "%s %d is not slot %d's", obj->getTemplate()->getName().str(), id, action.slot );
+	else if (!obj->isKindOf( KINDOF_STRUCTURE ))
+		why.format( "%s %d is not a structure", obj->getTemplate()->getName().str(), id );
+	else if (obj->testStatus( OBJECT_STATUS_SOLD ))
+		why.format( "%s %d is already being sold", obj->getTemplate()->getName().str(), id );
+	else if (!AIGroup::mayPlayerSell( obj ))
+		why.format( "%s %d cannot be sold (no sell button, unfinished or held)", obj->getTemplate()->getName().str(), id );
+	if (why.isNotEmpty())
+	{
+		DEBUG_LOG(("CONTROL: frame %d sell slot %d %s refused: %s\n", TheGameLogic->getFrame(), action.slot, action.selector.str(), why.str()));
+		controlError( members, why );
+		return FALSE;
+	}
+
+	GameMessage *msg = newInstance( GameMessage )( GameMessage::MSG_SELL );
+	msg->friend_setPlayerIndex( player->getPlayerIndex() );
+	msg->appendObjectIDArgument( obj->getID() );
+	TheGameLogic->logicMessageDispatcher( msg, NULL );
+	msg->deleteInstance();
+
+	const Bool selling = obj->testStatus( OBJECT_STATUS_SOLD );
+	DEBUG_LOG(("CONTROL: frame %d sell slot %d '%s' %d: %s\n", TheGameLogic->getFrame(), action.slot,
+						 obj->getTemplate()->getName().str(), id, selling ? "selling" : "dropped"));
+	if (!selling)
+	{
+		controlError( members, AsciiString( "the dispatcher dropped the order" ) );
+		return FALSE;
+	}
+	members->format( "\"id\":%d,\"template\":\"%s\"", id, obj->getTemplate()->getName().str() );
+	return TRUE;
+}
+
 Bool ScenarioDrill_controlOrder( const ScenarioAction &action, AsciiString *members )
 {
 	Player *player = findPlayerForSlot( action.slot );
@@ -3361,6 +3449,8 @@ Bool ScenarioDrill_controlOrder( const ScenarioAction &action, AsciiString *memb
 	}
 	if (action.action == SCENARIO_ACTION_PRODUCE)
 		return controlProduce( action, player, members );
+	if (action.action == SCENARIO_ACTION_SELL)
+		return controlSell( action, player, members );
 
 	Coord3D site;
 	if (!resolveScenarioPosition( action, &site ))

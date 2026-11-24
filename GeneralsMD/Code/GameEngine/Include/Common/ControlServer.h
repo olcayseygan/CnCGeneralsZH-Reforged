@@ -37,6 +37,10 @@
 //   attack <slot> <selector> <targetSlot> <targetSelector>
 //   stop <slot> <selector>
 //
+// A <selector> is a template name, "Prefix*", "*" (the seat's army, builders left out), or '#' and
+// object ids from objects, comma-separated with no spaces: "attackmove 0 #12,40,77 1500 2300" orders
+// those that are still alive and the seat's own, builders included, and skips the rest.
+//
 // plus a handful the files have no use for: ping, status, screenshot, skirmish, quit, and
 //
 //   key <KEY_name> [ALT] [CTRL] [SHIFT]
@@ -82,15 +86,21 @@
 //   buildspot <slot> <template> <x> <y> <radius>
 //                          read now: the legal spot nearest (x,y) within radius by construct's own
 //                          test, {"ok":true,"cmd":"buildspot","x":..,"y":..}, or ok false.
+//   sell <slot> <id>       the sell button on that structure (id from objects, '#' optional): MSG_SELL
+//                          with its id, handed to the dispatcher inside the frame for that seat.
+//                          {"ok":true,"cmd":"sell","id":id,"template":"..."}; the money comes when the
+//                          sale finishes, as for a player.  Or "error": no such living object, not the
+//                          seat's, not a structure, already being sold, or no sell button (unfinished,
+//                          subdued, unsellable).
 //
-// produce and construct reply after the logic frame that ran them, not where they arrive.  In
+// produce, construct and sell reply after the logic frame that ran them, not where they arrive.  In
 // lockstep that frame is the first of the next step, so their replies come inside that step, ahead
 // of the step's own, in the order sent: a client sends its orders, then step, and reads until the
 // reply whose "cmd" is "step".  A world command sent while a step is running waits for that step's
 // reply and runs on the first frame of the next, since a long step hands the pass back between its
 // frames and the frame it landed on would otherwise depend on how fast the machine went.  Like spawn,
 // they act outside the recorded command stream, so a match driven this way does not replay; a
-// -scenario file and every replay play exactly as before.  Unlike spawn, produce and construct are
+// -scenario file and every replay play exactly as before.  Unlike spawn, produce, construct and sell are
 // refused in a -netgame match and on an online test server: they act for any seat, and one machine's
 // order would split the match.
 //

@@ -62,6 +62,11 @@
 // seat N began (-scenario pins seat i to start i), and start<N>:<dx>:<dy> stands that far off it.
 // The token form is what lets one file play on a generated map, whose starts move with the seed.
 //
+// A <selector> is a template name, a prefix ending in '*' ("GLAVehicleTechnical*"), "*" for the
+// seat's army (builders left out), or '#' and a comma-separated list of object ids ("#12,40,77",
+// the ids objects reports): the ones still alive and owned by the seat, builders included.  A '#'
+// starting a token with a digit after it is that list; anywhere else '#' still starts a comment.
+//
 enum ScenarioActionType
 {
 	SCENARIO_ACTION_SPAWN = 0,		///< spawn <slot> <template> <count> <position> [spacing]
@@ -118,7 +123,8 @@ enum ScenarioActionType
 	SCENARIO_ACTION_LANEUNITUPGRADE,	///< laneunitupgrade <slot> <upgrade> <grid> <column> <row>; buy that object upgrade on the seat's plot unit on that slot, its button found in the unit's command set, as LANEWAR_ORDER_UNIT_UPGRADE
 	SCENARIO_ACTION_LANECASH,					///< lanecash <slot> <amount>; the seat is paid that much, a test's shortcut past the ticks
 	SCENARIO_ACTION_LANEABILITY,			///< laneability <slot> <template> <buttonSlot> <0|1>; switch the seat's wave units of that template off or on for the button in that command set slot (from 0, the INI's number less one), as LANEWAR_ORDER_ABILITY (slot and switch in at)
-	SCENARIO_ACTION_GROUPQUEUE				///< groupqueue <slot> <template> <count>; a command bar unit tab's click that many times, as MSG_QUEUE_UNIT_FOR_GROUP with squad -1 onto the message stream, the logic picking the factory
+	SCENARIO_ACTION_GROUPQUEUE,				///< groupqueue <slot> <template> <count>; a command bar unit tab's click that many times, as MSG_QUEUE_UNIT_FOR_GROUP with squad -1 onto the message stream, the logic picking the factory
+	SCENARIO_ACTION_SELL							///< sell <slot> <id>; the sell button on that one structure (an id from objects, '#' optional), as MSG_SELL handed to the dispatcher for that seat
 };
 
 /// ScenarioAction::atStart when the position is plain numbers
@@ -174,10 +180,10 @@ extern void ScenarioDrill_tick( void );
 	  from inside a logic frame, and only while a match is running. */
 extern Bool ScenarioDrill_execute( const ScenarioAction &action );
 
-/** -control's produce and construct, the socket's own versions of those two lines: the same work, but
+/** -control's produce, construct and sell, the socket's own versions of those lines: the same work, but
 	  every refusal named (money with the cost, the missing prerequisites by name, why the ground is
 	  illegal, which builders are busy at what), and construct sends only an idle builder, named to the
-	  dispatcher.  Writes the reply's JSON members, without braces, to members ("error" on a refusal) and
+	  dispatcher.  sell is the same function the file's sell runs.  Writes the reply's JSON members, without braces, to members ("error" on a refusal) and
 	  returns whether the order took.  The file's verbs are untouched.  Only from inside a logic frame. */
 extern Bool ScenarioDrill_controlOrder( const ScenarioAction &action, AsciiString *members );
 

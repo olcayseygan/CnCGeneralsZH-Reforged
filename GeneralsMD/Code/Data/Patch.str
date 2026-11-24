@@ -7329,6 +7329,18 @@ GUI:ApocalypseLower
 "Apocalypse"
 END
 
+GUI:ApocalypseBossComing
+"Blood Moon: %ls walks with the dead."
+END
+
+GUI:ApocalypseSurvived
+"Survived %s"
+END
+
+GUI:ApocalypseHeldOut
+"%s held out for %s"
+END
+
 GUI:DirectStrikeIslandNote
 "A new island every match"
 END
@@ -7387,6 +7399,10 @@ END
 
 GUI:LaneAbilities
 "Abilities"
+END
+
+GUI:LaneReveal
+"Spy Satellite scan  $%d"
 END
 
 GUI:LaneMenu
@@ -7503,6 +7519,90 @@ END
 
 OBJECT:ApocalypseZombieSpineLancer
 "Spine Lancer"
+END
+
+OBJECT:ApocalypseZombieCrawler
+"Crawler"
+END
+
+OBJECT:ApocalypseZombieHound
+"Hound"
+END
+
+OBJECT:ApocalypseZombieGasbag
+"Gasbag"
+END
+
+OBJECT:ApocalypseZombieBileLobber
+"Bile Lobber"
+END
+
+OBJECT:ApocalypseZombieBurner
+"Burner"
+END
+
+OBJECT:ApocalypseZombieGasDiver
+"Gas Diver"
+END
+
+OBJECT:ApocalypseZombieStalker
+"Stalker"
+END
+
+OBJECT:ApocalypseZombieHowler
+"Howler"
+END
+
+OBJECT:ApocalypseZombieShocker
+"Shocker"
+END
+
+OBJECT:ApocalypseZombieBurrower
+"Burrower"
+END
+
+OBJECT:ApocalypseZombieRotmother
+"Rotmother"
+END
+
+OBJECT:ApocalypseZombieLeech
+"Leech"
+END
+
+OBJECT:ApocalypseZombieBreach
+"Breach"
+END
+
+OBJECT:ApocalypseZombieAbomination
+"Abomination"
+END
+
+OBJECT:ApocalypseZombieBloatSack
+"Bloat Sack"
+END
+
+OBJECT:ApocalypseZombieBroodmother
+"Broodmother"
+END
+
+OBJECT:ApocalypseZombieSporeDrifter
+"Spore Drifter"
+END
+
+OBJECT:ApocalypseZombieBroodCarrier
+"Brood Carrier"
+END
+
+OBJECT:ApocalypseZombieColossus
+"Colossus"
+END
+
+OBJECT:ApocalypseZombieWyrm
+"Wyrm"
+END
+
+OBJECT:ApocalypseZombiePlagueKing
+"Plague King"
 END
 
 // EA's text asked for DirectX 8.1; the device is refused for other reasons now (driver, a held screen).

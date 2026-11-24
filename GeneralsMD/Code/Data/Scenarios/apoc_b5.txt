@@ -1,0 +1,98 @@
+# Apocalypse batch 5: the hosts. The Abomination, the Bloat Sack, the Broodmother, the Brood Carrier
+# and the Spore Drifter against their counters, staged before the first wave (2026-11-24).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 2 normal apocalypse -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 3 -maxframes 3000
+#     -scenario apoc_b5 -logPrefix apoc_b5_
+#
+# As apoc_b1: game frames, the first wave at 1800, every host a civilian spawn the director adopts as
+# a stray and sends at the nearest enemy; one fight a corner. What a host leaves (the Abomination's
+# walkers, the Sack's, the Carrier's Crawlers) is adopted the same way; its brood (Broodlings, Brood
+# Bats) is its slave and never is. Fight E runs past the wave on purpose: the Drifters' 90 s.
+#
+# Read: the HEADLESS TALLY lines below ('N alive, ..., K inside') and the 10 s 'alive by kind' line.
+# Pass:
+#   A 6 Paladins vs one Abomination: the Abomination tally 1 at 100 and 0 by 1700; in the first
+#     walker tally after it drops to 0, walkers alive rise by 8 over the tally before (less those B
+#     still has). Paladins' 1700 tally at least 4. A 'RadiationFieldSmall' shows only in a drawn run.
+#   B 4 Crusaders and 8 Rangers vs a Bloat Sack: the walker tally at 100 reads 10 alive, 10 inside
+#     (the payload); once the Sack tally is 0, 'inside' is 0 and the walkers it spilled are counted
+#     loose. Crusaders' 1700 tally 4.
+#   C 4 Crusaders vs a Broodmother: Broodling tally 6 at 300 (her burst of six); Broodmother and
+#     Broodling both 0 at 1700 (the brood dies with her). No 'stray 'ApocalypseZombieBroodling''
+#     line anywhere.
+#   D 4 Avengers vs a Brood Carrier: Brood Bat tally 8 at 300; Carrier and Brood Bat both 0 by 1700.
+#     With batch 3 applied, the Crawler tally after the Carrier's death reads 6 (Avengers cannot
+#     shoot the ground) and 'alive by kind' lists ApocalypseZombieCrawler; without it, 0 and no error.
+#   E 3 Spore Drifters with no anti-air near: tally 3 at 2650, 0 at 2800 (they burst at 90 game s,
+#     frame 2710); F 2 Drifters vs a Gattling Cannon: 0 by 1700, the cannon's 1700 tally 1.
+#   Not here: the alive cap with every spawner out at once is the long run's check (APPLY.md step 3).
+
+# A: seat 0's north-west corner
+10    spawn      0         AmericaTankPaladin            6   start0:-150:150   30
+10    spawn      civilian  ApocalypseZombieAbomination   1   start0:-150:330
+# B: north-east
+10    spawn      0         AmericaTankCrusader           4   start0:150:150    30
+10    spawn      0         AmericaInfantryRanger         8   start0:150:120    10
+10    spawn      civilian  ApocalypseZombieBloatSack     1   start0:150:330
+# C: south-west
+10    spawn      0         AmericaTankCrusader           4   start0:-150:-150  30
+10    spawn      civilian  ApocalypseZombieBroodmother   1   start0:-150:-330
+# D: east
+10    spawn      0         AmericaTankAvenger            4   start0:300:0      30
+10    spawn      civilian  ApocalypseZombieBroodCarrier  1   start0:470:0
+20    stance     0         *                             defensive
+
+# E: seat 1's west, nothing that shoots the air within their drift
+10    spawn      civilian  ApocalypseZombieSporeDrifter  3   start1:-480:0     20
+# F: south
+10    spawn      1         ChinaGattlingCannon           1   start1:0:-150
+10    spawn      civilian  ApocalypseZombieSporeDrifter  2   start1:0:-330     20
+20    stance     1         *                             defensive
+
+100   tally      civilian  ApocalypseZombie
+100   tally      civilian  ApocalypseZombieAbomination
+100   tally      civilian  ApocalypseZombieBloatSack
+300   tally      civilian  ApocalypseZombieBroodling
+300   tally      civilian  ApocalypseZombieBroodBat
+300   tally      civilian  ApocalypseZombie
+300   tally      civilian  ApocalypseZombieAbomination
+300   tally      civilian  ApocalypseZombieBloatSack
+300   tally      civilian  ApocalypseZombieBroodCarrier
+600   tally      civilian  ApocalypseZombie
+600   tally      civilian  ApocalypseZombieAbomination
+600   tally      civilian  ApocalypseZombieBloatSack
+600   tally      civilian  ApocalypseZombieBroodCarrier
+600   tally      civilian  ApocalypseZombieCrawler
+900   tally      civilian  ApocalypseZombie
+900   tally      civilian  ApocalypseZombieAbomination
+900   tally      civilian  ApocalypseZombieBloatSack
+900   tally      civilian  ApocalypseZombieBroodCarrier
+900   tally      civilian  ApocalypseZombieCrawler
+1200  tally      civilian  ApocalypseZombie
+1200  tally      civilian  ApocalypseZombieAbomination
+1200  tally      civilian  ApocalypseZombieBloatSack
+1200  tally      civilian  ApocalypseZombieBroodCarrier
+1200  tally      civilian  ApocalypseZombieCrawler
+1500  tally      civilian  ApocalypseZombie
+1500  tally      civilian  ApocalypseZombieAbomination
+1500  tally      civilian  ApocalypseZombieBloatSack
+1500  tally      civilian  ApocalypseZombieBroodCarrier
+1500  tally      civilian  ApocalypseZombieCrawler
+1700  tally      civilian  ApocalypseZombie
+1700  tally      civilian  ApocalypseZombieAbomination
+1700  tally      civilian  ApocalypseZombieBloatSack
+1700  tally      civilian  ApocalypseZombieBroodmother
+1700  tally      civilian  ApocalypseZombieBroodling
+1700  tally      civilian  ApocalypseZombieBroodCarrier
+1700  tally      civilian  ApocalypseZombieBroodBat
+1700  tally      civilian  ApocalypseZombieCrawler
+1700  tally      civilian  ApocalypseZombieSporeDrifter
+1700  tally      0         AmericaTankPaladin
+1700  tally      0         AmericaTankCrusader
+1700  tally      0         AmericaInfantryRanger
+1700  tally      0         AmericaTankAvenger
+1700  tally      1         ChinaGattlingCannon
+2650  tally      civilian  ApocalypseZombieSporeDrifter
+2800  tally      civilian  ApocalypseZombieSporeDrifter

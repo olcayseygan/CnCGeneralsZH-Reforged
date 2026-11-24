@@ -21554,6 +21554,18 @@ GUI:ApocalypseLower
 "Kıyamet"
 END
 
+GUI:ApocalypseBossComing
+"Kan Ayı: %ls ölülerle birlikte geliyor."
+END
+
+GUI:ApocalypseSurvived
+"Dayanılan: %s"
+END
+
+GUI:ApocalypseHeldOut
+"%s %s dayandı"
+END
+
 GUI:DirectStrikeIslandNote
 "Her maçta yeni bir ada"
 END
@@ -21612,6 +21624,10 @@ END
 
 GUI:LaneAbilities
 "Yetenekler"
+END
+
+GUI:LaneReveal
+"Casus Uydu taraması  $%d"
 END
 
 GUI:LaneMenu
@@ -21687,7 +21703,7 @@ OBJECT:ApocalypseZombie
 END
 
 OBJECT:ApocalypseZombieRunner
-"Koşucu Zombi"
+"Koşan Zombi"
 END
 
 OBJECT:ApocalypseZombieBrute
@@ -21728,4 +21744,88 @@ END
 
 OBJECT:ApocalypseZombieSpineLancer
 "Mızrakçı"
+END
+
+OBJECT:ApocalypseZombieCrawler
+"Sürünen"
+END
+
+OBJECT:ApocalypseZombieHound
+"Kuduz"
+END
+
+OBJECT:ApocalypseZombieGasbag
+"Kokuşmuş"
+END
+
+OBJECT:ApocalypseZombieBileLobber
+"Kusan"
+END
+
+OBJECT:ApocalypseZombieBurner
+"Yanık"
+END
+
+OBJECT:ApocalypseZombieGasDiver
+"Dalan"
+END
+
+OBJECT:ApocalypseZombieStalker
+"Sinsi"
+END
+
+OBJECT:ApocalypseZombieHowler
+"Uluyan"
+END
+
+OBJECT:ApocalypseZombieShocker
+"Çarpan"
+END
+
+OBJECT:ApocalypseZombieBurrower
+"Köstebek"
+END
+
+OBJECT:ApocalypseZombieRotmother
+"Çürük Ana"
+END
+
+OBJECT:ApocalypseZombieLeech
+"Sülük"
+END
+
+OBJECT:ApocalypseZombieBreach
+"Yarık"
+END
+
+OBJECT:ApocalypseZombieAbomination
+"Et Yığını"
+END
+
+OBJECT:ApocalypseZombieBloatSack
+"Kese"
+END
+
+OBJECT:ApocalypseZombieBroodmother
+"Kuluçka"
+END
+
+OBJECT:ApocalypseZombieSporeDrifter
+"Uçan Mantar"
+END
+
+OBJECT:ApocalypseZombieBroodCarrier
+"Kanatlı Kuluçka"
+END
+
+OBJECT:ApocalypseZombieColossus
+"Dev"
+END
+
+OBJECT:ApocalypseZombieWyrm
+"Ejder"
+END
+
+OBJECT:ApocalypseZombiePlagueKing
+"Veba Kralı"
 END

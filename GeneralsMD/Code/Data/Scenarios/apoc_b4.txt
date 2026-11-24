@@ -1,0 +1,75 @@
+# Apocalypse batch 4: the hidden and the helpers. The Stalker, the Leech, the Shocker, the Burrower, the
+# Rotmother and the Howler against their counters, staged before the first wave (2026-11-24).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 2 normal apocalypse -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 3 -maxframes 3000
+#     -scenario apoc_b4 -logPrefix apoc_b4_
+#
+# As apoc_b1 and apoc_b2: game frames, the first wave at 1800, every zombie a civilian spawn the
+# director adopts as a stray and sends on (a Leech at the nearest vehicle it can take); one fight a
+# corner, each corner's living side a template no other corner of that seat uses.
+#
+# Read: the HEADLESS TALLY lines, the director's 'stray' lines and its 10 s 'alive by kind' line. Pass:
+#   A 6 Rangers vs 3 Stalkers, no detector: the Rangers' 1700 tally at most 2 (unseen until they strike).
+#   B a Gattling Cannon (detects at 200) vs 3 Stalkers: alive at 1700 with more than half its health.
+#   C 2 Tomahawks alone vs 2 Leeches: seat 0's Tomahawk tally 0 at 1700, and a line
+#     "stray 'AmericaVehicleTomahawk' N joins the dead" before it (the taken vehicle walks with the dead).
+#   D 3 Battlemasters with 8 Red Guards vs 2 Leeches: the Battlemaster tally 3 at 1700 (the escort
+#     shoots a moving worm); no "stray 'ChinaTankBattleMaster'" line.
+#   E 3 Crusaders with a Shocker in among them: at 600 all 3 alive and the civilian Shocker tally 1
+#     (the Crusaders stand dark, so this Shocker lives); F 8 Red Guards vs a Shocker kill it by 600.
+#   G a Burrower at a wall line: the Breach tally 1 at 700 and 0 at 1300 (30 s, 600 frames), a
+#     "stray 'ApocalypseZombie'" line after the breach's frame (its walkers join), seat 1's ChinaWall
+#     tally under 4 at 1700.
+#   H a Rotmother leading 8 walkers vs 2 Paladins: the Rotmother dead by 1700, the Paladins' tally
+#     at least 1.
+#   I a Howler behind 10 walkers vs 2 Humvees (seat 0) beside J, the same 10 walkers without him vs 2
+#     Humvees (seat 1): read, not pass: seat 0's Humvee health at 1200 at most seat 1's (frenzy, +10%).
+# The Leeches go for the nearest vehicle they can take on the map: C's are 180 from the Tomahawks and
+# 480 or more from any other vehicle of seat 0, D's 180 from the Battlemasters.
+
+# seat 0, USA
+10    spawn      0         AmericaInfantryRanger        6   start0:-150:150   12
+10    spawn      civilian  ApocalypseZombieStalker      3   start0:-150:330   12
+10    spawn      0         AmericaVehicleTomahawk       2   start0:150:150    30
+10    spawn      civilian  ApocalypseZombieLeech        2   start0:150:330    12
+10    spawn      0         AmericaTankCrusader          3   start0:150:-150   30
+10    spawn      civilian  ApocalypseZombieShocker      1   start0:150:-165
+10    spawn      0         AmericaTankPaladin           2   start0:-150:-150  30
+10    spawn      civilian  ApocalypseZombieRotmother    1   start0:-150:-330
+10    spawn      civilian  ApocalypseZombie             8   start0:-150:-310  10
+10    spawn      0         AmericaVehicleHumvee         2   start0:-300:0     30
+10    spawn      civilian  ApocalypseZombie             10  start0:-450:0     10
+10    spawn      civilian  ApocalypseZombieHowler       1   start0:-480:0
+20    stance     0         *                            defensive
+
+# seat 1, China
+10    spawn      1         ChinaGattlingCannon          1   start1:-150:150
+10    spawn      civilian  ApocalypseZombieStalker      3   start1:-150:330   12
+10    spawn      1         ChinaTankBattleMaster        3   start1:150:150    30
+10    spawn      1         ChinaInfantryRedguard        8   start1:150:180    10
+10    spawn      civilian  ApocalypseZombieLeech        2   start1:150:330    12
+10    spawn      1         ChinaInfantryRedguard        8   start1:150:-150   10
+10    spawn      civilian  ApocalypseZombieShocker      1   start1:150:-330
+10    spawn      1         ChinaWall                    4   start1:-150:-200  20
+10    spawn      civilian  ApocalypseZombieBurrower     1   start1:-150:-360
+10    spawn      1         AmericaVehicleHumvee         2   start1:-300:0     30
+10    spawn      civilian  ApocalypseZombie             10  start1:-450:0     10
+20    stance     1         *                            defensive
+
+10    tally      0         AmericaInfantryRanger
+10    tally      1         ChinaGattlingCannon          1
+600   tally      0         AmericaTankCrusader
+600   tally      civilian  ApocalypseZombieShocker
+700   tally      civilian  ApocalypseZombieBreach
+1200  tally      0         AmericaVehicleHumvee
+1200  tally      1         AmericaVehicleHumvee
+1300  tally      civilian  ApocalypseZombieBreach
+1700  tally      0         AmericaInfantryRanger
+1700  tally      1         ChinaGattlingCannon          1
+1700  tally      0         AmericaVehicleTomahawk
+1700  tally      1         ChinaTankBattleMaster
+1700  tally      1         ChinaWall                    4
+1700  tally      civilian  ApocalypseZombieRotmother
+1700  tally      0         AmericaTankPaladin

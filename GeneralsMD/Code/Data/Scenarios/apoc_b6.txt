@@ -1,0 +1,63 @@
+# Apocalypse batch 6: the bosses. The Colossus, the Wyrm and the Plague King against their counters
+# and their prey, staged before the first wave (2026-11-24).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 2 normal apocalypse -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 3 -maxframes 3000
+#     -scenario apoc_b6 -logPrefix apoc_b6_
+#
+# As apoc_b1: scenario frames are game frames, 1.5 a logic frame at game speed 150, the first wave at
+# 1800, so every fight here is meant to be over by 1700. A boss made by a civilian spawn line is
+# adopted as a stray and sized for the seats as the Blood Moon's are (two seats: health times 1.5);
+# the health lines below then cut it to a share of that, so a boss falls inside the window. The cut is
+# a share of the scaled health, whichever runs first. One fight a corner.
+#
+# Read: the HEADLESS TALLY lines, the director's 10 s 'alive by kind' line, and these HEADLESS
+# APOCALYPSE lines: 'the Colossus N goes for', 'fell near the Plague King and rises', 'the Plague King
+# N falls and stands again', 'fallen N rises as zombie'. Pass:
+#   A Colossus vs 8 Crusaders and 2 Paladins: the first 'the Colossus ... goes for' line names
+#     'AmericaParticleCannonUplink' (cost 5000, the dearest of seat 0's); the Colossus gone from the
+#     1700 'alive by kind' line; the Crusader 1700 tally under 8 (it crushes and stomps tanks).
+#   B Wyrm vs 4 Comanches: the Comanche 1200 tally at most 1 (its bile takes aircraft).
+#   C Wyrm at a quarter health vs 8 Gattling tanks: the Gattling 1200 tally at least 6, and the
+#     'alive by kind' line at 1700 holds one Wyrm at most (B's).
+#   D Plague King at 15% with 8 walkers vs 6 Overlords and 10 Red Guards: at least one 'fell near the
+#     Plague King and rises' line and its 'fallen ... rises as zombie' line; one 'the Plague King ...
+#     falls and stands again at frame F' line with a health of 9900 (6600 x 1.5); no ApocalypseZombie
+#     PlagueKing in the 1700 'alive by kind' line (the second death is for good); the Overlord 1700
+#     tally at least 4.
+# The Blood Moon itself (points, elites, the boss with the night's peak wave) is the long run's check: the
+# director's waves start only at 1800.
+
+# A: seat 0's north-west corner, the dearest structure behind eight Crusaders and two Paladins
+10    spawn      0         AmericaParticleCannonUplink  1   start0:-330:150
+10    spawn      0         AmericaTankCrusader          8   start0:-150:150   30
+10    spawn      0         AmericaTankPaladin           2   start0:-200:120   30
+10    spawn      civilian  ApocalypseZombieColossus     1   start0:-150:360
+30    health     civilian  ApocalypseZombieColossus     20
+
+# B: seat 0's south-east corner, four Comanches and a Wyrm, made after C's health line so it keeps all of its
+10    spawn      0         AmericaVehicleComanche       4   start0:300:0      30
+45    spawn      civilian  ApocalypseZombieWyrm         1   start0:480:0
+20    stance     0         *                            defensive
+
+# C: seat 1's west, eight Gattling tanks and a Wyrm at a quarter
+10    spawn      1         ChinaTankGattling            8   start1:-150:0     30
+10    spawn      civilian  ApocalypseZombieWyrm         1   start1:-480:0
+30    health     civilian  ApocalypseZombieWyrm         25
+
+# D: seat 1's north, the Plague King at 15% with eight walkers before him
+10    spawn      1         ChinaTankOverlord            6   start1:0:150      35
+10    spawn      1         ChinaInfantryRedguard        10  start1:60:120     10
+10    spawn      civilian  ApocalypseZombiePlagueKing   1   start1:0:360
+10    spawn      civilian  ApocalypseZombie             8   start1:0:330      10
+30    health     civilian  ApocalypseZombiePlagueKing   15
+20    stance     1         *                            defensive
+
+1200  tally      0         AmericaVehicleComanche
+1200  tally      1         ChinaTankGattling
+1700  tally      0         AmericaTankCrusader
+1700  tally      0         AmericaTankPaladin
+1700  tally      0         AmericaParticleCannonUplink  1
+1700  tally      1         ChinaTankOverlord
+1700  tally      1         ChinaInfantryRedguard

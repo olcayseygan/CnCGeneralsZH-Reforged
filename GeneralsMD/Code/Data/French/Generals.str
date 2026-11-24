@@ -22589,6 +22589,90 @@ OBJECT:ApocalypseZombieSpineLancer
 "Lancier d'échine"
 END
 
+OBJECT:ApocalypseZombieCrawler
+"Rampant"
+END
+
+OBJECT:ApocalypseZombieHound
+"Molosse"
+END
+
+OBJECT:ApocalypseZombieGasbag
+"Sac à gaz"
+END
+
+OBJECT:ApocalypseZombieBileLobber
+"Cracheur de bile"
+END
+
+OBJECT:ApocalypseZombieBurner
+"Brûleur"
+END
+
+OBJECT:ApocalypseZombieGasDiver
+"Plongeur à gaz"
+END
+
+OBJECT:ApocalypseZombieStalker
+"Traqueur"
+END
+
+OBJECT:ApocalypseZombieHowler
+"Braillard"
+END
+
+OBJECT:ApocalypseZombieShocker
+"Électrocuteur"
+END
+
+OBJECT:ApocalypseZombieBurrower
+"Fouisseur"
+END
+
+OBJECT:ApocalypseZombieRotmother
+"Mère putride"
+END
+
+OBJECT:ApocalypseZombieLeech
+"Sangsue"
+END
+
+OBJECT:ApocalypseZombieBreach
+"Brèche"
+END
+
+OBJECT:ApocalypseZombieAbomination
+"Abomination"
+END
+
+OBJECT:ApocalypseZombieBloatSack
+"Sac gonflé"
+END
+
+OBJECT:ApocalypseZombieBroodmother
+"Mère couveuse"
+END
+
+OBJECT:ApocalypseZombieSporeDrifter
+"Spore flottante"
+END
+
+OBJECT:ApocalypseZombieBroodCarrier
+"Porte-couvée"
+END
+
+OBJECT:ApocalypseZombieColossus
+"Colosse"
+END
+
+OBJECT:ApocalypseZombieWyrm
+"Wyrm"
+END
+
+OBJECT:ApocalypseZombiePlagueKing
+"Roi de la peste"
+END
+
 OBJECT:LaneWarFortress
 "Forteresse"
 END

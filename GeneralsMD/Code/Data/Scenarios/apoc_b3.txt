@@ -1,0 +1,79 @@
+# Apocalypse batch 3: passes, garrisons and the weak front. The Crawler, the Gasbag, the Burner, the
+# Gas Diver, the Hound and the Bile Lobber against their counters and their prey, staged before the
+# first wave (2026-11-24).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 2 normal apocalypse -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 3 -maxframes 3000
+#     -scenario apoc_b3 -logPrefix apoc_b3_
+#
+# As apoc_b1: game frames, the first wave at 1800, every zombie a civilian spawn the director adopts
+# as a stray and sends at the nearest enemy; one fight a corner. The Hounds' front pick works only on
+# the director's own packs (spawnOne), never on a spawn line: it is read in the long run (APPLY.md).
+#
+# Read: the HEADLESS TALLY lines, the director's 10 s 'the dead:' line ('N on a cliff') and its
+# 'alive by kind' line. Pass:
+#   A Crawlers 560 out from start 0 on four sides, outside the basin's wall: at least one 'the dead:'
+#     line before logic frame 1200 says 1 or more on a cliff (they climb the wall, no pass needed).
+#   B 3 Humvees vs 2 Gasbags: a civilian PoisonFieldSmall tally of 1 or more at one of 300, 600, 900
+#     or 1200 (the cloud stays where one died), the Humvees' 1700 tally at least 2.
+#   C 4 Rangers vs 3 Burners: the Rangers' 1700 tally at most 1 (they burn), a civilian
+#     FireFieldSmall tally of 1 or more at one of 600, 900 or 1200 once a Burner fell;
+#     D 2 Humvees (the Air Force General's, a template apart so its tally is D's alone) vs 2 Burners:
+#     the AirF Humvees' 1700 tally at least 1.
+#   E 4 Comanches in a clump (10 apart) vs 2 Gas Divers: the AmericaVehicleComanche 1200 tally at
+#     most 2; F 4 Air Force Comanches spread 60 apart vs 2 Gas Divers: their 1200 tally at least 3.
+#   G 2 Gattling tanks vs 8 Hounds: the Gattlings' 1700 tally 2, no Hound in the 1700 line.
+#   H 2 Bile Lobbers at a small shop garrisoned by 5 Red Guards: the Red Guards' 1700 tally at most 1,
+#     and the shop's tally still 1 (the lobs killed them inside, the shop stood).
+# A kind's count in 'alive by kind' is the sum of its corners: read it with the tallies.
+
+# seat 0, USA
+# A: Crawlers outside the wall on four sides
+10    spawn      civilian  ApocalypseZombieCrawler      2   start0:560:0      10
+10    spawn      civilian  ApocalypseZombieCrawler      2   start0:-560:0     10
+10    spawn      civilian  ApocalypseZombieCrawler      2   start0:0:560      10
+10    spawn      civilian  ApocalypseZombieCrawler      2   start0:0:-560     10
+# B: Gasbags vs Humvees, north-west
+10    spawn      0         AmericaVehicleHumvee         3   start0:-150:150   30
+10    spawn      civilian  ApocalypseZombieGasbag       2   start0:-150:330   15
+# C: Burners vs Rangers, north-east
+10    spawn      0         AmericaInfantryRanger        4   start0:150:150    10
+10    spawn      civilian  ApocalypseZombieBurner       3   start0:150:330    10
+# D: Burners vs Humvees, east
+10    spawn      0         AirF_AmericaVehicleHumvee    2   start0:330:0      30
+10    spawn      civilian  ApocalypseZombieBurner       2   start0:500:0      10
+# E: Gas Divers at a clump of Comanches, south-west; F: at a spread four, south-east
+10    spawn      0         AmericaVehicleComanche       4   start0:-300:-150  10
+10    spawn      civilian  ApocalypseZombieGasDiver     2   start0:-300:-330  15
+10    spawn      0         AirF_AmericaVehicleComanche  4   start0:300:-150   60
+10    spawn      civilian  ApocalypseZombieGasDiver     2   start0:300:-330   15
+20    stance     0         *                            defensive
+
+# seat 1, China
+# G: Hounds vs Gattling tanks
+10    spawn      1         ChinaTankGattling            2   start1:150:150    30
+10    spawn      civilian  ApocalypseZombieHound        8   start1:150:350    8
+# H: Bile Lobbers at a garrisoned shop; the Lobbers come once the Red Guards are in
+10    spawn      1         StanSmallRetail01            1   start1:-150:150
+10    spawn      1         ChinaInfantryRedguard        5   start1:-150:220   10
+40    enter      1         ChinaInfantryRedguard        1   StanSmallRetail01
+150   spawn      civilian  ApocalypseZombieBileLobber   2   start1:-150:430   15
+20    stance     1         *                            defensive
+
+300   tally      civilian  PoisonFieldSmall
+600   tally      civilian  PoisonFieldSmall
+900   tally      civilian  PoisonFieldSmall
+1200  tally      civilian  PoisonFieldSmall
+600   tally      civilian  FireFieldSmall
+900   tally      civilian  FireFieldSmall
+1200  tally      civilian  FireFieldSmall
+140   tally      1         ChinaInfantryRedguard        5
+1200  tally      0         AmericaVehicleComanche       4
+1200  tally      0         AirF_AmericaVehicleComanche  4
+1700  tally      0         AmericaVehicleHumvee         3
+1700  tally      0         AirF_AmericaVehicleHumvee    2
+1700  tally      0         AmericaInfantryRanger
+1700  tally      1         ChinaTankGattling            2
+1700  tally      1         ChinaInfantryRedguard        5
+1700  tally      1         StanSmallRetail01            1

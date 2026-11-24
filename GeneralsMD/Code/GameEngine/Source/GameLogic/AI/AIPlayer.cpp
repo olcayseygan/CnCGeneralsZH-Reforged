@@ -14540,11 +14540,11 @@ void AIPlayer::sendWave( AIGroup *wave, const AsciiString &approach, Int pathSuf
 	Waypoint *way = TheTerrainLogic->getClosestWaypointOnPath( &center, pathLabel );
 	// an approach that ends at home leads nowhere: on a small map the enemy's start lies inside our own home
 	// ring, and once that base is taken or overrun what is left of the enemy stands elsewhere.  A wave that
-	// walked it went idle at home, was called up again the next wave tick and walked it again; a Savage USA
+	// walked it went idle at home, was called up again the next wave tick and walked it again; an Insane USA
 	// that had taken a GLA command centre beside its base re-sent the same teams 4,005 times and ran the
 	// match out with 267,000 of army never in a fight.  It hunts instead, which takes it to whatever of the
 	// enemy is nearest, and with nothing it can find it stays where it is without an order
-	if( way )
+	if( way && !(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) )
 	{
 		const Waypoint *end = way;
 		for( Int i = 0; i < WAVE_PATH_MAX_POINTS && end->getNumLinks() > 0; ++i )

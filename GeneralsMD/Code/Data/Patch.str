@@ -1959,8 +1959,12 @@ GUI:ShadowQuality2
 "High"
 END
 
+GUI:ShadowQuality3
+"Ray Traced"
+END
+
 TOOLTIP:ShadowQuality
-"How sharp unit and building shadows are. High takes about 64 MB of video memory, Low frees memory on a weak card. Direct3D 11 only, and not with Classic Graphics. Applies when you press Accept."
+"How sharp unit and building shadows are. High takes about 64 MB of video memory, Low frees memory on a weak card. Ray Traced follows every pixel's line to the sun past the real shape of each tank and building, so their shadows stay sharp at any zoom; it costs up to 1.6 ms a frame and is still experimental. Direct3D 11 only, and not with Classic Graphics. Applies when you press Accept."
 END
 
 GUI:VolumetricSmoke
@@ -2133,6 +2137,14 @@ END
 
 TOOLTIP:GroundFoliage
 "Grass, bushes, ferns and stones grow on the ground and sway in the breeze with the trees. Looks only: units walk through it. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
+END
+
+GUI:Ragdoll
+"Ragdoll Deaths"
+END
+
+TOOLTIP:Ragdoll
+"A soldier who dies goes limp and falls the way the shot or the blast pushed him, instead of playing his death animation. Looks only: where the body lies and when it goes are the same either way, and other players see their own setting. Off under Classic Graphics. Applies to the next death when you press Accept."
 END
 
 GUI:StructureCollapse

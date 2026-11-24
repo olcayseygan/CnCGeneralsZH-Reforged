@@ -87,12 +87,14 @@ void FireWeaponCollide::onCollide( Object *other, const Coord3D *loc, const Coor
 	// to hurt them all.  Another solution would be to keep a Map of other->objetIDs and 
 	// delays for each individually.  However, this solution here is so quick and simple that it
 	// warrants the "do it eventually if we need it" clause.
-	// At most once a retail frame: the reload is bypassed, so at twice the rate the damage a second
-	// would double. The frame that fired keeps firing, for everyone else colliding in it.
+	// Once a retail frame of game time, as retail fired once a frame: the reload is bypassed, so a
+	// shot a tick gave 20 a game second at 150 percent where retail gave 30. The retail frames
+	// this tick ends minus those it starts on is 1 or 2 at 150, every collider in the tick alike.
 	UnsignedInt now = TheGameLogic->getFrame();
-	if( now != m_lastFireFrame && now < m_lastFireFrame + LOGICFRAMES_PER_RETAIL_FRAME )
-		return;
-	if( shouldFireWeapon() )
+	const UnsignedInt speedPercent = (UnsignedInt)GAME_SPEED_PERCENT;
+	const UnsignedInt percentPerRetailFrame = 100 * LOGICFRAMES_PER_RETAIL_FRAME;
+	Int shots = (Int)( ( now + 1 ) * speedPercent / percentPerRetailFrame - now * speedPercent / percentPerRetailFrame );
+	for( Int shot = 0; shot < shots && shouldFireWeapon(); ++shot )
 	{
 		m_collideWeapon->loadAmmoNow( me );
 		m_collideWeapon->fireWeapon( me, other );

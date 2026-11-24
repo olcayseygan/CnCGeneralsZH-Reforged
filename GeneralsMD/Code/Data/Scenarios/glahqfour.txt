@@ -1,0 +1,28 @@
+# Four GLA Command Centers breaking apart at once, for the cost of it: seat 1's own at 1733,4205 on
+# Twilight Flame and three more put down in a row south of it, all set to 5 percent health and then
+# nuked by seat 0 in one blast between them. Each takes the blast as its first hit and its last, so all four
+# fall in the same frame. A drawn run: four FRACTURE COLLAPSE lines on one frame, and the FRACTURE
+# COST and DX11 GPU frame lines before, during and after the fall are the measure.
+#
+#   generals.exe -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionGLA -seed 1 -camera 1733 4090
+#     -scenario glahqfour -maxframes 900 -logPrefix glahqfour_
+#
+# Frames here are this file's 30 a game second; the log's logic frames are two thirds of them at 1.5x.
+
+30    spawn     1  GLABarracks                   1  2100  3850
+30    spawn     1  GLACommandCenter              1  1733  4030
+30    spawn     1  GLACommandCenter              1  1560  4030
+30    spawn     1  GLACommandCenter              1  1906  4030
+30    spawn     0  ChinaNuclearMissileLauncher   1  start0:300:0
+30    spawn     0  ChinaNuclearMissileLauncher   1  start0:-300:0
+30    spawn     0  ChinaPowerPlant               1  start0:0:300
+30    spawn     0  ChinaPowerPlant               1  start0:0:-300
+30    spawn     0  ChinaPowerPlant               1  start0:300:300
+30    spawn     0  ChinaPowerPlant               1  start0:-300:-300
+60    tally     1  GLACommandCenter
+300   health    1  GLACommandCenter              5
+330   power     0  ChinaNuclearMissileLauncher   1733  4090
+600   tally     1  GLACommandCenter
+900   tally     1  GLACommandCenter

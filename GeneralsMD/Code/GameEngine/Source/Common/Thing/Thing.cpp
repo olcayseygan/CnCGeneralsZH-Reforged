@@ -354,7 +354,10 @@ Bool Thing::isSignificantlyAboveTerrain() const
 {
 	// If it's high enough that it will take more than 3 frames to return to the ground,
 	// then it's significantly airborne.  jba
-	return (getHeightAboveTerrain() > -(3*3)*TheGlobalData->m_gravity);
+	// The 3 are retail frames and m_gravity is per tick squared, so the count is converted
+	// the way Locomotor's airborne test does it; a bare 3 made the line 2.25 times retail's at 150.
+	const Real AIRBORNE_FRAMES = ConvertRetailFrames(3.0f);
+	return (getHeightAboveTerrain() > -sqr(AIRBORNE_FRAMES)*TheGlobalData->m_gravity);
 }
 
 

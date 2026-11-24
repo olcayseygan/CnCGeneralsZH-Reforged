@@ -46,6 +46,7 @@
 #include "Common/GameState.h"
 #include "Common/INI.h"
 #include "Common/JobSystem.h"
+#include "Common/MapObject.h"
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
 #include "Common/ThingFactory.h"
@@ -590,7 +591,39 @@ Real WeaponTemplate::getBallisticLaunchPitch(const Coord3D& from, const Coord3D&
 {
 	const Real PEAK_HEIGHT_TO_LAUNCH_RISE = 4.0f;
 	Real run = sqrtf(sqr(to.x - from.x) + sqr(to.y - from.y));
-	return ATan2(to.z - from.z + PEAK_HEIGHT_TO_LAUNCH_RISE * m_ballisticPeakHeight, run);
+	Real peakHeight = max(m_ballisticPeakHeight, getBallisticGroundPeakHeight(from, to));
+	return ATan2(to.z - from.z + PEAK_HEIGHT_TO_LAUNCH_RISE * peakHeight, run);
+}
+
+//-------------------------------------------------------------------------------------------------
+// The least peak over the line that keeps the parabola off the ground between, zero when the line
+// is clear. EA's arc sat FirstHeight over the highest ground on the way; a BallisticPeakHeight over
+// the line alone sent an Inferno shell fired over a ridge into the hillside. At share t of the run
+// the parabola stands 4 * peak * t * (1 - t) over the line, so each sample of the ground asks for a
+// peak and the highest ask wins. The ground next to either end is the launcher's and the target's
+// own, where the ask grows without bound, and a ridge against the muzzle asks for a lob no gun
+// fires: past a peak that high the shell meets the ridge.
+Real WeaponTemplate::getBallisticGroundPeakHeight(const Coord3D& from, const Coord3D& to) const
+{
+	const Real GROUND_SAMPLE_STEP = MAP_XY_FACTOR;	// the heightmap's own spacing
+	const Real GROUND_END_SKIP = 2.0f * MAP_XY_FACTOR;
+	const Real GROUND_CLEARANCE = 2.0f;	// over a frame of gravity, which the shell's physics still adds
+	const Real MAX_PEAK_HEIGHT_PER_RUN = 0.75f;	// a launch about 72 degrees up on level ground
+	Real dx = to.x - from.x;
+	Real dy = to.y - from.y;
+	Real dz = to.z - from.z;
+	Real run = sqrtf(sqr(dx) + sqr(dy));
+	Real peakHeight = 0.0f;
+	Int samples = REAL_TO_INT_FLOOR((run - 2.0f * GROUND_END_SKIP) / GROUND_SAMPLE_STEP) + 1;
+	for (Int i = 0; i < samples; ++i)
+	{
+		Real t = (GROUND_END_SKIP + i * GROUND_SAMPLE_STEP) / run;
+		Real ground = TheTerrainLogic->getGroundHeight(from.x + t * dx, from.y + t * dy);
+		Real ask = (ground + GROUND_CLEARANCE - (from.z + t * dz)) / (4.0f * t * (1.0f - t));
+		if (ask > peakHeight)
+			peakHeight = ask;
+	}
+	return min(peakHeight, MAX_PEAK_HEIGHT_PER_RUN * run);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1184,10 +1217,18 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 		Real delayInFrames = (v.length() / getWeaponSpeed());
 
 		ObjectID damageID = getDamageDealtAtSelfPosition() ? INVALID_ID : victimID;
+		const Coord3D* damagePos = getDamageDealtAtSelfPosition() ? sourcePos : victimPos;
+		// A radar-blind miss only moved the point a projectile flies to; with no projectile the hit still
+		// went to the victim, so an instant weapon never missed. It lands on the ground beside it instead.
+		if( radarMiss && !getDamageDealtAtSelfPosition() )
+		{
+			damageID = INVALID_ID;
+			damagePos = &projectileDestination;
+		}
 
 		if( firingWeapon->isLaser() )
 		{
-			if( scatterRadius <= getPrimaryDamageRadius( bonus ) || scatterRadius <= getSecondaryDamageRadius( bonus ) )
+			if( !radarMiss && ( scatterRadius <= getPrimaryDamageRadius( bonus ) || scatterRadius <= getSecondaryDamageRadius( bonus ) ) )
 			{
 				//The laser is close enough to damage the object, so just hit it directly. Some victim objects
 				//adjust the laser's position to prevent it from hitting the ground.
@@ -1210,7 +1251,6 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 			return TheGameLogic->getFrame();
 		}
 
-		const Coord3D* damagePos = getDamageDealtAtSelfPosition() ? sourcePos : victimPos;
 		if (delayInFrames < 1.0f)
 		{
 			// go ahead and do it now

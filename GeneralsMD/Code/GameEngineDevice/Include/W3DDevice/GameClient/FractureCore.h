@@ -40,8 +40,11 @@
 
 namespace Fracture {
 
-enum { MATERIAL_INNER = 1, MATERIAL_ALPHA_TEST = 2, MATERIAL_DECAL = 4 };
-enum { FRAGMENT_GROUND = 1 };
+/// MATERIAL_HOUSE: cut from a retail HOUSECOLOR mesh, drawn in the colour the model's own house mesh wears.
+enum { MATERIAL_INNER = 1, MATERIAL_ALPHA_TEST = 2, MATERIAL_DECAL = 4, MATERIAL_HOUSE = 8 };
+/// FRAGMENT_SINKS: a flag, a tarp or a sliver with no wall behind it, which would lie on the ruin as a
+/// plate: in a plain fall it drops straight down with the rest and goes into the ground as it lands.
+enum { FRAGMENT_GROUND = 1, FRAGMENT_SINKS = 2 };
 enum { COLLAPSE_STAYS = 1, COLLAPSE_KICKED = 2 };
 
 /// A fragment whose lowest point is under this stands on the ground, flag or not: the fortress's

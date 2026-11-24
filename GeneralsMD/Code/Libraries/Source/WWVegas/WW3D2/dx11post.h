@@ -272,8 +272,17 @@ public:
 	// are the scene projection's scale on each axis.  False when it drew nothing; the caller rebinds
 	// as for Occlude_Scene.  The programs come through the backend's cache as the haze's do: three
 	// sources, and the tests compile them here.
+	// traced, when given, is the occlusion already worked out at half size by the Ray Traced level's
+	// rays (DX11BackendClass::Trace_Ray_Occlusion), the first pass's format: what is kept, then the
+	// distance along the eye's axis.  The first pass is skipped and the blur and upsample take it;
+	// took_traced says whether it did (a texture not of the half size is ignored).
 	bool World_Occlude_Scene(ID3D11ShaderResourceView * depth, const float world_from_clip[16],
-		float projection_x, float projection_y);
+		float projection_x, float projection_y, ID3D11ShaderResourceView * traced = NULL, bool * took_traced = NULL);
+	// Whether World_Occlude_Scene would draw this frame, so nothing is traced for it in vain.
+	bool World_Occlusion_Ready() const;
+	// The shroud the first pass fades the occlusion by and its rectangle (Set_Shroud), for a pass
+	// that takes its place; NULL when none was handed over this frame.
+	ID3D11ShaderResourceView * World_Ao_Shroud(float rect[4]) const;
 	bool Wants_World_Ao_Programs() const;
 	const char * World_Ao_Program_Source(unsigned index) const;
 	void Load_World_Ao_Program(unsigned index, const void * bytecode, SIZE_T size);

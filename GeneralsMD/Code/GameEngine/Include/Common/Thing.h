@@ -180,6 +180,9 @@ protected:
 	// Virtual method since objects can be on bridges and need to calculate heigh above terrain differently.
 	virtual Real calculateHeightAboveTerrain(void) const;		// Calculates the actual height above terrain.  Doesn't use cache.
 
+	// The altitude cache measures from the layer's surface, so a layer change without a move must drop it.
+	void invalidateAltitudeCache() const { m_cacheFlags &= ~(VALID_ALTITUDE_TERRAIN | VALID_ALTITUDE_SEALEVEL); }	///< keeps the dir flag, as a move does
+
 	virtual Object *asObjectMeth() { return NULL; }
 	virtual Drawable *asDrawableMeth() { return NULL; }
 	virtual const Object *asObjectMeth() const { return NULL; }

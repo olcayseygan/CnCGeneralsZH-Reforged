@@ -1,0 +1,38 @@
+# Footage of a GLA Command Center shelled until it breaks apart: seat 1 plays GLA and its own
+# Command Center at its start, 1733,4205 on Twilight Flame, is the target; seat 0 puts down two Nuke
+# Cannons, two Tomahawks and four Overlords east of it and sends them all at it. The Command Center
+# is its own model until the first hit, then its fragments (UBCmdHQ.lwfrag, W3DFractureDraw): each
+# round knocks out the fragments where it lands, and the killing round brings the rest down onto the
+# stumps at its foot. DestroyDie takes the object at once, so the fall finishes without it and the
+# ruin lies 12 game seconds before it sinks, beside the GLA hole. A drawn run: the FRACTURE HIT and
+# FRACTURE COLLAPSE lines are the text of it.
+#
+#   generals.exe -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionGLA -seed 1 -camera 1733 4205
+#     -scenario glahqfall -maxframes 1200 -logPrefix glahqfall_
+#
+# -camera 1733 4205 holds the Command Center dead centre (docs/reference/UI-MAP.md, the Ally Aid
+# row); the attackers come in from the right of the frame.
+# Frames here are this file's 30 a game second; the log's logic frames are two thirds of them at 1.5x.
+
+# a barracks out of the frame keeps seat 1 in the match: with the Command Center its only building,
+# the match was decided on the frame it died (logic 422) and the fall never played. 2050,3300 is
+# restricted terrain to a structure
+30    spawn   1  GLABarracks                1  2100  3850
+30    spawn   0  ChinaVehicleNukeLauncher   2  2080  4040  180
+30    spawn   0  AmericaVehicleTomahawk     2  2080  4300  180
+30    spawn   0  ChinaTankOverlord          4  1980  4150  180
+60    attack  0  ChinaVehicleNukeLauncher   1  GLACommandCenter
+60    attack  0  AmericaVehicleTomahawk     1  GLACommandCenter
+60    attack  0  ChinaTankOverlord          1  GLACommandCenter
+150   tally   1  GLACommandCenter
+300   tally   1  GLACommandCenter
+450   tally   1  GLACommandCenter
+600   tally   1  GLACommandCenter
+750   tally   1  GLACommandCenter
+900   tally   1  GLACommandCenter
+1050  tally   1  GLACommandCenter
+1200  tally   1  GLACommandCenter
+1500  tally   1  GLACommandCenter
+1800  tally   1  GLACommandCenter

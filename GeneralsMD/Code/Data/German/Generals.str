@@ -15109,8 +15109,12 @@ GUI:ShadowQuality2
 "Hoch"
 END
 
+GUI:ShadowQuality3
+"Raytracing"
+END
+
 TOOLTIP:ShadowQuality
-"Wie scharf die Schatten von Einheiten und Gebäuden sind. Hoch belegt etwa 64 MB Grafikspeicher, Niedrig spart Speicher auf einer schwachen Karte. Nur mit Direct3D 11 und nicht mit Klassischer Grafik. Gilt, sobald du Annehmen drückst."
+"Wie scharf die Schatten von Einheiten und Gebäuden sind. Hoch belegt etwa 64 MB Grafikspeicher, Niedrig spart Speicher auf einer schwachen Karte. Raytracing prüft für jeden Pixel den Weg zur Sonne an der echten Form jedes Panzers und Gebäudes, so bleiben ihre Schatten bei jedem Zoom scharf; das kostet bis zu 1,6 ms pro Bild und ist noch experimentell. Nur mit Direct3D 11 und nicht mit Klassischer Grafik. Gilt, sobald du Annehmen drückst."
 END
 
 GUI:VolumetricSmoke

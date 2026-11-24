@@ -527,43 +527,33 @@ static Bool xy_collideTest_Circle_Rect(const CollideInfo *a, const CollideInfo *
 */
 static Bool xy_collideTest_Rect_Circle(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
 {
-#if 1
-	/// @todo srj -- this is better than the other one, since it actually handles rotated rects,
-	// but still not as accurate as is could be. (srj)
-	CollideInfo btmp = *b;
-	btmp.geom.setMinorRadius(btmp.geom.getMajorRadius());
-	return xy_collideTest_Rect_Rect(a, &btmp, cinfo);
-#else
-	// note, this actually tests the intersection of the the rect with the circle's
-	// bounding box. in practice, this is usually good enough, since most of
-	// our sphere/cyl shapes are small relative to boxes. (in fact, the WWMath
-	// library takes a similar shortcut when colliding spheres with boxes in 3d.
-	// so I figured it was probably good enough for us too.)
+	// The circle's centre in the rect's own frame, against the rect's nearest point.  EA tested a
+	// square of the circle's radius turned to the circle's facing, which reached 41% too far on its
+	// diagonal and touched or not as an infantryman turned on the spot.
+	const Real c = (Real)Cos(a->angle);
+	const Real s = (Real)Sin(a->angle);
+	const Real major = a->geom.getMajorRadius();
+	const Real minor = a->geom.getMinorRadius();
+	const Real dx = b->position.x - a->position.x;
+	const Real dy = b->position.y - a->position.y;
+	const Real alongMajor = dx*c + dy*s;
+	const Real alongMinor = dy*c - dx*s;
+	const Real nearMajor = minReal(maxReal(alongMajor, -major), major);
+	const Real nearMinor = minReal(maxReal(alongMinor, -minor), minor);
+	const Real radius = b->geom.getMajorRadius();
+	if (sqr(alongMajor - nearMajor) + sqr(alongMinor - nearMinor) > sqr(radius))
+		return false;
 
-	Real circ_l = b->position.x - b->geom.getMajorRadius();
-	Real circ_r = b->position.x + b->geom.getMajorRadius();
-	Real circ_t = b->position.y - b->geom.getMajorRadius();
-	Real circ_b = b->position.y + b->geom.getMajorRadius();
-	Real rect_l = a->position.x - a->geom.getMajorRadius();
-	Real rect_r = a->position.x + a->geom.getMajorRadius();
-	Real rect_t = a->position.y - a->geom.getMinorRadius();
-	Real rect_b = a->position.y + a->geom.getMinorRadius();
-
-	if (circ_r >= rect_l &&	circ_l <= rect_r &&
-		circ_b >= rect_t &&	circ_t <= rect_b)
+	if (cinfo)
 	{
-		if (cinfo)
-		{
-			vecDiff_2D(&b->position, &a->position, &cinfo->normal);
-			cinfo->normal.normalize();
-			cinfo->loc.x = (maxReal(circ_l, rect_l) + minReal(circ_r, rect_r)) * 0.5f;
-			cinfo->loc.y = (maxReal(circ_t, rect_t) + minReal(circ_b, rect_b)) * 0.5f;
-			cinfo->loc.z = (a->position.z + b->position.z) * 0.5f;
-		}
-		return true;
+		// the rect's point nearest the circle's centre, and srj's centre-to-centre normal
+		cinfo->loc.x = a->position.x + nearMajor*c - nearMinor*s;
+		cinfo->loc.y = a->position.y + nearMajor*s + nearMinor*c;
+		cinfo->loc.z = (a->position.z + b->position.z) * 0.5f;
+		vecDiff_2D(&b->position, &a->position, &cinfo->normal);
+		cinfo->normal.normalize();
 	}
-	return false;
-#endif
+	return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -598,44 +588,80 @@ static Bool xy_collideTest_Circle_Circle(const CollideInfo *a, const CollideInfo
 */
 static Bool xy_collideTest_Rect_Rect(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
 {
-	Coord2D pts[4];
-	Coord2D avg; avg.x = avg.y = 0.0f;
-	Int avgTot = 0;
+	// Separating axes: two rects are apart exactly when their shadows are apart on one of their four
+	// edge directions.  EA only asked whether a corner of one lay inside the other, which misses a
+	// thin box crossing a wider one with no corner inside (a wall or a clothes line across a hull).
+	const Real ca = (Real)Cos(a->angle);
+	const Real sa = (Real)Sin(a->angle);
+	const Real cb = (Real)Cos(b->angle);
+	const Real sb = (Real)Sin(b->angle);
+	const Real aMajor = a->geom.getMajorRadius();
+	const Real aMinor = a->geom.getMinorRadius();
+	const Real bMajor = b->geom.getMajorRadius();
+	const Real bMinor = b->geom.getMinorRadius();
+	const Real dx = b->position.x - a->position.x;
+	const Real dy = b->position.y - a->position.y;
+	// |cos| and |sin| of the angle between the two
+	const Real cosAB = (Real)fabs(ca*cb + sa*sb);
+	const Real sinAB = (Real)fabs(ca*sb - sa*cb);
+	if ((Real)fabs(dx*ca + dy*sa) > aMajor + bMajor*cosAB + bMinor*sinAB)
+		return false;
+	if ((Real)fabs(dy*ca - dx*sa) > aMinor + bMajor*sinAB + bMinor*cosAB)
+		return false;
+	if ((Real)fabs(dx*cb + dy*sb) > bMajor + aMajor*cosAB + aMinor*sinAB)
+		return false;
+	if ((Real)fabs(dy*cb - dx*sb) > bMinor + aMajor*sinAB + aMinor*cosAB)
+		return false;
 
-	rectToFourPoints(a, pts);
-	testRotatedPointsAgainstRect(pts, b, &avg, &avgTot);
-
-	rectToFourPoints(b, pts);
-	testRotatedPointsAgainstRect(pts, a, &avg, &avgTot);
-	
-	if (avgTot > 0)
+	if (cinfo)
 	{
-		if (cinfo)
+		// the corners inside the other rect, as EA had it; a crossing with none takes the midpoint
+		Coord2D pts[4];
+		Coord2D avg; avg.x = avg.y = 0.0f;
+		Int avgTot = 0;
+		rectToFourPoints(a, pts);
+		testRotatedPointsAgainstRect(pts, b, &avg, &avgTot);
+		rectToFourPoints(b, pts);
+		testRotatedPointsAgainstRect(pts, a, &avg, &avgTot);
+		if (avgTot > 0)
 		{
-			// this is a little hokey, but generally adequate...
 			cinfo->loc.x = avg.x / avgTot;
 			cinfo->loc.y = avg.y / avgTot;
-			cinfo->loc.z = (a->position.z + b->position.z) * 0.5f;
-
-			// yow, what exactly does it mean to find the normal to two *intersecting*
-			// rects? with "true" physics we could project ahead and determine 
-			// what the collision point would be, which would of course always
-			// give a perfect, symmetrical normal. however, we almost always determine
-			// collisions "after the fact" and thus the rects already intersect, meaning
-			// that it's tricky to find the normal. we could do it the "right" way, which 
-			// would be to back up the objects to find the perfect point (see above), but
-			// we don't have velocity information at this point, so we can't really
-			// do that. so, naturally, we provide a (poor) guess by just doing the center-to-center
-			// normal. this is rarely the correct surface normal for a box-box collision,
-			// but until I either (a) rewrite everything to have predictive collisions, 
-			// or (b) come up with a better definition of a useful normal in this case,
-			// I'm not sure we can do a whole lot better... (srj)
-			vecDiff_2D(&b->position, &a->position, &cinfo->normal);
-			cinfo->normal.normalize();
 		}
-		return true;
+		else
+		{
+			cinfo->loc.x = (a->position.x + b->position.x) * 0.5f;
+			cinfo->loc.y = (a->position.y + b->position.y) * 0.5f;
+		}
+		cinfo->loc.z = (a->position.z + b->position.z) * 0.5f;
+
+		// yow, what exactly does it mean to find the normal to two *intersecting*
+		// rects? with "true" physics we could project ahead and determine
+		// what the collision point would be, which would of course always
+		// give a perfect, symmetrical normal. however, we almost always determine
+		// collisions "after the fact" and thus the rects already intersect, meaning
+		// that it's tricky to find the normal. we could do it the "right" way, which
+		// would be to back up the objects to find the perfect point (see above), but
+		// we don't have velocity information at this point, so we can't really
+		// do that. so, naturally, we provide a (poor) guess by just doing the center-to-center
+		// normal. this is rarely the correct surface normal for a box-box collision,
+		// but until I either (a) rewrite everything to have predictive collisions,
+		// or (b) come up with a better definition of a useful normal in this case,
+		// I'm not sure we can do a whole lot better... (srj)
+		vecDiff_2D(&b->position, &a->position, &cinfo->normal);
+		cinfo->normal.normalize();
 	}
-	return false;
+	return true;
+}
+
+//-----------------------------------------------------------------------------
+/** The z test every shape test starts from.  A sphere's position is its centre, so its range
+	reaches below the position; leaving that out missed a sphere at or under the other's base, and
+	only when it was the first argument. */
+inline Bool zRangesOverlap(const Coord3D *posA, const GeometryInfo& geomA, const Coord3D *posB, const GeometryInfo& geomB)
+{
+	return posA->z + geomA.getMaxHeightAbovePosition() >= posB->z - geomB.getMaxHeightBelowPosition() &&
+		posA->z - geomA.getMaxHeightBelowPosition() <= posB->z + geomB.getMaxHeightAbovePosition();
 }
 
 //-----------------------------------------------------------------------------
@@ -716,6 +742,16 @@ inline Bool z_collideTest_Nonsphere_Nonsphere(CollideTestProc xyproc, const Coll
 	if (minRadius>r) minRadius = r;
 	
 	Bool closeEnough = sqr(minRadius) > dSqr;
+
+	// the preflight skips xyproc, which is what fills loc and normal: without this onCollide got
+	// whatever the caller's stack held
+	if (closeEnough && cinfo)
+	{
+		cinfo->loc.x = (a->position.x + b->position.x) * 0.5f;
+		cinfo->loc.y = (a->position.y + b->position.y) * 0.5f;
+		vecDiff_2D(&b->position, &a->position, &cinfo->normal);
+		cinfo->normal.normalize();
+	}
 
 	if (closeEnough || xyproc(a, b, cinfo))
 	{
@@ -2012,53 +2048,47 @@ void PartitionData::doRectFill(
 	Real angle
 )
 {
-	Real c = (Real)Cos(angle);
-	Real s = (Real)Sin(angle);
+	// Every cell the turned rect overlaps, edges and corners included: a cell of the rect's bounding
+	// box is kept unless one of the rect's own two axes separates them (the bounding box settles the
+	// world axes).  EA sampled every half cell from one corner and stopped short of the far major
+	// and minor edges, so a strip up to half a cell wide on two sides shared no cell with what stood
+	// there and the pair was never tested.  Each cell comes up once, so no search for a duplicate;
+	// calcMaxCoiForShape's box count covers the bounding box, since it is never wider than the diagonal.
+	DEBUG_ASSERTCRASH(m_coiInUseCount == 0, ("expected no coi in use here"));
 
-	Real actualCellSize = ThePartitionManager->getCellSize();
-	Real stepSize = actualCellSize * 0.5f; // in theory, should be getCellSize() exactly, but needs to be smaller to avoid aliasing problems
-	Real ydx = s * stepSize;
-	Real ydy = -c * stepSize;
-	Real xdx = c * stepSize;
-	Real xdy = s * stepSize;
+	const Real c = (Real)Cos(angle);
+	const Real s = (Real)Sin(angle);
+	const Real absC = (Real)fabs(c);
+	const Real absS = (Real)fabs(s);
+	const Real boundX = halfsizeX*absC + halfsizeY*absS;
+	const Real boundY = halfsizeX*absS + halfsizeY*absC;
+	// a cell's half size projected on either of the rect's axes
+	const Real cellReach = ThePartitionManager->getCellSize() * 0.5f * (absC + absS);
 
-	// GS 12-26-02  Oh my.  The step size has been fudged down to ensure that a cell is not jumped over,
-	// but then the original step size was used to determine the number of steps.  This error gets
-	// more pronounced on bigger buildings.  ie a 100 X 160 registers cells for a 80 x 100.  If you
-	// fudge one, you have to fudge the other.
-//	Real stepSizeInvTimes2 = 2.0f * ThePartitionManager->getCellSizeInv();
-	Real stepSizeInvTimes2 = 2.0f * (1.0f / stepSize);
+	Int minCellX, minCellY, maxCellX, maxCellY;
+	ThePartitionManager->worldToCell(centerX - boundX, centerY - boundY, &minCellX, &minCellY);
+	ThePartitionManager->worldToCell(centerX + boundX, centerY + boundY, &maxCellX, &maxCellY);
 
-	/*
-		srj fixes subtle bug: need +1 to get all of misaligned geometries accted for.
-	*/
-//	Int numStepsX = REAL_TO_INT_CEIL(halfsizeX * stepSizeInvTimes2) + 1;
-//	Int numStepsY = REAL_TO_INT_CEIL(halfsizeY * stepSizeInvTimes2) + 1;
-	Int numStepsX = REAL_TO_INT_CEIL(halfsizeX * stepSizeInvTimes2);
-	Int numStepsY = REAL_TO_INT_CEIL(halfsizeY * stepSizeInvTimes2);
-	// GS 12-26-02  Oh my part 2.  Now that we are no longer greatly underestimating our COI imprint,
-	// we don't need this fudge.  The fudge is not in the calcMaxCOIForShape, so it just results in 
-	// good COIs getting dropped since we didn't allocate enough to handle this fudge.
-
-	Real tl_x = centerX - halfsizeX*c - halfsizeY*s;
-	Real tl_y = centerY + halfsizeY*c - halfsizeX*s;
-
-	for (Int iy = 0; iy < numStepsY; ++iy, tl_x += ydx, tl_y += ydy)
+	for (Int y = minCellY; y <= maxCellY; ++y)
 	{
-		Real x = tl_x;
-		Real y = tl_y;
-		for (Int ix = 0; ix < numStepsX; ++ix, x += xdx, y += xdy)
+		for (Int x = minCellX; x <= maxCellX; ++x)
 		{
-			Int cellx, celly;
-			ThePartitionManager->worldToCell(x, y, &cellx, &celly);
-			PartitionCell *cell = ThePartitionManager->getCellAt(cellx, celly);	// might be null if off the edge
-			if (cell)
-			{
-				addSubPixToCoverage(cell);
-			}
+			PartitionCell *cell = ThePartitionManager->getCellAt(x, y);	// might be null if off the edge
+			if (cell == NULL)
+				continue;
+
+			Real cellCenterX, cellCenterY;
+			ThePartitionManager->getCellCenterPos(x, y, cellCenterX, cellCenterY);
+			const Real dx = cellCenterX - centerX;
+			const Real dy = cellCenterY - centerY;
+			if ((Real)fabs(dx*c + dy*s) > halfsizeX + cellReach || (Real)fabs(dy*c - dx*s) > halfsizeY + cellReach)
+				continue;
+
+			DEBUG_ASSERTCRASH(m_coiInUseCount < m_coiArrayCount, ("not enough cois allocated for this object"));
+			if (m_coiInUseCount < m_coiArrayCount)
+				m_coiArray[m_coiInUseCount++].addCoverage(cell, this);
 		}
 	}
-
 }
 
 // -----------------------------------------------------------------------------
@@ -2142,7 +2172,8 @@ void PartitionData::doCircleFillPrecise(Real centerX, Real centerY, Real radius)
 			if (dy < 0.0f)
 				dy = 0.0f;
 
-			if (sqr(dx) + sqr(dy) < sqr(radius))
+			// touching counts, so a circle of radius 0 still keeps its own cell, as EA's fill did
+			if (sqr(dx) + sqr(dy) <= sqr(radius))
 				addSubPixToCoverage(cell);
 		}
 	}
@@ -2248,15 +2279,12 @@ Bool PartitionData::collidesWith(const PartitionData *that, CollideLocAndNormal 
 
 	// invariant for all geometries: first do z collision check.  Most pairs a crowd makes end here,
 	// so the two CollideInfo copies wait until they are needed.
+	// No swept test: a pair is tested where both stand this tick, so a mover stepping further than a
+	// thin box is wide passes it (at speed 150 a tick is 1.5 retail steps).  Ground units are kept
+	// off walls by the pathfinder; this reaches thrown things.  A fix needs the last position here.
 	const GeometryInfo& thisGeomInfo = thisObj->getGeometryInfo();
 	const GeometryInfo& thatGeomInfo = thatObj->getGeometryInfo();
-	Real thisZ = thisObj->getPosition()->z;
-	Real thatZ = thatObj->getPosition()->z;
-	Real thisTop = thisZ + thisGeomInfo.getMaxHeightAbovePosition();
-	Real thisBot = thisZ - thisGeomInfo.getMaxHeightBelowPosition();
-	Real thatTop = thatZ + thatGeomInfo.getMaxHeightAbovePosition();
-	Real thatBot = thatZ - thatGeomInfo.getMaxHeightBelowPosition();
-	if (thisTop >= thatBot && thisBot <= thatTop)
+	if (zRangesOverlap(thisObj->getPosition(), thisGeomInfo, thatObj->getPosition(), thatGeomInfo))
 	{
 		CollideInfo thisInfo(thisObj->getPosition(), thisGeomInfo, thisObj->getOrientation());
 		CollideInfo thatInfo(thatObj->getPosition(), thatGeomInfo, thatObj->getOrientation());
@@ -2291,8 +2319,7 @@ Bool PartitionManager::geomCollidesWithGeom(const Coord3D* pos1,
 	CollideInfo thatInfo(pos2, geom2, angle2);
 
 	// invariant for all geometries: first do z collision check.
-	if (thisInfo.position.z + thisInfo.geom.getMaxHeightAbovePosition() >= thatInfo.position.z && 
-			thisInfo.position.z <= thatInfo.position.z + thatInfo.geom.getMaxHeightAbovePosition())
+	if (zRangesOverlap(pos1, geom1, pos2, geom2))
 	{
 		GeometryType thisGeom = geom1.getGeomType();
 		GeometryType thatGeom = geom2.getGeomType();
@@ -2472,14 +2499,19 @@ Int PartitionData::calcMaxCoiForShape(GeometryType geom, Real majorRadius, Real 
 			{
 				// note that majorRadius is a radius, not a diameter.
 				// this actually allocates a few too many, but that's ok.
+				// (a span of 2r touches at most ceil(2r / cell) + 1 cells a side, so this covers
+				// doCircleFillPrecise; EA fell through to the box count here and over-allocated)
 				Int cells = ThePartitionManager->worldToCellDist(majorRadius*2) + 1;
 				result = cells * cells;
+				break;
 			}
 			case GEOMETRY_BOX:
+			default:
 			{
 				Real diagonal = (Real)(sqrtf(majorRadius*majorRadius + minorRadius*minorRadius));
 				Int cells = ThePartitionManager->worldToCellDist(diagonal*2) + 1;
 				result = cells * cells;
+				break;
 			}
 		};
 	}
@@ -6089,7 +6121,9 @@ Int PartitionManager::iterateCellsBreadthFirst(const Coord3D *pos, CellBreadthFi
 
 	Int cellX, cellY;
 	ThePartitionManager->worldToCell(pos->x, pos->y, &cellX, &cellY);
-	
+	if (getCellAt(cellX, cellY) == NULL)
+		return -1;	// off the grid: EA indexed the cell array with it
+
 	// Note, bool. not Bool, cause bool will cause this to be a bitfield.
 	std::vector<bool> bitField;
 	Int cellCount = m_cellCountX * m_cellCountY;
@@ -6135,7 +6169,7 @@ Int PartitionManager::iterateCellsBreadthFirst(const Coord3D *pos, CellBreadthFi
 		}
 
 		// bottom
-		if (curY + 1 > 0) {
+		if (curY + 1 < m_cellCountY) {	// EA tested > 0 and read past the top row
 			if (!bitField[(curY + 1) * m_cellCountX + curX]) {
 				bitField[(curY + 1) * m_cellCountX + curX] = true;
 				cellQ.push(&m_cells[(curY + 1) * m_cellCountX + curX]);
@@ -7023,8 +7057,7 @@ Bool PartitionFilterWouldCollide::allow(Object *objOther)
   Bool doesCollide;
 
 	// invariant for all geometries: first do z collision check.
-	if (thisInfo.position.z + thisInfo.geom.getMaxHeightAbovePosition() >= thatInfo.position.z && 
-			thisInfo.position.z <= thatInfo.position.z + thatInfo.geom.getMaxHeightAbovePosition())
+	if (zRangesOverlap(&m_position, m_geom, objOther->getPosition(), objOther->getGeometryInfo()))
 	{
 		GeometryType thisGeom = m_geom.getGeomType();
 		GeometryType thatGeom = objOther->getGeometryInfo().getGeomType();

@@ -162,7 +162,10 @@ enum { CLOUD_STYLE_COUNT = 2 };
 
 // Shadow quality is the size of the sun's depth map, low, medium and high: 1024, 2048 and 4096
 // texels a side (W3DVolumetricShadow.cpp, renderShadowMap).  Medium is the size the map always had.
-enum { SHADOW_QUALITY_COUNT = 3 };
+// Ray Traced is the High map with the opaque scene's sun shadows traced one ray a pixel, what
+// -rtShadows forces; only Direct3D 11 on Windows traces, so elsewhere the menu leaves it out and a
+// stored Ray Traced draws High.
+enum { SHADOW_QUALITY_HIGH = 2, SHADOW_QUALITY_RAY_TRACED = 3, SHADOW_QUALITY_COUNT = 4 };
 
 // The sun shafts: off, Low (6 steps a ray) or High (12), half size either way (W3DShaderManager.cpp,
 // pushSunShafts).  Strings: GUI:SunShafts, GUI:SunShafts0..2, TOOLTIP:SunShafts.

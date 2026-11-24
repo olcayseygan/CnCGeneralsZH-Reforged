@@ -1692,12 +1692,46 @@ bool DX11PostProcessClass::Ensure_World_Ao_Targets(unsigned & half_width, unsign
 	return true;
 }
 
-bool DX11PostProcessClass::World_Occlude_Scene(ID3D11ShaderResourceView * depth,
-	const float world_from_clip[16], float projection_x, float projection_y)
+ID3D11ShaderResourceView * DX11PostProcessClass::World_Ao_Shroud(float rect[4]) const
 {
-	if (Occluded || Resolved || !ShadersReady || SceneTarget.View == NULL
-			|| Device->Get_Scene_View() != SceneTarget.View || WorldAoRefused
-			|| WorldAoShaders[WORLD_AO_PROGRAMS - 1] == NULL) {
+	memcpy(rect, HazeShroudRect, sizeof(HazeShroudRect));
+	return HazeShroudSource;
+}
+
+// The traced occlusion's texture is the half size targets' size, or it is not used.
+static bool half_sized(ID3D11ShaderResourceView * view, unsigned width, unsigned height)
+{
+	ID3D11Resource * resource = NULL;
+	view->GetResource(&resource);
+	ID3D11Texture2D * texture = NULL;
+	bool same = false;
+	if (resource != NULL && SUCCEEDED(resource->QueryInterface(__uuidof(ID3D11Texture2D), (void **)&texture))) {
+		D3D11_TEXTURE2D_DESC description;
+		texture->GetDesc(&description);
+		same = description.Width == width && description.Height == height;
+		texture->Release();
+	}
+	if (resource != NULL) {
+		resource->Release();
+	}
+	return same;
+}
+
+bool DX11PostProcessClass::World_Occlusion_Ready() const
+{
+	return !Occluded && !Resolved && ShadersReady && SceneTarget.View != NULL
+		&& Device->Get_Scene_View() == SceneTarget.View && !WorldAoRefused
+		&& WorldAoShaders[WORLD_AO_PROGRAMS - 1] != NULL;
+}
+
+bool DX11PostProcessClass::World_Occlude_Scene(ID3D11ShaderResourceView * depth,
+	const float world_from_clip[16], float projection_x, float projection_y, ID3D11ShaderResourceView * traced,
+	bool * took_traced)
+{
+	if (took_traced != NULL) {
+		*took_traced = false;
+	}
+	if (!World_Occlusion_Ready()) {
 		return false;
 	}
 	unsigned half_width = 0;
@@ -1711,22 +1745,27 @@ bool DX11PostProcessClass::World_Occlude_Scene(ID3D11ShaderResourceView * depth,
 	// Read and left for the haze, which comes later in the same frame and takes it for good.
 	HazeShroudView = HazeShroudSource;
 
+	if (traced != NULL && !half_sized(traced, half_width, half_height)) {
+		traced = NULL;
+	}
 	PassSetup pass;
-	memset(&pass, 0, sizeof(pass));
-	pass.Shader = WorldAoShaders[0];
-	pass.Extra = depth;
-	pass.World = true;
-	pass.Destination = WorldAoTargets[0].View;
-	pass.DestinationWidth = half_width;
-	pass.DestinationHeight = half_height;
-	pass.SourceWidth = Width;
-	pass.SourceHeight = Height;
-	Draw_Pass(pass);
+	if (traced == NULL) {
+		memset(&pass, 0, sizeof(pass));
+		pass.Shader = WorldAoShaders[0];
+		pass.Extra = depth;
+		pass.World = true;
+		pass.Destination = WorldAoTargets[0].View;
+		pass.DestinationWidth = half_width;
+		pass.DestinationHeight = half_height;
+		pass.SourceWidth = Width;
+		pass.SourceHeight = Height;
+		Draw_Pass(pass);
+	}
 
 	memset(&pass, 0, sizeof(pass));
 	pass.Shader = WorldAoShaders[1];
 	pass.World = true;
-	pass.Source = WorldAoTargets[0].Resource;
+	pass.Source = (traced != NULL) ? traced : WorldAoTargets[0].Resource;
 	pass.Destination = WorldAoTargets[1].View;
 	pass.DestinationWidth = half_width;
 	pass.DestinationHeight = half_height;
@@ -1754,6 +1793,9 @@ bool DX11PostProcessClass::World_Occlude_Scene(ID3D11ShaderResourceView * depth,
 	pass.SourceHeight = half_height;
 	Draw_Pass(pass);
 	Occluded = true;
+	if (took_traced != NULL) {
+		*took_traced = traced != NULL;
+	}
 	return true;
 }
 

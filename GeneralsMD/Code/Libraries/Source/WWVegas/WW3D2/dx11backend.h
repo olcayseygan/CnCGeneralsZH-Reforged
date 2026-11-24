@@ -51,6 +51,9 @@
 #include "engineshader.h"
 #include "ffshader.h"
 #include "ffvertex.h"
+#include "dx11raygrid.h"
+#include "dx11rayao.h"
+#include "dx11raylights.h"
 
 #include <d3d11_1.h>
 #include <d3d9.h>
@@ -435,6 +438,32 @@ public:
 	// value, and no draw count tells that apart from a pass that drew the world.
 	std::string Shadow_Map_Report();
 
+	// Ray traced sun shadows, -rtShadows, a prototype.  While asked for, the sun's map is drawn as
+	// ever and a geometry program on the pass streams each solid caster's triangles out in the sun's
+	// clip space; a caster cut at its alpha (foliage, fences, rotors, the cloak's thinned shadow)
+	// marks the map's stencil instead.  A compute pass bins the triangles into a grid across the
+	// sun's view, and once the opaque world is down (Trace_Ray_Shadows) one ray a pixel goes from the
+	// scene's depth toward the sun through that grid, the map's marked texels and over the ground.  Only the opaque scene's receivers
+	// stand down for it; water, the mirror, anything translucent and a filter's frame keep the map.
+	// Off, none of it is made or bound.
+	void Set_Ray_Traced_Shadows(bool wanted) { RayShadowsWanted = wanted; }
+	bool Trace_Ray_Shadows();
+	bool Ray_Shade_Waiting() const;		///< what Trace_Ray_Shadows asks before it traces
+	std::string Ray_Shadow_Report();
+	// The Ambient Occlusion option's half size term from hemisphere rays through the ray grid, at the
+	// Ray Traced level on a frame that built it (dx11rayao.cpp); NULL leaves the option's own first
+	// pass to make it.  Time_Ray_Occlusion brackets the whole occlusion at that level, either kind.
+	ID3D11ShaderResourceView * Trace_Ray_Occlusion(const float world_from_clip[16],
+		ID3D11ShaderResourceView * shroud, const float shroud_rect[4]);
+	void Time_Ray_Occlusion(bool begin, bool traced);
+	// The scene's point lights with a shadow ray each through the ray grid, at the Ray Traced level
+	// (dx11raylights.cpp): while pending the opaque scene's receivers take none, and Trace_Ray_Lights,
+	// before Trace_Ray_Shadows, lights the opaque scene with them.  True when it bound targets of its own.
+	bool Ray_Lights_Pending() const;
+	bool Trace_Ray_Lights();
+	std::string Ray_Light_Probe_Report() { return (Device != NULL) ? RayLights.Probe_Report(Device->Get_Context()) : std::string(); }
+	bool Ray_Lights_Probing() const { return RayShadowsWanted && RayLights.Probing(); }
+
 	// The two draws.  Both resolve the shadow state into a pipeline first, and both return false
 	// when some part of that state has no D3D11 answer, which leaves the draw undone rather than
 	// drawn wrongly.
@@ -512,6 +541,9 @@ public:
 	// D3DCompile's first flag word; zero is its default optimisation.
 	bool Compile_Program(const std::string & source, const char * name, const char * profile,
 		std::vector<unsigned char> & bytecode, unsigned flags = 0);
+	// The Ray Traced shadows' per-sample multiply under a multisampled scene (ps_5_0: the shade at
+	// t0, sample 0's depth at t1, the samples' depth at t2), for a test to run on its own.
+	static const char * Ray_Samples_Program();
 
 	// A generated fixed-function program missing from both caches is compiled on a worker thread
 	// rather than on the frame that first meets it, which cost that frame 100 to 130ms of FXC: the
@@ -540,6 +572,7 @@ private:
 		ID3D11VertexShader * VertexShader;
 		ID3D11PixelShader * PixelShader;
 		ID3D11InputLayout * Layout;
+		unsigned CutCapture;	///< one past its vertex program's entry in RayCutCaptures, nought for none
 	};
 
 	// The whole constant block the generated vertex shader reads, always uploaded in full.  A shader
@@ -739,6 +772,128 @@ private:
 	float ShadowFromClipProjection[16];
 	bool ShadowFromClipValid;
 
+	// Ray traced shadows (Set_Ray_Traced_Shadows).  The triangles go out of the caster pass as three
+	// float4 corners each, the fourth float a stamp of the pass that wrote them, so the slots an
+	// earlier and fuller pass left behind are told apart without clearing 24 MB a frame.
+	bool Make_Ray_Shadows();
+	void Release_Ray_Shadows();
+	void Begin_Ray_Capture();
+	void End_Ray_Capture();
+	// Around the second draw a caster drawn one by one makes for the rays; false when this one is
+	// not streamed (a cloak's shadow, a cut caster with no coordinates or past the slices).
+	bool Begin_Ray_Copy(const Pipeline & pipeline);
+	bool Begin_Ray_Cut_Copy(unsigned cut_capture, ID3D11ShaderResourceView * texture, float reference);
+	void End_Ray_Copy();
+	bool Ray_Draw_Is_Cut() const;
+	bool Make_Ray_Samples();
+	// A cut caster's capture program, made from its vertex program's output signature on first
+	// use (nought for a program it cannot be made for), and the slice its texture's alpha goes into.
+	unsigned Cut_Capture_For(const std::vector<unsigned char> & vertex_code);
+	ID3D11GeometryShader * Ray_Cut_Program(unsigned cut_capture);
+	int Ray_Cut_Slice(ID3D11ShaderResourceView * texture);
+	void Release_Ray_Cut_Textures();
+	struct RayCutCapture
+	{
+		std::string Source;
+		ID3D11GeometryShader * Program;
+		bool Refused;
+	};
+	std::vector<RayCutCapture> RayCutCaptures;		///< kept with their sources across a device; the programs go with the rays
+	std::map<std::string, unsigned> RayCutCaptureIndex;
+	enum { RAY_CUT_SLICES = 32, RAY_CUT_SIZE = 512 };
+	bool RayCutWanted;				///< ZHR_RT_CUT=0 leaves the cut casters out of the 3D grid, for a before and after
+	bool RaySamplesRefused;
+	ID3D11ShaderResourceView * RayCutTextures[RAY_CUT_SLICES];	///< this pass's cut textures, held until their alpha is copied
+	unsigned RayCutTextureCount;
+	unsigned RayCutCopies;			///< the last caster pass's second draws of cut casters
+	unsigned RayCutTexturesLeftOut;	///< and of those refused a slice
+	float RayCaptureStamp[4];		///< what RayCaptureConstants holds
+	ID3D11Buffer * RayCutCoordinates;
+	ID3D11ShaderResourceView * RayCutCoordinatesView;
+	ID3D11Texture2D * RayCutAlpha;
+	ID3D11UnorderedAccessView * RayCutAlphaWrite;
+	ID3D11ShaderResourceView * RayCutAlphaRead;
+	ID3D11ComputeShader * RayCutAlphaShader;
+	float Sun_Depth_Scale() const;
+	bool Make_Ray_Mask();
+	bool Ray_Shade_Pending() const;
+	enum { RAY_CUT_STENCIL = 1 };	///< the map's stencil where the caster nearest the sun was cut at its alpha
+	bool RayShadowsWanted;
+	bool RayShadowsRefused;
+	bool RayCapturing;
+	bool RayCaptured;				///< this frame's triangles are binned and the opaque scene's receivers stand down
+	unsigned RayStamp;
+	float RayStrength;
+	ID3D11ShaderResourceView * RayStencilRead;	///< the map's stencil, let go with the map's surface
+	float RayProbe[4];							///< ZHR_RT_PROBE's screen rectangle, left, top, right, bottom
+	unsigned RayProbeCounts[12];				///< the trace's counts inside it (RAY_HIT_COUNTS)
+	unsigned RaySolidCopies;		///< the last caster pass's second draws of solid casters drawn one by one
+	unsigned RayPassesLeftToMap;	///< caster passes under a filter's target, whose frame kept the map
+	ID3D11GeometryShader * RayCaptureShader;		///< streams and rasterises nothing: a generic draw's second go
+	ID3D11GeometryShader * RayCaptureRasterShader;	///< streams and rasterises: the instanced solid runs, whose pixel program is none
+	ID3D11Buffer * RayCaptureConstants;
+	ID3D11Buffer * RayCorners;
+	ID3D11ShaderResourceView * RayCornersView;
+	ID3D11Buffer * RayCells[6];		///< counts, starts within a block of 1024 cells, cursors, items, block starts, rays stopped
+	ID3D11UnorderedAccessView * RayCellWrites[6];
+	ID3D11ShaderResourceView * RayCellReads[6];
+	ID3D11ComputeShader * RayCountShader;
+	ID3D11ComputeShader * RayScanShader;
+	ID3D11ComputeShader * RayBlockShader;
+	ID3D11ComputeShader * RayFillShader;
+	ID3D11ComputeShader * RayTraceShader;
+	ID3D11PixelShader * RayApplyShader;
+	ID3D11PixelShader * RayApplySamplesShader;	///< a multisampled scene's multiply, per sample, off RayShade
+	ID3D11Texture2D * RayShade;					///< the apply's one sample shade under a multisampled scene, at RayMask's size
+	ID3D11RenderTargetView * RayShadeTarget;
+	ID3D11ShaderResourceView * RayShadeRead;
+	ID3D11Buffer * RayConstants;
+	ID3D11BlendState * RayApplyBlend;
+	ID3D11DepthStencilState * RayApplyDepth;
+	ID3D11RasterizerState * RayApplyRasterizer;
+	ID3D11Texture2D * RayMask;
+	ID3D11UnorderedAccessView * RayMaskWrite;
+	ID3D11ShaderResourceView * RayMaskRead;
+	unsigned RayMaskWidth;
+	unsigned RayMaskHeight;
+	// Read back a few frames late, so nothing waits: the triangles written and wanted, the grid's
+	// references, and the GPU's time from the caster pass to the bins and from the trace to the end.
+	struct RayFrameQueries
+	{
+		ID3D11Query * Disjoint;
+		ID3D11Query * Start;
+		ID3D11Query * Captured;
+		ID3D11Query * Binned;
+		ID3D11Query * TraceStart;
+		ID3D11Query * Traced;
+		ID3D11Query * Streamed;
+		ID3D11Buffer * References;
+		bool Open;
+		bool Issued;
+		bool WasTraced;
+	};
+	enum { RAY_QUERY_FRAMES = 4 };
+	RayFrameQueries RayQueries[RAY_QUERY_FRAMES];
+	unsigned RayQueryFrame;
+	unsigned long long RayTrianglesWritten;
+	unsigned long long RayTrianglesWanted;
+	unsigned RayReferences;
+	unsigned RayStoppedByCasters;
+	unsigned RayStoppedByGround;
+	unsigned RayStoppedByCut;
+	unsigned RayStoppedByMap;		///< rays the sun's map would have stopped at the same point, one texel
+	unsigned RayRaysOnly;			///< rays a caster stopped where the map would not have
+	unsigned RayMapOnly;			///< the other way round
+	float RayCaptureMS;
+	float RayBinMS;
+	float RayTraceMS;
+	unsigned RayTracedPixels;
+	// The same triangles in a 3D grid, for rays in any direction (dx11raygrid.h); built at the end
+	// of every caster pass that captured, its probe run beside the trace under ZHR_RT_GRID.
+	DX11RayGridClass RayGrid;
+	DX11RayOcclusionClass RayOcclusion;	///< Trace_Ray_Occlusion's programs and textures
+	DX11RayLightClass RayLights;		///< Trace_Ray_Lights' programs and textures
+
 	// Set_Scene_View's matrix, and whether it has been set; and the projection held when it was,
 	// which is the scene camera's own (Set_Scene_View follows the camera's Apply).
 	float SceneView[16];
@@ -812,6 +967,7 @@ private:
 	ID3D11VertexShader * ShadowCasterVertexShaders[3];
 	ID3D11InputLayout * ShadowCasterLayouts[3];
 	ID3D11PixelShader * ShadowCasterAlphaTest;
+	unsigned ShadowCasterCutCapture;	///< the alpha tested kind's, as Pipeline::CutCapture
 	ID3D11Buffer * ShadowCasterInstances;
 	unsigned ShadowCasterCapacity;
 	ID3D11Buffer * ShadowCasterBones;
@@ -837,6 +993,7 @@ private:
 	ID3D11ShaderResourceView * TerrainHeightsView;
 	unsigned TerrainHeightsWidth;
 	unsigned TerrainHeightsHeight;
+	unsigned TerrainHeightsHighest;	///< the highest byte, where a ray toward the sun stops looking for ground
 	bool Terrain_Relight() const;
 	void Release_Terrain_Heights();
 	// Set_Soft_Particles, and which fade the current draw takes (a SOFT_PARTICLE_* value).

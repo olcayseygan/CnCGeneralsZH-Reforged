@@ -56,6 +56,7 @@
 #include "GameLogic/PolygonTrigger.h"
 #include "d3dx9math.h"
 #include "Common/GlobalData.h"
+#include "Common/OptionsCatalog.h"
 #include "Common/DrawModule.h"
 #include "W3DDevice/GameClient/W3DVolumetricShadow.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
@@ -4495,10 +4496,12 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	static Bool wholeMapRefused = FALSE;
 	if (!wholeMap)
 		wholeMapRefused = FALSE;
-	/* The ShadowQuality option halves or doubles the usual map: 1024, 2048 or 4096 a side.  The filter
-		 below is held in ground units against the 2048 map, so a level changes how sharp an edge is
-		 and not how wide its penumbra is. */
-	const UnsignedInt chosenTexels = (SHADOW_MAP_TEXELS / 2) << TheGlobalData->m_shadowQuality;
+	/* The ShadowQuality option halves or doubles the usual map: 1024, 2048 or 4096 a side, and Ray
+		 Traced keeps High's.  The filter below is held in ground units against the 2048 map, so a level
+		 changes how sharp an edge is and not how wide its penumbra is. */
+	const Int mapLevel = (std::min)( TheGlobalData->m_shadowQuality, (Int)SHADOW_QUALITY_HIGH );
+	const UnsignedInt chosenTexels = (SHADOW_MAP_TEXELS / 2) << mapLevel;
+	const Bool rayTraced = TheGlobalData->m_rtShadows || TheGlobalData->m_shadowQuality == SHADOW_QUALITY_RAY_TRACED;
 	UnsignedInt texels = chosenTexels;
 	Bool begun = FALSE;
 	/* The cloak's thinned shadow only goes with a body drawn as glass, asked here because once the
@@ -4506,6 +4509,11 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 		 the body by its opacity and casts in full.  The SDL GPU device draws the glass too, so it asks
 		 the same question. */
 	const Bool cloakBodiesDrawn = RenderEffects::TakesDrawEffect( DRAW_EFFECT_CLOAK );
+#ifdef _WIN32
+	// Ray Traced, or -rtShadows: the pass below also streams its casters out to be traced.  A backend
+	// that cannot make the rays' buffers draws the map alone.
+	Direct3D11_Set_Ray_Traced_Shadows( rayTraced != FALSE );
+#endif
 	if (TheGlobalData->m_shadowMap && captureShadows && TheTacticalView != NULL)
 	{
 		if (wholeMap && !wholeMapRefused && SunShadow::Begin( DX8Wrapper::_Get_D3D_Device(), SHADOW_MAP_WHOLE_MAP_TEXELS ))
@@ -4916,6 +4924,29 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	// Direct3D 11 takes the parameters whether or not the depth capture bound, as it always has.
 	SunShadow::Parameters(DX8Wrapper::_Get_D3D_Device(), depthBias, strength, widest,
 		narrowest, penumbra / worldPerTexel, unitsPerUnitOfDepth, skyFill);
+#endif
+#ifdef _WIN32
+	// The report is the dev switch's; a player on the Ray Traced level gets no line a second.
+	if (TheGlobalData->m_rtShadows)
+	{
+		static UnsignedInt nextRayReportFrame = 0;
+		const UnsignedInt frame = TheGameLogic ? TheGameLogic->getFrame() : 0;
+		if (frame >= nextRayReportFrame || frame + LOGICFRAMES_PER_SECOND < nextRayReportFrame)
+		{
+			nextRayReportFrame = frame + LOGICFRAMES_PER_SECOND;
+			DEBUG_LOG(("RTSHADOWS frame %u: %d casters, %s\n", frame, castersCounted,
+				Direct3D11_Ray_Shadow_Report().c_str()));
+		}
+		// The shadowed point lights' probe, every logic frame something was lit, so a flash is caught.
+		static UnsignedInt lastLightFrame = 0xffffffffu;
+		if (frame != lastLightFrame && Direct3D11_Ray_Lights_Probing())
+		{
+			lastLightFrame = frame;
+			const std::string lit = Direct3D11_Ray_Light_Probe_Report();
+			if (!lit.empty())
+				DEBUG_LOG(("RTLIGHTS frame %u: %s\n", frame, lit.c_str()));
+		}
+	}
 #endif
 
 #ifdef DEBUG_LOGGING

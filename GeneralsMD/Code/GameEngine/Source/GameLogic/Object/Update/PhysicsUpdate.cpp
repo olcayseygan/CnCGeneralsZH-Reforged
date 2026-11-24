@@ -238,8 +238,6 @@ PhysicsBehavior::PhysicsBehavior( Thing *thing, const ModuleData* moduleData ) :
 	m_ignoreCollisionsWith = INVALID_ID;
 
 	setAllowBouncing(getPhysicsBehaviorModuleData()->m_allowBouncing);
-	// what a finished bounce restores; never set, so it restored FALSE and AllowBouncing = Yes was lost
-	m_originalAllowBounce = getPhysicsBehaviorModuleData()->m_allowBouncing;
 	setAllowCollideForce(getPhysicsBehaviorModuleData()->m_allowCollideForce);
 
 	m_pui = NULL;
@@ -389,6 +387,20 @@ void PhysicsBehavior::applyShock( const Coord3D *force )
 }
 
 //-------------------------------------------------------------------------------------------------
+// Each shock adds up to ShockMax* to a spin rate, and nothing else bounded the sum: a carpet bomb's
+// dozen hits in a second spun a hull up without end.  Shocks may take a rate to this many hits' worth
+// and no further; a faster spin something else set (a SlowDeath toss) is left as it is.
+const Real MAX_SHOCK_SPIN_HITS = 2.0f;
+
+static Real addShockSpin(Real rate, Real add, Real maxPerHit)
+{
+	Real limit = MAX_SHOCK_SPIN_HITS * fabs(maxPerHit);
+	if (fabs(rate) > limit)
+		limit = fabs(rate);
+	return clamp(-limit, rate + add, limit);
+}
+
+//-------------------------------------------------------------------------------------------------
 /**
  * Apply a random rotation at the object's CG
  */
@@ -400,16 +412,17 @@ void PhysicsBehavior::applyRandomRotation()
 	// Set bounce to true for a while until the unit is complete bouncing
 	setAllowBouncing(true);
 
+	const PhysicsBehaviorModuleData* d = getPhysicsBehaviorModuleData();
 	Real randomModifier;
 
 	randomModifier = GameLogicRandomValue(-1.0f, 1.0f);
-	m_yawRate += getPhysicsBehaviorModuleData()->m_shockMaxYaw * randomModifier;
+	m_yawRate = addShockSpin(m_yawRate, d->m_shockMaxYaw * randomModifier, d->m_shockMaxYaw);
 
 	randomModifier = GameLogicRandomValue(-1.0f, 1.0f);
-	m_pitchRate += getPhysicsBehaviorModuleData()->m_shockMaxPitch * randomModifier;
+	m_pitchRate = addShockSpin(m_pitchRate, d->m_shockMaxPitch * randomModifier, d->m_shockMaxPitch);
 
 	randomModifier = GameLogicRandomValue(-1.0f, 1.0f);
-	m_rollRate += getPhysicsBehaviorModuleData()->m_shockMaxRoll * randomModifier;
+	m_rollRate = addShockSpin(m_rollRate, d->m_shockMaxRoll * randomModifier, d->m_shockMaxRoll);
 
 #ifdef SLEEPY_PHYSICS
 	if (getFlag(IS_IN_UPDATE))
@@ -564,7 +577,11 @@ Bool PhysicsBehavior::handleBounce(Real oldZ, Real newZ, Real groundZ, Coord3D* 
 		}
 		else
 		{
-			setAllowBouncing(m_originalAllowBounce);
+			// Come to rest: bouncing is over until something throws the body again (a shock's
+			// applyRandomRotation, a SlowDeath toss).  Retail restored a member nothing ever set, so this was always
+			// off; restoring AllowBouncing instead left debris and hulls bouncing at 0.8 and snapping
+			// level every time they were shoved or slid.
+			setAllowBouncing(false);
 			return false;
 		}
 	}
@@ -736,10 +753,20 @@ UpdateSleepTime PhysicsBehavior::update()
 			const AIUpdateInterface* stunnedAI = obj->getAI();
 			Bool heldAloft = stunnedAI != NULL && stunnedAI->getCurLocomotor() != NULL &&
 				stunnedAI->getCurLocomotor()->getBehaviorZ() != Z_NO_Z_MOTIVE_FORCE;
+			// A carrier's deck is the ground here (groundZ below adds it) but not to the height above
+			// terrain, so a unit stunned on the deck read airborne and stayed stunned; measure from the
+			// deck the way Locomotor's airborne test does.
+			Bool onSurface = obj->isSignificantlyAboveTerrain() == FALSE;
+			if (!onSurface && obj->testStatus(OBJECT_STATUS_DECK_HEIGHT_OFFSET))
+			{
+				const Real AIRBORNE_FRAMES = ConvertRetailFrames(3.0f);
+				onSurface = obj->getHeightAboveTerrain() - obj->getCarrierDeckHeight()
+					<= -sqr(AIRBORNE_FRAMES) * TheGlobalData->m_gravity;
+			}
 			if ( fabs(m_vel.x) < STUN_RELIEF_EPSILON &&
 				   fabs(m_vel.y) < STUN_RELIEF_EPSILON &&
 				   fabs(m_vel.z) < STUN_RELIEF_EPSILON &&
-				   ( heldAloft || obj->isSignificantlyAboveTerrain() == FALSE ) )
+				   ( heldAloft || onSurface ) )
 			{
 				setStunned(false);
 				// clear both: a weak shock can come to rest before the landing below swaps flailing for stunned
@@ -1181,8 +1208,8 @@ void PhysicsBehavior::transferVelocityTo(PhysicsBehavior* that) const
 	{
 		that->wakeIfDormant();	// a dormant body moves again; an asleep one does not, as it never did
 		that->m_vel.add(&m_vel);
+		that->m_velMag = INVALID_VEL_MAG;
 	}
-	that->m_velMag = INVALID_VEL_MAG;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1402,16 +1429,20 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 		return;
 	}
 
-	Real mass = getMass();
-	if (immobile)
-		mass = 999999.0f;
+	// A wreck sliding or tumbling into a live ground unit: both AIs answer processCollision with FALSE,
+	// so the wreck went straight through parked tanks and infantry.  It meets them as it meets a wall.
+	const Bool wreckMeetsUnit = ai != NULL && obj->isEffectivelyDead() && !otherImmobile
+		&& aiOther != NULL && !other->isEffectivelyDead() && !other->isSignificantlyAboveTerrain();
+	const Bool otherSolid = otherImmobile || wreckMeetsUnit;
 
-	if (ai) 
+	if (ai)
 	{
 		// AI objects move under their own initiative, not by getting bounced.  jba.
 		// unless they are dead & colliding with something immobile. (srj)
 		// or parachuting and colliding with something immobile. (srj)
-		if (!((obj->isEffectivelyDead() || obj->testStatus(OBJECT_STATUS_PARACHUTING)) && otherImmobile))
+		// or stunned: thrown by a shockwave, nothing steers them, and they landed inside buildings.
+		if (!((obj->isEffectivelyDead() || obj->testStatus(OBJECT_STATUS_PARACHUTING) || getIsStunned()) && otherImmobile)
+				&& !wreckMeetsUnit)
 		{
 			Bool doForce = ai->processCollision(this, other);
 			if (!doForce) 
@@ -1458,18 +1489,45 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 	Real dist = sqrtf(distSqr);
 	Real overlap = usRadius + themRadius - dist;
 
-	// if objects are coincident, dist is zero, so force would be infinite -- clearly
-	// not what we want. so just cap it here for now. (srj)
-	if (dist < 1.0f)
-		dist = 1.0f;
-
 	if (getAllowCollideForce())
 	{
-		Real factor;
-		Coord3D force;
-		if (otherImmobile && !obj->isDestroyed())
+		// The unit normal from us toward them, in 3d (the spring) and on the ground plane (walls).  EA
+		// clamped dist to 1 here without normalising delta, so the push faded to nothing as the centres
+		// met and coincident bodies never parted; coincident centres now split along x by ObjectID, so
+		// the two sides of the pair go opposite ways on every machine.
+		const Real COINCIDENT_DIST = 0.01f;
+		const Real splitX = (obj->getID() < other->getID()) ? 1.0f : -1.0f;
+		Coord3D normal;
+		if (dist > COINCIDENT_DIST)
 		{
-			if (obj->testStatus(OBJECT_STATUS_PARACHUTING))
+			normal.x = delta.x / dist;
+			normal.y = delta.y / dist;
+			normal.z = delta.z / dist;	// zero in the 2d case
+		}
+		else
+		{
+			normal.x = splitX;
+			normal.y = 0.0f;
+			normal.z = 0.0f;
+		}
+		Coord3D normal2D;
+		Real dist2D = sqrtf(sqr(delta.x) + sqr(delta.y));
+		normal2D.z = 0.0f;
+		if (dist2D > COINCIDENT_DIST)
+		{
+			normal2D.x = delta.x / dist2D;
+			normal2D.y = delta.y / dist2D;
+		}
+		else
+		{
+			normal2D.x = splitX;
+			normal2D.y = 0.0f;
+		}
+
+		Coord3D force;
+		if (otherSolid && !obj->isDestroyed())
+		{
+			if (otherImmobile && obj->testStatus(OBJECT_STATUS_PARACHUTING))
 			{
 				// don't let us intersect buildings. cheat. applying a force won't work
 				// cuz we are usually braking. jam it.
@@ -1479,8 +1537,8 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 				
 				Real bounceOutDist = usRadius * ConvertRetailPerFrameRate(0.1f);	// every frame it touches
 				Coord3D tmp = *objToBounce->getPosition();
-				tmp.x -= bounceOutDist * delta.x / dist;
-				tmp.y -= bounceOutDist * delta.y / dist;
+				tmp.x -= bounceOutDist * normal2D.x;
+				tmp.y -= bounceOutDist * normal2D.y;
 				objToBounce->setPosition(&tmp);
 
 				objToBounce->getPhysics()->scrubVelocity2D(0);
@@ -1497,21 +1555,18 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 			if (stiffness < MIN_STIFF) stiffness = MIN_STIFF;
 			if (stiffness > MAX_STIFF) stiffness = MAX_STIFF;
 			// huh huh, he said "stiff"
-			
-			Real mag = getVelocityMagnitude();
-			const Real MINBOUNCESPEED = 1.0f/(LOGICFRAMES_PER_GAME_SECOND*5.0f);
-			if (mag < MINBOUNCESPEED) 
-				mag = MINBOUNCESPEED;
-			factor = -mag * getMass() * stiffness;
-			
+
 			// if we are moving down, we may want to blow ourselves into smithereens....
-			// (not a wreck SlowDeathBehavior tossed: its hull and its blast wait for where it lands)
-			if (delta.z < 0.0f && !getFlag(NO_STRUCTURE_CRASH) &&
+			// (not a wreck SlowDeathBehavior tossed: its hull and its blast wait for where it lands,
+			// and not a live unit a shockwave threw: it bounces off and keeps its life)
+			if (otherImmobile && delta.z < 0.0f && !getFlag(NO_STRUCTURE_CRASH) &&
+					(ai == NULL || obj->isEffectivelyDead()) &&
 					obj->getPosition()->z >= TheGlobalData->m_defaultStructureRubbleHeight)
 			{
 				if (other->isKindOf(KINDOF_STRUCTURE))
 				{
-					// fall into a building. if a vehicle, blow up. then destroy ourself (not die), regardless.
+					// fall into a building: a vehicle blows up on it and is gone.  Anything else (debris,
+					// a body) was removed too, popping out of sight on the roof; it slides off below now.
 					if (obj->isKindOf(KINDOF_VEHICLE))
 					{
 						/* The crash weapon used to be fired where the vehicle landed, which gave it the
@@ -1535,9 +1590,9 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 							other->attemptDamage( &damageInfo );
 							FXList::doFXObj( crashWeapon->getFireFX( obj->getVeterancyLevel() ), obj );
 						}
+						TheGameLogic->destroyObject(obj);
+						return;
 					}
-					TheGameLogic->destroyObject(obj);
-					return;
 				}
 				else
 				{
@@ -1571,25 +1626,78 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 				}
 			}
 
-			// nuke the velocity. why? very simple: we want to ignore the previous vel in favor of
-			// this. in theory, we could be clever and calculate the right force to apply to achieve this,
-			// but then if we were still colliding next frame, we'd get a sudden 'aceleration' of bounce
-			// that would look freakish. so cheat.
-			m_vel.x = 0;
-			m_vel.y = 0;	 
-			m_vel.z = 0;	 
-			m_velMag = INVALID_VEL_MAG;
+			/*
+				A wall, met on the ground plane.  EA zeroed the whole velocity every frame of contact and
+				pushed back along the 3d line between the centres at a third of the speed: gravity was
+				cancelled each frame, so wrecks and debris hung on walls and crawled down them, and the +z
+				push held anything coming down on a roof up there.  Now only
+				the part of the velocity heading into them goes; falling and sliding along the wall carry
+				on.  The body leaves at the stiffness share of the speed it hit with, and something still
+				inside a wall's footprint is walked out of it at MIN_WALL_PUSH_OUT_SPEED.  Topping the
+				outward speed up to a target, rather than adding to it, keeps a body touching for many
+				frames from gaining speed.  A unit in a wreck's way only stops it: a wreck that has come
+				to rest against one is left there.
+			*/
+			const Real MIN_WALL_PUSH_OUT_SPEED = ConvertRetailPerFrameRate(0.5f);
+			Real intoSpeed = m_vel.x * normal2D.x + m_vel.y * normal2D.y;
+			if (intoSpeed > 0.0f)
+			{
+				m_vel.x -= intoSpeed * normal2D.x;
+				m_vel.y -= intoSpeed * normal2D.y;
+				m_velMag = INVALID_VEL_MAG;
+			}
+			else
+			{
+				intoSpeed = 0.0f;
+			}
+			Real targetOutSpeed = intoSpeed * stiffness;
+			if (otherImmobile && targetOutSpeed < MIN_WALL_PUSH_OUT_SPEED)
+				targetOutSpeed = MIN_WALL_PUSH_OUT_SPEED;
+			Real outSpeed = -((m_vel.x + m_accel.x) * normal2D.x + (m_vel.y + m_accel.y) * normal2D.y);
+			if (targetOutSpeed <= outSpeed)
+				return;
+			Real push = (targetOutSpeed - outSpeed) * getMass();	// applyForce divides by the mass
+			force.x = -push * normal2D.x;
+			force.y = -push * normal2D.y;
+			force.z = 0.0f;
 		}
 		else
 		{
-			if (overlap > 5.0f)
-				overlap = 5.0f;
-			factor = -ConvertRetailPerFrameSquared(overlap);	// a spring, pushing every frame they overlap
-		}
+			// EA's "mass = 999999" for an immobile body was never passed to the force, so hulls and props
+			// marked IMMOBILE were shoved by the spring as anything of their INI mass would be.
+			if (immobile)
+				return;
 
-		force.x = factor * delta.x / dist;
-		force.y = factor * delta.y / dist;
-		force.z = factor * delta.z / dist;	// will be zero for 2d case.
+			/*
+				A spring, pushing every frame they overlap: overlap times the retail stiffness over mass.
+				Two limits keep it what retail meant.  The rate stops at MAX_SPRING_RATE a tick squared,
+				what a Mass 1 body got at retail's 30 frames: a tick at game speed 150 is 1.5 retail frames,
+				the rate goes with its square, and a pair of bodies under Mass 1.125 passed 4, past which
+				this explicit integration does not settle but rings ever harder.  And the spring only tops
+				the speed apart up to MAX_SEPARATION_SPEED, so debris spawned inside a dying vehicle (which
+				takes all of the push, the vehicle's AI declining its share) eases out instead of leaving at
+				150 a second.
+			*/
+			const Real MAX_SPRING_OVERLAP = 5.0f;
+			const Real MAX_SPRING_RATE = 1.0f;
+			const Real MAX_SEPARATION_SPEED = ConvertRetailPerFrameRate(1.0f);
+			if (overlap > MAX_SPRING_OVERLAP)
+				overlap = MAX_SPRING_OVERLAP;
+			Real rate = ConvertRetailPerFrameSquared(1.0f) / getMass();
+			if (rate > MAX_SPRING_RATE)
+				rate = MAX_SPRING_RATE;
+			Real outSpeed = -((m_vel.x + m_accel.x) * normal.x + (m_vel.y + m_accel.y) * normal.y
+				+ (m_vel.z + m_accel.z) * normal.z);
+			Real pushSpeed = overlap * rate;
+			if (pushSpeed > MAX_SEPARATION_SPEED - outSpeed)
+				pushSpeed = MAX_SEPARATION_SPEED - outSpeed;
+			if (pushSpeed <= 0.0f)
+				return;
+			Real push = pushSpeed * getMass();	// applyForce divides by the mass
+			force.x = -push * normal.x;
+			force.y = -push * normal.y;
+			force.z = -push * normal.z;	// zero in the 2d case
+		}
 		DEBUG_ASSERTCRASH(!(_isnan(force.x) || _isnan(force.y) || _isnan(force.z)), ("PhysicsBehavior::onCollide force NAN!\n"));
 
 		applyForce( &force );
@@ -1974,6 +2082,11 @@ void PhysicsBehavior::testStunnedUnitForDestruction(void)
 	// Check for being in cells that the unit has no locomotor for
 	AIUpdateInterface *aiInt = obj->getAI();
 	if (!aiInt) return;
+
+	// The cell tests read the terrain at x,y, which for a unit landing on a bridge deck is the river
+	// or the gorge below it: a tank shocked on a bridge died for the water under the span.
+	if (obj->getLayer() != LAYER_GROUND)
+		return;
 
 	// Check for object being stuck on cliffs. If so kill it
 	if (TheTerrainLogic->isCliffCell(pos->x, pos->y) && !aiInt->hasLocomotorForSurface(LOCOMOTORSURFACE_CLIFF))

@@ -734,6 +734,7 @@ GlobalData::GlobalData()
 	m_vertexTerrainSun = FALSE;
 	m_noTerrainSubdivide = FALSE;
 	m_shadowMapOldCasters = FALSE;
+	m_rtShadows = FALSE;
 	m_shadowMapPenumbra = 0.0f;		//zero anywhere here means the built-in value stands
 	m_shadowMapSkyFill = 0.0f;
 	m_shadowMapStrength = 0.0f;
@@ -846,6 +847,7 @@ GlobalData::GlobalData()
 	m_underwaterClarity = FALSE;
 	m_waterFoam = FALSE;
 	m_groundFoliage = FALSE;
+	m_ragdoll = FALSE;
 	m_groundMarks = FALSE;
 	m_firelight = FALSE;
 	m_heatHaze = FALSE;

@@ -1009,9 +1009,59 @@ void Direct3D11_Ambient_Occlusion()
 	float projection_x = 0.0f;
 	float projection_y = 0.0f;
 	Backend.Scene_Projection_Scale(projection_x, projection_y);
-	if (Post.World_Occlude_Scene(Device.Get_Depth_Texture(), world_from_clip, projection_x, projection_y)) {
+	// At the Ray Traced level the half size term comes from rays when the grid was built this frame;
+	// at every other level this is NULL and timing does nothing.
+	float shroud_rect[4];
+	ID3D11ShaderResourceView * shroud = Post.World_Ao_Shroud(shroud_rect);
+	Backend.Time_Ray_Occlusion(true, false);
+	ID3D11ShaderResourceView * traced = Post.World_Occlusion_Ready()
+		? Backend.Trace_Ray_Occlusion(world_from_clip, shroud, shroud_rect) : NULL;
+	bool took_traced = false;
+	const bool occluded = Post.World_Occlude_Scene(Device.Get_Depth_Texture(), world_from_clip, projection_x,
+		projection_y, traced, &took_traced);
+	Backend.Time_Ray_Occlusion(false, took_traced);
+	if (occluded) {
 		Backend.Resume_Scene();
 	}
+}
+
+void Direct3D11_Set_Ray_Traced_Shadows(bool wanted)
+{
+	Backend.Set_Ray_Traced_Shadows(wanted);
+}
+
+void Direct3D11_Ray_Traced_Lights()
+{
+	if (Active && Backend.Trace_Ray_Lights()) {
+		Backend.Resume_Scene();
+	}
+}
+
+void Direct3D11_Ray_Traced_Shadows()
+{
+	if (Active && Backend.Trace_Ray_Shadows()) {
+		Backend.Resume_Scene();
+	}
+}
+
+bool Direct3D11_Ray_Shade_Waiting()
+{
+	return Active && Backend.Ray_Shade_Waiting();
+}
+
+std::string Direct3D11_Ray_Shadow_Report()
+{
+	return Active ? Backend.Ray_Shadow_Report() : std::string("no Direct3D 11 backend");
+}
+
+bool Direct3D11_Ray_Lights_Probing()
+{
+	return Active && Backend.Ray_Lights_Probing();
+}
+
+std::string Direct3D11_Ray_Light_Probe_Report()
+{
+	return Active ? Backend.Ray_Light_Probe_Report() : std::string();
 }
 
 void Direct3D11_Shroud_Memory()

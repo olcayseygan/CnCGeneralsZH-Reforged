@@ -280,6 +280,7 @@ NEW_CONTROLS = [
     (CHECK,  "CheckSmoothMotion",      "GUI:SmoothMotion"),
     (CHECK,  "CheckHeatHaze",          "GUI:HeatHaze"),
     (CHECK,  "CheckGroundFoliage",     "GUI:GroundFoliage"),
+    (CHECK,  "CheckRagdoll",           "GUI:Ragdoll"),
     (LABEL,  "LabelSunShafts",         "GUI:SunShafts"),
     (COMBO,  "ComboBoxSunShafts",      None),
     (LABEL,  "LabelGraphicsQuality",   "GUI:GraphicsQuality"),
@@ -404,7 +405,9 @@ GROUP_LAYOUT = [
         ("GUI:OptionsGroupModels", [
             ("check", "CheckDetailedModels"),
             ("check", "CheckHDTextures"),
-            ("check", "CheckFullDetailAtDistance")])]),
+            ("check", "CheckFullDetailAtDistance"),
+            # how a soldier's model falls; the Picture column is full down to Sun Shafts
+            ("check", "CheckRagdoll")])]),
 
     ("PageGraphics", [
         # the particle limit went to Effects' Particles group to make room for the quality slider

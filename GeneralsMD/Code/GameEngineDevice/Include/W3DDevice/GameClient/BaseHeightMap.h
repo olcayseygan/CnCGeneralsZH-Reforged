@@ -213,7 +213,8 @@ public:
 	void stepTrees(void);	///< W3DTreeBuffer::stepTrees, at the render's sync point
 	void takeWaypointsForRender(void);	///< W3DWaypointBuffer::takeReadsForRender, at the render's sync point
 	void takePropShroudForRender(void);	///< W3DPropBuffer::takeShroudForRender, at the render's sync point
-	void renderTrees(CameraClass * camera); ///< renders the tree buffer.
+	void renderTrees(CameraClass * camera, Bool grass = TRUE); ///< renders the tree buffer, and the grass unless renderGrass went first.
+	void renderGrass(CameraClass * camera); ///< the grass alone, ahead of the trees (the Ray Traced level)
 	Int renderTreeShadowCasters(RenderInfoClass &sunInfo, CameraClass *sceneCamera, const SunShadowCasterCull &cull); ///< the trees drawn into the sun's map, counted
 
 	void addProp(Int id, Coord3D location, Real angle, Real scale, const AsciiString &modelName);

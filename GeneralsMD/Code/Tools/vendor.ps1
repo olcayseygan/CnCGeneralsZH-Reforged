@@ -183,7 +183,8 @@ function Install-Mbedtls {
 }
 
 # --- The fork's own upscaled art: every 3D texture at twice its size, and the ground, and the
-# rebuilt models, one Reforged<Side>.big per side that Tools\artpack.py packs. Not in git -
+# rebuilt models, one Reforged<Side>.big per side that Tools\artpack.py packs, and the structures'
+# fracture sets in ReforgedFracture.big, cut from retail models and so never in git either. Not in git -
 # ReforgedTextures.big alone is a gigabyte, ten times
 # what GitHub takes in a file, and LFS in a fork is billed to the parent repository.
 #

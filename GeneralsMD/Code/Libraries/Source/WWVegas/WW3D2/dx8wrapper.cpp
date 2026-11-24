@@ -6162,6 +6162,7 @@ void Sky() {
 }
 void OpaqueScene(bool allowWorldAO) {
 #if defined(_WIN32)
+	Direct3D11_Ray_Traced_Shadows();	// nothing unless -rtShadows streamed this frame's casters
 	if (allowWorldAO) Direct3D11_Ambient_Occlusion();
 #else
 	OpaqueScene(DX8Wrapper::_Get_D3D_Device(),allowWorldAO);

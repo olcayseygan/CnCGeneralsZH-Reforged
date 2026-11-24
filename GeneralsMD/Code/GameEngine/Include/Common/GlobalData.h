@@ -236,7 +236,7 @@ public:
 	Int m_waterReflectionDetail; // 0 = Low, 1 = High planar resolution
 	Int m_cloudStyle;					// "CloudStyle": 0 = Classic (default), 1 = Volumetric (when supported)
 	Bool m_explosionDebrisTrails;	// "DebrisTrails": blasts throw smoke-trailing fragments and burning shrapnel
-	Int m_shadowQuality;				// "ShadowQuality": the sun's depth map at 1024, 2048 or 4096 texels a side (Direct3D 11)
+	Int m_shadowQuality;				// "ShadowQuality": the sun's depth map at 1024, 2048 or 4096 texels a side, or 4096 and ray traced (Direct3D 11)
 	Int m_graphicsQuality;			// "GraphicsQuality": where the options menu's Performance / Quality slider stands; Custom takes the particle ring from the preset at or below it
 	Bool m_classicGraphics;				// "ClassicGraphics": the game's own art, tile, shadows and picture; read at startup
 	Bool m_detailedModels;				// "DetailedModels": the rebuilt models' archives mount under the Reforged look; read at startup by Win32BIGFileSystem, not from here
@@ -247,6 +247,7 @@ public:
 	Bool m_vertexTerrainSun;			// "-vertexTerrainSun": the ground keeps EA's per-vertex sun on Direct3D 11 too, the before half of a picture
 	Bool m_noTerrainSubdivide;		// "-noTerrainSubdivide": the ground keeps EA's two triangles a cell on Direct3D 11 too, the before half of a picture
 	Bool m_shadowMapOldCasters;		// "-shadowmapoldcasters": every caster through the mesh renderer, none instanced
+	Bool m_rtShadows;							// "-rtShadows": the sun's shadows traced on Direct3D 11, one ray a pixel, in place of the map
 	Bool m_shadowMapOnly;					// "-shadowmaponly": the map's shadows with the stencil volumes' own darkening off
 	Real m_shadowMapPenumbra;			// "-shadowtune": penumbra per world unit of gap under the caster, 0 for the built-in
 	Real m_shadowMapSkyFill;			// how much of a wide shadow the sky fills back in
@@ -608,6 +609,7 @@ public:
 	Bool m_underwaterClarity;				///< "UnderwaterClarity": shallow shelves and ruins show through Modern water (SDL, client only)
 	Bool m_waterFoam;								///< "WaterFoam": foam, shore band and the sun's shadow on water (Direct3D 11, client only)
 	Bool m_groundFoliage;						///< "GroundFoliage": grass tufts on grass ground, swaying in the wind (client only; off under Classic graphics)
+	Bool m_ragdoll;									///< "Ragdoll": a dying soldier goes limp instead of playing his death animation (W3DRagdoll; client only, never read by the logic; off under Classic graphics)
 	Bool m_groundMarks;							///< "GroundMarks": craters, stains and longer treads that fade over minutes (Direct3D 11, client only)
 	Bool m_firelight;								///< "Firelight": flames light the ground, walls and units around them (Direct3D 11, client only)
 	Bool m_heatHaze;								///< "HeatHaze", "-heathaze": the air over fire, beams and exhausts shimmers (Direct3D 11, client only)

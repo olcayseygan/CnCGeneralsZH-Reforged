@@ -144,10 +144,18 @@ BaseHeightMapRenderObjClass *TheTerrainRenderObject=NULL;
 
 /** Entry point so that trees can be drawn at the appropriate point in the rendering pipe for 
     transparent objects. */
-void DoTrees(RenderInfoClass & rinfo)
+void DoTrees(RenderInfoClass & rinfo, Bool grass)
 {
 	if (TheTerrainRenderObject) {
-		TheTerrainRenderObject->renderTrees(&rinfo.Camera);
+		TheTerrainRenderObject->renderTrees(&rinfo.Camera, grass);
+	}
+}
+
+/** The grass alone, ahead of DoTrees(rinfo, FALSE): the Ray Traced level's order (RTS3DScene::Flush). */
+void DoGrass(RenderInfoClass & rinfo)
+{
+	if (TheTerrainRenderObject) {
+		TheTerrainRenderObject->renderGrass(&rinfo.Camera);
 	}
 }
 
@@ -3330,7 +3338,24 @@ Int BaseHeightMapRenderObjClass::renderTreeShadowCasters(RenderInfoClass &sunInf
 	return casters;
 }
 
-void BaseHeightMapRenderObjClass::renderTrees(CameraClass * camera)
+/** The GroundFoliage option's grass on its own, for the Ray Traced level, which draws it ahead of
+	the trees so the sun's rays take it in and leave the batched trees, which no level's sun ever
+	shadowed, unshaded (RTS3DScene::Flush).  Then renderTrees is called with grass FALSE. */
+void BaseHeightMapRenderObjClass::renderGrass(CameraClass * camera)
+{
+#ifdef EXTENDED_STATS
+	if (DX8Wrapper::stats.m_disableObjects) {
+		return;
+	}
+#endif
+	if (m_map == NULL || Scene == NULL || m_treeBuffer == NULL || m_grassBuffer == NULL) return;
+	// the trees' flag that the terrain drew this pass, still up: drawTrees has not run yet
+	if (m_treeBuffer->needToDraw()) {
+		m_grassBuffer->drawGrass(camera, m_terrainContentVersion, Transform);
+	}
+}
+
+void BaseHeightMapRenderObjClass::renderTrees(CameraClass * camera, Bool grass)
 {
 #ifdef EXTENDED_STATS
 	if (DX8Wrapper::stats.m_disableObjects) {
@@ -3356,7 +3381,7 @@ void BaseHeightMapRenderObjClass::renderTrees(CameraClass * camera)
 				m_skirtTrees->drawTrees(camera, &pDynamicLightsIterator);
 			}
 		}
-		if (m_grassBuffer && terrainPass) {
+		if (m_grassBuffer && terrainPass && grass) {
 			m_grassBuffer->drawGrass(camera, m_terrainContentVersion, tm);
 		}
 	}

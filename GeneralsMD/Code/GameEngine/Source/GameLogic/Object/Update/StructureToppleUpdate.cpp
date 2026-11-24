@@ -260,7 +260,10 @@ UpdateSleepTime StructureToppleUpdate::update( void )
 
 		m_accumulatedAngle += m_toppleVelocity;
 
-		applyCrushingDamage(PI/2 - m_accumulatedAngle);
+		// crush only while still falling: past flat, theta goes negative and the reach of
+		// h * (1 - sin theta) runs out beyond the building's tip; the landing crushes at 0 below
+		if (m_accumulatedAngle < PI/2)
+			applyCrushingDamage(PI/2 - m_accumulatedAngle);
 
 		if (m_accumulatedAngle >= PI/2) {
 			m_toppleVelocity -= m_accumulatedAngle - PI/2;
@@ -387,7 +390,9 @@ void StructureToppleUpdate::applyCrushingDamage(Real theta)
 	temp3D.y = minorComponent;
 	temp3D.z = 0.0f;
 	
-	Real facingWidth = temp3D.length() / 2;
+	// already the half width across the fall: doDamageLine runs from -facingWidth to +facingWidth,
+	// so halving it again crushed only the middle half of the building's width
+	Real facingWidth = temp3D.length();
 
 	// Get the crushing weapon.
 	const WeaponTemplate* wt = TheWeaponStore->findWeaponTemplate(d->m_crushingWeaponName);
@@ -414,9 +419,14 @@ void StructureToppleUpdate::applyCrushingDamage(Real theta)
 	}
 
 
-	jcos = maxDistance * Cos(toppleAngle);
-	jsin = maxDistance * Sin(toppleAngle);
-	doDamageLine(building, wt, jcos, jsin, facingWidth, toppleAngle);
+	// The tip's own line once, on landing, for the strip past the last spaced line. Fired every
+	// tick it hit whatever stood under the tip once per tick, so the damage followed the tick rate.
+	if (theta <= 0.0f)
+	{
+		jcos = maxDistance * Cos(toppleAngle);
+		jsin = maxDistance * Sin(toppleAngle);
+		doDamageLine(building, wt, jcos, jsin, facingWidth, toppleAngle);
+	}
 
 	m_lastCrushedLocation = j;
 }

@@ -12,6 +12,7 @@ Data/Art/Textures/LWFort_LeadD.tga
 Data/Art/Textures/LWFort_Rubble.tga
 Data/Art/Textures/LWFort_Stone.tga
 Data/Art/Textures/LWFort_StoneD.tga
+Data/Art/Textures/LWFrag_InnerAdobe.tga
 Data/Art/Textures/LWFrag_InnerConcrete.tga
 Data/Art/Textures/LWFrag_InnerPlate.tga
 Data/Art/Textures/LWFrag_InnerSand.tga
@@ -1403,6 +1404,7 @@ Data/Scenarios/foreign_snipe.txt
 Data/Scenarios/fortressair.txt
 Data/Scenarios/fortressattack.txt
 Data/Scenarios/fortressfall.txt
+Data/Scenarios/fortressrepair.txt
 Data/Scenarios/gate60hz.txt
 Data/Scenarios/geproto_alpine.txt
 Data/Scenarios/geproto_fogedge.txt
@@ -1410,6 +1412,9 @@ Data/Scenarios/geproto_glow.txt
 Data/Scenarios/geproto_hazefog.txt
 Data/Scenarios/geproto_oasis.txt
 Data/Scenarios/givemoney.txt
+Data/Scenarios/glahqfall.txt
+Data/Scenarios/glahqfour.txt
+Data/Scenarios/glahqrepair.txt
 Data/Scenarios/glowbase.txt
 Data/Scenarios/glowfight.txt
 Data/Scenarios/glowmicrowave.txt
@@ -1553,6 +1558,8 @@ Data/Scenarios/piecetowerdirect.txt
 Data/Scenarios/piecetowerfilm.txt
 Data/Scenarios/powerpropcapture.txt
 Data/Scenarios/radarbatch.txt
+Data/Scenarios/ragdoll_mixed.txt
+Data/Scenarios/ragdoll_slope.txt
 Data/Scenarios/reachhills.txt
 Data/Scenarios/reachproof.txt
 Data/Scenarios/reachshot.txt
@@ -1584,6 +1591,7 @@ Data/Scenarios/rf_thumb_fa.txt
 Data/Scenarios/rf_thumb_fe.txt
 Data/Scenarios/rocketfx.txt
 Data/Scenarios/rocketglow.txt
+Data/Scenarios/rtlights.txt
 Data/Scenarios/s240_beach.txt
 Data/Scenarios/s240_bridge.txt
 Data/Scenarios/s240_heli.txt
@@ -3130,6 +3138,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/W3DParticleSys.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DPoly.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DProjectedShadow.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DPropBuffer.h
+GameEngineDevice/Include/W3DDevice/GameClient/W3DRagdoll.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DRallyMarkers.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DReachOverlay.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DRoadBuffer.h
@@ -3273,6 +3282,7 @@ GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DOverlordTruckDraw.
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DPoliceCarDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DProjectileStreamDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DPropDraw.cpp
+GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DRagdoll.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DRopeDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DScienceModelDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DSupplyDraw.cpp
@@ -3624,6 +3634,12 @@ Libraries/Source/WWVegas/WW3D2/dx11layout.cpp
 Libraries/Source/WWVegas/WW3D2/dx11layout.h
 Libraries/Source/WWVegas/WW3D2/dx11post.cpp
 Libraries/Source/WWVegas/WW3D2/dx11post.h
+Libraries/Source/WWVegas/WW3D2/dx11rayao.cpp
+Libraries/Source/WWVegas/WW3D2/dx11rayao.h
+Libraries/Source/WWVegas/WW3D2/dx11raygrid.cpp
+Libraries/Source/WWVegas/WW3D2/dx11raygrid.h
+Libraries/Source/WWVegas/WW3D2/dx11raylights.cpp
+Libraries/Source/WWVegas/WW3D2/dx11raylights.h
 Libraries/Source/WWVegas/WW3D2/dx11resource.cpp
 Libraries/Source/WWVegas/WW3D2/dx11resource.h
 Libraries/Source/WWVegas/WW3D2/dx11runtime.cpp
@@ -4632,6 +4648,7 @@ Tests/test_modern_water_config.cpp
 Tests/test_msvc_float_casts.cpp
 Tests/test_observer_camera.inc
 Tests/test_online.cpp
+Tests/test_partition_collide.inc
 Tests/test_pathfind_slicing.inc
 Tests/test_pixelcentre.cpp
 Tests/test_posix_draw_resolve.cpp

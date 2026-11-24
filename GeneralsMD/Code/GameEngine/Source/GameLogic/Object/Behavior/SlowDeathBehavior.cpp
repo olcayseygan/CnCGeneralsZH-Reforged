@@ -53,6 +53,8 @@
 #include "GameLogic/Module/SlavedUpdate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectCreationList.h"
+#include "GameLogic/PartitionManager.h"
+#include "Common/Player.h"
 #include "Platform/MsvcFloatCasts.h"
 #include "GameLogic/Weapon.h"
 #include "GameClient/Drawable.h"
@@ -223,9 +225,9 @@ Int SlowDeathBehavior::getProbabilityModifier( const DamageInfo *damageInfo ) co
 }
 
 //-------------------------------------------------------------------------------------------------
-static void calcRandomForce(Real minMag, Real maxMag, Real minPitch, Real maxPitch, Coord3D& force)
+static void calcRandomForce(Real minMag, Real maxMag, Real minPitch, Real maxPitch, Real minAngle, Real maxAngle, Coord3D& force)
 {
-	Real angle = GameLogicRandomValueReal(-PI, PI);
+	Real angle = GameLogicRandomValueReal(minAngle, maxAngle);
 	Real pitch = GameLogicRandomValueReal(minPitch, maxPitch);
 	Real mag = GameLogicRandomValueReal(minMag, maxMag);
 
@@ -242,12 +244,73 @@ static void calcRandomForce(Real minMag, Real maxMag, Real minPitch, Real maxPit
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Height over whatever it stands on, a bridge included: physics lands it on that layer, and the
-	* terrain under a bridge would keep a wreck on it "in the air" for good. */
+/** The structure whose footprint the body would cover standing at pos, and the height of its roof;
+	* NULL when there is none.  The ground under a wreck is terrain or a bridge, so a car thrown onto a
+	* roof was "in the air" up there until its landing grace ran out, and a helicopter or a jet coming
+	* down on one never found its floor. */
+/*static*/ Object* SlowDeathBehavior::findStructureUnder(const Object* obj, const Coord3D& pos, Real& roofZ)
+{
+	PartitionFilterAcceptByKindOf structuresOnly(MAKE_KINDOF_MASK(KINDOF_STRUCTURE), KINDOFMASK_NONE);
+	PartitionFilter* filters[] = { &structuresOnly, NULL };
+	const GeometryInfo& geom = obj->getGeometryInfo();
+	// ponytail: the closest structure only; two whose footprints meet under one wreck read as the nearer
+	Object* other = ThePartitionManager->getClosestObject(&pos, geom.getBoundingCircleRadius(), FROM_BOUNDINGSPHERE_2D, filters);
+	if (other == NULL)
+		return NULL;
+	roofZ = other->getPosition()->z + other->getGeometryInfo().getMaxHeightAbovePosition();
+	// footprints only, turned as they are: tested at the roof's height so the heights always meet
+	Coord3D at = pos;
+	at.z = roofZ;
+	if (!ThePartitionManager->geomCollidesWithGeom(&at, geom, obj->getOrientation(),
+			other->getPosition(), other->getGeometryInfo(), other->getOrientation()))
+		return NULL;
+	return other;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** True if a body at pos is on that roof rather than against the building's side: no more than half
+	* its own height below it, as far as one frame's fall carries it into the roof before physics
+	* pushes it back out. */
+/*static*/ Bool SlowDeathBehavior::isOverRoof(const Object* obj, const Coord3D& pos, Real roofZ)
+{
+	return pos.z >= roofZ - 0.5f * obj->getGeometryInfo().getMaxHeightAbovePosition();
+}
+
+//-------------------------------------------------------------------------------------------------
+/** What physics does to a vehicle falling onto a building, short of deleting it: the building takes
+	* the crash weapon and its fire plays.  A helicopter or jet wreck is kept from that deletion
+	* (setNoStructureCrash), so it comes down on the roof and goes on to its own blast and hull. */
+/*static*/ void SlowDeathBehavior::crashIntoStructure(Object* obj, Object* structure)
+{
+	// ponytail: the default crash weapon by name; physics' per-object VehicleCrashesIntoBuildingWeaponTemplate
+	// is private to it, and a public getter there would make this exact
+	const WeaponTemplate* crashWeapon = TheWeaponStore->findWeaponTemplate("VehicleCrashesIntoBuildingWeapon");
+	if (crashWeapon == NULL || !obj->isKindOf(KINDOF_VEHICLE))
+		return;
+	WeaponBonus nullBonus;
+	DamageInfo damageInfo;
+	damageInfo.in.m_damageType = crashWeapon->getDamageType();
+	damageInfo.in.m_deathType = crashWeapon->getDeathType();
+	damageInfo.in.m_sourceID = obj->getID();
+	damageInfo.in.m_sourcePlayerMask = obj->getControllingPlayer() ? obj->getControllingPlayer()->getPlayerMask() : 0;
+	damageInfo.in.m_amount = crashWeapon->getPrimaryDamage(nullBonus);
+	structure->attemptDamage(&damageInfo);
+	FXList::doFXObj(crashWeapon->getFireFX(obj->getVeterancyLevel()), obj);
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Height over whatever it stands on, a bridge or a roof included: physics lands it on that layer,
+	* or holds it on the building, and the terrain under either would keep a wreck on it "in the air"
+	* for good. */
 static Real heightAboveFloor(const Object* obj)
 {
 	const Coord3D* pos = obj->getPosition();
-	return pos->z - TheTerrainLogic->getLayerHeight(pos->x, pos->y, obj->getLayer());
+	Real floor = TheTerrainLogic->getLayerHeight(pos->x, pos->y, obj->getLayer());
+	Real roofZ = 0.0f;
+	if (SlowDeathBehavior::findStructureUnder(obj, *pos, roofZ) != NULL && roofZ > floor &&
+			SlowDeathBehavior::isOverRoof(obj, *pos, roofZ))
+		floor = roofZ;
+	return pos->z - floor;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -270,6 +333,7 @@ const Real MOMENTUM_AIRBORNE_HEIGHT = 0.5f;																	///< above this a wr
 const Real MOMENTUM_LIFTOFF_HEIGHT = 0.05f;																	///< above this a slow car's low hop has left the ground
 #define MOMENTUM_LANDING_GRACE ((UnsignedInt)(3 * LOGICFRAMES_PER_GAME_SECOND))			///< on top of the slide and the hop, the most it may hold the destruction back
 const Real MOMENTUM_BOUNCINESS = -0.4f;																			///< off the ground's stiffness: it lands heavily, two short bounces
+const Real MOMENTUM_MAX_TILT = 80.0f * PI / 180.0f;													///< the furthest a tossed car tips from upright in the air; at 90 it stands on its nose or side
 // Tuned as 0.92 a frame at twice the retail rate, so 0.92 squared a retail frame; physics friction is
 // converted the same way (retailFrictionToFrame). sqrtf of a correctly rounded square gives the
 // float back exactly, so at twice the rate this is still exactly 0.92f.
@@ -387,6 +451,12 @@ Bool SlowDeathBehavior::beginMomentum(const DamageInfo* damageInfo)
 			obj->isKindOf(KINDOF_INFANTRY) || obj->isKindOf(KINDOF_STRUCTURE))
 		return FALSE;
 	if (obj->getContainedBy() != NULL || obj->isDisabledByType(DISABLED_HELD) || obj->isSignificantlyAboveTerrain())
+		return FALSE;
+	/* A shot with a shockwave throws the body itself, right after this death (Object::attemptDamage),
+		 and that flight is the death.  The check in updateMomentum saw the throw and let go, but the
+		 toss and spin given here stayed on top of it: a car killed by a fuel-air bomb, a MOAB or a
+		 nuke went about twice as high and as far as the blast alone throws it. */
+	if (damageInfo != NULL && damageInfo->in.m_shockWaveAmount > 0.0f && damageInfo->in.m_shockWaveRadius > 0.0f)
 		return FALSE;
 
 	LocomotorAppearance appearance = locomotor->getAppearance();
@@ -542,9 +612,15 @@ Bool SlowDeathBehavior::beginMomentum(const DamageInfo* damageInfo)
 		const Real wx = (ry * jz - rz * jy) / ixx;
 		const Real wy = (rz * jx - rx * jz) / iyy;
 		const Real wz = (rx * jy - ry * jx) / izz;
-		physics->setRollRate(wx / factor);
-		physics->setPitchRate(wy / factor);
-		physics->setYawRate(wz / factor);
+		/* The spin and the time aloft both go with the strength, so the tilt it reaches goes with its
+			 square, mass scale included: a Mass 5 supply truck hit at the cap went nearly end over end.
+			 However hard the hit, the tilt reached over the flight stops short of upright, the point the
+			 tip-back's reading of the body cannot come back from. */
+		const Real tilt = sqrtf(wx * wx + wy * wy) * airFrames;
+		const Real tiltScale = (tilt > MOMENTUM_MAX_TILT) ? MOMENTUM_MAX_TILT / tilt : 1.0f;
+		physics->setRollRate(wx * tiltScale / factor);
+		physics->setPitchRate(wy * tiltScale / factor);
+		physics->setYawRate(wz * tiltScale / factor);
 	}
 	return TRUE;
 }
@@ -613,7 +689,8 @@ Bool SlowDeathBehavior::updateMomentum()
 		}
 	}
 
-	const Bool airborne = heightAboveFloor(obj) > MOMENTUM_AIRBORNE_HEIGHT;
+	const Real floorHeight = heightAboveFloor(obj);
+	const Bool airborne = floorHeight > MOMENTUM_AIRBORNE_HEIGHT;
 
 	/* The toss ends when the body is down on the ground.  A car tumbling nose down has its bonnet in
 		 the dirt while its base is still up in the air: from the frame any corner of it touches, it tips
@@ -626,13 +703,22 @@ Bool SlowDeathBehavior::updateMomentum()
 		 one that never got off at all ends when it should have landed. */
 	if ((m_flags & (1<<MOMENTUM_TUMBLING)) != 0 && now > m_momentumStartFrame)
 	{
-		const Real height = heightAboveFloor(obj);
+		const Real height = floorHeight;
 		const Bool leftGround = (m_flags & (1<<MOMENTUM_LEFT_GROUND)) != 0;
 		const Real reach = bodyReachBelow(obj);
 		const Bool bodyDown = leftGround && vel->z <= 0.0f && height - reach <= MOMENTUM_LIFTOFF_HEIGHT;
 		// the nose gives the heading, unless it points nearly straight up or down mid-flip: then the
 		// way it was flying does
 		const Matrix3D& m = *obj->getTransformMatrix();
+		/* The tilt is held under MOMENTUM_MAX_TILT here too: the spin was set for a landing on level
+			 ground, and a car thrown off a ledge or down a slope stays up longer and turns on.  Past 90
+			 degrees ASin and Get_Z_Rotation below read it as turned 180 the other way, and the tip-back
+			 unrolled it in a fast barrel roll.  The body's up axis has a world z of cos(tilt). */
+		if (m[2][2] < Cos(MOMENTUM_MAX_TILT))
+		{
+			physics->setRollRate(0.0f);
+			physics->setPitchRate(0.0f);
+		}
 		const Bool noseUpright = fabs(m[2][0]) > 0.95f && (m_momentumVelX != 0.0f || m_momentumVelY != 0.0f);
 		const Real heading = noseUpright ? ATan2(m_momentumVelY, m_momentumVelX) : m.Get_Z_Rotation();
 		if (bodyDown && height > MOMENTUM_LIFTOFF_HEIGHT)
@@ -802,9 +888,22 @@ void SlowDeathBehavior::beginSlowDeath(const DamageInfo *damageInfo)
 					obj->setPosition(&pos);
 				}
 
+				/* EA threw the body any way at all, so a soldier flew into the blast as often as away from
+					 it. A shot that pushes (calcHitDirection) throws it away from where it came from, up
+					 to 45 degrees either side; anything else still throws it anywhere. */
+				const Real FLING_SPREAD = PI / 4.0f;
+				Real angleLo = -PI;
+				Real angleHi = PI;
+				Real hitX, hitY;
+				if (calcHitDirection(obj, damageInfo, hitX, hitY))
+				{
+					const Real away = ATan2(hitY, hitX);
+					angleLo = away - FLING_SPREAD;
+					angleHi = away + FLING_SPREAD;
+				}
 				Coord3D force;
-				calcRandomForce(d->m_flingForce, d->m_flingForce + d->m_flingForceVariance, 
-												d->m_flingPitch, d->m_flingPitch + d->m_flingPitchVariance, force);
+				calcRandomForce(d->m_flingForce, d->m_flingForce + d->m_flingForceVariance,
+												d->m_flingPitch, d->m_flingPitch + d->m_flingPitchVariance, angleLo, angleHi, force);
 				physics->setAllowToFall(true);
 				physics->applyForce(&force);
 				physics->setExtraBounciness(-1.0);					// we don't want this guy to bounce at all

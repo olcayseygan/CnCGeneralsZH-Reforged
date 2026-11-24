@@ -2669,3 +2669,413 @@ TEST(dx11backend_a_screen_filter_after_a_multisampled_clear_draws_over_a_cleared
 	device.Release();
 	DestroyWindow(window);
 }
+
+// The Ray Traced level's grid for rays in any direction: a tilted triangle and one aside binned, one
+// left by an older pass ignored, and rays along the sun's depth and across it, short and long, from
+// inside the grid and from outside it.  The sun's matrix is the identity, so the world is clip space.
+TEST(dx11backend_the_ray_grid_finds_a_triangle_from_any_side)
+{
+	DX11DeviceClass device;
+	device.Request_Debug_Layer();
+	CHECK(device.Create_Offscreen());
+	ID3D11Device * d3d = device.Get_Device();
+	ID3D11DeviceContext * context = device.Get_Context();
+	DX11BackendClass backend;
+	CHECK(backend.Initialise(&device));
+
+	// Stream out fills from slot nought, so this pass is slots 0 to 69 (the tilted triangle again and
+	// again, then the one aside) and the rest an older pass's: a length search that stops short of
+	// the second group of 64 drops the triangle aside.  That one is a cut caster, its stamp negated,
+	// its coordinates running 0 to 1 across from its first corner to its second, on a slice whose
+	// left half is clear: a ray through it counts only past the middle.
+	const unsigned slots = 200;
+	const float stamp = 5.0f;
+	std::vector<float> corners(slots * 12, 0.0f);
+	std::vector<float> cut_coordinates(slots * 12, 0.0f);
+	const float tilted[12] = { -0.3f, -0.3f, 0.3f, stamp, 0.3f, -0.3f, 0.5f, stamp, 0.0f, 0.3f, 0.7f, stamp };
+	const float stale[12] = { 0.5f, 0.5f, 0.2f, 4.0f, 0.7f, 0.5f, 0.2f, 4.0f, 0.6f, 0.7f, 0.2f, 4.0f };
+	const float aside[12] = { 0.7f, -0.8f, 0.1f, -stamp, 0.9f, -0.8f, 0.1f, -stamp, 0.8f, -0.6f, 0.9f, -stamp };
+	const float aside_cut[12] = { 0.0f, 0.5f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 0.5f, 0.0f, 0.5f, 0.0f, 0.5f };
+	for (unsigned slot = 0; slot < 69; ++slot) {
+		memcpy(&corners[12 * slot], tilted, sizeof(tilted));
+	}
+	memcpy(&corners[12 * 69], aside, sizeof(aside));
+	memcpy(&cut_coordinates[12 * 69], aside_cut, sizeof(aside_cut));
+	memcpy(&corners[12 * 70], stale, sizeof(stale));
+	D3D11_BUFFER_DESC description;
+	memset(&description, 0, sizeof(description));
+	description.ByteWidth = static_cast<UINT>(corners.size() * sizeof(float));
+	description.Usage = D3D11_USAGE_DEFAULT;
+	description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	D3D11_SUBRESOURCE_DATA data;
+	memset(&data, 0, sizeof(data));
+	data.pSysMem = &corners[0];
+	ID3D11Buffer * corner_buffer = NULL;
+	CHECK(SUCCEEDED(d3d->CreateBuffer(&description, &data, &corner_buffer)));
+	D3D11_SHADER_RESOURCE_VIEW_DESC read;
+	memset(&read, 0, sizeof(read));
+	read.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	read.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+	read.Buffer.NumElements = slots * 3;
+	ID3D11ShaderResourceView * corner_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateShaderResourceView(corner_buffer, &read, &corner_view)));
+	data.pSysMem = &cut_coordinates[0];
+	ID3D11Buffer * cut_buffer = NULL;
+	CHECK(SUCCEEDED(d3d->CreateBuffer(&description, &data, &cut_buffer)));
+	ID3D11ShaderResourceView * cut_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateShaderResourceView(cut_buffer, &read, &cut_view)));
+	D3D11_TEXTURE2D_DESC alpha_description;
+	memset(&alpha_description, 0, sizeof(alpha_description));
+	alpha_description.Width = 4;
+	alpha_description.Height = 1;
+	alpha_description.MipLevels = 1;
+	alpha_description.ArraySize = 1;
+	alpha_description.Format = DXGI_FORMAT_R8_UNORM;
+	alpha_description.SampleDesc.Count = 1;
+	alpha_description.Usage = D3D11_USAGE_DEFAULT;
+	alpha_description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	const unsigned char alpha_texels[4] = { 0, 0, 255, 255 };
+	D3D11_SUBRESOURCE_DATA alpha_data;
+	memset(&alpha_data, 0, sizeof(alpha_data));
+	alpha_data.pSysMem = alpha_texels;
+	alpha_data.SysMemPitch = sizeof(alpha_texels);
+	ID3D11Texture2D * alpha_texture = NULL;
+	CHECK(SUCCEEDED(d3d->CreateTexture2D(&alpha_description, &alpha_data, &alpha_texture)));
+	ID3D11ShaderResourceView * alpha_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateShaderResourceView(alpha_texture, NULL, &alpha_view)));
+
+	float identity[16];
+	set_identity(identity);
+	DX11RayGridClass grid;
+	grid.Set_Cut(cut_view, alpha_view);
+	grid.Build(backend, d3d, context, corner_view, 5, slots, identity);
+	CHECK(grid.Built());
+
+	// Origin and reach, then the way, and the answer expected.
+	struct GridRay { float From[4]; float Way[4]; unsigned Hit; };
+	const GridRay rays[] = {
+		{ { 0.0f, -0.05f, 0.0f, 2.0f }, { 0.0f, 0.0f, 1.0f, 0.0f }, 1 },		// up through the tilted one
+		{ { 0.0f, -0.05f, 0.0f, 0.4f }, { 0.0f, 0.0f, 1.0f, 0.0f }, 0 },		// stops short of it
+		{ { -0.9f, 0.0f, 0.55f, 2.0f }, { 1.0f, 0.0f, 0.0f, 0.0f }, 1 },		// across the sun's depth
+		{ { -0.9f, 0.0f, 0.55f, 0.5f }, { 1.0f, 0.0f, 0.0f, 0.0f }, 0 },
+		{ { 0.0f, 0.0f, 0.95f, 1.0f }, { 0.0f, 0.0f, -1.0f, 0.0f }, 1 },		// down from above the grid
+		{ { 0.6f, 0.6f, 0.0f, 2.0f }, { 0.0f, 0.0f, 1.0f, 0.0f }, 0 },		// the stale triangle only
+		{ { -5.0f, 0.0f, 0.55f, 10.0f }, { 1.0f, 0.0f, 0.0f, 0.0f }, 1 },		// from far outside the grid
+		{ { -0.6f, -0.6f, 0.0f, 3.0f }, { 0.6f, 0.6f, 0.8f, 0.0f }, 0 },		// crosses the plane outside the triangle
+		{ { 0.0f, -0.2f, 0.0f, 3.0f }, { 0.1f, 0.3f, 1.0f, 0.0f }, 1 },		// slanted, inside it
+		{ { 0.8f, -0.7f, 0.0f, 2.0f }, { 0.0f, 0.0f, 1.0f, 0.0f }, 0 },		// the one aside, a quarter across: clear
+		{ { 0.86f, -0.78f, 0.0f, 2.0f }, { 0.0f, 0.0f, 1.0f, 0.0f }, 1 },		// three quarters across: solid
+	};
+	const unsigned ray_count = sizeof(rays) / sizeof(rays[0]);
+	std::vector<float> packed;
+	for (unsigned index = 0; index < ray_count; ++index) {
+		packed.insert(packed.end(), rays[index].From, rays[index].From + 4);
+		packed.insert(packed.end(), rays[index].Way, rays[index].Way + 4);
+	}
+	description.ByteWidth = static_cast<UINT>(packed.size() * sizeof(float));
+	data.pSysMem = &packed[0];
+	ID3D11Buffer * ray_buffer = NULL;
+	CHECK(SUCCEEDED(d3d->CreateBuffer(&description, &data, &ray_buffer)));
+	read.Buffer.NumElements = ray_count * 2;
+	ID3D11ShaderResourceView * ray_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateShaderResourceView(ray_buffer, &read, &ray_view)));
+
+	description.ByteWidth = ray_count * sizeof(unsigned);
+	description.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+	ID3D11Buffer * result_buffer = NULL;
+	CHECK(SUCCEEDED(d3d->CreateBuffer(&description, NULL, &result_buffer)));
+	D3D11_UNORDERED_ACCESS_VIEW_DESC write;
+	memset(&write, 0, sizeof(write));
+	write.Format = DXGI_FORMAT_R32_UINT;
+	write.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+	write.Buffer.NumElements = ray_count;
+	ID3D11UnorderedAccessView * result_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateUnorderedAccessView(result_buffer, &write, &result_view)));
+
+	const std::string source = DX11RayGridClass::Trace_Program()
+		+ "Buffer<float4> Rays : register(t0);\n"
+		  "RWBuffer<uint> Results : register(u0);\n"
+		  "[numthreads(16, 1, 1)]\n"
+		  "void main(uint3 id : SV_DispatchThreadID)\n"
+		  "{\n"
+		  "    uint count;\n"
+		  "    Rays.GetDimensions(count);\n"
+		  "    if (id.x * 2 >= count) return;\n"
+		  "    float4 from = Rays[id.x * 2];\n"
+		  "    float3 way = normalize(Rays[id.x * 2 + 1].xyz);\n"
+		  "    Results[id.x] = ray_occluded(from.xyz, way, from.w) ? 1 : 0;\n"
+		  "}\n";
+	std::vector<unsigned char> code;
+	CHECK(backend.Compile_Program(source, "raygrid test", "cs_5_0", code));
+	ID3D11ComputeShader * program = NULL;
+	CHECK(!code.empty() && SUCCEEDED(d3d->CreateComputeShader(&code[0], code.size(), NULL, &program)));
+
+	const float no_ground[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	grid.Bind(context, NULL, no_ground);
+	context->CSSetShaderResources(0, 1, &ray_view);
+	context->CSSetUnorderedAccessViews(0, 1, &result_view, NULL);
+	context->CSSetShader(program, NULL, 0);
+	context->Dispatch(1, 1, 1);
+	ID3D11ShaderResourceView * no_read = NULL;
+	ID3D11UnorderedAccessView * no_write = NULL;
+	context->CSSetShaderResources(0, 1, &no_read);
+	context->CSSetUnorderedAccessViews(0, 1, &no_write, NULL);
+	grid.Unbind(context);
+
+	description.Usage = D3D11_USAGE_STAGING;
+	description.BindFlags = 0;
+	description.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+	ID3D11Buffer * staging = NULL;
+	CHECK(SUCCEEDED(d3d->CreateBuffer(&description, NULL, &staging)));
+	context->CopyResource(staging, result_buffer);
+	D3D11_MAPPED_SUBRESOURCE mapped;
+	CHECK(SUCCEEDED(context->Map(staging, 0, D3D11_MAP_READ, 0, &mapped)));
+	const unsigned * hits = static_cast<const unsigned *>(mapped.pData);
+	for (unsigned index = 0; index < ray_count; ++index) {
+		if (hits[index] != rays[index].Hit) {
+			printf("  ray %u: hit %u, expected %u\n", index, hits[index], rays[index].Hit);
+		}
+		CHECK_EQ(hits[index], rays[index].Hit);
+	}
+	context->Unmap(staging, 0);
+
+	staging->Release();
+	program->Release();
+	result_view->Release();
+	result_buffer->Release();
+	ray_view->Release();
+	ray_buffer->Release();
+	grid.Release();
+	alpha_view->Release();
+	alpha_texture->Release();
+	cut_view->Release();
+	cut_buffer->Release();
+	corner_view->Release();
+	corner_buffer->Release();
+	backend.Shutdown();
+	device.Release();
+}
+
+// The Ray Traced shadows' multiply under a multisampled scene.  A near triangle (depth 0.2) over far
+// ground (0.9) with its edge across the pixels, the near side lit (1) and the far shadowed (0.25)
+// in a one sample shade worked out from sample 0's depth, as the trace's is: every sample has to
+// come out with its own surface's shade, the edge pixels' other samples included.
+TEST(dx11backend_the_ray_traced_multiply_gives_each_msaa_sample_its_own_surfaces_shade)
+{
+	DX11DeviceClass device;
+	device.Request_Debug_Layer();
+	CHECK(device.Create_Offscreen());
+	ID3D11Device * d3d = device.Get_Device();
+	ID3D11DeviceContext * context = device.Get_Context();
+	DX11BackendClass backend;
+	CHECK(backend.Initialise(&device));
+
+	const unsigned size = 8;
+	const unsigned sample_count = 4;
+	const float near_depth = 0.2f;
+	const float far_depth = 0.9f;
+	const float lit = 1.0f;
+	const float shadowed = 0.25f;
+	UINT quality = 0;
+	CHECK(SUCCEEDED(d3d->CheckMultisampleQualityLevels(DXGI_FORMAT_R32_FLOAT, sample_count, &quality)) && quality > 0);
+
+	D3D11_TEXTURE2D_DESC description;
+	memset(&description, 0, sizeof(description));
+	description.Width = size;
+	description.Height = size;
+	description.MipLevels = 1;
+	description.ArraySize = 1;
+	description.Format = DXGI_FORMAT_R32_FLOAT;
+	description.SampleDesc.Count = 1;
+	description.Usage = D3D11_USAGE_DEFAULT;
+	description.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	// Each sample's depth, sample 0's, the shade, the multiply's samples.
+	enum { SAMPLES, FIRST, SHADE, RESULT, TEXTURES };
+	ID3D11Texture2D * textures[TEXTURES] = { NULL, NULL, NULL, NULL };
+	ID3D11RenderTargetView * targets[TEXTURES] = { NULL, NULL, NULL, NULL };
+	ID3D11ShaderResourceView * reads[TEXTURES] = { NULL, NULL, NULL, NULL };
+	for (unsigned index = 0; index < TEXTURES; ++index) {
+		D3D11_TEXTURE2D_DESC texture = description;
+		texture.SampleDesc.Count = (index == SAMPLES || index == RESULT) ? sample_count : 1;
+		CHECK(SUCCEEDED(d3d->CreateTexture2D(&texture, NULL, &textures[index]))
+			&& SUCCEEDED(d3d->CreateRenderTargetView(textures[index], NULL, &targets[index]))
+			&& SUCCEEDED(d3d->CreateShaderResourceView(textures[index], NULL, &reads[index])));
+	}
+
+	// A full screen triangle, and the near one: its long edge from the top right to below the
+	// bottom left, through no pixel centre.
+	const char * const vertex_source =
+		"float4 main(uint id : SV_VertexID) : SV_Position\n"
+		"{\n"
+		"#ifdef NEAR\n"
+		"    const float2 corners[3] = { float2(-1.0, 1.0), float2(1.1, 1.0), float2(-1.0, -1.3) };\n"
+		"    return float4(corners[id], 0.0, 1.0);\n"
+		"#else\n"
+		"    float2 at = float2((id << 1) & 2, id & 2);\n"
+		"    return float4(at * float2(2.0, -2.0) + float2(-1.0, 1.0), 0.0, 1.0);\n"
+		"#endif\n"
+		"}\n";
+	const std::string near_source = std::string("#define NEAR\n") + vertex_source;
+	char near_pixel[96];
+	snprintf(near_pixel, sizeof(near_pixel), "float main() : SV_Target { return %.2f; }\n", near_depth);
+	char shade_pixel[256];
+	snprintf(shade_pixel, sizeof(shade_pixel),
+		"Texture2D<float> First : register(t0);\n"
+		"float main(float4 position : SV_Position) : SV_Target\n"
+		"{ return First.Load(int3(position.xy, 0)) < 0.5 ? %.2f : %.2f; }\n", lit, shadowed);
+	const char * const first_pixel =
+		"Texture2DMS<float> Samples : register(t0);\n"
+		"float main(float4 position : SV_Position) : SV_Target { return Samples.Load(int2(position.xy), 0); }\n";
+	const char * const read_back =
+		"Texture2DMS<float> Samples : register(t0);\n"
+		"Texture2DMS<float> Result : register(t1);\n"
+		"RWBuffer<float2> Out : register(u0);\n"
+		"[numthreads(8, 8, 1)]\n"
+		"void main(uint3 id : SV_DispatchThreadID)\n"
+		"{\n"
+		"    for (uint s = 0; s < 4; ++s)\n"
+		"        Out[(id.y * 8 + id.x) * 4 + s] = float2(Samples.Load(id.xy, s), Result.Load(id.xy, s));\n"
+		"}\n";
+	std::vector<unsigned char> code;
+	ID3D11VertexShader * full_screen = NULL;
+	ID3D11VertexShader * near_corners = NULL;
+	ID3D11PixelShader * near_program = NULL;
+	ID3D11PixelShader * first_program = NULL;
+	ID3D11PixelShader * shade_program = NULL;
+	ID3D11PixelShader * multiply = NULL;
+	ID3D11ComputeShader * reader = NULL;
+	CHECK(backend.Compile_Program(vertex_source, "msaa test", "vs_5_0", code)
+		&& SUCCEEDED(d3d->CreateVertexShader(&code[0], code.size(), NULL, &full_screen)));
+	CHECK(backend.Compile_Program(near_source, "msaa test", "vs_5_0", code)
+		&& SUCCEEDED(d3d->CreateVertexShader(&code[0], code.size(), NULL, &near_corners)));
+	CHECK(backend.Compile_Program(near_pixel, "msaa test", "ps_5_0", code)
+		&& SUCCEEDED(d3d->CreatePixelShader(&code[0], code.size(), NULL, &near_program)));
+	CHECK(backend.Compile_Program(first_pixel, "msaa test", "ps_5_0", code)
+		&& SUCCEEDED(d3d->CreatePixelShader(&code[0], code.size(), NULL, &first_program)));
+	CHECK(backend.Compile_Program(shade_pixel, "msaa test", "ps_5_0", code)
+		&& SUCCEEDED(d3d->CreatePixelShader(&code[0], code.size(), NULL, &shade_program)));
+	CHECK(backend.Compile_Program(DX11BackendClass::Ray_Samples_Program(), "msaa test", "ps_5_0", code)
+		&& SUCCEEDED(d3d->CreatePixelShader(&code[0], code.size(), NULL, &multiply)));
+	CHECK(backend.Compile_Program(read_back, "msaa test", "cs_5_0", code)
+		&& SUCCEEDED(d3d->CreateComputeShader(&code[0], code.size(), NULL, &reader)));
+
+	D3D11_RASTERIZER_DESC rasterizer_description;
+	memset(&rasterizer_description, 0, sizeof(rasterizer_description));
+	rasterizer_description.FillMode = D3D11_FILL_SOLID;
+	rasterizer_description.CullMode = D3D11_CULL_NONE;
+	rasterizer_description.MultisampleEnable = TRUE;
+	ID3D11RasterizerState * rasterizer = NULL;
+	CHECK(SUCCEEDED(d3d->CreateRasterizerState(&rasterizer_description, &rasterizer)));
+	D3D11_VIEWPORT viewport = { 0.0f, 0.0f, static_cast<float>(size), static_cast<float>(size), 0.0f, 1.0f };
+	context->RSSetViewports(1, &viewport);
+	context->RSSetState(rasterizer);
+	context->IASetInputLayout(NULL);
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context->OMSetBlendState(NULL, NULL, 0xffffffff);
+	context->OMSetDepthStencilState(NULL, 0);
+	ID3D11ShaderResourceView * const no_reads[3] = { NULL, NULL, NULL };
+
+	const float far_colour[4] = { far_depth, far_depth, far_depth, far_depth };
+	context->ClearRenderTargetView(targets[SAMPLES], far_colour);
+	context->OMSetRenderTargets(1, &targets[SAMPLES], NULL);
+	context->VSSetShader(near_corners, NULL, 0);
+	context->PSSetShader(near_program, NULL, 0);
+	context->Draw(3, 0);
+
+	context->VSSetShader(full_screen, NULL, 0);
+	context->OMSetRenderTargets(1, &targets[FIRST], NULL);
+	context->PSSetShader(first_program, NULL, 0);
+	context->PSSetShaderResources(0, 1, &reads[SAMPLES]);
+	context->Draw(3, 0);
+	context->PSSetShaderResources(0, 1, no_reads);
+
+	context->OMSetRenderTargets(1, &targets[SHADE], NULL);
+	context->PSSetShader(shade_program, NULL, 0);
+	context->PSSetShaderResources(0, 1, &reads[FIRST]);
+	context->Draw(3, 0);
+	context->PSSetShaderResources(0, 1, no_reads);
+
+	context->OMSetRenderTargets(1, &targets[RESULT], NULL);
+	context->PSSetShader(multiply, NULL, 0);
+	ID3D11ShaderResourceView * const multiply_reads[3] = { reads[SHADE], reads[FIRST], reads[SAMPLES] };
+	context->PSSetShaderResources(0, 3, multiply_reads);
+	context->Draw(3, 0);
+	context->PSSetShaderResources(0, 3, no_reads);
+	ID3D11RenderTargetView * const no_target = NULL;
+	context->OMSetRenderTargets(1, &no_target, NULL);
+
+	const unsigned values = size * size * sample_count;
+	D3D11_BUFFER_DESC buffer;
+	memset(&buffer, 0, sizeof(buffer));
+	buffer.ByteWidth = values * 2 * sizeof(float);
+	buffer.Usage = D3D11_USAGE_DEFAULT;
+	buffer.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+	ID3D11Buffer * out_buffer = NULL;
+	CHECK(SUCCEEDED(d3d->CreateBuffer(&buffer, NULL, &out_buffer)));
+	D3D11_UNORDERED_ACCESS_VIEW_DESC write;
+	memset(&write, 0, sizeof(write));
+	write.Format = DXGI_FORMAT_R32G32_FLOAT;
+	write.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+	write.Buffer.NumElements = values;
+	ID3D11UnorderedAccessView * out_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateUnorderedAccessView(out_buffer, &write, &out_view)));
+	ID3D11ShaderResourceView * const read_back_reads[2] = { reads[SAMPLES], reads[RESULT] };
+	context->CSSetShaderResources(0, 2, read_back_reads);
+	context->CSSetUnorderedAccessViews(0, 1, &out_view, NULL);
+	context->CSSetShader(reader, NULL, 0);
+	context->Dispatch(1, 1, 1);
+	ID3D11UnorderedAccessView * const no_write = NULL;
+	context->CSSetUnorderedAccessViews(0, 1, &no_write, NULL);
+	context->CSSetShaderResources(0, 2, no_reads);
+
+	buffer.Usage = D3D11_USAGE_STAGING;
+	buffer.BindFlags = 0;
+	buffer.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+	ID3D11Buffer * staging = NULL;
+	CHECK(SUCCEEDED(d3d->CreateBuffer(&buffer, NULL, &staging)));
+	context->CopyResource(staging, out_buffer);
+	D3D11_MAPPED_SUBRESOURCE mapped;
+	CHECK(SUCCEEDED(context->Map(staging, 0, D3D11_MAP_READ, 0, &mapped)));
+	const float * read = static_cast<const float *>(mapped.pData);
+	unsigned wrong = 0;
+	unsigned against_their_pixel = 0;	// samples on the other surface from their pixel's sample 0
+	for (unsigned pixel = 0; pixel < size * size; ++pixel) {
+		const bool pixel_near = read[pixel * sample_count * 2] < 0.5f;
+		for (unsigned sample = 0; sample < sample_count; ++sample) {
+			const float own = read[(pixel * sample_count + sample) * 2];
+			const float shade = read[(pixel * sample_count + sample) * 2 + 1];
+			const bool sample_near = own < 0.5f;
+			const float wanted = sample_near ? lit : shadowed;
+			if (fabsf(shade - wanted) > 0.001f) {
+				printf("  pixel %u,%u sample %u: depth %.2f shade %.2f, wanted %.2f\n",
+					pixel % size, pixel / size, sample, own, shade, wanted);
+				++wrong;
+			}
+			if (sample_near != pixel_near) {
+				++against_their_pixel;
+			}
+		}
+	}
+	context->Unmap(staging, 0);
+	CHECK_EQ(wrong, 0u);
+	CHECK(against_their_pixel > 0);
+
+	staging->Release();
+	out_view->Release();
+	out_buffer->Release();
+	rasterizer->Release();
+	reader->Release();
+	multiply->Release();
+	shade_program->Release();
+	first_program->Release();
+	near_program->Release();
+	near_corners->Release();
+	full_screen->Release();
+	for (unsigned index = 0; index < TEXTURES; ++index) {
+		reads[index]->Release();
+		targets[index]->Release();
+		textures[index]->Release();
+	}
+	backend.Shutdown();
+	device.Release();
+}

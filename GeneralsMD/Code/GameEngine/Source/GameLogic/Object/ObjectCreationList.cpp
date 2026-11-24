@@ -1052,7 +1052,9 @@ protected:
 			}
 		}
 		
-		if (m_ignorePrimaryObstacle)
+		// debris always: a piece starts inside the hull that threw it, and colliding with that hull
+		// shoved it out on top of its own throw (a dying tank's plates, a falling jet's wings)
+		if (m_ignorePrimaryObstacle || !m_nameAreObjects)
 		{
 			PhysicsBehavior* p = obj->getPhysics();
 			if (p)
@@ -1104,8 +1106,13 @@ protected:
 				// EA's: the source's velocity applied as a force, so the new object keeps 1/mass of it.
 				// EA's masses are tuned against that. A Dragon's fire wall segment (mass 50) took the
 				// whole 9 units a frame of the flame that spawned it as a velocity and slid up to 1000
-				// units away; a napalm bomb (mass 75) would fly on as fast as its plane.
-				objectPhysics->applyForce( sourcePhysics->getVelocity() );			}
+				// units away; a napalm bomb (mass 75) would fly on as fast as its plane. Debris takes
+				// its own Mass first: the dispositions below set it too late, and GenericDebris's 1
+				// handed a crashing jet's pieces its whole speed.
+				if (!m_nameAreObjects && m_mass > 0.0f)
+					objectPhysics->setMass( m_mass );
+				objectPhysics->applyForce( sourcePhysics->getVelocity() );
+			}
 		}
 
 		if( BitTest( m_disposition, LIKE_EXISTING ) )

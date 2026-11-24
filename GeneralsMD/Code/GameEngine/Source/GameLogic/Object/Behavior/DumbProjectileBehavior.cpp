@@ -391,7 +391,7 @@ static Bool calcTrajectory(
 	return false;
 }
 
-#endif NOT_IN_USE
+#endif // NOT_IN_USE
 
 //-------------------------------------------------------------------------------------------------
 // Prepares the missile for launch via proper weapon-system channels.
@@ -620,6 +620,8 @@ Bool DumbProjectileBehavior::calcFlightPath(Bool recalcNumSegments)
 		Real peakHeight = m_detonationWeaponTmpl->getBallisticPeakHeight();
 		Real barrelPeakHeight = LAUNCH_RISE_TO_PEAK_HEIGHT * ( m_launchSlope * sqrtf( sqr( span.x ) + sqr( span.y ) ) - span.z );
 		peakHeight = clamp( peakHeight * ( 1.0f - PEAK_HEIGHT_SHIFT_LIMIT ), barrelPeakHeight, peakHeight * ( 1.0f + PEAK_HEIGHT_SHIFT_LIMIT ) );
+		// and never under the ground on the way: the barrel was raised for the ridge too
+		peakHeight = max( peakHeight, m_detonationWeaponTmpl->getBallisticGroundPeakHeight( controlPoints[0], controlPoints[3] ) );
 		Real innerRise = PEAK_HEIGHT_TO_INNER_POINT_RISE * peakHeight;
 		for( Int inner = 1; inner <= 2; ++inner )
 		{
@@ -956,14 +958,19 @@ UpdateSleepTime DumbProjectileBehavior::update()
 				if (distVictimMoved > d->m_flightPathAdjustDistPerFrame)
 					distVictimMoved = d->m_flightPathAdjustDistPerFrame;
 				delta.normalize();
-				m_flightPathEnd.x += distVictimMoved * delta.x;
-				m_flightPathEnd.y += distVictimMoved * delta.y;
-				m_flightPathEnd.z += distVictimMoved * delta.z;
-				if (!calcFlightPath(false))
+				delta.scale(distVictimMoved);
+				m_flightPathEnd.add(&delta);
+				// The rest of the path bends toward the moved end, the last point all the way. Built again
+				// from the muzzle every frame, it ran the straight-or-lob test against the new end, and a
+				// shell near a crest flipped between the line and the arc and jinked up in mid-air.
+				Int remaining = (Int)m_flightPath.size() - m_currentFlightPathStep;
+				for (Int i = 0; i < remaining; ++i)
 				{
-					DEBUG_CRASH(("Hmm, recalc of flight path returned false... should this happen?"));
-					detonate();
-					return UPDATE_SLEEP_NONE;
+					Real share = (Real)(i + 1) / remaining;
+					Coord3D &point = m_flightPath[m_currentFlightPathStep + i];
+					point.x += share * delta.x;
+					point.y += share * delta.y;
+					point.z += share * delta.z;
 				}
 			}
 		}
@@ -1008,6 +1015,17 @@ UpdateSleepTime DumbProjectileBehavior::update()
 	else
 	{
 		getObject()->setPosition(&flightStep);
+	}
+
+	// The path flies the shell, but EA's shells carry a PhysicsBehavior, which moves it each frame by
+	// the velocity its gravity has piled up (and a moving launcher's, handed over at launch). The drop
+	// grew by a frame's gravity every step, and near the end it pulled the shell under the ground, which
+	// set it off a step short of its target, further short downhill. Cleared here, the physics moves it
+	// one frame's gravity at most.
+	if( PhysicsBehavior *physics = getObject()->getPhysics() )
+	{
+		physics->scrubVelocityZ( 0.0f );
+		physics->scrubVelocity2D( 0.0f );
 	}
 
 	// note that we want to use getHighestLayerForDestination() here, so that anything even slightly
@@ -1084,7 +1102,8 @@ void DumbProjectileBehavior::xfer( Xfer *xfer )
 	// version 5 adds the shot's point on its victim, which a shell following the victim keeps to
 	// version 6 adds the hover (HoverTime): where it stands, when it rose and when it leaves
 	// version 7 adds where it rises to (HoverAirSpot); before it, HoverHeight straight up
-	XferVersion currentVersion = 7;
+	// version 8 adds the path's points (see the end)
+	XferVersion currentVersion = 8;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1165,9 +1184,23 @@ void DumbProjectileBehavior::xfer( Xfer *xfer )
 		m_hoverTop.z += getDumbProjectileBehaviorModuleData()->m_hoverHeight;
 	}
 
-	// the path itself is a vector of points that is not saved; rebuild it from the start, end and
-	// segment count that are, so the step we just read means something
-	if( xfer->getXferMode() == XFER_LOAD && m_flightPathSegments > 0 )
+	// version 8 saves the path's points: a shell following its victim bends the rest of its path in
+	// place, so one rebuilt from the start and end flew elsewhere after a load. Before it, the path was
+	// rebuilt from the start, end and segment count, so the step read above means something.
+	if( version >= 8 )
+	{
+		Int pointCount = (Int)m_flightPath.size();
+		xfer->xferInt( &pointCount );
+		if( xfer->getXferMode() == XFER_LOAD )
+		{
+			if( pointCount < 0 )
+				throw SC_INVALID_DATA;
+			m_flightPath.resize( pointCount );
+		}
+		for( Int i = 0; i < pointCount; ++i )
+			xfer->xferCoord3D( &m_flightPath[ i ] );
+	}
+	else if( xfer->getXferMode() == XFER_LOAD && m_flightPathSegments > 0 )
 		calcFlightPath( false );
 
 }  // end xfer

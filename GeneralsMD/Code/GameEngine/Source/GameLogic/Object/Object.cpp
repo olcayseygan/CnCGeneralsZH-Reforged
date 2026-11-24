@@ -263,6 +263,9 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	//Modules have not been created yet!
 	m_modulesReady = false;
 
+	m_notedPos = *getPosition();
+	m_notedAngle = getOrientation();
+
 	// Force the thing template to use the most overridden version of itself - jkmcd
 	// Note that after this, the object will be using m_template, which forces the usage of the 
 	// most overridden version of tt, so this is okay.
@@ -2011,8 +2014,15 @@ void Object::reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPo
   	m_drawable->setTransformMatrix( this->getTransformMatrix() );
 	}
 
-	Bool posDiff = isPosDifferent(oldPos, getPosition());
-	Bool angDiff = isAngleDifferent(oldAngle, getOrientation());
+	// Against the transform last reacted to, not the one just before this move: a unit creeping or
+	// turning under the threshold every tick otherwise never re-registers its cells, and the drift
+	// grows without bound.
+	Bool posDiff = isPosDifferent(&m_notedPos, getPosition());
+	Bool angDiff = isAngleDifferent(m_notedAngle, getOrientation());
+	if (posDiff)
+		m_notedPos = *getPosition();
+	if (angDiff)
+		m_notedAngle = getOrientation();
 
 	if (posDiff || angDiff)
 	{
@@ -3112,6 +3122,7 @@ void Object::setLayer(PathfindLayerEnum layer)
 		if (m_physics)
 			m_physics->wakeIfDormant();
 		m_layer = layer;
+		invalidateAltitudeCache();	// the height above ground is measured from the layer
 		TheAI->pathfinder()->updatePos(this, getPosition());
 	}
 }
@@ -4681,13 +4692,14 @@ static void xferModule( Xfer *xfer, BehaviorModule *module, const Object *obj )
 	* 16: the auras gathered since its last turn of the once-a-second pass
 	* 17: the rank auras gone; versions 14 to 16 are read and thrown away
 	* 18: the hotkey squad a group panel reinforcement is walking to
+	* 19: the position and angle the partition last reacted to
 	*/
 //-------------------------------------------------------------------------------------------------
 void Object::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 18;
+	const XferVersion currentVersion = 19;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -5175,6 +5187,19 @@ void Object::xfer( Xfer *xfer )
 		xfer->xferInt( &m_reinforcementSquad );
 		xfer->xferCoord3D( &m_reinforcementDestination );
 		xfer->xferBool( &m_reinforcementRetargeted );
+	}
+
+	// what the partition last reacted to decides when it next re-registers, so a load carries on
+	// from the saved one; an older save takes the loaded transform, the one its partition is built at
+	if( version >= 19 )
+	{
+		xfer->xferCoord3D( &m_notedPos );
+		xfer->xferReal( &m_notedAngle );
+	}
+	else if( xfer->getXferMode() == XFER_LOAD )
+	{
+		m_notedPos = *getPosition();
+		m_notedAngle = getOrientation();
 	}
 
 }  // end xfer

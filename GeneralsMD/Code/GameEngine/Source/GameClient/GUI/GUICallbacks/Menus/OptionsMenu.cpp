@@ -306,6 +306,18 @@ static Bool modernWaterSettingsSupported( void )
 	return WaterScreenReflection::Supported();
 }
 
+// Ray Traced, ShadowQuality's last entry, is traced by Direct3D 11 on Windows only.  Elsewhere the combo
+// ends at High, which is what a stored Ray Traced draws there, and Accept leaves that line alone.
+static Bool rayTracedShadowsHidden( const OptionDef& def )
+{
+#ifdef _WIN32
+	const Bool traced = TheGlobalData->m_direct3D11;
+#else
+	const Bool traced = FALSE;
+#endif
+	return !traced && strcmp( def.iniKey, "ShadowQuality" ) == 0;
+}
+
 // Nine tabs leave less space for translated captions. Fit the actual glyphs,
 // keeping the normal font wherever it already fits the button.
 static void fitWaterOptionsTabCaption( GameWindow *tab )
@@ -1256,13 +1268,14 @@ static void fillCatalogWidgets( void )
 			case OPTION_ENUM:
 			{
 				GadgetComboBoxReset( widget );
-				for( Int entry = def.lo; entry <= def.hi; ++entry )
+				const Int shownHi = rayTracedShadowsHidden( def ) ? (Int)SHADOW_QUALITY_HIGH : def.hi;
+				for( Int entry = def.lo; entry <= shownHi; ++entry )
 				{
 					AsciiString key;
 					key.format( "%s%d", def.labelKey, entry );
 					GadgetComboBoxAddEntry( widget, TheGameText->fetch( key ), entryColor );
 				}
-				GadgetComboBoxSetSelectedPos( widget, value - def.lo );
+				GadgetComboBoxSetSelectedPos( widget, min( value, shownHi ) - def.lo );
 				break;
 			}
 
@@ -1336,6 +1349,9 @@ static void readCatalogWidgets( OptionPreferences &out )
 				if( selected < 0 )
 					continue;
 				value = clampOptionValue( def, def.lo + selected );
+				// a stored Ray Traced shown as High where nothing traces stays the player's choice
+				if( rayTracedShadowsHidden( def ) && value == SHADOW_QUALITY_HIGH && def.get() > value )
+					continue;
 				break;
 			}
 

@@ -1,0 +1,22 @@
+# Rangers dying on a slope, for the -ragdoll before and after: one squad shot by Red Guard, the
+# other blown up by a Rocket Buggy (EXPLODED deaths, so the logic flings them). The slope is the one
+# south of 1550,3650 on Twilight Flame that toxinslope.txt uses; 200 south of the Rangers is cliff,
+# so the enemy comes from the west. The Rangers are set to a tenth of their health so they die
+# within a few seconds of the first shots.
+#
+#   generals.exe -win -xres 1280 -yres 720 -noFPSLimit -quickstart -noshellmap -observer
+#     -multiInstance -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 3 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -side 2 FactionGLA -seed 7
+#     -camera 1575 3625 -maxframes 900 -scenario ragdoll_slope -logPrefix ragdoll_ [-ragdoll]
+#
+# The same line with -headless (and no -win, -xres, -yres, -camera) is the CRC pair: the HEADLESS
+# CRC lines have to be the same with and without -ragdoll.
+
+20    spawn      0  AmericaInfantryRanger           5   1500 3640  14
+20    spawn      0  AmericaInfantryRanger           5   1660 3600  14
+25    health     0  AmericaInfantryRanger               10
+30    spawn      1  ChinaInfantryRedguard           8   1360 3660  14
+30    spawn      2  GLAVehicleRocketBuggy           2   1400 3740  30
+60    attack     1  ChinaInfantryRedguard               0 AmericaInfantryRanger
+60    attack     2  GLAVehicleRocketBuggy               0 AmericaInfantryRanger
+600   tally      0  AmericaInfantryRanger

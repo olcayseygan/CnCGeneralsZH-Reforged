@@ -320,6 +320,25 @@ void Direct3D11_Occlude_Scene();
 // graphics, -headless and the SDL3 port draw nothing here.
 void Direct3D11_Ambient_Occlusion();
 
+// -rtShadows (DX11BackendClass::Set_Ray_Traced_Shadows): the sun's casters streamed out of their
+// pass and traced against, one ray a pixel, in place of the map.  Set says whether it is wanted
+// (said every caster pass); the trace goes on the opaque world before the ambient occlusion and the
+// water, and does nothing on a frame whose caster pass did not stream.  The report is one line.
+void Direct3D11_Set_Ray_Traced_Shadows(bool wanted);
+void Direct3D11_Ray_Traced_Shadows();
+// True while this frame's sun rays wait for the opaque scene: RTS3DScene::Flush then traces them
+// after the grass and before the batched trees, which take no sun shadow at any level.
+bool Direct3D11_Ray_Shade_Waiting();
+// The scene's point lights with shadows (DX11BackendClass::Trace_Ray_Lights), called once the
+// opaque world is down and before the batched trees, which took no point light at any level, and
+// so before the sun's trace, whose dark pixel guard reads the lit scene as it read the programs'.
+void Direct3D11_Ray_Traced_Lights();
+std::string Direct3D11_Ray_Shadow_Report();
+// ZHR_RT_LIGHTS_PROBE: the shadowed point lights' counts of the last frame read back, for a line
+// each logic frame; empty when nothing was lit.
+bool Direct3D11_Ray_Lights_Probing();
+std::string Direct3D11_Ray_Light_Probe_Report();
+
 // The fog's memory look (DX11PostProcessClass::Shroud_Memory_Scene), called after the water and before
 // the translucent meshes: it greys every pixel by the ground under it, and a translucent mesh drawn
 // first, the placement ghost above all, lost its red over black shroud with the ground.

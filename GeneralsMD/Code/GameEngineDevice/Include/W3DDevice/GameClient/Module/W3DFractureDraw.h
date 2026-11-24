@@ -74,6 +74,9 @@ public:
 
 	/// Once a frame before the views draw (W3DDisplay::draw): what falls, falls on the screen or off it.
 	static void updateAll( void );
+	/// At the sync point (W3DDisplay's takeReadsForRender), where the client may read the logic: health
+	/// that rose since brings knocked out fragments back.
+	static void takeReadsForRender( void );
 	/// Every fractured structure's fragments into the sun's depth map (W3DVolumetricShadowManager).
 	static void renderShadowCasters( RenderInfoClass &sunInfo );
 	/// TRUE for a drawable whose fall this module draws, which the Collapse option then leaves alone.
@@ -86,6 +89,8 @@ private:
 	FractureRenderObjClass *m_fracture;						///< made at the first hit or the death
 	std::vector<unsigned char> m_loadedStanding;	///< a load's holes, until the fragments are made
 	Int m_loadedWay;															///< and the baked way it fell, -1 for none
+	std::vector<unsigned> m_loadedKnocked;				///< and the order they went in, for a repair
+	std::vector<Real> m_loadedKnockedAt;					///< and the share of health lost as each went
 	Bool m_loaded;																///< dead in a loaded save: the ruin it shows fell before it
 
 };

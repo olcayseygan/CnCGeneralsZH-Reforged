@@ -714,12 +714,17 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 				d->onDamage( damageInfo );
 			}
 
-			// the client draws where it landed (a structure in fragments); logic tells, never asks back
+			// the client draws where it landed (a structure in fragments); logic tells, never asks back.  A
+			// kill with no point of impact (a nuke's blast, poison) tells too, at the object with no hole
+			// (a radius below zero), or a structure DestroyDie takes at once vanished instead of falling
 			Drawable *draw = obj->getDrawable();
-			if( draw && damageInfo->in.m_hasImpact )
+			const Bool killed = m_currentHealth <= 0 && m_prevHealth > 0;
+			if( draw && ( damageInfo->in.m_hasImpact || killed ) )
 			{
 				const Object *source = TheGameLogic->findObjectByID( damageInfo->in.m_sourceID );
-				draw->reactToImpact( damageInfo->in.m_impactPos, damageInfo->in.m_impactRadius, source ? source->getPosition() : NULL );
+				const Bool impact = damageInfo->in.m_hasImpact;
+				draw->reactToImpact( impact ? damageInfo->in.m_impactPos : *obj->getPosition(), impact ? damageInfo->in.m_impactRadius : -1.0f,
+					source ? source->getPosition() : NULL );
 			}
 		}
 

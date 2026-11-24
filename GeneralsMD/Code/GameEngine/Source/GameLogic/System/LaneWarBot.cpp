@@ -32,6 +32,7 @@
 
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Upgrade.h"
 #include "GameLogic/AIPlayer.h"
@@ -107,12 +108,29 @@ namespace
 	const Real PLOT_BEFORE_TIER = 2.0f;	///< a tier or the hero waits until the plot is worth this many times its price
 	const Real SELL_BELOW = 0.35f;			///< a unit trading worse than this against the enemy plots is dead weight
 	const Real SELL_MARGIN = 0.2f;			///< ... sold only for a roster unit trading this much better
+	// the owner's list of 2026-11-24, from the Warcraft III Direct Strike guide
+	const Real LATER_PLOT_WEIGHT = 0.5f;	///< an enemy plot whose wave is not the next counts this much against the field and the next one
+	const Int CORE_PICKS = 2;						///< of every CORE_CYCLE units bought, this many are the best all-round value, the rest counters
+	const Int CORE_CYCLE = 5;
+	const Real OPENING_FRONT = 1.0f;		///< the opening's first units are front tanks: this on a front unit's score while the plot has fewer than FEW_UNITS
+	const Real PLOT_BEFORE_HERO = 1.0f;	///< the hero comes with the opening, once the plot is worth his price
+	const Int TECH3_STAGGER_TICKS = 2;	///< a team's seats open tech tier 3 this many ticks apart, seat 1 first
+	const Int EXTRAS_EVERY_TICKS = 2;		///< at most one rank or upgrade in this many ticks, bought on the tick's first decision
 	const Int SLOTS_MAX = 64;
 	const Int UNIT_UPGRADES_MAX = 32;		///< more than a command set has buttons
+
+	/// what a purchase of the template becomes: its first build variation (the Technical's chassis carry its gun), or itself
+	const ThingTemplate *armedTemplateOf( const ThingTemplate *tmpl )
+	{
+		const std::vector<AsciiString> &variations = tmpl->getBuildVariations();
+		const ThingTemplate *built = variations.empty() ? NULL : TheThingFactory->findTemplate( variations[ 0 ] );
+		return built != NULL ? built : tmpl;
+	}
 
 	/// the longest reach of the template's default weapons
 	Real reachOf( const ThingTemplate *tmpl )
 	{
+		tmpl = armedTemplateOf( tmpl );
 		const WeaponTemplateSet *set = tmpl->getWeaponTemplateSets().empty() ? NULL : tmpl->findWeaponTemplateSet( WeaponSetFlags() );
 		Real reach = 0.0f;
 		for( Int slot = 0; set != NULL && slot < WEAPONSLOT_COUNT; ++slot )
@@ -124,9 +142,27 @@ namespace
 		return reach;
 	}
 
-	/// artillery, the long guns and the jets (which never march) at the back, the other vehicles in front, infantry and helicopters between
+	/// no default weapon that takes health off an enemy: a carrier, a detector, a jammer, a healer
+	Bool isSupport( const ThingTemplate *tmpl )
+	{
+		tmpl = armedTemplateOf( tmpl );
+		const WeaponTemplateSet *set = tmpl->getWeaponTemplateSets().empty() ? NULL : tmpl->findWeaponTemplateSet( WeaponSetFlags() );
+		for( Int slot = 0; set != NULL && slot < WEAPONSLOT_COUNT; ++slot )
+		{
+			const WeaponTemplate *weapon = set->getNth( (WeaponSlotType)slot );
+			if( weapon != NULL && IsHealthDamagingDamage( weapon->getDamageType() ) && weapon->getDamageType() != DAMAGE_HEALING )
+				return FALSE;
+		}
+		return TRUE;
+	}
+
+	/** artillery, the long guns and the jets (which never march) at the back, the other vehicles in front, infantry,
+		  helicopters and support between: support stands right behind the front, where it reaches the fight, not
+		  at the very back nor leading the wave (the owner's list of 2026-11-24) */
 	Int roleOf( const ThingTemplate *tmpl )
 	{
+		if( !LaneWarDirector::isJet( tmpl ) && isSupport( tmpl ) )
+			return LANEWAR_BOT_MIDDLE;
 		if( LaneWarDirector::isJet( tmpl ) || reachOf( tmpl ) >= BACK_RANGE )
 			return LANEWAR_BOT_BACK;
 		if( tmpl->isKindOf( KINDOF_VEHICLE ) && !tmpl->isKindOf( KINDOF_AIRCRAFT ) )
@@ -156,6 +192,7 @@ namespace
 		Int slotsUsed, slotsTotal;		///< of its ground grid
 		std::vector<Enemy> enemies;
 		Real enemyValue;
+		std::vector<Enemy> possible;	///< every roster unit the enemy seats could buy now
 	};
 
 	/** The first free block for the template on the seat's plot.  Its role's band comes first, filled a
@@ -229,6 +266,18 @@ namespace
 		return suicide ? min( counter, 0.5f ) : counter;
 	}
 
+	/// how the template trades for its price against everything the enemy seats could field now, each unit alike, held as tradeOf is
+	Real allRoundOf( const View &v, const ThingTemplate *tmpl, Real cost, Bool suicide )
+	{
+		if( v.possible.empty() )
+			return 0.5f;
+		Real sum = 0.0f;
+		for( size_t i = 0; i < v.possible.size(); ++i )
+			sum += AIMatchup_templates( tmpl, v.possible[ i ].thing, cost, v.possible[ i ].cost );
+		const Real value = sum / (Real)v.possible.size();
+		return suicide ? min( value, 0.5f ) : value;
+	}
+
 	void order( View &v, Int kind, const Int *args, Int count, const char *what, const char *name, Int price )
 	{
 		// where it goes: a placement's column and row, a move's new ones, a sale's old ones
@@ -278,6 +327,9 @@ namespace
 		// the score: the matchup, the front the plan wants, value per slot as the plot fills, and the dice
 		const Real frontShare = v.value > 0.0f ? v.frontValue / v.value : 0.0f;
 		const Real fill = v.slotsTotal > 0 ? (Real)v.slotsUsed / (Real)v.slotsTotal : 0.0f;
+		// a solid core and counters on it: CORE_PICKS of every CORE_CYCLE ground units weigh every unit the
+		// enemy could field, the rest what they field and send; the jets are always counters
+		const Bool core = !jets && ( v.units % CORE_CYCLE ) < CORE_PICKS && !v.possible.empty();
 		Int best = -1, bestAffordable = -1;
 		Real bestScore = 0.0f, bestAffordableScore = 0.0f;
 		for( Int i = 0; i < count; ++i )
@@ -286,9 +338,11 @@ namespace
 			// the judgement grows with the rating: none of it at Easy, where the dice alone pick
 			Real score = GameLogicRandomValueReal( 0.0f, plan.jitter );
 			if( plan.counterWeight > 0.0f )
-				score += plan.counterWeight * tradeOf( v, p.thing, (Real)p.cost, p.suicide );
+				score += plan.counterWeight * ( core ? allRoundOf( v, p.thing, (Real)p.cost, p.suicide ) : tradeOf( v, p.thing, (Real)p.cost, p.suicide ) );
 			if( ( p.role == LANEWAR_BOT_FRONT ) == ( frontShare < FRONT_SHARE ) )
 				score += 0.2f * plan.counterWeight;
+			if( p.role == LANEWAR_BOT_FRONT && v.units < FEW_UNITS )
+				score += OPENING_FRONT * plan.counterWeight;
 			if( densest > 0.0f )
 				score += 0.3f * plan.counterWeight * fill * (Real)p.cost / (Real)( p.size * p.size ) / densest;
 			if( best < 0 || score > bestScore )
@@ -339,7 +393,7 @@ namespace
 			if( !findSlot( v, tmpl, LANEWAR_BOT_MIDDLE, &col, &row ) )
 				return FALSE;
 			const Int cost = tmpl->calcCostToBuild( v.player );
-			if( v.value < PLOT_BEFORE_TIER * (Real)cost )
+			if( v.value < PLOT_BEFORE_HERO * (Real)cost )
 				return FALSE;
 			if( cost > v.money )
 			{
@@ -508,7 +562,9 @@ namespace
 	Bool buyTier( View &v, Int track, Bool *saving )
 	{
 		const Int level = 1 + ( track == LANEWAR_TRACK_INCOME ? v.director->getIncomeLevel( v.team, v.seat ) : v.director->getTechLevel( v.team, v.seat ) );
-		if( !LaneWarBot_wantsTier( *v.plan, track, level, v.tick ) )
+		// a team opens tier 3 one seat at a time, so it never stops buying units on three plots at once
+		const UnsignedInt stagger = track == LANEWAR_TRACK_TECH && level == LANEWAR_TECH_TIERS ? (UnsignedInt)( v.seat * TECH3_STAGGER_TICKS ) : 0;
+		if( v.tick < stagger || !LaneWarBot_wantsTier( *v.plan, track, level, v.tick - stagger ) )
 			return FALSE;
 		const Int price = LaneWar_tierPrice( track, level );
 		if( v.value < PLOT_BEFORE_TIER * (Real)price )
@@ -528,14 +584,29 @@ namespace
 	struct Sighting
 	{
 		Int team;
+		Int seat;				///< the plot it stands on, FIELD for a wave copy out on the lane
 		Enemy enemy;
 	};
+	enum { FIELD = -1 };
 
-	/// what is on the plots now, units and passengers, in purchase order
+	/// what is on the plots now, units and passengers, in purchase order, then the wave copies out on the lane in spawn order
 	void sightPlots( const LaneWarDirector *director, std::vector<Sighting> *out )
 	{
 		out->clear();
 		const std::vector<LaneWarDirector::PlotUnit> &units = director->getPlotUnits();
+		for( Int i = 0; i < director->getCopyCount(); ++i )
+		{
+			const Object *obj = TheGameLogic->findObjectByID( director->getCopyID( i ) );
+			Int team, seat;
+			if( obj == NULL || obj->isEffectivelyDead() || !director->seatOf( obj->getControllingPlayer(), &team, &seat ) )
+				continue;
+			Sighting s;
+			s.team = team;
+			s.seat = FIELD;
+			s.enemy.thing = obj->getTemplate();
+			s.enemy.cost = (Real)max( obj->getTemplate()->calcCostToBuild( obj->getControllingPlayer() ), 1 );
+			out->push_back( s );
+		}
 		for( size_t i = 0; i < units.size(); ++i )
 		{
 			const LaneWarDirector::PlotUnit &u = units[ i ];
@@ -544,6 +615,7 @@ namespace
 				continue;
 			Sighting s;
 			s.team = u.team;
+			s.seat = u.seat;
 			s.enemy.thing = obj->getTemplate();
 			s.enemy.cost = (Real)max( u.cost, 1 );
 			out->push_back( s );
@@ -602,12 +674,41 @@ namespace
 					v.slotsUsed += u.size * u.size;
 			}
 		}
+		/* What its units will meet (the owner's list of 2026-11-24): the enemy waves out on the lane and the
+			 enemy plot whose wave goes next, in full; the other enemy plots, whose waves come later, at half.
+			 Weighing the plots alone had every seat answer infantry plots with infantry for an hour. */
+		Bool enemyOccupied[ LANEWAR_SEATS ];
+		for( Int s = 0; s < LANEWAR_SEATS; ++s )
+			enemyOccupied[ s ] = director->getSeatPlayer( 1 - team, s ) >= 0;
+		const Int enemyNext = LaneWar_seatForTick( enemyOccupied, v.tick );
 		for( size_t i = 0; i < sighted.size(); ++i )
 			if( sighted[ i ].team != team )
 			{
-				v.enemies.push_back( sighted[ i ].enemy );
-				v.enemyValue += sighted[ i ].enemy.cost;
+				Enemy e = sighted[ i ].enemy;
+				if( sighted[ i ].seat != FIELD && sighted[ i ].seat != enemyNext )
+					e.cost *= LATER_PLOT_WEIGHT;
+				v.enemies.push_back( e );
+				v.enemyValue += e.cost;
 			}
+
+		// and every unit the enemy seats could field now, for the all-round picks
+		for( Int s = 0; s < LANEWAR_SEATS; ++s )
+		{
+			const Int index = director->getSeatPlayer( 1 - team, s );
+			if( index < 0 )
+				continue;
+			Player *enemy = ThePlayerList->getNthPlayer( index );
+			LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
+			const Int listed = LaneWar_roster( enemy, roster, LANEWAR_ROSTER_MAX );
+			for( Int i = 0; i < listed; ++i )
+				if( roster[ i ].tier <= director->getTechLevel( 1 - team, s ) )
+				{
+					Enemy e;
+					e.thing = roster[ i ].thing;
+					e.cost = (Real)max( roster[ i ].thing->calcCostToBuild( enemy ), 1 );
+					v.possible.push_back( e );
+				}
+		}
 
 		// a unit the plot's own rows have room for again goes back to them first, for nothing
 		if( plan.moveTick < NO_TICK && (Real)v.tick >= plan.moveTick && moveIntoBand( v ) )
@@ -658,7 +759,10 @@ namespace
 
 		// nothing left to place, or the money piling up past what it waits for
 		const Bool plotFull = wanted == 0 && v.units >= FEW_UNITS;
-		if( plan.extrasTick < NO_TICK && (Real)v.tick >= plan.extrasTick && ( plotFull || v.spend >= 2 * wanted ) )
+		// paced: one at most every EXTRAS_EVERY_TICKS ticks, on that tick's first decision, so units come first
+		const UnsignedInt tickFrame = director->getNextTickFrame() - LANEWAR_TICK_FRAMES;
+		const Bool extrasTurn = v.tick > 0 && v.tick % EXTRAS_EVERY_TICKS == 0 && now >= tickFrame && now < tickFrame + plan.stepFrames;
+		if( extrasTurn && plan.extrasTick < NO_TICK && (Real)v.tick >= plan.extrasTick && ( plotFull || v.spend >= 2 * wanted ) )
 			buyExtra( v, plotFull );
 	}
 }

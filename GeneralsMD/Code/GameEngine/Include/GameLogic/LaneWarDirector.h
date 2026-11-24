@@ -85,6 +85,8 @@ enum
 	LANEWAR_JET_REARM_SECONDS = 15,				///< game seconds a parked jet takes to reload before it can strike again
 	LANEWAR_CARGO_LOG_SECONDS = 5,				///< wall seconds between the log's counts of passengers and drones out in the waves
 	LANEWAR_TOWER_BOUNTY = 500,						///< paid once to every seated player of the team that brings an enemy Watch Tower down
+	LANEWAR_PILLAGE_PERCENT = 50,					///< of the health a player's units take off an enemy tower or fortress, paid to him (LaneWar_pillageOf)
+	LANEWAR_COPY_HEALTH_PERCENT = 200,		///< of its template's health a wave copy, passenger or jet goes out with (2026-11-24)
 	LANEWAR_PRESS_COOLDOWN_SECONDS = 20,	///< game seconds a Dragon's fire wall or a Toxin Truck's slime waits before that copy presses it again
 	LANEWAR_HERO_COOLDOWN_SECONDS = 30,		///< game seconds a hero's copy waits after any of its buttons before the next
 	LANEWAR_HACK_RANGE = 250,							///< how far a Hacker starts his building hack, just past the Watch Tower's 225 (SpecialAbilityUpdate::getStartAbilityRange)
@@ -93,6 +95,12 @@ enum
 	LANEWAR_REVEAL_RADIUS = 300,					///< what it uncovers and where it detects the hidden: EA's SpySatellitePing, 10 game seconds then 5 shrinking
 	LANEWAR_REVEAL_COOLDOWN_SECONDS = 45,	///< game seconds before the same seat may buy the next
 };
+
+/// pillage owed for that much health taken off enemy towers and the fortress in all, whole money; LaneWarStats::onDamage pays the rise
+inline Int LaneWar_pillageOf( Real damage )
+{
+	return damage > 0.0f ? (Int)floor( damage * (Real)LANEWAR_PILLAGE_PERCENT / 100.0f ) : 0;
+}
 
 /** A span the mode was tuned for in wall seconds at the native 1.5x, as game time: the same share of the
 	  match at every game speed (45 is 1350 frames at 1.5x, 2025 at 1.0x), so a slower room plays the same
@@ -404,6 +412,7 @@ public:
 	Bool getGridBounds( Int team, Int seat, Int grid, Coord2D *lo, Coord2D *hi ) const;
 	Coord3D slotCentre( Int team, Int seat, Int grid, Int col, Int row, Int size ) const;
 	const std::vector<PlotUnit> &getPlotUnits( void ) const { return m_plotUnits; }
+	/// the wave copies out, in spawn order, dead ones included until the next pass prunes them (the bot's view of the field, the HUD's)
 	Int getCopyCount( void ) const { return (Int)m_copies.size(); }
 	ObjectID getCopyID( Int i ) const { return m_copies[ i ].id; }
 	/** A fixed-wing jet: an aircraft not made at a helipad and with no helicopter locomotor.  Only a jet

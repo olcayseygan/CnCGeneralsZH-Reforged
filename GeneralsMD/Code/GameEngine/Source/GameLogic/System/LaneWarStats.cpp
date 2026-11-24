@@ -386,10 +386,25 @@ void LaneWarStats::onDamage( const Object *damager, const Object *victim, Real a
 	const ObjectID id = victim->getID();
 	const Int enemy = 1 - team;
 	LaneWarSeatStats *st = seatStats( damager->getControllingPlayer() );
+	const Real before = st->towerDamage + st->fortressDamage;
 	if( id == TheLaneWarDirector->getFortress( enemy ) )
 		st->fortressDamage += amount;
 	else if( id == TheLaneWarDirector->getTower( enemy, 0 ) || id == TheLaneWarDirector->getTower( enemy, 1 ) )
 		st->towerDamage += amount;
+	else
+		return;
+
+	/* Pillage (2026-11-24, the owner's lever for match length): health taken off an enemy tower or fortress
+		 pays the player whose unit took it LANEWAR_PILLAGE_PERCENT of it.  Paid off the running total this
+		 record already saves, so a hit's fraction carries to the next and no state is added. */
+	const Int paid = LaneWar_pillageOf( before );
+	const Int owed = LaneWar_pillageOf( st->towerDamage + st->fortressDamage );
+	if( owed > paid )
+	{
+		Player *player = damager->getControllingPlayer();
+		player->getMoney()->deposit( (UnsignedInt)( owed - paid ), FALSE );
+		onIncome( (Int)player->getPlayerIndex(), (UnsignedInt)( owed - paid ), 0 );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -13558,15 +13558,24 @@ TEST(lane_war_late_income_leaves_the_opening_alone_then_grows_to_its_cap)
 
 TEST(lane_war_tiers_cost_what_the_plan_says_and_a_sale_pays_back_half_once_sent)
 {
-	// four income levels of 1000 each, every one paying 100 more a tick, the middle a quarter on top
+	// four income levels at 1000, 1000, 1500 and 2000, every one paying 100 more a tick, the middle a quarter on top
 	CHECK_EQ( LaneWar_incomeAt( 0, FALSE ), (UnsignedInt)400 );
 	CHECK_EQ( LaneWar_incomeAt( 4, FALSE ), (UnsignedInt)( 400 + 4 * 100 ) );
 	CHECK_EQ( LaneWar_incomeAt( 2, TRUE ), (UnsignedInt)( ( 400 + 2 * 100 ) * 125 / 100 ) );
 	CHECK_EQ( LaneWar_incomeAt( 0, TRUE ), LaneWar_income( TRUE ) );
-	for( Int level = 1; level <= LANEWAR_INCOME_TIERS; ++level )
-		CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, level ), 1000 );
+	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, 0 ), 0 );
+	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, 1 ), 1000 );
+	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, 2 ), 1000 );
+	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, 3 ), 1500 );
+	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, 4 ), 2000 );
 	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, LANEWAR_INCOME_TIERS + 1 ), 0 );
 
+	// pillage: half the health taken off enemy structures, in whole money, a hit's fraction kept for the next
+	CHECK_EQ( LaneWar_pillageOf( 0.0f ), 0 );
+	CHECK_EQ( LaneWar_pillageOf( -5.0f ), 0 );
+	CHECK_EQ( LaneWar_pillageOf( 1.5f ), 0 );
+	CHECK_EQ( LaneWar_pillageOf( 1500.0f ), 1500 * LANEWAR_PILLAGE_PERCENT / 100 );
+	CHECK_EQ( LaneWar_pillageOf( 12.0f ) + ( LaneWar_pillageOf( 25.0f ) - LaneWar_pillageOf( 12.0f ) ), LaneWar_pillageOf( 25.0f ) );
 	// tech starts at 1, so 2 and 3 are the levels on sale
 	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 1 ), 0 );
 	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 2 ), 1500 );

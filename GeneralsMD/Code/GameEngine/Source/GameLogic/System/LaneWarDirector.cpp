@@ -119,11 +119,11 @@ UnsignedInt LaneWar_incomeAt( Int level, Bool holdsMiddle )
 }
 
 //-------------------------------------------------------------------------------------------------
-/// income levels 1 to 4 are 1000 each; tech tier 2 is 1500 and 3 is 3000
+/// income levels 1 to 4 are 1000, 1000, 1500 and 2000 (2026-11-24: the late ones a real choice); tech tier 2 is 1500 and 3 is 3000
 Int LaneWar_tierPrice( Int track, Int level )
 {
 	if( track == LANEWAR_TRACK_INCOME )
-		return level >= 1 && level <= LANEWAR_INCOME_TIERS ? LANEWAR_INCOME_TIER_PRICE : 0;
+		return level >= 1 && level <= 2 ? LANEWAR_INCOME_TIER_PRICE : level == 3 ? 1500 : level == LANEWAR_INCOME_TIERS ? 2000 : 0;
 	if( track == LANEWAR_TRACK_TECH )
 		return level == 2 ? 1500 : level == 3 ? 3000 : 0;
 	return 0;
@@ -1137,6 +1137,16 @@ static void holdOnPlot( Object *obj )
 	obj->setStatus( MAKE_OBJECT_STATUS_MASK2( OBJECT_STATUS_NO_ATTACK, OBJECT_STATUS_UNATTACKABLE ) );
 	if( obj->getBodyModule() )
 		obj->getBodyModule()->setIndestructible( TRUE );
+}
+
+/** A wave copy, a passenger or a jet sent out: LANEWAR_COPY_HEALTH_PERCENT of its template's health, full
+	  (the players' suggestion of 2026-11-23, taken on 2026-11-24 for the match length: fights last long
+	  enough for a wave to reach the tower).  Before its rank, so the rank's health comes on top. */
+static void toughenCopy( Object *obj )
+{
+	BodyModuleInterface *body = obj->getBodyModule();
+	if( body != NULL )
+		body->setMaxHealth( body->getMaxHealth() * (Real)LANEWAR_COPY_HEALTH_PERCENT / 100.0f, FULLY_HEAL );
 }
 
 /** What rides with a unit, in object list order: everything inside it, and inside that (an Overlord's
@@ -2343,6 +2353,7 @@ void LaneWarDirector::spawnCargo( Object *copy, const PlotUnit &u, Team *owner, 
 		Object *man = TheThingFactory->newObject( p.thing, owner );
 		if( man == NULL )
 			continue;
+		toughenCopy( man );
 		man->setPosition( copy->getPosition() );
 		for( BehaviorModule **m = man->getBehaviorModules(); *m; ++m )
 		{
@@ -2510,6 +2521,7 @@ void LaneWarDirector::launchJets( Int team, Int seat, UnsignedInt now )
 		Object *obj = TheThingFactory->newObject( jet.thing, owner );
 		if( obj == NULL )
 			continue;
+		toughenCopy( obj );
 		obj->setOrientation( toward > 0.0f ? 0.0f : PI );
 		obj->setPosition( &pos );
 		for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
@@ -2927,6 +2939,7 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 		Object *copy = TheThingFactory->newObject( waveTemplateOf( original->getTemplate() ), owner );
 		if( copy == NULL )
 			continue;
+		toughenCopy( copy );
 		copy->setOrientation( facing );
 		copy->setPosition( &pos );
 		for( BehaviorModule **m = copy->getBehaviorModules(); *m; ++m )

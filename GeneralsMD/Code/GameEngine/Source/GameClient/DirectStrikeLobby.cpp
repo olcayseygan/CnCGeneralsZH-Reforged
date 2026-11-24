@@ -53,6 +53,7 @@
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GUIUtil.h"
 #include "GameNetwork/LANAPICallbacks.h"
+#include "GameNetwork/LANGameInfo.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/StagingRoomGameInfo.h"
 #include "GameNetwork/Online/OnlineQueues.h"
@@ -720,10 +721,33 @@ namespace
 	/// the Riveted Clamp box of the chat, the offline island panel and every open list
 	void clampBox( const DirectStrikeRect &r ) { nineSlice( boxOf( r ), CLAMP_BOX_TL ); }
 
+	/// the Mixed box: its check in a well and its name, the host's to tick, a field for everyone else
+	void drawMixed( void )
+	{
+		const DirectStrikeRect r = DirectStrikeLobby_mixed( isNetwork() );
+		const Bool hot = amHost() && s_list == LIST_NONE && pointerIn( r );
+		const Real y = middleOf( r );
+		const Color color = hot ? TEXT_GOLD : amHost() ? TEXT_WHITE : TEXT_GREY;
+		// the name first, so offline the check and the name stand centred under the island's name as one line
+		Real x0 = r.x0;
+		if( !isNetwork() )
+		{
+			const Int w = text( TheGameText->fetch( "GUI:DirectStrikeMixed" ), ISLAND_NOTE_EM, 960 + ( CHECK + ICON_GAP ) * 0.5f, y, color, 0 );
+			x0 = 960 - ( CHECK + ICON_GAP + w / s_frame.k ) * 0.5f;
+		}
+		else
+			text( TheGameText->fetch( "GUI:DirectStrikeMixed" ), ISLAND_BAND_NOTE_EM, r.x0 + CHECK + ICON_GAP, y, color );
+		// the check's well, a plain sunk square: the well's nine slices do not fold down to 20
+		const LaneHudBox check = boxOf( DirectStrike_rect( x0, y - CHECK * 0.5f, x0 + CHECK, y + CHECK * 0.5f ) );
+		TheDisplay->drawFillRect( check.x, check.y, check.w, check.h, GameMakeColor( 0, 0, 0, 200 ) );
+		TheDisplay->drawOpenRect( check.x, check.y, check.w, check.h, 1.0f, hot ? TEXT_GOLD : TEXT_GREY );
+		if( s_game->getDirectStrikeMixed() )
+			drawImage( art( LOBBY_CHECK ), check );
+	}
+
 	void drawIsland( void )
 	{
 		const UnicodeString name = TheGameText->fetch( "GUI:DirectStrikeMap" );
-		const UnicodeString note = TheGameText->fetch( "GUI:DirectStrikeIslandNote" );
 		if( !isNetwork() )
 		{
 			clampBox( DirectStrikeLobby_islandPanel() );
@@ -732,16 +756,16 @@ namespace
 				island.y1 + ISLAND_WELL_OUT ) ), WELL_TL );
 			drawImage( art( LOBBY_ISLAND ), boxOf( island ) );
 			text( name, ISLAND_EM, 960, island.y1 + ISLAND_NAME_BELOW, TEXT_WHITE, 0 );
-			text( note, ISLAND_NOTE_EM, 960, island.y1 + ISLAND_NOTE_BELOW, TEXT_GREY, 0 );
+			drawMixed();	// where the island's note stood, which the name already says
 			return;
 		}
-		// the map band on the head row: its island in a well, the name on the glass and the note at its right end
+		// the map band on the head row: its island in a well, the name on the glass and the Mixed box at its right end
 		const DirectStrikeRect band = DirectStrikeLobby_islandChip();
 		threeSlice( boxOf( band ), CLAMP_BAND_L, CLAMP_BAND_C, CLAMP_BAND_R );
 		nineSlice( boxOf( DirectStrikeLobby_islandWell() ), WELL_TL );
 		drawImage( art( LOBBY_ISLAND_BAND ), boxOf( DirectStrikeLobby_islandSmall() ) );
 		text( name, ISLAND_BAND_EM, ISLAND_BAND_NAME_X, middleOf( band ), TEXT_WHITE );
-		text( note, ISLAND_BAND_NOTE_EM, ISLAND_BAND_NOTE_X, middleOf( band ), TEXT_GREY, 1 );
+		drawMixed();
 	}
 
 	/// a chat string of the line `line`, wrapped at `wrap` pixels and clipped to the panel's glass
@@ -1090,6 +1114,27 @@ namespace
 		press( "ButtonMapStartPosition", at );
 	}
 
+	/// the host ticks Mixed: the room's game takes it and a network room sends its options, as its own boxes do
+	void toggleMixed( void )
+	{
+		GameInfo *game = const_cast<GameInfo *>( s_game );
+		game->setDirectStrikeMixed( !game->getDirectStrikeMixed() );
+		DEBUG_LOG(( "DIRECTSTRIKE LOBBY mixed %d\n", (Int)game->getDirectStrikeMixed() ));
+		if( !isNetwork() )
+			return;
+		game->resetAccepted();
+		if( s_room == ROOM_LAN )
+		{
+			TheLAN->RequestGameOptions( GenerateGameOptionsString(), true );
+			lanUpdateSlotList();
+		}
+		else if( TheGameSpyInfo != NULL )
+		{
+			TheGameSpyInfo->setGameOptions();
+			WOLDisplaySlotList();
+		}
+	}
+
 	void sendChat( void )
 	{
 		GameWindow *entry = named( CHAT_ENTRY );
@@ -1204,6 +1249,11 @@ namespace
 		if( amHost() && DirectStrikeLobby_speed().contains( x, y ) )
 		{
 			s_list = LIST_SPEED;
+			return;
+		}
+		if( amHost() && DirectStrikeLobby_mixed( isNetwork() ).contains( x, y ) )
+		{
+			toggleMixed();
 			return;
 		}
 		for( Int slot = 0; slot < DSLOBBY_SEATS; ++slot )

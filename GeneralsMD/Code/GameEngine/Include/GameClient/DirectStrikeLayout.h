@@ -376,6 +376,15 @@ inline DirectStrikeRect DirectStrikeLobby_island( void ) { return DirectStrike_r
 inline DirectStrikeRect DirectStrikeLobby_islandChip( void ) { return DirectStrike_rect( 700, DSLOBBY_TOP, 1220, DSLOBBY_TOP + DSLOBBY_HEAD_H ); }
 inline DirectStrikeRect DirectStrikeLobby_islandWell( void ) { return DirectStrike_rect( 708, DSLOBBY_TOP + 6, 784, DSLOBBY_TOP + 38 ); }
 inline DirectStrikeRect DirectStrikeLobby_islandSmall( void ) { return DirectStrike_rect( 710, DSLOBBY_TOP + 7, 782, DSLOBBY_TOP + 37 ); }
+
+/** The host's Mixed box (2026-11-24), its check and its name: in a network room at the map band's right end, offline
+	* on the island caption's second line, where the island's note stood. */
+inline DirectStrikeRect DirectStrikeLobby_mixed( bool network )
+{
+	if( network )
+		return DirectStrike_rect( 1020, DSLOBBY_TOP + 10, 1212, DSLOBBY_TOP + 34 );
+	return DirectStrike_rect( 860, DSLOBBY_TOP + 404, 1060, DSLOBBY_TOP + 426 );
+}
 inline DirectStrikeRect DirectStrikeLobby_chat( void )
 {
 	return DirectStrike_rect( 700, DirectStrikeLobby_card( DirectStrikeLobby_seat( 0, 0 ) ).y0, 1220,

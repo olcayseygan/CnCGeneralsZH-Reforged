@@ -78,6 +78,7 @@ enum
 	LANEWAR_INCOME_TIER_PRICE = 1000,			///< each of them
 	LANEWAR_INCOME_TIER_PAYS = 100,				///< more on every tick for each level bought, back in ten ticks
 	LANEWAR_TECH_TIERS = 3,								///< a player starts on tech tier 1
+	LANEWAR_TECH_RESEARCH_SECONDS = 45,		///< a bought tech tier opens this long after it is paid, in wall seconds at the native 1.5x (LaneWar_gameFrames), the owner's call of 2026-11-24
 	LANEWAR_SELL_SENT_PERCENT = 50,				///< a unit that has gone out in a wave sells back for this share; one that has not, for all of it
 	LANEWAR_JET_PARK_MARGIN = 100,				///< world units past the map's border, behind his own end, where a player's jets wait
 	LANEWAR_STRIKE_CONTACT_GAP = 250,			///< two fronts this close along the lane are fighting already: a strike goes now
@@ -114,6 +115,7 @@ inline UnsignedInt LaneWar_gameFrames( UnsignedInt nativeSeconds )
 #define LANEWAR_TICK_FRAMES LaneWar_gameFrames( LANEWAR_TICK_SECONDS )
 #define LANEWAR_FIRST_TICK_FRAMES LaneWar_gameFrames( LANEWAR_FIRST_TICK_SECONDS )
 #define LANEWAR_LIFESPAN_FRAMES LaneWar_gameFrames( LANEWAR_LIFESPAN_SECONDS )
+#define LANEWAR_TECH_RESEARCH_FRAMES LaneWar_gameFrames( LANEWAR_TECH_RESEARCH_SECONDS )
 #define LANEWAR_STRIKE_FRAMES ((UnsignedInt)(LANEWAR_STRIKE_SECONDS * LOGICFRAMES_PER_GAME_SECOND))
 #define LANEWAR_JET_REARM_FRAMES ((UnsignedInt)(LANEWAR_JET_REARM_SECONDS * LOGICFRAMES_PER_GAME_SECOND))
 
@@ -291,8 +293,22 @@ enum { LANEWAR_ROSTER_MAX = 48 };
 /** The units the player's side offers in Lane War, tier by tier, each resolved to his general's own
 	  template where the general has one (AirF_AmericaInfantryRanger for the Air Force General).  None for a
 	  side outside the mode.  The same table on every machine: it reads the player's side and the
-	  template store and nothing else. */
+	  template store and nothing else.  In a Mixed match it is the seat's own roll instead
+	  (LaneWarDirector::isMixed), the director's saved state. */
 extern Int LaneWar_roster( const Player *player, LaneWarRosterItem *out, Int maxItems );
+
+/// a Mixed seat's draw from the three sides' base rosters together: this many of each tier and one hero
+enum
+{
+	LANEWAR_MIXED_TIER1 = 6,
+	LANEWAR_MIXED_TIER2 = 5,
+	LANEWAR_MIXED_TIER3 = 4,
+	LANEWAR_MIXED_MAX = LANEWAR_MIXED_TIER1 + LANEWAR_MIXED_TIER2 + LANEWAR_MIXED_TIER3 + 1,
+};
+
+/** The pool a Mixed seat draws from for that tier (0 for the heroes): every base-roster entry of the USA,
+	  China and GLA with that tier, as template names in table order.  The same on every machine. */
+extern Int LaneWar_mixedPool( Int tier, const char **out, Int maxItems );
 
 /// the template is the hero of the player's roster
 extern Bool LaneWar_isHero( const Player *player, const ThingTemplate *tmpl );
@@ -389,6 +405,15 @@ public:
 	Bool seatOf( const Player *player, Int *team, Int *seat ) const;
 	Int getIncomeLevel( Int team, Int seat ) const { return m_incomeLevel[ team ][ seat ]; }
 	Int getTechLevel( Int team, Int seat ) const { return m_techLevel[ team ][ seat ]; }
+	/// the frame the seat's bought next tech tier opens, 0 while none is on the way
+	UnsignedInt getTechReadyFrame( Int team, Int seat ) const { return m_techReady[ team ][ seat ]; }
+	/// a Mixed match: every seat buys from its own roll across the three sides (the lobby's MX)
+	Bool isMixed( void ) const { return m_mixed; }
+	/// the seat's Mixed roll, tier 1 first and the hero last; 0 off a Mixed match
+	Int getMixedRoster( Int team, Int seat, LaneWarRosterItem *out, Int maxItems ) const;
+	/** The scenario drill's shortcut past LANEWAR_TECH_RESEARCH_SECONDS: the player's tech tier on the way
+		  opens now.  Nothing else calls it. */
+	void openTechNow( Player *player );
 	Int getMiddleHolder( void ) const { return m_middleHolder; }
 	Bool isHeroBought( Int team, Int seat ) const { return m_heroBought[ team ][ seat ]; }
 	/// the first frame the seat may buy its next satellite scan
@@ -530,6 +555,9 @@ private:
 	std::vector<PlotUnit> m_plotUnits;										///< in purchase order, which is ObjectID order
 	Int m_incomeLevel[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];		///< 0 to LANEWAR_INCOME_TIERS, bought
 	Int m_techLevel[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];			///< 1 to LANEWAR_TECH_TIERS
+	UnsignedInt m_techReady[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];	///< the frame the next tech level, paid for, opens; 0 while none is on the way
+	Bool m_mixed;																						///< the lobby's Mixed option, read once from the game's options at a new match
+	const ThingTemplate *m_mixedRoll[ LANEWAR_TEAMS ][ LANEWAR_SEATS ][ LANEWAR_MIXED_MAX ];	///< each seat's Mixed roll in LaneWar_mixedPool's tier order, hero last; NULL where a draw found no template
 	Bool m_heroBought[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];		///< the seat's one hero is bought, once a match
 	UnsignedInt m_revealReady[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];	///< the first frame the seat may buy its next satellite scan, 0 at once
 	Int m_middleHolder;																		///< the team the last tick found holding the middle, -1 nobody

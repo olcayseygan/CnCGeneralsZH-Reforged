@@ -359,6 +359,23 @@ TEST(dslobby_the_block_is_centred_and_its_columns_share_top_and_foot)
 	CHECK( DirectStrikeLobby_start().x1 - DirectStrikeLobby_start().x0 >= 180.0f );
 }
 
+TEST(dslobby_mixed_box_sits_inside_the_island_panel_or_band_clear_of_the_island)
+{
+	// a network room: on the map band, clear of its island well and of the island's name from x 800
+	const DirectStrikeRect band = DirectStrikeLobby_mixed( true );
+	CHECK( within( band, DirectStrikeLobby_islandChip() ) );
+	CHECK( !meet( band, DirectStrikeLobby_islandWell() ) );
+	CHECK( band.x0 >= 800.0f + 160.0f );
+	// offline: inside the panel, under the island picture and its name's line, which is centred 20 below it
+	const DirectStrikeRect panel = DirectStrikeLobby_mixed( false );
+	CHECK( within( panel, DirectStrikeLobby_islandPanel() ) );
+	CHECK( !meet( panel, DirectStrikeLobby_island() ) );
+	CHECK( panel.y0 >= DirectStrikeLobby_island().y1 + 20.0f + 9.0f );
+	// both hold the 20 check and a 15 letter name at the body size
+	CHECK( band.x1 - band.x0 >= 20.0f + 10.0f + 150.0f );
+	CHECK( panel.x1 - panel.x0 >= 20.0f + 10.0f + 150.0f );
+}
+
 TEST(dslobby_every_open_list_stays_on_the_screen_and_holds_its_rows)
 {
 	const DirectStrikeRect offline[] =

@@ -7345,6 +7345,10 @@ GUI:DirectStrikeIslandNote
 "A new island every match"
 END
 
+GUI:DirectStrikeMixed
+"Mixed armies"
+END
+
 GUI:DirectStrikeTeamSize
 "%d v %d"
 END

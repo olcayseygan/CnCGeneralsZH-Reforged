@@ -41,6 +41,7 @@
 #include <thread>		// the picture cap spins its last millisecond on std::this_thread::yield
 
 #include "Lib/WideCharFns.h"
+#include "Common/EarlyCommandLine.h"
 
 #include "Common/ActionManager.h"
 #include "Common/AudioAffect.h"
@@ -953,6 +954,8 @@ static void startAutoSkirmish( Int numPlayersWanted )
 	TheSkirmishGameInfo->setSupplyPileLimit( TheGlobalData->m_supplyPileLimit );
 	TheSkirmishGameInfo->setStartShrouded( TheGlobalData->m_startShrouded );
 	TheSkirmishGameInfo->setDayNight( TheGlobalData->m_dayNight );
+	// -dsmixed: Direct Strike's Mixed box for an -autoskirmish run; the replay's header carries it as MX
+	TheSkirmishGameInfo->setDirectStrikeMixed( findEarlyCommandLineOption( L"-dsmixed" ) != NULL );
 	TheSkirmishGameInfo->setSuperweaponRestriction( (UnsignedShort)TheGlobalData->m_superweapons );
 	TheSkirmishGameInfo->setGameSpeedPercent( TheGlobalData->m_autoSkirmishGameSpeedPercent );
 	if (TheGlobalData->m_startingCash > 0)

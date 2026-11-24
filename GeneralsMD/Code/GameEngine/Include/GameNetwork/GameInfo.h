@@ -357,6 +357,12 @@ public:
   Bool getDayNight( void ) const { return m_dayNight; }
   void setDayNight( Bool on ) { m_dayNight = on; }
 
+  // Direct Strike's Mixed option: every seat buys from its own random draw across the three sides'
+  // rosters (LaneWarDirector).  The host's chip in a Direct Strike room; MX=1 in the options string,
+  // written only when on.  Nothing reads it off a Direct Strike map.
+  Bool getDirectStrikeMixed( void ) const { return m_directStrikeMixed; }
+  void setDirectStrikeMixed( Bool on ) { m_directStrikeMixed = on; }
+
   // Game speed in percent of retail's pace, one of PLAYER_GAME_SPEED_PERCENTS: the game time each tick
   // advances.  The skirmish lobby and the LAN and custom online rooms' hosts pick it, a matched Quick
   // Match sets RETAIL_GAME_SPEED_PERCENT.  The options string carries it as SP=<percent> only when it is
@@ -399,6 +405,7 @@ protected:
   Int m_supplyPileLimit; // players who may gather from one supply pile at once, 0 = any number
   Bool m_startShrouded; // the map starts black for every player, a ranked Quick Match
   Bool m_dayNight; // the day and night cycle runs, DN in the options string
+  Bool m_directStrikeMixed; // Direct Strike's Mixed rosters, MX in the options string
   Int m_gameSpeedPercent; // the lobby's game speed, getDefaultGameSpeedPercent until someone picks another
 };
 

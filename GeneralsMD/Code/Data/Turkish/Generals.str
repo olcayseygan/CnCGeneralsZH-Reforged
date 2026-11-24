@@ -21570,6 +21570,10 @@ GUI:DirectStrikeIslandNote
 "Her maçta yeni bir ada"
 END
 
+GUI:DirectStrikeMixed
+"Karışık ordu"
+END
+
 GUI:DirectStrikeTeamSize
 "%d - %d"
 END

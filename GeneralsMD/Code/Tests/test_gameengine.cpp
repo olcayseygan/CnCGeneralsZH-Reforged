@@ -13630,11 +13630,24 @@ TEST(lane_war_tiers_cost_what_the_plan_says_and_a_sale_pays_back_half_once_sent)
 	CHECK_EQ( LaneWar_pillageOf( 1.5f ), 0 );
 	CHECK_EQ( LaneWar_pillageOf( 1500.0f ), 1500 * LANEWAR_PILLAGE_PERCENT / 100 );
 	CHECK_EQ( LaneWar_pillageOf( 12.0f ) + ( LaneWar_pillageOf( 25.0f ) - LaneWar_pillageOf( 12.0f ) ), LaneWar_pillageOf( 25.0f ) );
+
 	// tech starts at 1, so 2 and 3 are the levels on sale
 	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 1 ), 0 );
 	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 2 ), 1500 );
 	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 3 ), 3000 );
 	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 4 ), 0 );
+
+	// a bought tech tier opens 45 native seconds later, on the ticks' clock
+	CHECK_EQ( (Int)LANEWAR_TECH_RESEARCH_FRAMES, (Int)LaneWar_gameFrames( 45 ) );
+
+	// a Mixed seat draws from all three sides: every pool holds more than a seat takes, and the heroes are three
+	const char *pool[ LANEWAR_ROSTER_MAX ];
+	CHECK_EQ( LaneWar_mixedPool( 0, pool, LANEWAR_ROSTER_MAX ), 3 );
+	CHECK( LaneWar_mixedPool( 1, pool, LANEWAR_ROSTER_MAX ) > LANEWAR_MIXED_TIER1 );
+	CHECK( LaneWar_mixedPool( 2, pool, LANEWAR_ROSTER_MAX ) > LANEWAR_MIXED_TIER2 );
+	CHECK( LaneWar_mixedPool( 3, pool, LANEWAR_ROSTER_MAX ) > LANEWAR_MIXED_TIER3 );
+	CHECK_STR( pool[ 0 ], "AmericaJetStealthFighter" );
+	CHECK_EQ( LaneWar_mixedPool( 4, pool, LANEWAR_ROSTER_MAX ), 0 );
 
 	CHECK_EQ( LaneWar_refund( 225, FALSE ), 225 );
 	CHECK_EQ( LaneWar_refund( 225, TRUE ), 112 );
@@ -28846,6 +28859,17 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	CHECK( ParseAsciiStringToGameInfo( &guest, picked ) );
 	CHECK( !guest.getDayNight() );
 	TheWritableGlobalData->m_dayNight = savedSwitch;
+
+	// Direct Strike's Mixed box rides as MX=1, off writing nothing, so a joiner and a replay roll the same rosters
+	CHECK( strstr( picked.str(), "MX=" ) == NULL );
+	host.setDirectStrikeMixed( TRUE );
+	const AsciiString mixed = GameInfoOptionsString( &host, mapPath, 0 );
+	host.setDirectStrikeMixed( FALSE );
+	CHECK( strstr( mixed.str(), "MX=1;" ) != NULL );
+	CHECK( ParseAsciiStringToGameInfo( &guest, mixed ) );
+	CHECK( guest.getDirectStrikeMixed() );
+	CHECK( ParseAsciiStringToGameInfo( &guest, picked ) );
+	CHECK( !guest.getDirectStrikeMixed() );
 
 	/* The longest string a room can send with the cycle on: eight people at the longest name the LAN
 		 lobby takes, every other seat a computer with a personality and a handicap, every rule set.  It

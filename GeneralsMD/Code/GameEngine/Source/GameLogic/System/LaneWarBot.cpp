@@ -562,6 +562,9 @@ namespace
 	Bool buyTier( View &v, Int track, Bool *saving )
 	{
 		const Int level = 1 + ( track == LANEWAR_TRACK_INCOME ? v.director->getIncomeLevel( v.team, v.seat ) : v.director->getTechLevel( v.team, v.seat ) );
+		// a tech tier already paid for opens on its own (LANEWAR_TECH_RESEARCH_SECONDS); the seat spends on units meanwhile
+		if( track == LANEWAR_TRACK_TECH && v.director->getTechReadyFrame( v.team, v.seat ) != 0 )
+			return FALSE;
 		// a team opens tier 3 one seat at a time, so it never stops buying units on three plots at once
 		const UnsignedInt stagger = track == LANEWAR_TRACK_TECH && level == LANEWAR_TECH_TIERS ? (UnsignedInt)( v.seat * TECH3_STAGGER_TICKS ) : 0;
 		if( v.tick < stagger || !LaneWarBot_wantsTier( *v.plan, track, level, v.tick - stagger ) )

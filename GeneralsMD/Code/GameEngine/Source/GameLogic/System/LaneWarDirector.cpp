@@ -46,6 +46,7 @@
 #include "GameLogic/LaneWarBot.h"
 #include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/LaneWarStats.h"
+#include "GameLogic/LogicRandomValue.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/ContainModule.h"
@@ -60,6 +61,7 @@
 #include "GameLogic/ScenarioDrill.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Weapon.h"
+#include "GameNetwork/GameInfo.h"
 
 static LaneWarDirector theLaneWarDirector;
 LaneWarDirector *TheLaneWarDirector = &theLaneWarDirector;
@@ -380,8 +382,36 @@ static Bool tagListed( const char *list, const char *tag )
 	return FALSE;
 }
 
+Int LaneWar_mixedPool( Int tier, const char **out, Int maxItems )
+{
+	const RosterEntry *const tables[ 3 ] = { USA_ROSTER, CHINA_ROSTER, GLA_ROSTER };
+	const Int sizes[ 3 ] = { (Int)( sizeof( USA_ROSTER ) / sizeof( USA_ROSTER[ 0 ] ) ), (Int)( sizeof( CHINA_ROSTER ) / sizeof( CHINA_ROSTER[ 0 ] ) ),
+													 (Int)( sizeof( GLA_ROSTER ) / sizeof( GLA_ROSTER[ 0 ] ) ) };
+	Int count = 0;
+	for( Int t = 0; t < 3; ++t )
+		for( Int i = 0; i < sizes[ t ] && count < maxItems; ++i )
+			if( tier == 0 ? tables[ t ][ i ].hero : !tables[ t ][ i ].hero && tables[ t ][ i ].tier == tier )
+				out[ count++ ] = tables[ t ][ i ].name;
+	return count;
+}
+
+/// the tier of a Mixed roll's entry by its place in the roll: tier 1 first, the hero last (0)
+static Int mixedTierAt( Int i )
+{
+	if( i < LANEWAR_MIXED_TIER1 )
+		return 1;
+	if( i < LANEWAR_MIXED_TIER1 + LANEWAR_MIXED_TIER2 )
+		return 2;
+	return i < LANEWAR_MIXED_MAX - 1 ? 3 : 0;
+}
+
 Int LaneWar_roster( const Player *player, LaneWarRosterItem *out, Int maxItems )
 {
+	// a Mixed match's seat buys from its own roll
+	Int team, seat;
+	if( TheLaneWarDirector != NULL && TheLaneWarDirector->isMixed() && TheLaneWarDirector->seatOf( player, &team, &seat ) )
+		return TheLaneWarDirector->getMixedRoster( team, seat, out, maxItems );
+
 	AsciiString tag;
 	const Int side = laneSide( player, &tag );
 	const RosterEntry *table = side == 0 ? USA_ROSTER : side == 1 ? CHINA_ROSTER : GLA_ROSTER;
@@ -691,6 +721,7 @@ LaneWarDirector::LaneWarDirector( void )
 void LaneWarDirector::reset( void )
 {
 	m_active = FALSE;
+	m_mixed = FALSE;
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
 	{
 		for( Int s = 0; s < LANEWAR_SEATS; ++s )
@@ -705,6 +736,9 @@ void LaneWarDirector::reset( void )
 			m_seatPlayer[ t ][ s ] = -1;
 			m_incomeLevel[ t ][ s ] = 0;
 			m_techLevel[ t ][ s ] = 1;
+			m_techReady[ t ][ s ] = 0;
+			for( Int i = 0; i < LANEWAR_MIXED_MAX; ++i )
+				m_mixedRoll[ t ][ s ][ i ] = NULL;
 			m_heroBought[ t ][ s ] = FALSE;
 			m_revealReady[ t ][ s ] = 0;
 		}
@@ -859,6 +893,37 @@ void LaneWarDirector::newMap( Bool loadingSaveGame )
 							m_gridCols[0][0][LANEWAR_GRID_GROUND], m_gridRows[0][0][LANEWAR_GRID_GROUND], plotLo.x, plotLo.y, plotHi.x, plotHi.y,
 							m_nextTickFrame ));
 
+	/* Mixed: the lobby's option, from the options every machine agreed on (a replay's from its header), and
+		 each seat's roll drawn off the logic stream the match seed started, so every machine and the replay
+		 draw the same.  Every seat is drawn, sat in or not, so the count of draws never depends on the room.
+		 A loaded match takes both from the save. */
+	if( !loadingSaveGame && TheGameInfo != NULL && TheGameInfo->getDirectStrikeMixed() )
+	{
+		m_mixed = TRUE;
+		const Int takes[ 4 ] = { 1, LANEWAR_MIXED_TIER1, LANEWAR_MIXED_TIER2, LANEWAR_MIXED_TIER3 };
+		for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+			for( Int s = 0; s < LANEWAR_SEATS; ++s )
+			{
+				Int at = 0;
+				for( Int k = 1; k <= 4; ++k )
+				{
+					const Int tier = k % 4;		// tiers 1 to 3, then the heroes (0), so the roll keeps that order
+					const char *pool[ LANEWAR_ROSTER_MAX ];
+					const Int size = LaneWar_mixedPool( tier, pool, LANEWAR_ROSTER_MAX );
+					// a partial Fisher-Yates: the first `takes` of the pool shuffled
+					for( Int i = 0; i < takes[ tier ] && i < size; ++i )
+					{
+						const Int j = GameLogicRandomValue( i, size - 1 );
+						const char *swap = pool[ i ];
+						pool[ i ] = pool[ j ];
+						pool[ j ] = swap;
+						m_mixedRoll[ t ][ s ][ at + i ] = TheThingFactory->findTemplate( pool[ i ], FALSE );
+					}
+					at += takes[ tier ];
+				}
+			}
+	}
+
 	// what each seat's army can buy, so a log says which general fielded what
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
 		for( Int s = 0; s < LANEWAR_SEATS; ++s )
@@ -874,7 +939,8 @@ void LaneWarDirector::newMap( Bool loadingSaveGame )
 				names.concat( ' ' );
 				names.concat( roster[ i ].thing->getName() );
 			}
-			DEBUG_LOG(( "LANEWAR: player %d %s roster of %d:%s\n", player->getPlayerIndex(), player->getSide().str(), count, names.str() ));
+			DEBUG_LOG(( "LANEWAR: player %d %s %sroster of %d:%s\n", player->getPlayerIndex(), player->getSide().str(), m_mixed ? "mixed " : "",
+									count, names.str() ));
 		}
 }
 
@@ -892,6 +958,41 @@ Bool LaneWarDirector::seatOf( const Player *player, Int *team, Int *seat ) const
 				return TRUE;
 			}
 	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Int LaneWarDirector::getMixedRoster( Int team, Int seat, LaneWarRosterItem *out, Int maxItems ) const
+{
+	Int count = 0;
+	for( Int i = 0; m_mixed && i < LANEWAR_MIXED_MAX && count < maxItems; ++i )
+	{
+		const ThingTemplate *thing = m_mixedRoll[ team ][ seat ][ i ];
+		if( thing == NULL )
+			continue;
+		out[ count ].thing = thing;
+		out[ count ].tier = mixedTierAt( i );
+		out[ count ].hero = out[ count ].tier == 0;
+		++count;
+	}
+	return count;
+}
+
+//-------------------------------------------------------------------------------------------------
+/// the tech level on the way opens; from update when its time is up, and from the scenario drill at once
+static void openTech( Int *level, UnsignedInt *ready, Int playerIndex, UnsignedInt now, const char *why )
+{
+	if( *ready == 0 )
+		return;
+	++*level;
+	*ready = 0;
+	DEBUG_LOG(( "LANEWAR TIER: frame %u player %d tech level %d open%s\n", now, playerIndex, *level, why ));
+}
+
+void LaneWarDirector::openTechNow( Player *player )
+{
+	Int team, seat;
+	if( m_active && seatOf( player, &team, &seat ) )
+		openTech( &m_techLevel[ team ][ seat ], &m_techReady[ team ][ seat ], player->getPlayerIndex(), TheGameLogic->getFrame(), ", the scenario's shortcut" );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1249,22 +1350,27 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 }
 
 //-------------------------------------------------------------------------------------------------
-/// the next level of a track, paid in full; the level asked for must be the one after the player's
+/** The next level of a track, paid in full; the level asked for must be the one after the player's.  An
+	  income level pays from the next tick; a tech tier opens LANEWAR_TECH_RESEARCH_FRAMES later (update), and
+	  none more can be bought while one is on the way. */
 Bool LaneWarDirector::buyTier( Player *player, Int track, Int level )
 {
 	Int team, seat;
 	const char *refused = NULL;
 	Int price = LaneWar_tierPrice( track, level );
+	const UnsignedInt now = TheGameLogic->getFrame();
 	if( !m_active || !seatOf( player, &team, &seat ) )
 		refused = "not seated in a lane game";
 	else if( price <= 0 )
 		refused = "no such tier";
+	else if( track == LANEWAR_TRACK_TECH && m_techReady[ team ][ seat ] != 0 )
+		refused = "a tier is on the way";
 	else if( level != ( track == LANEWAR_TRACK_INCOME ? m_incomeLevel[ team ][ seat ] : m_techLevel[ team ][ seat ] ) + 1 )
 		refused = "not the next level";
 	else if( (Int)player->getMoney()->countMoney() < price )
 		refused = "too dear";
 
-	DEBUG_LOG(( "LANEWAR TIER: frame %u player %d %s level %d for %d %s%s\n", TheGameLogic->getFrame(),
+	DEBUG_LOG(( "LANEWAR TIER: frame %u player %d %s level %d for %d %s%s\n", now,
 							player ? (Int)player->getPlayerIndex() : -1, track == LANEWAR_TRACK_INCOME ? "income" : "tech", level, price,
 							refused ? "refused: " : "bought", refused ? refused : "" ));
 	if( refused != NULL )
@@ -1274,7 +1380,11 @@ Bool LaneWarDirector::buyTier( Player *player, Int track, Int level )
 	if( track == LANEWAR_TRACK_INCOME )
 		m_incomeLevel[ team ][ seat ] = level;
 	else
-		m_techLevel[ team ][ seat ] = level;
+	{
+		m_techReady[ team ][ seat ] = now + LANEWAR_TECH_RESEARCH_FRAMES;
+		DEBUG_LOG(( "LANEWAR TIER: frame %u player %d tech level %d opens at frame %u\n", now, (Int)player->getPlayerIndex(), level,
+								m_techReady[ team ][ seat ] ));
+	}
 	return TRUE;
 }
 
@@ -2188,6 +2298,10 @@ void LaneWarDirector::update( void )
 	updateJets( now );
 	if( now % ( LANEWAR_CARGO_LOG_SECONDS * LOGICFRAMES_PER_SECOND ) == 0 )
 		logCargo( now );
+	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+		for( Int s = 0; s < LANEWAR_SEATS; ++s )
+			if( m_techReady[ t ][ s ] != 0 && now >= m_techReady[ t ][ s ] )
+				openTech( &m_techLevel[ t ][ s ], &m_techReady[ t ][ s ], m_seatPlayer[ t ][ s ], now, "" );
 	LaneWarBot_update( this, now );		// the computer seats spend, through onOrder as a player does
 
 	if( now >= m_nextTickFrame )
@@ -3043,10 +3157,11 @@ void LaneWarDirector::crc( Xfer *xfer )
 	  Version 8: each jet's plot unit, and how far adoptStrays has looked.
 	  Version 9: which towers' bounties are paid.
 	  Version 10: each copy's next press frame.
-	  Version 11: when each seat may buy its next satellite scan. */
+	  Version 11: when each seat may buy its next satellite scan.
+	  Version 12: when each seat's tech tier on the way opens, and the Mixed option with every seat's roll. */
 void LaneWarDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 11;
+	XferVersion currentVersion = 12;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -3278,4 +3393,26 @@ void LaneWarDirector::xfer( Xfer *xfer )
 			else
 				m_revealReady[ t ][ s ] = 0;
 		}
+
+	// a match saved before the wait has its tiers open at once, and is never Mixed
+	if( version >= 12 )
+	{
+		for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+			for( Int s = 0; s < LANEWAR_SEATS; ++s )
+				xfer->xferUnsignedInt( &m_techReady[ t ][ s ] );
+		xfer->xferBool( &m_mixed );
+		// the roll by template name, only in a Mixed match
+		for( Int t = 0; m_mixed && t < LANEWAR_TEAMS; ++t )
+			for( Int s = 0; s < LANEWAR_SEATS; ++s )
+				for( Int i = 0; i < LANEWAR_MIXED_MAX; ++i )
+				{
+					const ThingTemplate *&thing = m_mixedRoll[ t ][ s ][ i ];
+					AsciiString name = thing != NULL ? thing->getName() : AsciiString::TheEmptyString;
+					xfer->xferAsciiString( &name );
+					if( xfer->getXferMode() == XFER_LOAD )
+						thing = name.isEmpty() ? NULL : TheThingFactory->findTemplate( name, FALSE );
+				}
+	}
+	else
+		m_mixed = FALSE;
 }

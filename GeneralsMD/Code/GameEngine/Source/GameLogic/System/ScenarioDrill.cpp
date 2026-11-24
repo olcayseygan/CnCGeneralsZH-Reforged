@@ -2875,6 +2875,9 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 			}
 		}
 		TheLaneWarDirector->onOrder( player, kind, args, argCount );
+		// a scenario's tech tier opens at once, a test's shortcut past LANEWAR_TECH_RESEARCH_SECONDS
+		if (kind == LANEWAR_ORDER_TIER && argCount >= 1 && args[ 0 ] == LANEWAR_TRACK_TECH)
+			TheLaneWarDirector->openTechNow( player );
 		return TRUE;
 	}
 

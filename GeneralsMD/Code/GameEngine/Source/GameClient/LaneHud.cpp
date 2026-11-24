@@ -1146,9 +1146,16 @@ static Int shownTier( void )
 	return s_tab;
 }
 
+/// the wall seconds before the seat's paid tech tier opens, 0 when none is on the way
+static Int techWait( void )
+{
+	const UnsignedInt ready = TheLaneWarDirector->getTechReadyFrame( s_team, s_seat ), now = TheGameLogic->getFrame();
+	return ready > now ? (Int)( ( ready - now + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND ) : 0;
+}
+
 static void drawTierKeys( void )
 {
-	const Int tech = techLevel(), cash = localMoney();
+	const Int tech = techLevel(), cash = localMoney(), wait = techWait();
 	for( Int t = 0; t < LANEHUD_TIERS; ++t )
 	{
 		const LaneHudBox &b = s_layout.tiers[ t ];
@@ -1156,7 +1163,15 @@ static void drawTierKeys( void )
 		const Bool locked = t + 1 > tech;
 		key( b, piece, !locked && s_tab == t, locked );
 		const Bool flat = art( piece ) == NULL;
-		if( locked )
+		if( locked && t + 1 == tech + 1 && wait > 0 )
+		{
+			// paid and on the way: the key fills from the foot as the wait runs out, the time left beside it
+			const Int total = (Int)( ( LANEWAR_TECH_RESEARCH_FRAMES + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND );
+			const Int filled = b.h * ( total - min( wait, total ) ) / max( total, 1 );
+			TheDisplay->drawFillRect( b.x, b.y + b.h - filled, b.w, filled, GameMakeColor( 242, 194, 48, 96 ) );
+			drawText( clockText( wait ), smallFont(), b.x - pxs( 6 ), b.y, b.h, PRICE, 1 );
+		}
+		else if( locked )
 		{
 			const Int price = LaneWar_tierPrice( LANEWAR_TRACK_TECH, t + 1 );
 			const Bool next = t + 1 == tech + 1 && cash >= price;
@@ -2156,7 +2171,7 @@ static Bool pressRow( const ICoord2D *mouse )
 			continue;
 		if( t + 1 <= tech )
 			s_tab = t;
-		else if( t + 1 == tech + 1 && localMoney() >= LaneWar_tierPrice( LANEWAR_TRACK_TECH, t + 1 ) )
+		else if( t + 1 == tech + 1 && techWait() == 0 && localMoney() >= LaneWar_tierPrice( LANEWAR_TRACK_TECH, t + 1 ) )
 		{
 			sendOrder( LANEWAR_ORDER_TIER, LANEWAR_TRACK_TECH, t + 1 );
 			s_tab = t;

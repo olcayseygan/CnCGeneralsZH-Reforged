@@ -5195,6 +5195,7 @@ void W3DVolumetricShadowManager::renderShadows( Bool forceStencilFill )
 		{
 			// CPU: silhouette and extrusion for every enabled caster.  Touches no D3D state.
 			USE_PERF_TIMER(shadowVolumeUpdate)
+			W3DFractureDraw::holdModelVolumes();	// before the walk, or a model turned back on casts this picture
 			for( shadow = m_shadowList; shadow; shadow = shadow->m_next )
 			{
 				if (shadow->m_isEnabled && !shadow->m_isInvisibleEnabled)

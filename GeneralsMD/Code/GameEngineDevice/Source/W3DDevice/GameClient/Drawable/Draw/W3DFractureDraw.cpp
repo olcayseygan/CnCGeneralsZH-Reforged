@@ -228,9 +228,10 @@ void makeVolumeEdges( Shared &s )
 		{
 			const Fracture::Triangle &tri = a.triangles[f.firstTriangle + t];
 			s.faceNormal[f.firstTriangle + t].Set( 0.0f, 0.0f, 0.0f );
-			// alpha tested or blended (railings, nets, decals): no slab of shadow, as initFromHLOD leaves
-			// a translucent mesh out; the triangles beside it see an open edge
-			if( tri.material < a.materials.size() && ( a.materials[tri.material].flags & ( Fracture::MATERIAL_ALPHA_TEST | Fracture::MATERIAL_DECAL ) ) )
+			// alpha tested (railings, nets): no slab of shadow, as initFromHLOD leaves a translucent mesh
+			// out; the triangles beside it see an open edge.  MATERIAL_DECAL is opaque, only two-sided
+			// (shaderFor), and casts as the opaque two-sided meshes initFromHLOD keeps
+			if( tri.material < a.materials.size() && ( a.materials[tri.material].flags & Fracture::MATERIAL_ALPHA_TEST ) )
 				continue;
 			const Vector3 p0( v[tri.index[0]].pos[0], v[tri.index[0]].pos[1], v[tri.index[0]].pos[2] );
 			const Vector3 p1( v[tri.index[1]].pos[0], v[tri.index[1]].pos[1], v[tri.index[1]].pos[2] );
@@ -1959,7 +1960,8 @@ void FractureRenderObjClass::addVolume( std::vector<Vector3> &out, unsigned frag
 
 //-------------------------------------------------------------------------------------------------
 /** Where the fragments cast stencil volumes, the whole model's own volume, standing on under its hidden
-	model, goes the moment they stand in: at the first hit, seen or not, and again every stencil picture.
+	model, goes the moment they stand in: at the first hit, seen or not, and again at the top of every
+	stencil pass before any caster queues its volume (holdModelVolumes).
 	Only the volume: the patch under the footprint stays until the fall.  The options can change, so the
 	answer is asked again each time; an orphan keeps its last. */
 //-------------------------------------------------------------------------------------------------
@@ -1972,7 +1974,7 @@ void FractureRenderObjClass::holdModelVolume( void )
 		return;		// the sun's map alone: the hidden model is in no shadow pass
 	W3DModelDraw *modelDraw = modelDrawOf( m_drawable );
 	if( modelDraw )
-		modelDraw->holdShadowOff( TRUE );
+		modelDraw->holdShadowOff();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1985,7 +1987,6 @@ void FractureRenderObjClass::renderVolumes( Bool build )
 	if( build )
 	{
 		const CostTimer timer;
-		holdModelVolume();		// every stencil picture, on the screen or off it: a model swap turns its volume back on
 		if( !m_castsVolume || !castsShadow() || TheW3DShadowManager == NULL || TheTerrainRenderObject == NULL )
 		{
 			m_volumes.clear();
@@ -2286,6 +2287,14 @@ void W3DFractureDraw::renderShadowCasters( RenderInfoClass &sunInfo )
 			s_modules[i]->m_fracture->renderCaster( sunInfo );
 	for( size_t i = 0; i < s_orphans.size(); ++i )
 		s_orphans[i]->renderCaster( sunInfo );
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DFractureDraw::holdModelVolumes( void )
+{
+	for( size_t i = 0; i < s_modules.size(); ++i )
+		if( s_modules[i]->m_fracture )
+			s_modules[i]->m_fracture->holdModelVolume();
 }
 
 //-------------------------------------------------------------------------------------------------

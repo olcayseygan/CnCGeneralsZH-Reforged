@@ -82,6 +82,9 @@ public:
 	/// And their stencil volumes (-d3d9, Classic), once in each of renderShadows' two passes: the first
 	/// builds what changed.
 	static void renderStencilVolumes( Bool build );
+	/// At the top of renderShadows, before any caster queues its volume: a model whose fragments cast
+	/// keeps its own volume off, whatever turned it back on since (a model swap, an unhide, the options).
+	static void holdModelVolumes( void );
 	/// TRUE for a drawable whose fall this module draws, which the Collapse option then leaves alone.
 	static Bool stagesCollapse( const Drawable *draw );
 

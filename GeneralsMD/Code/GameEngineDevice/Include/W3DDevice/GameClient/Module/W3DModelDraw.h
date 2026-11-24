@@ -384,7 +384,7 @@ public:
 	/// for every other render object.
 	static Bool getPosedBoundingSphere(RenderObjClass *robj, SphereClass &sphere);
 	virtual void setShadowsEnabled(Bool enable);
-	void holdShadowOff(Bool hold);			///< this model's own shadow only, not the contact patch (W3DFractureDraw's fragments cast instead)
+	void holdShadowOff(void);			///< this model's own shadow off, not the contact patch (W3DFractureDraw's fragments cast instead); asked again each picture
 	virtual void releaseShadows(void);	///< frees all shadow resources used by this module - used by Options screen.
 	virtual void allocateShadows(void); ///< create shadow resources if not already present. Used by Options screen.
 	void allocateContactShadow(void);		///< the soft patch under a structure, which is what stands it on the ground

@@ -2254,10 +2254,10 @@ void W3DModelDraw::setShadowsEnabled(Bool enable)
 	m_shadowEnabled = enable;
 }
 
-void W3DModelDraw::holdShadowOff(Bool hold)
+void W3DModelDraw::holdShadowOff(void)
 {
 	if (m_shadow)
-		m_shadow->enableShadowRender(!hold && m_shadowEnabled && m_renderObject && !m_renderObject->Is_Hidden());
+		m_shadow->enableShadowRender(FALSE);
 }
 
 /**collect some stats about the rendering cost of this draw module */

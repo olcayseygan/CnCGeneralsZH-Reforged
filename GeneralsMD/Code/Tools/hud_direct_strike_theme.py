@@ -13,9 +13,8 @@ import os
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-import hud_sidebar as S
-import hud_command_bar as H
-from hud_command_bar import Painter, Offset, shade, bar_finish, plate, shape, regular, GOLDM, BRIGHT, STEEL, DARK, INKM
+# The painters (hud_sidebar, hud_command_bar) are imported after the tables below: hud_command_bar reads PALETTE
+# back for the watcher's HUD (OBS_LOOK) at its foot, so a theme imported first must hold its tables by then.
 
 SIDES = ("America", "China", "Gla")
 PREFIX = {"America": "AmericaPro", "China": "ChinaPro", "Gla": "GLAPro"}
@@ -93,10 +92,26 @@ PREFIX["ForgedAlloy"] = "CommonPro"
 TILE, TILE_BLEND = 192, 24                      # a tiled middle's period and the band its seam is blended over
 PALETTE_ENV = "DS_PALETTE"
 
-# flat colours: the code's text and the glyphs it tints, the two teams, the coin's metal
+# flat colours: the code's text and the glyphs it tints, the two teams, the coin's metal.  red is an alarm (a line
+# under attack, a beaten seat, power short), slot an unlit segment or a header band on glass, rule a hairline between
+# a card's sections, violet the fourth team's colour (TEAMS)
 INK = dict(white=(236, 238, 242), grey=(176, 182, 192), dim=(120, 126, 136), paper=(232, 234, 240), gold=(242, 194, 48),
            green=(60, 186, 72), on_lit=(14, 16, 22), keyline=(12, 14, 18), shadow=(0, 0, 0, 210), us=(66, 112, 236),
-           them=(214, 44, 36), muted=(150, 156, 166))
+           them=(214, 44, 36), muted=(150, 156, 166), red=(214, 44, 36), slot=(26, 30, 36), rule=(44, 46, 52),
+           violet=(150, 90, 210))
+TEAMS = ("us", "them", "green", "violet")       # a watcher's teams 1 to 4 by INK name; past four the players' colours
+KEY_INK = {"": INK["paper"], "H": INK["gold"], "P": INK["on_lit"], "I": INK["dim"]}     # a key's glyph by its state
+# the heat ramp (t 0 the lowest standing seat, 1 the highest): cold gunmetal blue through amber to red-orange
+HEAT = ((0.0, (34, 58, 88)), (0.45, (52, 96, 112)), (0.7, (170, 128, 40)), (1.0, (226, 82, 30)))
+
+
+def heat(t):
+    """The heat ramp's colour at t, straight between its stops, as the game's code reads it."""
+    t = min(max(t, 0.0), 1.0)
+    for (ta, ca), (tb, cb) in zip(HEAT, HEAT[1:]):
+        if t <= tb:
+            return tuple(int(ca[j] + (cb[j] - ca[j]) * (t - ta) / (tb - ta)) for j in range(3))
+    return HEAT[-1][1]
 COIN = dict(rim=(20, 16, 6), face=(242, 194, 48), inner=(226, 172, 36), deep=(176, 128, 24), brass=(214, 168, 64),
             brass_inner=(190, 140, 44), random=(120, 126, 136), random_mark=(24, 26, 30))
 
@@ -114,7 +129,7 @@ if os.environ.get(PALETTE_ENV):
 
 FONT_DIR = os.path.join(os.environ.get("WINDIR", "C:/Windows"), "Fonts")
 FONT_BOLD, FONT_REGULAR = "arialbd.ttf", "arial.ttf"
-TYPE = dict(tick=11, small=13, price=14, body=16, label=18, name=22, figure=28, title=34, result=40)
+TYPE = dict(tick=11, small=13, price=14, row=14, body=16, label=18, name=22, figure=28, title=34, result=40)
 TRACKING = dict(title=0.30, result=0.32, button=0.21, team=0.2)   # letter spacing of the spaced capitals, times the size
 
 # ---------------------------------------------------------------------------------------------- metrics
@@ -136,6 +151,7 @@ NINE, WELL_NINE, SLICE_EDGE, CAP = 16, 8, 8, 24
 NINE_PARTS = ("TL", "T", "TR", "L", "C", "R", "BL", "B", "BR")
 DROP_H, DROP_L, DROP_C, DROP_R, FIELD_R = 48, 16, 8, 44, 16
 BIG = 8                                         # flat glyphs are drawn at 8x and box filtered
+MASTER = 160                                    # the square a plain 9-slice is cut from
 
 
 def look(side):
@@ -144,6 +160,22 @@ def look(side):
 
 def build_of(side):
     return PALETTE[side]["build"]
+
+
+def master(side, corner=NINE):
+    """The square a 9-slice of corner is cut from: MASTER, or on a tiled palette big enough for its middles to hold
+    a whole TILE."""
+    return 2 * corner + TILE + TILE_BLEND + 16 if look(side).get("tile") else MASTER
+
+
+def nine(side, full, corner=NINE):
+    """full cut as the palette wants it: tiled middles on a tiled palette (nine_tile), stretched ones otherwise."""
+    return nine_tile(full, corner) if look(side).get("tile") else nine_cut(full, corner)
+
+
+import hud_sidebar as S                         # noqa: E402  (after the tables, see the note at the top)
+import hud_command_bar as H                     # noqa: E402
+from hud_command_bar import Painter, Offset, shade, bar_finish, plate, shape, regular, GOLDM, BRIGHT, STEEL, DARK, INKM  # noqa: E402
 
 # ---------------------------------------------------------------------------------------------- type
 
@@ -217,27 +249,48 @@ def patches(o, w, h, x0, x1, seed):
         x += pw + rng.uniform(16, 60)
 
 
-def panel(side, w, h, wells=(), lit=False, rule=None, bands=(), recess=None):
+def opened(kind, w, h, open4):
+    """The outline maker of a w x h piece some of whose sides (open4: top, bottom, left, right) are the screen's edge:
+    outline(x0, y0, x1, y1, c) is shape(kind, ...) with each open side run PAD past the piece, to the painter's
+    border, which Painter.tiers and recess (open4 None) take as no edge, and the corners on an open side square.
+    Wells and lips drawn through it run to the screen's edge too.  With every side closed it is shape itself."""
+    top, bottom, left, right = open4
+    corner = H.BUILDS[kind]["corner"]
+
+    def outline(x0, y0, x1, y1, c):
+        if not any(open4):
+            return shape(kind, x0, y0, x1, y1, c)
+        x0, x1 = (-PAD if left else x0), (w + PAD if right else x1)
+        y0, y1 = (-PAD if top else y0), (h + PAD if bottom else y1)
+        cut = (corner if corner in ("cut", "notch", "round") else "cut", c)
+        square = ("none", 0)
+        return plate(x0, y0, x1, y1, square if top or left else cut, square if top or right else cut,
+                     square if bottom or right else cut, square if bottom or left else cut)
+    return outline
+
+
+def panel(side, w, h, wells=(), lit=False, rule=None, bands=(), recess=None, open4=CLOSED):
     """Every plate of the mode: the side's outline, the near-black shell, the lip (bright steel when lit, the winner's
     and the hero's), glass wells sunk into it, square band wells, a recessed face, a gold rule.  Rects in the panel's
-    own pixels."""
+    own pixels; open4 (top, bottom, left, right) the sides that are the screen's edge, without rim or bevel (opened)."""
     build = build_of(side)
     c = min(CORNER[build], h / 4)
     sharp_form = sharp(side)
-    outline = "terraced" if sharp_form else build     # a common frame takes China's notched corners
+    outline = opened("terraced" if sharp_form else build, w, h, open4)   # a common frame takes China's notched corners
+    edges = None if any(open4) else CLOSED
 
     def draw(o, b):
-        o.tiers([shape(outline, 0, 0, w, h, c)], CLOSED, SHELL_TOP, LIP_TOP, LIP_INSET, LIP_BEVEL[build], SHELL_BEVEL,
+        o.tiers([outline(0, 0, w, h, c)], edges, SHELL_TOP, LIP_TOP, LIP_INSET, LIP_BEVEL[build], SHELL_BEVEL,
                 lip_mat=BRIGHT if lit else None)
         if sharp_form:
             k = LIP_INSET + 1.5
-            stepped_lip(o, [shape(outline, k, k, w - k, h - k, max(c - k * 0.5, 1.5))], k)
+            stepped_lip(o, [outline(k, k, w - k, h - k, max(c - k * 0.5, 1.5))], k)
             if look(side).get("patches") and min(w, h) >= 60:
                 patches(o, w, h, 8, w - 8, w * 3 + h)
         if recess:
-            o.recess([shape(outline, *recess, c * RECESS_CORNER)], CLOSED, RECESS_DEPTH, RECESS_EDGE)
+            o.recess([outline(*recess, c * RECESS_CORNER)], edges, RECESS_DEPTH, RECESS_EDGE)
         for r in wells:
-            o.sink([shape(outline, *r, c * WELL_CORNER)], WELL_DEPTH, WELL_LIP)
+            o.sink([outline(*r, c * WELL_CORNER)], WELL_DEPTH, WELL_LIP)
         for r in bands:
             o.sink([plate(*r)], BAND_DEPTH, BAND_LIP)
         if rule:
@@ -245,15 +298,21 @@ def panel(side, w, h, wells=(), lit=False, rule=None, bands=(), recess=None):
     return small(side, w, h, draw)
 
 
-def chip(side, w, h, inset=INSET, lit=False):
-    """A panel with one glass well inset from its edge."""
-    return panel(side, w, h, [(inset, inset, w - inset, h - inset)], lit)
+def chip(side, w, h, inset=INSET, lit=False, open4=CLOSED):
+    """A panel with one glass well inset from its edge (and run to the screen's edge on an open side)."""
+    return panel(side, w, h, [(inset, inset, w - inset, h - inset)], lit, open4=open4)
 
 
 def key(side, w, h, state, layers=(), k=1.0, corner=1.0, dx=0.0, dy=0.0):
     """The mode's key: the sidebar's bezel in this palette.  state '' up, 'H' hover, 'P' lit, 'I' disabled; layers
-    the glyph ((polys, fill) in a 22 box round 11, 11) or none for the code's text."""
+    the glyph ((polys, fill) in a 22 box round 11, 11) or none for the code's text.  A worn palette wears its keys
+    as it wears its plates (shade's worn), so a frame and the keys on it show one wear; a common frame's hover rule is
+    its own lit colour, not the bar's blue."""
     palette = look(side)
+    if any(palette.get(k_) for k_ in ("wear", "rust", "grit")):
+        palette = dict(palette, worn=True)
+    if side in COMMONS:
+        palette = dict(palette, hilite=palette["lit"])
     return S.key(side, w, h, state, layers, k, corner, dx, dy, look=palette, lit=palette["lit"])
 
 # ---------------------------------------------------------------------------------------------- flat glyphs

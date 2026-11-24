@@ -151,6 +151,30 @@ namespace
 		"DSClampBoxTL", "DSClampBoxT", "DSClampBoxTR", "DSClampBoxL", "DSClampBoxC", "DSClampBoxR", "DSClampBoxBL", "DSClampBoxB", "DSClampBoxBR",
 		"DSClampBandL", "DSClampBandC", "DSClampBandR",
 
+		"ObsRadar",
+		"ObsBoardTL", "ObsBoardT", "ObsBoardTR", "ObsBoardL", "ObsBoardC", "ObsBoardR", "ObsBoardBL", "ObsBoardB", "ObsBoardBR",
+		"ObsCardTL", "ObsCardT", "ObsCardTR", "ObsCardL", "ObsCardC", "ObsCardR", "ObsCardBL", "ObsCardB", "ObsCardBR",
+		"ObsHeat",
+		"ObsBadgeTurkiye",
+		"ObsIconPower",
+		"ObsIconCrown",
+		"ObsIconStar",
+		"ObsIconSkull",
+		"ObsStatPrev",
+		"ObsStatNext",
+		"ObsKeyFree",
+		"ObsKeyFollow",
+		"ObsKeyDirector",
+		"ObsKeyVisAll",
+		"ObsKeyVisTeam",
+		"ObsKeyVisPlayer",
+		"ObsKeyHideRadar",
+		"ObsKeyHideBoard",
+		"ObsKeyHideDossier",
+		"ObsKeyOptions",
+		"ObsKeyChat",
+		"ObsKeyQuit",
+
 		NULL,	// past the last: a name added without its Piece, or a Piece without its name, fails the assert below
 	};
 	static_assert( sizeof( PIECE_NAMES ) / sizeof( PIECE_NAMES[ 0 ] ) == PIECE_COUNT + 1, "PIECE_NAMES has one name a Piece" );
@@ -581,6 +605,26 @@ void swatch( const LaneHudBox &b, Color color )
 	const Int frame = px( 2 );
 	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, KEYLINE );
 	TheDisplay->drawFillRect( b.x + frame, b.y + frame, b.w - 2 * frame, b.h - 2 * frame, color );
+}
+
+Color heat( Real t, Int alpha )
+{
+	static const Real STOPS[ 4 ] = { 0.0f, 0.45f, 0.7f, 1.0f };
+	static const Int RGB[ 4 ][ 3 ] = { { 34, 58, 88 }, { 52, 96, 112 }, { 170, 128, 40 }, { 226, 82, 30 } };
+	t = max( 0.0f, min( 1.0f, t ) );
+	Int i = 0;
+	while( i < 2 && t > STOPS[ i + 1 ] )
+		i++;
+	const Real f = ( t - STOPS[ i ] ) / ( STOPS[ i + 1 ] - STOPS[ i ] );
+	return GameMakeColor( REAL_TO_INT( RGB[ i ][ 0 ] + ( RGB[ i + 1 ][ 0 ] - RGB[ i ][ 0 ] ) * f ),
+												REAL_TO_INT( RGB[ i ][ 1 ] + ( RGB[ i + 1 ][ 1 ] - RGB[ i ][ 1 ] ) * f ),
+												REAL_TO_INT( RGB[ i ][ 2 ] + ( RGB[ i + 1 ][ 2 ] - RGB[ i ][ 2 ] ) * f ), alpha );
+}
+
+Color teamColour( Int team )
+{
+	static const Color TEAMS[ 4 ] = { TEAM_US, TEAM_THEM, TEXT_GREEN, TEAM_VIOLET };
+	return TEAMS[ max( 0, team ) % 4 ];
 }
 
 const Image *generalPortrait( const PlayerTemplate *army )

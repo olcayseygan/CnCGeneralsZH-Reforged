@@ -47,7 +47,7 @@ END_KEYS = {"Rematch": "rematch", "Replay": "replay", "Menu": "menu"}
 STATS = {"Waves": "waves", "Placed": "placed", "Earned": "earned", "Spent": "spent", "Kills": "kills", "Damage": "damage",
          "Middle": "middle", "Time": "time", "Fortress": "fortress"}
 ROW_H, ROW_CAP, ROW_BAR = 36, 12, 4               # a list row: the lobby's 36, its 3-slice ends, the gold bar's width
-MASTER, WELL_AT = 160, (24, 24, 136, 136)       # the 9-slices are cut from a panel this size; the well's own from this rect
+MASTER, WELL_AT = T.MASTER, (24, 24, 136, 136)  # the 9-slices are cut from a panel this size; the well's own from this rect
 BUTTON = (432, 72)                              # the wide text key the 3-slice is cut from
 LAMP, COIN = 32, 28
 # a plain side's portrait: its command centre's build button picture (SAComCentr_L, SNComCentr_L, SUHeadquarters_L,
@@ -140,8 +140,120 @@ def toggle(side, on):
     return img
 
 
+def obs_marks():
+    """The observer HUD's marks, each draw(d, k) in a 22 box: the operator keys' glyphs (Free a move cross, Follow a
+    person, Director a film camera, VisAll an eye with rays, VisTeam two people, VisPlayer an eye, HideRadar a framed
+    map with a sweep, HideBoard list lines with a colour tick, HideDossier a card with a portrait, Options sliders,
+    Chat a speech bubble, Quit a door with an arrow), the stat step arrows and the label icons the code tints."""
+    def move(d, k):
+        for ang in (0, 90, 180, 270):
+            a = np.radians(ang)
+            tip = (11 + 9 * np.cos(a), 11 + 9 * np.sin(a))
+            bx, by = 11 + 4.5 * np.cos(a), 11 + 4.5 * np.sin(a)
+            px, py = -np.sin(a) * 3.4, np.cos(a) * 3.4
+            d.polygon([(tip[0] * k, tip[1] * k), ((bx + px) * k, (by + py) * k), ((bx - px) * k, (by - py) * k)], fill=255)
+        d.rectangle((9.8 * k, 5 * k, 12.2 * k, 17 * k), fill=255)
+        d.rectangle((5 * k, 9.8 * k, 17 * k, 12.2 * k), fill=255)
+
+    def person(d, k):
+        d.ellipse((7 * k, 2 * k, 15 * k, 10 * k), fill=255)
+        d.pieslice((3 * k, 11 * k, 19 * k, 27 * k), 180, 360, fill=255)
+        d.rectangle((1 * k, 19.6 * k, 21 * k, 21 * k), fill=255)
+
+    def film(d, k):
+        d.rectangle((2 * k, 8 * k, 14 * k, 18 * k), fill=255)
+        d.polygon([(14 * k, 11 * k), (20 * k, 8 * k), (20 * k, 18 * k), (14 * k, 15 * k)], fill=255)
+        d.ellipse((2 * k, 1 * k, 8 * k, 7 * k), fill=255)
+        d.ellipse((8 * k, 1 * k, 14 * k, 7 * k), fill=255)
+
+    def eye(rays):
+        def draw(d, k):
+            d.chord((1 * k, 4 * k, 21 * k, 22 * k), 200, 340, fill=255)
+            d.chord((1 * k, 0 * k, 21 * k, 18 * k), 20, 160, fill=255)
+            d.ellipse((7 * k, 7 * k, 15 * k, 15 * k), fill=0)
+            d.ellipse((8.8 * k, 8.8 * k, 13.2 * k, 13.2 * k), fill=255)
+            if rays:
+                for x in (4, 11, 18):
+                    d.line([(x * k, 0), (x * k, 2.6 * k)], fill=255, width=int(1.6 * k))
+        return draw
+
+    def team(d, k):
+        for cx in (6.5, 15.5):
+            d.ellipse(((cx - 3) * k, 3 * k, (cx + 3) * k, 9 * k), fill=255)
+            d.pieslice(((cx - 5.5) * k, 10 * k, (cx + 5.5) * k, 24 * k), 180, 360, fill=255)
+        d.rectangle((0, 17.6 * k, 22 * k, 19 * k), fill=255)
+
+    def radar(d, k):
+        d.rectangle((2 * k, 2 * k, 20 * k, 20 * k), fill=255)
+        d.rectangle((4 * k, 4 * k, 18 * k, 18 * k), fill=0)
+        d.pieslice((4 * k, 4 * k, 18 * k, 18 * k), -90, -20, fill=255)
+        d.ellipse((9.6 * k, 9.6 * k, 12.4 * k, 12.4 * k), fill=255)
+
+    def board(d, k):
+        for y in (4, 10, 16):
+            d.rectangle((2 * k, y * k, 5 * k, (y + 3) * k), fill=255)
+            d.rectangle((7 * k, (y + 0.4) * k, 20 * k, (y + 2.6) * k), fill=255)
+
+    def dossier(d, k):
+        d.rectangle((2 * k, 3 * k, 20 * k, 19 * k), fill=255)
+        d.rectangle((3.8 * k, 4.8 * k, 18.2 * k, 17.2 * k), fill=0)
+        d.ellipse((6 * k, 6.5 * k, 10 * k, 10.5 * k), fill=255)
+        d.pieslice((4.5 * k, 11 * k, 11.5 * k, 19 * k), 180, 360, fill=255)
+        for y in (8, 12):
+            d.rectangle((12.5 * k, y * k, 17 * k, (y + 1.6) * k), fill=255)
+
+    def sliders(d, k):
+        for y, x in ((5, 7), (11, 15), (17, 10)):
+            d.rectangle((2 * k, (y - 0.9) * k, 20 * k, (y + 0.9) * k), fill=255)
+            d.rectangle(((x - 2) * k, (y - 3) * k, (x + 2) * k, (y + 3) * k), fill=255)
+
+    def chat(d, k):
+        d.rounded_rectangle((2 * k, 3 * k, 20 * k, 15 * k), 3 * k, fill=255)
+        d.polygon([(6 * k, 14 * k), (6 * k, 20 * k), (12 * k, 14 * k)], fill=255)
+
+    def leave(d, k):
+        d.rectangle((3 * k, 2 * k, 12 * k, 20 * k), fill=255)
+        d.rectangle((5 * k, 4 * k, 10 * k, 18 * k), fill=0)
+        d.polygon([(10 * k, 9 * k), (16 * k, 9 * k), (16 * k, 6 * k), (21 * k, 11 * k), (16 * k, 16 * k), (16 * k, 13 * k), (10 * k, 13 * k)], fill=255)
+
+    def prev(d, k):
+        d.polygon([(15 * k, 4 * k), (15 * k, 18 * k), (5 * k, 11 * k)], fill=255)
+
+    def nxt(d, k):
+        d.polygon([(7 * k, 4 * k), (7 * k, 18 * k), (17 * k, 11 * k)], fill=255)
+
+    def star(d, k):
+        d.polygon([((11 + (10 if i % 2 == 0 else 4.2) * np.cos(-np.pi / 2 + i * np.pi / 5)) * k,
+                    (11.6 + (10 if i % 2 == 0 else 4.2) * np.sin(-np.pi / 2 + i * np.pi / 5)) * k) for i in range(10)], fill=255)
+
+    def skull(d, k):
+        d.ellipse((4 * k, 2 * k, 18 * k, 15 * k), fill=255)
+        d.rectangle((7 * k, 13 * k, 15 * k, 19 * k), fill=255)
+        d.ellipse((6.5 * k, 7 * k, 10.2 * k, 10.8 * k), fill=0)
+        d.ellipse((11.8 * k, 7 * k, 15.5 * k, 10.8 * k), fill=0)
+        for x in (9, 11.4):
+            d.rectangle((x * k, 16 * k, (x + 1.2) * k, 19 * k), fill=0)
+
+    def crown(d, k):
+        d.polygon([(2 * k, 17 * k), (2 * k, 6 * k), (7 * k, 11 * k), (11 * k, 3 * k), (15 * k, 11 * k), (20 * k, 6 * k), (20 * k, 17 * k)], fill=255)
+        d.rectangle((2 * k, 18.5 * k, 20 * k, 20.5 * k), fill=255)
+
+    def bolt(d, k):
+        d.polygon([(13 * k, 2 * k), (5 * k, 12.5 * k), (10.5 * k, 12.5 * k), (8.5 * k, 20 * k), (17 * k, 9 * k), (11.5 * k, 9 * k)], fill=255)
+
+    return {"free": move, "follow": person, "director": film, "vis_all": eye(True), "vis_team": team, "vis_player": eye(False),
+            "hide_radar": radar, "hide_board": board, "hide_dossier": dossier, "options": sliders, "chat": chat, "quit": leave,
+            "prev": prev, "next": nxt, "star": star, "skull": skull, "crown": crown, "power": bolt}
+
+
+OBS_MARKS = obs_marks()
+
+
 def stat_glyph(kind, size, colour=T.INK["white"]):
-    """The end screen's stat marks in a 20 box."""
+    """The end screen's stat marks in a 20 box, and the observer HUD's (OBS_MARKS) in their 22."""
+    if kind in OBS_MARKS:
+        return T.mask((size, size), lambda d, kk: OBS_MARKS[kind](d, size / 22 * kk), colour)
+
     def draw(d, kk):
         k = size / 20 * kk
 
@@ -442,6 +554,93 @@ def watch(side):
         out["SidebarKeyMenu" + s] = T.key(side, *KEY_SIZES["Menu"], s, icon_layers("Options", build), 0.55)
         out["SidebarKeyDiplomacy" + s] = T.key(side, *KEY_SIZES["Diplomacy"], s, icon_layers("Chat", build), 0.55)
     return out
+
+
+# The observer HUD, V1 "Ledger" (the owner's pick of 2026-11-24; the contract is the wrapper's
+# experiments/observer-console/PIECES.md): a radar module in the bottom left corner, a board flush on the right edge
+# whose height follows the seats, a dossier card left of the board while a seat is picked.  Each module is the
+# common frame's chip, its sides on the screen's edge open (no rim, the glass to the edge), the notch only on a
+# corner facing the battlefield.  The code writes every word and number; these are the frames, the heat scale, the
+# icons it tints, Turkiye's badge and the operator keys.
+OBS_RADAR, OBS_KEY, OBS_STAT_KEY, OBS_HEAT = 232, (22, 22), (18, 18), (192, 10)
+OBS_KEYS = {"Free": "free", "Follow": "follow", "Director": "director", "VisAll": "vis_all", "VisTeam": "vis_team",
+            "VisPlayer": "vis_player", "HideRadar": "hide_radar", "HideBoard": "hide_board", "HideDossier": "hide_dossier",
+            "Options": "options", "Chat": "chat", "Quit": "quit"}
+OBS_KEY_GLYPH, OBS_STAT_GLYPH = 13, 11          # the glyph's box on a key: the face (key()'s, 4.7 in) holds it whole
+OPEN_RADAR, OPEN_BOARD = (False, True, True, False), (False, True, False, True)    # open bottom and left; bottom and right
+
+
+def obs_key(side, size, kind, state, glyph):
+    """The theme's key with an observer mark on its face in the state's ink.  P is the mode in force as well as a key
+    held down: the lit face with a dark glyph."""
+    w, h = size
+    img = T.key(side, w, h, state)
+    img.alpha_composite(stat_glyph(kind, glyph, T.KEY_INK[state]), ((w - glyph) // 2, (h - glyph) // 2))
+    return img
+
+
+def heat_scale():
+    w, h = OBS_HEAT
+    img = Image.new("RGBA", (w, h), T.INK["keyline"] + (255,))
+    d = ImageDraw.Draw(img)
+    for i in range(w - 2):
+        d.line([(i + 1, 1), (i + 1, h - 2)], fill=T.heat(i / (w - 3)) + (255,))
+    return img
+
+
+def badge_turkiye():
+    """Turkiye's badge: its PlayerTemplate names America's observer picture, so the seat takes the side's own Command
+    Center cameo (TRCameoCommandCenter_L), squared and keylined as the SSObserver pictures are."""
+    rect = H.read_mapped(None, name="TRCameos")["TRCameoCommandCenter_L"]
+    cc = Image.open(os.path.join(DATA, TEXTURES, "TRCameos.tga")).convert("RGBA").crop(rect)
+    s = min(cc.size)
+    cc = cc.crop(((cc.width - s) // 2, (cc.height - s) // 2, (cc.width + s) // 2, (cc.height + s) // 2))
+    out = Image.new("RGBA", (22, 24), T.INK["keyline"] + (255,))
+    out.paste(cc.resize((20, 22), Image.LANCZOS), (1, 1))
+    return out
+
+
+def observer(side):
+    """The observer HUD's pieces, the names InGameUI.cpp's console reads (Piece OBS_*)."""
+    s = T.master(side)
+    out = {"ObsRadar": T.chip(side, OBS_RADAR, OBS_RADAR, open4=OPEN_RADAR), "ObsHeat": heat_scale(), "ObsBadgeTurkiye": badge_turkiye()}
+    out.update(slices("ObsBoard", lambda st: T.nine(side, T.chip(side, s, s, open4=OPEN_BOARD))))
+    out.update(slices("ObsCard", lambda st: T.nine(side, T.chip(side, s, s))))
+    for name in ("Power", "Crown", "Star"):
+        out["ObsIcon" + name] = stat_glyph(name.lower(), 14, (255, 255, 255))
+    out["ObsIconSkull"] = stat_glyph("skull", 18, (255, 255, 255))
+    for name, kind in OBS_KEYS.items():
+        for st in KEY_STATES:
+            out["ObsKey" + name + st] = obs_key(side, OBS_KEY, kind, st, OBS_KEY_GLYPH)
+    for name in ("Prev", "Next"):
+        for st in STATES:
+            out["ObsStat" + name + st] = obs_key(side, OBS_STAT_KEY, name.lower(), st, OBS_STAT_GLYPH)
+    check_observer(out)
+    return out
+
+
+def check_observer(out):
+    """The sides on the screen's edge have no rim (the glass runs to the radar's left and bottom and the board's right
+    and foot), the glass is dark enough for the rows' heat tint and is where the code draws the map, the frames tile,
+    and a lit key reads far from an idle one."""
+    def rgb(name):
+        return np.asarray(out[name], np.float32)[..., :3]
+    r = rgb("ObsRadar")
+    assert r[100:130, 0].mean() < 40 and r[-1, 100:130].mean() < 40, "ObsRadar has a rim on the screen's edge"
+    assert r[30:200, 30:200].mean() < 40, "ObsRadar's glass is not where the code draws the map"
+    assert r[:6, 100:130].mean(1).max() > 80 and r[100:130, -6:].mean(0).max() > 80, "ObsRadar has no rim facing the battlefield"
+    c = rgb("ObsBoardC")
+    assert c.mean() < 40, "the board's glass is %.1f, too light for the heat tint" % c.mean()
+    for k in ("R", "BR", "B"):
+        assert rgb("ObsBoard" + k)[-1, -1].mean() < 40, "ObsBoard%s has a rim on the screen's edge" % k
+    for frame in ("ObsBoard", "ObsCard"):
+        for k in ("T", "B", "L", "R", "C"):
+            a = np.asarray(out[frame + k], np.int32)
+            assert a.shape[0] == T.TILE or a.shape[1] == T.TILE, "%s%s is not a whole tile" % (frame, k)
+    for name in OBS_KEYS:
+        up, lit = rgb("ObsKey" + name), rgb("ObsKey" + name + "P")
+        warm = lambda a: float(((a[..., 0] - a[..., 2]) > 50).mean())    # the lit face's bronze: red well over blue
+        assert warm(lit) > warm(up) + 0.1, "ObsKey%sP does not stand out from its up state (%.2f vs %.2f)" % (name, warm(lit), warm(up))
 
 
 def end_card(side, won):
@@ -771,7 +970,7 @@ def pieces(side):
     # shared plates, keys and lamps (the match HUD and the shell's mode picker draw them) and its match HUD
     # the common sheet's clamp dropdown and list rows replace the shared ones under the same names
     restyled = {n for n in out if n.startswith(("DSDrop", "DSFieldR", "DSRow"))} if side in T.COMMONS else set()
-    for part in ((end(side), lobby(side), watch(side)) if side in T.COMMONS else (hud(side),)):
+    for part in ((end(side), lobby(side), watch(side), observer(side)) if side in T.COMMONS else (hud(side),)):
         twice = set(part) & set(out) - restyled
         assert not twice, "a name is drawn twice: %s" % sorted(twice)
         out.update(part)

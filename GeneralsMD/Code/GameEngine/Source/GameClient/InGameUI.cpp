@@ -12792,20 +12792,6 @@ static LaneHudBox regionBox( const IRegion2D &r )
 	return LaneHud_box( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y );
 }
 
-/// a console piece, ObserverCon<name><state>, or the plain one, or NULL while the sheet lacks it
-static const Image *consolePiece( const char *name, const char *state = "" )
-{
-	AsciiString full;
-	if( *state != 0 )
-	{
-		full.format( "ObserverCon%s%s", name, state );
-		if( const Image *image = TheMappedImageCollection->findImageByName( full ) )
-			return image;
-	}
-	full.format( "ObserverCon%s", name );
-	return TheMappedImageCollection->findImageByName( full );
-}
-
 enum
 {
 	CON_STATS					= 7,			///< Money, Income, Army, Kills, Power, Builds, Super, as the keys Q W E R T Y A
@@ -12850,9 +12836,7 @@ static ConsoleLayout consoleLayout( void )
 /// a team row's fixed colour, the same every match so a viewer can say "blue team"; gold is the leader's alone
 static Color consoleTeamColour( Int team )
 {
-	static const Int RGB[ 4 ][ 3 ] = { { 70, 120, 220 }, { 210, 64, 52 }, { 80, 170, 80 }, { 150, 90, 210 } };
-	const Int t = max( 0, team ) % 4;
-	return GameMakeColor( RGB[ t ][ 0 ], RGB[ t ][ 1 ], RGB[ t ][ 2 ], 255 );
+	return DirectStrikeTheme::teamColour( team );
 }
 
 /// a pulse on the wall clock, 0 to 1 and back once a period: the motion cues run in real time, the same
@@ -12875,19 +12859,18 @@ static Int theConsoleLeader = -1;
 static Int theConsoleLeaderBefore = -1;
 static UnsignedInt theConsoleLeaderAtMs = 0;
 
-/// the heat map's ramp, cold gunmetal blue through amber to hot red-orange (PIECES.md's stops)
+/// the heat map's ramp, cold gunmetal blue through amber to hot red-orange (the theme's HEAT)
 static Color consoleHeat( Real t, Int alpha = 255 )
 {
-	static const Real STOPS[ 4 ] = { 0.0f, 0.45f, 0.7f, 1.0f };
-	static const Int RGB[ 4 ][ 3 ] = { { 34, 58, 88 }, { 52, 96, 112 }, { 170, 128, 40 }, { 226, 82, 30 } };
-	t = max( 0.0f, min( 1.0f, t ) );
-	Int i = 0;
-	while( i < 2 && t > STOPS[ i + 1 ] )
-		i++;
-	const Real f = ( t - STOPS[ i ] ) / ( STOPS[ i + 1 ] - STOPS[ i ] );
-	return GameMakeColor( REAL_TO_INT( RGB[ i ][ 0 ] + ( RGB[ i + 1 ][ 0 ] - RGB[ i ][ 0 ] ) * f ),
-												REAL_TO_INT( RGB[ i ][ 1 ] + ( RGB[ i + 1 ][ 1 ] - RGB[ i ][ 1 ] ) * f ),
-												REAL_TO_INT( RGB[ i ][ 2 ] + ( RGB[ i + 1 ][ 2 ] - RGB[ i ][ 2 ] ) * f ), alpha );
+	return DirectStrikeTheme::heat( t, alpha );
+}
+
+/// a value's ink on the heat map: the heat colour lifted toward white, so it reads on the tinted line
+static Color consoleHeatInk( Real t )
+{
+	UnsignedByte r, g, b, a;
+	GameGetColorComponents( consoleHeat( t ), &r, &g, &b, &a );
+	return GameMakeColor( min( 255, r * 6 / 10 + 110 ), min( 255, g * 6 / 10 + 110 ), min( 255, b * 6 / 10 + 110 ), 255 );
 }
 
 /// "$14k", "$4.2k", "$900"
@@ -12946,43 +12929,19 @@ static void drawConsoleClock( const IRegion2D &r, Int percent, Bool ready, const
 	else
 		TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, GameMakeColor( 30, 33, 38, 255 ) );
 	if( !ready )
-		TheDisplay->drawRemainingRectClock( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, percent, GameMakeColor( 0, 0, 0, 150 ) );
+		TheDisplay->drawRemainingRectClock( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, percent, DirectStrikeTheme::GREYED );
 	else
 		TheDisplay->drawOpenRect( r.lo.x - rim, r.lo.y - rim, r.hi.x - r.lo.x + 2 * rim, r.hi.y - r.lo.y + 2 * rim, (Real)rim,
-			GameMakeColor( 242, 194, 48, alpha ) );
+			UIStyle::withAlpha( DirectStrikeTheme::TEXT_GOLD, alpha ) );
 }
 
 /// a seat's side badge: the template's observer picture, Turkiye's own from the console sheet
 static const Image *consoleBadge( const Player *player )
 {
 	if( player->getSide().startsWith( "Turkiye" ) )
-		if( const Image *turkiye = consolePiece( "BadgeTurkiye" ) )
+		if( const Image *turkiye = DirectStrikeTheme::art( DirectStrikeTheme::OBS_BADGE_TURKIYE ) )
 			return turkiye;
 	return player->getPlayerTemplate()->getEnabledImage();
-}
-
-/// a 9-slice of ObserverCon<name>TL..BR, corners `corner` at 1080, or the theme's panel
-static void drawConsoleNine( const char *name, const IRegion2D &r, Real k, Int corner )
-{
-	static const char *const PARTS[ 9 ] = { "TL", "T", "TR", "L", "C", "R", "BL", "B", "BR" };
-	const Image *parts[ 9 ];
-	for( Int each = 0; each < 9; each++ )
-	{
-		AsciiString piece;
-		piece.format( "%s%s", name, PARTS[ each ] );
-		parts[ each ] = consolePiece( piece.str() );
-		if( parts[ each ] == NULL )
-		{
-			DirectStrikeTheme::panel( regionBox( r ) );
-			return;
-		}
-	}
-	const Int c = min( max( REAL_TO_INT( corner * k + 0.5f ), 1 ), min( r.hi.x - r.lo.x, r.hi.y - r.lo.y ) / 2 );
-	const Int xs[ 4 ] = { r.lo.x, r.lo.x + c, r.hi.x - c, r.hi.x }, ys[ 4 ] = { r.lo.y, r.lo.y + c, r.hi.y - c, r.hi.y };
-	for( Int row = 0; row < 3; row++ )
-		for( Int col = 0; col < 3; col++ )
-			if( xs[ col + 1 ] > xs[ col ] && ys[ row + 1 ] > ys[ row ] )
-				TheDisplay->drawImage( parts[ row * 3 + col ], xs[ col ], ys[ row ], xs[ col + 1 ], ys[ row + 1 ] );
 }
 
 /// What the console knows of one seat, gathered each draw from the standings the rack's refresh keeps.
@@ -13053,14 +13012,14 @@ static Bool consoleHot( const IRegion2D &r )
 	return mouse.x >= r.lo.x && mouse.x < r.hi.x && mouse.y >= r.lo.y && mouse.y < r.hi.y;
 }
 
-/// a key: its piece in the state the pointer and `lit` say (L lit, P held down, H hovered, I disabled), and
-/// a click that does `action`
-static void consoleKey( const char *name, const IRegion2D &r, Bool lit, Bool disabled, Int action, Int arg )
+/// a key: its piece in the theme's state the pointer and `lit` say (P lit or held down, H hovered, I
+/// disabled), and a click that does `action`
+static void consoleKey( DirectStrikeTheme::Piece piece, const IRegion2D &r, Bool lit, Bool disabled, Int action, Int arg )
 {
 	const Bool hot = !disabled && consoleHot( r );
 	const Bool held = hot && TheMouse->getMouseStatus()->leftState != MBS_Up;
-	const char *state = disabled ? "I" : held ? "P" : lit ? "L" : hot ? "H" : "";
-	if( const Image *image = consolePiece( name, state ) )
+	const char *state = DirectStrikeTheme::stateOf( hot, lit || held, disabled );
+	if( const Image *image = DirectStrikeTheme::art( piece, state ) )
 		TheDisplay->drawImage( image, r.lo.x, r.lo.y, r.hi.x, r.hi.y );
 	else
 		DirectStrikeTheme::threeSlice( regionBox( r ), DirectStrikeTheme::BUTTON_L, DirectStrikeTheme::BUTTON_C, DirectStrikeTheme::BUTTON_R, state );
@@ -13293,13 +13252,13 @@ void InGameUI::drawObserverConsoleBay( void )
 	if( theConsoleHidden[ CON_MODULE_RADAR ] || controlBarTop() >= TheDisplay->getHeight() )
 		return;
 	const ConsoleLayout l = consoleLayout();
-	if( const Image *frame = consolePiece( "Radar" ) )
+	DirectStrikeTheme::begin( DirectStrikeTheme::SIDE_COMMON, l.k );
+	if( const Image *frame = DirectStrikeTheme::art( DirectStrikeTheme::OBS_RADAR ) )
 		TheDisplay->drawImage( frame, l.radarBox.lo.x, l.radarBox.lo.y, l.radarBox.hi.x, l.radarBox.hi.y );
 	else
 	{
-		DirectStrikeTheme::begin( DirectStrikeTheme::SIDE_COMMON, l.k );
 		DirectStrikeTheme::nineSlice( regionBox( l.radarBox ), DirectStrikeTheme::CONSOLE_TL );
-		TheDisplay->drawFillRect( l.glass.lo.x, l.glass.lo.y, l.glass.hi.x - l.glass.lo.x, l.glass.hi.y - l.glass.lo.y, GameMakeColor( 4, 5, 6, 255 ) );
+		TheDisplay->drawFillRect( l.glass.lo.x, l.glass.lo.y, l.glass.hi.x - l.glass.lo.x, l.glass.hi.y - l.glass.lo.y, DirectStrikeTheme::WELL );
 	}
 }
 
@@ -13315,7 +13274,7 @@ static IRegion2D drawObserverDossier( const ConsoleLayout &l, const SpectatorSta
 	const Real k = l.k;
 	auto P = [ k ]( Real at1080 ) { return REAL_TO_INT_FLOOR( at1080 * k + 0.5f ); };
 	const Color WHITE_INK = TEXT_WHITE, GREY_INK = TEXT_GREY, GOLD_INK = TEXT_GOLD;
-	const Color GREEN_INK = GameMakeColor( 60, 186, 72, 255 ), DARK_SEG = GameMakeColor( 26, 30, 36, 255 );
+	const Color GREEN_INK = TEXT_GREEN, DARK_SEG = SLOT;
 	Player *player = stats.player;
 	const Color colour = rackColour( player );
 
@@ -13374,7 +13333,7 @@ static IRegion2D drawObserverDossier( const ConsoleLayout &l, const SpectatorSta
 	const Int cx = boardX - P( 342 ), cy = max( 0, min( lineY - P( 40 ), l.bottom - cardH ) );
 	const IRegion2D card = ConsoleLayout::box( cx, cy, cx + cardW, cy + cardH );
 	TheDisplay->beginBatch2D();
-	drawConsoleNine( "Card", card, k, 16 );
+	nineSlice( regionBox( card ), OBS_CARD_TL );
 	TheDisplay->endBatch2D();
 	const Int ix = cx + P( 8 ), right = ix + P( 324 );
 	Int top = cy + P( 8 );
@@ -13391,13 +13350,13 @@ static IRegion2D drawObserverDossier( const ConsoleLayout &l, const SpectatorSta
 	{
 		UnicodeString team;
 		team.format( TheGameText->fetch( "GUI:ObsConTeam" ), stats.team + 1 );
-		teamW = drawText( team, font( 14 ), right, top, P( 20 ), consoleTeamColour( stats.team ), 1 );
+		teamW = drawText( team, font( TYPE_ROW ), right, top, P( 20 ), consoleTeamColour( stats.team ), 1 );
 	}
 	const Int stars = max( 0, min( stats.rank, 10 ) );
-	GameFont *nameFont = font( 16 );
+	GameFont *nameFont = font( TYPE_BODY );
 	const UnicodeString name = UIStyle::fitName( player->getPlayerDisplayName(), nameFont, max( right - teamW - P( 12 ) - stars * P( 15 ) - ( ix + P( 30 ) ), 1 ) );
 	const Int nameW = drawText( name, nameFont, ix + P( 30 ), top, P( 20 ), WHITE_INK );
-	const Image *star = consolePiece( "IconStar" );
+	const Image *star = art( OBS_ICON_STAR );
 	for( Int each = 0; each < stars && star != NULL; each++ )
 	{
 		const Int s = P( 14 ), sx = ix + P( 38 ) + nameW + each * P( 15 ) - s / 2, sy = top + P( 10 ) - s / 2;
@@ -13410,38 +13369,39 @@ static IRegion2D drawObserverDossier( const ConsoleLayout &l, const SpectatorSta
 		UIStyle::coverImage( portrait, ix, top, P( 68 ), P( 68 ) );
 	TheDisplay->drawFillRect( ix, top + P( 64 ), P( 68 ), P( 4 ), colour );
 	const Int tx = ix + P( 78 );
-	const Int dollarW = drawText( UnicodeString( u"$" ), font( 16 ), tx, top, P( 18 ), GOLD_INK );
-	drawText( stats.unlimited ? TheGameText->fetch( "GUI:StartingMoneyUnlimited" ) : broadcastNumber( "", stats.cash ), font( 16 ), tx + dollarW + P( 2 ), top, P( 18 ), WHITE_INK );
+	const Int dollarW = drawText( UnicodeString( u"$" ), font( TYPE_BODY ), tx, top, P( 18 ), GOLD_INK );
+	drawText( stats.unlimited ? TheGameText->fetch( "GUI:StartingMoneyUnlimited" ) : broadcastNumber( "", stats.cash ), font( TYPE_BODY ), tx + dollarW + P( 2 ), top, P( 18 ), WHITE_INK );
 	UnicodeString income;
 	income.format( u"+%d", stats.income );
 	income.concat( TheGameText->fetch( "GUI:ObsConPerMinute" ) );
-	drawText( income, font( 14 ), right, top, P( 18 ), WHITE_INK, 1 );
+	drawText( income, font( TYPE_ROW ), right, top, P( 18 ), WHITE_INK, 1 );
 	const Int used = max( stats.produced - stats.power, 0 );
-	const Color powerInk = stats.power < 0 ? GameMakeColor( 220, 44, 34, 255 ) : GREEN_INK;
-	if( const Image *bolt = consolePiece( "IconPower" ) )
+	const Color powerInk = stats.power < 0 ? TEXT_RED : GREEN_INK;
+	if( const Image *bolt = art( OBS_ICON_POWER ) )
 		TheDisplay->drawImage( bolt, tx, top + P( 24 ), tx + P( 14 ), top + P( 38 ), powerInk );
 	drawSegmentBar( tx + P( 18 ), top + P( 26 ), ix + P( 276 ), top + P( 36 ), stats.produced > 0 ? (Real)used / stats.produced : 1.0f,
 		powerInk, P( 3 ), max( P( 1 ), 1 ), DARK_SEG );
 	UnicodeString powerText;
 	powerText.format( u"%d/%d", used, stats.produced );
-	drawText( powerText, font( 14 ), right, top + P( 22 ), P( 18 ), WHITE_INK, 1 );
+	GameFont *row = font( TYPE_ROW );
+	drawText( powerText, row, right, top + P( 22 ), P( 18 ), WHITE_INK, 1 );
 	UnicodeString kills, lost;
 	kills.format( u"%d ", stats.kills );
 	lost.format( u"%d ", stats.losses );
 	Int fx = tx;
-	fx += drawText( kills, font( 14 ), fx, top + P( 45 ), P( 18 ), WHITE_INK );
-	fx += drawText( TheGameText->fetch( "GUI:ObsConStatKills" ), font( 14 ), fx, top + P( 45 ), P( 18 ), GREY_INK ) + P( 10 );
-	fx += drawText( lost, font( 14 ), fx, top + P( 45 ), P( 18 ), WHITE_INK );
-	drawText( TheGameText->fetch( "GUI:ObsConLost" ), font( 14 ), fx, top + P( 45 ), P( 18 ), GREY_INK );
-	drawText( consoleMoney( stats.army ), font( 14 ), right, top + P( 45 ), P( 18 ), WHITE_INK, 1 );
+	fx += drawText( kills, row, fx, top + P( 45 ), P( 18 ), WHITE_INK );
+	fx += drawText( TheGameText->fetch( "GUI:ObsConStatKills" ), row, fx, top + P( 45 ), P( 18 ), GREY_INK ) + P( 10 );
+	fx += drawText( lost, row, fx, top + P( 45 ), P( 18 ), WHITE_INK );
+	drawText( TheGameText->fetch( "GUI:ObsConLost" ), row, fx, top + P( 45 ), P( 18 ), GREY_INK );
+	drawText( consoleMoney( stats.army ), row, right, top + P( 45 ), P( 18 ), WHITE_INK, 1 );
 	top += P( 78 );
 
 	// a section: the rule over it, its word in the left column, its cells from ix + 68
 	const Int cellX = ix + P( 68 );
 	auto label = [ & ]( const char *key )
 	{
-		TheDisplay->drawFillRect( ix, top - P( 3 ), right - ix, 1, GameMakeColor( 44, 46, 52, 255 ) );
-		drawText( TheGameText->fetch( key ), font( 14 ), ix, top + P( 5 ), P( 16 ), GREY_INK );
+		TheDisplay->drawFillRect( ix, top - P( 3 ), right - ix, 1, RULE );
+		drawText( TheGameText->fetch( key ), row, ix, top + P( 5 ), P( 16 ), GREY_INK );
 	};
 	auto cameoAt = [ & ]( Int column, Int line, Int w, Int h ) { return ConsoleLayout::box( cellX + P( column * 38 ), top + P( line * 31 ), cellX + P( column * 38 ) + P( w ), top + P( line * 31 ) + P( h ) ); };
 
@@ -13505,7 +13465,7 @@ static IRegion2D drawObserverDossier( const ConsoleLayout &l, const SpectatorSta
 				clock = TheGameText->fetch( "GUI:SidebarSuperweaponReady" );
 			else
 				clock.format( u"%d:%02d", power.seconds / 60, power.seconds % 60 );
-			drawText( clock, font( 14 ), px + P( 40 ), py + P( 5 ), P( 18 ), power.ready ? GOLD_INK : WHITE_INK );
+			drawText( clock, row, px + P( 40 ), py + P( 5 ), P( 18 ), power.ready ? GOLD_INK : WHITE_INK );
 		}
 		top += P( 31 * powerLines );
 	}
@@ -13549,9 +13509,9 @@ void InGameUI::drawObserverConsole( void )
 	auto P = [ k ]( Real at1080 ) { return REAL_TO_INT_FLOOR( at1080 * k + 0.5f ); };
 	auto box = []( Int x0, Int y0, Int x1, Int y1 ) { return ConsoleLayout::box( x0, y0, x1, y1 ); };
 	const Color WHITE_INK = TEXT_WHITE, GREY_INK = TEXT_GREY, GOLD_INK = TEXT_GOLD;
-	const Color GREEN_INK = GameMakeColor( 60, 186, 72, 255 ), AMBER = GameMakeColor( 240, 176, 30, 255 ), RED_INK = GameMakeColor( 220, 44, 34, 255 );
-	const Color DARK_SEG = GameMakeColor( 26, 30, 36, 255 ), DARK_LINE = GameMakeColor( 8, 9, 10, 255 );
-	const Color OUT_INK = GameMakeColor( 200, 56, 44, 255 ), HOT_END_INK = GameMakeColor( 240, 170, 110, 255 );
+	const Color GREEN_INK = TEXT_GREEN, AMBER = TEXT_GOLD, RED_INK = TEXT_RED;
+	const Color DARK_SEG = SLOT, DARK_LINE = KEYLINE;
+	const Color OUT_INK = TEXT_RED, HOT_END_INK = consoleHeatInk( 1.0f );
 
 	// the standings, every seat, at most twice a second, and what each has coming once a frame
 	const UnsignedInt frame = TheGameLogic->getFrame();
@@ -13702,16 +13662,7 @@ void InGameUI::drawObserverConsole( void )
 	const Int y0 = max( 0, l.bottom - P( boardHidden ? CON_STUB_H : CON_BOARD_HEAD + CON_LINE * lines ) );
 	theConsoleBlock[ 1 ] = box( x0, y0, x1, l.bottom );
 	TheDisplay->beginBatch2D();
-	{
-		const Image *boardT = consolePiece( "BoardT" ), *boardC = consolePiece( "BoardC" );
-		if( boardT != NULL && boardC != NULL )
-		{
-			TheDisplay->drawImage( boardT, x0, y0, x1, y0 + P( 16 ) );
-			TheDisplay->drawImage( boardC, x0, y0 + P( 16 ), x1, l.bottom );
-		}
-		else
-			nineSlice( regionBox( box( x0, y0, x1, l.bottom ) ), CONSOLE_TL );
-	}
+	nineSlice( regionBox( box( x0, y0, x1, l.bottom ) ), OBS_BOARD_TL );
 	TheDisplay->endBatch2D();
 	const Int ix = x0 + P( 6 );
 	auto BX = [ & ]( Real at ) { return ix + P( at ); };
@@ -13719,8 +13670,8 @@ void InGameUI::drawObserverConsole( void )
 
 	// the operator keys: the camera, the vision, the modules, the menus; the mode in force lit
 	{
-		static const char *const KEYS[ 12 ] = { "KeyFree", "KeyFollow", "KeyDirector", "KeyVisAll", "KeyVisTeam", "KeyVisPlayer",
-			"KeyHideRadar", "KeyHideBoard", "KeyHideDossier", "KeyOptions", "KeyChat", "KeyQuit" };
+		static const Piece KEYS[ 12 ] = { OBS_KEY_FREE, OBS_KEY_FOLLOW, OBS_KEY_DIRECTOR, OBS_KEY_VIS_ALL, OBS_KEY_VIS_TEAM, OBS_KEY_VIS_PLAYER,
+			OBS_KEY_HIDE_RADAR, OBS_KEY_HIDE_BOARD, OBS_KEY_HIDE_DOSSIER, OBS_KEY_OPTIONS, OBS_KEY_CHAT, OBS_KEY_QUIT };
 		static const Int KEY_X[ 12 ] = { 0, 23, 46, 73, 96, 119, 146, 169, 192, 219, 242, 265 };
 		static const Int KEY_ACTION[ 12 ] = { CON_CAMERA, CON_CAMERA, CON_CAMERA, CON_VISION, CON_VISION, CON_VISION,
 			CON_HIDE, CON_HIDE, CON_HIDE, CON_OPTIONS, CON_CHAT, CON_QUIT };
@@ -13746,7 +13697,7 @@ void InGameUI::drawObserverConsole( void )
 		// the match chip: the clock, the speed, the armies' tug, the seats still standing
 		UnicodeString clock;
 		clock.translate( AsciiString( spectatorClock( frame ).c_str() ) );
-		drawText( clock, font( 20 ), BX( 4 ), BY( 7 ), P( 22 ), WHITE_INK );
+		drawText( clock, font( TYPE_LABEL ), BX( 4 ), BY( 7 ), P( 22 ), WHITE_INK );
 		UnicodeString speed;
 		const Real pace = (Real)TheGameEngine->getFramesPerSecondLimit() / LOGICFRAMES_PER_SECOND * GAME_SPEED_PERCENT / 100.0f;
 		const Int hundredths = REAL_TO_INT( pace * 100.0f + 0.5f );
@@ -13758,13 +13709,13 @@ void InGameUI::drawObserverConsole( void )
 			speed.format( u"%d.%02d", hundredths / 100, hundredths % 100 );
 		// the sign from its code point, as consoleTimes takes it
 		speed.concat( (WideChar)0x00D7 );
-		drawText( speed, font( 14 ), BX( 62 ), BY( 10 ), P( 18 ), GREY_INK );
+		drawText( speed, font( TYPE_ROW ), BX( 62 ), BY( 10 ), P( 18 ), GREY_INK );
 		Int alive = 0;
 		for( size_t each = 0; each < seats.size(); each++ )
 			alive += seats[ each ].out ? 0 : 1;
 		UnicodeString standing;
 		standing.format( u"%d/%d", alive, (Int)seats.size() );
-		const Int standingW = drawText( standing, font( 14 ), BX( 292 ), BY( 10 ), P( 18 ), WHITE_INK, 1 );
+		const Int standingW = drawText( standing, font( TYPE_ROW ), BX( 292 ), BY( 10 ), P( 18 ), WHITE_INK, 1 );
 		const Int tugX0 = BX( 98 ), tugX1 = BX( 292 ) - standingW - P( 12 );
 		if( tugX1 > tugX0 )
 		{
@@ -13801,10 +13752,10 @@ void InGameUI::drawObserverConsole( void )
 		// the stat selector: the picked stat in words between the step keys, its range round the heat scale
 		static const char *const STAT_WORDS[ CON_STATS ] = { "GUI:ObsConStatMoney", "GUI:ObsConStatIncome", "GUI:ObsConStatArmy",
 			"GUI:ObsConStatKills", "GUI:ObsConStatPower", "GUI:ObsConStatBuilds", "GUI:ObsConStatSuper" };
-		consoleKey( "StatPrev", box( BX( 0 ), BY( 61 ), BX( 18 ), BY( 79 ) ), FALSE, FALSE, CON_STAT_STEP, -1 );
-		const Int wordW = drawText( TheGameText->fetch( STAT_WORDS[ stat ] ), font( 14 ), BX( 24 ), BY( 62 ), P( 16 ), GOLD_INK );
+		consoleKey( OBS_STAT_PREV, box( BX( 0 ), BY( 61 ), BX( 18 ), BY( 79 ) ), FALSE, FALSE, CON_STAT_STEP, -1 );
+		const Int wordW = drawText( TheGameText->fetch( STAT_WORDS[ stat ] ), font( TYPE_ROW ), BX( 24 ), BY( 62 ), P( 16 ), GOLD_INK );
 		const Int nextX = BX( 24 ) + wordW + P( 6 );
-		consoleKey( "StatNext", box( nextX, BY( 61 ), nextX + P( 18 ), BY( 79 ) ), FALSE, FALSE, CON_STAT_STEP, 1 );
+		consoleKey( OBS_STAT_NEXT, box( nextX, BY( 61 ), nextX + P( 18 ), BY( 79 ) ), FALSE, FALSE, CON_STAT_STEP, 1 );
 		const ConsoleSeat *lowSeat = NULL, *highSeat = NULL;
 		for( size_t each = 0; each < seats.size(); each++ )
 		{
@@ -13817,11 +13768,11 @@ void InGameUI::drawObserverConsole( void )
 		}
 		if( lowSeat != NULL && highSeat != NULL )
 		{
-			const Int highW = drawText( consoleValueText( stat, *highSeat ), font( 14 ), BX( 292 ), BY( 62 ), P( 16 ), HOT_END_INK, 1 );
+			const Int highW = drawText( consoleValueText( stat, *highSeat ), font( TYPE_ROW ), BX( 292 ), BY( 62 ), P( 16 ), HOT_END_INK, 1 );
 			const Int heatX1 = BX( 292 ) - highW - P( 6 ), heatX0 = heatX1 - P( 60 );
-			if( const Image *heat = consolePiece( "Heat" ) )
-				TheDisplay->drawImage( heat, heatX0, BY( 66 ), heatX1, BY( 74 ) );
-			drawText( consoleValueText( stat, *lowSeat ), font( 14 ), heatX0 - P( 5 ), BY( 62 ), P( 16 ), GREY_INK, 1 );
+			if( const Image *heatScale = art( OBS_HEAT ) )
+				TheDisplay->drawImage( heatScale, heatX0, BY( 66 ), heatX1, BY( 74 ) );
+			drawText( consoleValueText( stat, *lowSeat ), font( TYPE_ROW ), heatX0 - P( 5 ), BY( 62 ), P( 16 ), GREY_INK, 1 );
 		}
 
 		//
@@ -13830,7 +13781,7 @@ void InGameUI::drawObserverConsole( void )
 		Int lineY = BY( CON_BOARD_HEAD - 4 );
 		Int pickedLineY = -1;
 		Int lastTeam = -1;
-		GameFont *ink14 = font( 14 );
+		GameFont *ink14 = font( TYPE_ROW );
 		const Int lineH = P( CON_LINE );
 		for( size_t each = 0; each < seats.size(); each++ )
 		{
@@ -13840,7 +13791,7 @@ void InGameUI::drawObserverConsole( void )
 			{
 				lastTeam = t;
 				const Color teamInk = t < 4 ? consoleTeamColour( t ) : rackColour( seat.player );
-				TheDisplay->drawFillRect( ix, lineY, boardW, lineH, GameMakeColor( 30, 32, 36, 255 ) );
+				TheDisplay->drawFillRect( ix, lineY, boardW, lineH, SLOT );
 				TheDisplay->drawFillRect( ix, lineY, P( 4 ), lineH, teamInk );
 				TheDisplay->drawFillRect( ix, lineY + lineH - 1, boardW, 1, DARK_LINE );
 				UnicodeString team, count;
@@ -13875,9 +13826,9 @@ void InGameUI::drawObserverConsole( void )
 			const UnicodeString name = UIStyle::fitName( seat.player->getPlayerDisplayName(), ink14, P( 82 ) );
 			if( seat.out )
 			{
-				const Int nameW = drawText( name, ink14, X( 25 ), lineY, lineH, GameMakeColor( 110, 112, 116, 255 ) );
-				TheDisplay->drawFillRect( X( 24 ), lineY + lineH / 2 - 1, nameW + P( 2 ), max( P( 2 ), 1 ), GameMakeColor( 170, 40, 34, 255 ) );
-				if( const Image *skull = consolePiece( "IconSkull" ) )
+				const Int nameW = drawText( name, ink14, X( 25 ), lineY, lineH, TEXT_DIM );
+				TheDisplay->drawFillRect( X( 24 ), lineY + lineH / 2 - 1, nameW + P( 2 ), max( P( 2 ), 1 ), TEXT_RED );
+				if( const Image *skull = art( OBS_ICON_SKULL ) )
 					TheDisplay->drawImage( skull, X( 243 ), lineY + P( 3 ), X( 257 ), lineY + P( 17 ), OUT_INK );
 				drawText( TheGameText->fetch( "GUI:ObsConOut" ), ink14, X( 292 ), lineY, lineH, OUT_INK, 1 );
 				if( const Int flash = defeatFlash( seat ) )
@@ -13897,9 +13848,9 @@ void InGameUI::drawObserverConsole( void )
 				drawProgressRing( box( X( 111 ), lineY + P( 1 ), X( 133 ), lineY + P( 19 ) ), first.percent / 100.0f, GOLD_INK, 1 );
 			}
 			drawSegmentBar( X( 160 ), lineY + P( 6 ), X( 200 ), lineY + P( 13 ), (Real)seat.stats->army / largestArmy,
-				GameMakeColor( 196, 202, 210, 255 ), max( P( 2 ), 1 ), 1, DARK_SEG );
+				GREY_INK, max( P( 2 ), 1 ), 1, DARK_SEG );
 			const Color powerInk = seat.power == 0 ? GREEN_INK : seat.power == 1 ? AMBER : RED_INK;
-			if( const Image *bolt = consolePiece( "IconPower" ) )
+			if( const Image *bolt = art( OBS_ICON_POWER ) )
 				TheDisplay->drawImage( bolt, X( 204 ), lineY + P( 4 ), X( 216 ), lineY + P( 16 ), powerInk );
 			if( seat.hasSuperweapon )
 				drawConsoleClock( box( X( 220 ), lineY + P( 3 ), X( 238 ), lineY + P( 17 ) ), seat.superweaponPercent, seat.superweaponReady,
@@ -13914,24 +13865,24 @@ void InGameUI::drawObserverConsole( void )
 
 			// the value, the heat colour lifted, turning to the leader's gold as his crown fades in
 			const Real lead = leaderShare( seat.index );
-			UnsignedByte hr, hg, hb, ha;
-			GameGetColorComponents( consoleHeat( heatOf( seat ) ), &hr, &hg, &hb, &ha );
+			UnsignedByte hr, hg, hb, ha, gr, gg, gb, ga;
+			GameGetColorComponents( consoleHeatInk( heatOf( seat ) ), &hr, &hg, &hb, &ha );
+			GameGetColorComponents( GOLD_INK, &gr, &gg, &gb, &ga );
 			auto toward = [ lead ]( Int from, Int to ) { return REAL_TO_INT( from + ( to - from ) * lead ); };
-			const Color valueInk = GameMakeColor( toward( min( 255, hr * 6 / 10 + 110 ), 242 ), toward( min( 255, hg * 6 / 10 + 110 ), 194 ),
-				toward( min( 255, hb * 6 / 10 + 110 ), 48 ), 255 );
+			const Color valueInk = GameMakeColor( toward( hr, gr ), toward( hg, gg ), toward( hb, gb ), 255 );
 			const Int valueW = drawText( consoleValueText( stat, seat ), ink14, X( 292 ), lineY, lineH, valueInk, 1 );
 			if( lead > 0.0f )
 			{
 				const Int alpha = REAL_TO_INT( 255 * lead );
-				if( const Image *crown = consolePiece( "IconCrown" ) )
+				if( const Image *crown = art( OBS_ICON_CROWN ) )
 				{
 					const Int s = P( 14 ), cxc = X( 292 ) - valueW - P( 12 );
-					TheDisplay->drawImage( crown, cxc - s / 2, lineY + ( lineH - s ) / 2, cxc - s / 2 + s, lineY + ( lineH - s ) / 2 + s, GameMakeColor( 242, 194, 48, alpha ) );
+					TheDisplay->drawImage( crown, cxc - s / 2, lineY + ( lineH - s ) / 2, cxc - s / 2 + s, lineY + ( lineH - s ) / 2 + s, UIStyle::withAlpha( GOLD_INK, alpha ) );
 				}
-				TheDisplay->drawOpenRect( line.lo.x, line.lo.y, boardW, lineH, 1.0f, GameMakeColor( 242, 194, 48, alpha ) );
+				TheDisplay->drawOpenRect( line.lo.x, line.lo.y, boardW, lineH, 1.0f, UIStyle::withAlpha( GOLD_INK, alpha ) );
 			}
 			if( seat.stats->underAttack )
-				TheDisplay->drawOpenRect( line.lo.x, line.lo.y, boardW, lineH, max( 2.0f, 2 * k ), GameMakeColor( 236, 52, 38, REAL_TO_INT( 255 * alarmAlpha ) ) );
+				TheDisplay->drawOpenRect( line.lo.x, line.lo.y, boardW, lineH, max( 2.0f, 2 * k ), UIStyle::withAlpha( RED_INK, REAL_TO_INT( 255 * alarmAlpha ) ) );
 			if( &seat == pickedSeat && !theConsoleHidden[ CON_MODULE_DOSSIER ] )
 				TheDisplay->drawOpenRect( line.lo.x, line.lo.y, boardW, lineH, max( 2.0f, 2 * k ), WHITE_INK );
 			lineY += lineH;

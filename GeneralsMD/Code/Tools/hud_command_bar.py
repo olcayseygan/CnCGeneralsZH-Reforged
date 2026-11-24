@@ -633,10 +633,10 @@ BUILDS["desk"] = dict(metric="edt", bevel=2.0, corner="cut")
 # the screens every player shares (hud_direct_strike_theme's PALETTE["ForgedAlloy"], the CommonPro sheet): its grey
 # steel brushed, near-black glass, bronze for the accents, the tally and the lit rims, and its scratches, rust and
 # grit (worn).  No side's colour is left anywhere on the watcher's HUD; the boxes keep round 20's shapes, their
-# fittings rivets as the common frame's are, and the selection box's corner notched.
-BAR_LOOKS["Observer"] = dict(build="desk", skin="machined", steel=(120, 120, 120), glass=(12, 13, 14), glass_lo=(8, 8, 9),
-                             accent=(150, 124, 70), accent2=(194, 160, 86), crest=(1.0, 0.96, 0.88), crest_k=0.55,
-                             hilite=(194, 160, 86), brushed=True, worn=True, wear=0.10, rust=0.3, grit=0.045)
+# fittings rivets as the common frame's are, and the selection box's corner notched.  The steel, glass, accent, crest
+# and wear are the theme's Forged Alloy, merged in at the foot of this module (the theme draws with this module's
+# painter, so it can only be read once both exist); accent2 and hilite are its lit bronze.
+BAR_LOOKS["Observer"] = dict(build="desk", skin="machined", brushed=True, worn=True)
 OBS_LOOK = BAR_LOOKS["Observer"]
 
 
@@ -3557,7 +3557,7 @@ TAB_RADIO_H = tab_u(34) - tab_u(10)             # 43 at 1080
 TAB_RADIO_END, TAB_RADIO_MID = 16, 8
 TAB_RADIO_X = 1932                              # the pieces' column on the TabPanel sheet
 TAB_RADIO_OPEN_K = 0.55
-TAB_RADIO_OBS_OPEN = OBS_LOOK["hilite"]         # the observer's open tab: the common frame's lit bronze, no side's colour
+# TAB_RADIO_OBS_OPEN, the observer's open tab, is the common frame's lit bronze, no side's colour (set at the foot)
 
 
 def tab_radio(side, state):
@@ -3959,7 +3959,7 @@ RACK_STAT_AT = [(23 + RACK_STAT_PITCH * i, 3, 23 + RACK_STAT_PITCH * i + RACK_ST
 RACK_HEAD_AT = dict(heading=(22, 32, 294, 48), columns=(22, 51, 294, 65), rule=(22, 65, 294, 66))
 # the code's text colours (InGameUI drawSpectatorRack), which the keys' glyphs and rims match; the lit rim is
 # Forged Alloy's lit bronze since round 23 (it was America's blue, 128, 149, 234)
-RACK_GREY, RACK_WHITE, RACK_LIT, RACK_GOLD = (138, 148, 159), (240, 244, 246), OBS_LOOK["hilite"], (242, 194, 48)
+RACK_GREY, RACK_WHITE, RACK_GOLD = (138, 148, 159), (240, 244, 246), (242, 194, 48)     # RACK_LIT is OBS_LOOK's hilite
 RACK_LABEL = (24, 9, 180, 23)
 DRAWER_W, DRAWER_TOP = 276, 12
 DRAWER_CAMEOS = [(22 + 39 * i, 3, 58 + 39 * i, 27) for i in range(6)]   # all six clear of the standings' edge
@@ -4676,332 +4676,13 @@ def paint_guard_shields():
     return sheet_img
 
 
-# ---------------------------------------------------------------------------------------------- the observer's console
-# V1 "Ledger" (the owner's pick of 2026-11-24, after turning concept B's full-width console down for its empty
-# space): separate small modules, each anchored on its own and sized to its content.  The radar in the bottom left
-# corner, a board flush on the right edge whose height follows the seats (its header the match chip, the operator
-# keys and the stat selector) and a dossier card that opens left of the board only while a seat is picked.  One thin
-# Forged Alloy frame, 4 px, no rim on a side that touches the screen's edge, China's notch only on a corner facing
-# the battlefield, the wear turned down.  The code draws the rows, every word and number and the game's cameos;
-# the sheet holds the frames, the heat scale, the label icons the code tints, Turkiye's badge and the keys.  The
-# layout the code follows is the piece contract kept with the art; ReforgedHudObsConsole.ini is the sheet's.
-
-OBS_CON_SIZE = (512, 512)
-OBS_CON_FRAME = 4                               # the frame's width: shell, lip and the glass's lip
-OBS_CON_RADAR = 232                             # the radar module, its glass 6..226 inside
-OBS_CON_BOARD_W = 304
-OBS_CON_CARD = 48                               # the dossier card's master, cut as a 9-slice with 16 corners
-OBS_CON_KEY = (22, 22)
-OBS_CON_KEYS = ("Free", "Follow", "Director", "VisAll", "VisTeam", "VisPlayer", "HideRadar", "HideBoard", "HideDossier",
-                "Options", "Chat", "Quit")
-OBS_CON_KEY_STATES = ("", "H", "P", "L")        # up, hover, pressed, lit (the mode in force, read on a stream)
-OBS_CON_ICONS = ("Power", "Crown", "Star", "StarOff")
-OBS_CON_LOOK = "ObsMinimal"                     # Forged Alloy with its wear turned down
-
-
-def con_notch(x0, y0, x1, y1, c, corners="1111"):
-    """China's notched corner, the common frame's form, on the corners flagged tl, tr, br, bl."""
-    return plate(x0, y0, x1, y1, *[("notch", c) if f == "1" else ("none", 0) for f in corners])
-
-
-def con_glyphs():
-    """The console's flat glyphs, each draw(d, k) in a 22 box at scale k on an L mask."""
-    def coins(d, k):
-        for i, y in enumerate((15, 11, 7)):
-            d.ellipse((4 * k, (y - 2.6) * k, 16 * k, (y + 2.6) * k), fill=255)
-            d.ellipse((5.2 * k, (y - 1.6) * k, 14.8 * k, (y + 1.4) * k), fill=0 if i == 2 else 255)
-        d.ellipse((12 * k, 12 * k, 19 * k, 19 * k), fill=255)
-        d.ellipse((13.4 * k, 13.4 * k, 17.6 * k, 17.6 * k), fill=0)
-
-    def rise(d, k):
-        d.line([(3 * k, 17 * k), (8 * k, 12 * k), (11 * k, 14.5 * k), (17 * k, 7 * k)], fill=255, width=int(2.4 * k), joint="curve")
-        d.polygon([(19 * k, 4 * k), (19.5 * k, 11 * k), (13 * k, 6 * k)], fill=255)
-        d.rectangle((3 * k, 18.6 * k, 19 * k, 19.8 * k), fill=255)
-
-    def tank(d, k):
-        d.polygon([(2 * k, 13 * k), (20 * k, 13 * k), (18 * k, 18 * k), (4 * k, 18 * k)], fill=255)
-        d.rectangle((6 * k, 9 * k, 14 * k, 13 * k), fill=255)
-        d.rectangle((13 * k, 10 * k, 21 * k, 11.4 * k), fill=255)
-        for x in (6, 10, 14):
-            d.ellipse(((x - 1.2) * k, 14.6 * k, (x + 1.2) * k, 17 * k), fill=0)
-
-    def reticle(d, k):
-        d.ellipse((4 * k, 4 * k, 18 * k, 18 * k), fill=255)
-        d.ellipse((6.2 * k, 6.2 * k, 15.8 * k, 15.8 * k), fill=0)
-        for a, b in (((11, 1), (11, 8)), ((11, 14), (11, 21)), ((1, 11), (8, 11)), ((14, 11), (21, 11))):
-            d.line([(a[0] * k, a[1] * k), (b[0] * k, b[1] * k)], fill=255, width=int(2 * k))
-        d.ellipse((9.8 * k, 9.8 * k, 12.2 * k, 12.2 * k), fill=255)
-
-    def bolt(d, k):
-        d.polygon([(13 * k, 2 * k), (5 * k, 12.5 * k), (10.5 * k, 12.5 * k), (8.5 * k, 20 * k), (17 * k, 9 * k), (11.5 * k, 9 * k)], fill=255)
-
-    def factory(d, k):
-        d.polygon([(2 * k, 19 * k), (2 * k, 9 * k), (7 * k, 12 * k), (7 * k, 9 * k), (12 * k, 12 * k), (12 * k, 9 * k), (17 * k, 12 * k),
-                   (17 * k, 3 * k), (20 * k, 3 * k), (20 * k, 19 * k)], fill=255)
-        for x in (5, 10, 15):
-            d.rectangle((x * k, 14 * k, (x + 2) * k, 16.5 * k), fill=0)
-
-    def clock(d, k):
-        d.ellipse((3 * k, 3 * k, 19 * k, 19 * k), fill=255)
-        d.ellipse((5 * k, 5 * k, 17 * k, 17 * k), fill=0)
-        d.pieslice((5 * k, 5 * k, 17 * k, 17 * k), -90, 130, fill=255)
-        d.ellipse((9 * k, 9 * k, 13 * k, 13 * k), fill=0)
-
-    def move(d, k):
-        for ang in (0, 90, 180, 270):
-            a = np.radians(ang)
-            tip = (11 + 9 * np.cos(a), 11 + 9 * np.sin(a))
-            bx, by = 11 + 4.5 * np.cos(a), 11 + 4.5 * np.sin(a)
-            px, py = -np.sin(a) * 3.4, np.cos(a) * 3.4
-            d.polygon([(tip[0] * k, tip[1] * k), ((bx + px) * k, (by + py) * k), ((bx - px) * k, (by - py) * k)], fill=255)
-        d.rectangle((9.8 * k, 5 * k, 12.2 * k, 17 * k), fill=255)
-        d.rectangle((5 * k, 9.8 * k, 17 * k, 12.2 * k), fill=255)
-
-    def person(d, k):
-        d.ellipse((7 * k, 2 * k, 15 * k, 10 * k), fill=255)
-        d.pieslice((3 * k, 11 * k, 19 * k, 27 * k), 180, 360, fill=255)
-        d.rectangle((1 * k, 19.6 * k, 21 * k, 21 * k), fill=255)
-
-    def film(d, k):
-        d.rectangle((2 * k, 8 * k, 14 * k, 18 * k), fill=255)
-        d.polygon([(14 * k, 11 * k), (20 * k, 8 * k), (20 * k, 18 * k), (14 * k, 15 * k)], fill=255)
-        d.ellipse((2 * k, 1 * k, 8 * k, 7 * k), fill=255)
-        d.ellipse((8 * k, 1 * k, 14 * k, 7 * k), fill=255)
-
-    def eye(rays):
-        def draw(d, k):
-            d.chord((1 * k, 4 * k, 21 * k, 22 * k), 200, 340, fill=255)
-            d.chord((1 * k, 0 * k, 21 * k, 18 * k), 20, 160, fill=255)
-            d.ellipse((7 * k, 7 * k, 15 * k, 15 * k), fill=0)
-            d.ellipse((8.8 * k, 8.8 * k, 13.2 * k, 13.2 * k), fill=255)
-            if rays:
-                for x in (4, 11, 18):
-                    d.line([(x * k, 0), (x * k, 2.6 * k)], fill=255, width=int(1.6 * k))
-        return draw
-
-    def team(d, k):
-        for cx in (6.5, 15.5):
-            d.ellipse(((cx - 3) * k, 3 * k, (cx + 3) * k, 9 * k), fill=255)
-            d.pieslice(((cx - 5.5) * k, 10 * k, (cx + 5.5) * k, 24 * k), 180, 360, fill=255)
-        d.rectangle((0, 17.6 * k, 22 * k, 19 * k), fill=255)
-
-    def sliders(d, k):
-        for y, x in ((5, 7), (11, 15), (17, 10)):
-            d.rectangle((2 * k, (y - 0.9) * k, 20 * k, (y + 0.9) * k), fill=255)
-            d.rectangle(((x - 2) * k, (y - 3) * k, (x + 2) * k, (y + 3) * k), fill=255)
-
-    def chat(d, k):
-        d.rounded_rectangle((2 * k, 3 * k, 20 * k, 15 * k), 3 * k, fill=255)
-        d.polygon([(6 * k, 14 * k), (6 * k, 20 * k), (12 * k, 14 * k)], fill=255)
-
-    def leave(d, k):
-        d.rectangle((3 * k, 2 * k, 12 * k, 20 * k), fill=255)
-        d.rectangle((5 * k, 4 * k, 10 * k, 18 * k), fill=0)
-        d.polygon([(10 * k, 9 * k), (16 * k, 9 * k), (16 * k, 6 * k), (21 * k, 11 * k), (16 * k, 16 * k), (16 * k, 13 * k), (10 * k, 13 * k)], fill=255)
-
-    def grid(d, k):
-        for r in range(3):
-            for c in range(4):
-                d.rectangle(((1.5 + c * 5) * k, (4 + r * 5) * k, (5.3 + c * 5) * k, (7.8 + r * 5) * k), fill=255)
-
-    def prev(d, k):
-        d.polygon([(15 * k, 4 * k), (15 * k, 18 * k), (5 * k, 11 * k)], fill=255)
-
-    def nxt(d, k):
-        d.polygon([(7 * k, 4 * k), (7 * k, 18 * k), (17 * k, 11 * k)], fill=255)
-
-    def star(d, k):
-        d.polygon([((11 + (10 if i % 2 == 0 else 4.2) * np.cos(-np.pi / 2 + i * np.pi / 5)) * k,
-                    (11.6 + (10 if i % 2 == 0 else 4.2) * np.sin(-np.pi / 2 + i * np.pi / 5)) * k) for i in range(10)], fill=255)
-
-    def star_off(d, k):                         # the star's outline only
-        star(d, k)
-        d.polygon([((11 + (7.0 if i % 2 == 0 else 2.6) * np.cos(-np.pi / 2 + i * np.pi / 5)) * k,
-                    (11.6 + (7.0 if i % 2 == 0 else 2.6) * np.sin(-np.pi / 2 + i * np.pi / 5)) * k) for i in range(10)], fill=0)
-
-    def skull(d, k):
-        d.ellipse((4 * k, 2 * k, 18 * k, 15 * k), fill=255)
-        d.rectangle((7 * k, 13 * k, 15 * k, 19 * k), fill=255)
-        d.ellipse((6.5 * k, 7 * k, 10.2 * k, 10.8 * k), fill=0)
-        d.ellipse((11.8 * k, 7 * k, 15.5 * k, 10.8 * k), fill=0)
-        for x in (9, 11.4):
-            d.rectangle((x * k, 16 * k, (x + 1.2) * k, 19 * k), fill=0)
-
-    def house(d, k):
-        d.polygon([(11 * k, 2 * k), (21 * k, 10 * k), (18 * k, 10 * k), (18 * k, 20 * k), (4 * k, 20 * k), (4 * k, 10 * k), (1 * k, 10 * k)], fill=255)
-        d.rectangle((9 * k, 13 * k, 13 * k, 20 * k), fill=0)
-
-    def radar(d, k):                            # a framed map square with a sweep: the radar module
-        d.rectangle((2 * k, 2 * k, 20 * k, 20 * k), fill=255)
-        d.rectangle((4 * k, 4 * k, 18 * k, 18 * k), fill=0)
-        d.pieslice((4 * k, 4 * k, 18 * k, 18 * k), -90, -20, fill=255)
-        d.ellipse((9.6 * k, 9.6 * k, 12.4 * k, 12.4 * k), fill=255)
-
-    def board(d, k):                            # list lines with a colour tick each: the seat board
-        for y in (4, 10, 16):
-            d.rectangle((2 * k, y * k, 5 * k, (y + 3) * k), fill=255)
-            d.rectangle((7 * k, (y + 0.4) * k, 20 * k, (y + 2.6) * k), fill=255)
-
-    def dossier(d, k):                          # a card with a portrait: the dossier
-        d.rectangle((2 * k, 3 * k, 20 * k, 19 * k), fill=255)
-        d.rectangle((3.8 * k, 4.8 * k, 18.2 * k, 17.2 * k), fill=0)
-        d.ellipse((6 * k, 6.5 * k, 10 * k, 10.5 * k), fill=255)
-        d.pieslice((4.5 * k, 11 * k, 11.5 * k, 19 * k), 180, 360, fill=255)
-        for y in (8, 12):
-            d.rectangle((12.5 * k, y * k, 17 * k, (y + 1.6) * k), fill=255)
-
-    def crown(d, k):                            # the leader of the picked stat
-        d.polygon([(2 * k, 17 * k), (2 * k, 6 * k), (7 * k, 11 * k), (11 * k, 3 * k), (15 * k, 11 * k), (20 * k, 6 * k), (20 * k, 17 * k)], fill=255)
-        d.rectangle((2 * k, 18.5 * k, 20 * k, 20.5 * k), fill=255)
-
-    def chevrons(up):                           # two stacked chevrons: fold the console down, or open it up
-        def draw(d, k):
-            for y in (5, 12):
-                yy = [(y, y + 5), (y + 5, y)][up]
-                d.line([(4 * k, yy[0] * k), (11 * k, yy[1] * k), (18 * k, yy[0] * k)], fill=255, width=int(2.6 * k), joint="curve")
-        return draw
-
-    return {"Money": coins, "Income": rise, "Army": tank, "Kills": reticle, "Power": bolt, "Prod": factory, "Super": clock,
-            "Free": move, "Follow": person, "Director": film, "All": eye(True), "Team": team, "Player": eye(False),
-            "Options": sliders, "Chat": chat, "Quit": leave, "NavAll": grid, "Prev": prev, "Next": nxt, "Star": star,
-            "StarOff": star_off, "Skull": skull, "Losses": skull, "Buildings": house, "Vision": eye(False), "Alive": person,
-            "Collapse": chevrons(False), "Expand": chevrons(True), "Crown": crown, "VisAll": eye(True), "VisTeam": team,
-            "VisPlayer": eye(False), "HideRadar": radar, "HideBoard": board, "HideDossier": dossier}
-
-
-def con_glyph(draw, size, colour):
-    """A glyph size square, antialiased at 8x, in colour."""
-    big = 8
-    m = Image.new("L", (size * big, size * big), 0)
-    draw(ImageDraw.Draw(m), big * size / 22.0)
-    g = Image.new("RGBA", (size, size), tuple(colour) + (255,))
-    g.putalpha(m.resize((size, size), Image.BOX))
-    return g
-
-
-def obs_frame(w, h, open_="", notch="1111", scan=True):
-    """A module's thin frame round its glass: the near-black shell, a brushed lip, the glass sunk inside.  Sides in
-    open_ ('l', 'r', 'b', 't') are the screen's edge and take no rim; notch flags the corners (tl, tr, br, bl) that get
-    China's notch, the ones facing the battlefield."""
-    import hud_direct_strike_theme as T
-    T.PALETTE.setdefault(OBS_CON_LOOK, dict(T.PALETTE["ForgedAlloy"], wear=0.05, rust=0.1, grit=0.025))
-    ext = {k: (30 if k in open_ else 0) for k in "lrbt"}
-    x0, y0, x1, y1 = -ext["l"], -ext["t"], w + ext["r"], h + ext["b"]
-    g = OBS_CON_FRAME
-
-    def draw(o, b):
-        o.tiers([con_notch(x0, y0, x1, y1, 5, notch)], (False,) * 4, 2.4, 4.4, 1.4, 0.9, 1.2)
-        o.sink([con_notch(x0 + (0 if "l" in open_ else g), y0 + (0 if "t" in open_ else g), x1 - (0 if "r" in open_ else g),
-                          y1 - (0 if "b" in open_ else g), 2.5, notch)], 2.6, 0.8)
-    return T.small(OBS_CON_LOOK, w, h, draw, scan=scan)
-
-
-def obs_console_pieces():
-    """Every piece of ReforgedHudObsConsole by its name past ObserverCon."""
-    import hud_direct_strike_theme as T
-    ink = T.INK
-    out = {"Radar": obs_frame(OBS_CON_RADAR, OBS_CON_RADAR, "lb", "0100")}
-    board = obs_frame(OBS_CON_BOARD_W, 64, "rb", "1000", scan=False)     # the board: its top, and a band that stretches
-    out["BoardT"] = board.crop((0, 0, OBS_CON_BOARD_W, 16))
-    out["BoardC"] = T.uniform(board.crop((0, 40, OBS_CON_BOARD_W, 48)), 0)
-    for k, v in T.nine_cut(obs_frame(OBS_CON_CARD, OBS_CON_CARD, scan=False), 16, 8).items():
-        out["Card" + k] = v
-
-    heat = Image.new("RGBA", (192, 10), ink["keyline"] + (255,))
-    stops = [(0.0, (34, 58, 88)), (0.45, (52, 96, 112)), (0.7, (170, 128, 40)), (1.0, (226, 82, 30))]
-    for i in range(190):
-        t = i / 189
-        for (ta, ca), (tb, cb) in zip(stops, stops[1:]):
-            if t <= tb:
-                c = tuple(int(ca[j] + (cb[j] - ca[j]) * (t - ta) / (tb - ta)) for j in range(3))
-                break
-        ImageDraw.Draw(heat).line([(i + 1, 1), (i + 1, 8)], fill=c + (255,))
-    out["Heat"] = heat
-
-    # Turkiye's badge: its PlayerTemplate names America's picture, so the seat takes the side's own Command Center
-    # cameo (TRCameoCommandCenter_L), squared and keylined as the SSObserver pictures are
-    tr = read_mapped(None, name="TRCameos")["TRCameoCommandCenter_L"]
-    cc = Image.open(os.path.join(HERE, "..", "Data", "Art", "Textures", "TRCameos.tga")).convert("RGBA").crop(tr)
-    side = min(cc.size)
-    cc = cc.crop(((cc.width - side) // 2, (cc.height - side) // 2, (cc.width + side) // 2, (cc.height + side) // 2))
-    badge = Image.new("RGBA", (22, 24), ink["keyline"] + (255,))
-    badge.paste(cc.resize((20, 22), Image.LANCZOS), (1, 1))
-    out["BadgeTurkiye"] = badge
-
-    glyphs = con_glyphs()
-    for k in OBS_CON_ICONS:
-        out["Icon" + k] = con_glyph(glyphs[k], 14, (255, 255, 255))
-    out["IconSkull"] = con_glyph(glyphs["Skull"], 18, (255, 255, 255))
-
-    def glyph_key(w, h, draw, state, size):
-        """The theme's key with a flat glyph.  Pressed: the lit face sunk and dimmed, a pale glyph pushed down a
-        pixel.  Lit: the full gold face and a dark glyph, the mode in force, read from across a stream."""
-        if state == "P":
-            img = T.key("ForgedAlloy", w, h, "P")
-            a = np.asarray(img, np.float32)
-            a[..., :3] *= 0.62
-            img, colour, off = Image.fromarray(a.astype(np.uint8), "RGBA"), ink["paper"], 1
-        elif state == "L":                      # the bezel goes gold with the face: at 22 px the face alone is a sliver
-            a = np.asarray(T.key("ForgedAlloy", w, h, "P"), np.float32)
-            lum = a[..., :3].mean(2, keepdims=True) / 160.0
-            a[..., :3] = a[..., :3] * 0.35 + np.clip(lum * np.asarray(ink["gold"], np.float32), 0, 255) * 0.65
-            img, colour, off = Image.fromarray(a.astype(np.uint8), "RGBA"), ink["on_lit"], 0
-        else:
-            img = T.key("ForgedAlloy", w, h, state)
-            colour, off = {"": ink["paper"], "H": ink["gold"], "I": ink["dim"]}[state], 0
-        g = con_glyph(draw, size, colour)
-        img.alpha_composite(g, ((w - size) // 2 + off, (h - size) // 2 + off))
-        return img
-    for kind in OBS_CON_KEYS:
-        for st in OBS_CON_KEY_STATES:
-            out["Key" + kind + st] = glyph_key(*OBS_CON_KEY, glyphs[kind], st, 15)
-    for kind in ("Prev", "Next"):
-        for st in ("", "H", "P", "I"):
-            out["Stat" + kind + st] = glyph_key(18, 18, glyphs[kind], st, 12)
-    return out
-
-
-def paint_observer_console():
-    M = read_mapped(None, name="ReforgedHudObsConsole")
-    pieces = obs_console_pieces()
-    assert set(M) == {"ObserverCon" + n for n in pieces}, "ReforgedHudObsConsole.ini and its pieces differ: %s" % sorted(
-        set(M) ^ {"ObserverCon" + n for n in pieces})
-    sheet_img = Image.new("RGBA", OBS_CON_SIZE, (0, 0, 0, 0))
-    for name, img in pieces.items():
-        put(sheet_img, img, M["ObserverCon" + name])
-    check_mapped(M, OBS_CON_SIZE)
-    check_observer_console(pieces)
-    return sheet_img
-
-
-def check_observer_console(pieces):
-    """The board's band stretches clean and meets its top piece, the card's middles are uniform, the board's glass is
-    dark enough for the rows' heat tint, the sides on the screen's edge have no rim (the glass runs to the radar's
-    left and bottom and the board's right), the radar's glass is where the code draws the map, and a lit key is far
-    brighter than an idle one."""
-    c = np.asarray(pieces["BoardC"], np.int32)
-    assert (c == c[:1]).all(), "ObserverConBoardC is not uniform along y"
-    assert np.abs(np.asarray(pieces["BoardT"], np.float32)[-1] - c[0]).mean() < 24, "ObserverConBoardT does not meet the band"
-    for k in ("T", "B", "L", "R", "C"):
-        a = np.asarray(pieces["Card" + k], np.int32)
-        assert (a == a[:1]).all() or (a == a[:, :1]).all(), "ObserverConCard%s is not uniform along its stretch" % k
-    glass = c[0, 40:260, :3].mean()
-    assert glass < 40, "the board's glass is %.1f, too light for the heat tint" % glass
-    r = np.asarray(pieces["Radar"], np.float32)
-    assert r[100:130, 0, :3].mean() < 40 and r[-1, 100:130, :3].mean() < 40, "the radar has a rim on the screen's edge"
-    assert c[0, -1, :3].mean() < 40, "the board has a rim on the screen's right edge"
-    assert r[30:200, 30:200, :3].mean() < 40, "the radar's glass is not where the code draws the map"
-    def gold(name):                             # the share of the key that reads gold: red well over blue
-        a = np.asarray(pieces[name], np.float32)
-        return float(((a[..., 0] - a[..., 2]) > 50).mean())
-    for kind in OBS_CON_KEYS:
-        up, lit = gold("Key" + kind), gold("Key" + kind + "L")
-        assert lit > up + 0.25, "ObserverConKey%sL does not stand out from its up state (%.2f vs %.2f gold)" % (kind, lit, up)
+# The observer's console (V1 "Ledger") is drawn in the Direct Strike theme on the common sheet since 2026-11-24:
+# hud_direct_strike.py's observer().
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--side", default="all", choices=["all", "Observer", "ObsConsole", "Guard"] + sorted(SIDES))
+    ap.add_argument("--side", default="all", choices=["all", "Observer", "Guard"] + sorted(SIDES))
     ap.add_argument("--out", required=True, help="where the PNGs go")
     ap.add_argument("--dds", help="Data/Art/Textures, to write the DXT5 textures too")
     ap.add_argument("--emblem", default=EMBLEM_SVG)
@@ -5018,14 +4699,11 @@ def main():
             if args.dds:
                 shields.save(os.path.join(args.dds, "ReforgedGuardShield.tga"))
             print("wrote ReforgedGuardShield")
-        elif side == "ObsConsole":                  # the console alone (also part of Observer)
-            made = {"ReforgedHudObsConsole": paint_observer_console()}
         elif side == "Observer":
             bar, panel = paint_observer_bar(), paint_observer_panel()
             check_observer(bar, panel)
             made = {"ReforgedHudObsCommandBar": bar, "ReforgedHudObsPlayerWindow": panel,
-                    "ReforgedHudObsPieces": paint_observer_pieces(args.emblem), "ReforgedHudObsSpec": paint_rack(),
-                    "ReforgedHudObsConsole": paint_observer_console()}
+                    "ReforgedHudObsPieces": paint_observer_pieces(args.emblem), "ReforgedHudObsSpec": paint_rack()}
             made["ReforgedHudHelpbox"] = helpbox = paint_helpbox()
             check_helpbox(helpbox)
             made["ReforgedHudObsTabPanel"] = tab = tab_panel("Observer")
@@ -5109,6 +4787,14 @@ def dxt5_touch_up(path, img, worst=20):
         o = 128 + (by * bw + bx) * 16 + 8
         data[o:o + 8] = int(words[hi[k]]).to_bytes(2, "little") + int(words[lo[k]]).to_bytes(2, "little") + bits.to_bytes(4, "little")
     open(path, "wb").write(data)
+
+
+# The watcher's HUD reads the common frame's numbers from the theme, which is only importable now that every name it
+# takes from this module exists (it keeps its tables above its own imports, so either module may be imported first)
+import hud_direct_strike_theme as _theme        # noqa: E402
+OBS_LOOK.update({k: v for k, v in _theme.PALETTE["ForgedAlloy"].items() if k != "build"})
+OBS_LOOK.update(accent2=OBS_LOOK["lit"], hilite=OBS_LOOK["lit"])
+TAB_RADIO_OBS_OPEN = RACK_LIT = OBS_LOOK["hilite"]
 
 
 if __name__ == "__main__":

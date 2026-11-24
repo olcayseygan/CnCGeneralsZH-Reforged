@@ -66,6 +66,10 @@ namespace DirectStrikeTheme
 	static const Color TEXT_DARK			= GameMakeColor( 14, 16, 22, 255 );			///< on_lit: on a lit key or an open dropdown
 	static const Color TEAM_US				= GameMakeColor( 66, 112, 236, 255 );
 	static const Color TEAM_THEM			= GameMakeColor( 214, 44, 36, 255 );
+	static const Color TEAM_VIOLET		= GameMakeColor( 150, 90, 210, 255 );		///< a watcher's fourth team (TEAMS: us, them, green, violet)
+	static const Color TEXT_RED				= GameMakeColor( 214, 44, 36, 255 );		///< an alarm: under attack, beaten, power short
+	static const Color SLOT						= GameMakeColor( 26, 30, 36, 255 );			///< an unlit segment, a header band on glass
+	static const Color RULE						= GameMakeColor( 44, 46, 52, 255 );			///< a hairline between a card's sections
 	static const Color KEYLINE				= GameMakeColor( 12, 14, 18, 255 );			///< the dark rim round marks, lamps and swatches
 	static const Color TEXT_SHADOW		= GameMakeColor( 0, 0, 0, 210 );				///< one pixel down and right, none on a lit face
 
@@ -73,6 +77,7 @@ namespace DirectStrikeTheme
 	static const Real TYPE_TICK				= 11.0f;
 	static const Real TYPE_SMALL			= 13.0f;
 	static const Real TYPE_PRICE			= 14.0f;
+	static const Real TYPE_ROW				= 14.0f;	///< a board's line, a card's figures: the observer's stream minimum
 	static const Real TYPE_BODY				= 16.0f;	///< chat, picker names, hints
 	static const Real TYPE_LABEL			= 18.0f;	///< dropdowns, team heads
 	static const Real TYPE_NAME				= 22.0f;	///< seat names
@@ -214,6 +219,31 @@ namespace DirectStrikeTheme
 		CLAMP_BOX_TL, CLAMP_BOX_T, CLAMP_BOX_TR, CLAMP_BOX_L, CLAMP_BOX_C, CLAMP_BOX_R, CLAMP_BOX_BL, CLAMP_BOX_B, CLAMP_BOX_BR,
 		CLAMP_BAND_L, CLAMP_BAND_C, CLAMP_BAND_R,
 
+		// the observer HUD (the Ledger) on the common sheet: the wrapper's experiments/observer-console/PIECES.md
+		OBS_RADAR,					///< the radar module, 232 square, open left and bottom, its glass from 5 in
+		OBS_BOARD_TL, OBS_BOARD_T, OBS_BOARD_TR, OBS_BOARD_L, OBS_BOARD_C, OBS_BOARD_R, OBS_BOARD_BL, OBS_BOARD_B, OBS_BOARD_BR,	///< open right and bottom
+		OBS_CARD_TL, OBS_CARD_T, OBS_CARD_TR, OBS_CARD_L, OBS_CARD_C, OBS_CARD_R, OBS_CARD_BL, OBS_CARD_B, OBS_CARD_BR,
+		OBS_HEAT,						///< the heat scale, 192x10, stretched
+		OBS_BADGE_TURKIYE,
+		OBS_ICON_POWER,			///< white, tinted
+		OBS_ICON_CROWN,
+		OBS_ICON_STAR,
+		OBS_ICON_SKULL,
+		OBS_STAT_PREV,			///< the stat step keys, 18 square, "" H P I
+		OBS_STAT_NEXT,
+		OBS_KEY_FREE,				///< the operator keys, 22 square, "" H P (P the mode in force, or held down)
+		OBS_KEY_FOLLOW,
+		OBS_KEY_DIRECTOR,
+		OBS_KEY_VIS_ALL,
+		OBS_KEY_VIS_TEAM,
+		OBS_KEY_VIS_PLAYER,
+		OBS_KEY_HIDE_RADAR,
+		OBS_KEY_HIDE_BOARD,
+		OBS_KEY_HIDE_DOSSIER,
+		OBS_KEY_OPTIONS,
+		OBS_KEY_CHAT,
+		OBS_KEY_QUIT,
+
 		PIECE_COUNT
 	};
 
@@ -293,6 +323,12 @@ namespace DirectStrikeTheme
 	Color listText( Bool current, Bool hot );
 	/// the current choice where a list is a grid of cells (the army picker, the colours): a gold frame round it
 	void currentFrame( const LaneHudBox &b );
+
+	/// the heat ramp (HEAT in the theme) at t, 0 the lowest standing seat and 1 the highest: gunmetal blue, amber,
+	/// red-orange
+	Color heat( Real t, Int alpha = 255 );
+	/// a watcher's team 0 to 3 in its INK colour (us, them, green, violet)
+	Color teamColour( Int team );
 
 	/// the general's face from the challenge menu, NULL for a plain side
 	const Image *generalPortrait( const PlayerTemplate *army );

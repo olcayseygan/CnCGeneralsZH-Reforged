@@ -1240,6 +1240,8 @@ static const Real BASE_EDGE_REACH = 2.0f;
 /** ... and how far past that a superweapon may go once nothing inside it fits (buildAsap), behind the base
 	* only: 3.5 base radii, and its rings stretched alike. */
 static const Real SUPERWEAPON_REACH_SCALE = 1.75f;
+/** The banks over its target past which an extra factory may take that stretched edge too (queueExtraFactory). */
+static const Int FACTORY_STRETCH_BANKS = 3;
 
 /** What a computer buys for itself and can only keep at home: the buildings that pay out on a timer,
 	* the superweapons and the tech building they wait on.  The search for room used to walk outward
@@ -8168,6 +8170,10 @@ static const KindOfType PRODUCTION_KIND[ PRODUCTION_KINDS ] = { KINDOF_FS_WARFAC
 
 /** How deep a spending personality queues its surplus behind what a factory already builds, by rung. */
 static const AIRungInt PERSONA_SURPLUS_DEPTH = { { 2, 2, 3 }, AIKNOB_OPEN };
+/** How deep any personality queues its surplus once the bank passes RICH_SURPLUS_BANKS targets, by rung:
+	* one on Easy and Medium, two on Hard, and one more for every 500 of rating past it. */
+static const AIRungInt RICH_SURPLUS_DEPTH = { { 1, 1, 2 }, AIKNOB_OPEN };
+static const Int RICH_SURPLUS_BANKS = 2;
 /** How many factories of its favoured kind a personality with a unit taste stands without waiting for
 	* a backlog, by rung. */
 static const AIRungInt PERSONA_FAVOURED_FACTORIES = { { 2, 3, 4 }, AIKNOB_OPEN };
@@ -10185,7 +10191,15 @@ Bool AIPlayer::queueExtraFactory( Object *dozer, KindOfType kind, Bool doctrine 
 			placeNear( tmpl, warehouse->getPosition(),
 				warehouse->getGeometryInfo().getBoundingCircleRadius() + SUPPLY_CENTER_CLOSE_DIST * 0.5f, FALSE ) )
 		return TRUE;
-	return placeNear( tmpl, &m_baseCenter, m_baseRadius, TRUE );
+	if( placeNear( tmpl, &m_baseCenter, m_baseRadius, TRUE ) )
+		return TRUE;
+	// A full base with the money piling up takes the superweapon's stretched edge, behind the base only.
+	// An Elo 4200 seat banked a median 19,960 between frames 4000 and 9000 against Hard's 6,142 and
+	// failed to place 2,854 War Factories in 40 ladder games: its income outgrew the ground inside two
+	// base radii, and every factory it had stayed full.
+	if( (Int)m_player->getMoney()->countMoney() < FACTORY_STRETCH_BANKS * bankTarget() )
+		return FALSE;
+	return placeNear( tmpl, &m_baseCenter, m_baseRadius, TRUE, NULL, TRUE, SUPERWEAPON_REACH_SCALE );
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -10252,6 +10266,10 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 	const Real innerSqr = innerRadius > 0.0f ? sqr( innerRadius + structureRadius ) : 0.0f;
 	// spots a structure's radius apart, as the rings were; never closer than every other cell
 	Int stride = REAL_TO_INT_FLOOR( structureRadius / PATHFIND_CELL_SIZE_F );
+	// the stretched search is the last one before giving up, so it looks between the spots as well: the
+	// footprint test turned away about half of a full base's spots on a grid a structure's radius apart
+	if( stretched )
+		stride /= 2;
 	if( stride < 2 )
 		stride = 2;
 
@@ -12068,11 +12086,15 @@ void AIPlayer::trainSurplus( Int budget )
 	const Bool persona = m_persona != AIPERSONA_NORMAL;
 	AIPersonaWeights taste = aiPersonaWeights( AIPERSONA_NORMAL );
 	Int depth = 1;
+	// a bank piled past a few targets queues deeper on every personality, by rating: one unit a factory a
+	// pass left an Elo 4200 seat on 19,960 where its Hard opponent held 6,142
+	if( (Int)m_player->getMoney()->countMoney() > RICH_SURPLUS_BANKS * bankTarget() )
+		depth = aiRatingLerp( m_rating, RICH_SURPLUS_DEPTH );
 	if( persona )
 	{
 		taste = personaTaste();
 		if( personaFavouredKind( taste ) >= 0 || taste.m_surplus > 1.0f )
-			depth = aiRatingLerp( m_rating, PERSONA_SURPLUS_DEPTH );
+			depth = max( depth, aiRatingLerp( m_rating, PERSONA_SURPLUS_DEPTH ) );
 		std::vector<Object *> liked, plain, disliked;
 		for( std::vector<Object *>::const_iterator f = factories.begin(); f != factories.end(); ++f )
 		{
@@ -26495,6 +26517,7 @@ static const AIRatingTable s_ratingTables[] =
 	AI_TABLE_INT( TURTLE_MINED_GUNS ),
 	AI_TABLE_INT( TURTLE_DEMO_TRAPS ),
 	AI_TABLE_INT( PERSONA_SURPLUS_DEPTH ),
+	AI_TABLE_INT( RICH_SURPLUS_DEPTH ),
 	AI_TABLE_INT( PERSONA_FAVOURED_FACTORIES ),
 	AI_TABLE_INT( RAID_PARTY ),
 	AI_TABLE_INT( RAID_START_SECONDS ),

@@ -37,6 +37,8 @@ CARD = (100, 116)                               # the hand's card
 CAMEO_AT = (5, 5, 95, 77)                       # its picture well; the cameo 86x69 drawn 2 inside
 PRICE_AT = (8, 84, 92, 108)                     # its price band
 TOGGLE = (44, 22)
+UNIT_CHIP = (44, 44)                            # a chip over a plot unit: rank, upgrade or passenger
+UNIT_CHIP_WELLS = [(5, 5, 39, 26), (5, 28, 39, 39)]     # its picture well (top 3/5) and price band
 END_CARD, END_RESULT, END_HEADER, END_TIMELINE = (250, 590), (340, 452), (420, 76), (1700, 168)
 END_CARD_WELLS = [(10, 10, 240, 232), (64, 278, 186, 376), (10, 388, 240, 580)]     # portrait, MVP cameo, stats
 END_RESULT_WELLS = [(10, 10, 330, 300), (10, 316, 330, 442)]                       # portrait, result word and time
@@ -507,6 +509,7 @@ def hud(side):
            "LaneIncomeIcon": T.flat_glyph(64, 54, income_glyph(build), 2.0, 32, 27, T.INK["gold"]),
            "LaneMoneyChip": T.chip(side, 200, 66), "LaneLaneChip": T.chip(side, 490, 66), "LaneYourChip": T.chip(side, 96, 66),
            "LaneBarChip": T.chip(side, 490, 14, 4), "LaneCountChip": T.chip(side, 84, 36),
+           "LaneUnitChip": T.panel(side, *UNIT_CHIP, UNIT_CHIP_WELLS),
            "LaneCoin": T.coin(side, COIN),"LaneYourRing": T.ring(24, 11, 3)}
     for n in (1, 2, 3):
         for s in STATES:

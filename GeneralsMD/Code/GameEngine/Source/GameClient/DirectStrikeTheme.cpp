@@ -74,6 +74,7 @@ namespace
 		"LaneAbilitiesPanelFoot",
 		"LaneToggleOn",
 		"LaneToggleOff",
+		"LaneUnitChip",
 		"SidebarKeyMenu",
 		"SidebarKeyDiplomacy",
 

@@ -195,6 +195,7 @@ found and fixed, EA's own, not port damage.**
 
 - Nobody sends money to anyone in Direct Strike or the Apocalypse any more. The money column on the Tab screen is gone in those matches, and a gift sent from an older copy of the game is turned away.
 - The hero portrait in the bottom left corner is gone from Direct Strike. Your hero keeps his own card on the Direct Strike bar.
+- The rank, upgrade and passenger chips over a plot unit were flat grey boxes, the last plain fills left on the Direct Strike bar. They now wear your side's steel like the cards in your hand, the picture sunk in one glass well and the price in another.
 - Dragging a box over the field selects nothing in Direct Strike. Clicks and the plot work as before.
 - Marching waves no longer wear the "F" formation letter. They still march together at their slowest unit's pace.
 - The watch tower and the fortress see stealthed units now, the tower out to 250 and the fortress out to 325, a little past their own guns.

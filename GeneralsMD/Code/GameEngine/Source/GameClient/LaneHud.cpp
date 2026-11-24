@@ -1590,8 +1590,17 @@ static Bool overUnit( const LaneWarDirector::PlotUnit &u, Int *cx, Int *top )
 /// a chip's face, as a card's: lit under the pointer when it can be pressed
 static void chipFace( const LaneHudBox &b, Bool live )
 {
+	const Bool hot = live && inside( b, mousePos() );
+	const Image *face = art( LANE_UNIT_CHIP );
+	if( face != NULL )
+	{
+		drawImage( face, b );
+		if( hot )
+			TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, UIStyle::EDGE_LIT );
+		return;
+	}
 	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, CARD_FACE );
-	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, live && inside( b, mousePos() ) ? UIStyle::EDGE_LIT : PLATE_EDGE );
+	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, hot ? UIStyle::EDGE_LIT : PLATE_EDGE );
 }
 
 /// a chip's price band, or the check when there is nothing left to buy

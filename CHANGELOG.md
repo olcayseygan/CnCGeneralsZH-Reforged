@@ -12,6 +12,7 @@ found and fixed, EA's own, not port damage.**
 
 - A computer's base guards kept grabbing a target their teammate had picked, a Comanche overhead or a tank across the map, dropped it the same instant because they could not reach it, and grabbed it again a few seconds later. One four-player Hard match logged 52,257 of those turns, a single Microwave Tank 7,616 of them. A guard now takes the team's target only when it stands inside its own circle and it can hit it, and it no longer picks an aircraft out of its weapons' reach. Over the same twelve four-player matches the turns fell from 60,149 to 18,793.
 - Paratroopers and soldiers the computer leaves behind your lines stood where they landed, or walked home past your buildings. A Ranger, Rebel or Red Guard out on the map now walks into the nearest building worth taking, yours or a tech building, before it looks for a fight. It stops trying a building once the walk in has failed, where ten Rangers used to stand 470 from an Arms Dealer being sent again every two seconds.
+- Hurt soldiers the computer called to its Ambulance could reach the door and stand there for over a minute without getting in. They are now called in again from the door. In six America mirror matches the soldiers stuck at the door fell from 9 to 1, and the average wait from the call to getting in from 61 to 52 seconds.
 - Replays with a computer player recorded before this change will not play back.
 
 ## The levels above Hard stand and fight

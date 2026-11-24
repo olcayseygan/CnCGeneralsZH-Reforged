@@ -17291,6 +17291,8 @@ static const Int AMBULANCE_FIRST_ARMY = 8;
 static const Int AMBULANCE_SECOND_ARMY = 20;
 static const Real AMBULANCE_PATIENT_HEALTH = 0.5f;
 static const Real AMBULANCE_CALL_REACH = 900.0f;
+/** A patient standing this near its Ambulance in its enter order is at the door (doAmbulances). */
+static const Real AMBULANCE_DOOR_REACH = 80.0f;
 #define AMBULANCE_PATIENT_QUIET ((UnsignedInt)(2 * LOGICFRAMES_PER_GAME_SECOND))
 static const Real AMBULANCE_BEHIND = 300.0f;
 static const Real AMBULANCE_HAZARD_REACH = 1500.0f;
@@ -17572,6 +17574,29 @@ void AIPlayer::steerAmbulance( Int slot, const std::vector<AIKnownGun> &guns )
 		DEBUG_LOG(("AI AMBULANCE frame %d player %d '%s' %d lets 1 out whole, '%s' %d, at (%.0f,%.0f)\n", now, m_player->getPlayerIndex(),
 			ambulance->getTemplate()->getName().str(), duty.id, rider->getTemplate()->getName().str(), rider->getID(), pos->x, pos->y));
 		rider->getAI()->aiExit( ambulance, CMD_FROM_AI );
+	}
+
+	// One that walked up to the door and stands there in its enter order never gets in: six Hard USA
+	// mirrors on Twilight Flame had patients 25 to 56 from their Ambulance for 19 to 84 seconds until the
+	// order lapsed, and one called again from there was inside a second later.  So it is called again
+	// from the door, whatever the Ambulance is doing (a cleanup or a pull-back skips the call below).
+	std::vector<Object *> waiting;
+	m_player->iterateObjects( collectOwned, &waiting );
+	for( size_t w = 0; w < waiting.size(); ++w )
+	{
+		Object *obj = waiting[ w ];
+		AIUpdateInterface *walkerAI = obj->getAI();
+		if( obj->isEffectivelyDead() || obj->isContained() || walkerAI == NULL || walkerAI->getCurrentStateID() != AI_ENTER ||
+				walkerAI->getGoalObject() != ambulance )
+			continue;
+		const Real doorSqr = sqr( obj->getPosition()->x - pos->x ) + sqr( obj->getPosition()->y - pos->y );
+		// not only the ones standing still: a stuck one reads as moving, jogging on the spot
+		if( doorSqr <= sqr( AMBULANCE_DOOR_REACH ) && hold->isValidContainerFor( obj, TRUE ) )
+		{
+			walkerAI->aiEnter( ambulance, CMD_FROM_AI );
+			DEBUG_LOG(("AI AMBULANCE frame %d player %d '%s' %d calls '%s' %d in again from its door, %.0f away\n", now, m_player->getPlayerIndex(),
+				ambulance->getTemplate()->getName().str(), duty.id, obj->getTemplate()->getName().str(), obj->getID(), (Real)sqrt( doorSqr )));
+		}
 	}
 
 	const StateID state = ai->getCurrentStateID();

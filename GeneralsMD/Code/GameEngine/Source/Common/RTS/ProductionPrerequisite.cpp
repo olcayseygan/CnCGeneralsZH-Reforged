@@ -230,6 +230,48 @@ void ProductionPrerequisite::addUnitPrereq( const std::vector<AsciiString>& unit
 }  // end addUnitPrereq
 
 //-------------------------------------------------------------------------------------------------
+AsciiString ProductionPrerequisite::getMissingNames(const Player *player) const
+{
+	AsciiString missing;
+	if (!player)
+		return missing;
+
+	Int ownCount[MAX_PREREQ];
+	const Int cnt = calcNumPrereqUnitsOwned(player, ownCount);
+	for (Int i = 0; i < cnt; )
+	{
+		// a unit and the ones "or-ed" behind it are one requirement
+		Int end = i + 1;
+		Int owned = ownCount[i];
+		while (end < cnt && (m_prereqUnits[end].flags & UNIT_OR_WITH_PREV))
+			owned += ownCount[end++];
+		if (owned == 0)
+		{
+			if (missing.isNotEmpty())
+				missing.concat(" ");
+			for (Int k = i; k < end; ++k)
+			{
+				if (k > i)
+					missing.concat("|");
+				// resolveNames keeps the name only for a prereq it could not find
+				missing.concat(m_prereqUnits[k].unit ? m_prereqUnits[k].unit->getName() : m_prereqUnits[k].name);
+			}
+		}
+		i = end;
+	}
+
+	for (size_t s = 0; s < m_prereqSciences.size(); ++s)
+	{
+		if (player->hasScience(m_prereqSciences[s]))
+			continue;
+		if (missing.isNotEmpty())
+			missing.concat(" ");
+		missing.concat(TheScienceStore->getInternalNameForScience(m_prereqSciences[s]));
+	}
+	return missing;
+}
+
+//-------------------------------------------------------------------------------------------------
 // a prereq the data names but never defines has no template, only its INI name (resolveNames)
 static UnicodeString prereqDisplayName(const ThingTemplate *unit, const AsciiString &name)
 {

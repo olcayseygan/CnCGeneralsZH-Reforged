@@ -52,6 +52,8 @@
 #include "Lib/BaseType.h"
 #include "Common/AsciiString.h"
 
+#include <string>
+
 // ------------------------------------------------------------------------------------------------
 /** What one scenario line asks for. */
 // ------------------------------------------------------------------------------------------------
@@ -59,6 +61,11 @@
 // A <position> is two numbers, x and y, or one token naming a start position: start<N> is where
 // seat N began (-scenario pins seat i to start i), and start<N>:<dx>:<dy> stands that far off it.
 // The token form is what lets one file play on a generated map, whose starts move with the seed.
+//
+// A <selector> is a template name, a prefix ending in '*' ("GLAVehicleTechnical*"), "*" for the
+// seat's army (builders left out), or '#' and a comma-separated list of object ids ("#12,40,77",
+// the ids objects reports): the ones still alive and owned by the seat, builders included.  A '#'
+// starting a token with a digit after it is that list; anywhere else '#' still starts a comment.
 //
 enum ScenarioActionType
 {
@@ -117,7 +124,9 @@ enum ScenarioActionType
 	SCENARIO_ACTION_LANECASH,					///< lanecash <slot> <amount>; the seat is paid that much, a test's shortcut past the ticks
 	SCENARIO_ACTION_LANEREVEAL,				///< lanereveal <slot> <x> <y>; the seat buys a satellite scan of that world spot, as DIRECTSTRIKE_ORDER_REVEAL (the numbers in name; 0 0 is the lane's middle)
 	SCENARIO_ACTION_LANEABILITY,			///< laneability <slot> <template> <buttonSlot> <0|1>; switch the seat's wave units of that template off or on for the button in that command set slot (from 0, the INI's number less one), as DIRECTSTRIKE_ORDER_ABILITY (slot and switch in at)
-	SCENARIO_ACTION_GROUPQUEUE				///< groupqueue <slot> <template> <count>; a command bar unit tab's click that many times, as MSG_QUEUE_UNIT_FOR_GROUP with squad -1 onto the message stream, the logic picking the factory
+	SCENARIO_ACTION_GROUPQUEUE,				///< groupqueue <slot> <template> <count>; a command bar unit tab's click that many times, as MSG_QUEUE_UNIT_FOR_GROUP with squad -1 onto the message stream, the logic picking the factory
+	SCENARIO_ACTION_SELL,							///< sell <slot> <id>; the sell button on that one structure (an id from objects, '#' optional), as MSG_SELL handed to the dispatcher for that seat
+	SCENARIO_ACTION_SCIENCE						///< science <slot> <science>; the general's powers window's purchase with the seat's own rank and points, as MSG_PURCHASE_SCIENCE handed to the dispatcher (purchase grants rank and points first)
 };
 
 /// ScenarioAction::atStart when the position is plain numbers
@@ -172,6 +181,25 @@ extern void ScenarioDrill_tick( void );
 	  that a command typed down a socket means exactly what the same line means in a file.  Only safe
 	  from inside a logic frame, and only while a match is running. */
 extern Bool ScenarioDrill_execute( const ScenarioAction &action );
+
+/** -control's produce, construct, sell and science, the socket's own versions of those lines: the same
+	  work, but every refusal named (money with the cost, the missing prerequisites by name, why the ground
+	  is illegal, which builders are busy at what), and construct sends only an idle builder, named to the
+	  dispatcher.  sell and science are the same functions the file's lines of those names run.  Writes the reply's JSON members, without braces, to members ("error" on a refusal) and
+	  returns whether the order took.  The file's verbs are untouched.  Only from inside a logic frame. */
+extern Bool ScenarioDrill_controlOrder( const ScenarioAction &action, AsciiString *members );
+
+/** -control's objects: the seat's money, power and every living structure, infantry, vehicle and
+	  aircraft (template, id, position, kind, health percent, construction, production queue; a builder's
+	  idle and task; a supply pile's boxes left) as JSON members, at most maxObjects of them; shots, effects and inert things are left out.  Slot -1
+	  is the map's own structures.  A std::string, since a late army runs past AsciiString's 32 KB.
+	  Read-only; FALSE when nobody sits there. */
+extern Bool ScenarioDrill_describeObjects( Int slot, Int maxObjects, std::string *members );
+
+/** -control's buildspot: the legal spot for the template nearest (x, y) within radius, by the same test
+	  construct makes, with the builder construct would send.  Read-only. */
+extern Bool ScenarioDrill_findBuildSpot( Int slot, const AsciiString &templateName, Real x, Real y, Real radius,
+																				 Coord3D *found, AsciiString *why );
 
 /** One line for the end-of-run summary: how much of the file actually happened. */
 extern const char *ScenarioDrill_report( void );

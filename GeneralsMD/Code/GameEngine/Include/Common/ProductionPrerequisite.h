@@ -83,6 +83,10 @@ public:
 	/// not satisfied yet
 	UnicodeString getRequiresList(const Player *player) const;
 
+	/// the same list by internal name, for a script: template names space separated, "A|B" where
+	/// either will do, and each missing science by its own name
+	AsciiString getMissingNames(const Player *player) const;
+
 	/// return true iff the player satisfies our set of prerequisites
 	Bool isSatisfied(const Player *player) const;
 

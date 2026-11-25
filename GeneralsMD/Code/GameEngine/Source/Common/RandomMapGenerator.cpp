@@ -827,7 +827,7 @@ static const RMGStyle theStyles[] =
 };
 static const Int RMG_STYLE_COUNT = sizeof(theStyles) / sizeof(theStyles[0]);
 
-/** The Lane War map (RMGLayout::buildLane) is a style past the table: "-randommap <seed> lane", named
+/** The Direct Strike map (RMGLayout::buildLane) is a style past the table: "-randommap <seed> lane", named
 	"RMG_v<version>_<seed>_6p_332c_lane". Its ground has no size or player count of its own, so
 	clampSettings pins both; the seed picks only its look. */
 static const Int RMG_STYLE_LANE = RMG_STYLE_COUNT + 1;
@@ -968,11 +968,11 @@ struct RMGObject
 	Int m_waypointID;		///< 0 for anything that is not a waypoint
 	Int m_flags;			///< MapObject's own flags; the road ones are the only ones used here
 	AsciiString m_pathLabel;	///< a waypoint on a skirmish approach path: "Center3", "Flank1" ...
-	AsciiString m_objectName;	///< the name a script or the Lane War director finds it by; empty for most
+	AsciiString m_objectName;	///< the name a script or the Direct Strike director finds it by; empty for most
 	AsciiString m_owner;		///< originalOwner, "StartOwner:1,3,5" for a seat's own (GameLogic.cpp); empty: neutral, "team"
 };
 
-/** A named trigger area that is not water, in playable cells: the Lane War map's build plateaus and
+/** A named trigger area that is not water, in playable cells: the Direct Strike map's build plateaus and
 	middle. */
 struct RMGArea
 {
@@ -9751,10 +9751,10 @@ void RMGLayout::clearLockedGround( void )
 }
 
 //-----------------------------------------------------------------------------
-// The Lane War map
+// The Direct Strike map
 //-----------------------------------------------------------------------------
 
-/* Lane War (docs/plans/LANE-MODE.md in the wrapper) plays on this map, built here rather than in
+/* Direct Strike (docs/plans/DIRECT-STRIKE.md in the wrapper) plays on this map, built here rather than in
 	WorldBuilder so that a change to it is a change to code. Its layout follows the Warcraft III
 	Direct Strike map and is the same for every seed; the seed picks only the look round it. Below, x
 	runs along the lane and y across it, in playable cells of 10 world units, and every figure comes
@@ -9780,7 +9780,7 @@ void RMGLayout::clearLockedGround( void )
 	along the lane by 32 across. The wave copy is 32 cells wide now on the 45-cell lane, so its middle
 	seven or eight columns meet the 14-cell fortress head on and go round it through the 15.5 cells
 	either side, where the outer columns already walk. Behind each column a strip RMG_LANE_DERRICK_CLEAR
-	cells deep stays clear of props: the client stands a player's income derricks there (LaneHud).
+	cells deep stays clear of props: the client stands a player's income derricks there (DirectStrikeHud).
 
 	The lane and the plots are flat at RMG_LANE_GROUND, and nothing walls them in: the director holds
 	a plot's units where they were bought and sends a wave straight down its lines, so the terrain
@@ -9837,7 +9837,7 @@ static const char *const RMG_LANE_MIDDLE_TEMPLATE = NULL;	///< a structure in th
 #define RMG_LANE_MIDDLE_SIDES	16
 #define RMG_LANE_PATH_STEP		15.0f	///< cells between two waypoints of a lane path
 #define RMG_LANE_PLOT_GAP		14		///< cells of green between a lane's end and the front of its team's plots
-#define RMG_LANE_PLOT_ALONG		24		///< a plot's cells along the lane, front to back: 12 slots of LANEWAR_SLOT_SIZE (32, 16 slots, on 2026-11-21)
+#define RMG_LANE_PLOT_ALONG		24		///< a plot's cells along the lane, front to back: 12 slots of DIRECTSTRIKE_SLOT_SIZE (32, 16 slots, on 2026-11-21)
 #define RMG_LANE_PLOT_ACROSS	32		///< and across it, the width of its front: 16 slots (24, 12 slots, on 2026-11-21)
 #define RMG_LANE_PLOT_PITCH		42		///< cells between the middles of two neighbouring plots of a column: 10 of green between them, as at 24 across and 34
 #define RMG_LANE_DERRICK_CLEAR	7		///< cells behind a plot column's back edge no prop stands in, room for the client's income derricks (a 46 by 42 TechOilDerrick 1 cell off the edge reaches 5.6)

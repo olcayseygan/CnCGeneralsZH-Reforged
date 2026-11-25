@@ -18,7 +18,7 @@
 // Modified 2026 by Olcay Seygan for Zero Hour Reforged; see the git history.
 
 // FILE: W3DFractureDraw.h
-// A structure drawn as the pre-fractured copy of its model once it is hit (the Lane War fortress and
+// A structure drawn as the pre-fractured copy of its model once it is hit (the Direct Strike fortress and
 // watch tower).  It rides beside the object's W3DModelDraw, which keeps the turret, the bones, the
 // condition states and the picking: until the first hit nothing changes, then that model is hidden
 // and its fragments are drawn in its place, posed on its bones.  A hit knocks out the fragments where

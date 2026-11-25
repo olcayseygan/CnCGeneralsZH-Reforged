@@ -2210,7 +2210,7 @@ static void drawGroundOverlays(Bool modernFullMirror, Bool shadeByShroud)
 	DX8Wrapper::Set_Texture(1,NULL);
 	ShaderClass::Invalidate();
 	TheInGameUI->drawBuildGrid(shadeByShroud);
-	// the slot grid of each Lane War build plot, which its units stand on; it is there all the time,
+	// the slot grid of each Direct Strike build plot, which its units stand on; it is there all the time,
 	// so it stays out of the classic water's mirror, which draws no ground under it
 	if (!ShaderClass::Is_Backface_Culling_Inverted())
 		TheInGameUI->drawLanePlotGrids(shadeByShroud);

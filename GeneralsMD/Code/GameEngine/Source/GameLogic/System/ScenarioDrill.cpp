@@ -41,7 +41,7 @@
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
-#include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/DirectStrikeDirector.h"
 #include "Common/Upgrade.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BehaviorModule.h"
@@ -2786,14 +2786,14 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 		return executeLaneMarch( action, player );
 
 	if (action.action == SCENARIO_ACTION_LANEPLACE)
-		return TheLaneWarDirector->placeUnit( player, TheThingFactory->findTemplate( action.selector, FALSE ),
+		return TheDirectStrikeDirector->placeUnit( player, TheThingFactory->findTemplate( action.selector, FALSE ),
 																					(Int)action.at.x, (Int)action.at.y );
 
 	if (action.action == SCENARIO_ACTION_LANEABILITY)
 	{
 		const ThingTemplate *tmpl = TheThingFactory->findTemplate( action.selector, FALSE );
 		const Int args[ 3 ] = { tmpl ? (Int)tmpl->getTemplateID() : -1, (Int)action.at.x, (Int)action.at.y };
-		TheLaneWarDirector->onOrder( player, LANEWAR_ORDER_ABILITY, args, 3 );
+		TheDirectStrikeDirector->onOrder( player, DIRECTSTRIKE_ORDER_ABILITY, args, 3 );
 		return TRUE;
 	}
 
@@ -2811,10 +2811,10 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 		if (args[ 0 ] == 0 && args[ 1 ] == 0)
 		{
 			// 0 0: the lane's middle, which the map knows and the file does not
-			args[ 0 ] = REAL_TO_INT( TheLaneWarDirector->getMiddle()->x );
-			args[ 1 ] = REAL_TO_INT( TheLaneWarDirector->getMiddle()->y );
+			args[ 0 ] = REAL_TO_INT( TheDirectStrikeDirector->getMiddle()->x );
+			args[ 1 ] = REAL_TO_INT( TheDirectStrikeDirector->getMiddle()->y );
 		}
-		TheLaneWarDirector->onOrder( player, LANEWAR_ORDER_REVEAL, args, 2 );
+		TheDirectStrikeDirector->onOrder( player, DIRECTSTRIKE_ORDER_REVEAL, args, 2 );
 		return TRUE;
 	}
 
@@ -2827,35 +2827,35 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 		{
 			const ThingTemplate *tmpl = TheThingFactory->findTemplate( action.selector, FALSE );
 			args[ 3 ] = tmpl ? (Int)tmpl->getTemplateID() : -1;
-			TheLaneWarDirector->onOrder( player, LANEWAR_ORDER_GARRISON, args, 4 );
+			TheDirectStrikeDirector->onOrder( player, DIRECTSTRIKE_ORDER_GARRISON, args, 4 );
 			return TRUE;
 		}
-		const Int index = TheLaneWarDirector->plotUnitAt( player, args[ 0 ], args[ 1 ], args[ 2 ] );
-		LaneWarDirector::UnitUpgrade list[ MAX_COMMANDS_PER_SET ];
-		const Int listed = index >= 0 ? TheLaneWarDirector->getUnitUpgrades( index, list, MAX_COMMANDS_PER_SET ) : 0;
+		const Int index = TheDirectStrikeDirector->plotUnitAt( player, args[ 0 ], args[ 1 ], args[ 2 ] );
+		DirectStrikeDirector::UnitUpgrade list[ MAX_COMMANDS_PER_SET ];
+		const Int listed = index >= 0 ? TheDirectStrikeDirector->getUnitUpgrades( index, list, MAX_COMMANDS_PER_SET ) : 0;
 		for (Int i = 0; i < listed; ++i)
 			if (list[ i ].upgrade->getUpgradeName() == action.selector)
 				args[ 3 ] = list[ i ].slot;
 		if (args[ 3 ] < 0)
 			DEBUG_LOG(("SCENARIO: frame %d laneunitupgrade: no '%s' on the command set of slot %d's plot unit there\n", action.frame,
 								 action.selector.str(), action.slot));
-		TheLaneWarDirector->onOrder( player, LANEWAR_ORDER_UNIT_UPGRADE, args, 4 );
+		TheDirectStrikeDirector->onOrder( player, DIRECTSTRIKE_ORDER_UNIT_UPGRADE, args, 4 );
 		return TRUE;
 	}
 
-	// the other Lane War orders go in as MSG_LANEWAR_ORDER's integers do
+	// the other Direct Strike orders go in as MSG_DIRECTSTRIKE_ORDER's integers do
 	if (action.action == SCENARIO_ACTION_LANETIER || action.action == SCENARIO_ACTION_LANESELL
 			|| action.action == SCENARIO_ACTION_LANEMOVE || action.action == SCENARIO_ACTION_LANEUPGRADE
 			|| action.action == SCENARIO_ACTION_LANEVET)
 	{
 		Int args[ 6 ];
 		Int argCount = 0;
-		Int kind = LANEWAR_ORDER_TIER;
+		Int kind = DIRECTSTRIKE_ORDER_TIER;
 		if (action.action == SCENARIO_ACTION_LANEUPGRADE)
 		{
-			kind = LANEWAR_ORDER_UPGRADE;
-			const UpgradeTemplate *list[ LANEWAR_ROSTER_MAX ];
-			const Int listed = LaneWar_upgrades( player, list, LANEWAR_ROSTER_MAX );
+			kind = DIRECTSTRIKE_ORDER_UPGRADE;
+			const UpgradeTemplate *list[ DIRECTSTRIKE_ROSTER_MAX ];
+			const Int listed = DirectStrike_upgrades( player, list, DIRECTSTRIKE_ROSTER_MAX );
 			args[ argCount++ ] = -1;
 			for (Int i = 0; i < listed; ++i)
 				if (list[ i ]->getUpgradeName() == action.selector)
@@ -2863,9 +2863,9 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 		}
 		else
 		{
-			kind = action.action == SCENARIO_ACTION_LANESELL ? LANEWAR_ORDER_SELL
-					 : action.action == SCENARIO_ACTION_LANEMOVE ? LANEWAR_ORDER_MOVE
-					 : action.action == SCENARIO_ACTION_LANEVET ? LANEWAR_ORDER_VETERANCY : LANEWAR_ORDER_TIER;
+			kind = action.action == SCENARIO_ACTION_LANESELL ? DIRECTSTRIKE_ORDER_SELL
+					 : action.action == SCENARIO_ACTION_LANEMOVE ? DIRECTSTRIKE_ORDER_MOVE
+					 : action.action == SCENARIO_ACTION_LANEVET ? DIRECTSTRIKE_ORDER_VETERANCY : DIRECTSTRIKE_ORDER_TIER;
 			const char *at = action.name.str();
 			Int value = 0, used = 0;
 			while (argCount < 6 && sscanf( at, "%d%n", &value, &used ) == 1)
@@ -2874,10 +2874,10 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 				at += used;
 			}
 		}
-		TheLaneWarDirector->onOrder( player, kind, args, argCount );
-		// a scenario's tech tier opens at once, a test's shortcut past LANEWAR_TECH_RESEARCH_SECONDS
-		if (kind == LANEWAR_ORDER_TIER && argCount >= 1 && args[ 0 ] == LANEWAR_TRACK_TECH)
-			TheLaneWarDirector->openTechNow( player );
+		TheDirectStrikeDirector->onOrder( player, kind, args, argCount );
+		// a scenario's tech tier opens at once, a test's shortcut past DIRECTSTRIKE_TECH_RESEARCH_SECONDS
+		if (kind == DIRECTSTRIKE_ORDER_TIER && argCount >= 1 && args[ 0 ] == DIRECTSTRIKE_TRACK_TECH)
+			TheDirectStrikeDirector->openTechNow( player );
 		return TRUE;
 	}
 

@@ -47,7 +47,7 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/GhostObject.h"
-#include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -65,7 +65,7 @@
 #include "GameClient/Image.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/ObserverCamera.h"
-#include "GameClient/LaneHud.h"
+#include "GameClient/DirectStrikeHud.h"
 #include "W3DDevice/GameClient/W3DAssetManager.h"
 #include "W3DDevice/GameClient/W3DGUICallbacks.h"
 #include "W3DDevice/GameClient/W3DInGameUI.h"
@@ -1071,7 +1071,7 @@ static void buildGridSampleHeight( const Coord3D *at, void *userData )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The slot grid of every Lane War build plot (LaneWarDirector), painted on the ground in the
+/** The slot grid of every Direct Strike build plot (DirectStrikeDirector), painted on the ground in the
 	* terrain pass like the build grid, so a unit standing in a slot stands on top of it.  The plot wears
 	* the island's own ground, so the lines take the lane map theme's colour (LaneGridColours), pale on
 	* dark ground and a deep shade on light, and the plot's outline is stronger than the lines between
@@ -1080,10 +1080,10 @@ static void buildGridSampleHeight( const Coord3D *at, void *userData )
 //-------------------------------------------------------------------------------------------------
 void W3DInGameUI::drawLanePlotGrids( Bool shadeByShroud )
 {
-	if( TheLaneWarDirector == NULL || !TheLaneWarDirector->isActive() || TheTerrainLogic == NULL )
+	if( TheDirectStrikeDirector == NULL || !TheDirectStrikeDirector->isActive() || TheTerrainLogic == NULL )
 		return;
 
-	const Real SLOT = (Real)LANEWAR_SLOT_SIZE;
+	const Real SLOT = (Real)DIRECTSTRIKE_SLOT_SIZE;
 	const Real LINE_HALF_WIDTH = 0.6f, EDGE_HALF_WIDTH = 1.2f;
 	const Real LIFT = 0.35f;	// as the build grid's
 
@@ -1104,11 +1104,11 @@ void W3DInGameUI::drawLanePlotGrids( Bool shadeByShroud )
 	// depth tested and shaded by the shroud as the build grid is, so a hill or a deck covers it
 	setGroundOverlayState( GRID_PULL, shadeByShroud );
 	GroundOverlayQuads &quads = theGroundOverlayQuads;
-	for( Int r = 0; r < LANEWAR_TEAMS * LANEWAR_SEATS; ++r )
+	for( Int r = 0; r < DIRECTSTRIKE_TEAMS * DIRECTSTRIKE_SEATS; ++r )
 	{
 		{
 			Coord2D lo, hi;
-			if( !TheLaneWarDirector->getPlotBounds( r / LANEWAR_SEATS, r % LANEWAR_SEATS, &lo, &hi ) )
+			if( !TheDirectStrikeDirector->getPlotBounds( r / DIRECTSTRIKE_SEATS, r % DIRECTSTRIKE_SEATS, &lo, &hi ) )
 				continue;
 			// lines every slot from the low corner; the director counts from the front left, which gives
 			// the same lines while a plot is whole slots a side, as every generated one is
@@ -1152,10 +1152,10 @@ void W3DInGameUI::drawLanePlotGrids( Bool shadeByShroud )
 	Coord2D at;
 	Real half;
 	Bool legal;
-	if( LaneHud_heldFootprint( &at, &half, &legal ) )
+	if( DirectStrikeHud_heldFootprint( &at, &half, &legal ) )
 	{
 		const Real WASH_ALPHA = 0x50;
-		const UnsignedInt c = overlayColor( legal ? 0x003CBA48 : 0x00F03C2D, WASH_ALPHA );	// DirectStrikeTheme's green, LaneHud's red
+		const UnsignedInt c = overlayColor( legal ? 0x003CBA48 : 0x00F03C2D, WASH_ALPHA );	// DirectStrikeTheme's green, DirectStrikeHud's red
 		const Real step = 0.5f * SLOT;
 		const Int n = max( 1, REAL_TO_INT_FLOOR( 2.0f * half / step + 0.5f ) );
 		for( Int j = 0; j < n; ++j )

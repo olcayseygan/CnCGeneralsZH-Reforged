@@ -12886,7 +12886,7 @@ TEST(a_seed_generates_the_same_map_bytes_every_single_time)
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The Lane War map: one ground for every seed and seat count, the seed choosing only its look.
+/** The Direct Strike map: one ground for every seed and seat count, the seed choosing only its look.
 	Every name the director looks up is in the file, the fortresses and towers belong to their own
 	end's starts, a wave copy fits on its pad and walks clear of its own fortress, and the ground is
 	open and soft: no cliff on dry ground, gentle slopes at every edge of play, one walk reaching
@@ -13351,26 +13351,26 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The Lane War director's rules (LaneWarDirector.h), the parts that are plain arithmetic: who sits
+/** The Direct Strike director's rules (DirectStrikeDirector.h), the parts that are plain arithmetic: who sits
 	  where, whose wave a tick sends, who holds the middle, what a tick pays and how long things last. */
-#include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/DirectStrikeDirector.h"
 
-TEST(lane_war_seats_follow_the_starts_and_alternate_the_ends)
+TEST(direct_strike_seats_follow_the_starts_and_alternate_the_ends)
 {
 	// start 1 (0) is A's seat 1, start 2 B's seat 1, start 3 A's seat 2, start 6 B's seat 3
-	CHECK_EQ( LaneWar_teamOfStart( 0 ), 0 );
-	CHECK_EQ( LaneWar_seatOfStart( 0 ), 0 );
-	CHECK_EQ( LaneWar_teamOfStart( 1 ), 1 );
-	CHECK_EQ( LaneWar_seatOfStart( 1 ), 0 );
-	CHECK_EQ( LaneWar_teamOfStart( 2 ), 0 );
-	CHECK_EQ( LaneWar_seatOfStart( 2 ), 1 );
-	CHECK_EQ( LaneWar_teamOfStart( 5 ), 1 );
-	CHECK_EQ( LaneWar_seatOfStart( 5 ), 2 );
+	CHECK_EQ( DirectStrike_teamOfStart( 0 ), 0 );
+	CHECK_EQ( DirectStrike_seatOfStart( 0 ), 0 );
+	CHECK_EQ( DirectStrike_teamOfStart( 1 ), 1 );
+	CHECK_EQ( DirectStrike_seatOfStart( 1 ), 0 );
+	CHECK_EQ( DirectStrike_teamOfStart( 2 ), 0 );
+	CHECK_EQ( DirectStrike_seatOfStart( 2 ), 1 );
+	CHECK_EQ( DirectStrike_teamOfStart( 5 ), 1 );
+	CHECK_EQ( DirectStrike_seatOfStart( 5 ), 2 );
 }
 
 #include "GameClient/DirectStrikeLayout.h"
 
-TEST(lane_war_lobby_seat_move_swaps_with_a_computer_and_refuses_closed_and_human_seats)
+TEST(direct_strike_lobby_seat_move_swaps_with_a_computer_and_refuses_closed_and_human_seats)
 {
 	/* DirectStrikeTakeSeat, the one path a seat move goes through in skirmish, a LAN host and an online host
 	   (the joiner's "StartPos=" request lands on it too): a computer's seat swaps, the computer taking the seat
@@ -13422,63 +13422,63 @@ TEST(lane_war_lobby_seat_move_swaps_with_a_computer_and_refuses_closed_and_human
 	TheWritableGlobalData = saved;
 }
 
-TEST(lane_war_rotation_takes_seats_in_turn_and_passes_over_empty_ones)
+TEST(direct_strike_rotation_takes_seats_in_turn_and_passes_over_empty_ones)
 {
-	const Bool full[ LANEWAR_SEATS ] = { TRUE, TRUE, TRUE };
+	const Bool full[ DIRECTSTRIKE_SEATS ] = { TRUE, TRUE, TRUE };
 	for( UnsignedInt tick = 0; tick < 9; ++tick )
-		CHECK_EQ( LaneWar_seatForTick( full, tick ), (Int)( tick % 3 ) );
+		CHECK_EQ( DirectStrike_seatForTick( full, tick ), (Int)( tick % 3 ) );
 
 	// a lone player spawns on every tick
-	const Bool lone[ LANEWAR_SEATS ] = { FALSE, TRUE, FALSE };
+	const Bool lone[ DIRECTSTRIKE_SEATS ] = { FALSE, TRUE, FALSE };
 	for( UnsignedInt tick = 0; tick < 5; ++tick )
-		CHECK_EQ( LaneWar_seatForTick( lone, tick ), 1 );
+		CHECK_EQ( DirectStrike_seatForTick( lone, tick ), 1 );
 
 	// two players alternate, the empty middle seat never comes up
-	const Bool ends[ LANEWAR_SEATS ] = { TRUE, FALSE, TRUE };
-	CHECK_EQ( LaneWar_seatForTick( ends, 0 ), 0 );
-	CHECK_EQ( LaneWar_seatForTick( ends, 1 ), 2 );
-	CHECK_EQ( LaneWar_seatForTick( ends, 2 ), 0 );
-	CHECK_EQ( LaneWar_seatForTick( ends, 3 ), 2 );
+	const Bool ends[ DIRECTSTRIKE_SEATS ] = { TRUE, FALSE, TRUE };
+	CHECK_EQ( DirectStrike_seatForTick( ends, 0 ), 0 );
+	CHECK_EQ( DirectStrike_seatForTick( ends, 1 ), 2 );
+	CHECK_EQ( DirectStrike_seatForTick( ends, 2 ), 0 );
+	CHECK_EQ( DirectStrike_seatForTick( ends, 3 ), 2 );
 
-	const Bool none[ LANEWAR_SEATS ] = { FALSE, FALSE, FALSE };
-	CHECK_EQ( LaneWar_seatForTick( none, 0 ), -1 );
-	CHECK_EQ( LaneWar_seatForTick( none, 7 ), -1 );
+	const Bool none[ DIRECTSTRIKE_SEATS ] = { FALSE, FALSE, FALSE };
+	CHECK_EQ( DirectStrike_seatForTick( none, 0 ), -1 );
+	CHECK_EQ( DirectStrike_seatForTick( none, 7 ), -1 );
 }
 
-TEST(lane_war_middle_goes_to_the_larger_count_past_the_line_and_pays_a_quarter_more)
+TEST(direct_strike_middle_goes_to_the_larger_count_past_the_line_and_pays_a_quarter_more)
 {
-	CHECK_EQ( LaneWar_middleHolder( 0, 0 ), -1 );
-	CHECK_EQ( LaneWar_middleHolder( 3, 3 ), -1 );
-	CHECK_EQ( LaneWar_middleHolder( 1, 0 ), 0 );
-	CHECK_EQ( LaneWar_middleHolder( 4, 9 ), 1 );
+	CHECK_EQ( DirectStrike_middleHolder( 0, 0 ), -1 );
+	CHECK_EQ( DirectStrike_middleHolder( 3, 3 ), -1 );
+	CHECK_EQ( DirectStrike_middleHolder( 1, 0 ), 0 );
+	CHECK_EQ( DirectStrike_middleHolder( 4, 9 ), 1 );
 
-	CHECK_EQ( LaneWar_income( FALSE ), (UnsignedInt)400 );
-	CHECK_EQ( LaneWar_income( TRUE ), (UnsignedInt)( 400 + 100 ) );
-	CHECK_EQ( (Int)LANEWAR_START_MONEY, 2000 );
+	CHECK_EQ( DirectStrike_income( FALSE ), (UnsignedInt)400 );
+	CHECK_EQ( DirectStrike_income( TRUE ), (UnsignedInt)( 400 + 100 ) );
+	CHECK_EQ( (Int)DIRECTSTRIKE_START_MONEY, 2000 );
 }
 
-TEST(lane_war_plot_slots_cover_the_footprint_and_never_share)
+TEST(direct_strike_plot_slots_cover_the_footprint_and_never_share)
 {
 	// a Ranger's few units take one slot, a tank of radius 15 two a side, an Overlord's 25 three
-	CHECK_EQ( LaneWar_slotsFor( 0.0f ), 1 );
-	CHECK_EQ( LaneWar_slotsFor( 6.0f ), 1 );
-	CHECK_EQ( LaneWar_slotsFor( 10.0f ), 1 );
-	CHECK_EQ( LaneWar_slotsFor( 10.5f ), 2 );
-	CHECK_EQ( LaneWar_slotsFor( 15.0f ), 2 );
-	CHECK_EQ( LaneWar_slotsFor( 25.0f ), 3 );
+	CHECK_EQ( DirectStrike_slotsFor( 0.0f ), 1 );
+	CHECK_EQ( DirectStrike_slotsFor( 6.0f ), 1 );
+	CHECK_EQ( DirectStrike_slotsFor( 10.0f ), 1 );
+	CHECK_EQ( DirectStrike_slotsFor( 10.5f ), 2 );
+	CHECK_EQ( DirectStrike_slotsFor( 15.0f ), 2 );
+	CHECK_EQ( DirectStrike_slotsFor( 25.0f ), 3 );
 
 	// a 12 by 8 grid: the block has to stay inside it
-	CHECK( LaneWar_blockFits( 0, 0, 1, 12, 8 ) );
-	CHECK( LaneWar_blockFits( 10, 6, 2, 12, 8 ) );
-	CHECK( !LaneWar_blockFits( 11, 6, 2, 12, 8 ) );
-	CHECK( !LaneWar_blockFits( 10, 7, 2, 12, 8 ) );
-	CHECK( !LaneWar_blockFits( -1, 0, 1, 12, 8 ) );
+	CHECK( DirectStrike_blockFits( 0, 0, 1, 12, 8 ) );
+	CHECK( DirectStrike_blockFits( 10, 6, 2, 12, 8 ) );
+	CHECK( !DirectStrike_blockFits( 11, 6, 2, 12, 8 ) );
+	CHECK( !DirectStrike_blockFits( 10, 7, 2, 12, 8 ) );
+	CHECK( !DirectStrike_blockFits( -1, 0, 1, 12, 8 ) );
 
 	// two blocks overlap when they share a slot, and touching edges is no overlap
-	CHECK( LaneWar_blocksOverlap( 0, 0, 2, 1, 1, 1 ) );
-	CHECK( LaneWar_blocksOverlap( 3, 3, 1, 2, 2, 2 ) );
-	CHECK( !LaneWar_blocksOverlap( 0, 0, 2, 2, 0, 2 ) );
-	CHECK( !LaneWar_blocksOverlap( 0, 0, 2, 0, 2, 1 ) );
+	CHECK( DirectStrike_blocksOverlap( 0, 0, 2, 1, 1, 1 ) );
+	CHECK( DirectStrike_blocksOverlap( 3, 3, 1, 2, 2, 2 ) );
+	CHECK( !DirectStrike_blocksOverlap( 0, 0, 2, 2, 0, 2 ) );
+	CHECK( !DirectStrike_blocksOverlap( 0, 0, 2, 0, 2, 1 ) );
 
 	ScenarioAction action;
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 laneplace 0 AmericaTankCrusader 4 2", &action ), (Int)SCENARIO_PARSE_OK );
@@ -13489,26 +13489,26 @@ TEST(lane_war_plot_slots_cover_the_footprint_and_never_share)
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 laneplace 0 AmericaTankCrusader 4", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
 }
 
-TEST(lane_war_plot_front_faces_the_lane_and_leads_the_wave)
+TEST(direct_strike_plot_front_faces_the_lane_and_leads_the_wave)
 {
 	/* The plots of the night of 2026-11-20, turned: 160 along the lane and 240 across, team A's behind
 		the west end with its front, the edge towards the lane, facing east, team B's behind the east end
 		facing west. Column 0 row 0 is the front left slot as each team faces the enemy. */
-	const Coord2D a00 = LaneWar_slotPlace( 400.0f, 1280.0f, 560.0f, 1520.0f, 1.0f, 0, 0, 1 );
-	const Coord2D aLast = LaneWar_slotPlace( 400.0f, 1280.0f, 560.0f, 1520.0f, 1.0f, 11, 7, 1 );
+	const Coord2D a00 = DirectStrike_slotPlace( 400.0f, 1280.0f, 560.0f, 1520.0f, 1.0f, 0, 0, 1 );
+	const Coord2D aLast = DirectStrike_slotPlace( 400.0f, 1280.0f, 560.0f, 1520.0f, 1.0f, 11, 7, 1 );
 	CHECK_NEAR( a00.x, 550.0f, 0.01f );
 	CHECK_NEAR( a00.y, 1510.0f, 0.01f );
 	CHECK_NEAR( aLast.x, 410.0f, 0.01f );
 	CHECK_NEAR( aLast.y, 1290.0f, 0.01f );
-	const Coord2D b00 = LaneWar_slotPlace( 4440.0f, 1280.0f, 4600.0f, 1520.0f, -1.0f, 0, 0, 1 );
-	const Coord2D bLast = LaneWar_slotPlace( 4440.0f, 1280.0f, 4600.0f, 1520.0f, -1.0f, 11, 7, 1 );
+	const Coord2D b00 = DirectStrike_slotPlace( 4440.0f, 1280.0f, 4600.0f, 1520.0f, -1.0f, 0, 0, 1 );
+	const Coord2D bLast = DirectStrike_slotPlace( 4440.0f, 1280.0f, 4600.0f, 1520.0f, -1.0f, 11, 7, 1 );
 	CHECK_NEAR( b00.x, 4450.0f, 0.01f );
 	CHECK_NEAR( b00.y, 1290.0f, 0.01f );
 	CHECK_NEAR( bLast.x, 4590.0f, 0.01f );
 	CHECK_NEAR( bLast.y, 1510.0f, 0.01f );
 
 	// a tank's two by two block at column 4 row 0 centres one slot in from its front left corner
-	const Coord2D tank = LaneWar_slotPlace( 400.0f, 1280.0f, 560.0f, 1520.0f, 1.0f, 4, 0, 2 );
+	const Coord2D tank = DirectStrike_slotPlace( 400.0f, 1280.0f, 560.0f, 1520.0f, 1.0f, 4, 0, 2 );
 	CHECK_NEAR( tank.x, 540.0f, 0.01f );
 	CHECK_NEAR( tank.y, 1420.0f, 0.01f );
 
@@ -13522,32 +13522,32 @@ TEST(lane_war_plot_front_faces_the_lane_and_leads_the_wave)
 	CHECK_NEAR( leftA, -leftB, 0.01f );
 }
 
-TEST(lane_war_damage_scales_reach_only_their_targets)
+TEST(direct_strike_damage_scales_reach_only_their_targets)
 {
 	// the artillery at 60 against units, men included, and full against a structure
-	CHECK_EQ( LaneWar_damagePercent( "ChinaVehicleNukeLauncher", FALSE, FALSE ), 60 );
-	CHECK_EQ( LaneWar_damagePercent( "ChinaVehicleNukeLauncher", TRUE, FALSE ), 100 );
-	CHECK_EQ( LaneWar_damagePercent( "Nuke_ChinaVehicleNukeLauncher", FALSE, FALSE ), 60 );
-	CHECK_EQ( LaneWar_damagePercent( "GLAVehicleScudLauncher", FALSE, TRUE ), 60 );
-	CHECK_EQ( LaneWar_damagePercent( "AmericaVehicleTomahawk", TRUE, FALSE ), 100 );
+	CHECK_EQ( DirectStrike_damagePercent( "ChinaVehicleNukeLauncher", FALSE, FALSE ), 60 );
+	CHECK_EQ( DirectStrike_damagePercent( "ChinaVehicleNukeLauncher", TRUE, FALSE ), 100 );
+	CHECK_EQ( DirectStrike_damagePercent( "Nuke_ChinaVehicleNukeLauncher", FALSE, FALSE ), 60 );
+	CHECK_EQ( DirectStrike_damagePercent( "GLAVehicleScudLauncher", FALSE, TRUE ), 60 );
+	CHECK_EQ( DirectStrike_damagePercent( "AmericaVehicleTomahawk", TRUE, FALSE ), 100 );
 	// the Aurora at 75 against structures only, a general's copy too
-	CHECK_EQ( LaneWar_damagePercent( "AirF_AmericaJetAurora", TRUE, FALSE ), 75 );
-	CHECK_EQ( LaneWar_damagePercent( "AmericaJetAurora", FALSE, FALSE ), 100 );
+	CHECK_EQ( DirectStrike_damagePercent( "AirF_AmericaJetAurora", TRUE, FALSE ), 75 );
+	CHECK_EQ( DirectStrike_damagePercent( "AmericaJetAurora", FALSE, FALSE ), 100 );
 	// the Pathfinder at 45 against infantry only
-	CHECK_EQ( LaneWar_damagePercent( "AmericaInfantryPathfinder", FALSE, TRUE ), 45 );
-	CHECK_EQ( LaneWar_damagePercent( "AmericaInfantryPathfinder", FALSE, FALSE ), 100 );
+	CHECK_EQ( DirectStrike_damagePercent( "AmericaInfantryPathfinder", FALSE, TRUE ), 45 );
+	CHECK_EQ( DirectStrike_damagePercent( "AmericaInfantryPathfinder", FALSE, FALSE ), 100 );
 	// nothing else, and no name that merely ends the same way
-	CHECK_EQ( LaneWar_damagePercent( "AmericaInfantryRanger", FALSE, TRUE ), 100 );
-	CHECK_EQ( LaneWar_damagePercent( "XAmericaJetAurora", TRUE, FALSE ), 100 );
+	CHECK_EQ( DirectStrike_damagePercent( "AmericaInfantryRanger", FALSE, TRUE ), 100 );
+	CHECK_EQ( DirectStrike_damagePercent( "XAmericaJetAurora", TRUE, FALSE ), 100 );
 
-	CHECK( LaneWar_hasModeWeaponSet( "AmericaTankMicrowave" ) );
-	CHECK( LaneWar_hasModeWeaponSet( "SupW_AmericaTankMicrowave" ) );
+	CHECK( DirectStrike_hasModeWeaponSet( "AmericaTankMicrowave" ) );
+	CHECK( DirectStrike_hasModeWeaponSet( "SupW_AmericaTankMicrowave" ) );
 	// Black Lotus's gun is on her LaneWar_ copy, never a set on her own template
-	CHECK( !LaneWar_hasModeWeaponSet( "ChinaInfantryBlackLotus" ) );
-	CHECK( !LaneWar_hasModeWeaponSet( "ChinaTankECM" ) );
+	CHECK( !DirectStrike_hasModeWeaponSet( "ChinaInfantryBlackLotus" ) );
+	CHECK( !DirectStrike_hasModeWeaponSet( "ChinaTankECM" ) );
 }
 
-TEST(lane_war_times_are_the_same_match_at_every_speed)
+TEST(direct_strike_times_are_the_same_match_at_every_speed)
 {
 	// game time: at the native 1.5x a tick every 45 wall s, the first at 90 s, a copy living 130 s, as
 	// tuned; at another speed the same share of the match, so the frames scale against the speed
@@ -13562,9 +13562,9 @@ TEST(lane_war_times_are_the_same_match_at_every_speed)
 	for( Int i = 0; LOGICFRAMES_PER_SECOND == 30 && i < (Int)( sizeof( SPEEDS ) / sizeof( SPEEDS[ 0 ] ) ); ++i )
 	{
 		GameSpeed_set( SPEEDS[ i ].percent );
-		CHECK_EQ( LANEWAR_TICK_FRAMES, SPEEDS[ i ].tick );
-		CHECK_EQ( LANEWAR_FIRST_TICK_FRAMES, SPEEDS[ i ].first );
-		CHECK_EQ( LANEWAR_LIFESPAN_FRAMES, SPEEDS[ i ].life );
+		CHECK_EQ( DIRECTSTRIKE_TICK_FRAMES, SPEEDS[ i ].tick );
+		CHECK_EQ( DIRECTSTRIKE_FIRST_TICK_FRAMES, SPEEDS[ i ].first );
+		CHECK_EQ( DIRECTSTRIKE_LIFESPAN_FRAMES, SPEEDS[ i ].life );
 	}
 	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
 
@@ -13572,86 +13572,86 @@ TEST(lane_war_times_are_the_same_match_at_every_speed)
 	CHECK_EQ( ObjectStatusMaskType::getSingleBitFromName( "UNATTACKABLE" ), (Int)OBJECT_STATUS_UNATTACKABLE );
 }
 
-TEST(lane_war_jets_take_off_when_the_meeting_is_no_further_than_their_flight)
+TEST(direct_strike_jets_take_off_when_the_meeting_is_no_further_than_their_flight)
 {
 	Real ahead = -1.0f;
 	// fronts 1000 apart closing at 1 and 1 a frame meet in 500 frames, 500 ahead of my front; jets
 	// 2500 behind it at 10 a frame need 300 frames to be there: not yet
-	CHECK( !LaneWar_strikeDue( 1000.0f, 1.0f, 1.0f, 2500.0f, 10.0f, &ahead ) );
+	CHECK( !DirectStrike_strikeDue( 1000.0f, 1.0f, 1.0f, 2500.0f, 10.0f, &ahead ) );
 	CHECK_NEAR( ahead, 500.0f, 0.001f );
 	// 500 apart: they meet in 250 frames, 250 ahead, and the jets need 275: go
-	CHECK( LaneWar_strikeDue( 500.0f, 1.0f, 1.0f, 2500.0f, 10.0f, &ahead ) );
+	CHECK( DirectStrike_strikeDue( 500.0f, 1.0f, 1.0f, 2500.0f, 10.0f, &ahead ) );
 	CHECK_NEAR( ahead, 250.0f, 0.001f );
 	// a front standing still is met where it stands: 200 frames off, 300 of flight
-	CHECK( LaneWar_strikeDue( 400.0f, 0.0f, 2.0f, 3000.0f, 10.0f, &ahead ) );
+	CHECK( DirectStrike_strikeDue( 400.0f, 0.0f, 2.0f, 3000.0f, 10.0f, &ahead ) );
 	CHECK_NEAR( ahead, 0.0f, 0.001f );
 	// fronts in contact strike now, halfway between them, moving or not and with no jet speed known
-	CHECK( LaneWar_strikeDue( (Real)LANEWAR_STRIKE_CONTACT_GAP, 0.0f, 0.0f, 5000.0f, 0.0f, &ahead ) );
-	CHECK_NEAR( ahead, 0.5f * LANEWAR_STRIKE_CONTACT_GAP, 0.001f );
-	CHECK( LaneWar_strikeDue( -30.0f, 1.0f, 1.0f, 5000.0f, 10.0f, &ahead ) );
+	CHECK( DirectStrike_strikeDue( (Real)DIRECTSTRIKE_STRIKE_CONTACT_GAP, 0.0f, 0.0f, 5000.0f, 0.0f, &ahead ) );
+	CHECK_NEAR( ahead, 0.5f * DIRECTSTRIKE_STRIKE_CONTACT_GAP, 0.001f );
+	CHECK( DirectStrike_strikeDue( -30.0f, 1.0f, 1.0f, 5000.0f, 10.0f, &ahead ) );
 	CHECK_NEAR( ahead, 0.0f, 0.001f );
 	// apart and standing, or backing off, there is nothing to meet
-	CHECK( !LaneWar_strikeDue( 600.0f, 0.0f, 0.0f, 100.0f, 10.0f, &ahead ) );
-	CHECK( !LaneWar_strikeDue( 600.0f, -2.0f, -1.0f, 100.0f, 10.0f, &ahead ) );
+	CHECK( !DirectStrike_strikeDue( 600.0f, 0.0f, 0.0f, 100.0f, 10.0f, &ahead ) );
+	CHECK( !DirectStrike_strikeDue( 600.0f, -2.0f, -1.0f, 100.0f, 10.0f, &ahead ) );
 
 	// a strike and a rearm are game time, the lifespan stays wall time
-	CHECK_EQ( LANEWAR_STRIKE_FRAMES, (UnsignedInt)( 30 * LOGICFRAMES_PER_GAME_SECOND ) );
-	CHECK_EQ( LANEWAR_JET_REARM_FRAMES, (UnsignedInt)( 15 * LOGICFRAMES_PER_GAME_SECOND ) );
+	CHECK_EQ( DIRECTSTRIKE_STRIKE_FRAMES, (UnsignedInt)( 30 * LOGICFRAMES_PER_GAME_SECOND ) );
+	CHECK_EQ( DIRECTSTRIKE_JET_REARM_FRAMES, (UnsignedInt)( 15 * LOGICFRAMES_PER_GAME_SECOND ) );
 }
 
-TEST(lane_war_late_income_leaves_the_opening_alone_then_grows_to_its_cap)
+TEST(direct_strike_late_income_leaves_the_opening_alone_then_grows_to_its_cap)
 {
-	for( UnsignedInt tick = 0; tick < LANEWAR_LATE_INCOME_FROM_TICK; ++tick )
-		CHECK_EQ( LaneWar_lateIncome( tick ), (UnsignedInt)0 );
-	CHECK_EQ( LaneWar_lateIncome( LANEWAR_LATE_INCOME_FROM_TICK ), (UnsignedInt)LANEWAR_LATE_INCOME_STEP );
-	CHECK_EQ( LaneWar_lateIncome( LANEWAR_LATE_INCOME_FROM_TICK + 1 ), (UnsignedInt)( 2 * LANEWAR_LATE_INCOME_STEP ) );
-	CHECK_EQ( LaneWar_lateIncome( 1000 ), (UnsignedInt)LANEWAR_LATE_INCOME_MOST );
+	for( UnsignedInt tick = 0; tick < DIRECTSTRIKE_LATE_INCOME_FROM_TICK; ++tick )
+		CHECK_EQ( DirectStrike_lateIncome( tick ), (UnsignedInt)0 );
+	CHECK_EQ( DirectStrike_lateIncome( DIRECTSTRIKE_LATE_INCOME_FROM_TICK ), (UnsignedInt)DIRECTSTRIKE_LATE_INCOME_STEP );
+	CHECK_EQ( DirectStrike_lateIncome( DIRECTSTRIKE_LATE_INCOME_FROM_TICK + 1 ), (UnsignedInt)( 2 * DIRECTSTRIKE_LATE_INCOME_STEP ) );
+	CHECK_EQ( DirectStrike_lateIncome( 1000 ), (UnsignedInt)DIRECTSTRIKE_LATE_INCOME_MOST );
 	for( UnsignedInt tick = 1; tick < 100; ++tick )
-		CHECK( LaneWar_lateIncome( tick ) >= LaneWar_lateIncome( tick - 1 ) );
+		CHECK( DirectStrike_lateIncome( tick ) >= DirectStrike_lateIncome( tick - 1 ) );
 }
 
-TEST(lane_war_tiers_cost_what_the_plan_says_and_a_sale_pays_back_half_once_sent)
+TEST(direct_strike_tiers_cost_what_the_plan_says_and_a_sale_pays_back_half_once_sent)
 {
 	// four income levels at 1000, 1000, 1500 and 2000, every one paying 100 more a tick, the middle a quarter on top
-	CHECK_EQ( LaneWar_incomeAt( 0, FALSE ), (UnsignedInt)400 );
-	CHECK_EQ( LaneWar_incomeAt( 4, FALSE ), (UnsignedInt)( 400 + 4 * 100 ) );
-	CHECK_EQ( LaneWar_incomeAt( 2, TRUE ), (UnsignedInt)( ( 400 + 2 * 100 ) * 125 / 100 ) );
-	CHECK_EQ( LaneWar_incomeAt( 0, TRUE ), LaneWar_income( TRUE ) );
-	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, 0 ), 0 );
-	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, 1 ), 1000 );
-	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, 2 ), 1000 );
-	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, 3 ), 1500 );
-	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, 4 ), 2000 );
-	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, LANEWAR_INCOME_TIERS + 1 ), 0 );
+	CHECK_EQ( DirectStrike_incomeAt( 0, FALSE ), (UnsignedInt)400 );
+	CHECK_EQ( DirectStrike_incomeAt( 4, FALSE ), (UnsignedInt)( 400 + 4 * 100 ) );
+	CHECK_EQ( DirectStrike_incomeAt( 2, TRUE ), (UnsignedInt)( ( 400 + 2 * 100 ) * 125 / 100 ) );
+	CHECK_EQ( DirectStrike_incomeAt( 0, TRUE ), DirectStrike_income( TRUE ) );
+	CHECK_EQ( DirectStrike_tierPrice( DIRECTSTRIKE_TRACK_INCOME, 0 ), 0 );
+	CHECK_EQ( DirectStrike_tierPrice( DIRECTSTRIKE_TRACK_INCOME, 1 ), 1000 );
+	CHECK_EQ( DirectStrike_tierPrice( DIRECTSTRIKE_TRACK_INCOME, 2 ), 1000 );
+	CHECK_EQ( DirectStrike_tierPrice( DIRECTSTRIKE_TRACK_INCOME, 3 ), 1500 );
+	CHECK_EQ( DirectStrike_tierPrice( DIRECTSTRIKE_TRACK_INCOME, 4 ), 2000 );
+	CHECK_EQ( DirectStrike_tierPrice( DIRECTSTRIKE_TRACK_INCOME, DIRECTSTRIKE_INCOME_TIERS + 1 ), 0 );
 
 	// pillage: half the health taken off enemy structures, in whole money, a hit's fraction kept for the next
-	CHECK_EQ( LaneWar_pillageOf( 0.0f ), 0 );
-	CHECK_EQ( LaneWar_pillageOf( -5.0f ), 0 );
-	CHECK_EQ( LaneWar_pillageOf( 1.5f ), 0 );
-	CHECK_EQ( LaneWar_pillageOf( 1500.0f ), 1500 * LANEWAR_PILLAGE_PERCENT / 100 );
-	CHECK_EQ( LaneWar_pillageOf( 12.0f ) + ( LaneWar_pillageOf( 25.0f ) - LaneWar_pillageOf( 12.0f ) ), LaneWar_pillageOf( 25.0f ) );
+	CHECK_EQ( DirectStrike_pillageOf( 0.0f ), 0 );
+	CHECK_EQ( DirectStrike_pillageOf( -5.0f ), 0 );
+	CHECK_EQ( DirectStrike_pillageOf( 1.5f ), 0 );
+	CHECK_EQ( DirectStrike_pillageOf( 1500.0f ), 1500 * DIRECTSTRIKE_PILLAGE_PERCENT / 100 );
+	CHECK_EQ( DirectStrike_pillageOf( 12.0f ) + ( DirectStrike_pillageOf( 25.0f ) - DirectStrike_pillageOf( 12.0f ) ), DirectStrike_pillageOf( 25.0f ) );
 
 	// tech starts at 1, so 2 and 3 are the levels on sale
-	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 1 ), 0 );
-	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 2 ), 1500 );
-	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 3 ), 3000 );
-	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 4 ), 0 );
+	CHECK_EQ( DirectStrike_tierPrice( DIRECTSTRIKE_TRACK_TECH, 1 ), 0 );
+	CHECK_EQ( DirectStrike_tierPrice( DIRECTSTRIKE_TRACK_TECH, 2 ), 1500 );
+	CHECK_EQ( DirectStrike_tierPrice( DIRECTSTRIKE_TRACK_TECH, 3 ), 3000 );
+	CHECK_EQ( DirectStrike_tierPrice( DIRECTSTRIKE_TRACK_TECH, 4 ), 0 );
 
 	// a bought tech tier opens 45 native seconds later, on the ticks' clock
-	CHECK_EQ( (Int)LANEWAR_TECH_RESEARCH_FRAMES, (Int)LaneWar_gameFrames( 45 ) );
+	CHECK_EQ( (Int)DIRECTSTRIKE_TECH_RESEARCH_FRAMES, (Int)DirectStrike_gameFrames( 45 ) );
 
 	// a Mixed seat draws from all three sides: every pool holds more than a seat takes, and the heroes are three
-	const char *pool[ LANEWAR_ROSTER_MAX ];
-	CHECK_EQ( LaneWar_mixedPool( 0, pool, LANEWAR_ROSTER_MAX ), 3 );
-	CHECK( LaneWar_mixedPool( 1, pool, LANEWAR_ROSTER_MAX ) > LANEWAR_MIXED_TIER1 );
-	CHECK( LaneWar_mixedPool( 2, pool, LANEWAR_ROSTER_MAX ) > LANEWAR_MIXED_TIER2 );
-	CHECK( LaneWar_mixedPool( 3, pool, LANEWAR_ROSTER_MAX ) > LANEWAR_MIXED_TIER3 );
+	const char *pool[ DIRECTSTRIKE_ROSTER_MAX ];
+	CHECK_EQ( DirectStrike_mixedPool( 0, pool, DIRECTSTRIKE_ROSTER_MAX ), 3 );
+	CHECK( DirectStrike_mixedPool( 1, pool, DIRECTSTRIKE_ROSTER_MAX ) > DIRECTSTRIKE_MIXED_TIER1 );
+	CHECK( DirectStrike_mixedPool( 2, pool, DIRECTSTRIKE_ROSTER_MAX ) > DIRECTSTRIKE_MIXED_TIER2 );
+	CHECK( DirectStrike_mixedPool( 3, pool, DIRECTSTRIKE_ROSTER_MAX ) > DIRECTSTRIKE_MIXED_TIER3 );
 	CHECK_STR( pool[ 0 ], "AmericaJetStealthFighter" );
-	CHECK_EQ( LaneWar_mixedPool( 4, pool, LANEWAR_ROSTER_MAX ), 0 );
+	CHECK_EQ( DirectStrike_mixedPool( 4, pool, DIRECTSTRIKE_ROSTER_MAX ), 0 );
 
-	CHECK_EQ( LaneWar_refund( 225, FALSE ), 225 );
-	CHECK_EQ( LaneWar_refund( 225, TRUE ), 112 );
-	CHECK_EQ( LaneWar_refund( 900, TRUE ), 450 );
+	CHECK_EQ( DirectStrike_refund( 225, FALSE ), 225 );
+	CHECK_EQ( DirectStrike_refund( 225, TRUE ), 112 );
+	CHECK_EQ( DirectStrike_refund( 900, TRUE ), 450 );
 
 	// the drill's lane verbs keep their numbers in name for the director's order
 	ScenarioAction action;
@@ -13666,56 +13666,56 @@ TEST(lane_war_tiers_cost_what_the_plan_says_and_a_sale_pays_back_half_once_sent)
 	CHECK( ScenarioDrill_parseLine( "30 lanemove 0 0 3 1 5", &action ) != SCENARIO_PARSE_OK );
 }
 
-TEST(lane_war_abilities_start_on_but_the_captures_and_money_and_a_switch_holds_only_what_differs)
+TEST(direct_strike_abilities_start_on_but_the_captures_and_money_and_a_switch_holds_only_what_differs)
 {
 	// the owner's list of 2026-11-20: building captures and money abilities start off, the car bomb too
-	CHECK( !LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_INFANTRY_CAPTURE_BUILDING ) );
-	CHECK( !LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_BLACKLOTUS_CAPTURE_BUILDING ) );
-	CHECK( !LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_BLACKLOTUS_STEAL_CASH_HACK ) );
-	CHECK( !LaneWar_abilityDefaultOn( GUI_COMMAND_HACK_INTERNET, SPECIAL_INVALID ) );
-	CHECK( !LaneWar_abilityDefaultOn( GUICOMMANDMODE_SABOTAGE_BUILDING, SPECIAL_INVALID ) );
-	CHECK( !LaneWar_abilityDefaultOn( GUICOMMANDMODE_CONVERT_TO_CARBOMB, SPECIAL_INVALID ) );
-	CHECK( LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_BLACKLOTUS_DISABLE_VEHICLE_HACK ) );
-	CHECK( LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_TANKHUNTER_TNT_ATTACK ) );
-	CHECK( LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_HACKER_DISABLE_BUILDING ) );
-	CHECK( LaneWar_abilityDefaultOn( GUICOMMANDMODE_HIJACK_VEHICLE, SPECIAL_INVALID ) );
-	CHECK( LaneWar_abilityDefaultOn( GUI_COMMAND_FIRE_WEAPON, SPECIAL_INVALID ) );
-	CHECK( LaneWar_abilityDefaultOn( GUI_COMMAND_SWITCH_WEAPON, SPECIAL_INVALID ) );
+	CHECK( !DirectStrike_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_INFANTRY_CAPTURE_BUILDING ) );
+	CHECK( !DirectStrike_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_BLACKLOTUS_CAPTURE_BUILDING ) );
+	CHECK( !DirectStrike_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_BLACKLOTUS_STEAL_CASH_HACK ) );
+	CHECK( !DirectStrike_abilityDefaultOn( GUI_COMMAND_HACK_INTERNET, SPECIAL_INVALID ) );
+	CHECK( !DirectStrike_abilityDefaultOn( GUICOMMANDMODE_SABOTAGE_BUILDING, SPECIAL_INVALID ) );
+	CHECK( !DirectStrike_abilityDefaultOn( GUICOMMANDMODE_CONVERT_TO_CARBOMB, SPECIAL_INVALID ) );
+	CHECK( DirectStrike_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_BLACKLOTUS_DISABLE_VEHICLE_HACK ) );
+	CHECK( DirectStrike_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_TANKHUNTER_TNT_ATTACK ) );
+	CHECK( DirectStrike_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_HACKER_DISABLE_BUILDING ) );
+	CHECK( DirectStrike_abilityDefaultOn( GUICOMMANDMODE_HIJACK_VEHICLE, SPECIAL_INVALID ) );
+	CHECK( DirectStrike_abilityDefaultOn( GUI_COMMAND_FIRE_WEAPON, SPECIAL_INVALID ) );
+	CHECK( DirectStrike_abilityDefaultOn( GUI_COMMAND_SWITCH_WEAPON, SPECIAL_INVALID ) );
 
 	// a switch away from the default is kept, sorted by player, template and slot; back to it drops it
-	std::vector<LaneWarAbilityToggle> list;
-	LaneWar_setAbilityToggle( list, 2, 40, 3, FALSE, TRUE );
-	LaneWar_setAbilityToggle( list, 0, 90, 1, TRUE, FALSE );
-	LaneWar_setAbilityToggle( list, 2, 40, 1, FALSE, TRUE );
-	LaneWar_setAbilityToggle( list, 0, 90, 1, TRUE, FALSE );		// the same again: no second entry
+	std::vector<DirectStrikeAbilityToggle> list;
+	DirectStrike_setAbilityToggle( list, 2, 40, 3, FALSE, TRUE );
+	DirectStrike_setAbilityToggle( list, 0, 90, 1, TRUE, FALSE );
+	DirectStrike_setAbilityToggle( list, 2, 40, 1, FALSE, TRUE );
+	DirectStrike_setAbilityToggle( list, 0, 90, 1, TRUE, FALSE );		// the same again: no second entry
 	CHECK_EQ( (Int)list.size(), 3 );
 	CHECK_EQ( list[ 0 ].player, 0 );
 	CHECK_EQ( list[ 1 ].slot, 1 );
 	CHECK_EQ( list[ 2 ].slot, 3 );
-	CHECK( !LaneWar_abilityToggleOn( list, 2, 40, 3, TRUE ) );
-	CHECK( LaneWar_abilityToggleOn( list, 0, 90, 1, FALSE ) );
-	CHECK( LaneWar_abilityToggleOn( list, 1, 40, 3, TRUE ) );			// another player keeps the default
-	CHECK( !LaneWar_abilityToggleOn( list, 2, 41, 3, FALSE ) );
-	LaneWar_setAbilityToggle( list, 2, 40, 3, TRUE, TRUE );
+	CHECK( !DirectStrike_abilityToggleOn( list, 2, 40, 3, TRUE ) );
+	CHECK( DirectStrike_abilityToggleOn( list, 0, 90, 1, FALSE ) );
+	CHECK( DirectStrike_abilityToggleOn( list, 1, 40, 3, TRUE ) );			// another player keeps the default
+	CHECK( !DirectStrike_abilityToggleOn( list, 2, 41, 3, FALSE ) );
+	DirectStrike_setAbilityToggle( list, 2, 40, 3, TRUE, TRUE );
 	CHECK_EQ( (Int)list.size(), 2 );
-	CHECK( LaneWar_abilityToggleOn( list, 2, 40, 3, TRUE ) );
-	LaneWar_setAbilityToggle( list, 2, 40, 1, TRUE, FALSE );			// on where the default is off: kept as on
+	CHECK( DirectStrike_abilityToggleOn( list, 2, 40, 3, TRUE ) );
+	DirectStrike_setAbilityToggle( list, 2, 40, 1, TRUE, FALSE );			// on where the default is off: kept as on
 	CHECK_EQ( (Int)list.size(), 2 );
-	CHECK( LaneWar_abilityToggleOn( list, 2, 40, 1, FALSE ) );
+	CHECK( DirectStrike_abilityToggleOn( list, 2, 40, 1, FALSE ) );
 
 	// the order's integers: template id, a command set slot, and the switch as 0 or 1
 	const Int good[ 3 ] = { 12, 1, 0 };
-	CHECK( LaneWar_abilityOrderArgsOk( good, 3 ) );
-	CHECK( !LaneWar_abilityOrderArgsOk( good, 2 ) );
+	CHECK( DirectStrike_abilityOrderArgsOk( good, 3 ) );
+	CHECK( !DirectStrike_abilityOrderArgsOk( good, 2 ) );
 	const Int badId[ 3 ] = { -1, 1, 1 };
 	const Int bigId[ 3 ] = { 0x10000, 1, 1 };
 	const Int badSlot[ 3 ] = { 12, MAX_COMMANDS_PER_SET, 1 };
 	const Int badSwitch[ 3 ] = { 12, 1, 2 };
-	CHECK( !LaneWar_abilityOrderArgsOk( badId, 3 ) );
-	CHECK( !LaneWar_abilityOrderArgsOk( bigId, 3 ) );
-	CHECK( !LaneWar_abilityOrderArgsOk( badSlot, 3 ) );
-	CHECK( !LaneWar_abilityOrderArgsOk( badSwitch, 3 ) );
-	CHECK_EQ( (Int)LANEWAR_ORDER_ABILITY, 5 );
+	CHECK( !DirectStrike_abilityOrderArgsOk( badId, 3 ) );
+	CHECK( !DirectStrike_abilityOrderArgsOk( bigId, 3 ) );
+	CHECK( !DirectStrike_abilityOrderArgsOk( badSlot, 3 ) );
+	CHECK( !DirectStrike_abilityOrderArgsOk( badSwitch, 3 ) );
+	CHECK_EQ( (Int)DIRECTSTRIKE_ORDER_ABILITY, 5 );
 
 	ScenarioAction action;
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 laneability 0 ChinaInfantryTankHunter 1 0", &action ), (Int)SCENARIO_PARSE_OK );
@@ -13725,18 +13725,18 @@ TEST(lane_war_abilities_start_on_but_the_captures_and_money_and_a_switch_holds_o
 	CHECK( ScenarioDrill_parseLine( "30 laneability 0 ChinaInfantryTankHunter 1 2", &action ) != SCENARIO_PARSE_OK );
 }
 
-TEST(lane_war_ranks_cost_a_half_three_quarters_and_all_of_the_unit)
+TEST(direct_strike_ranks_cost_a_half_three_quarters_and_all_of_the_unit)
 {
 	// a Crusader bought for 900: Veteran 450, Elite 675, Heroic 900, nothing past Heroic or for Regular
-	CHECK_EQ( LaneWar_veterancyPrice( 900, LEVEL_VETERAN ), 450 );
-	CHECK_EQ( LaneWar_veterancyPrice( 900, LEVEL_ELITE ), 675 );
-	CHECK_EQ( LaneWar_veterancyPrice( 900, LEVEL_HEROIC ), 900 );
-	CHECK_EQ( LaneWar_veterancyPrice( 900, LEVEL_HEROIC + 1 ), 0 );
-	CHECK_EQ( LaneWar_veterancyPrice( 900, LEVEL_REGULAR ), 0 );
+	CHECK_EQ( DirectStrike_veterancyPrice( 900, LEVEL_VETERAN ), 450 );
+	CHECK_EQ( DirectStrike_veterancyPrice( 900, LEVEL_ELITE ), 675 );
+	CHECK_EQ( DirectStrike_veterancyPrice( 900, LEVEL_HEROIC ), 900 );
+	CHECK_EQ( DirectStrike_veterancyPrice( 900, LEVEL_HEROIC + 1 ), 0 );
+	CHECK_EQ( DirectStrike_veterancyPrice( 900, LEVEL_REGULAR ), 0 );
 	// a Ranger's 225 rounds down: 112 and 168
-	CHECK_EQ( LaneWar_veterancyPrice( 225, LEVEL_VETERAN ), 112 );
-	CHECK_EQ( LaneWar_veterancyPrice( 225, LEVEL_ELITE ), 168 );
-	CHECK_EQ( (Int)LANEWAR_ORDER_VETERANCY, 6 );
+	CHECK_EQ( DirectStrike_veterancyPrice( 225, LEVEL_VETERAN ), 112 );
+	CHECK_EQ( DirectStrike_veterancyPrice( 225, LEVEL_ELITE ), 168 );
+	CHECK_EQ( (Int)DIRECTSTRIKE_ORDER_VETERANCY, 6 );
 
 	ScenarioAction action;
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 lanevet 0 0 3 1", &action ), (Int)SCENARIO_PARSE_OK );
@@ -13746,10 +13746,10 @@ TEST(lane_war_ranks_cost_a_half_three_quarters_and_all_of_the_unit)
 	CHECK_STR( action.name.str(), "0 3 1 2" );
 }
 
-TEST(lane_war_cargo_orders_name_the_plot_unit_and_what_goes_on_it)
+TEST(direct_strike_cargo_orders_name_the_plot_unit_and_what_goes_on_it)
 {
-	CHECK_EQ( (Int)LANEWAR_ORDER_GARRISON, 7 );
-	CHECK_EQ( (Int)LANEWAR_ORDER_UNIT_UPGRADE, 8 );
+	CHECK_EQ( (Int)DIRECTSTRIKE_ORDER_GARRISON, 7 );
+	CHECK_EQ( (Int)DIRECTSTRIKE_ORDER_UNIT_UPGRADE, 8 );
 
 	ScenarioAction action;
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "90 lanegarrison 1 ChinaInfantryRedguard 0 0 0", &action ), (Int)SCENARIO_PARSE_OK );
@@ -13768,36 +13768,36 @@ TEST(lane_war_cargo_orders_name_the_plot_unit_and_what_goes_on_it)
 
 	// every part of a sale comes back under the unit's rule: a 2000 tank, a 500 bunker, a 300 man
 	// ranked for 150, after its first wave
-	CHECK_EQ( LaneWar_refund( 2000, TRUE ) + LaneWar_refund( 500, TRUE ) + LaneWar_refund( 300, TRUE ) + LaneWar_refund( 150, TRUE ), 1475 );
+	CHECK_EQ( DirectStrike_refund( 2000, TRUE ) + DirectStrike_refund( 500, TRUE ) + DirectStrike_refund( 300, TRUE ) + DirectStrike_refund( 150, TRUE ), 1475 );
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The Lane War bot's plan (LaneWarBot.h): one curve of the AI rating through the lobby's four levels,
+/** The Direct Strike bot's plan (DirectStrikeBot.h): one curve of the AI rating through the lobby's four levels,
 	  when it wants its income and tech, moves and sells, and where on a plot it looks for room first. */
-#include "GameLogic/LaneWarBot.h"
+#include "GameLogic/DirectStrikeBot.h"
 
-TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
+TEST(direct_strike_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
 {
-	LaneWarBotPlan easy, medium, hard, brutal, between, past;
-	LaneWarBot_planAt( AI_RATING_EASY, &easy );
-	LaneWarBot_planAt( AI_RATING_MEDIUM, &medium );
-	LaneWarBot_planAt( AI_RATING_HARD, &hard );
-	LaneWarBot_planAt( AI_RATING_BRUTAL, &brutal );
-	LaneWarBot_planAt( 2000.0f, &between );
-	LaneWarBot_planAt( 2600.0f, &past );
+	DirectStrikeBotPlan easy, medium, hard, brutal, between, past;
+	DirectStrikeBot_planAt( AI_RATING_EASY, &easy );
+	DirectStrikeBot_planAt( AI_RATING_MEDIUM, &medium );
+	DirectStrikeBot_planAt( AI_RATING_HARD, &hard );
+	DirectStrikeBot_planAt( AI_RATING_BRUTAL, &brutal );
+	DirectStrikeBot_planAt( 2000.0f, &between );
+	DirectStrikeBot_planAt( 2600.0f, &past );
 	CHECK_EQ( AILevelAboveHardRating[ 0 ], aiRatingToHundredths( AI_RATING_BRUTAL ) );	// the lobby's Brutal is the plan's fourth level
 
 	// the four lobby levels are points on the curve: no level buys income, which never pays back inside
 	// a match; Easy opens tier 2 on tick 12 and Medium on tick 4
-	for( Int level = 1; level <= LANEWAR_INCOME_TIERS; ++level )
-		CHECK( !LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_INCOME, level, 100 ) && !LaneWarBot_wantsTier( easy, LANEWAR_TRACK_INCOME, level, 100 ) );
-	CHECK( !LaneWarBot_wantsTier( easy, LANEWAR_TRACK_TECH, 2, 11 ) );
-	CHECK( LaneWarBot_wantsTier( easy, LANEWAR_TRACK_TECH, 2, 12 ) );
-	CHECK( !LaneWarBot_wantsTier( easy, LANEWAR_TRACK_TECH, 3, 100 ) );
-	CHECK( !LaneWarBot_wantsTier( medium, LANEWAR_TRACK_TECH, 2, 3 ) );
-	CHECK( LaneWarBot_wantsTier( medium, LANEWAR_TRACK_TECH, 2, 4 ) );
-	CHECK( !LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_INCOME, 5, 100 ) );
-	CHECK( !LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_TECH, 1, 100 ) );
+	for( Int level = 1; level <= DIRECTSTRIKE_INCOME_TIERS; ++level )
+		CHECK( !DirectStrikeBot_wantsTier( brutal, DIRECTSTRIKE_TRACK_INCOME, level, 100 ) && !DirectStrikeBot_wantsTier( easy, DIRECTSTRIKE_TRACK_INCOME, level, 100 ) );
+	CHECK( !DirectStrikeBot_wantsTier( easy, DIRECTSTRIKE_TRACK_TECH, 2, 11 ) );
+	CHECK( DirectStrikeBot_wantsTier( easy, DIRECTSTRIKE_TRACK_TECH, 2, 12 ) );
+	CHECK( !DirectStrikeBot_wantsTier( easy, DIRECTSTRIKE_TRACK_TECH, 3, 100 ) );
+	CHECK( !DirectStrikeBot_wantsTier( medium, DIRECTSTRIKE_TRACK_TECH, 2, 3 ) );
+	CHECK( DirectStrikeBot_wantsTier( medium, DIRECTSTRIKE_TRACK_TECH, 2, 4 ) );
+	CHECK( !DirectStrikeBot_wantsTier( brutal, DIRECTSTRIKE_TRACK_INCOME, 5, 100 ) );
+	CHECK( !DirectStrikeBot_wantsTier( brutal, DIRECTSTRIKE_TRACK_TECH, 1, 100 ) );
 	CHECK_EQ( (Int)easy.stepFrames, 6 * LOGICFRAMES_PER_SECOND );
 	CHECK_EQ( (Int)brutal.stepFrames, LOGICFRAMES_PER_SECOND );
 	CHECK( !easy.saves && medium.saves );
@@ -13813,40 +13813,40 @@ TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
 	// a higher rating never wants a tier later, never decides slower, never weighs the enemy less or the dice more
 	for( Real r = 300.0f; r < 3800.0f; r += 10.0f )
 	{
-		LaneWarBotPlan lo, hi;
-		LaneWarBot_planAt( r, &lo );
-		LaneWarBot_planAt( r + 10.0f, &hi );
+		DirectStrikeBotPlan lo, hi;
+		DirectStrikeBot_planAt( r, &lo );
+		DirectStrikeBot_planAt( r + 10.0f, &hi );
 		Bool ordered = hi.stepFrames <= lo.stepFrames && hi.heroTick <= lo.heroTick && hi.jetTick <= lo.jetTick
 									 && hi.extrasTick <= lo.extrasTick && hi.moveTick <= lo.moveTick && hi.sellTick <= lo.sellTick
 									 && hi.counterWeight >= lo.counterWeight && hi.jitter <= lo.jitter;
-		for( Int k = 0; k < LANEWAR_INCOME_TIERS; ++k )
+		for( Int k = 0; k < DIRECTSTRIKE_INCOME_TIERS; ++k )
 			ordered = ordered && hi.incomeTick[ k ] <= lo.incomeTick[ k ];
-		for( Int k = 0; k < LANEWAR_TECH_TIERS - 1; ++k )
+		for( Int k = 0; k < DIRECTSTRIKE_TECH_TIERS - 1; ++k )
 			ordered = ordered && hi.techTick[ k ] <= lo.techTick[ k ];
 		CHECK( ordered );
 	}
 
 	// Easy never moves or sells; Brutal moves from tick 1 and sells from tick 6
-	CHECK( easy.moveTick >= (Real)LANEWAR_BOT_NEVER_TICK && easy.sellTick >= (Real)LANEWAR_BOT_NEVER_TICK );
+	CHECK( easy.moveTick >= (Real)DIRECTSTRIKE_BOT_NEVER_TICK && easy.sellTick >= (Real)DIRECTSTRIKE_BOT_NEVER_TICK );
 	CHECK_NEAR( brutal.moveTick, 1.0f, 1e-6f );
 	CHECK_NEAR( brutal.sellTick, 6.0f, 1e-6f );
 
 	// an 8-row plot in three bands, rows 0-2, 3-4 and 5-7, and a 2-slot block: the front band from the
 	// front, the back band from the back, the middle band from its front, then the rows nearest the band
 	Int rows[ 16 ], inBand;
-	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 8, 2, rows, 16, &inBand ), 7 );
+	CHECK_EQ( DirectStrikeBot_rowOrder( DIRECTSTRIKE_BOT_FRONT, 8, 2, rows, 16, &inBand ), 7 );
 	CHECK_EQ( inBand, 3 );
 	CHECK_EQ( rows[ 0 ], 0 );
 	CHECK_EQ( rows[ 2 ], 2 );
 	CHECK_EQ( rows[ 3 ], 3 );
 	CHECK_EQ( rows[ 6 ], 6 );
-	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_BACK, 8, 2, rows, 16, &inBand ), 7 );
+	CHECK_EQ( DirectStrikeBot_rowOrder( DIRECTSTRIKE_BOT_BACK, 8, 2, rows, 16, &inBand ), 7 );
 	CHECK_EQ( inBand, 2 );		// a 2-deep block's front row can stand on 5 or 6
 	CHECK_EQ( rows[ 0 ], 6 );
 	CHECK_EQ( rows[ 1 ], 5 );
 	CHECK_EQ( rows[ 2 ], 4 );
 	CHECK_EQ( rows[ 6 ], 0 );
-	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_MIDDLE, 8, 2, rows, 16, &inBand ), 7 );
+	CHECK_EQ( DirectStrikeBot_rowOrder( DIRECTSTRIKE_BOT_MIDDLE, 8, 2, rows, 16, &inBand ), 7 );
 	CHECK_EQ( inBand, 2 );
 	CHECK_EQ( rows[ 0 ], 3 );
 	CHECK_EQ( rows[ 1 ], 4 );
@@ -13857,15 +13857,15 @@ TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
 	for( Int i = 0; i < 7; ++i )
 		every |= 1 << rows[ i ];
 	CHECK_EQ( every, ( 1 << 7 ) - 1 );
-	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 2, 3, rows, 16, &inBand ), 0 );
+	CHECK_EQ( DirectStrikeBot_rowOrder( DIRECTSTRIKE_BOT_FRONT, 2, 3, rows, 16, &inBand ), 0 );
 	// a grid two rows deep: a 1-slot block tries row 0, then row 1
-	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 2, 1, rows, 16, &inBand ), 2 );
+	CHECK_EQ( DirectStrikeBot_rowOrder( DIRECTSTRIKE_BOT_FRONT, 2, 1, rows, 16, &inBand ), 2 );
 	CHECK_EQ( inBand, 1 );
 	CHECK_EQ( rows[ 1 ], 1 );
 
 	// 12 columns and a 2-slot block: 5, 4, 6, 3, 7 ... every one of 0 to 10 once
 	Int cols[ 16 ];
-	CHECK_EQ( LaneWarBot_columnOrder( 12, 2, cols, 16 ), 11 );
+	CHECK_EQ( DirectStrikeBot_columnOrder( 12, 2, cols, 16 ), 11 );
 	CHECK_EQ( cols[ 0 ], 5 );
 	CHECK_EQ( cols[ 1 ], 4 );
 	CHECK_EQ( cols[ 2 ], 6 );

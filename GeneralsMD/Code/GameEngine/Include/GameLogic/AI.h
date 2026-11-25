@@ -196,7 +196,7 @@ enum AISkillLevel
 #define AI_RATING_EASY		800.0f
 #define AI_RATING_MEDIUM	1300.0f
 #define AI_RATING_HARD		1800.0f
-/** The lobby's four levels above Hard (AILevelAboveHardRating); Brutal is also the Lane War bot's fourth anchor. */
+/** The lobby's four levels above Hard (AILevelAboveHardRating); Brutal is also the Direct Strike bot's fourth anchor. */
 #define AI_RATING_BRUTAL	2200.0f
 #define AI_RATING_VICIOUS	2600.0f
 #define AI_RATING_SAVAGE	3400.0f
@@ -2024,7 +2024,7 @@ public:
 	void groupAttackTeam( const Team *team, Int maxShotsToFire, CommandSourceType cmdSource );							///< attack the given team
 	void groupAttackPosition( const Coord3D *pos, Int maxShotsToFire, CommandSourceType cmdSource );						///< attack given spot
 	void groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire, CommandSourceType cmdSource );	///< Attack move to the location
-	void groupLaneMarch( Real dx, Int maxShotsToFire, CommandSourceType cmdSource );	///< Lane War wave: one formation, each member attack-moving dx along x on its own y
+	void groupLaneMarch( Real dx, Int maxShotsToFire, CommandSourceType cmdSource );	///< Direct Strike wave: one formation, each member attack-moving dx along x on its own y
 	void groupHunt( CommandSourceType cmdSource );														///< begin "seek and destroy"
 	void groupRepair( Object *obj, CommandSourceType cmdSource );						///< repair the given object
 	void groupResumeConstruction( Object *obj, CommandSourceType cmdSource );	///< resume construction on the object

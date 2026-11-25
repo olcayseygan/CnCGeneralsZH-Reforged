@@ -38,7 +38,7 @@
 // condition itself, at the bind and in DayNight_update across the seconds the lights turn, so windows,
 // lamps and headlights come on after dusk and go off after dawn on the same frame on every machine.
 //
-// The cycle stands down under the Apocalypse and Lane War, which write the same light tables.
+// The cycle stands down under the Apocalypse and Direct Strike, which write the same light tables.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,7 +90,7 @@ enum
 	DAYNIGHT_VEHICLE_DELAY_SECONDS = 4,
 };
 
-/// the cycle runs in this match: the box is ticked and neither the Apocalypse nor Lane War is on, one
+/// the cycle runs in this match: the box is ticked and neither the Apocalypse nor Direct Strike is on, one
 /// Bool GameLogic settles at the start and saves ahead of the objects (GameLogic::isDayNight)
 extern Bool DayNight_isOn( void );
 

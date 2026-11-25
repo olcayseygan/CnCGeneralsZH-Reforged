@@ -53,7 +53,7 @@
 #include "GameClient/HotKey.h"
 #include "GameClient/HotkeyScheme.h"
 #include "GameClient/MetaEvent.h"
-#include "GameClient/LaneHud.h"
+#include "GameClient/DirectStrikeHud.h"
 
 #include "GameLogic/GameLogic.h" // for TheGameLogic->getFrame()
 
@@ -634,13 +634,13 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 			disp = DESTROY_MESSAGE;
 		}
 
-		// Lane War: Tab held lays the other seats' incomes and plots out, and is Tab's only job there (the
+		// Direct Strike: Tab held lays the other seats' incomes and plots out, and is Tab's only job there (the
 		// HUD has its own diplomacy key, and the window would cover it)
-		const Bool laneTab = !isModifierKey && key == MK_TAB && newModState == NONE && LaneHud_isShowing();
+		const Bool laneTab = !isModifierKey && key == MK_TAB && newModState == NONE && DirectStrikeHud_isShowing();
 		if( laneTab )
 		{
 			if( !( keyState & KEY_STATE_AUTOREPEAT ) )
-				LaneHud_holdScoreboard( ( keyState & KEY_STATE_DOWN ) != 0 );
+				DirectStrikeHud_holdScoreboard( ( keyState & KEY_STATE_DOWN ) != 0 );
 			disp = DESTROY_MESSAGE;
 		}
 
@@ -765,8 +765,8 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 				( keyState & KEY_STATE_DOWN ) && !( keyState & KEY_STATE_AUTOREPEAT ) &&
 				TheGameClient->getFrame() >= 1 && !( TheShell && TheShell->isShellActive() ) )
 		{
-			// on a Lane War map Home is the way back to the player's own plot
-			TheMessageStream->appendMessage( LaneHud_isShowing() ? GameMessage::MSG_META_VIEW_COMMAND_CENTER
+			// on a Direct Strike map Home is the way back to the player's own plot
+			TheMessageStream->appendMessage( DirectStrikeHud_isShowing() ? GameMessage::MSG_META_VIEW_COMMAND_CENTER
 																													: GameMessage::MSG_META_CAMERA_RESET );
 			disp = DESTROY_MESSAGE;
 		}

@@ -18,16 +18,16 @@
 
 // FILE: DirectStrikeLayout.h /////////////////////////////////////////////////////////////////////
 //
-// Where the Direct Strike screens stand, in plain integers so test_lanehud checks them alone.  A screen
+// Where the Direct Strike screens stand, in plain integers so test_directstrikehud checks them alone.  A screen
 // is authored at 1920x1080 and put on any screen by the frame: k = min(W / 1920, H / 1080), the 1920k
 // by 1080k box centred.  The lobby's rects began as hud-artist's README-lobby.md of 2026-11-21 and are the
 // Spearhead console of 2026-11-23 now (the owner's direction C, docs/reference/DIRECT-STRIKE-THEME.md): one
 // console, every plate pointing at the lane, every seat a full card, the centre column square on the seat
-// rows; the in-match HUD keeps its own anchoring in LaneHudLayout.h.  DirectStrikeTheme.h is what draws in
+// rows; the in-match HUD keeps its own anchoring in DirectStrikeHudLayout.h.  DirectStrikeTheme.h is what draws in
 // them.
 //
 // A seat is a place on the console and the start the player stands on: seat n is start n, team 1 the even
-// seats on the left and team 2 the odd ones on the right (LaneWar_teamOfStart), row n / 2 down.  A seat is
+// seats on the left and team 2 the odd ones on the right (DirectStrike_teamOfStart), row n / 2 down.  A seat is
 // not a slot: a player keeps his slot and moves by his start, so DirectStrikeLobby_seats says which slot
 // shows at which seat.
 //
@@ -38,7 +38,7 @@
 #ifndef __DIRECTSTRIKELAYOUT_H_
 #define __DIRECTSTRIKELAYOUT_H_
 
-#include "GameClient/LaneHudLayout.h"
+#include "GameClient/DirectStrikeHudLayout.h"
 
 /// a 1920x1080 screen put on a real one
 struct DirectStrikeFrame
@@ -82,11 +82,11 @@ inline int DirectStrike_px( const DirectStrikeFrame &f, float design )
 }
 
 /// a design rect on the screen; both corners are rounded, so neighbours share their edge
-inline LaneHudBox DirectStrike_box( const DirectStrikeFrame &f, const DirectStrikeRect &r )
+inline DirectStrikeHudBox DirectStrike_box( const DirectStrikeFrame &f, const DirectStrikeRect &r )
 {
 	const int lx = f.ox + (int)( r.x0 * f.k + 0.5f ), ly = f.oy + (int)( r.y0 * f.k + 0.5f );
 	const int hx = f.ox + (int)( r.x1 * f.k + 0.5f ), hy = f.oy + (int)( r.y1 * f.k + 0.5f );
-	return LaneHud_box( lx, ly, hx - lx, hy - ly );
+	return DirectStrikeHud_box( lx, ly, hx - lx, hy - ly );
 }
 
 /// a screen point back in the design's space

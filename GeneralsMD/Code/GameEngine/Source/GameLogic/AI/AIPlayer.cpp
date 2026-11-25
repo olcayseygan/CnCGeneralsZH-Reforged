@@ -37,7 +37,7 @@
 #include "Common/GlobalData.h"
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
-#include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/ApocalypseDirector.h"
 #include "Common/PlayerTemplate.h"
 #include "Common/SpecialPower.h"
@@ -2572,7 +2572,7 @@ Bool AIPlayer::isLocationSafe(const Coord3D *pos, const ThingTemplate *tthing )
 	// Apocalypse and Direct Strike seats keep counting it, as they did.
 	PartitionFilterRejectByKindOf filterInert(MAKE_KINDOF_MASK(KINDOF_INERT), KINDOFMASK_NONE);
 	if (runsOwnAI() && !(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) &&
-			!(TheLaneWarDirector != NULL && TheLaneWarDirector->isActive()))
+			!(TheDirectStrikeDirector != NULL && TheDirectStrikeDirector->isActive()))
 		filters[numFilters++] = &filterInert;
 	filters[numFilters] = NULL;
 
@@ -6995,8 +6995,8 @@ void AIPlayer::update( void )
 	// its base, its attacks and its superweapon by the map script, which is the whole of its difficulty:
 	// run on top of that, Kwai's $30000 stood three nuclear silos a minute into the match.  So is a
 	// skirmish seat on a map that scripts it: an Art of Defense GLA left its wave paths for a base.
-	// A Lane War seat has no base and its units are the director's wave copies, which it alone drives.
-	if( runsOwnAI() && !TheLaneWarDirector->isActive() )
+	// A Direct Strike seat has no base and its units are the director's wave copies, which it alone drives.
+	if( runsOwnAI() && !TheDirectStrikeDirector->isActive() )
 	{
 		AI_PHASE( AIP_SCOUT,   doScouting() );					// Keep one unit looking at the map.
 		AI_PHASE( AIP_RETREAT, doRetreats() );					// Break off the fights we are losing.
@@ -8005,7 +8005,7 @@ static const Real ENEMY_START_KEEP_OUT = 0.8f;
 static Bool onEnemySide( const Coord3D *pos, const Coord3D *base, const Coord3D *threats, Int threatCount )
 {
 	if( (TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) ||
-			(TheLaneWarDirector != NULL && TheLaneWarDirector->isActive()) )
+			(TheDirectStrikeDirector != NULL && TheDirectStrikeDirector->isActive()) )
 		return FALSE;
 	const Real ownSqr = sqr( pos->x - base->x ) + sqr( pos->y - base->y );
 	const Real keepOutSqr = sqr( 2.0f * TheAI->getAiData()->m_supplyCenterSafeRadius );
@@ -11422,7 +11422,7 @@ void AIPlayer::defendHome( void )
 	// came in handfuls and that base fell where it used to hold.  Apocalypse and Direct Strike seats play as
 	// they did: everything idle goes, in the list's order.
 	const Bool asBefore = (TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) ||
-		(TheLaneWarDirector != NULL && TheLaneWarDirector->isActive());
+		(TheDirectStrikeDirector != NULL && TheDirectStrikeDirector->isActive());
 	const Bool capped = intruder->isKindOf( KINDOF_AIRCRAFT );
 	Real worth = aiRatingLerp( m_rating, DEFEND_ODDS ) * intruderWorth;
 	std::vector<SquatterHunter> hunters;
@@ -11869,7 +11869,7 @@ void AIPlayer::doSpending( void )
 	// with 43,535 in the bank.  The modes' seats spend as they did
 	if( isBaseUnderAttack() && ( bank < FACTORY_STRETCH_BANKS * bankTarget() ||
 			(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) ||
-			(TheLaneWarDirector != NULL && TheLaneWarDirector->isActive()) ) )
+			(TheDirectStrikeDirector != NULL && TheDirectStrikeDirector->isActive()) ) )
 		return;
 	addProductionForQueues();
 	if( m_persona != AIPERSONA_NORMAL )
@@ -13769,7 +13769,7 @@ void AIPlayer::doWaves( void )
 		Real intruderWorth = 0.0f;
 		Real staying = 0.0f;
 		const Bool asBefore = !runsOwnAI() || (TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) ||
-			(TheLaneWarDirector != NULL && TheLaneWarDirector->isActive());
+			(TheDirectStrikeDirector != NULL && TheDirectStrikeDirector->isActive());
 		if( !asBefore )
 		{
 			Int intruders = 0;
@@ -20770,7 +20770,7 @@ static void logAbility( const AIPlayer *ai, const Player *player, const Object *
 		target ? target->getTemplate()->getName().str() : "ground", target ? target->getID() : INVALID_ID, at->x, at->y, why ));
 }
 
-// the statics above, for a caller with no AIPlayer (LaneWarDirector's wave units)
+// the statics above, for a caller with no AIPlayer (DirectStrikeDirector's wave units)
 Bool AIAbility_unitBusy( const Object *obj ) { return obj->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) || aiAbilityWeaponHeld( obj ); }
 void AIAbility_enemiesNear( const Player *player, const Coord3D *at, Real radius, std::vector<Object *> *out ) { abilityEnemiesNear( player, at, radius, out ); }
 Bool AIAbility_specialReady( Object *obj, const CommandButton *button ) { return abilitySpecialReady( obj, button ); }

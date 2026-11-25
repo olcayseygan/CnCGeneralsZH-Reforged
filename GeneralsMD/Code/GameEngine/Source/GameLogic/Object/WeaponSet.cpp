@@ -562,7 +562,7 @@ CanAttackResult WeaponSet::getAbleToAttackSpecificObject( AbleToAttackType attac
 	if (victim->testStatus(OBJECT_STATUS_MASKED))
 		return ATTACKRESULT_NOT_POSSIBLE;
 
-	// a Lane War build plot's unit: its owner still selects and moves it, and nobody shoots it
+	// a Direct Strike build plot's unit: its owner still selects and moves it, and nobody shoots it
 	if (victim->testStatus(OBJECT_STATUS_UNATTACKABLE))
 		return ATTACKRESULT_NOT_POSSIBLE;
 

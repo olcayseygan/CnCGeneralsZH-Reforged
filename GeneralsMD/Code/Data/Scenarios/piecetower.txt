@@ -1,4 +1,4 @@
-# Fracture proof on the Lane War watch towers (W3DFractureDraw): each team shells the other's tower
+# Fracture proof on the Direct Strike watch towers (W3DFractureDraw): each team shells the other's tower
 # with guns whose rounds go off at a point of their own. Team A (slot 0) brings two Nuke Cannons (400
 # damage, 50 and 60 radius) against B's tower, team B (slot 1) two Tomahawk launchers (150 damage
 # within 10, 50 within 25) against A's. The fragments are the client's, so a drawn run only (no

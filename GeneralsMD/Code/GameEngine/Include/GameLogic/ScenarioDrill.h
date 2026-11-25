@@ -106,17 +106,17 @@ enum ScenarioActionType
 	SCENARIO_ACTION_AIRLIFT,					///< airlift <slot> <building> <position> <template>:<count>[,<template>:<count>...]; the airlift panel's OK, as MSG_DO_AIRLIFT_ORDER handed to the dispatcher for that seat
 	SCENARIO_ACTION_HEALTH,						///< health <slot> <selector> <percent> [rank]; every match set to that share of its health, and first to that veterancy rank (0-3, in targetSlot) when one is given; outside the command stream, as handover is
 	SCENARIO_ACTION_LANEMARCH,				///< lanemarch <slot> <selector> <dx>; the seat's units spawned since its last lanemarch that match, each attack-moving dx (in at.x) along x on its own y, as one formation at its slowest member's speed
-	SCENARIO_ACTION_LANEPLACE,				///< laneplace <slot> <template> <column> <row>; a Lane War purchase onto the seat's own plot at that grid slot (in at; column across the plot's front from the left, row back from it), through LaneWarDirector::placeUnit as MSG_LANEWAR_ORDER is
-	SCENARIO_ACTION_LANETIER,					///< lanetier <slot> <track> <level>; a Lane War tier, track 0 income and 1 tech, as LANEWAR_ORDER_TIER (the numbers in name)
-	SCENARIO_ACTION_LANESELL,					///< lanesell <slot> <grid> <column> <row> [passenger]; sell the seat's plot unit on that slot, grid 0 ground and 1 air, as LANEWAR_ORDER_SELL
-	SCENARIO_ACTION_LANEMOVE,					///< lanemove <slot> <grid> <column> <row> <to column> <to row>; move the seat's plot unit, as LANEWAR_ORDER_MOVE
-	SCENARIO_ACTION_LANEUPGRADE,			///< laneupgrade <slot> <upgrade>; buy that player upgrade off the seat's Lane War list, as LANEWAR_ORDER_UPGRADE
-	SCENARIO_ACTION_LANEVET,					///< lanevet <slot> <grid> <column> <row> [passenger]; raise the seat's plot unit on that slot one rank, as LANEWAR_ORDER_VETERANCY
-	SCENARIO_ACTION_LANEGARRISON,			///< lanegarrison <slot> <template> <grid> <column> <row>; buy that infantryman into the seat's plot unit on that slot, as LANEWAR_ORDER_GARRISON
-	SCENARIO_ACTION_LANEUNITUPGRADE,	///< laneunitupgrade <slot> <upgrade> <grid> <column> <row>; buy that object upgrade on the seat's plot unit on that slot, its button found in the unit's command set, as LANEWAR_ORDER_UNIT_UPGRADE
+	SCENARIO_ACTION_LANEPLACE,				///< laneplace <slot> <template> <column> <row>; a Direct Strike purchase onto the seat's own plot at that grid slot (in at; column across the plot's front from the left, row back from it), through DirectStrikeDirector::placeUnit as MSG_DIRECTSTRIKE_ORDER is
+	SCENARIO_ACTION_LANETIER,					///< lanetier <slot> <track> <level>; a Direct Strike tier, track 0 income and 1 tech, as DIRECTSTRIKE_ORDER_TIER (the numbers in name)
+	SCENARIO_ACTION_LANESELL,					///< lanesell <slot> <grid> <column> <row> [passenger]; sell the seat's plot unit on that slot, grid 0 ground and 1 air, as DIRECTSTRIKE_ORDER_SELL
+	SCENARIO_ACTION_LANEMOVE,					///< lanemove <slot> <grid> <column> <row> <to column> <to row>; move the seat's plot unit, as DIRECTSTRIKE_ORDER_MOVE
+	SCENARIO_ACTION_LANEUPGRADE,			///< laneupgrade <slot> <upgrade>; buy that player upgrade off the seat's Direct Strike list, as DIRECTSTRIKE_ORDER_UPGRADE
+	SCENARIO_ACTION_LANEVET,					///< lanevet <slot> <grid> <column> <row> [passenger]; raise the seat's plot unit on that slot one rank, as DIRECTSTRIKE_ORDER_VETERANCY
+	SCENARIO_ACTION_LANEGARRISON,			///< lanegarrison <slot> <template> <grid> <column> <row>; buy that infantryman into the seat's plot unit on that slot, as DIRECTSTRIKE_ORDER_GARRISON
+	SCENARIO_ACTION_LANEUNITUPGRADE,	///< laneunitupgrade <slot> <upgrade> <grid> <column> <row>; buy that object upgrade on the seat's plot unit on that slot, its button found in the unit's command set, as DIRECTSTRIKE_ORDER_UNIT_UPGRADE
 	SCENARIO_ACTION_LANECASH,					///< lanecash <slot> <amount>; the seat is paid that much, a test's shortcut past the ticks
-	SCENARIO_ACTION_LANEREVEAL,				///< lanereveal <slot> <x> <y>; the seat buys a satellite scan of that world spot, as LANEWAR_ORDER_REVEAL (the numbers in name; 0 0 is the lane's middle)
-	SCENARIO_ACTION_LANEABILITY,			///< laneability <slot> <template> <buttonSlot> <0|1>; switch the seat's wave units of that template off or on for the button in that command set slot (from 0, the INI's number less one), as LANEWAR_ORDER_ABILITY (slot and switch in at)
+	SCENARIO_ACTION_LANEREVEAL,				///< lanereveal <slot> <x> <y>; the seat buys a satellite scan of that world spot, as DIRECTSTRIKE_ORDER_REVEAL (the numbers in name; 0 0 is the lane's middle)
+	SCENARIO_ACTION_LANEABILITY,			///< laneability <slot> <template> <buttonSlot> <0|1>; switch the seat's wave units of that template off or on for the button in that command set slot (from 0, the INI's number less one), as DIRECTSTRIKE_ORDER_ABILITY (slot and switch in at)
 	SCENARIO_ACTION_GROUPQUEUE				///< groupqueue <slot> <template> <count>; a command bar unit tab's click that many times, as MSG_QUEUE_UNIT_FOR_GROUP with squad -1 onto the message stream, the logic picking the factory
 };
 
@@ -182,7 +182,7 @@ extern const char *ScenarioDrill_report( void );
 extern void ScenarioDrill_logArrivals( void );
 
 class AIGroup;
-/** Log a wave just sent with AIGroup::groupLaneMarch (the lanemarch verb, the LaneWarDirector) on a
+/** Log a wave just sent with AIGroup::groupLaneMarch (the lanemarch verb, the DirectStrikeDirector) on a
 	  LANEMARCH line, and every 5 game seconds after on HEADLESS LANEMARCH: how many stand, its x span
 	  and the worst drift off the y each member set out on.  Read-only; nothing in the logic reads it. */
 extern void ScenarioDrill_watchLaneMarch( Int slot, const AsciiString &label, AIGroup *group, Real dx );

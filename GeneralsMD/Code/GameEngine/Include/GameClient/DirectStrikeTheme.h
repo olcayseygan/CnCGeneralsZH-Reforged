@@ -18,7 +18,7 @@
 
 // FILE: DirectStrikeTheme.h //////////////////////////////////////////////////////////////////////
 //
-// The one look every Direct Strike screen draws in: the in-match HUD (LaneHud.cpp), the lobby
+// The one look every Direct Strike screen draws in: the in-match HUD (DirectStrikeHud.cpp), the lobby
 // (DirectStrikeLobby.cpp) and, once it moves over, the end screen.  It holds the palette, the type, the
 // side's art and how a piece is named, and the shapes made of pieces (the 9-slice panel, the 3-slice
 // bar, dropdown and key, a chip, a portrait well, a lamp).  A piece is asked for by its Piece below and
@@ -45,7 +45,7 @@
 #include "Common/AsciiString.h"
 #include "Common/UnicodeString.h"
 #include "GameClient/Color.h"
-#include "GameClient/LaneHudLayout.h"
+#include "GameClient/DirectStrikeHudLayout.h"
 
 class DisplayString;
 class GameFont;
@@ -297,44 +297,44 @@ namespace DirectStrikeTheme
 	DisplayString *pooled( const UnicodeString &text, GameFont *font );
 
 	// shapes
-	void drawImage( const Image *image, const LaneHudBox &b, Color tint = 0xFFFFFFFF );
+	void drawImage( const Image *image, const DirectStrikeHudBox &b, Color tint = 0xFFFFFFFF );
 	/// an image at its own size times the scale, centred in b
-	void drawCentred( const Image *image, const LaneHudBox &b, Color tint = 0xFFFFFFFF );
+	void drawCentred( const Image *image, const DirectStrikeHudBox &b, Color tint = 0xFFFFFFFF );
 	/// a flat plate with a lit top line
-	void plate( const LaneHudBox &b );
+	void plate( const DirectStrikeHudBox &b );
 	/// a key in its piece or flat: lit when its mode is on, brighter under the pointer
-	void key( const LaneHudBox &b, Piece piece, Bool lit, Bool disabled = FALSE );
+	void key( const DirectStrikeHudBox &b, Piece piece, Bool lit, Bool disabled = FALSE );
 	/// a chip of the HUD's floating top: its piece, or a card's flat face with its glass 5 in
-	void chip( const LaneHudBox &b, Piece piece );
+	void chip( const DirectStrikeHudBox &b, Piece piece );
 	/// a 9-slice from its top left piece (PANEL_TL, PANEL_LIT_TL, PLATE_TL, WELL_TL, CONSOLE_TL, CLAMP_BOX_TL),
 	/// corners at their own size times the scale; a flat well where the pieces are missing.  The middles stretch,
 	/// unless the centre is a textured tile (wider than TILE_MIN): then the edges and the centre repeat from the
 	/// top left at their own size, the last copy cut, so the scratches are never smeared
-	void nineSlice( const LaneHudBox &b, Piece topLeft, Color tint = 0xFFFFFFFF );
+	void nineSlice( const DirectStrikeHudBox &b, Piece topLeft, Color tint = 0xFFFFFFFF );
 	/// the plain panel, nineSlice from PANEL_TL
-	void panel( const LaneHudBox &b );
+	void panel( const DirectStrikeHudBox &b );
 	/// a 3-slice bar: left and right at their own widths times the scale, the centre stretched between, or repeated
 	/// from the left when it is a textured tile as above
-	void threeSlice( const LaneHudBox &b, Piece left, Piece centre, Piece right, const char *state = "", Color tint = 0xFFFFFFFF );
+	void threeSlice( const DirectStrikeHudBox &b, Piece left, Piece centre, Piece right, const char *state = "", Color tint = 0xFFFFFFFF );
 	/// a dropdown ("" up, H hot, P open), or a field without its caret
-	void dropdown( const LaneHudBox &b, const char *state, Bool field );
+	void dropdown( const DirectStrikeHudBox &b, const char *state, Bool field );
 	/// the keys row's chip (team size, game speed), the Riveted Clamp's dropdown at 72: "" up, H hot, P open, or a
 	/// field without its caret block
-	void clampChip( const LaneHudBox &b, const char *state, Bool field );
+	void clampChip( const DirectStrikeHudBox &b, const char *state, Bool field );
 	/// a lit piece (white, its halo in the alpha) at its core grown by GLOW on every side, in the colour
-	void glow( Piece piece, const LaneHudBox &core, Color tint );
+	void glow( Piece piece, const DirectStrikeHudBox &core, Color tint );
 	/// a picture filling a square well from its centre top, the colour band 6 high at its foot
-	void portraitWell( const LaneHudBox &well, const Image *picture, Color band, Bool fill );
+	void portraitWell( const DirectStrikeHudBox &well, const Image *picture, Color band, Bool fill );
 	/// a swatch: the colour in a 2 pixel black frame
-	void swatch( const LaneHudBox &b, Color color );
+	void swatch( const DirectStrikeHudBox &b, Color color );
 
 	/// an open list's row, one rule for every list: the current choice a lit band with a gold bar on its leading
 	/// edge, the row under the pointer a plain light band, any other row nothing
-	void listRow( const LaneHudBox &b, Bool current, Bool hot );
+	void listRow( const DirectStrikeHudBox &b, Bool current, Bool hot );
 	/// the text on such a row: white on the current one, gold under the pointer, grey otherwise
 	Color listText( Bool current, Bool hot );
 	/// the current choice where a list is a grid of cells (the army picker, the colours): a gold frame round it
-	void currentFrame( const LaneHudBox &b );
+	void currentFrame( const DirectStrikeHudBox &b );
 
 	/// the heat ramp (HEAT in the theme) at t, 0 the lowest standing seat and 1 the highest: gunmetal blue, amber,
 	/// red-orange

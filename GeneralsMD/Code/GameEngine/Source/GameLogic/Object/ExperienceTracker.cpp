@@ -34,7 +34,7 @@
 #include "Common/ThingTemplate.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
-#include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/Object.h"
 
 
@@ -236,7 +236,7 @@ void ExperienceTracker::addExperiencePoints( Int experienceGain, Bool canScaleFo
 	// sink's share) comes through here and stops.  The bought rank goes in by setVeterancyLevel and
 	// stays; the general's skill points are their own path (Player::addSkillPointsForKill).  The
 	// director's switch comes from the map, the same on every machine
-	if( TheLaneWarDirector != NULL && TheLaneWarDirector->isActive() )
+	if( TheDirectStrikeDirector != NULL && TheDirectStrikeDirector->isActive() )
 		return;
 
 	if( m_experienceSink != INVALID_ID )

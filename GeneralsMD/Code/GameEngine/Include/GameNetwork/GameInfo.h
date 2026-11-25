@@ -358,7 +358,7 @@ public:
   void setDayNight( Bool on ) { m_dayNight = on; }
 
   // Direct Strike's Mixed option: every seat buys from its own random draw across the three sides'
-  // rosters (LaneWarDirector).  The host's chip in a Direct Strike room; MX=1 in the options string,
+  // rosters (DirectStrikeDirector).  The host's chip in a Direct Strike room; MX=1 in the options string,
   // written only when on.  Nothing reads it off a Direct Strike map.
   Bool getDirectStrikeMixed( void ) const { return m_directStrikeMixed; }
   void setDirectStrikeMixed( Bool on ) { m_directStrikeMixed = on; }

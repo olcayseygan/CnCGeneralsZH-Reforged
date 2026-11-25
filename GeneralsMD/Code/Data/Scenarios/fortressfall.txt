@@ -1,4 +1,4 @@
-# Footage of a Lane War fortress shelled to rubble: two Nuke Cannons and two Tomahawks from out of
+# Footage of a Direct Strike fortress shelled to rubble: two Nuke Cannons and two Tomahawks from out of
 # its reach and four Overlords inside it, all team A's (slot 0), against team B's fortress (slot 1).
 # The fortress is the W3D until its first hit, then its fragments (LWFORT.lwfrag, W3DFractureDraw):
 # each round knocks out the fragments where it lands, the gun bastions keep their guns, and at zero

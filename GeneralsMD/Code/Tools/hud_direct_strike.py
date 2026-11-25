@@ -499,7 +499,7 @@ def card(side, hero=False, back=False):
 
 
 def hud(side):
-    """The match HUD's pieces, the names LaneHud.cpp reads."""
+    """The match HUD's pieces, the names DirectStrikeHud.cpp reads."""
     build = T.build_of(side)
     out = {"LaneCard": card(side), "LaneCardHero": card(side, hero=True), "LaneCardBack": card(side, back=True),
            "LaneDone": T.lamp("ready", 20), "LaneTabLock": tab_lock(), "LaneAirMark": air_mark(),
@@ -543,7 +543,7 @@ def obs_band(side):
 
 
 def watch(side):
-    """The common frame's match pieces: what LaneHud.cpp draws for a watcher, who is no side (the top's chips, the strip
+    """The common frame's match pieces: what DirectStrikeHud.cpp draws for a watcher, who is no side (the top's chips, the strip
     map's marks, a seat's frame, the menu keys), and the observer panels' own (InGameUI.cpp): a header strip as a 3-slice
     (DSHead) and a cameo's cell (DSCell); their plates are DSPanel, DSPanelLit and DSWell."""
     build = T.build_of(side)
@@ -765,7 +765,7 @@ def end_timeline(side):
 
 
 def end(side):
-    """The end screen's pieces, the names LaneWarEndScreen.cpp reads."""
+    """The end screen's pieces, the names DirectStrikeEndScreen.cpp reads."""
     build = T.build_of(side)
     out = {"LaneEndCard": end_card(side, False), "LaneEndCardWon": end_card(side, True),
            "LaneEndResult": end_result(side, False), "LaneEndResultWon": end_result(side, True), "LaneEndHeader": end_header(side)}

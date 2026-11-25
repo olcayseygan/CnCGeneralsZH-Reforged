@@ -671,7 +671,7 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	if (TheInGameUI && !modernFullMirror)
 		TheInGameUI->drawOrderRings(m_shroud && rinfo.Additional_Pass_Count() && !m_disableTextures);
 
-	// and the Lane War plots' slot grid, as the detailed ground draws it, never into a water mirror
+	// and the Direct Strike plots' slot grid, as the detailed ground draws it, never into a water mirror
 	if (TheInGameUI && !ShaderClass::Is_Backface_Culling_Inverted())
 		TheInGameUI->drawLanePlotGrids(m_shroud && rinfo.Additional_Pass_Count() && !m_disableTextures);
 #endif

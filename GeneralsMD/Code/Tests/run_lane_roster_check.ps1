@@ -1,5 +1,5 @@
-# What each of the twelve armies can buy in Direct Strike (LaneWar_roster, LaneWarDirector.cpp). Two
-# headless 3v3 lane matches seat all twelve with -side, and every seat's "LANEWAR: player N <side> roster
+# What each of the twelve armies can buy in Direct Strike (DirectStrike_roster, DirectStrikeDirector.cpp). Two
+# headless 3v3 lane matches seat all twelve with -side, and every seat's "DIRECTSTRIKE: player N <side> roster
 # of K: ..." line, written once at match start, must read as below, in this order. The lists are the
 # generals' own factory command sets on the shipped data: a Paladin for the Laser General or a Hijacker
 # for the Toxin General fails it, and so does a general's unit falling back to the base side's template.
@@ -61,7 +61,7 @@ try {
 $seen = @{}
 foreach ($r in $runs) {
 	if (Test-Path $r.Log) {
-		foreach ($line in (Select-String -Path $r.Log -Pattern "LANEWAR: player \d+ (\S+) roster of \d+:(.*)$")) {
+		foreach ($line in (Select-String -Path $r.Log -Pattern "DIRECTSTRIKE: player \d+ (\S+) roster of \d+:(.*)$")) {
 			$seen[$line.Matches[0].Groups[1].Value] = $line.Matches[0].Groups[2].Value.Trim()
 		}
 		Remove-Item $r.Log -Force

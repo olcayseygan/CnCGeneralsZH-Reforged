@@ -31,7 +31,7 @@
 #include "Common/Recorder.h"
 #include "GameClient/DisconnectMenu.h"
 #include "GameClient/InGameUI.h"
-#include "GameClient/LaneWarEndScreen.h"
+#include "GameClient/DirectStrikeEndScreen.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/DisconnectManager.h"
 #include "GameNetwork/StallJudgement.h"
@@ -850,7 +850,7 @@ time_t DisconnectManager::timeBeforeDrop(Int slot, ConnectionManager *conMgr, ti
 		 and a seat rejoining or gone silent, a leaver whose last packets never came, would only keep the
 		 others on this screen in front of their results.  No reconnect hold, and a seat silent as long as
 		 the stall judgement's silence drops at once; one still talking keeps its countdown (2026-11-23). */
-	if (LaneWarEndScreen_isShowing()) {
+	if (DirectStrikeEndScreen_isShowing()) {
 		if (hold) {
 			*hold = 0;
 		}

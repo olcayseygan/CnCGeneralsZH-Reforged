@@ -333,7 +333,7 @@ public:
 	Int getSupplyPileLimit( void ) const { return m_supplyPileLimit; }
 
 	/** The day and night cycle runs: the lobby's box (DN in the options string), stood down under the
-			Apocalypse and Lane War once their directors have read the map.  Fixed when the match starts and
+			Apocalypse and Direct Strike once their directors have read the map.  Fixed when the match starts and
 			saved ahead of the objects.  DayNight_isOn in DayNightCycle.h is the question to ask. */
 	Bool isDayNight( void ) const { return m_dayNight; }
 

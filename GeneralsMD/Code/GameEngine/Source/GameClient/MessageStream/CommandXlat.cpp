@@ -96,7 +96,7 @@
 #include "GameLogic/Module/ContainModule.h"
 
 #include "GameNetwork/NetworkInterface.h"
-#include "GameClient/LaneHud.h"
+#include "GameClient/DirectStrikeHud.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/GameSpy/BuddyThread.h"
@@ -985,8 +985,8 @@ static void viewCommandCenter( void )
 	if (!localPlayer)
 		return;
 
-	// Lane War has no base: home is the player's plot
-	if (LaneHud_viewHome())
+	// Direct Strike has no base: home is the player's plot
+	if (DirectStrikeHud_viewHome())
 		return;
 
 	CommandCenterLocator ccl;
@@ -3820,8 +3820,8 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			if( Sidebar_cancelCursorMode() )
 				cancelledSomething = TRUE;
 
-			// a Lane War unit armed, picked up or for sale, or the abilities panel
-			if( LaneHud_escape() )
+			// a Direct Strike unit armed, picked up or for sale, or the abilities panel
+			if( DirectStrikeHud_escape() )
 				cancelledSomething = TRUE;
 
 			// a watcher looking through one player's eyes gets the whole map back, menu shut first

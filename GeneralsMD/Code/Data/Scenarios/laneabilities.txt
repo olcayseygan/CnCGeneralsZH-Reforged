@@ -1,7 +1,7 @@
-# Lane War abilities proof: every wave unit presses its own buttons, on the skirmish AI's rules and
+# Direct Strike abilities proof: every wave unit presses its own buttons, on the skirmish AI's rules and
 # the lane's walk-up rule, as far as its player's switches let it. Team A fields the units with a
 # button (Burton, Missile Defenders, Tank Hunters, Black Lotus, a Hacker, a Dragon, Jarmen Kell,
-# Hijackers), team B nothing but Crusaders. Read the LANEWAR ABILITY USE lines, the LANEWAR ABILITY
+# Hijackers), team B nothing but Crusaders. Read the DIRECTSTRIKE ABILITY USE lines, the DIRECTSTRIKE ABILITY
 # lines for the switches and for a hijacked Crusader marching for its taker, and the IDLEHACKER lines
 # (there should be none: a plot's hacker is held and must not hack for money).
 #

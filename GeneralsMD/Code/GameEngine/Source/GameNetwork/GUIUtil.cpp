@@ -324,7 +324,7 @@ void PopulateColorComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myG
 
 // -----------------------------------------------------------------------------
 
-/// a side Direct Strike leaves out: Turkiye is not in the mode (LANE-MODE.md, "Sides")
+/// a side Direct Strike leaves out: Turkiye is not in the mode (DIRECT-STRIKE.md, "Sides")
 static Bool notInDirectStrike(const PlayerTemplate *fac)
 {
 	return fac->getSide().compareNoCase("Turkiye") == 0;
@@ -1822,7 +1822,7 @@ Bool FitDirectStrikeRoom(GameInfo *game)
 		}
 
 		// The seat is the place: seats 1, 3, 5 are team 1's, on the left, and 2, 4, 6 team 2's, on the
-		// right, and seat n is start n, which is how the director reads the teams (LaneWar_teamOfStart:
+		// right, and seat n is start n, which is how the director reads the teams (DirectStrike_teamOfStart:
 		// start 1 is team A's first, start 2 team B's first, start 3 A's second).  A player who moved
 		// keeps the start he took; one with none yet (a joiner, a new AI) takes the seat he was shown at.
 		const Int seat = seatOf[i];
@@ -2075,16 +2075,16 @@ namespace
 	{
 		return REAL_TO_INT(v1080 * pickerScale() + 0.5f);
 	}
-	LaneHudBox screenBox(GameWindow *window)
+	DirectStrikeHudBox screenBox(GameWindow *window)
 	{
-		LaneHudBox b;
+		DirectStrikeHudBox b;
 		window->winGetScreenPosition(&b.x, &b.y);
 		window->winGetSize(&b.w, &b.h);
 		return b;
 	}
-	LaneHudBox inset(const LaneHudBox &b, Int by)
+	DirectStrikeHudBox inset(const DirectStrikeHudBox &b, Int by)
 	{
-		LaneHudBox r = { b.x + by, b.y + by, b.w - 2 * by, b.h - 2 * by };
+		DirectStrikeHudBox r = { b.x + by, b.y + by, b.w - 2 * by, b.h - 2 * by };
 		return r;
 	}
 	void fill(Int x, Int y, Int w, Int h, Color color)
@@ -2093,7 +2093,7 @@ namespace
 	}
 
 	/// a picture of the mode from flat shapes: four bases round a field, a lane between two forts, a walled basin in red fog
-	void drawModeEmblem(Int mode, const LaneHudBox &b)
+	void drawModeEmblem(Int mode, const DirectStrikeHudBox &b)
 	{
 		const Color blue = GameMakeColor(70, 120, 220, 255), red = GameMakeColor(210, 60, 50, 255);
 		const Color green = GameMakeColor(80, 170, 80, 255), gold = GameMakeColor(230, 190, 60, 255);
@@ -2149,7 +2149,7 @@ namespace
 
 	void drawPickerPanel(GameWindow *window, WinInstanceData *)
 	{
-		const LaneHudBox b = screenBox(window);
+		const DirectStrikeHudBox b = screenBox(window);
 		DirectStrikeTheme::nineSlice(b, DirectStrikeTheme::PANEL_LIT_TL);
 		DirectStrikeTheme::drawSpaced(TheGameText->fetch(thePickerModsOnly ? "GUI:Mods" : "GUI:GameModeTitle"), DirectStrikeTheme::font(DirectStrikeTheme::TYPE_NAME),
 			b.x + b.w / 2, b.y + px(PICKER_PAD) / 2, px(PICKER_TITLE_H), DirectStrikeTheme::TYPE_NAME * DirectStrikeTheme::TRACK_TEAM,
@@ -2166,9 +2166,9 @@ namespace
 			return;
 		const Bool hot = BitTest(instData->getState(), WIN_STATE_HILITED);
 		const Bool pressed = BitTest(instData->getState(), WIN_STATE_SELECTED);
-		const LaneHudBox b = screenBox(window);
+		const DirectStrikeHudBox b = screenBox(window);
 		DirectStrikeTheme::nineSlice(b, hot ? DirectStrikeTheme::PANEL_LIT_TL : DirectStrikeTheme::PANEL_TL);
-		const LaneHudBox picture = { b.x + px(PICKER_INSET), b.y + px(PICKER_INSET), b.w - 2 * px(PICKER_INSET), px(PICKER_EMBLEM_H) };
+		const DirectStrikeHudBox picture = { b.x + px(PICKER_INSET), b.y + px(PICKER_INSET), b.w - 2 * px(PICKER_INSET), px(PICKER_EMBLEM_H) };
 		drawModeEmblem(card->mode, picture);
 		if (pressed)
 			fill(picture.x, picture.y, picture.w, picture.h, GameMakeColor(0, 0, 0, 90));
@@ -2197,7 +2197,7 @@ namespace
 	void drawPickerCancel(GameWindow *window, WinInstanceData *instData)
 	{
 		const Bool hot = BitTest(instData->getState(), WIN_STATE_HILITED);
-		const LaneHudBox b = screenBox(window);
+		const DirectStrikeHudBox b = screenBox(window);
 		DirectStrikeTheme::nineSlice(b, hot ? DirectStrikeTheme::PANEL_LIT_TL : DirectStrikeTheme::PANEL_TL);
 		DirectStrikeTheme::drawText(TheGameText->fetch("GUI:Cancel"), DirectStrikeTheme::font(DirectStrikeTheme::TYPE_LABEL),
 			b.x + b.w / 2, b.y, b.h, hot ? DirectStrikeTheme::TEXT_GOLD : DirectStrikeTheme::TEXT_WHITE, 0);

@@ -218,7 +218,7 @@ enum { SHIPPED_MAP_MAX_PLAYERS = 8 };
 // or fewer (a preset's eight on a four-player map); a map that holds them is kept.
 Bool GenerateMapForCrowdedRoom(GameInfo *game, Bool whenTooSmall = FALSE);
 
-// Direct Strike, the Lane War director's mode, in a staging room.  The mode is the map: a room whose
+// Direct Strike, the Direct Strike director's mode, in a staging room.  The mode is the map: a room whose
 // map is a generated lane map ("-randommap <seed> lane", RMG_v<n>_<seed>_6p_..._lane) is a Direct
 // Strike room on every machine, so nothing new travels in the options string and a joiner, a replay
 // and the game list all read the mode off the map's name.  There is no map choice: the host stages a

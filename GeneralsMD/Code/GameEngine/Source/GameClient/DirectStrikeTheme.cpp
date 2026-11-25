@@ -244,7 +244,7 @@ namespace
 	/** A textured slice repeated over b from its top left, at its own width when acrossX and its own height when
 		* acrossY (else the box's), the last copy cut by the clip.  Under a clip someone else set it stretches
 		* instead, since the display cannot hand that clip back. */
-	void tile( const Image *image, const LaneHudBox &b, Bool acrossX, Bool acrossY, Color tint )
+	void tile( const Image *image, const DirectStrikeHudBox &b, Bool acrossX, Bool acrossY, Color tint )
 	{
 		if( image == NULL || b.w <= 0 || b.h <= 0 )
 			return;
@@ -337,7 +337,7 @@ Real scale( void )
 
 Int px( Real at1080 )
 {
-	return LaneHud_px( at1080, s_scale );
+	return DirectStrikeHud_px( at1080, s_scale );
 }
 
 const Image *artOf( Side side, Piece piece, const char *state )
@@ -455,28 +455,28 @@ Int drawSpaced( const UnicodeString &text, GameFont *font, Int x, Int y, Int h, 
 }
 
 //-------------------------------------------------------------------------------------------------
-void drawImage( const Image *image, const LaneHudBox &b, Color tint )
+void drawImage( const Image *image, const DirectStrikeHudBox &b, Color tint )
 {
 	if( image != NULL )
 		TheDisplay->drawImage( image, b.x, b.y, b.x + b.w, b.y + b.h, tint );
 }
 
-void drawCentred( const Image *image, const LaneHudBox &b, Color tint )
+void drawCentred( const Image *image, const DirectStrikeHudBox &b, Color tint )
 {
 	if( image == NULL )
 		return;
 	const Int w = scaled( image, TRUE ), h = scaled( image, FALSE );
-	drawImage( image, LaneHud_box( b.x + ( b.w - w ) / 2, b.y + ( b.h - h ) / 2, w, h ), tint );
+	drawImage( image, DirectStrikeHud_box( b.x + ( b.w - w ) / 2, b.y + ( b.h - h ) / 2, w, h ), tint );
 }
 
-void plate( const LaneHudBox &b )
+void plate( const DirectStrikeHudBox &b )
 {
 	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, PLATE );
 	TheDisplay->drawFillRect( b.x + 1, b.y + 1, b.w - 2, 1, PLATE_LIT );
 	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, PLATE_EDGE );
 }
 
-void key( const LaneHudBox &b, Piece piece, Bool lit, Bool disabled )
+void key( const DirectStrikeHudBox &b, Piece piece, Bool lit, Bool disabled )
 {
 	const Bool hot = !disabled && b.contains( TheMouse->getMouseStatus()->pos.x, TheMouse->getMouseStatus()->pos.y );
 	const Image *image = art( piece, stateOf( hot, lit, disabled ) );
@@ -491,7 +491,7 @@ void key( const LaneHudBox &b, Piece piece, Bool lit, Bool disabled )
 		TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, GREYED );
 }
 
-void chip( const LaneHudBox &b, Piece piece )
+void chip( const DirectStrikeHudBox &b, Piece piece )
 {
 	const Image *image = art( piece );
 	if( image != NULL )
@@ -505,7 +505,7 @@ void chip( const LaneHudBox &b, Piece piece )
 	TheDisplay->drawFillRect( b.x + in, b.y + in, b.w - 2 * in, b.h - 2 * in, WELL );
 }
 
-void nineSlice( const LaneHudBox &b, Piece topLeft, Color tint )
+void nineSlice( const DirectStrikeHudBox &b, Piece topLeft, Color tint )
 {
 	const Image *tl = art( topLeft );
 	if( tl == NULL )
@@ -517,34 +517,34 @@ void nineSlice( const LaneHudBox &b, Piece topLeft, Color tint )
 	enum { T = 1, TR, L, C, R, BL, B, BR };
 	const Int c = min( scaled( tl, TRUE ), min( b.w, b.h ) / 2 );
 	const Int x1 = b.x + c, x2 = b.x + b.w - c, y1 = b.y + c, y2 = b.y + b.h - c;
-	drawImage( tl, LaneHud_box( b.x, b.y, c, c ), tint );
-	drawImage( art( (Piece)( topLeft + TR ) ), LaneHud_box( x2, b.y, c, c ), tint );
-	drawImage( art( (Piece)( topLeft + BL ) ), LaneHud_box( b.x, y2, c, c ), tint );
-	drawImage( art( (Piece)( topLeft + BR ) ), LaneHud_box( x2, y2, c, c ), tint );
+	drawImage( tl, DirectStrikeHud_box( b.x, b.y, c, c ), tint );
+	drawImage( art( (Piece)( topLeft + TR ) ), DirectStrikeHud_box( x2, b.y, c, c ), tint );
+	drawImage( art( (Piece)( topLeft + BL ) ), DirectStrikeHud_box( b.x, y2, c, c ), tint );
+	drawImage( art( (Piece)( topLeft + BR ) ), DirectStrikeHud_box( x2, y2, c, c ), tint );
 	const Image *centre = art( (Piece)( topLeft + C ) );
 	if( isTile( centre ) )
 	{
 		// the edges repeat along their run and the centre both ways, the 192 tile rule
-		tile( art( (Piece)( topLeft + T ) ), LaneHud_box( x1, b.y, x2 - x1, c ), TRUE, FALSE, tint );
-		tile( art( (Piece)( topLeft + B ) ), LaneHud_box( x1, y2, x2 - x1, c ), TRUE, FALSE, tint );
-		tile( art( (Piece)( topLeft + L ) ), LaneHud_box( b.x, y1, c, y2 - y1 ), FALSE, TRUE, tint );
-		tile( art( (Piece)( topLeft + R ) ), LaneHud_box( x2, y1, c, y2 - y1 ), FALSE, TRUE, tint );
-		tile( centre, LaneHud_box( x1, y1, x2 - x1, y2 - y1 ), TRUE, TRUE, tint );
+		tile( art( (Piece)( topLeft + T ) ), DirectStrikeHud_box( x1, b.y, x2 - x1, c ), TRUE, FALSE, tint );
+		tile( art( (Piece)( topLeft + B ) ), DirectStrikeHud_box( x1, y2, x2 - x1, c ), TRUE, FALSE, tint );
+		tile( art( (Piece)( topLeft + L ) ), DirectStrikeHud_box( b.x, y1, c, y2 - y1 ), FALSE, TRUE, tint );
+		tile( art( (Piece)( topLeft + R ) ), DirectStrikeHud_box( x2, y1, c, y2 - y1 ), FALSE, TRUE, tint );
+		tile( centre, DirectStrikeHud_box( x1, y1, x2 - x1, y2 - y1 ), TRUE, TRUE, tint );
 		return;
 	}
-	drawImage( art( (Piece)( topLeft + T ) ), LaneHud_box( x1, b.y, x2 - x1, c ), tint );
-	drawImage( art( (Piece)( topLeft + L ) ), LaneHud_box( b.x, y1, c, y2 - y1 ), tint );
-	drawImage( centre, LaneHud_box( x1, y1, x2 - x1, y2 - y1 ), tint );
-	drawImage( art( (Piece)( topLeft + R ) ), LaneHud_box( x2, y1, c, y2 - y1 ), tint );
-	drawImage( art( (Piece)( topLeft + B ) ), LaneHud_box( x1, y2, x2 - x1, c ), tint );
+	drawImage( art( (Piece)( topLeft + T ) ), DirectStrikeHud_box( x1, b.y, x2 - x1, c ), tint );
+	drawImage( art( (Piece)( topLeft + L ) ), DirectStrikeHud_box( b.x, y1, c, y2 - y1 ), tint );
+	drawImage( centre, DirectStrikeHud_box( x1, y1, x2 - x1, y2 - y1 ), tint );
+	drawImage( art( (Piece)( topLeft + R ) ), DirectStrikeHud_box( x2, y1, c, y2 - y1 ), tint );
+	drawImage( art( (Piece)( topLeft + B ) ), DirectStrikeHud_box( x1, y2, x2 - x1, c ), tint );
 }
 
-void panel( const LaneHudBox &b )
+void panel( const DirectStrikeHudBox &b )
 {
 	nineSlice( b, PANEL_TL );
 }
 
-void threeSlice( const LaneHudBox &b, Piece left, Piece centre, Piece right, const char *state, Color tint )
+void threeSlice( const DirectStrikeHudBox &b, Piece left, Piece centre, Piece right, const char *state, Color tint )
 {
 	const Image *l = art( left, state ), *m = art( centre, state ), *r = art( right, state );
 	if( l == NULL || m == NULL || r == NULL )
@@ -554,32 +554,32 @@ void threeSlice( const LaneHudBox &b, Piece left, Piece centre, Piece right, con
 		return;
 	}
 	const Int lw = min( scaled( l, TRUE ), b.w / 2 ), rw = min( scaled( r, TRUE ), b.w - lw );
-	drawImage( l, LaneHud_box( b.x, b.y, lw, b.h ), tint );
-	const LaneHudBox middle = LaneHud_box( b.x + lw, b.y, b.w - lw - rw, b.h );
+	drawImage( l, DirectStrikeHud_box( b.x, b.y, lw, b.h ), tint );
+	const DirectStrikeHudBox middle = DirectStrikeHud_box( b.x + lw, b.y, b.w - lw - rw, b.h );
 	if( isTile( m ) )
 		tile( m, middle, TRUE, FALSE, tint );
 	else
 		drawImage( m, middle, tint );
-	drawImage( r, LaneHud_box( b.x + b.w - rw, b.y, rw, b.h ), tint );
+	drawImage( r, DirectStrikeHud_box( b.x + b.w - rw, b.y, rw, b.h ), tint );
 }
 
-void dropdown( const LaneHudBox &b, const char *state, Bool field )
+void dropdown( const DirectStrikeHudBox &b, const char *state, Bool field )
 {
 	threeSlice( b, DROP_L, DROP_C, field ? FIELD_R : DROP_R, field ? "" : state );
 }
 
-void clampChip( const LaneHudBox &b, const char *state, Bool field )
+void clampChip( const DirectStrikeHudBox &b, const char *state, Bool field )
 {
 	threeSlice( b, CLAMP_CHIP_L, CLAMP_CHIP_C, field ? CLAMP_CHIP_FIELD_R : CLAMP_CHIP_R, field ? "" : state );
 }
 
-void glow( Piece piece, const LaneHudBox &core, Color tint )
+void glow( Piece piece, const DirectStrikeHudBox &core, Color tint )
 {
 	const Int g = px( GLOW );
-	drawImage( art( piece ), LaneHud_box( core.x - g, core.y - g, core.w + 2 * g, core.h + 2 * g ), tint );
+	drawImage( art( piece ), DirectStrikeHud_box( core.x - g, core.y - g, core.w + 2 * g, core.h + 2 * g ), tint );
 }
 
-void listRow( const LaneHudBox &b, Bool current, Bool hot )
+void listRow( const DirectStrikeHudBox &b, Bool current, Bool hot )
 {
 	if( current || hot )
 		threeSlice( b, ROW_L, ROW_C, ROW_R, current ? "P" : "H" );
@@ -590,7 +590,7 @@ Color listText( Bool current, Bool hot )
 	return current ? TEXT_WHITE : hot ? TEXT_GOLD : TEXT_GREY;
 }
 
-void currentFrame( const LaneHudBox &b )
+void currentFrame( const DirectStrikeHudBox &b )
 {
 	const Int t = px( 2 );
 	TheDisplay->drawFillRect( b.x - t, b.y - t, b.w + 2 * t, t, TEXT_GOLD );
@@ -599,10 +599,10 @@ void currentFrame( const LaneHudBox &b )
 	TheDisplay->drawFillRect( b.x + b.w, b.y, t, b.h, TEXT_GOLD );
 }
 
-void portraitWell( const LaneHudBox &well, const Image *picture, Color band, Bool fill )
+void portraitWell( const DirectStrikeHudBox &well, const Image *picture, Color band, Bool fill )
 {
 	const Int in = px( 4 );
-	const LaneHudBox inner = LaneHud_box( well.x + in, well.y + in, well.w - 2 * in, well.h - 2 * in );
+	const DirectStrikeHudBox inner = DirectStrikeHud_box( well.x + in, well.y + in, well.w - 2 * in, well.h - 2 * in );
 	if( fill )
 		drawImage( squareOf( picture ), inner );
 	else
@@ -611,7 +611,7 @@ void portraitWell( const LaneHudBox &well, const Image *picture, Color band, Boo
 		TheDisplay->drawFillRect( well.x + in, well.y + well.h - in - px( 6 ), well.w - 2 * in, px( 6 ), band );
 }
 
-void swatch( const LaneHudBox &b, Color color )
+void swatch( const DirectStrikeHudBox &b, Color color )
 {
 	const Int frame = px( 2 );
 	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, KEYLINE );

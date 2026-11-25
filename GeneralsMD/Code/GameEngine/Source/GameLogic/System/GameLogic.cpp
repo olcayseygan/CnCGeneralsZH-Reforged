@@ -95,8 +95,8 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/DayNightCycle.h"
-#include "GameLogic/LaneWarDirector.h"
-#include "GameLogic/LaneWarStats.h"
+#include "GameLogic/DirectStrikeDirector.h"
+#include "GameLogic/DirectStrikeStats.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -483,8 +483,8 @@ void GameLogic::reset( void )
 {
 	m_thingTemplateBuildableOverrides.clear();
 	m_controlBarOverrides.clear();
-	TheLaneWarDirector->reset();
-	TheLaneWarStats->reset();
+	TheDirectStrikeDirector->reset();
+	TheDirectStrikeStats->reset();
 	TheApocalypseDirector->reset();
 	m_dayNight = FALSE;	// a load sets it from the save before its objects, a new game from its options
 	DayNight_resetPicture();	// the shadow's darkness back; the next map keeps its own light
@@ -1218,7 +1218,7 @@ void GameLogic::refuseCorruptMap( void )
 /** A map object whose originalOwner reads "StartOwner:1,3,5" belongs to the playable player standing
 	on the first of those start positions (1-based, Player_N_Start) that anybody holds, or to the
 	neutral player when none is. A map cannot name a lobby slot for an object, since which slot takes
-	which start is chosen in the lobby; the random map generator's Lane War map owns each team's
+	which start is chosen in the lobby; the random map generator's Direct Strike map owns each team's
 	fortress and towers this way. The start positions are in the game setup every machine and the
 	replay agree on, and the player list is walked in its own order, so every machine picks the same
 	player. A load with no game setup (a map opened on its own) has no seats, and the map's own sides
@@ -2085,7 +2085,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 
 	/* The cycle off before the map's own objects are made on a map that carries either mode's marker, the
 		 ones the directors' newMap first looks for below: a drawable made while the cycle reads on takes no
-		 NIGHT state (Drawable's time of day, Object's objectTime 2), so a night Apocalypse or Lane War map
+		 NIGHT state (Drawable's time of day, Object's objectTime 2), so a night Apocalypse or Direct Strike map
 		 with the box ticked kept its placed objects on day models after the latch below turned it off.
 		 The waypoints and trigger areas are the map file's, read by TerrainLogic::loadMap. */
 	if (!loadingSaveGame && m_dayNight
@@ -2274,11 +2274,11 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	DEBUG_LOG(("%s", Buf));
 	#endif
 
-	// a Lane War map turns the mode on (LaneWarDirector.h): no starting base, and only the fortresses
+	// a Direct Strike map turns the mode on (DirectStrikeDirector.h): no starting base, and only the fortresses
 	// decide the match
-	TheLaneWarDirector->newMap( loadingSaveGame );
-	if (TheLaneWarDirector->isActive())
-		TheVictoryConditions->setVictoryConditions(VICTORY_LANEWAR);
+	TheDirectStrikeDirector->newMap( loadingSaveGame );
+	if (TheDirectStrikeDirector->isActive())
+		TheVictoryConditions->setVictoryConditions(VICTORY_DIRECTSTRIKE);
 
 	// an Apocalypse map turns that mode on (ApocalypseDirector.h): the seats lose together, the dead never
 	TheApocalypseDirector->newMap( loadingSaveGame );
@@ -2289,7 +2289,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		 tables.  Settled once here, so DayNight_isOn reads one saved Bool and nothing a load fills in
 		 later; the objects placed so far looked on frame 0, which is day either way. */
 	if (!loadingSaveGame)
-		m_dayNight = m_dayNight && !TheLaneWarDirector->isActive() && !TheApocalypseDirector->isActive();
+		m_dayNight = m_dayNight && !TheDirectStrikeDirector->isActive() && !TheApocalypseDirector->isActive();
 
 	progressCount = LOAD_PROGRESS_LOOP_INITIAL_NETWORK_BUILDINGS;
 	// place initial network buildings/units
@@ -2352,7 +2352,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 
 
 
-				if (!TheLaneWarDirector->isActive())
+				if (!TheDirectStrikeDirector->isActive())
 					placeNetworkBuildingsForPlayer(i, slot, player, pt);
 			}
 
@@ -3303,7 +3303,7 @@ void GameLogic::writeMismatchDump( Int numPlayers, UnsignedInt crcFrame )
 		"partition (logic random seed, shroud)",
 		"players (battle plans, skill points, science points, money)",
 		"AI (pathfinder, AI data, AI groups)",
-		"scripts (and the Lane War director on a lane map)",
+		"scripts (and the Direct Strike director on a lane map)",
 	};
 	fprintf( fp, "World CRC at the end of each part:\n" );
 	for( Int s = 0; s < CRC_SECTION_COUNT; ++s )
@@ -4814,11 +4814,11 @@ static Bool kickVoteAgreed( Int votes, Int voters )
 	return voters >= MIN_KICK_VOTERS && votes >= voters;
 }
 
-/// a kicked player has left the game: in Direct Strike his team's buildings go to a teammate first (LaneWarStats.h)
+/// a kicked player has left the game: in Direct Strike his team's buildings go to a teammate first (DirectStrikeStats.h)
 static void kickPlayer( Player *player )
 {
-	if( TheLaneWarDirector->isActive() )
-		TheLaneWarStats->onPlayerLeft( player );
+	if( TheDirectStrikeDirector->isActive() )
+		TheDirectStrikeStats->onPlayerLeft( player );
 	player->killPlayer();
 }
 
@@ -5586,9 +5586,9 @@ void GameLogic::update( void )
 		 happens on a render pass and making an object has to happen in here, so the two are split. */
 	ControlServer_runCommands();
 
-	// Lane War, after both so a unit put on a plot this frame is held this frame
-	TheLaneWarDirector->update();
-	TheLaneWarStats->update();
+	// Direct Strike, after both so a unit put on a plot this frame is held this frame
+	TheDirectStrikeDirector->update();
+	TheDirectStrikeStats->update();
 	TheApocalypseDirector->update();
 	// the day and night cycle's re-looks after a sight step (DayNightCycle.h)
 	DayNight_update();
@@ -6285,15 +6285,15 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 	marker = "MARKER:TheScriptEngine";
 	xferCRC->xferAsciiString(&marker);
 	xferCRC->xferSnapshot( TheScriptEngine );
-	// only on a Lane War map, so every other game's CRC is what it was
-	if (TheLaneWarDirector->isActive())
+	// only on a Direct Strike map, so every other game's CRC is what it was
+	if (TheDirectStrikeDirector->isActive())
 	{
 		marker = "MARKER:TheLaneWarDirector";
 		xferCRC->xferAsciiString(&marker);
-		xferCRC->xferSnapshot( TheLaneWarDirector );
+		xferCRC->xferSnapshot( TheDirectStrikeDirector );
 		marker = "MARKER:TheLaneWarStats";
 		xferCRC->xferAsciiString(&marker);
-		xferCRC->xferSnapshot( TheLaneWarStats );
+		xferCRC->xferSnapshot( TheDirectStrikeStats );
 	}
 	// only on an Apocalypse map, the same way
 	if (TheApocalypseDirector->isActive())
@@ -6922,8 +6922,8 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 17: xfer m_supplyPileLimit
 	* 18: xfer the logic random stream and the pathfinder's request queue and flow maps
 	* 19: xfer the AI groups and the AI's group and formation counters (AI::xferGroups)
-	* 20: xfer TheLaneWarDirector
-	* 21: xfer TheLaneWarStats
+	* 20: xfer TheDirectStrikeDirector
+	* 21: xfer TheDirectStrikeStats
 	* 22: xfer TheApocalypseDirector
 	* 23: xfer m_dayNight
 	*/
@@ -7421,14 +7421,14 @@ void GameLogic::xfer( Xfer *xfer )
     TheAI->xferGroups( xfer );
 
   if ( version >= 20 )
-    xfer->xferSnapshot( TheLaneWarDirector );
+    xfer->xferSnapshot( TheDirectStrikeDirector );
   else if ( xfer->getXferMode() == XFER_LOAD )
-    TheLaneWarDirector->reset();	// a save from before the director plays as it was made, with no director
+    TheDirectStrikeDirector->reset();	// a save from before the director plays as it was made, with no director
 
   if ( version >= 21 )
-    xfer->xferSnapshot( TheLaneWarStats );
+    xfer->xferSnapshot( TheDirectStrikeStats );
   else if ( xfer->getXferMode() == XFER_LOAD )
-    TheLaneWarStats->reset();	// a lane save from before the record starts counting from the load
+    TheDirectStrikeStats->reset();	// a lane save from before the record starts counting from the load
 
   if ( version >= 22 )
     xfer->xferSnapshot( TheApocalypseDirector );

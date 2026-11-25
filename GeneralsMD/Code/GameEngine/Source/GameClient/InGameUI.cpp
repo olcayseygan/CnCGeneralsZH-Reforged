@@ -112,9 +112,9 @@
 #include "GameClient/Shadow.h"
 #include "GameClient/GlobalLanguage.h"
 #include "GameClient/GroupPanel.h"
-#include "GameClient/LaneHud.h"
+#include "GameClient/DirectStrikeHud.h"
 #include "GameClient/MatchClock.h"
-#include "GameClient/LaneWarEndScreen.h"
+#include "GameClient/DirectStrikeEndScreen.h"
 #include "GameClient/AirliftPanel.h"
 #include "GameClient/UIStyle.h"
 #include "GameClient/DirectStrikeTheme.h"
@@ -3440,10 +3440,10 @@ void InGameUI::preDraw( void )
 	// handle any "icons" for the act of building things and placing them in the world
 	handleBuildPlacements();
 
-	// a Lane War unit riding the pointer to its plot slot
-	LaneHud_preDraw();
-	// and a decided Lane War match's end, read here at the sync point
-	LaneWarEndScreen_preDraw();
+	// a Direct Strike unit riding the pointer to its plot slot
+	DirectStrikeHud_preDraw();
+	// and a decided Direct Strike match's end, read here at the sync point
+	DirectStrikeEndScreen_preDraw();
 
 	// handle radius-cursors, if any
 	handleRadiusCursor();
@@ -9272,9 +9272,9 @@ void InGameUI::postDraw( void )
 	// a player's squad list on the left, and the picked squad's build tray where a watcher's rack hangs
 	GroupPanel_draw( rackPlateTop );
 
-	// a Lane War map's own HUD, in the command bar's place, and over it the match's end
-	LaneHud_draw();
-	LaneWarEndScreen_draw();
+	// a Direct Strike map's own HUD, in the command bar's place, and over it the match's end
+	DirectStrikeHud_draw();
+	DirectStrikeEndScreen_draw();
 
 	// an airlift power's load being picked, over everything else at its spot
 	AirliftPanel_draw();
@@ -12783,7 +12783,7 @@ void InGameUI::drawProductionList( void )
 	const Int foot = radarFrameTop() - stripPixels( PRODUCTION_LIST_LIFT ) - style.production.footH;
 	// the Direct Strike HUD sells and shows its own hero card, so the cell would be a second hero at the
 	// screen's edge; Apocalypse has no such HUD and keeps it
-	if( !LaneHud_isShowing() )
+	if( !DirectStrikeHud_isShowing() )
 		m_heroCell = drawHeroCell( style, foot - style.cellH, m_hero );
 	// the Red Alert style sidebar's cameos wear their own queue's clocks and counts; the hero's cell
 	// stays, over the selection card (radarFrameTop)
@@ -12906,9 +12906,9 @@ static void drawObserverReadout( const UnicodeString &text, const IRegion2D &cam
 // bar's windows are hidden but the radar's, which stands in the radar's glass (keepConsoleWindows).
 //=================================================================================================
 
-static LaneHudBox regionBox( const IRegion2D &r )
+static DirectStrikeHudBox regionBox( const IRegion2D &r )
 {
-	return LaneHud_box( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y );
+	return DirectStrikeHud_box( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y );
 }
 
 enum

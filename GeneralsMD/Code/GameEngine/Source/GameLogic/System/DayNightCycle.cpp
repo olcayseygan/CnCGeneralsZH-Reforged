@@ -84,7 +84,7 @@ Bool DayNight_isOn( void )
 {
 	if( theOverrideForTests >= 0 )
 		return theOverrideForTests != 0;
-	// one saved Bool, settled at the start against the Apocalypse and Lane War (GameLogic::startNewGame)
+	// one saved Bool, settled at the start against the Apocalypse and Direct Strike (GameLogic::startNewGame)
 	return TheGameLogic != NULL && TheGameLogic->isDayNight();
 }
 

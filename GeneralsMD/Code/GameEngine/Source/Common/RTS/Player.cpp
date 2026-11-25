@@ -107,7 +107,7 @@
 #include "GameLogic/Module/RebuildHoleBehavior.h"
 #include "GameLogic/Module/TransportContain.h"
 #include "GameLogic/VictoryConditions.h"
-#include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/ApocalypseDirector.h"
 
 #include "GameNetwork/GameInfo.h"
@@ -2985,8 +2985,8 @@ void Player::addSciencePurchasePoints(Int delta)
 //=============================================================================
 Bool Player::attemptToPurchaseScience(ScienceType science)
 {
-	// Lane War has no general's powers: every science purchase is refused, quietly, the AI's included
-	if (TheLaneWarDirector->isActive())
+	// Direct Strike has no general's powers: every science purchase is refused, quietly, the AI's included
+	if (TheDirectStrikeDirector->isActive())
 		return false;
 
 	if (!isCapableOfPurchasingScience(science))
@@ -3053,7 +3053,7 @@ void Player::logAIPersonaSummary(void)
 
 Bool Player::isCapableOfPurchasingScience(ScienceType science) const
 {
-	if (science == SCIENCE_INVALID || TheLaneWarDirector->isActive())
+	if (science == SCIENCE_INVALID || TheDirectStrikeDirector->isActive())
 	{
 		return false;
 	}

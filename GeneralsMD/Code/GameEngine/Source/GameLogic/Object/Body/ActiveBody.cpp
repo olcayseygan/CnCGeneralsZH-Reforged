@@ -52,8 +52,8 @@
 #include "GameLogic/Armor.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
-#include "GameLogic/LaneWarDirector.h"
-#include "GameLogic/LaneWarStats.h"
+#include "GameLogic/DirectStrikeDirector.h"
+#include "GameLogic/DirectStrikeStats.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Damage.h"
 #include "GameLogic/PartitionManager.h"
@@ -581,11 +581,11 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 			amount *= m_damageScalar;
 		}
 
-		// Direct Strike's scales on a few of EA's guns, in a lane match only (LaneWar_damagePercent); a hit
+		// Direct Strike's scales on a few of EA's guns, in a lane match only (DirectStrike_damagePercent); a hit
 		// at 100 percent keeps its float path untouched
-		if( damager != NULL && TheLaneWarDirector != NULL && TheLaneWarDirector->isActive() )
+		if( damager != NULL && TheDirectStrikeDirector != NULL && TheDirectStrikeDirector->isActive() )
 		{
-			const Int percent = LaneWar_damagePercent( damager->getTemplate()->getName().str(),
+			const Int percent = DirectStrike_damagePercent( damager->getTemplate()->getName().str(),
 				obj->isKindOf( KINDOF_STRUCTURE ), obj->isKindOf( KINDOF_INFANTRY ) );
 			if( percent != 100 )
 				amount = amount * (Real)percent / 100.0f;
@@ -593,7 +593,7 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 			// building burning names itself, whoever lit it, so that is left out)
 			if( amount > 0.0f && damager != obj && obj->isKindOf( KINDOF_STRUCTURE ) && damager->getControllingPlayer() != NULL && victimPlayer != NULL
 					&& ( damager->getControllingPlayer() == victimPlayer || damager->getControllingPlayer()->getRelationship( obj->getTeam() ) == ALLIES ) )
-				DEBUG_LOG(( "LANEWAR FRIENDLY FIRE: frame %u '%s' %d hits its own side's '%s' %d for %.1f\n", TheGameLogic->getFrame(),
+				DEBUG_LOG(( "DIRECTSTRIKE FRIENDLY FIRE: frame %u '%s' %d hits its own side's '%s' %d for %.1f\n", TheGameLogic->getFrame(),
 										damager->getTemplate()->getName().str(), (Int)damager->getID(), obj->getTemplate()->getName().str(), (Int)obj->getID(), amount ));
 		}
 
@@ -657,9 +657,9 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 		if( !alreadyHandled && damageInfo->out.m_actualDamageClipped > 0.0f && damager && damager != obj
 				&& damager->getRelationship( obj ) == ENEMIES )
 			obj->getExperienceTracker()->recordDamage( damager->getID(), REAL_TO_INT_CEIL( damageInfo->out.m_actualDamageClipped ) );
-		// and a Lane War wave unit's damage to an enemy tower or fortress, for the match's record
+		// and a Direct Strike wave unit's damage to an enemy tower or fortress, for the match's record
 		if( !alreadyHandled && damager )
-			TheLaneWarStats->onDamage( damager, obj, damageInfo->out.m_actualDamageClipped );
+			TheDirectStrikeStats->onDamage( damager, obj, damageInfo->out.m_actualDamageClipped );
 
 		// then copy the whole DamageInfo struct for easy lookup 
 		// (object pointer loses scope as soon as atteptdamage's caller ends)

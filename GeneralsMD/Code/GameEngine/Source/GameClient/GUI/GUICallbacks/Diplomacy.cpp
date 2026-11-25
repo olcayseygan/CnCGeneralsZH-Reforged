@@ -59,7 +59,7 @@
 #include "GameClient/Keyboard.h"
 #include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/GameLogic.h"
-#include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/VictoryConditions.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/NetworkInterface.h"
@@ -857,7 +857,7 @@ void PopulateInGameDiplomacyPopup( void )
 	// the money column is for a player still in the match, and never in a replay, where the
 	// transfers already recorded play back by themselves.  Direct Strike and Apocalypse have no gifts
 	// at all (GameLogicDispatch.cpp refuses the message there), so the column is hidden in them too
-	const Bool modeMatch = (TheLaneWarDirector != NULL && TheLaneWarDirector->isActive())
+	const Bool modeMatch = (TheDirectStrikeDirector != NULL && TheDirectStrikeDirector->isActive())
 										|| (TheApocalypseDirector != NULL && TheApocalypseDirector->isActive());
 	const Bool mayGive = !modeMatch && !TheGameLogic->isInReplayGame() && ThePlayerList->getLocalPlayer()->isPlayerActive();
 	if (staticTextMoneyTitle)

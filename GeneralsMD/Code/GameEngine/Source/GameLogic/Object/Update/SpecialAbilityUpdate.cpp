@@ -53,7 +53,7 @@
 
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/GameLogic.h"
-#include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/TerrainLogic.h"
@@ -1003,14 +1003,14 @@ void SpecialAbilityUpdate::killUnpackLaser()
 
 //-------------------------------------------------------------------------------------------------
 /** The INI's StartAbilityRange.  In a Direct Strike match a Hacker's building hack starts from
-	* LANEWAR_HACK_RANGE instead, just past the Watch Tower's gun (225), so a lone Hacker lives through
+	* DIRECTSTRIKE_HACK_RANGE instead, just past the Watch Tower's gun (225), so a lone Hacker lives through
 	* his unpack and finishes the hack (2026-11-23); classic and the other modes keep EA's 150. */
 Real SpecialAbilityUpdate::getStartAbilityRange() const
 {
   const SpecialAbilityUpdateModuleData* data = getSpecialAbilityUpdateModuleData();
   if( data->m_specialPowerTemplate != NULL && data->m_specialPowerTemplate->getSpecialPowerType() == SPECIAL_HACKER_DISABLE_BUILDING
-      && TheLaneWarDirector != NULL && TheLaneWarDirector->isActive() )
-    return __max( data->m_startAbilityRange, (Real)LANEWAR_HACK_RANGE );
+      && TheDirectStrikeDirector != NULL && TheDirectStrikeDirector->isActive() )
+    return __max( data->m_startAbilityRange, (Real)DIRECTSTRIKE_HACK_RANGE );
   return data->m_startAbilityRange;
 }
 

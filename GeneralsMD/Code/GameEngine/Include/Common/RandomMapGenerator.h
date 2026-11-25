@@ -142,7 +142,7 @@ extern Bool stageRandomMap( const RandomMapSettings& settings, AsciiString& mapP
 	calls it when its seat count changes. FALSE when the path is not a generated map. */
 extern Bool restageRandomMap( const AsciiString& path, Int numPlayers, AsciiString& mapPathOut );
 
-/** The colours, ARGB, a Lane War plot's slot grid is drawn in on the lane map at this path: its
+/** The colours, ARGB, a Direct Strike plot's slot grid is drawn in on the lane map at this path: its
 	lines between slots and its outline, picked per theme to read on the theme's own ground. FALSE
 	when the path is not a generated lane map. Client side only; nothing in the simulation reads it. */
 extern Bool LaneGridColours( const AsciiString& mapPath, UnsignedInt *lineARGB, UnsignedInt *edgeARGB );

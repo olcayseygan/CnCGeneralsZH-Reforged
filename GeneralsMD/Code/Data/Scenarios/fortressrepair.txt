@@ -1,4 +1,4 @@
-# A Lane War fortress and watch tower holed and then mended, the same check glahqrepair makes on the
+# A Direct Strike fortress and watch tower holed and then mended, the same check glahqrepair makes on the
 # GLA Command Center: team A (slot 0) shells team B's fortress with two Tomahawks and four Overlords
 # from fortressfall's places and its watch tower with two Crusaders, then all eight go over to slot 1,
 # so the shelling stops, and both have their health set back up to 85 and then 100 percent. The

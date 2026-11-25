@@ -48,7 +48,7 @@
 #include "GameClient/GUICallbacks.h"		// ToggleQuitMenu, for quitmenu
 #include "GameClient/InGameUI.h"
 #include "GameClient/KeyDefs.h"
-#include "GameClient/LaneHud.h"
+#include "GameClient/DirectStrikeHud.h"
 #include "GameClient/Shell.h"
 #include "GameClient/View.h"
 #include "GameClient/WindowLayout.h"
@@ -870,8 +870,8 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
-	/* lanehud <grid> <col> <row>: where the Lane War HUD has the local player's slot on screen and the
-		 chips it last raised over a plot unit, for a script that drags with the mouse (LaneHud_describe) */
+	/* lanehud <grid> <col> <row>: where the Direct Strike HUD has the local player's slot on screen and the
+		 chips it last raised over a plot unit, for a script that drags with the mouse (DirectStrikeHud_describe) */
 	if (strncmp( command.str(), "lanehud ", 8 ) == 0)
 	{
 		Int grid = 0, col = 0, row = 0;
@@ -881,7 +881,7 @@ static void handleCommand( const AsciiString &command )
 			return;
 		}
 		char members[ 2048 ];
-		LaneHud_describe( grid, col, row, members, sizeof( members ) );
+		DirectStrikeHud_describe( grid, col, row, members, sizeof( members ) );
 		char reply[ 2100 ];
 		snprintf( reply, sizeof( reply ), "{\"ok\":true,%s}", members );
 		sendText( reply );

@@ -1,5 +1,5 @@
 # Fracture proof for a shot with no blast point of its own: twenty Gattling Tanks (15 damage a round, no
-# projectile, no radius) shoot team B's Lane War watch tower straight on, so each hit lands on the side
+# projectile, no radius) shoot team B's Direct Strike watch tower straight on, so each hit lands on the side
 # of the tower facing the tanks at its middle height, spread over that face by the client. A drawn run
 # only (no -headless): read the FRACTURE HIT lines, the smallest hole (3) a hit, chipping the face
 # facing the tanks. The tower fires until it dies, so the tanks' health falls at every tally until

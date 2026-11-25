@@ -2903,7 +2903,7 @@ void AIGroup::groupAttackPosition( const Coord3D *pos, Int maxShotsToFire, Comma
 }
 
 /**
- * The Lane War wave order, shared by the lanemarch scenario verb and the LaneWarDirector.  The group
+ * The Direct Strike wave order, shared by the lanemarch scenario verb and the DirectStrikeDirector.  The group
  * becomes one formation, and each member attack-moves dx along x from where it stands, on its own y,
  * so nothing bends the wave towards one shared point.  A member with a FormationID takes its group's
  * slowest member speed every time AIMoveToState::onEnter sets it moving, after a fight too, so the

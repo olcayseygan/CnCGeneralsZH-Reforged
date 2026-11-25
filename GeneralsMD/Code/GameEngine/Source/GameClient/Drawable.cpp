@@ -57,7 +57,7 @@
 
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"		// for logic frame count
-#include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 
@@ -4386,7 +4386,7 @@ void Drawable::drawIconUI( void )
 	if( barOnly && !TheGlobalData->m_directorRecord )
 		return;
 
-	// a Lane War plot unit is a piece on a board: the board shows nothing over it
+	// a Direct Strike plot unit is a piece on a board: the board shows nothing over it
 	if( m_iconUIHidden )
 		return;
 
@@ -4976,7 +4976,7 @@ void Drawable::drawUIText()
 
 	// Direct Strike puts every wave in a formation to hold it to its slowest unit's speed; the player
 	// never made it, so it wears no F there
-	if ( obj->getFormationID() != NO_FORMATION_ID && ( TheLaneWarDirector == NULL || !TheLaneWarDirector->isActive() ) )
+	if ( obj->getFormationID() != NO_FORMATION_ID && ( TheDirectStrikeDirector == NULL || !TheDirectStrikeDirector->isActive() ) )
 	{
 		//draw an F, here
 		Coord3D p;

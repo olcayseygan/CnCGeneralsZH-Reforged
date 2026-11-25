@@ -2491,9 +2491,9 @@ target_include_directories(test_audio_mix_policy PRIVATE ${CMAKE_CURRENT_SOURCE_
 add_lib_test(test_ground_marks)
 target_include_directories(test_ground_marks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
-# GameClient/LaneHudLayout.h: where the Lane War HUD's boxes stand on a screen.
-add_lib_test(test_lanehud)
-target_include_directories(test_lanehud PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
+# GameClient/DirectStrikeHudLayout.h: where the Direct Strike HUD's boxes stand on a screen.
+add_lib_test(test_directstrikehud)
+target_include_directories(test_directstrikehud PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
 # W3DDevice/GameClient/TerrainSubdivide.h: the subdivided ground through the samples, near the plane.
 add_lib_test(test_terrain_subdivide)
 target_include_directories(test_terrain_subdivide PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)

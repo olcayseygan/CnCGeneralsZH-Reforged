@@ -796,7 +796,7 @@ public:
   Bool getReceivesDynamicLights( void ) { return LogicThread::isInsideWindow() ? m_lookForDraw.receivesDynamicLights : m_receivesDynamicLights; };
   void setReceivesDynamicLights( Bool set ) { m_receivesDynamicLights = set; };
 
-	/// no health bar, pips, rank or status icons over it: a Lane War plot unit (LaneHud_preDraw sets it at the sync point)
+	/// no health bar, pips, rank or status icons over it: a Direct Strike plot unit (DirectStrikeHud_preDraw sets it at the sync point)
 	void setIconUIHidden( Bool hidden ) { m_iconUIHidden = hidden; }
 
   //---------------------------------------------------------------------------------

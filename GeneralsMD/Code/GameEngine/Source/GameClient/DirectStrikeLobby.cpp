@@ -83,7 +83,7 @@ namespace
 	};
 	const char *const CHAT_ENTRY = "TextEntryChat";
 
-	/// the picker's columns, README-lobby.md "Army picker": the side first, then its generals; Lane War has no Turkiye
+	/// the picker's columns, README-lobby.md "Army picker": the side first, then its generals; Direct Strike has no Turkiye
 	const char *const ARMIES[ DSLOBBY_ARMY_COLUMNS ][ DSLOBBY_ARMY_TILES ] =
 	{
 		{ "FactionAmerica", "FactionAmericaAirForceGeneral", "FactionAmericaLaserGeneral", "FactionAmericaSuperWeaponGeneral" },
@@ -188,11 +188,11 @@ namespace
 	//-----------------------------------------------------------------------------------------------
 	Int screenX( Real x ) { return s_frame.ox + REAL_TO_INT( x * s_frame.k + 0.5f ); }
 	Int screenY( Real y ) { return s_frame.oy + REAL_TO_INT( y * s_frame.k + 0.5f ); }
-	LaneHudBox boxOf( const DirectStrikeRect &r ) { return DirectStrike_box( s_frame, r ); }
+	DirectStrikeHudBox boxOf( const DirectStrikeRect &r ) { return DirectStrike_box( s_frame, r ); }
 	Real middleOf( const DirectStrikeRect &r ) { return ( r.y0 + r.y1 ) * 0.5f; }
 
 	/// a square of `size` whose left is x, centred down r
-	LaneHudBox iconAt( Real x, const DirectStrikeRect &r, Real w, Real h )
+	DirectStrikeHudBox iconAt( Real x, const DirectStrikeRect &r, Real w, Real h )
 	{
 		const Real y = middleOf( r ) - h * 0.5f;
 		return boxOf( DirectStrike_rect( x, y, x + w, y + h ) );
@@ -482,7 +482,7 @@ namespace
 	/// the chat entry on the chat input's rect, so a click there gives it the keyboard
 	void placeEntry( GameWindow *entry )
 	{
-		const LaneHudBox b = boxOf( DirectStrikeLobby_chatInput() );
+		const DirectStrikeHudBox b = boxOf( DirectStrikeLobby_chatInput() );
 		Int upX = 0, upY = 0, x = 0, y = 0, w = 0, h = 0;
 		if( entry->winGetParent() != NULL )
 			entry->winGetParent()->winGetScreenPosition( &upX, &upY );
@@ -506,7 +506,7 @@ namespace
 	void drawConsole( void )
 	{
 		nineSlice( boxOf( DirectStrikeLobby_console() ), CONSOLE_TL );
-		const LaneHudBox title = boxOf( DirectStrikeLobby_title() );
+		const DirectStrikeHudBox title = boxOf( DirectStrikeLobby_title() );
 		threeSlice( title, HEX_TITLE_L, HEX_TITLE_C, HEX_TITLE_R );
 		drawSpaced( TheGameText->fetch( "GUI:DirectStrike" ), font( TITLE_EM ), title.x + title.w / 2, title.y, title.h, TITLE_SPACING, TEXT_WHITE, 0 );
 		for( Int i = 0; i < 2; ++i )
@@ -529,7 +529,7 @@ namespace
 		for( Int team = 0; team < DSLOBBY_TEAMS; ++team )
 		{
 			const DirectStrikeRect head = DirectStrikeLobby_teamHead( team );
-			const LaneHudBox b = boxOf( head );
+			const DirectStrikeHudBox b = boxOf( head );
 			pointedPlate( head, team, DSLOBBY_HEAD_SPEAR, SPEAR_HEAD_RIGHT_L, SPEAR_HEAD_LEFT_L );
 			const Bool hot = s_list == LIST_NONE && headMove( team ) >= 0 && pointerIn( headPlate( team ) );
 			if( hot )
@@ -542,7 +542,7 @@ namespace
 			const Int size = min( teamSize( team ), (Int)DSLOBBY_HEAD_LEDS ), ready = teamReady( team );
 			for( Int i = 0; i < size; ++i )
 			{
-				const LaneHudBox led = boxOf( DirectStrikeLobby_headLed( team, i ) );
+				const DirectStrikeHudBox led = boxOf( DirectStrikeLobby_headLed( team, i ) );
 				if( i < ready )
 					glow( LED_LIT, led, teamColor( team ) );
 				else
@@ -557,7 +557,7 @@ namespace
 	{
 		const GameSlot *s = seat( slot );
 		const DirectStrikeRect wellAt = seatPart( slot, DSSEAT_PORTRAIT );
-		const LaneHudBox well = boxOf( wellAt );
+		const DirectStrikeHudBox well = boxOf( wellAt );
 		// the + key, 28 in: the whole open card is its target (overMove), so it lights for the card
 		const Int at = seatOfSlot( slot );
 		const DirectStrikeRect mark = DirectStrike_rect( wellAt.x0 + PLUS_IN, wellAt.y0 + PLUS_IN, wellAt.x1 - PLUS_IN, wellAt.y1 - PLUS_IN );
@@ -669,7 +669,7 @@ namespace
 		const Bool ready = isReady( slot );
 		for( Int k = 0; k < DSLOBBY_LIP_SEGS; ++k )
 		{
-			const LaneHudBox seg = boxOf( DirectStrikeLobby_lipSeg( at, k ) );
+			const DirectStrikeHudBox seg = boxOf( DirectStrikeLobby_lipSeg( at, k ) );
 			if( ready )
 				glow( SEG_LIT, seg, teamColor( team ) );
 			else
@@ -738,7 +738,7 @@ namespace
 		else
 			text( TheGameText->fetch( "GUI:DirectStrikeMixed" ), ISLAND_BAND_NOTE_EM, r.x0 + CHECK + ICON_GAP, y, color );
 		// the check's well, a plain sunk square: the well's nine slices do not fold down to 20
-		const LaneHudBox check = boxOf( DirectStrike_rect( x0, y - CHECK * 0.5f, x0 + CHECK, y + CHECK * 0.5f ) );
+		const DirectStrikeHudBox check = boxOf( DirectStrike_rect( x0, y - CHECK * 0.5f, x0 + CHECK, y + CHECK * 0.5f ) );
 		TheDisplay->drawFillRect( check.x, check.y, check.w, check.h, GameMakeColor( 0, 0, 0, 200 ) );
 		TheDisplay->drawOpenRect( check.x, check.y, check.w, check.h, 1.0f, hot ? TEXT_GOLD : TEXT_GREY );
 		if( s_game->getDirectStrikeMixed() )
@@ -848,7 +848,7 @@ namespace
 	void drawChatInput( void )
 	{
 		const DirectStrikeRect input = DirectStrikeLobby_chatInput();
-		const LaneHudBox field = boxOf( input );
+		const DirectStrikeHudBox field = boxOf( input );
 		dropdown( field, "", TRUE );
 		clampKey( DirectStrikeLobby_send(), CLAMP_SEND );
 		GameWindow *entry = named( CHAT_ENTRY );
@@ -892,7 +892,7 @@ namespace
 			state = "P";
 		threeSlice( boxOf( DirectStrikeLobby_start() ), CLAMP_START_L, CLAMP_START_C, CLAMP_START_R, state );
 		const UnicodeString label = TheGameText->fetch( isNetwork() && !amHost() ? "GUI:DirectStrikeReady" : "GUI:DirectStrikeStart" );
-		const LaneHudBox b = boxOf( DirectStrikeLobby_start() );
+		const DirectStrikeHudBox b = boxOf( DirectStrikeLobby_start() );
 		const Color color = *state == 'P' ? TEXT_DARK : *state == 'I' ? TEXT_DIM : TEXT_WHITE;
 		drawSpaced( label, font( START_EM ), b.x + b.w / 2, b.y, b.h, START_SPACING, color, 0, *state != 'P' );
 	}
@@ -908,14 +908,14 @@ namespace
 			const Int lit = size > 0 ? ( 2 * DSLOBBY_TUG_SEGS * teamReady( team ) + size ) / ( 2 * size ) : 0;
 			for( Int i = 0; i < DSLOBBY_TUG_SEGS; ++i )
 			{
-				const LaneHudBox seg = boxOf( DirectStrikeLobby_tugSeg( team, i ) );
+				const DirectStrikeHudBox seg = boxOf( DirectStrikeLobby_tugSeg( team, i ) );
 				if( i < lit )
 					glow( TUG_SEG_LIT, seg, teamColor( team ) );
 				else
 					drawImage( art( TUG_SEG ), seg );
 			}
 		}
-		const LaneHudBox line = boxOf( DirectStrike_rect( GOLD_LINE_X0, GOLD_LINE_Y0, GOLD_LINE_X1, GOLD_LINE_Y1 ) );
+		const DirectStrikeHudBox line = boxOf( DirectStrike_rect( GOLD_LINE_X0, GOLD_LINE_Y0, GOLD_LINE_X1, GOLD_LINE_Y1 ) );
 		TheDisplay->drawFillRect( line.x, line.y, line.w, line.h, TEXT_GOLD );
 	}
 
@@ -1010,7 +1010,7 @@ namespace
 		{
 			const DirectStrikeRect cell = DirectStrikeLobby_colorCell( seatOfSlot( slot ), count, i, isNetwork() );
 			const Real x = ( cell.x0 + cell.x1 - SWATCH_W ) * 0.5f;
-			const LaneHudBox box = iconAt( x, cell, SWATCH_W, SWATCH_H );
+			const DirectStrikeHudBox box = iconAt( x, cell, SWATCH_W, SWATCH_H );
 			const Bool current = colors[ i ] == seat( slot )->getColor();
 			listRow( boxOf( cell ), FALSE, !current && pointerIn( cell ) );
 			swatch( box, TheMultiplayerSettings->getColor( colors[ i ] )->getColor() );

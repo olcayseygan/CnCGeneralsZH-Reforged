@@ -1480,16 +1480,22 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		 seen (PartitionData::getShroudedStatus), so with UNFOGGED it is asked of exactly the objects it
 		 always was, those the can-attack filter and the line of sight both let through, and only those
 		 two may change places ahead of it. That is the computer players' own case on a random map. The
-		 can-attack filter asks weapons their status, and Weapon::getStatus writes its answer back; the
-		 search asks under a Weapon::StatusPeek, which writes nothing, so which weapons got asked leaves
-		 no trace. */
+		 caller's optional filter is the exception and goes first in both lists: a mood scan's is the
+		 elevated reach or the aircraft's forward arc, a distance or an angle, and 93% of the candidates
+		 of a crowded late game reached the late filters, about half of a sample out of reach, each paying the
+		 weapon questions and the two walks only to decide whether its shroud status got computed. So
+		 an enemy out of reach is no longer asked the shroud query on the scanner's behalf, which can
+		 leave its "ever seen" for that player unset until something else asks (2026-11-25, the owner's
+		 call; old replays may part). The can-attack filter asks weapons their status, and
+		 Weapon::getStatus writes its answer back; the search asks under a Weapon::StatusPeek, which
+		 writes nothing, so which weapons got asked leaves no trace. */
 	const Bool fogFiltered = (qualifiers & UNFOGGED) != 0;
+
+	if (optionalFilter)
+		filters[numFilters++] = optionalFilter;
 
 	if (!fogFiltered)
 	{
-		if (optionalFilter)
-			filters[numFilters++] = optionalFilter;
-
 		if (qualifiers & IGNORE_INSIGNIFICANT_BUILDINGS)
 			filters[numFilters++] = &filterInsignificant;
 
@@ -1510,9 +1516,6 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 			filters[numFilters++] = &filterInsignificant;
 
 		filters[numFilters++] = &filterStealth;
-
-		if (optionalFilter)
-			filters[numFilters++] = optionalFilter;
 	}
 
 	filters[numFilters] = NULL;

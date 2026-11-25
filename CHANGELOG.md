@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Huge battles run lighter
+
+- Late-game fights with thousands of units cost the computer players less to think about: picking a target and deciding when a unit pulls back skip the checks for enemies that are out of reach. At about 3000 units a frame takes roughly 14% less time. Replays recorded on an earlier build can drift apart in very dense battles.
+
 ## The game room in the new menu look
 
 - The room you set up every skirmish, LAN game and online custom game in is the next screen in the new menu look: the thin lit frame with its ruler ticks, one lit key (Play Game, Start or Accept), and every drop-down and check box drawn in the same lines instead of EA's 2003 art.

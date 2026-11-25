@@ -870,4 +870,9 @@ extern void applyWindowMode( void );
 	* never be applied twice to the same numbers. */
 extern void reforgeLighting( GlobalData::TerrainLighting lights[MAX_GLOBAL_LIGHTS] );
 
+/** The Reforged style's moon, for a map's Night lights only, after reforgeLighting: a cool blue key
+	* from a moon at most REFORGED_MOON_SINE high and a blue sky ambient, each raised to a floor where
+	* the map's own is dimmer, so a night map reads under moonlight instead of near black. */
+extern void reforgeMoonlight( GlobalData::TerrainLighting lights[MAX_GLOBAL_LIGHTS] );
+
 #endif

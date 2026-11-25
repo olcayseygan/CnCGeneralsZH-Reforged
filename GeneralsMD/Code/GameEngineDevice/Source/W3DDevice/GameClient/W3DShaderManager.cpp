@@ -491,7 +491,8 @@ static void pushProtoHazeFrame(void)
 		towardSun[1] = -objectSun.lightPos.y / length;
 		towardSun[2] = -objectSun.lightPos.z / length;
 		const Real daylight = (0.299f * objectSun.diffuse.red + 0.587f * objectSun.diffuse.green + 0.114f * objectSun.diffuse.blue - 0.25f) / 0.5f;
-		warmth = max(min(daylight, 1.0f), 0.0f);
+		// a night map's moon is no sun, however bright the Reforged style makes it
+		warmth = DayNight_mapNightCondition() ? 0.0f : max(min(daylight, 1.0f), 0.0f);
 	}
 	setGroundHaze(colour, top, rise, strength, PROTO_HAZE_REACH, water, towardSun, warmth);
 }
@@ -697,8 +698,9 @@ static void pushSunShafts(Bool denserDust)
 		const Real low = max(min((SUN_SHAFT_LOW_SUN_DEGREES - elevation) / SUN_SHAFT_LOW_SUN_SPAN, 1.0f), 0.0f);
 		const Real day = max(min((0.299f * sun.diffuse.red + 0.587f * sun.diffuse.green + 0.114f * sun.diffuse.blue - 0.25f) / 0.5f,
 			1.0f), 0.0f);
-		// the night the picture is lit by, in the light's own steps, so the shafts go with the light on screen
-		const Real night = max(min(DayNight_lightAmount(), 1.0f), 0.0f);
+		// the night the picture is lit by, in the light's own steps, so the shafts go with the light on screen;
+		// a night map is all night, its moon bright enough under the Reforged style to pass for a sun
+		const Real night = DayNight_mapNightCondition() ? 1.0f : max(min(DayNight_lightAmount(), 1.0f), 0.0f);
 		const Real dusk = 4.0f * night * (1.0f - night);
 		const SunShaftTuning &tuning = s_shaftTuning;
 		shafts.Strength = min(SUN_SHAFT_STRENGTH * low * day * (1.0f - night) * (1.0f + tuning.duskGain * dusk),

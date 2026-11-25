@@ -1477,6 +1477,61 @@ void reforgeLighting( GlobalData::TerrainLighting lights[MAX_GLOBAL_LIGHTS] )
 	}
 }
 
+/* EA's night maps light a lit face at about a third of an afternoon's and some carry no moon at all,
+	a straight-down light with next to no colour, so a tank is a dark lump on dark ground.  The moon
+	is a key about four tenths of a noon sun, deep blue, no higher than 40 degrees so it rakes the
+	ground and gives every hull a lit and a dark side, over a blue sky ambient that keeps the shade
+	readable.  A map that is brighter than either floor keeps its own; a dimmer one keeps its hue
+	and the moon's colour fills the rest, so the picture stays night and never turns a dim day. */
+// Deep blue on purpose: a paler key (0.34 0.44 0.72) turned the grass olive and read as dusk.
+static const Real REFORGED_MOON_KEY[3] = { 0.24f, 0.40f, 0.86f };	// luminance 0.405
+static const Real REFORGED_MOON_SKY[3] = { 0.12f, 0.20f, 0.46f };	// luminance 0.206
+static const Real REFORGED_MOON_SINE = 0.64f;				// about 40 degrees over the horizon
+static const Real REFORGED_MOON_STEEPEST = 0.82f;		// a moon above about 55 degrees is brought down to it
+
+/// raise a colour to the floor's luminance by adding the floor's colour, so its own hue stays
+static void moonFloor( RGBColor &c, const Real floor[3] )
+{
+	const Real want = 0.299f * floor[0] + 0.587f * floor[1] + 0.114f * floor[2];
+	const Real have = lightLuminance( c );
+	if( have >= want )
+		return;
+	const Real add = 1.0f - have / want;
+	c.red += floor[0] * add;
+	c.green += floor[1] * add;
+	c.blue += floor[2] * add;
+}
+
+void reforgeMoonlight( GlobalData::TerrainLighting lights[MAX_GLOBAL_LIGHTS] )
+{
+	GlobalData::TerrainLighting &moon = lights[0];
+	Coord3D &ray = moon.lightPos;
+	Real length = (Real)sqrt( ray.x * ray.x + ray.y * ray.y + ray.z * ray.z );
+	if( length < 0.0001f )
+	{
+		ray.z = -1.0f;
+		length = 1.0f;
+	}
+	if( -ray.z / length > REFORGED_MOON_STEEPEST )
+	{
+		// on the map's own bearing, or from the south-west where it has none (mapLightSun's)
+		Real flat = (Real)sqrt( ray.x * ray.x + ray.y * ray.y );
+		Real x = ray.x, y = ray.y;
+		if( flat < 0.0001f )
+		{
+			x = 0.7071f;
+			y = -0.7071f;
+			flat = 1.0f;
+		}
+		const Real across = (Real)sqrt( 1.0f - REFORGED_MOON_SINE * REFORGED_MOON_SINE ) * length / flat;
+		ray.x = x * across;
+		ray.y = y * across;
+		ray.z = -REFORGED_MOON_SINE * length;
+	}
+	moonFloor( moon.diffuse, REFORGED_MOON_KEY );
+	moonFloor( moon.ambient, REFORGED_MOON_SKY );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** Create a new global data instance to override the existing data set.  The
 	* initial values of the newly created instance will be a copy of the current

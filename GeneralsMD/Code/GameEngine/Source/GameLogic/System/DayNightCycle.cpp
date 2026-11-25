@@ -309,15 +309,17 @@ static Real luminance( const RGBColor &c )
 }
 
 /** Moonlight over noon.  The ambient carries what stays readable: a face turned from the moon keeps
-		about three fifths of its noon, a hard ambient cut left the Apocalypse's units black silhouettes.
-		The moon itself is dim and blue, a luminance of 0.27 of the noon sun's, which also leaves a bright
-		map's sun shafts next to nothing (their strength falls with the sun's luminance under 0.25). */
+		about seven tenths of its noon, a hard ambient cut left the Apocalypse's units black silhouettes.
+		The moon is the key and deep blue, a luminance of 0.45 of the noon sun's: at 0.27 the ground stood
+		at about a third of its noon and players saw next to nothing, now a lit face is about half its
+		noon, under a blue that keeps it night (a paler moon turned the grass olive).  The sun shafts take
+		nothing from it: their strength goes with the night amount (pushSunShafts). */
 static const DayNightPalette theCyclePalette =
 {
 	{ 1.0f, 1.0f, 1.0f },
 	{ 1.0f, 1.0f, 1.0f },
-	{ 0.55f, 0.62f, 0.90f },
-	{ 0.22f, 0.27f, 0.42f },
+	{ 0.62f, 0.70f, 1.00f },
+	{ 0.30f, 0.44f, 0.86f },
 	0.5f,
 	TRUE,
 	TRUE,
@@ -529,7 +531,7 @@ static const Int LOOK_STEPS = 16;			///< the cloud fade refilters a 1024 texture
 static const Int STENCIL_STEPS = 32;		///< alpha only
 static const Int SMOKE_STEPS = 32;			///< each change ages the GPU particles' ring again
 /// the tint over smoke and dust at full night: about the darkening of a lit face, a little blue
-static const Real NIGHT_SMOKE[ 3 ] = { 0.42f, 0.48f, 0.66f };
+static const Real NIGHT_SMOKE[ 3 ] = { 0.58f, 0.66f, 0.88f };
 /// of the direct light a handover takes away, the share the ambient gives back (a lit face's average)
 static const Real DIRECT_TO_AMBIENT = 0.35f;
 

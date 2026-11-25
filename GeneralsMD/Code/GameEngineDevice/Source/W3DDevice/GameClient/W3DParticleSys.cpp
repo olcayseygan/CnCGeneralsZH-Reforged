@@ -784,10 +784,13 @@ static RGBColor managerSmokeTint( void )
 	if (tint.red == 1.0f && tint.green == 1.0f && tint.blue == 1.0f
 		&& !TheGlobalData->m_classicGraphics && DayNight_mapNightCondition())
 	{
-		// ponytail: NIGHT_SMOKE in DayNightCycle.cpp, copied; move it to DayNightCycle.h if it changes
-		tint.red = 0.42f;
-		tint.green = 0.48f;
-		tint.blue = 0.66f;
+		// ponytail: NIGHT_SMOKE in DayNightCycle.cpp, copied; move it to DayNightCycle.h if it changes.
+		// The Reforged moon (reforgeMoonlight) lights the ground as the cycle's night does, so the smoke
+		// takes the cycle's tint; the map's own darker night keeps the darker one.
+		const Bool moonlit = TheGlobalData->m_lightingStyle == LIGHTING_STYLE_REFORGED;
+		tint.red = moonlit ? 0.58f : 0.42f;
+		tint.green = moonlit ? 0.66f : 0.48f;
+		tint.blue = moonlit ? 0.88f : 0.66f;
 	}
 	return tint;
 }

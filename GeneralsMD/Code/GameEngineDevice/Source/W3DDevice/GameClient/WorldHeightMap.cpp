@@ -521,16 +521,23 @@ Bool WorldHeightMap::ParseLightingDataChunk(DataChunkInput &file, DataChunkInfo 
 				reforgeLighting(TheWritableGlobalData->m_terrainLighting[i]);
 				reforgeLighting(TheWritableGlobalData->m_terrainObjectsLighting[i]);
 			}
+			reforgeMoonlight(TheWritableGlobalData->m_terrainLighting[TIME_OF_DAY_NIGHT]);
+			reforgeMoonlight(TheWritableGlobalData->m_terrainObjectsLighting[TIME_OF_DAY_NIGHT]);
 			const GlobalData::TerrainLighting &after = TheGlobalData->m_terrainObjectsLighting[tod][0];
-			DEBUG_LOG(("LIGHTING reforged, time of day %d: object ambient %.2f %.2f %.2f -> %.2f %.2f %.2f, sun %.2f %.2f %.2f -> %.2f %.2f %.2f\n",
+			DEBUG_LOG(("LIGHTING reforged, time of day %d: object ambient %.2f %.2f %.2f -> %.2f %.2f %.2f, sun %.2f %.2f %.2f -> %.2f %.2f %.2f, ray %.2f %.2f %.2f -> %.2f %.2f %.2f\n",
 				tod, before.ambient.red, before.ambient.green, before.ambient.blue,
 				after.ambient.red, after.ambient.green, after.ambient.blue,
 				before.diffuse.red, before.diffuse.green, before.diffuse.blue,
-				after.diffuse.red, after.diffuse.green, after.diffuse.blue));
+				after.diffuse.red, after.diffuse.green, after.diffuse.blue,
+				before.lightPos.x, before.lightPos.y, before.lightPos.z,
+				after.lightPos.x, after.lightPos.y, after.lightPos.z));
 		}
 		// a Direct3D 11 look like the haze that goes with it, so -d3d9 keeps the map's own sun
 		if (TheGlobalData->m_mapLight && TheGlobalData->m_direct3D11) {
 			for (i=TIME_OF_DAY_FIRST; i<TIME_OF_DAY_COUNT; i++) {
+				// the Reforged moon is bright enough to read as late daylight here, and would turn gold
+				if (i == TIME_OF_DAY_NIGHT && TheGlobalData->m_lightingStyle == LIGHTING_STYLE_REFORGED)
+					continue;
 				mapLightSun(TheWritableGlobalData->m_terrainLighting[i][0]);
 				mapLightSun(TheWritableGlobalData->m_terrainObjectsLighting[i][0]);
 			}

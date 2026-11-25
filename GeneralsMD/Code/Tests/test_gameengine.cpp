@@ -28197,6 +28197,47 @@ TEST(reforged_lighting_keeps_the_lit_side_and_darkens_the_shade)
 	CHECK( moon[0].diffuse.blue > 1.8f * moon[0].diffuse.red );
 }
 
+/** A night map's moon under the Reforged style: a map with no moon (a black light straight down) gets
+	 a blue key at 40 degrees and a blue sky ambient; a dim moon keeps its bearing and is raised to the
+	 floors with its own hue in; a bright night keeps every number it had. */
+TEST(reforged_moonlight_gives_a_dark_night_map_a_blue_moon)
+{
+	GlobalData::TerrainLighting dark[MAX_GLOBAL_LIGHTS];
+	memset( dark, 0, sizeof(dark) );
+	dark[0].lightPos.z = -1.0f;
+	reforgeMoonlight( dark );
+	const Real key = 0.299f * dark[0].diffuse.red + 0.587f * dark[0].diffuse.green + 0.114f * dark[0].diffuse.blue;
+	const Real sky = 0.299f * dark[0].ambient.red + 0.587f * dark[0].ambient.green + 0.114f * dark[0].ambient.blue;
+	CHECK_NEAR( key, 0.405f, 0.01f );
+	CHECK_NEAR( sky, 0.206f, 0.01f );
+	CHECK( dark[0].diffuse.blue > 3.0f * dark[0].diffuse.red );
+	const Coord3D &ray = dark[0].lightPos;
+	CHECK_NEAR( -ray.z / (Real)sqrt( ray.x * ray.x + ray.y * ray.y + ray.z * ray.z ), 0.64f, 0.001f );
+	CHECK( ray.x != 0.0f || ray.y != 0.0f );
+
+	// Dark Night's own moon after the style, on a bearing: raised, the bearing kept
+	GlobalData::TerrainLighting dim[MAX_GLOBAL_LIGHTS];
+	memset( dim, 0, sizeof(dim) );
+	dim[0].ambient.red = 0.08f; dim[0].ambient.green = 0.14f; dim[0].ambient.blue = 0.44f;
+	dim[0].diffuse.red = 0.23f; dim[0].diffuse.green = 0.27f; dim[0].diffuse.blue = 0.43f;
+	dim[0].lightPos.x = -0.6f; dim[0].lightPos.y = 0.0f; dim[0].lightPos.z = -0.8f;
+	reforgeMoonlight( dim );
+	CHECK( dim[0].diffuse.red > 0.23f && dim[0].ambient.blue > 0.44f );
+	CHECK_NEAR( dim[0].lightPos.z, -0.8f, 0.0001f );
+	CHECK_NEAR( dim[0].lightPos.y, 0.0f, 0.0001f );
+
+	// a bright night is left alone
+	GlobalData::TerrainLighting bright[MAX_GLOBAL_LIGHTS];
+	memset( bright, 0, sizeof(bright) );
+	bright[0].ambient.red = bright[0].ambient.green = bright[0].ambient.blue = 0.3f;
+	bright[0].diffuse.red = bright[0].diffuse.green = bright[0].diffuse.blue = 0.6f;
+	bright[0].lightPos.x = -0.8f; bright[0].lightPos.z = -0.6f;
+	GlobalData::TerrainLighting kept[MAX_GLOBAL_LIGHTS];
+	memcpy( kept, bright, sizeof(kept) );
+	reforgeMoonlight( bright );
+	CHECK_MEM( bright, kept, sizeof(kept) );
+}
+
 // A veterancy level's or death type's flag bit is bit (value - 1) with the count taken modulo 32, which is
 // what EA's `1UL << (dt - 1)` gave on Windows, where unsigned long is 32 bits and shl reads five bits of the
 // count.  REGULAR and NORMAL are 0: bit 31, inside ALL.  With a 64-bit unsigned long it was bit 63, outside
@@ -31209,12 +31250,12 @@ TEST(day_night_palette_is_a_dim_blue_moon_over_noon)
 		CHECK( p.nightDiffuse[ i ] > 0.0f && p.nightDiffuse[ i ] <= 1.0f );
 	}
 	CHECK( p.nightAmbient[ 2 ] > p.nightAmbient[ 0 ] && p.nightDiffuse[ 2 ] > p.nightDiffuse[ 0 ] );	// blue
-	// the moon's luminance against the noon sun's, 0.272: a bright map's sun shafts all but gone
+	// the moon's luminance against the noon sun's, 0.446: a key that lights a face to about half its noon
 	const Real moon = 0.299f * p.nightDiffuse[ 0 ] + 0.587f * p.nightDiffuse[ 1 ] + 0.114f * p.nightDiffuse[ 2 ];
-	CHECK_NEAR( moon, 0.272f, 0.001f );
+	CHECK_NEAR( moon, 0.446f, 0.001f );
 	// a face turned from the moon keeps over half its noon ambient: no black silhouettes
 	const Real shade = 0.299f * p.nightAmbient[ 0 ] + 0.587f * p.nightAmbient[ 1 ] + 0.114f * p.nightAmbient[ 2 ];
-	CHECK( shade > 0.55f && shade < 0.7f );
+	CHECK( shade > 0.55f && shade < 0.75f );
 }
 
 TEST(day_night_depth_and_noon_check_follow_the_maps_own_light)

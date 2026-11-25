@@ -4412,6 +4412,8 @@ static const Real DOCTRINE_TRUST_ACTIVE = 0.5f;
 	* at most one of them stands within 300 of it: the unit that went in on its own, as against the last
 	* survivor of a lost fight, which dies alone whatever the AI did. */
 //-------------------------------------------------------------------------------------------------
+static Real groundAttackRange( const Object *obj );
+
 void AIPlayer::onUnitLost( const Object *obj )
 {
 	const Team *team = obj->getTeam();
@@ -4423,14 +4425,31 @@ void AIPlayer::onUnitLost( const Object *obj )
 	// the kill zone: where it died, unless it blew itself up
 	if( killer != obj )
 		recordLoss( obj );
-	if( runsOwnAI() && !obj->isKindOf( KINDOF_STRUCTURE ) && killer && killer->isKindOf( KINDOF_STRUCTURE ) &&
-			m_player->getRelationship( killer->getTeam() ) == ENEMIES )
-		DEBUG_LOG(("AI DEFLOSS frame %d player %d '%s' %d worth %.0f to '%s'; team '%s' state %d source %d, %.0f from home, %s\n", TheGameLogic->getFrame(),
+	// not a missile shot down: the turtle bench counted 1,039 SCUD missiles among 2,684 units lost to defences
+	// in twelve matches
+	if( runsOwnAI() && !obj->isKindOf( KINDOF_STRUCTURE ) && !obj->isKindOf( KINDOF_PROJECTILE ) && killer &&
+			killer->isKindOf( KINDOF_STRUCTURE ) && m_player->getRelationship( killer->getTeam() ) == ENEMIES )
+	{
+		// where it was going against the gun's reach, what it shot at, and what the tactics had it doing: an
+		// order into the reach is a target pick, one past it a road
+		const AIUpdateInterface *ai = obj->getAI();
+		const Coord3D *goal = ai ? ai->getGoalPosition() : NULL;
+		const Object *victim = ai ? ai->getCurrentVictim() : NULL;
+		const TacticalStep *step = findTacticalStep( obj->getID() );
+		DEBUG_LOG(("AI DEFLOSS frame %d player %d '%s' %d worth %.0f to '%s'; team '%s' state %d source %d, %.0f from home, %s; goal %.0f from it, reach %.0f, at %.0f, victim %s, step %s%s\n", TheGameLogic->getFrame(),
 			m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), obj->getID(), aiCombatPower( obj ), killer->getTemplate()->getName().str(),
-			team ? team->getName().str() : "", obj->getAI() ? (Int)obj->getAI()->getCurrentStateID() : -1,
-			obj->getAI() ? (Int)obj->getAI()->getLastCommandSource() : -1,
+			team ? team->getName().str() : "", ai ? (Int)ai->getCurrentStateID() : -1,
+			ai ? (Int)ai->getLastCommandSource() : -1,
 			(Real)sqrt( sqr( obj->getPosition()->x - m_baseCenter.x ) + sqr( obj->getPosition()->y - m_baseCenter.y ) ),
-			observerKnowsAbout( killer, m_player->getPlayerIndex() ) ? "known" : "unseen"));
+			observerKnowsAbout( killer, m_player->getPlayerIndex() ) ? "known" : "unseen",
+			goal ? (Real)sqrt( sqr( goal->x - killer->getPosition()->x ) + sqr( goal->y - killer->getPosition()->y ) ) : -1.0f,
+			groundAttackRange( killer ),
+			(Real)sqrt( sqr( obj->getPosition()->x - killer->getPosition()->x ) + sqr( obj->getPosition()->y - killer->getPosition()->y ) ),
+			victim == NULL ? "none" : victim == killer ? "killer" : victim->isKindOf( KINDOF_STRUCTURE ) ? "building" : "unit",
+			step == NULL ? "none" : step->fallingBack ? "falling" : step->answerFrame != 0 ? "answer" : step->resumeFrame != 0 ? "kite" :
+			step->leaveAloneUntil > TheGameLogic->getFrame() ? "held" : step->savedAttitude != AI_INVALID ? "calm" : "row",
+			step != NULL && step->hurtAt > 0.0f ? " hurt" : ""));
+	}
 	// AI RETREATLOSS: one the retreat pulled out or sent home, killed on the way, and by what
 	const TacticalStep *walked = runsOwnAI() ? findTacticalStep( obj->getID() ) : NULL;
 	if( walked && walked->fallbackFrame != 0 )

@@ -281,7 +281,8 @@ Object *ResourceGatheringManager::findBestSupplyCenterInList(Object *queryObject
 {
 	Object *bestCenter = NULL;
 	Real bestCost = FLT_MAX;
-	AIPlayer *ai = queryObject->getControllingPlayer() ? queryObject->getControllingPlayer()->getAIPlayer() : NULL;
+	// a NULL query only sweeps dead centers out of the list, as EA's computeRelativeCost allows
+	AIPlayer *ai = ( queryObject && queryObject->getControllingPlayer() ) ? queryObject->getControllingPlayer()->getAIPlayer() : NULL;
 
 	objectIDListIterator iterator = m_supplyCenters.begin();
 	while( iterator != m_supplyCenters.end() )

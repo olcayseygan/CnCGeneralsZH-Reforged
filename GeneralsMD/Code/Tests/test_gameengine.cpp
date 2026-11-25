@@ -28833,7 +28833,9 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	CHECK_EQ( guest.getSlot( 1 )->getHandicap(), (Int)HANDICAP_FULL );
 
 	/* A ranked Quick Match's black start rides as SH=1, written only when set, so every other game's
-		 string and replay stays byte for byte what it was. */
+		 string and replay stays byte for byte what it was.  No room offers it since 2026-11-25, but the
+		 parser keeps taking it: ranked peers and old replays carrying SH=1 come through here, and a guest
+		 that dropped it would play another map than its host. */
 	CHECK( strstr( picked.str(), "SH=" ) == NULL );
 	host.setStartShrouded( TRUE );
 	const AsciiString shrouded = GameInfoOptionsString( &host, mapPath, 0 );

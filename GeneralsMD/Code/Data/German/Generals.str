@@ -14893,20 +14893,12 @@ GUI:SuperweaponsNone
 "Keine Superwaffen"
 END
 
-GUI:StartShrouded
-"Verd. Karte"
-END
-
 GUI:DayNight
 "Tag/Nacht"
 END
 
 TOOLTIP:DayNight
 "Nach jeweils zehn Minuten Tag bricht die Nacht herein, und nachts sieht jede Einheit ein Fünftel weniger weit."
-END
-
-TOOLTIP:StartShrouded
-"Die Karte beginnt für jeden Spieler schwarz. Was deine Seite noch nicht gesehen hat, bleibt schwarz, bis eine deiner Einheiten dort ist, und der Ladebildschirm verrät die Startpunkte nicht. Aus beginnt jeder mit der ganzen Karte unter dem Nebel, wie es im Mehrspieler immer war."
 END
 
 GUI:UnitLimit

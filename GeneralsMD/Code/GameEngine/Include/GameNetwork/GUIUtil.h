@@ -94,8 +94,7 @@ const char *SuperweaponCaption(Int restriction);
 void UpdateUnitLimitCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit);
 // The Pro Rules check box, the same thing for PR.
 void UpdateProRulesCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit);
-// The Hidden Map check box, the same thing for SH, the black start a ranked Quick Match also plays.
-void UpdateStartShroudedCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit);
+// The day and night box, the same thing for DN.
 void UpdateDayNightCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit);
 
 // The income sharing dropdown, one entry per IncomeSharing in GameInfo.h, travelling as IS.

@@ -136,7 +136,6 @@ static NameKeyType comboBoxGameSpeedID = NAMEKEY_INVALID;
 static NameKeyType comboBoxSuperweaponsID = NAMEKEY_INVALID;
 static NameKeyType comboBoxStartingCashID = NAMEKEY_INVALID;
 static NameKeyType checkBoxUnitLimitID = NAMEKEY_INVALID;
-static NameKeyType checkBoxStartShroudedID = NAMEKEY_INVALID;
 static NameKeyType checkBoxDayNightID = NAMEKEY_INVALID;
 static NameKeyType comboBoxIncomeSharingID = NAMEKEY_INVALID;
 static NameKeyType comboBoxTechRespawnID = NAMEKEY_INVALID;
@@ -292,6 +291,7 @@ static AsciiString customKey( Int slot, const char *field )
 	return key;
 }
 
+// StartShrouded is the retired Hidden Map box's, nothing reads it; a cleared slot still drops an old one
 static const char *const theCustomFields[] = { "SlotList", "Map", "Players", "StartingCash", "Superweapons",
 	"UnitLimit", "StartShrouded", "DayNight", "IncomeSharing", "TechRespawn", "SupplyPileLimit", "GameSpeed" };
 
@@ -314,7 +314,6 @@ static void saveCustomPreset( Int slot )
 	pref.setInt( customKey( slot, "StartingCash" ), TheSkirmishGameInfo->getStartingCash().countMoney() );
 	pref.setInt( customKey( slot, "Superweapons" ), TheSkirmishGameInfo->getSuperweaponRestriction() );
 	pref.setInt( customKey( slot, "UnitLimit" ), TheSkirmishGameInfo->getUnitLimit() ? 1 : 0 );
-	pref.setInt( customKey( slot, "StartShrouded" ), TheSkirmishGameInfo->getStartShrouded() ? 1 : 0 );
 	pref.setInt( customKey( slot, "DayNight" ), TheSkirmishGameInfo->getDayNight() ? 1 : 0 );
 	pref.setInt( customKey( slot, "IncomeSharing" ), TheSkirmishGameInfo->getIncomeSharing() );
 	pref.setInt( customKey( slot, "TechRespawn" ), TheSkirmishGameInfo->getTechRespawn() );
@@ -352,7 +351,7 @@ static Bool loadCustomPreset( Int slot )
 	TheSkirmishGameInfo->setStartingCash( TheMultiplayerSettings->getListedStartingMoney( cash.countMoney() ) );
 	TheSkirmishGameInfo->setSuperweaponRestriction( (UnsignedShort)pref.getInt( customKey( slot, "Superweapons" ), SUPERWEAPONS_ALLOW ) );
 	TheSkirmishGameInfo->setUnitLimit( pref.getInt( customKey( slot, "UnitLimit" ), 0 ) != 0 );
-	TheSkirmishGameInfo->setStartShrouded( pref.getInt( customKey( slot, "StartShrouded" ), 0 ) != 0 );
+	TheSkirmishGameInfo->setStartShrouded( FALSE );	// an old preset's slot list may carry SH=1; no room starts black
 	TheSkirmishGameInfo->setDayNight( pref.getInt( customKey( slot, "DayNight" ), 0 ) != 0 );
 	TheSkirmishGameInfo->setIncomeSharing( pref.getInt( customKey( slot, "IncomeSharing" ), INCOME_SHARING_OFF ) );
 	TheSkirmishGameInfo->setTechRespawn( pref.getInt( customKey( slot, "TechRespawn" ), 0 ) );
@@ -486,7 +485,6 @@ static GameWindow *textEntryPlayerName = NULL;
 static GameWindow *comboBoxSuperweapons = NULL;
 static GameWindow *comboBoxStartingCash = NULL;
 static GameWindow *checkBoxUnitLimit = NULL;
-static GameWindow *checkBoxStartShrouded = NULL;
 static GameWindow *checkBoxDayNight = NULL;
 static GameWindow *comboBoxIncomeSharing = NULL;
 static GameWindow *comboBoxTechRespawn = NULL;
@@ -788,7 +786,6 @@ Bool SkirmishPreferences::write(void)
   setStartingCash( TheSkirmishGameInfo->getStartingCash() );
   setSuperweaponRestriction( TheSkirmishGameInfo->getSuperweaponRestriction() );
   setInt( "UnitLimit", TheSkirmishGameInfo->getUnitLimit() ? 1 : 0 );
-  setInt( "StartShrouded", TheSkirmishGameInfo->getStartShrouded() ? 1 : 0 );
   setInt( "DayNight", TheSkirmishGameInfo->getDayNight() ? 1 : 0 );
   setInt( "IncomeSharing", TheSkirmishGameInfo->getIncomeSharing() );
   setInt( "TechRespawn", TheSkirmishGameInfo->getTechRespawn() );
@@ -836,6 +833,8 @@ void reallyDoStart( void )
 	DEBUG_LOG(("Game speed %d%%: %d logic frames a second\n", gameSpeedPercent, GameEngine_matchFramesPerSecond()));
 
   TheWritableGlobalData->m_mapName = TheSkirmishGameInfo->getMap();
+  // no room offers Hidden Map since 2026-11-25, whatever an old preference or slot list left on the game
+  TheSkirmishGameInfo->setStartShrouded( FALSE );
   TheSkirmishGameInfo->startGame(0);
 
 		Bool isSkirmish = TRUE;
@@ -1784,7 +1783,6 @@ void InitSkirmishGameGadgets( void )
   comboBoxSuperweaponsID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxSuperweapons" ) );
   comboBoxStartingCashID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxStartingCash" ) );
   checkBoxUnitLimitID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:CheckBoxUnitLimit" ) );
-  checkBoxStartShroudedID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:CheckBoxStartShrouded" ) );
   checkBoxDayNightID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:CheckBoxDayNight" ) );
   comboBoxIncomeSharingID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxIncomeSharing" ) );
   comboBoxTechRespawnID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxTechRespawn" ) );
@@ -1858,11 +1856,6 @@ void InitSkirmishGameGadgets( void )
   DEBUG_ASSERTCRASH(checkBoxUnitLimit, ("Could not find the checkBoxUnitLimit"));
   if ( checkBoxUnitLimit )
     UpdateUnitLimitCheckBox( checkBoxUnitLimit, TheSkirmishGameInfo, TRUE );
-  // the Hidden Map box, the same kind of control; it travels as SH, a ranked Quick Match's black start
-  checkBoxStartShrouded = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, checkBoxStartShroudedID );
-  DEBUG_ASSERTCRASH(checkBoxStartShrouded, ("Could not find the checkBoxStartShrouded"));
-  if ( checkBoxStartShrouded )
-    UpdateStartShroudedCheckBox( checkBoxStartShrouded, TheSkirmishGameInfo, TRUE );
   // the day and night cycle's box, the same kind; it travels as DN
   checkBoxDayNight = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, checkBoxDayNightID );
   DEBUG_ASSERTCRASH(checkBoxDayNight, ("Could not find the checkBoxDayNight"));
@@ -2084,8 +2077,6 @@ void updateSkirmishGameOptions( void )
     UpdateSuperweaponComboBox( comboBoxSuperweapons, TheSkirmishGameInfo, TRUE );
   if ( checkBoxUnitLimit )
     UpdateUnitLimitCheckBox( checkBoxUnitLimit, TheSkirmishGameInfo, TRUE );
-  if ( checkBoxStartShrouded )
-    UpdateStartShroudedCheckBox( checkBoxStartShrouded, TheSkirmishGameInfo, TRUE );
   if ( checkBoxDayNight )
     UpdateDayNightCheckBox( checkBoxDayNight, TheSkirmishGameInfo, TRUE );
   if ( comboBoxIncomeSharing )
@@ -2185,7 +2176,7 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
   TheSkirmishGameInfo->setStartingCash( prefs.getStartingCash() );
   TheSkirmishGameInfo->setSuperweaponRestriction( prefs.getSuperweaponRestriction() );
   TheSkirmishGameInfo->setUnitLimit( prefs.getInt( "UnitLimit", 0 ) != 0 );
-  TheSkirmishGameInfo->setStartShrouded( prefs.getInt( "StartShrouded", 0 ) != 0 );
+  TheSkirmishGameInfo->setStartShrouded( FALSE );	// the saved slot list may carry an old SH=1
   TheSkirmishGameInfo->setDayNight( prefs.getInt( "DayNight", 0 ) != 0 );
   TheSkirmishGameInfo->setIncomeSharing( prefs.getInt( "IncomeSharing", INCOME_SHARING_OFF ) );
   TheSkirmishGameInfo->setTechRespawn( prefs.getInt( "TechRespawn", 0 ) );
@@ -2534,11 +2525,6 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
 				if ( controlID == checkBoxUnitLimitID )
 				{
 					TheSkirmishGameInfo->setUnitLimit( GadgetCheckBoxIsChecked( control ) );
-					break;
-				}
-				if ( controlID == checkBoxStartShroudedID )
-				{
-					TheSkirmishGameInfo->setStartShrouded( GadgetCheckBoxIsChecked( control ) );
 					break;
 				}
 				if ( controlID == checkBoxDayNightID )

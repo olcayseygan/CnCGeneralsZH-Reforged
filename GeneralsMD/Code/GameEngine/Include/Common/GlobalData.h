@@ -525,7 +525,7 @@ public:
 	Int m_incomeSharing;						///< -incomesharing <n>: the lobby's income sharing, an IncomeSharing, for an -autoskirmish run
 	Int m_techRespawn;							///< -techrespawn <n>: the lobby's tech building respawn, in minutes, for an -autoskirmish run
 	Int m_supplyPileLimit;					///< -supplypilelimit <n>: the lobby's supply pile limit, in players a pile, for an -autoskirmish run
-	Bool m_startShrouded;						///< -startshrouded: the lobby's Hidden Map for an -autoskirmish run, ground never seen stays black
+	Bool m_startShrouded;						///< -startshrouded: a ranked Quick Match's black start for an -autoskirmish run, ground never seen stays black
 	Bool m_dayNight;								///< -daynight: the lobby's day and night cycle for an -autoskirmish run; dead in a network game
 	Int m_autoSkirmishGameSpeedPercent;	///< -gamespeed <percent>: the skirmish lobby's game speed for an -autoskirmish run, PLAYER_GAME_SPEED_PERCENT_DEFAULT unless asked
 	Int m_superweapons;							///< -superweapons <n>: the lobby's superweapon rule, a SUPERWEAPONS_ mode, for an -autoskirmish run

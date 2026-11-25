@@ -132,7 +132,6 @@ static NameKeyType comboBoxStartingCashID = NAMEKEY_INVALID;
 static NameKeyType comboBoxPeaceTimeID = NAMEKEY_INVALID;
 static NameKeyType checkBoxUnitLimitID = NAMEKEY_INVALID;
 static NameKeyType checkBoxProRulesID = NAMEKEY_INVALID;
-static NameKeyType checkBoxStartShroudedID = NAMEKEY_INVALID;
 static NameKeyType checkBoxDayNightID = NAMEKEY_INVALID;
 static NameKeyType comboBoxIncomeSharingID = NAMEKEY_INVALID;
 static NameKeyType comboBoxTechRespawnID = NAMEKEY_INVALID;
@@ -152,7 +151,6 @@ static GameWindow *comboBoxStartingCash = NULL;
 static GameWindow *comboBoxPeaceTime = NULL;
 static GameWindow *checkBoxUnitLimit = NULL;
 static GameWindow *checkBoxProRules = NULL;
-static GameWindow *checkBoxStartShrouded = NULL;
 static GameWindow *checkBoxDayNight = NULL;
 static GameWindow *comboBoxIncomeSharing = NULL;
 static GameWindow *comboBoxTechRespawn = NULL;
@@ -478,7 +476,7 @@ void LANDisableButtons()
 	comboBoxStartingCash->winEnable(false);
 
 	GameWindow *optionalGadgets[] = { comboBoxSuperweapons, comboBoxPeaceTime, checkBoxUnitLimit,
-		checkBoxProRules, checkBoxStartShrouded, checkBoxDayNight, comboBoxIncomeSharing, comboBoxTechRespawn, comboBoxSupplyPileLimit,
+		checkBoxProRules, checkBoxDayNight, comboBoxIncomeSharing, comboBoxTechRespawn, comboBoxSupplyPileLimit,
 		comboBoxGameSpeed };
 	for (Int i = 0; i < (Int)ARRAY_SIZE(optionalGadgets); ++i)
 	{
@@ -887,24 +885,6 @@ static void handleProRulesSelection()
   }
 }
 
-static void handleStartShroudedSelection()
-{
-  LANGameInfo *myGame = TheLAN->GetMyGame();
-
-  // the same guard as the unit limit box below
-  if (myGame == NULL || checkBoxStartShrouded == NULL || myGame->getStartShrouded() == GadgetCheckBoxIsChecked( checkBoxStartShrouded ))
-    return;
-
-  myGame->setStartShrouded( GadgetCheckBoxIsChecked( checkBoxStartShrouded ) );
-  myGame->resetAccepted();
-
-  if (myGame->amIHost() && !s_isIniting)
-  {
-    TheLAN->RequestGameOptions(GenerateGameOptionsString(), true);
-    lanUpdateSlotList(); // Update the accepted button UI
-  }
-}
-
 static void handleDayNightSelection()
 {
   LANGameInfo *myGame = TheLAN->GetMyGame();
@@ -1015,7 +995,6 @@ void InitLanGameGadgets( void )
   comboBoxPeaceTimeID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxPeaceTime" ) );
   checkBoxUnitLimitID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:CheckBoxUnitLimit" ) );
   checkBoxProRulesID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:CheckBoxProRules" ) );
-  checkBoxStartShroudedID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:CheckBoxStartShrouded" ) );
   checkBoxDayNightID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:CheckBoxDayNight" ) );
   comboBoxIncomeSharingID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxIncomeSharing" ) );
   comboBoxTechRespawnID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxTechRespawn" ) );
@@ -1063,10 +1042,6 @@ void InitLanGameGadgets( void )
   DEBUG_ASSERTCRASH(checkBoxProRules, ("Could not find the checkBoxProRules"));
 	if (checkBoxProRules)
 		UpdateProRulesCheckBox(checkBoxProRules, TheLAN->GetMyGame(), TheLAN->AmIHost());
-  checkBoxStartShrouded = TheWindowManager->winGetWindowFromId( parentLanGameOptions, checkBoxStartShroudedID );
-  DEBUG_ASSERTCRASH(checkBoxStartShrouded, ("Could not find the checkBoxStartShrouded"));
-	if (checkBoxStartShrouded)
-		UpdateStartShroudedCheckBox(checkBoxStartShrouded, TheLAN->GetMyGame(), TheLAN->AmIHost());
   checkBoxDayNight = TheWindowManager->winGetWindowFromId( parentLanGameOptions, checkBoxDayNightID );
   DEBUG_ASSERTCRASH(checkBoxDayNight, ("Could not find the checkBoxDayNight"));
 	if (checkBoxDayNight)
@@ -1203,7 +1178,6 @@ void DeinitLanGameGadgets( void )
   comboBoxPeaceTime = NULL;
   checkBoxUnitLimit = NULL;
   checkBoxProRules = NULL;
-  checkBoxStartShrouded = NULL;
   checkBoxDayNight = NULL;
   comboBoxIncomeSharing = NULL;
   comboBoxTechRespawn = NULL;
@@ -1277,7 +1251,7 @@ void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
     game->setSuperweaponRestriction( pref.getSuperweaponRestriction() );
     game->setUnitLimit( pref.getInt( "UnitLimit", 0 ) != 0 );
     game->setProRules( pref.getInt( "ProRules", 1 ) != 0 );
-    game->setStartShrouded( pref.getInt( "StartShrouded", 0 ) != 0 );
+    game->setStartShrouded( FALSE );	// no room offers Hidden Map; an old StartShrouded line stays unread
     game->setDayNight( pref.getInt( "DayNight", 0 ) != 0 );
     game->setIncomeSharing( pref.getInt( "IncomeSharing", INCOME_SHARING_OFF ) );
     game->setTechRespawn( pref.getInt( "TechRespawn", 0 ) );
@@ -1436,8 +1410,6 @@ void updateGameOptions( void )
 			UpdateUnitLimitCheckBox( checkBoxUnitLimit, theGame, TheLAN->AmIHost() );
 		if (checkBoxProRules)
 			UpdateProRulesCheckBox( checkBoxProRules, theGame, TheLAN->AmIHost() );
-		if (checkBoxStartShrouded)
-			UpdateStartShroudedCheckBox( checkBoxStartShrouded, theGame, TheLAN->AmIHost() );
 		if (checkBoxDayNight)
 			UpdateDayNightCheckBox( checkBoxDayNight, theGame, TheLAN->AmIHost() );
 		if (comboBoxIncomeSharing)
@@ -1726,12 +1698,6 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
 				if ( controlID == checkBoxProRulesID )
 				{
 					handleProRulesSelection();
-					break;
-				}
-
-				if ( controlID == checkBoxStartShroudedID )
-				{
-					handleStartShroudedSelection();
 					break;
 				}
 

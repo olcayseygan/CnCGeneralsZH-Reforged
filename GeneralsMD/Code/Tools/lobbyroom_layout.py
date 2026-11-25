@@ -224,14 +224,15 @@ MATCH_RULES = [("StartingCashLabel", "ComboBoxStartingCash"), ("LabelSuperweapon
                ("LabelTechRespawn", "ComboBoxTechRespawn")]
 SKIRMISH_RULES = [GAME_SPEED_DROPDOWN] + MATCH_RULES
 NETWORK_RULES = [GAME_SPEED_DROPDOWN] + MATCH_RULES[:1] + [("LabelPeaceTime", "ComboBoxPeaceTime")] + MATCH_RULES[1:]
-# The Hidden Map box in all three rooms, cloned from the unit limit box so it wears that box's art;
-# the menu code ticks it from the game's start shroud (SH in the options string). It shares the unit
-# limit's row in the skirmish room and opens a row of its own in the network rooms.
-START_SHROUDED = ("CheckBoxStartShrouded", "GUI:StartShrouded", "TOOLTIP:StartShrouded")
-# The day and night cycle's box (DN in the options string), cloned the same way, after Hidden Map.
+# The day and night cycle's box (DN in the options string) in all three rooms, cloned from the unit
+# limit box so it wears that box's art, and put after it. It shares the unit limit's row in the
+# skirmish room and opens a row of its own in the network rooms.
 DAY_NIGHT = ("CheckBoxDayNight", "GUI:DayNight", "TOOLTIP:DayNight")
-SKIRMISH_CHECKS = ["CheckBoxUnitLimit", START_SHROUDED[0], DAY_NIGHT[0]]
-LAN_CHECKS = ["CheckBoxProRules", "CheckBoxUnitLimit", START_SHROUDED[0], DAY_NIGHT[0]]
+# The Hidden Map box sat between the two until the owner took it out of every room on 2026-11-25; a
+# ranked Quick Match still starts black on its own (SH in the options string).
+RETIRED_HIDDEN_MAP_BOX = "CheckBoxStartShrouded"
+SKIRMISH_CHECKS = ["CheckBoxUnitLimit", DAY_NIGHT[0]]
+LAN_CHECKS = ["CheckBoxProRules", "CheckBoxUnitLimit", DAY_NIGHT[0]]
 GAMESPY_CHECKS = ["CheckBoxUseStats", "CheckBoxLimitArmies"] + LAN_CHECKS
 
 ROOMS = {
@@ -299,9 +300,9 @@ def add_game_speed_row(layout, menu):
         control.put_prop("TOOLTIPTEXT", '"%s"' % tooltip)
 
 
-def add_start_shrouded_box(layout, menu, spec=START_SHROUDED, after="CheckBoxUnitLimit"):
-    """Clone the unit limit box into the Hidden Map box (or another box of that kind, put after
-    `after`), once; a second run finds it there."""
+def add_check_box(layout, menu, spec, after="CheckBoxUnitLimit"):
+    """Clone the `after` box into another box of that kind, put after it, once; a second run finds
+    it there."""
     name, text, tooltip = spec
     if layout.find(name) is not None:
         return
@@ -752,10 +753,9 @@ def build(layout, menu):
     add_combo_column(layout, menu, PERSONA_PREFIX, "ComboBoxPlayerTemplate", PERSONA_TOOLTIP)
     add_handicap_column(layout, menu)
     add_seat_rows(layout, menu, spec)
-    remove(layout, TABS + (RETIRED_PERSONA_HEADING, RETIRED_TURBO_BOX))
+    remove(layout, TABS + (RETIRED_PERSONA_HEADING, RETIRED_TURBO_BOX, RETIRED_HIDDEN_MAP_BOX))
     add_game_speed_row(layout, menu)
-    add_start_shrouded_box(layout, menu)
-    add_start_shrouded_box(layout, menu, DAY_NIGHT, START_SHROUDED[0])
+    add_check_box(layout, menu, DAY_NIGHT)
     container = need(layout, spec["container"])
     add_ruler(layout, menu, container)
     add_seat_windows(layout, menu, container, spec)
@@ -826,6 +826,8 @@ def selfcheck():
                 problems.append("%s.wnd still has %s; the rules page is always open" % (menu, tab))
         if layout.find(RETIRED_TURBO_BOX) is not None:
             problems.append("%s.wnd still has %s; turbo is gone" % (menu, RETIRED_TURBO_BOX))
+        if layout.find(RETIRED_HIDDEN_MAP_BOX) is not None:
+            problems.append("%s.wnd still has %s; no room offers Hidden Map" % (menu, RETIRED_HIDDEN_MAP_BOX))
         stale = [short(node) or "(unnamed)" for node in layout.root.walk() if tuple(node.rect[4:]) != WIDE]
         if stale:
             problems.append("%s.wnd: %d windows not authored at 1920x1080, %s first"

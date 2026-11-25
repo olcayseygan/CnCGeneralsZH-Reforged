@@ -612,15 +612,6 @@ void UpdateProRulesCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMay
     GadgetCheckBoxSetChecked( checkBox, proRules );
 }
 
-void UpdateStartShroudedCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit)
-{
-  checkBox->winEnable( hostMayEdit );
-
-  const Bool shrouded = myGame->getStartShrouded();
-  if ( GadgetCheckBoxIsChecked( checkBox ) != shrouded )
-    GadgetCheckBoxSetChecked( checkBox, shrouded );
-}
-
 void UpdateDayNightCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit)
 {
   checkBox->winEnable( hostMayEdit );

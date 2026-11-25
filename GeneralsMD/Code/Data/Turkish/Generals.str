@@ -15882,20 +15882,12 @@ GUI:SuperweaponsNone
 "Süper Silah Yok"
 END
 
-GUI:StartShrouded
-"Gizli Harita"
-END
-
 GUI:DayNight
 "Gün/Gece"
 END
 
 TOOLTIP:DayNight
 "On dakikalık gündüzün ardından gece çöker, gece her birlik beşte bir daha az uzağı görür."
-END
-
-TOOLTIP:StartShrouded
-"Harita her oyuncu için kapkara başlar. Tarafınızın görmediği yerler birlikleriniz oraya varana kadar kara kalır, yükleme ekranı da başlangıç noktalarını göstermez. Kapalıyken herkes haritanın tamamını sisin altında görerek başlar, çok oyunculu oyun hep böyle oynandı."
 END
 
 GUI:UnitLimit

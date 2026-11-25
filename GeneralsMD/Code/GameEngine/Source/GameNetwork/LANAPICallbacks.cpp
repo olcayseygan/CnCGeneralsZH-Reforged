@@ -378,7 +378,6 @@ void LANAPI::OnGameStart( void )
       pref.setSuperweaponRestriction( m_currentGame->getSuperweaponRestriction() );
       pref.setInt( "UnitLimit", m_currentGame->getUnitLimit() ? 1 : 0 );
       pref.setInt( "ProRules", m_currentGame->getProRules() ? 1 : 0 );
-      pref.setInt( "StartShrouded", m_currentGame->getStartShrouded() ? 1 : 0 );
       pref.setInt( "DayNight", m_currentGame->getDayNight() ? 1 : 0 );
       pref.setInt( "IncomeSharing", m_currentGame->getIncomeSharing() );
       pref.setInt( "TechRespawn", m_currentGame->getTechRespawn() );

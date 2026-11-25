@@ -2536,7 +2536,7 @@ Int parseSupplyPileLimit(char *args[], int num)
 	return 1;
 }
 
-/* -startshrouded: the skirmish lobby's Hidden Map for an -autoskirmish run, carried the same way as
+/* -startshrouded: a ranked Quick Match's black start for an -autoskirmish run (no room offers it), carried the same way as
 	 -incomesharing (SH= in the slot list, so the replay starts black too). */
 Int parseStartShrouded(char *args[], int num)
 {

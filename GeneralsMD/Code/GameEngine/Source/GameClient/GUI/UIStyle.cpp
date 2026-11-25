@@ -33,7 +33,9 @@
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
+#include "GameClient/GameClient.h"
 #include "GameClient/Gadget.h"
+#include "GameClient/GadgetComboBox.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameFont.h"
 #include "GameClient/GameText.h"
@@ -1310,6 +1312,565 @@ const char *onlineTabScreen( OnlineTab tab )
 OnlineTab onlineTabAsked( void )
 {
 	return s_askedTab;
+}
+
+//=================================================================================================
+// The menu language.  The look is hud-artist.md's "Menu HUD"; the reference drawing is
+// experiments/proofs/2026-11-24/spirit/c-bridge/c3.py on c2.py, and every number here is theirs.
+//=================================================================================================
+
+BoardFit boardFit( Int screenWidth, Int screenHeight )
+{
+	BoardFit fit;
+	fit.scale = min( screenWidth / (Real)BOARD_WIDTH, screenHeight / (Real)BOARD_HEIGHT );
+	fit.x = ( screenWidth - REAL_TO_INT( BOARD_WIDTH * fit.scale + 0.5f ) ) / 2;
+	fit.y = ( screenHeight - REAL_TO_INT( BOARD_HEIGHT * fit.scale + 0.5f ) ) / 2;
+	return fit;
+}
+
+Int pxOn( Real at1080, Int screenWidth, Int screenHeight )
+{
+	const Int length = REAL_TO_INT( at1080 * boardFit( screenWidth, screenHeight ).scale + 0.5f );
+	if( length == 0 && at1080 > 0.0f )
+		return 1;
+	return length;
+}
+
+IRegion2D boardRectOn( Int left, Int top, Int right, Int bottom, Int screenWidth, Int screenHeight )
+{
+	const BoardFit fit = boardFit( screenWidth, screenHeight );
+	IRegion2D r;
+	r.lo.x = fit.x + REAL_TO_INT( left * fit.scale + 0.5f );
+	r.lo.y = fit.y + REAL_TO_INT( top * fit.scale + 0.5f );
+	r.hi.x = fit.x + REAL_TO_INT( right * fit.scale + 0.5f );
+	r.hi.y = fit.y + REAL_TO_INT( bottom * fit.scale + 0.5f );
+	return r;
+}
+
+IRegion2D boardRect( Int left, Int top, Int right, Int bottom )
+{
+	return boardRectOn( left, top, right, bottom, TheDisplay->getWidth(), TheDisplay->getHeight() );
+}
+
+/// pxOn on this display: a line never thins to nothing
+static Int menuPx( Real at1080 )
+{
+	return pxOn( at1080, TheDisplay->getWidth(), TheDisplay->getHeight() );
+}
+
+Int menuTextPixels( Int px1080, Int screenWidth, Int screenHeight )
+{
+	const Int pixels = REAL_TO_INT( px1080 * boardFit( screenWidth, screenHeight ).scale + 0.5f );
+	return max( pixels, MENU_TEXT_FLOOR );
+}
+
+Int menuFontPoints( Int emPixels )
+{
+	// the nearest point size: an em of points * 4 / 3 pixels (render2dsentence.cpp's 96 dpi)
+	return max( 1, ( emPixels * 3 + 2 ) / 4 );
+}
+
+GameFont *menuFont( Int px1080, Bool bold )
+{
+	const Int em = menuTextPixels( px1080, TheDisplay->getWidth(), TheDisplay->getHeight() );
+	return TheFontLibrary->getFont( AsciiString( "Arial" ), menuFontPoints( em ), bold );
+}
+
+static Color black( Int alpha )
+{
+	return GameMakeColor( 0, 0, 0, alpha );
+}
+
+static void fill( const IRegion2D &r, Color color )
+{
+	TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, color );
+}
+
+static void outline( const IRegion2D &r, Color color )
+{
+	TheDisplay->drawOpenRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, 1.0f, color );
+}
+
+static IRegion2D windowRegion( GameWindow *window )
+{
+	IRegion2D r;
+	Int w, h;
+	window->winGetScreenPosition( &r.lo.x, &r.lo.y );
+	window->winGetSize( &w, &h );
+	r.hi.x = r.lo.x + w;
+	r.hi.y = r.lo.y + h;
+	return r;
+}
+
+/// words centred in a box, in font
+static void drawCentred( DisplayString *words, GameFont *font, const IRegion2D &box, Color color )
+{
+	if( words == NULL || words->getTextLength() == 0 )
+		return;
+	if( words->getFont() != font )
+		words->setFont( font );
+	Int w, h;
+	words->getSize( &w, &h );
+	words->draw( ( box.lo.x + box.hi.x - w ) / 2, ( box.lo.y + box.hi.y - h ) / 2, color, black( 160 ) );
+}
+
+void veil( Int alpha )
+{
+	TheDisplay->drawFillRect( 0, 0, TheDisplay->getWidth(), TheDisplay->getHeight(), black( alpha ) );
+}
+
+Bool backdropBlurs( void )
+{
+	// package 2b's seam: a Display virtual that hands back the screen blurred at radius 14 when a
+	// menu opened, drawn here under the glass.  Until it lands every display draws the dim alone.
+	return FALSE;
+}
+
+void glass( const IRegion2D &panel, Int alpha )
+{
+	fill( panel, black( alpha ) );
+}
+
+void dimOutside( const IRegion2D &panel, Int alpha )
+{
+	const Int w = TheDisplay->getWidth();
+	const Int h = TheDisplay->getHeight();
+	const Color dim = black( alpha );
+	TheDisplay->drawFillRect( 0, 0, w, panel.lo.y, dim );
+	TheDisplay->drawFillRect( 0, panel.hi.y, w, h - panel.hi.y, dim );
+	TheDisplay->drawFillRect( 0, panel.lo.y, panel.lo.x, panel.hi.y - panel.lo.y, dim );
+	TheDisplay->drawFillRect( panel.hi.x, panel.lo.y, w - panel.hi.x, panel.hi.y - panel.lo.y, dim );
+}
+
+void litLine( Int x, Int y, Int width, Int height, Color color )
+{
+	// c2.glow_line: the line over a blurred copy of itself, here two wider passes at low alpha
+	const Int g = menuPx( 2.0f );
+	TheDisplay->drawFillRect( x - 2 * g, y - 2 * g, width + 4 * g, height + 4 * g, withAlpha( color, 24 ) );
+	TheDisplay->drawFillRect( x - g, y - g, width + 2 * g, height + 2 * g, withAlpha( color, 48 ) );
+	TheDisplay->drawFillRect( x, y, width, height, withAlpha( color, 255 ) );
+}
+
+void litEdge( const IRegion2D &box, Color color )
+{
+	const Int w = box.hi.x - box.lo.x;
+	const Int h = box.hi.y - box.lo.y;
+	litLine( box.lo.x, box.lo.y, w, 1, color );
+	litLine( box.lo.x, box.hi.y - 1, w, 1, color );
+	litLine( box.lo.x, box.lo.y, 1, h, color );
+	litLine( box.hi.x - 1, box.lo.y, 1, h, color );
+}
+
+Int frameTickLength( Int index )
+{
+	if( index % 25 == 0 )
+		return 14;
+	if( index % 5 == 0 )
+		return 8;
+	return 4;
+}
+
+/// a tick's colour: the long and middle ones EDGE, the short ones FRAME, as c3.frame_a
+static Color tickColor( Int index )
+{
+	const Int length = frameTickLength( index );
+	if( length == 14 )
+		return withAlpha( EDGE, 230 );
+	if( length == 8 )
+		return withAlpha( EDGE, 190 );
+	return withAlpha( FRAME, 200 );
+}
+
+void frameA( const IRegion2D &panel )
+{
+	dimOutside( panel, 120 );
+	const Int x0 = panel.lo.x, y0 = panel.lo.y, x1 = panel.hi.x, y1 = panel.hi.y;
+	litEdge( panel, EDGE );
+
+	// the scale, read from the top left corner
+	for( Int i = 0; ; i++ )
+	{
+		const Int x = x0 + menuPx( (Real)( FRAME_TICK_STEP * i ) );
+		if( i > 0 && x > x1 )
+			break;
+		const Int n = menuPx( (Real)frameTickLength( i ) );
+		TheDisplay->drawFillRect( x, y0 - n, 1, n, tickColor( i ) );
+		TheDisplay->drawFillRect( x, y1, 1, n, tickColor( i ) );
+	}
+	for( Int i = 0; ; i++ )
+	{
+		const Int y = y0 + menuPx( (Real)( FRAME_TICK_STEP * i ) );
+		if( i > 0 && y > y1 )
+			break;
+		const Int n = menuPx( (Real)frameTickLength( i ) );
+		TheDisplay->drawFillRect( x0 - n, y, n, 1, tickColor( i ) );
+		TheDisplay->drawFillRect( x1, y, n, 1, tickColor( i ) );
+	}
+
+	// the corners' returns: an L standing FRAME_RETURN off each corner, its arms three returns long
+	const Int r = menuPx( (Real)FRAME_RETURN );
+	const Int arm = 3 * r;
+	litLine( x0 - r, y0 - r, arm, 1, EDGE );
+	litLine( x0 - r, y0 - r, 1, arm, EDGE );
+	litLine( x1 + r - arm, y0 - r, arm, 1, EDGE );
+	litLine( x1 + r - 1, y0 - r, 1, arm, EDGE );
+	litLine( x0 - r, y1 + r - 1, arm, 1, EDGE );
+	litLine( x0 - r, y1 + r - arm, 1, arm, EDGE );
+	litLine( x1 + r - arm, y1 + r - 1, arm, 1, EDGE );
+	litLine( x1 + r - 1, y1 + r - arm, 1, arm, EDGE );
+
+	// the one accent, over the title
+	litLine( x0 + menuPx( 32.0f ), y0 - menuPx( 2.0f ), menuPx( 200.0f ), menuPx( 3.0f ), EDGE_LIT );
+}
+
+void menuHeader( DisplayString *title, DisplayString *subtitle )
+{
+	const IRegion2D row = boardRect( MENU_INSET, MENU_TITLE_TOP, MENU_PANEL_RIGHT - 32, MENU_TITLE_BOTTOM );
+	const Int middle = ( row.lo.y + row.hi.y ) / 2;
+	Int x = row.lo.x;
+	if( title && title->getTextLength() )
+	{
+		title->setFont( menuFont( MENU_TEXT_TITLE, TRUE ) );
+		Int w, h;
+		title->getSize( &w, &h );
+		title->draw( x, middle - h / 2, INK, black( 160 ) );
+		x += w + menuPx( 20.0f );
+	}
+	if( subtitle && subtitle->getTextLength() )
+	{
+		subtitle->setFont( menuFont( MENU_TEXT_BODY ) );
+		Int w, h;
+		subtitle->getSize( &w, &h );
+		subtitle->draw( x, middle - h / 2, MUTED, black( 160 ) );
+	}
+	const IRegion2D rule = boardRect( MENU_PANEL_LEFT + 2, MENU_HEADER_RULE, MENU_PANEL_RIGHT - 2, MENU_HEADER_RULE + 2 );
+	litLine( rule.lo.x, rule.lo.y, rule.hi.x - rule.lo.x, max( 1, rule.hi.y - rule.lo.y ), FRAME );
+}
+
+void menuTab( const IRegion2D &box, DisplayString *label, Bool open, Bool hovered )
+{
+	fill( box, black( 120 ) );
+	Color words = INK;
+	if( open )
+	{
+		outline( box, GameMakeColor( 90, 120, 40, 255 ) );
+		const Int line = max( 1, menuPx( 2.0f ) );
+		litLine( box.lo.x, box.hi.y - line, box.hi.x - box.lo.x, line, ACTIVE );
+		words = ACTIVE;
+	}
+	else
+		outline( box, hovered ? EDGE_LIT : withAlpha( TAB_EDGE, 150 ) );
+	drawCentred( label, menuFont( MENU_TEXT_LABEL + 2, TRUE ), box, words );
+}
+
+void menuKey( const IRegion2D &box, DisplayString *label, KeyState state, Bool primary )
+{
+	fill( box, black( 170 ) );
+	Color words = INK;
+	if( state == KEY_DISABLED )
+	{
+		outline( box, FRAME );
+		words = MUTED;
+	}
+	else if( primary )
+	{
+		// the lit key: an EDGE wash, the cyan line two pixels deep in its soft light, EDGE inside it
+		fill( box, withAlpha( EDGE, state == KEY_PRESSED ? 110 : 60 ) );
+		const Int w = box.hi.x - box.lo.x;
+		const Int h = box.hi.y - box.lo.y;
+		const Int line = max( 1, menuPx( 2.0f ) );
+		litLine( box.lo.x, box.lo.y, w, line, EDGE_LIT );
+		litLine( box.lo.x, box.hi.y - line, w, line, EDGE_LIT );
+		litLine( box.lo.x, box.lo.y, line, h, EDGE_LIT );
+		litLine( box.hi.x - line, box.lo.y, line, h, EDGE_LIT );
+		IRegion2D inner = box;
+		inner.lo.x += line;
+		inner.lo.y += line;
+		inner.hi.x -= line;
+		inner.hi.y -= line;
+		outline( inner, EDGE );
+		if( state == KEY_HOVER )
+			fill( inner, GameMakeColor( 255, 255, 255, 14 ) );
+	}
+	else if( state == KEY_PRESSED )
+	{
+		fill( box, withAlpha( EDGE, 90 ) );
+		outline( box, EDGE );
+	}
+	else if( state == KEY_HOVER )
+	{
+		fill( box, GameMakeColor( 255, 255, 255, 14 ) );
+		outline( box, EDGE_LIT );
+	}
+	else
+		outline( box, EDGE );
+	drawCentred( label, menuFont( MENU_TEXT_KEY, TRUE ), box, words );
+}
+
+static KeyState keyStateOf( GameWindow *window, WinInstanceData *instData )
+{
+	if( BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ) == FALSE )
+		return KEY_DISABLED;
+	if( BitTest( instData->getState(), WIN_STATE_SELECTED ) )
+		return KEY_PRESSED;
+	if( BitTest( instData->getState(), WIN_STATE_HILITED ) )
+		return KEY_HOVER;
+	return KEY_NORMAL;
+}
+
+static void menuKeyDraw( GameWindow *window, WinInstanceData *instData )
+{
+	menuKey( windowRegion( window ), instData->getTextDisplayString(), keyStateOf( window, instData ), FALSE );
+}
+
+static void menuPrimaryKeyDraw( GameWindow *window, WinInstanceData *instData )
+{
+#if defined(_DEBUG) || defined(_INTERNAL)
+	// one lit key a screen: a second primary under the same top window in the same frame is a bug
+	static UnsignedInt s_frame = 0xFFFFFFFF;
+	static GameWindow *s_root = NULL;
+	static GameWindow *s_key = NULL;
+	GameWindow *root = window;
+	while( root->winGetParent() )
+		root = root->winGetParent();
+	const UnsignedInt frame = TheGameClient ? TheGameClient->getFrame() : 0;
+	DEBUG_ASSERTCRASH( !( frame == s_frame && root == s_root && window != s_key ),
+		( "UIStyle: two primary keys lit on one screen" ) );
+	s_frame = frame;
+	s_root = root;
+	s_key = window;
+#endif
+	menuKey( windowRegion( window ), instData->getTextDisplayString(), keyStateOf( window, instData ), TRUE );
+}
+
+void setMenuKey( GameWindow *button, Bool primary )
+{
+	if( button == NULL )
+		return;
+	button->winSetDrawFunc( primary ? menuPrimaryKeyDraw : menuKeyDraw );
+	button->winSetFont( menuFont( MENU_TEXT_KEY, TRUE ) );
+}
+
+static void menuCheckBoxDraw( GameWindow *window, WinInstanceData *instData )
+{
+	const IRegion2D r = windowRegion( window );
+	const KeyState state = keyStateOf( window, instData );
+	const Int side = min( r.hi.y - r.lo.y, menuPx( 22.0f ) );
+	IRegion2D box;
+	box.lo.x = r.lo.x;
+	box.lo.y = ( r.lo.y + r.hi.y - side ) / 2;
+	box.hi.x = box.lo.x + side;
+	box.hi.y = box.lo.y + side;
+	fill( box, black( 170 ) );
+	outline( box, state == KEY_DISABLED ? FRAME : state == KEY_HOVER ? EDGE_LIT : EDGE );
+	if( BitTest( instData->getState(), WIN_STATE_SELECTED ) )
+	{
+		// the tick, two strokes, lit green (MUTED when the box cannot be changed)
+		const Color tick = state == KEY_DISABLED ? MUTED : ACTIVE;
+		const Real width = (Real)max( 2, menuPx( 3.0f ) );
+		const Int ax = box.lo.x + side / 5, ay = box.lo.y + side / 2;
+		const Int bx = box.lo.x + side * 2 / 5, by = box.hi.y - side / 4;
+		const Int cx = box.hi.x - side / 5, cy = box.lo.y + side / 4;
+		TheDisplay->drawLine( ax, ay, bx, by, width, tick );
+		TheDisplay->drawLine( bx, by, cx, cy, width, tick );
+	}
+	DisplayString *label = instData->getTextDisplayString();
+	if( label && label->getTextLength() )
+	{
+		GameFont *font = menuFont( MENU_TEXT_BODY );
+		if( label->getFont() != font )
+			label->setFont( font );
+		Int w, h;
+		label->getSize( &w, &h );
+		label->draw( box.hi.x + menuPx( 12.0f ), ( r.lo.y + r.hi.y - h ) / 2, state == KEY_DISABLED ? MUTED : INK, black( 160 ) );
+	}
+}
+
+void setMenuCheckBox( GameWindow *checkBox )
+{
+	if( checkBox )
+		checkBox->winSetDrawFunc( menuCheckBoxDraw );
+}
+
+void caretBlock( const IRegion2D &box, Bool hovered )
+{
+	fill( box, black( 170 ) );
+	outline( box, hovered ? EDGE_LIT : EDGE );
+	const Int w = ( box.hi.x - box.lo.x ) / 3;
+	const Int cx = ( box.lo.x + box.hi.x ) / 2;
+	const Int cy = ( box.lo.y + box.hi.y ) / 2;
+	const Real width = (Real)max( 1, menuPx( 2.0f ) );
+	TheDisplay->drawLine( cx - w / 2, cy - w / 4, cx, cy + w / 4, width, INK );
+	TheDisplay->drawLine( cx, cy + w / 4, cx + w / 2, cy - w / 4, width, INK );
+}
+
+static void menuComboDraw( GameWindow *window, WinInstanceData *instData )
+{
+	const IRegion2D r = windowRegion( window );
+	const KeyState state = keyStateOf( window, instData );
+	fill( r, black( 120 ) );
+	outline( r, state == KEY_DISABLED ? withAlpha( FRAME, 140 ) : state == KEY_HOVER ? EDGE_LIT : FRAME );
+}
+
+static void menuCaretDraw( GameWindow *window, WinInstanceData *instData )
+{
+	caretBlock( windowRegion( window ), keyStateOf( window, instData ) == KEY_HOVER );
+}
+
+void setMenuComboBox( GameWindow *comboBox )
+{
+	if( comboBox == NULL )
+		return;
+	comboBox->winSetDrawFunc( menuComboDraw );
+	GameWindow *button = GadgetComboBoxGetDropDownButton( comboBox );
+	if( button )
+		button->winSetDrawFunc( menuCaretDraw );
+}
+
+void menuRow( const IRegion2D &row, RowState state, Bool zebra )
+{
+	if( zebra )
+		fill( row, GameMakeColor( 255, 255, 255, 7 ) );
+	const Int edge = max( 2, menuPx( 3.0f ) );
+	if( state == ROW_LOCAL )
+	{
+		// the gold wash, 34 at the left fading to nothing at the right, in sixteen steps
+		const Int steps = 16;
+		const Int width = row.hi.x - row.lo.x;
+		for( Int each = 0; each < steps; each++ )
+		{
+			const Int a = row.lo.x + width * each / steps;
+			const Int b = row.lo.x + width * ( each + 1 ) / steps;
+			TheDisplay->drawFillRect( a, row.lo.y, b - a, row.hi.y - row.lo.y, withAlpha( GOLD, 34 * ( steps - each ) / steps ) );
+		}
+		litLine( row.lo.x, row.lo.y, edge, row.hi.y - row.lo.y, GOLD );
+	}
+	else if( state == ROW_HOVER )
+	{
+		fill( row, GameMakeColor( 255, 255, 255, 14 ) );
+		litLine( row.lo.x, row.lo.y, edge, row.hi.y - row.lo.y, EDGE_LIT );
+	}
+}
+
+void columnHead( DisplayString *words, Int right, Int middle, Bool sorted )
+{
+	if( words == NULL || words->getTextLength() == 0 )
+		return;
+	words->setFont( menuFont( MENU_TEXT_LABEL, TRUE ) );
+	Int w, h;
+	words->getSize( &w, &h );
+	words->draw( right - w, middle - h / 2, sorted ? ACTIVE : INK, black( 160 ) );
+	if( sorted )
+	{
+		// the caret, a small down triangle before the words
+		const Int size = menuPx( 8.0f );
+		const Int x = right - w - menuPx( 6.0f ) - size;
+		const Int y = middle - size / 4;
+		for( Int row = 0; row < size / 2; row++ )
+			TheDisplay->drawFillRect( x + row, y + row, size - 2 * row, 1, ACTIVE );
+	}
+}
+
+Int questionBoxHeight( Int lines )
+{
+	return BOX_HEAD + BOX_LINE + lines * BOX_LINE + BOX_LINE + BOX_FOOT;
+}
+
+Int questionBoxMaxLines( void )
+{
+	return ( BOARD_HEIGHT - 2 * BOX_TOP_MIN - questionBoxHeight( 0 ) ) / BOX_LINE;
+}
+
+IRegion2D boxRect1080( Int width, Int height, Bool overMatch )
+{
+	IRegion2D r;
+	r.lo.x = ( BOARD_WIDTH - width ) / 2;
+	if( overMatch )
+	{
+		// boxes.py's place(): the world above the bar, 44 clear of it (frame A's return and air)
+		const Int lowest = BOX_BAR_TOP - 44;
+		r.lo.y = max( BOX_TOP_MIN, ( lowest - height ) / 2 + 8 );
+		if( r.lo.y + height > lowest )
+			r.lo.y = max( BOX_TOP_MIN, lowest - height );
+	}
+	else
+		r.lo.y = ( BOARD_HEIGHT - height ) / 2;
+	r.hi.x = r.lo.x + width;
+	r.hi.y = r.lo.y + height;
+	return r;
+}
+
+IRegion2D boxKeyRect1080( const IRegion2D &box, Int index )
+{
+	IRegion2D r;
+	r.hi.x = box.hi.x - BOX_PAD - index * ( BOX_KEY_WIDTH + BOX_KEY_GAP );
+	r.lo.x = r.hi.x - BOX_KEY_WIDTH;
+	r.hi.y = box.hi.y - 20;
+	r.lo.y = r.hi.y - BOX_KEY_HEIGHT;
+	return r;
+}
+
+void wrapLines( const UnicodeString &text, Int widest, TextMeasure measure, void *context,
+	std::vector< UnicodeString > &lines )
+{
+	UnicodeString line, word;
+	const Int length = text.getLength();
+	for( Int at = 0; at <= length; at++ )
+	{
+		const WideChar c = at < length ? text.getCharAt( at ) : u'\n';
+		if( c != u' ' && c != u'\n' )
+		{
+			word.concat( c );
+			continue;
+		}
+		if( !word.isEmpty() )
+		{
+			UnicodeString longer = line;
+			if( !longer.isEmpty() )
+				longer.concat( u' ' );
+			longer.concat( word );
+			if( line.isEmpty() || measure( longer, context ) <= widest )
+				line = longer;
+			else
+			{
+				lines.push_back( line );
+				line = word;
+			}
+			word.clear();
+		}
+		if( c == u'\n' )
+		{
+			lines.push_back( line );
+			line.clear();
+		}
+	}
+}
+
+void boxShell( const IRegion2D &box, DisplayString *title, Bool overMatch )
+{
+	// over a menu the screen steps right back; over a match only frame A's own dim, so the battle reads
+	if( !overMatch )
+		veil( 150 );
+	glass( box, 200 );
+	frameA( box );
+	if( title == NULL )
+		return;
+	if( title->getTextLength() )
+	{
+		title->setFont( menuFont( MENU_TEXT_BOX_TITLE, TRUE ) );
+		Int w, h;
+		title->getSize( &w, &h );
+		title->draw( box.lo.x + menuPx( (Real)BOX_PAD ), box.lo.y + menuPx( 44.0f ) - h / 2, INK, black( 160 ) );
+	}
+	litLine( box.lo.x + menuPx( 2.0f ), box.lo.y + menuPx( 80.0f ), box.hi.x - box.lo.x - 2 * menuPx( 2.0f ),
+		max( 1, menuPx( 2.0f ) ), FRAME );
+}
+
+void boxFootRule( const IRegion2D &box )
+{
+	const Int pad = menuPx( (Real)BOX_PAD );
+	TheDisplay->drawFillRect( box.lo.x + pad, box.hi.y - menuPx( (Real)BOX_FOOT ), box.hi.x - box.lo.x - 2 * pad, 1,
+		withAlpha( FRAME, 110 ) );
 }
 
 }

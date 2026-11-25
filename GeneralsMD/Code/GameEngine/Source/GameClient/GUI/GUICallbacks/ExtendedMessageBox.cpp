@@ -42,6 +42,7 @@
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/ExtendedMessageBox.h"
+#include "GameClient/MessageBox.h"
 
 WindowMsgHandledType ExtendedMessageBoxSystem( GameWindow *window, UnsignedInt msg, 
 										 WindowMsgData mData1, WindowMsgData mData2 );
@@ -188,34 +189,47 @@ static GameWindow *gogoExMessageBox(Int x, Int y, Int width, Int height, Unsigne
 	return parent;
 }// gogoExMessageBox
 
+/// the box in the menu language (MessageBox.cpp's MessageBoxDress), Enter's key lit
+static GameWindow *dressedEx( GameWindow *root, UnsignedShort flags, const UnicodeString &title,
+	const UnicodeString &body, UnsignedShort lit )
+{
+	MessageBoxDress( root, FALSE, flags, title, body, lit );
+	return root;
+}
+
 GameWindow *ExMessageBoxYesNo				(UnicodeString titleString,UnicodeString bodyString, void *userData,
 																		 MessageBoxFunc yesCallback, MessageBoxFunc noCallback)
 {
-	return gogoExMessageBox(-1,-1,-1,-1,MSG_BOX_NO | MSG_BOX_YES , titleString, bodyString, userData, yesCallback, noCallback, NULL, NULL);
+	return dressedEx( gogoExMessageBox(-1,-1,-1,-1,MSG_BOX_NO | MSG_BOX_YES , titleString, bodyString, userData, yesCallback, noCallback, NULL, NULL),
+		MSG_BOX_NO | MSG_BOX_YES, titleString, bodyString, MSG_BOX_YES );
 }
 
 GameWindow *ExMessageBoxYesNoCancel	(UnicodeString titleString,UnicodeString bodyString, void *userData,
 																		 MessageBoxFunc yesCallback, MessageBoxFunc noCallback, MessageBoxFunc cancelCallback)
 {
-	return gogoExMessageBox(-1,-1,-1,-1,MSG_BOX_NO | MSG_BOX_YES | MSG_BOX_CANCEL , titleString, bodyString, userData, yesCallback, noCallback, NULL, cancelCallback);
+	return dressedEx( gogoExMessageBox(-1,-1,-1,-1,MSG_BOX_NO | MSG_BOX_YES | MSG_BOX_CANCEL , titleString, bodyString, userData, yesCallback, noCallback, NULL, cancelCallback),
+		MSG_BOX_NO | MSG_BOX_YES | MSG_BOX_CANCEL, titleString, bodyString, MSG_BOX_YES );
 }
 
 GameWindow *ExMessageBoxOkCancel		(UnicodeString titleString,UnicodeString bodyString, void *userData,
 																		 MessageBoxFunc okCallback, MessageBoxFunc cancelCallback)
 {
-	return gogoExMessageBox(-1,-1,-1,-1,MSG_BOX_OK | MSG_BOX_CANCEL , titleString, bodyString, userData, NULL, NULL, okCallback, cancelCallback);
+	return dressedEx( gogoExMessageBox(-1,-1,-1,-1,MSG_BOX_OK | MSG_BOX_CANCEL , titleString, bodyString, userData, NULL, NULL, okCallback, cancelCallback),
+		MSG_BOX_OK | MSG_BOX_CANCEL, titleString, bodyString, MSG_BOX_OK );
 }
 
 GameWindow *ExMessageBoxOk					(UnicodeString titleString,UnicodeString bodyString, void *userData,
 																		 MessageBoxFunc okCallback)
 {
-	return gogoExMessageBox(-1,-1,-1,-1,MSG_BOX_OK, titleString, bodyString, userData, NULL, NULL, okCallback, NULL);
+	return dressedEx( gogoExMessageBox(-1,-1,-1,-1,MSG_BOX_OK, titleString, bodyString, userData, NULL, NULL, okCallback, NULL),
+		MSG_BOX_OK, titleString, bodyString, MSG_BOX_OK );
 }
 
 GameWindow *ExMessageBoxCancel			(UnicodeString titleString,UnicodeString bodyString, void *userData,
 																		 MessageBoxFunc cancelCallback)
 {
-	return gogoExMessageBox(-1,-1,-1,-1, MSG_BOX_CANCEL, titleString, bodyString, userData, NULL, NULL, NULL, cancelCallback);
+	return dressedEx( gogoExMessageBox(-1,-1,-1,-1, MSG_BOX_CANCEL, titleString, bodyString, userData, NULL, NULL, NULL, cancelCallback),
+		MSG_BOX_CANCEL, titleString, bodyString, 0 );
 }
 
 

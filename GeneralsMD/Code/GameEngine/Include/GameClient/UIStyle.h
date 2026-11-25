@@ -335,6 +335,165 @@ namespace UIStyle
 	/// the tab the last click went to, so WOLLadderScreen.wnd opens as Skins; read it before
 	/// onlinePageInit, which clears it
 	OnlineTab onlineTabAsked( void );
+
+	//===============================================================================================
+	// The menu language (docs/plans/MENU-REDESIGN.md, "The foundation in code"): thin lit lines over
+	// see-through dark, drawn by code and never from EA's art.  Everything is placed on the 1920x1080
+	// board, scaled by the smaller axis and centred, so 21:9 and 4:3 letterbox with the backdrop
+	// round it.  A converted screen uses these; the parts above stay for screens not yet converted.
+	// UI-STYLE.md in the wrapper's docs/reference is the guide, with a worked example.
+	//===============================================================================================
+
+	/// frame A's grid on the board, every number at 1080
+	const Int BOARD_WIDTH = 1920;
+	const Int BOARD_HEIGHT = 1080;
+	const Int MENU_PANEL_LEFT = 32;				///< the panel, 28 to 32 px off the screen's edges
+	const Int MENU_PANEL_TOP = 28;
+	const Int MENU_PANEL_RIGHT = 1888;
+	const Int MENU_PANEL_BOTTOM = 1052;
+	const Int MENU_INSET = 64;						///< content left; MENU_PANEL_RIGHT - 32 is its right
+	const Int MENU_TITLE_TOP = 46;				///< the title row
+	const Int MENU_TITLE_BOTTOM = 94;
+	const Int MENU_HEADER_RULE = 110;			///< the lit header rule
+	const Int MENU_TABS_TOP = 126;
+	const Int MENU_TABS_BOTTOM = 162;
+	const Int MENU_CONTENT_TOP = 182;
+	const Int MENU_FOOT_RULE = 962;				///< the faint rule over the key row
+	const Int MENU_KEYS_TOP = 976;
+	const Int MENU_KEYS_BOTTOM = 1028;
+	const Int MENU_KEY_WIDTH = 300;
+	const Int MENU_KEY_GAP = 16;
+
+	/// the board on a screen: scale is min( width / 1920, height / 1080 ), x and y its top left
+	struct BoardFit
+	{
+		Real scale;
+		Int x, y;
+	};
+	BoardFit boardFit( Int screenWidth, Int screenHeight );
+	/// a 1080 rectangle (left, top, right, bottom) on that screen's board; pure, for tests
+	IRegion2D boardRectOn( Int left, Int top, Int right, Int bottom, Int screenWidth, Int screenHeight );
+	/// the same on this display
+	IRegion2D boardRect( Int left, Int top, Int right, Int bottom );
+	/// a length at 1080 on that screen, rounded, never under 1 when the length is not 0
+	Int pxOn( Real at1080, Int screenWidth, Int screenHeight );
+
+	/// The five sizes at 1080 (hud-artist.md, "Menu HUD"): a screen's title, a team's key figure,
+	/// a row's key figure, body text and the 14 px capital labels.  The box family adds three of
+	/// its own: its title 26, a key's word 20 and the foot's hint 15.  No text is under 14 at 1080.
+	const Int MENU_TEXT_TITLE = 40;
+	const Int MENU_TEXT_TEAM_FIGURE = 40;
+	const Int MENU_TEXT_ROW_FIGURE = 24;
+	const Int MENU_TEXT_BODY = 18;
+	const Int MENU_TEXT_LABEL = 14;
+	const Int MENU_TEXT_BOX_TITLE = 26;
+	const Int MENU_TEXT_KEY = 20;
+	const Int MENU_TEXT_HINT = 15;
+	/// the smallest em menuFont draws, whatever the screen: 14 at 1080 is 9.3 at 720
+	const Int MENU_TEXT_FLOOR = 9;
+	/// the em in screen pixels a size at 1080 draws at on that screen, never under MENU_TEXT_FLOOR
+	Int menuTextPixels( Int px1080, Int screenWidth, Int screenHeight );
+	/// the point size whose em is that many pixels (the font library sets an em of points * 96 / 72)
+	Int menuFontPoints( Int emPixels );
+	/// Arial at a size given at 1080, its em scaled with the board: the one call for menu text
+	GameFont *menuFont( Int px1080, Bool bold = FALSE );
+
+	/// The backdrop.  Package 2b blurs what is behind (radius 14) where the display can; until then,
+	/// and on Direct3D 9 and SDL3, the backdrop is the dim alone.  veil darkens the whole screen;
+	/// glass is a panel's see-through black over what is behind it (blurred when it can be).
+	void veil( Int alpha );
+	void glass( const IRegion2D &panel, Int alpha = 168 );
+	/// the world outside a panel dimmed, as frame A stands on a dark shell
+	void dimOutside( const IRegion2D &panel, Int alpha = 120 );
+	/// whether glass blurs on this display; FALSE until package 2b lands its virtual on Display
+	Bool backdropBlurs( void );
+
+	/// A line with its soft light: two wider passes at low alpha, then the line.  Only for the lines
+	/// that matter: the panel edge, the header rule, a team's bar, the open tab, the primary key.
+	void litLine( Int x, Int y, Int width, Int height, Color color );
+	/// a 1 px rectangle's edge, its four sides each a litLine
+	void litEdge( const IRegion2D &box, Color color );
+
+	/// Frame A, the measured edge: the panel's 1 px lit EDGE line, ruler ticks standing out of it
+	/// (4 px every 8, 8 every 40, 14 every 200, counted from the top left corner), a bright return
+	/// 20 px off each corner, one cyan accent over the title.  panel is on the screen; the ticks are
+	/// placed by the board's scale.  It dims the world outside the panel itself (dimOutside 120).
+	void frameA( const IRegion2D &panel );
+	/// the length at 1080 of the tick index steps of 8 px from the corner: 14, 8 or 4
+	Int frameTickLength( Int index );
+	const Int FRAME_TICK_STEP = 8;
+	const Int FRAME_RETURN = 20;
+
+	/// The title row of a converted screen: the title in MENU_TEXT_TITLE bold capitals at
+	/// MENU_INSET, a MUTED subtitle after it, and the lit FRAME header rule at MENU_HEADER_RULE.
+	/// words are the caller's strings; this sets their fonts.
+	void menuHeader( DisplayString *title, DisplayString *subtitle );
+
+	/// A tab: a 1 px TAB_EDGE box over black; the open one green with a lit line under it, the
+	/// hovered one cyan.  The label (MENU_TEXT_LABEL + 2 bold) is centred; this sets its font.
+	void menuTab( const IRegion2D &box, DisplayString *label, Bool open, Bool hovered );
+
+	/// A key (a button): outline only.  Normal is a 1 px EDGE line; hover lifts it white with a
+	/// cyan edge; pressed washes it EDGE; disabled is a FRAME line and a MUTED word.  The primary,
+	/// lit key (exactly one on a screen: CONTINUE, START, the box key Enter presses) is the three
+	/// line edge, EDGE, EDGE_LIT, EDGE, in its soft light over an EDGE wash.  The word is
+	/// MENU_TEXT_KEY bold, centred; this sets its font.
+	enum KeyState { KEY_NORMAL, KEY_HOVER, KEY_PRESSED, KEY_DISABLED };
+	void menuKey( const IRegion2D &box, DisplayString *label, KeyState state, Bool primary );
+	/** A push button drawn as menuKey from its own state (hilite, selected, enabled) and text.
+		* primary puts the lit key on it.  A debug build asserts when two primaries under one top
+		* level window are drawn in one frame. */
+	void setMenuKey( GameWindow *button, Bool primary );
+
+	/// A check box gadget drawn in the language: a 1 px box (EDGE, cyan on hover), a lit ACTIVE tick
+	/// when checked, its label in body type at its right.
+	void setMenuCheckBox( GameWindow *checkBox );
+	/// A combo box gadget: its field a 1 px FRAME box over black (cyan on hover), its drop-down
+	/// button the caret block, an EDGE square with a down caret.  The list it opens keeps its draw.
+	void setMenuComboBox( GameWindow *comboBox );
+	/// the caret block alone, for a code-drawn control
+	void caretBlock( const IRegion2D &box, Bool hovered );
+
+	/// A row's state.  LOCAL is the local player's: a gold edge light and a gold wash fading right
+	/// (gold means him and nothing else).  HOVER is a white lift with a cyan edge light.  zebra lays
+	/// the faint wash of an odd row at dense sizes.  No hairlines between rows.
+	enum RowState { ROW_PLAIN, ROW_LOCAL, ROW_HOVER };
+	void menuRow( const IRegion2D &row, RowState state, Bool zebra = FALSE );
+	/// A column head in MENU_TEXT_LABEL bold capitals with its right edge at right; the sorted one
+	/// ACTIVE with a caret before it.  This sets its font.
+	void columnHead( DisplayString *words, Int right, Int middle, Bool sorted );
+
+	/// The box: the message box pattern at three widths.  Every number is at 1080.
+	enum BoxWidth { BOX_MENU = 560, BOX_QUESTION = 720, BOX_LIST = 1040 };
+	const Int BOX_PAD = 32;					///< the content's inset
+	const Int BOX_HEAD = 82;				///< the title band, down to the lit rule's foot
+	const Int BOX_FOOT = 84;				///< the key band under the faint rule
+	const Int BOX_LINE = 28;				///< a body line; the box grows a line at a time
+	const Int BOX_KEY_WIDTH = 170;	///< three keys fit a question box
+	const Int BOX_KEY_GAP = 12;
+	const Int BOX_KEY_HEIGHT = 48;
+	const Int BOX_BAR_TOP = 832;		///< the command bar's highest plate: a box over a match ends 44 over it
+	const Int BOX_TOP_MIN = 56;
+	/// a question box holding lines of body: the head, a line of air, the lines, a line, the foot
+	Int questionBoxHeight( Int lines );
+	/// the most body lines a question box holds on the board
+	Int questionBoxMaxLines( void );
+	/// where a box of that size stands on the board: centred over a menu; over a match centred in
+	/// the world above the bar and never reaching it
+	IRegion2D boxRect1080( Int width, Int height, Bool overMatch );
+	/// a key's rectangle on the board: index 0 is the rightmost (Enter's), counting left
+	IRegion2D boxKeyRect1080( const IRegion2D &box, Int index );
+	/** Words broken into lines no wider than widest, on spaces and on '\n'; a word wider than the
+		* line stands alone on its own.  measure is the font's width on screen (or a test's rule). */
+	void wrapLines( const UnicodeString &text, Int widest, TextMeasure measure, void *context,
+		std::vector< UnicodeString > &lines );
+	/** The box's shell on the screen: over a menu the screen steps back (veil 150), then the
+		* glass (black 200), frame A, the title in MENU_TEXT_BOX_TITLE bold capitals from the top
+		* left and the lit FRAME rule under the title band.  title may be NULL (the Victory band).
+		* box is boardRect of boxRect1080.  This sets the title's font. */
+	void boxShell( const IRegion2D &box, DisplayString *title, Bool overMatch );
+	/// the faint rule over the box's foot
+	void boxFootRule( const IRegion2D &box );
 }
 
 #endif // _UISTYLE_H_

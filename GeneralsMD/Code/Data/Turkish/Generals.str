@@ -21825,3 +21825,32 @@ END
 OBJECT:ApocalypseZombiePlagueKing
 "Veba Kralı"
 END
+
+// Menu redesign package 2, the message box: the foot's hint says what Escape and Enter press.
+GUI:HintEscNoEnterYes
+"Esc: Hayır  ·  Enter: Evet"
+END
+
+GUI:HintEscEnterNo
+"Esc ve Enter: Hayır"
+END
+
+GUI:HintEscCancelEnterYes
+"Esc: İptal  ·  Enter: Evet"
+END
+
+GUI:HintEscCancelEnterNo
+"Esc: İptal  ·  Enter: Hayır"
+END
+
+GUI:HintEscCancelEnterOk
+"Esc: İptal  ·  Enter: Tamam"
+END
+
+GUI:HintEscEnterOk
+"Esc ve Enter: Tamam"
+END
+
+GUI:HintEscCancel
+"Esc: İptal"
+END

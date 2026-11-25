@@ -3173,6 +3173,13 @@ if(Python3_Interpreter_FOUND)
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/Tools/mainmenu_layout.py selfcheck)
 
+  # The message boxes in the menu language: MessageBox.cpp looks the box's windows up by name and
+  # lays them out on UIStyle's box, so both masters have to carry them at the one-line box's rects,
+  # authored at 1920x1080, and Patch.str the foot's hints.
+  add_test(NAME boxes_selfcheck
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/Tools/boxes_layout.py selfcheck)
+
   # The lobby settings tab moves the host's settings onto a page of their own in all three lobbies,
   # and takes EA's superweapon checkbox out.  Same three-file agreement, plus one more failure the
   # null checks make silent: a control left behind on the old row would be drawn under the chat log.

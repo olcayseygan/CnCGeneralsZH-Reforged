@@ -34,11 +34,13 @@
 
 #include "GameClient/GameWindowManager.h"
 
-GameWindow *MessageBoxYesNo(UnicodeString titleString,UnicodeString bodyString,GameWinMsgBoxFunc yesCallback,GameWinMsgBoxFunc noCallback);  ///< convenience function for displaying a Message box with Yes and No buttons
-GameWindow *QuitMessageBoxYesNo(UnicodeString titleString,UnicodeString bodyString,GameWinMsgBoxFunc yesCallback,GameWinMsgBoxFunc noCallback);  ///< convenience function for displaying a Message box with Yes and No buttons
+// lit is the key Enter presses, drawn lit: MSG_BOX_YES, or MSG_BOX_NO on a question that loses
+// something (surrender, restart, delete), where Enter then answers No.
+GameWindow *MessageBoxYesNo(UnicodeString titleString,UnicodeString bodyString,GameWinMsgBoxFunc yesCallback,GameWinMsgBoxFunc noCallback, UnsignedShort lit = MSG_BOX_YES);  ///< convenience function for displaying a Message box with Yes and No buttons
+GameWindow *QuitMessageBoxYesNo(UnicodeString titleString,UnicodeString bodyString,GameWinMsgBoxFunc yesCallback,GameWinMsgBoxFunc noCallback, UnsignedShort lit = MSG_BOX_YES);  ///< convenience function for displaying a Message box with Yes and No buttons
 
 
-GameWindow *MessageBoxYesNoCancel(UnicodeString titleString,UnicodeString bodyString, GameWinMsgBoxFunc yesCallback, GameWinMsgBoxFunc noCallback, GameWinMsgBoxFunc cancelCallback);///< convenience function for displaying a Message box with Yes,No and Cancel buttons
+GameWindow *MessageBoxYesNoCancel(UnicodeString titleString,UnicodeString bodyString, GameWinMsgBoxFunc yesCallback, GameWinMsgBoxFunc noCallback, GameWinMsgBoxFunc cancelCallback, UnsignedShort lit = MSG_BOX_YES);///< convenience function for displaying a Message box with Yes,No and Cancel buttons
 
 
 GameWindow *MessageBoxOkCancel(UnicodeString titleString,UnicodeString bodyString,GameWinMsgBoxFunc okCallback,GameWinMsgBoxFunc cancelCallback);///< convenience function for displaying a Message box with Ok and Cancel buttons
@@ -47,5 +49,12 @@ GameWindow *MessageBoxOk(UnicodeString titleString,UnicodeString bodyString,Game
 
 
 GameWindow *MessageBoxCancel(UnicodeString titleString,UnicodeString bodyString,GameWinMsgBoxFunc cancelCallback);///< convenience function for displaying a Message box with Cancel button
+
+/** Lays a box made from MessageBox.wnd or QuitMessageBox.wnd (root is the layout's top window) out
+	* as the menu language's question box (UIStyle's box, 720 wide, growing 28 px a body line), draws
+	* it in code and lets Escape and Enter answer it: Escape presses Cancel, else No, else OK; Enter
+	* presses lit (nothing when lit is 0).  buttonFlags are the keys the box shows. */
+void MessageBoxDress( GameWindow *root, Bool quitLayout, UnsignedShort buttonFlags,
+	const UnicodeString &title, const UnicodeString &body, UnsignedShort lit );
 
 #endif //__MESSAGEBOX_H_

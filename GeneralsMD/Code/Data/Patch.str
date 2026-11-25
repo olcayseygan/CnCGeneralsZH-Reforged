@@ -7605,3 +7605,32 @@ END
 ERROR:D3DFailureMessage
 "The graphics card did not start.\n\nUpdate the graphics driver. Close overlays and other fullscreen programs. Do not start the game over remote desktop or on a locked screen. Restart the PC, or start the game with -win."
 END
+
+// Menu redesign package 2, the message box: the foot's hint says what Escape and Enter press.
+GUI:HintEscNoEnterYes
+"Esc: No  ·  Enter: Yes"
+END
+
+GUI:HintEscEnterNo
+"Esc and Enter: No"
+END
+
+GUI:HintEscCancelEnterYes
+"Esc: Cancel  ·  Enter: Yes"
+END
+
+GUI:HintEscCancelEnterNo
+"Esc: Cancel  ·  Enter: No"
+END
+
+GUI:HintEscCancelEnterOk
+"Esc: Cancel  ·  Enter: OK"
+END
+
+GUI:HintEscEnterOk
+"Esc and Enter: OK"
+END
+
+GUI:HintEscCancel
+"Esc: Cancel"
+END

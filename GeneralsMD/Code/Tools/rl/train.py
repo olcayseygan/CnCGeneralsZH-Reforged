@@ -8,7 +8,12 @@
     python train.py eval --model models/usa_easy.zip --episodes 3        # print the build order it plays
     python train.py eval --model models/usa_easy.zip --watch             # watch it play in a window
     python train.py eval --model models/usa_easy.zip --watch 2           # the same at twice the pace
+    python train.py train --steps 10000000 --max-hours 3 --stop-win-rate 0.95   # until the curve goes flat
+    python train.py check                                                 # the plateau stop's self-test
     tensorboard --logdir runs
+
+Training stops early once neither the mean return nor the win rate of the last --plateau-window
+episodes has set a new best for --plateau-steps decisions, and saves the model either way.
 
 Each env with --envs N runs its own generals.exe on port --port + rank, launched and killed by the
 env itself (GeneralsMD/Run/generals.exe, or --exe / ZHR_GENERALS_EXE). eval starts on port 8900, so
@@ -17,10 +22,12 @@ a watch window never lands on a running training's game. Needs sb3-contrib.
 
 import argparse
 import os
+import time
+from collections import deque
 
 import numpy as np
 from sb3_contrib import MaskablePPO
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import BaseCallback, CallbackList, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
@@ -43,9 +50,49 @@ def make_env(args, rank):
     return lambda: Monitor(BuildOrderEnv(**env_kwargs(args, rank)), filename=log, info_keywords=("won", "lost"))
 
 
+RETURN_MARGIN = 0.02  # a new best return beats the old by this share of it (and by at least 1)...
+WIN_MARGIN = 0.02     # ...a new best win rate by this much
+
+
+class PlateauStop(BaseCallback):
+    """Stops training once the mean return and the win rate of the last `window` episodes have both
+    gone `patience` decisions without a new best, once that win rate reaches `win_target`, or once
+    `max_hours` of wall time are spent. `reason` says which."""
+
+    def __init__(self, window, patience, win_target=None, max_hours=None, clock=time.monotonic):
+        super().__init__()
+        self.window, self.patience, self.win_target, self.max_hours, self.clock = window, patience, win_target, max_hours, clock
+        self.returns, self.wins = deque(maxlen=window), deque(maxlen=window)
+        self.best_return = self.best_win = self.improved_at = None
+        self.started = clock()
+        self.reason = None
+
+    def _on_step(self):
+        for info in self.locals["infos"]:
+            if "episode" in info:  # Monitor's end of an episode
+                self.returns.append(info["episode"]["r"])
+                self.wins.append(bool(info.get("won")))
+        if self.max_hours and self.clock() - self.started >= self.max_hours * 3600:
+            self.reason = "wall time cap of %g h reached" % self.max_hours
+        if len(self.returns) == self.window:
+            mean, rate = float(np.mean(self.returns)), float(np.mean(self.wins))
+            if self.best_return is None or mean > self.best_return + max(1.0, RETURN_MARGIN * abs(self.best_return)) \
+                    or rate > self.best_win + WIN_MARGIN:
+                self.best_return = mean if self.best_return is None else max(mean, self.best_return)
+                self.best_win = rate if self.best_win is None else max(rate, self.best_win)
+                self.improved_at = self.num_timesteps
+            if self.win_target is not None and rate >= self.win_target:
+                self.reason = "win rate %.2f over the last %d episodes reached %.2f" % (rate, self.window, self.win_target)
+            elif self.num_timesteps - self.improved_at >= self.patience:
+                self.reason = ("plateau: no new best for %d decisions (best mean return %.1f, best win rate %.2f; "
+                               "now %.1f, %.2f)" % (self.patience, self.best_return, self.best_win, mean, rate))
+        return self.reason is None
+
+
 def train(args):
     makers = [make_env(args, rank) for rank in range(args.envs)]
     venv = SubprocVecEnv(makers) if args.envs > 1 else DummyVecEnv(makers)
+    plateau = PlateauStop(args.plateau_window, args.plateau_steps, args.stop_win_rate, args.max_hours)
     try:
         if args.resume:
             model = MaskablePPO.load(args.resume, env=venv, device=args.device, tensorboard_log=args.logdir,
@@ -57,8 +104,9 @@ def train(args):
         checkpoints = CheckpointCallback(save_freq=max(1, args.checkpoint // args.envs),
                                          save_path=os.path.join(args.save_dir, args.name + "_checkpoints"),
                                          name_prefix=args.name)
-        model.learn(total_timesteps=args.steps, callback=checkpoints, tb_log_name=args.name,
+        model.learn(total_timesteps=args.steps, callback=CallbackList([checkpoints, plateau]), tb_log_name=args.name,
                     reset_num_timesteps=not args.resume)
+        print("stopped at %d decisions: %s" % (model.num_timesteps, plateau.reason or "--steps reached"))
         path = os.path.join(args.save_dir, args.name)
         model.save(path)
         print("saved %s.zip" % path)
@@ -136,6 +184,13 @@ def main():
     t.add_argument("--save-dir", default="models")
     t.add_argument("--logdir", default="runs", help="tensorboard log folder")
     t.add_argument("--checkpoint", type=int, default=10000, help="save a checkpoint every this many decisions")
+    t.add_argument("--plateau-steps", type=int, default=30000,
+                   help="stop once neither the mean return nor the win rate has set a new best for this many decisions")
+    t.add_argument("--plateau-window", type=int, default=100, help="episodes the mean return and win rate are taken over")
+    t.add_argument("--stop-win-rate", type=float, help="also stop once the win rate over that window reaches this (e.g. 0.95)")
+    t.add_argument("--max-hours", type=float, help="stop after this many hours of wall time whatever the curve does")
+
+    commands.add_parser("check", help="test the plateau stop on made-up episodes (no game, no training)")
 
     e = commands.add_parser("eval", parents=[shared], help="play a saved model and print its build order")
     e.set_defaults(port=DEFAULT_EVAL_PORT)  # a watch window must never land on a training run's port
@@ -147,7 +202,36 @@ def main():
                         "2 twice that; every decision is printed as it happens")
 
     args = parser.parse_args()
-    train(args) if args.command == "train" else evaluate(args)
+    {"train": train, "eval": evaluate, "check": check}[args.command](args)
+
+
+def check(args):
+    """A flat curve stops after the patience, a rising one does not, a won window stops at once."""
+    episode_length = 100
+
+    def run(returns, wins, **kwargs):
+        clock = iter(range(10 ** 9)).__next__
+        stop = PlateauStop(window=10, patience=2000, clock=clock, **kwargs)
+        for n, (value, won) in enumerate(zip(returns, wins), 1):
+            stop.num_timesteps = n * episode_length
+            stop.locals = {"infos": [{"episode": {"r": value}, "won": won}]}
+            if not stop._on_step():
+                return stop.num_timesteps, stop.reason
+        return None, None
+
+    flat = [50.0] * 200
+    at, reason = run(flat, [False] * 200)
+    # the window fills at episode 10 (1000 decisions), then 2000 more without a new best
+    assert at == 3000 and reason.startswith("plateau"), (at, reason)
+    rising = [10.0 * n for n in range(200)]
+    assert run(rising, [False] * 200) == (None, None)
+    wins = [n % 4 == 0 for n in range(200)]  # a quarter won, flat: the plateau still ends it
+    assert run(flat, wins)[0] == 3000
+    at, reason = run(flat, [True] * 200, win_target=0.95)
+    assert at == 1000 and reason.startswith("win rate"), (at, reason)
+    at, reason = run(rising, [False] * 200, max_hours=1.0 / 3600 * 50)  # the fake clock ticks a second a step
+    assert reason.startswith("wall time"), reason
+    print("check passed: the plateau stop ends a flat run at %d decisions, leaves a rising one alone" % 3000)
 
 
 if __name__ == "__main__":

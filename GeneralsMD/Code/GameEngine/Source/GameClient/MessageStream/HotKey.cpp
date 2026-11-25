@@ -1010,7 +1010,8 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 		{ "OBSERVER_CAMERA_DIRECTOR", "KEY_D" }, { "OBSERVER_VISION_ALL", "KEY_A" }, { "OBSERVER_VISION_TEAM", "KEY_T" },
 		{ "OBSERVER_VISION_PLAYER", "KEY_P" }, { "OBSERVER_TOGGLE_RADAR", "KEY_1" }, { "OBSERVER_TOGGLE_BOARD", "KEY_2" },
 		{ "OBSERVER_TOGGLE_DOSSIER", "KEY_3" }, { "OBSERVER_TOGGLE_HUD", "KEY_0" }, { "OBSERVER_NEXT_SEAT", "KEY_RIGHT" },
-		{ "OBSERVER_PREV_SEAT", "KEY_LEFT" }, { "OBSERVER_NEXT_STAT", "KEY_DOWN" }, { "OBSERVER_PREV_STAT", "KEY_UP" } };
+		{ "OBSERVER_PREV_SEAT", "KEY_LEFT" }, { "OBSERVER_NEXT_STAT", "KEY_DOWN" }, { "OBSERVER_PREV_STAT", "KEY_UP" },
+		{ "OBSERVER_TOGGLE_STANDINGS", "KEY_S" }, { "OBSERVER_VISION_CYCLE", "KEY_V" } };
 	for( size_t each = 0; each < sizeof( OBSERVER ) / sizeof( OBSERVER[ 0 ] ); each++ )
 		unbound.push_back( commandRow( OBSERVER[ each ][ 0 ], "OBSERVER", OBSERVER[ each ][ 1 ], "ALT" ) );
 	// LAUNCHER_DEFAULTS: I, free in the shipped map, for the next idle worker, and Alt with Z, X and C,

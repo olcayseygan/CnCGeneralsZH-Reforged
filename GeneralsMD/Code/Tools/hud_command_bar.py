@@ -26,10 +26,10 @@ window and button, the surface of the metal and what is fixed to it.  America is
 at 45 degrees with the emblem's chevrons; China is cast armour in square terraces held by rivets; the
 GLA is scrap sheet welded and bolted over a ragged frame; Turkiye is composite armour of triangular
 facets with 30 degree cuts.  The emblem in every side's selection window is the launcher's
-(launcher/ui/emblem.svg beside this checkout, or --emblem).  The observer has a build of its own, the
-desk (round 18's three tiers in plain graphite, grilles, screws, the emblem's feathers and a tally lamp):
-its bar, the watched player's panel, a sheet of pieces (toolbar buttons, the rows' rings, the radar
-frame's nine, every side's and general's emblem) and the spectator's rack (ReforgedHudObsSpec).  Each
+(launcher/ui/emblem.svg beside this checkout, or --emblem).  The observer's HUD is one more side bar
+(round 24, paint_obs_*): America's radar box with five keys (ReforgedHudObsCommandBar), China's centre panel
+for the followed player (ReforgedHudObsPlayerWindow), Turkiye's right box cut in crop slices with its mount
+(ReforgedHudObsSpec) and a sheet of keys, dropdown faces and tray pieces (ReforgedHudObsPieces).  Each
 side and the observer also have a painting for the Tab screen (ReforgedHud<Side>TabPanel).
 
     python Tools/hud_command_bar.py --out DIR [--side all|Observer|Guard|America|China|Gla|Turkiye] [--dds TEXTURES]
@@ -3325,9 +3325,11 @@ def tab_panel(side, solo=False, comm=False):
     Communicator page's (<prefix>TabComm on ReforgedHud<Side>TabComm): a well for the buddy list, one for the
     chat and one for the line typed into it (TAB_COMM_WELLS), its sheet the painting alone too."""
     solo = solo or comm
-    look = BAR_LOOKS[side]
+    look = obs_look() if side == "Observer" else BAR_LOOKS[side]   # the watcher's glass lifted, as his Tab screen's
     build = look.get("skin", look["build"])
     W, H = TAB_PANEL
+    if side == "Observer" and not solo:
+        return tab_sheet(side, obs_tab_painting(), solo)
     p = Painter(W + 9, H + 6)
     kind = BUILDS[build]["corner"]
     corner = {"machined": ("cut", 40), "terraced": ("notch", 22), "scavenged": ("cut", 34), "faceted": ("slant", 20),
@@ -3368,6 +3370,31 @@ def tab_panel(side, solo=False, comm=False):
     if build == "faceted":
         img = led(img, [((30, 22), (330, 22)), ((W - 420, foot[0] + 9), (W - 200, foot[0] + 9))],
                   [(344, 22, TURQ), (W - 186, foot[0] + 9, AMBER)])
+    return tab_sheet(side, img, solo)
+
+
+# The watcher's Tab screen (round 24, spirit/b-bar): one machined casting square on the screen's top and left edges,
+# cut at the corner toward the field, the team titles, the table (a column a team, drawn by InGameUI) and the
+# match's facts each in a scanline well, the Main Menu key in a socket of its own at TAB_HIDE
+OBS_TAB_TITLES = (16, 14, 1362, 58)
+OBS_TAB_TABLE = (16, 66, 1362, 640)
+OBS_TAB_FACTS = (16, 650, 1130, 702)
+
+
+def obs_tab_painting():
+    W, H = TAB_PANEL
+    b = ObsBox(0, 0, W + 30, H + 30)
+    b.tiers(plate(0, 0, W, H, br=("cut", 30)))
+    for r in (OBS_TAB_TITLES, OBS_TAB_TABLE, OBS_TAB_FACTS):
+        b.well(plate(*r), 6, 2.5)
+    b.well(obs_cut4(grow(TAB_HIDE, 4), 6), 4, 2)
+    for x, y in ((1368, 20), (1368, 640), (1140, 676)):
+        b.stud(x, y, 2.4)
+    return b.finish()
+
+
+def tab_sheet(side, img, solo):
+    W, H = TAB_PANEL
     sheet_img = Image.new("RGBA", TAB_SHEET, (0, 0, 0, 0))
     sheet_img.paste(img.crop((0, 0, W, H)), (0, 0))
     if solo:
@@ -3607,39 +3634,10 @@ def check_tab(sheet_img, side_name, prefix, solo_img=None, comm_img=None):
 
 # ---------------------------------------------------------------------------------------------- the observer
 
-# The watcher's bar, its layout approved by the owner on 2026-11-03 with the rows' colour lamps (round 9's
-# A), the radar framed to the map's shape and the rack; since round 19 (2026-11-05) drawn as round 18 draws
-# the sides' bars, three tiers in the desk build (OBS_LOOK): every box flush with the screen's edges and
-# square there, its corners toward the field cut, a near-black shell, a bevelled lip, a recessed floor and
-# scanline wells.  Since round 20 (2026-11-06) each box is one side's build in that steel (BAR_LOOKS'
-# Observer note).  Every window it frames is ControlBar.wnd's and the Observer8x6 scheme's, in screen pixels
-# at 1920x1080; the scheme names BlockRadar for the radar box's ledge and BlockObserverInfo for the followed
-# player's panel, which runs to the screen's foot; the rest stands inside the .wnd's own blockers (the column's,
-# the selection's and, round the mount, the general's button's).  Its pieces are on two sheets of their own,
-# ReforgedHudObsPieces (the toolbar's buttons, the rows' hover and watched rings, the radar's nine) and
-# ReforgedHudObsSpec (the rack), each laid out by its MappedImages/HandCreated INI.
-OBS_WALL, OBS_POD = 350, 998                    # the radar box's right wall's edge, the key pod's top (screen)
-OBS_OPTIONS, OBS_CHAT = (334, 1011, 379, 1041), (334, 1043, 379, 1073)  # OptionsUL/LR, ChatUL/LR; ButtonCancel on chat
-OBS_SELECTION, OBS_EXP = (1642, 887, 1871, 1071), (1875, 887, 1911, 1071)   # RightHUD and the rank bar's place
-# the column's, the selection's and the general's button's (round the mount); the radar's follows its frame
-OBS_BLOCKS = [(332, 740, 394, 1080), (1625, 870, 1920, 1080), (1821, 794, 1920, 870)]
-OBS_MOUNT = (1840, 836, 1920, 878)              # the selection box's mount, the tally on it
-# ObserverPlayerInfoWindow: its picture (WinGeneralPortrait, ObserverProPlayerWindow) is 512x256 at 327,824
-OBS_PANEL_AT = (327, 824)
-OBS_POWER = (332, 895, 822, 905)                # PowerBarUL/LR
-OBS_NAME, OBS_MONEY = (334, 912, 698, 946), (700, 912, 820, 946)        # StaticTextPlayerName, MoneyUL/LR
-OBS_LABELS = [(334 + 122 * i, 948, 454 + 122 * i, 998) for i in range(4)]   # Buildings, Units, Units Lost, Units Killed
-OBS_NUMBERS = [(334, 1000, 454, 1034), (454, 1000, 574, 1034), (578, 1000, 698, 1034), (700, 1000, 820, 1034)]
-OBS_PANEL_BLOCKS = [(394, 879, 833, 1080), (332, 740, 394, 1080)]   # Observer8x6's BlockObserverInfo, the column's
-OBS_PIECES_SIZE, OBS_SPEC_SIZE = (512, 512), (1024, 512)
-
+# The watcher's fittings, shared by his paintings below (round 24, the watcher's bar) and the Tab screen.
 
 def to_bar(r):
     return (r[0], r[1] - TOP, r[2], r[3] - TOP)
-
-
-def to_panel(r):
-    return (r[0] - OBS_PANEL_AT[0], r[1] - OBS_PANEL_AT[1], r[2] - OBS_PANEL_AT[0], r[3] - OBS_PANEL_AT[1])
 
 
 def screw(p, cx, cy, r=2.6):
@@ -3682,128 +3680,6 @@ def fastener(p, cx, cy):
     p.bump([regular(cx, cy, 1.5, 6)], 0.6, 0.6, STEEL)
 
 
-def paint_observer_bar():
-    """The bar: the radar box's right wall stepping out into the pod round the options and chat keys on the
-    left, the selection window under its mount on the right and nothing in the middle.  Since 2026-11-23 EA's
-    column of eight player buttons is gone (a player is picked on the standings), so the wall is only as wide
-    as the box's side under the ledge's arrow point, with a groove down it, and the pod at its foot is built
-    round the two keys alone.  The radar's nine piece frame (observer_radar_frame) stands round the map left of
-    it, its ledge running over the radar to the arrow point on the wall's top."""
-    b = "machined"
-    p = Painter(2048, 512)
-    # the wall and the pod, open on their left where the frame's right edge meets them: drawn from further left
-    # and that part cut away, so the lip runs on into the frame's
-    stack(p, [(300, 740), (OBS_WALL - 6, 740), (OBS_WALL, 746), (OBS_WALL, OBS_POD), (386, OBS_POD), (386, OBS_POD + 8),
-              (394, OBS_POD + 8), (394, 1080), (300, 1080)])
-    floor(p, [(300, 751), (OBS_WALL - 7, 751), (OBS_WALL - 5, 753), (OBS_WALL - 5, OBS_POD + 5), (382, OBS_POD + 5),
-              (382, OBS_POD + 12), (389, OBS_POD + 12), (389, 1080), (300, 1080)])
-    p.inlay([T(plate(337.5, 762, 338.5, OBS_POD - 8))], INKM, 0.6)
-    for r in (OBS_OPTIONS, OBS_CHAT):
-        well(p, shape(b, *grow(r, 1), 4), 3.5, 2)
-    p.inlay([T(plate(389, 1006, 394, 1007))], INKM, 0.8)
-    for x, y in ((338, 752), (338, OBS_POD - 2), (388, 1076)):
-        p.rivet(x, y - TOP, 2.0)
-    p.cut([T(plate(290, 730, 330, 1080))])
-
-    # the selection's box: Turkiye's wide chamfer, an armour panel with a gap, range ticks and recessed
-    # fasteners, and a mount above as on every side's bar, holding a grille and the tally
-    stack(p, plate(1625, 870, 1920, 1080, tl=("notch", 14)))
-    stack(p, plate(*OBS_MOUNT, tl=("notch", 8)), 9, 12, 4, 2.2)
-    floor(p, plate(1850, 846, 1920, 872))
-    grille(p, 1856, 850 - TOP, 1892, 868 - TOP, 3.2)
-    tally(p, 1906, 859 - TOP, 3.0)
-    floor(p, plate(1638, 883, 1916, 1080, tl=("notch", 8)))
-    well(p, plate(*grow(OBS_SELECTION, 2)), 6, 2.5)
-    well(p, plate(*grow(OBS_EXP, 1)), 6, 2)
-    p.bump([T([(1690, 877), (1704, 872), (1790, 872), (1790, 877)])], 2.2, 1.0, STEEL)
-    p.inlay([T(plate(1792, 871, 1793, 880))], INKM, 0.9)
-    p.inlay([T(plate(x, 873, x + 1, 876 if i % 5 else 879)) for i, x in enumerate(range(1798, 1834, 6))], INKM, 0.6)
-    for x, y in ((1632, 1070), (1912, 1070), (1680, 876)):
-        p.rivet(x, y - TOP, 2.2)
-    return bar_finish(shade(p, OBS_LOOK, SEAMS), p, OBS_LOOK)
-
-
-def paint_observer_panel():
-    """The watched player's panel (ObserverProPlayerWindow), China's: a rail over it carrying the power
-    channel, stepped at its end like the pagoda's eaves, with a row of rivets and a dark lacquer band, the
-    name and money wells, the four counts' labels and numbers, and the options and back buttons where it
-    covers the column.  Square on the screen's foot, open on the left where it meets the radar's frame."""
-    b = "terraced"
-    p = Painter(512, 256)
-    p.tiers([plate(-12, 78, 506, 256)], (False, True, True, False))
-    p.tiers([plate(-12, 55, 506, 86, tr=("step2", 14))], (False, False, True, False), 9.0, 13.0, 4.0, 2.2)
-    p.recess([plate(-12, 90, 496, 256)], (False, True, True, False))
-    p.sink([plate(*grow(to_panel(OBS_POWER), 2))], 5, 1.6)
-    p.sink([shape(b, *grow(to_panel(OBS_NAME), 1), 4)], 6, 2.5)
-    p.sink([shape(b, *grow(to_panel(OBS_MONEY), 1), 4)], 6, 2.5)
-    for lab in OBS_LABELS:
-        x0, y0, x1, y1 = to_panel(lab)
-        p.sink([shape(b, x0 + 3, y0 + 4, x1 - 3, y1 - 4, 3)], 3, 1.4)
-    for num in OBS_NUMBERS:
-        x0, y0, x1, y1 = to_panel(num)
-        x0 = max(x0, 56) + 2                    # the first count stands right of the options button
-        p.sink([shape(b, x0, y0, x1 - 2, y1, 3)], 6, 2.5)
-    p.sink([shape(b, *grow(to_panel(OBS_OPTIONS), 1), 4)], 3.5, 2)
-    p.sink([shape(b, *grow(to_panel(OBS_CHAT), 1), 4)], 3.5, 2)
-    p.inlay([plate(30, 64.5, 470, 66.5)], DARK, 0.3)
-    for x in range(20, 480, 30):
-        p.rivet(x, 61.5, 1.7)
-    for y in range(104, 250, 26):
-        p.rivet(500.5, y, 1.8)
-    p.cut([plate(-20, 0, 2, 256)])
-    return bar_finish(shade(p, OBS_LOOK), p, OBS_LOOK, gloss=False)
-
-
-OBS_OWN = ("Logo", "ExpBar", "Tray", "HudCell", "HudReady")   # what the watcher took from America's sheet until round 23
-
-
-def paint_observer_pieces(svg_path=EMBLEM_SVG):
-    """ReforgedHudObsPieces, 512x512: the toolbar's three buttons in four states, the hovered (RowH) and
-    the watched (RowS) row's rings that stand 4 px round a 45x30 player button and the radar's nine.  The
-    sides' emblems that stood at y 150-248 are retail's SSObserver pictures again.  Since round 23 the sheet
-    also holds what the watcher's scheme took from America's: the emblem in the selection window (in grey,
-    ObserverProLogo), the rank bar (ObserverProExpBar) and the superweapon tray's pieces (ObserverProTray*,
-    ObserverProHudCellPlate), all in the common frame's Forged Alloy."""
-    b = "machined"                              # the column's, America's like the radar box it belongs to
-    M = read_mapped("Obs", "Pieces")
-    p = Painter(*OBS_PIECES_SIZE)
-    for name, r in M.items():
-        kind = name[len("ObserverPro"):]
-        if not name.startswith("ObserverPro") or kind.startswith(("Radar",) + OBS_OWN):
-            continue
-        st = kind[-1] if kind[-1] in "HPIS" else ""
-        base = kind[:-1] if st else kind
-        if base in ("Options", "Chat", "Back"):
-            button(p, r, base, st, b)
-        else:                                   # a ring round the button, its middle open: shell and lip
-            x0, y0, x1, y1 = r
-            sl, m, d = p.tiers([shape(b, x0, y0, x1, y1, 5)], (False,) * 4, 3.0, 5.0, 1.4, 1.0, 1.4)
-            if st == "H":
-                p.mat[sl][m & (d > 1.4)] = BRIGHT
-                p.inlay([plate(x0 + 9, y1 - 2.6, x1 - 9, y1 - 1.4)], HILITE, 0.2)
-            else:                               # the watched one: on air, red bars top and bottom
-                p.inlay([plate(x0 + 9, y0 + 1.4, x1 - 9, y0 + 2.6), plate(x0 + 9, y1 - 2.6, x1 - 9, y1 - 1.4)], ACCENT2, 0.2)
-            p.cut([shape(b, x0 + 4, y0 + 4, x1 - 4, y1 - 4, 2)])
-    exp_bar(p, *M["ObserverProExpBar"][:2], b)
-    p.limit[:] = True
-    sheet_img = bar_finish(shade(p, OBS_LOOK, shadow=False), p, OBS_LOOK, scan=False, gloss=False)
-    for name, img in radar_pieces(observer_radar_frame(), OBS_RADAR_EDGE).items():
-        put(sheet_img, img, M["ObserverProRadar" + name])
-    x0, y0, x1, y1 = M["ObserverProLogo"]
-    if os.path.exists(svg_path):                # the launcher is not beside this checkout
-        sheet_img.paste(logo((x1 - x0, y1 - y0), svg_path, mute=0.3, grey=OBS_LOOK["steel"], mono=True), (x0, y0))
-    pieces = {"Tray" + k: v for k, v in tray_pieces("Observer").items()}
-    pieces.update({"HudCell" + k: v for k, v in hud_cell_pieces("Observer").items()})
-    pieces.update({"TrayTabDown": tray_tab("Observer"), "TrayTabUp": tray_tab("Observer", up=True)})
-    pieces.update(ready_glow_pieces(b, "B"))
-    for name, img in pieces.items():
-        put(sheet_img, img, M["ObserverPro" + name])
-    assert {n for n in M if n.startswith(tuple("ObserverPro" + k for k in OBS_OWN))} == \
-        {"ObserverProLogo", "ObserverProExpBar"} | {"ObserverPro" + n for n in pieces}, "ReforgedHudObsPieces.ini and its pieces differ"
-    check_mapped(M, OBS_PIECES_SIZE)
-    return sheet_img
-
-
 def stroke(path, w):
     """A polyline w wide: a bar along each segment and a square at each joint."""
     out = []
@@ -3823,70 +3699,308 @@ def check_mapped(M, size):
             assert p[2] <= q[0] or q[2] <= p[0] or p[3] <= q[1] or q[3] <= p[1], "%s and %s overlap" % (n, m)
 
 
-def check_observer(bar, panel):
-    """The cuts stay clear, every window the bar and the panel frame stands on plate, nothing is opaque more
-    than 3 px past its blockers (the column's, the selection's and the mount's; the radar's follows its frame
-    at runtime), and Observer8x6 names the radar frame's and the panel's."""
+# ---------------------------------------------------------------------------------------------- the watcher's bar, round 24
+#
+# The owner's pick of 2026-11-24 (the wrapper's experiments/proofs/2026-11-24/spirit/b-bar/README-spec.md, spec.py):
+# the watcher's HUD as one more side bar, every box round 18's three tiers in OBS_LOOK's steel with its glass lifted
+# so retail's scanline reads, round 20's mix of builds kept.  The radar box is America's, its glass the map's square
+# and five keys in a recess right of it (the bar's painting, ReforgedHudObsCommandBar); the followed player's panel
+# is China's centre panel (ReforgedHudObsPlayerWindow); the roster or the standings stand in Turkiye's box where the
+# selection box stands, grown to the list (ReforgedHudObsSpec: the box in four crop slices and its mount).  Every
+# rect is GameClient/ObserverHudLayout.h's at 1920x1080; InGameUI.cpp draws the rows, words and pictures.
+OBS_RADAR_GLASS = (5, 828, 249, 1072)           # Observer8x6's RadarUL/LR, a 244 square
+OBS_RADAR_OUTLINE = [(0, 812), (317, 812), (345, 840), (345, 1080), (0, 1080)]
+OBS_LEDGE = [(0, 795), (226, 795), (262, 809), (226, 823), (0, 823)]
+OBS_RADAR_BLOCK = (0, 795, 345, 1080)           # Observer8x6's BlockRadar
+OBS_KEYS = ("Standings", "Vision", "Chat", "Options", "Back")
+OBS_KEY_W, OBS_KEY_H = 58, 36
+OBS_STATES = ("", "H", "P", "I")
+OBS_DROP_W, OBS_DROP_H = 160, 32
+OBS_PANEL_AT = (540, 800)                       # the followed player's painting's top left on the screen
+OBS_PANEL_SIZE = (870, 280)
+OBS_PANEL_POWER = (646, 888, 1304, 898)
+OBS_PANEL_PORTRAIT = (584, 924, 708, 1048)
+OBS_PANEL_ID_X = (718, 928)
+OBS_PANEL_ID_ROWS = [(922, 952), (958, 986), (992, 1020), (1026, 1054)]
+OBS_PANEL_CELLS = (940, 918, 1374, 1074)
+OBS_BOX_REF = (860, 880)                        # the right box drawn once this size, the widest and tallest it gets
+OBS_BOX_CUT = 24                                # the right and bottom strips it is cut into
+OBS_MOUNT = (230, 74)
+OBS_PIECES_SIZE, OBS_SPEC_SIZE = (512, 512), (1024, 1024)
+
+
+def obs_key_rect(i):
+    return (270, 858 + 44 * i, 270 + OBS_KEY_W, 858 + 44 * i + OBS_KEY_H)
+
+
+def obs_look():
+    """OBS_LOOK with its glass lifted to 24,28,32 over 15,18,21, as the design drew it (spec.py)."""
+    return dict(OBS_LOOK, glass=(24, 28, 32), glass_lo=(15, 18, 21))
+
+
+class ObsBox:
+    """A painter over one box, its origin at (ox, oy) in the box's own coordinates, the canvas w x h; a side on
+    the canvas's border is open (the screen's edge)."""
+
+    def __init__(self, ox, oy, w, h):
+        self.ox, self.oy = ox, oy
+        self.p = Painter(w, h)
+
+    def P(self, poly):
+        return [(x - self.ox, y - self.oy) for x, y in poly]
+
+    def R(self, r):
+        return (r[0] - self.ox, r[1] - self.oy, r[2] - self.ox, r[3] - self.oy)
+
+    def tiers(self, poly, *a):
+        self.p.tiers([self.P(poly)], None, *a)
+
+    def floor(self, poly, depth=3.0, edge=2.0):
+        self.p.recess([self.P(poly)], None, depth, edge)
+
+    def well(self, poly, depth=6, lip=2.5):
+        self.p.sink([self.P(poly)], depth, lip)
+
+    def inlay(self, polys, mat, depth=0.6):
+        self.p.inlay([self.P(q) for q in polys], mat, depth)
+
+    def bump(self, polys, h, bevel, mat=None):
+        self.p.bump([self.P(q) for q in polys], h, bevel, mat)
+
+    def rivet(self, x, y, r=2.2):
+        self.p.rivet(x - self.ox, y - self.oy, r)
+
+    def stud(self, x, y, r=2.6):
+        self.p.stud(x - self.ox, y - self.oy, r)
+
+    def fastener(self, x, y):
+        fastener(self.p, x - self.ox, y - self.oy)
+
+    def finish(self, falloff=True, scan=True):
+        look = obs_look()
+        return bar_finish(shade(self.p, look, falloff=falloff), self.p, look, scan=scan, gloss=False)
+
+
+def obs_cut4(r, c):
+    return plate(*r, tl=("cut", c), tr=("cut", c), br=("cut", c), bl=("cut", c))
+
+
+def obs_notch4(r, c):
+    return plate(*r, tl=("notch", c), tr=("notch", c), br=("notch", c), bl=("notch", c))
+
+
+def paint_obs_radar_box():
+    """ReforgedHudObsCommandBar: America's radar box under its arrow-point ledge, outline for outline as on
+    America's bar, the square glass on the left and the five keys' recess on the right, each key in a socket of
+    its own (the code draws the keys), octagon studs, the ledge's hairline and seams.  Nothing else on the bar."""
+    look = obs_look()
+    p = Painter(2048, 512)
+    stack(p, OBS_RADAR_OUTLINE)
+    stack(p, OBS_LEDGE, 9, 12, 4, 2.0)
+    g = OBS_RADAR_GLASS
+    floor(p, plate(0, g[1] - 5, g[2] + 5, 1080, tr=("cut", 6)))
+    well(p, plate(*grow(g, 2)), 5, 2)
+    floor(p, plate(260, 850, 338, 1080, tl=("cut", 6)))
+    for i in range(len(OBS_KEYS)):
+        well(p, shape("machined", *grow(obs_key_rect(i), 1), 4), 3.5, 2)
+    p.inlay([T(plate(40, 804, 200, 806))], ACCENT, 0.5)
+    p.inlay([T(q) for q in (plate(30, 798, 31, 820), plate(120, 798, 121, 820), plate(333, 900, 345, 901),
+                            plate(333, 1000, 345, 1001))], INKM, 0.8)
+    for x, y in ((338, 1066), (338, 852), (254, 1074)):
+        p.stud(x, y - TOP, 2.4)
+    return bar_finish(shade(p, look, SEAMS), p, look)
+
+
+def paint_obs_player_panel():
+    """ReforgedHudObsPlayerWindow: China's centre panel where the command grid stands, shown while a seat is
+    followed.  The rail stepped at its ends like the pagoda's eaves, the money tab in two eaved steps, rows of
+    rivets, dark lacquer bands, bright studs; the money, power, picture, four facts and the cells' well sunk in."""
+    ax, ay = OBS_PANEL_AT
+    W, H = OBS_PANEL_SIZE
+    b = ObsBox(ax, ay - 40, W, H + 40)
+    b.tiers(plate(X0, 898, X1, 1080, tl=("notch", 12), tr=("notch", 12)))
+    left = [(X0 + 6, 922), (X0 + 12, 894)] + curve((X0 + 2, 882), (X0 - 4, 872), (X0 - 10, 862), 5)
+    left += curve((X0 + 2, 870), (X0 + 30, 878), (X0 + 74, 880), 6)
+    tail = [(TAB0 - 40, 880)] + curve((TAB0 - 52, 866), (TAB0 - 58, 858), (TAB0 - 68, 850), 4)
+    tail += curve((TAB0 - 52, 856), (TAB0 - 36, 860), (TAB0 - 6, 860), 4)
+    tail += [(TAB0 - 6, 844)] + curve((TAB0 - 14, 834), (TAB0 - 20, 828), (TAB0 - 28, 820), 4)
+    tail += curve((TAB0 - 12, 826), (TAB0, 831), (TAB0 + 12, 832), 4)
+    b.tiers(left + tail + mirror(left + tail), 9, 13, 4, 2.2)
+    b.floor(plate(X0 + 9, 912, X1 - 9, 1080, tl=("notch", 4), tr=("notch", 4)))
+    pw = OBS_PANEL_POWER
+    b.well(plate(*grow(pw, 2)), 5, 1.6)
+    b.well(obs_notch4(grow(MONEY_WELL, 1), 4), 6, 2)
+    b.well(plate(*grow(OBS_PANEL_PORTRAIT, 2)), 6, 2.5)
+    for y0, y1 in OBS_PANEL_ID_ROWS:
+        b.well(obs_notch4((OBS_PANEL_ID_X[0], y0, OBS_PANEL_ID_X[1], y1), 3), 6, 2.5)
+    b.well(plate(*OBS_PANEL_CELLS, tl=("notch", 3), tr=("notch", 3)), 6, 2.5)
+    bands = [plate(X0 + 16, 906, pw[0] - 6, 911), plate(pw[2] + 6, 906, X1 - 16, 911), plate(TAB0 - 36, 874, TAB2 + 36, 878)]
+    b.inlay(bands, DARK, 0.3)
+    for x in range(X0 + 26, X1 - 20, 34):
+        if not pw[0] - 10 < x < pw[2] + 10:
+            b.rivet(x, 894)
+    for x in list(range(TAB0 - 30, TAB0 + 1, 15)) + list(range(TAB2, TAB2 + 31, 15)):
+        b.rivet(x, 870, 2.0)
+    for y in range(930, 1070, 26):
+        b.rivet(934, y, 1.8)
+    b.bump([regular(x, 907, 2.6, 12) for x in (X0 + 30, X1 - 30)] + [regular(x, 836, 2.4, 12) for x in (TAB0 + 6, TAB2 - 6)],
+           2.2, 1.4, BRIGHT)
+    img = b.finish().crop((0, 40, W, 40 + H))
+    sheet_img = Image.new("RGBA", (1024, 512), (0, 0, 0, 0))
+    sheet_img.paste(img, (0, 0))
+    return sheet_img
+
+
+def obs_box_reference():
+    """Turkiye's box where the player's selection box stands, drawn once at OBS_BOX_REF with its top left at the
+    origin: a wide chamfer at the corner facing the field, an armour panel with a gap on its top lip, range ticks,
+    recessed fasteners, the crown's channel for the teams' shares and the list's one scanline well.  Open on the
+    right and the foot (the screen's edges), lit without falloff so the slices cut from it meet."""
+    W, H = OBS_BOX_REF
+    b = ObsBox(-16, -16, W + 16, H + 16)
+    b.tiers(plate(0, 0, W, H, tl=("cut", 30)))
+    b.floor(plate(12, 12, W - 4, H, tl=("cut", 22)))
+    b.well(plate(*grow((30, 20, W - 22, 30), 2)), 5, 1.6)
+    b.well(plate(20, 78, W - 14, H - 12, tl=("cut", 8)), 6, 2.5)
+    b.bump([[(64, 9), (78, 4), (200, 4), (200, 9)]], 2.2, 1.0, STEEL)
+    b.inlay([plate(202, 3, 203, 12)], INKM, 0.9)
+    b.inlay([plate(x, 4, x + 1, 7 if i % 5 else 10) for i, x in enumerate(range(210, 330, 6))], INKM, 0.6)
+    for x, y in ((6, H - 12), (W - 8, H - 12), (40, 8)):
+        b.fastener(x, y)
+    return b.finish(falloff=False).crop((16, 16, W + 16, H + 16))
+
+
+def obs_box_slices():
+    """The box's four crop slices: Big, its top left W-24 x H-24 (drawn at the box's top left and cut to its
+    size), Right the strip down its right edge, Bottom the strip along its foot, Corner the two's corner."""
+    W, H = OBS_BOX_REF
+    c = OBS_BOX_CUT
+    ref = obs_box_reference()
+    return {"BoxBig": ref.crop((0, 0, W - c, H - c)), "BoxRight": ref.crop((W - c, 0, W, H - c)),
+            "BoxBottom": ref.crop((0, H - c, W - c, H)), "BoxCorner": ref.crop((W - c, H - c, W, H))}
+
+
+def obs_mount():
+    """The mount over the box's top right, as on every side's bar: the clock's well, a grille, the tally."""
+    w, h = OBS_MOUNT
+    b = ObsBox(-16, -16, w + 16, h + 32)
+    b.tiers(plate(0, 0, w, h, tl=("cut", 16)), 9, 12, 4, 2.2)
+    b.well(obs_cut4(grow((22, 12, 166, 48), 1), 4), 6, 2)
+    grille(b.p, 178 + 16, 14 + 16, 216 + 16, 32 + 16, 3.2)
+    tally(b.p, 197 + 16, 42 + 16, 3.0)
+    b.fastener(10, 52)
+    return b.finish(falloff=False).crop((16, 16, w + 16, h + 16))
+
+
+def obs_key_glyph(kind, cx, cy):
+    """Standings: three bars, longest on top, a ranked list.  Vision: an eye."""
+    if kind == "Standings":
+        return [plate(cx - 8, cy - 7, cx + 8, cy - 4), plate(cx - 8, cy - 1.5, cx + 4, cy + 1.5), plate(cx - 8, cy + 4, cx, cy + 7)]
+    top = [(cx + 10 * np.cos(a), cy - 6 * np.sin(a)) for a in np.linspace(np.pi, 0, 14)]
+    low = [(cx + 10 * np.cos(a), cy + 6 * np.sin(a)) for a in np.linspace(0, np.pi, 14)]
+    return stroke(top, 1.8) + stroke(low, 1.8) + [regular(cx, cy, 3.0, 12)]
+
+
+def obs_unhover(p, r):
+    """The watcher's keys under the pointer take paper white for the glyph and the rule, where the shipped
+    button's H state turns them gold and bronze: gold is the followed seat's alone."""
+    x0, y0, x1, y1 = (int(round(v * SS)) for v in r)
+    m = p.mat[y0:y1, x0:x1]
+    m[(m == GOLDM) | (m == HILITE)] = PAPERM
+
+
+def paint_obs_pieces(svg_path=EMBLEM_SVG):
+    """ReforgedHudObsPieces, 512x512: the radar box's five keys in four states (the toolbar's machined bezel,
+    paper under the pointer), the crown's two dropdown faces (Turkiye's faceted bezel) in three, and what the
+    watcher's scheme names besides: the emblem (ObserverProLogo), the rank bar and the superweapon tray's pieces,
+    all in the common frame's Forged Alloy."""
+    M = read_mapped("Obs", "Pieces")
+    p = Painter(*OBS_PIECES_SIZE)
+    for kind in OBS_KEYS:
+        for st in OBS_STATES:
+            r = M["ObserverPro%s%s" % (kind, st)]
+            if kind in ("Options", "Chat", "Back"):
+                button(p, r, kind, st, "machined")
+            else:
+                button(p, r, None, st, "machined")
+                off = 1 if st == "P" else 0
+                p.bump(obs_key_glyph(kind, (r[0] + r[2]) / 2 + off, (r[1] + r[3]) / 2 + off), 1.1, 0.6,
+                       {"": PAPERM, "H": PAPERM, "P": HILITE, "I": DIM}[st])
+            if st == "H":
+                obs_unhover(p, r)
+    for st in ("", "H", "P"):
+        r = M["ObserverProDrop" + st]
+        button(p, r, None, st, "faceted")
+        if st == "H":
+            obs_unhover(p, r)
+    exp_bar(p, *M["ObserverProExpBar"][:2], "machined")
+    p.limit[:] = True
+    look = obs_look()
+    sheet_img = bar_finish(shade(p, look, shadow=False), p, look, scan=False, gloss=False)
+    x0, y0, x1, y1 = M["ObserverProLogo"]
+    if os.path.exists(svg_path):                # the launcher is not beside this checkout
+        sheet_img.paste(logo((x1 - x0, y1 - y0), svg_path, mute=0.3, grey=OBS_LOOK["steel"], mono=True), (x0, y0))
+    pieces = {"Tray" + k: v for k, v in tray_pieces("Observer").items()}
+    pieces.update({"HudCell" + k: v for k, v in hud_cell_pieces("Observer").items()})
+    pieces.update({"TrayTabDown": tray_tab("Observer"), "TrayTabUp": tray_tab("Observer", up=True)})
+    pieces.update(ready_glow_pieces("machined", "B"))
+    for name, img in pieces.items():
+        put(sheet_img, img, M["ObserverPro" + name])
+    want = {"ObserverPro%s%s" % (k, s) for k in OBS_KEYS for s in OBS_STATES} | {"ObserverProDrop" + s for s in ("", "H", "P")}
+    want |= {"ObserverProLogo", "ObserverProExpBar"} | {"ObserverPro" + n for n in pieces}
+    assert set(M) == want, "ReforgedHudObsPieces.ini and its pieces differ: %s" % sorted(set(M) ^ want)
+    for k in OBS_KEYS:
+        x0, y0, x1, y1 = M["ObserverPro" + k]
+        assert (x1 - x0, y1 - y0) == (OBS_KEY_W, OBS_KEY_H), "ObserverPro%s is not %dx%d" % (k, OBS_KEY_W, OBS_KEY_H)
+    check_mapped(M, OBS_PIECES_SIZE)
+    return sheet_img
+
+
+def paint_obs_spec():
+    """ReforgedHudObsSpec, 2048x1024: the right box's four crop slices and its mount, where the INI maps them."""
+    M = read_mapped("Obs", "Spec")
+    pieces = obs_box_slices()
+    pieces["Mount"] = obs_mount()
+    assert set(M) == {"ObserverPro" + n for n in pieces}, "ReforgedHudObsSpec.ini and its pieces differ: %s" % sorted(set(M))
+    sheet_img = Image.new("RGBA", OBS_SPEC_SIZE, (0, 0, 0, 0))
+    for name, img in pieces.items():
+        put(sheet_img, img, M["ObserverPro" + name])
+    check_mapped(M, OBS_SPEC_SIZE)
+    return sheet_img
+
+
+def check_obs(bar, panel_sheet, spec_sheet):
+    """The cuts stay clear, the glass and every key socket stand on plate, nothing is opaque past BlockRadar,
+    the right box's slices are opaque where the code stands them, and Observer8x6 names the radar's glass and
+    blocker and the followed player's panel's blocker."""
     a = np.asarray(bar)[..., 3]
     for x in SEAMS:
         assert not a[:, x - 2:x + 3].any(), "observer art across the cut at texel %d" % x
-    for r in [OBS_OPTIONS, OBS_CHAT, OBS_SELECTION, OBS_EXP]:
+    for r in [OBS_RADAR_GLASS] + [obs_key_rect(i) for i in range(len(OBS_KEYS))]:
         x0, y0, x1, y1 = to_bar(r)
         assert (a[y0:y1, x0:x1] == 255).all(), "observer window %s is not on the plate" % (r,)
-    for img, blocks, at in ((a[:, :1920], OBS_BLOCKS, (0, TOP)), (np.asarray(panel)[..., 3], OBS_PANEL_BLOCKS, OBS_PANEL_AT)):
-        ok = np.zeros(img.shape, bool)
-        for x0, y0, x1, y1 in blocks:
-            ok[max(y0 - at[1] - 3, 0):max(y1 - at[1] + 3, 0), max(x0 - at[0] - 3, 0):max(x1 - at[0] + 3, 0)] = True
-        assert not ((img >= 250) & ~ok).any(), "observer plate past its blockers at %s" % (np.argwhere((img >= 250) & ~ok)[0],)
-    pa = np.asarray(panel)[..., 3]
-    for r in [OBS_POWER, OBS_NAME, OBS_MONEY, OBS_OPTIONS, OBS_CHAT] + OBS_LABELS + OBS_NUMBERS:
-        x0, y0, x1, y1 = to_panel(r)
-        assert (pa[y0:y1, x0:x1] == 255).all(), "panel window %s is not on the plate" % (r,)
-    # Observer8x6 names the radar's frame at the square map (fitRadarToMap stands the radar on its top) and
-    # the panel's blocker, which runs to the screen's foot with the art
+    x0, y0, x1, y1 = OBS_RADAR_BLOCK
+    ok = np.zeros(a.shape, bool)
+    ok[max(y0 - TOP - 3, 0):, :x1 + 3] = True
+    assert not ((a >= 250) & ~ok).any(), "observer plate past BlockRadar at %s" % (np.argwhere((a >= 250) & ~ok)[0],)
+    pa = np.asarray(panel_sheet)[..., 3]
+    ax, ay = OBS_PANEL_AT
+    for r in [OBS_PANEL_POWER, OBS_PANEL_PORTRAIT, OBS_PANEL_CELLS, MONEY_WELL]:
+        assert (pa[r[1] - ay:r[3] - ay, r[0] - ax:r[2] - ax] == 255).all(), "panel window %s is not on the plate" % (r,)
+    M = read_mapped("Obs", "Spec")
+    sa = np.asarray(spec_sheet)[..., 3]
+    for name in ("BoxRight", "BoxBottom", "BoxCorner"):
+        x0, y0, x1, y1 = M["ObserverPro" + name]
+        assert (sa[y0:y1, x0:x1] == 255).all(), "ObserverPro%s has a hole" % name
     text = open(SCHEME_INI, encoding="latin-1").read()
     body = re.search(r"ControlBarScheme Observer8x6\b(.*?)(?=\nControlBarScheme |\Z)", text, re.S).group(1)
-    named = {k + c: (int(x), int(y)) for k, c, x, y in re.findall(r"Block(\w+?)(UL|LR) X:(\d+) Y:(\d+)", body)}
-    l, t, r, b = OBS_RADAR_EDGE
-    want = {"Radar": (0, RADAR_GLASS_SQUARE[1] - t, RADAR_GLASS_SQUARE[2] + r, 1080), "ObserverInfo": OBS_PANEL_BLOCKS[0]}
+    named = {k + c: (int(x), int(y)) for k, c, x, y in re.findall(r"\n\s*(\w+?)(UL|LR) X:(\d+) Y:(\d+)", body)}
+    want = {"BlockRadar": OBS_RADAR_BLOCK, "Radar": OBS_RADAR_GLASS,
+            "BlockObserverInfo": (OBS_PANEL_AT[0] + 16, 820, OBS_PANEL_AT[0] + OBS_PANEL_SIZE[0] - 16, 1080)}
     for k, v in want.items():
         assert named.get(k + "UL", ()) + named.get(k + "LR", ()) == v, \
-            "Observer8x6 wants Block%sUL X:%d Y:%d and Block%sLR X:%d Y:%d" % (k, v[0], v[1], k, v[2], v[3])
-
-
-# The observer's radar sized to the map like the sides' (RadarFrameImage ObserverProRadar on
-# Observer8x6): the left part of America's radar box, round 20.  5 down the left and the foot, which are the
-# screen's; 39 over the top, where the ledge runs over the box (714..742, the box itself from 731); 33 on the
-# right, where the ledge ends in its arrow point over the box's right wall.  Below the ledge the right edge is
-# the box's lip five texels wide and the rest of it is empty: the wall and the key pod at its foot (the bar's
-# left piece, OBS_WALL and OBS_POD) stand there, open on their side, so the two read as one box.  At the square map the frame is 0..360 x 714..1080, which is
-# Observer8x6's BlockRadar (fitRadarToMap stands the radar on it, so the square keeps its place).  The ledge
-# runs the frame's whole width, so T stretches it evenly; its fittings (two swept chevrons) are in TR.  Drawn
-# on the bar's 512 rows (screen y 568..1080) with the bar's top to bottom falloff, so the ledge's lip and the
-# column's meet at the same shade.
-OBS_RADAR_EDGE = (5, 39, 33, 5)
-RADAR_GLASS_SQUARE = (5, 753, 327, 1075)       # Observer8x6's RadarUL/LR, LeftHUD's square
-
-
-def observer_radar_frame():
-    l, t, r, b = OBS_RADAR_EDGE
-    W, H = l + RADAR_INSIDE + r, t + RADAR_INSIDE + b
-    top, right = 1080 - H, l + RADAR_INSIDE
-    p = Painter(W + 40, 512)                    # the right side runs off the canvas, so it takes no rim
-    stack(p, plate(0, top + 17, W + 40, 1080))
-    tip = right + r - 2
-    stack(p, [(0, top), (right, top), (tip, top + 14), (right, top + 28), (0, top + 28)], 9, 12, 4, 2.0)
-    floor(p, plate(0, top + 34, W + 40, 1080))
-    well(p, plate(*grow((l, top + t, right, 1080 - b), 2)), 5, 2)
-    p.inlay([T([(right + 1, top + 8), (right + 4, top + 8), (right + 10, top + 14), (right + 4, top + 20), (right + 1, top + 20),
-                (right + 7, top + 14)])], DARK, 0.7)      # a swept chevron in the point, America's
-    edge = right + l                            # the box's lip ends here; the column stands right of it
-    rise = 14 * (edge - right) / (tip - right)  # how far the arrow's edges have closed in at the lip's end
-    p.cut([T(plate(edge, top + 28, W + 40, 1080)),
-           T([(edge, top - 2), (W + 40, top - 2), (W + 40, top + 14), (tip, top + 14), (edge, top + rise)]),
-           T([(edge, top + 28 - rise), (tip, top + 14), (W + 40, top + 14), (W + 40, top + 28), (edge, top + 28)])])
-    img = bar_finish(shade(p, OBS_LOOK, shadow=False), p, OBS_LOOK, scan=False, gloss=False)
-    return img.crop((0, top - TOP, W, 512))
+            "Observer8x6 wants %sUL X:%d Y:%d and %sLR X:%d Y:%d" % (k, v[0], v[1], k, v[2], v[3])
+    assert "RadarFrameImage" not in body, "Observer8x6 still names a radar frame; the radar box is one painting"
 
 
 # ---------------------------------------------------------------------------------------------- the spectator's rack
@@ -4700,10 +4814,10 @@ def main():
                 shields.save(os.path.join(args.dds, "ReforgedGuardShield.tga"))
             print("wrote ReforgedGuardShield")
         elif side == "Observer":
-            bar, panel = paint_observer_bar(), paint_observer_panel()
-            check_observer(bar, panel)
+            bar, panel, spec = paint_obs_radar_box(), paint_obs_player_panel(), paint_obs_spec()
+            check_obs(bar, panel, spec)
             made = {"ReforgedHudObsCommandBar": bar, "ReforgedHudObsPlayerWindow": panel,
-                    "ReforgedHudObsPieces": paint_observer_pieces(args.emblem), "ReforgedHudObsSpec": paint_rack()}
+                    "ReforgedHudObsPieces": paint_obs_pieces(args.emblem), "ReforgedHudObsSpec": spec}
             made["ReforgedHudHelpbox"] = helpbox = paint_helpbox()
             check_helpbox(helpbox)
             made["ReforgedHudObsTabPanel"] = tab = tab_panel("Observer")

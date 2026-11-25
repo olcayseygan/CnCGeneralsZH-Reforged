@@ -318,6 +318,30 @@ static Int moneyRowAt( Int x, Int y )
 
 
 //-------------------------------------------------------------------------------------------------
+// A watcher's Tab screen (round 24's observer HUD): the window wears his painting with its own draw, and the
+// players, a column a team for up to 32 seats, are drawn over it by InGameUI::drawObserverTab; the In Game
+// page's eight rows stay hidden.  Every other player keeps the page as it is.
+static GameWinDrawFunc theDefaultDraw = NULL;
+
+static Bool watchingTab( void )
+{
+	const Player *local = ThePlayerList->getLocalPlayer();
+	return local != NULL && !local->isPlayerActive() && TheRecorder->isMultiplayer()
+		&& TheControlBar->getControlBarSchemeManager()->getTabPanelImage() != NULL;
+}
+
+static void observerTabDraw( GameWindow *window, WinInstanceData *instData )
+{
+	if (theDefaultDraw)
+		theDefaultDraw(window, instData);
+	IRegion2D panel;
+	Int width, height;
+	window->winGetScreenPosition(&panel.lo.x, &panel.lo.y);
+	window->winGetSize(&width, &height);
+	panel.hi.x = panel.lo.x + width;
+	panel.hi.y = panel.lo.y + height;
+	TheInGameUI->drawObserverTab(panel);
+}
 
 static void updateFunc( WindowLayout *layout, void *param )
 {
@@ -630,6 +654,16 @@ void ShowDiplomacy( Bool immediate )
 		dressForPanel();
 	PopulateInGameDiplomacyPopup();
 
+	if (theDefaultDraw == NULL && observerTabDraw != theWindow->winGetDrawFunc())
+		theDefaultDraw = theWindow->winGetDrawFunc();
+	if (watchingTab())
+	{
+		winInGame->winHide(TRUE);
+		theWindow->winSetDrawFunc(observerTabDraw);
+	}
+	else if (theDefaultDraw)
+		theWindow->winSetDrawFunc(theDefaultDraw);
+
 	if(TheGameSpyInfo && TheGameSpyInfo->getLocalProfileID() != 0)
 	{
 		radioButtonInGame->winHide(FALSE);
@@ -732,6 +766,18 @@ WindowMsgHandledType DiplomacyInput( GameWindow *window, UnsignedInt msg,
 			return MSG_HANDLED;
 
 		}  // end char
+
+		// --------------------------------------------------------------------------------------------
+		// a watcher's mute keys, drawn by InGameUI over his painting
+		case GWM_LEFT_DOWN:
+		case GWM_LEFT_UP:
+		{
+			if (!watchingTab())
+				return MSG_IGNORED;
+			if (msg == GWM_LEFT_UP)
+				TheInGameUI->clickObserverTab(LOLONGTOSHORT(mData1), HILONGTOSHORT(mData1));
+			return MSG_HANDLED;
+		}
 
 		// --------------------------------------------------------------------------------------------
 		// the wheel over a row's money controls moves its amount; every control there lets it through

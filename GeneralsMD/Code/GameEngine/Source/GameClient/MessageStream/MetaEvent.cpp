@@ -237,6 +237,8 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "OBSERVER_PREV_SEAT",												GameMessage::MSG_META_OBSERVER_PREV_SEAT },
 	{ "OBSERVER_NEXT_STAT",												GameMessage::MSG_META_OBSERVER_NEXT_STAT },
 	{ "OBSERVER_PREV_STAT",												GameMessage::MSG_META_OBSERVER_PREV_STAT },
+	{ "OBSERVER_TOGGLE_STANDINGS",								GameMessage::MSG_META_OBSERVER_TOGGLE_STANDINGS },
+	{ "OBSERVER_VISION_CYCLE",										GameMessage::MSG_META_OBSERVER_VISION_CYCLE },
 	{ "OPTIONS",																	GameMessage::MSG_META_OPTIONS },
 	{ "TOGGLE_LOWER_DETAILS",											GameMessage::MSG_META_TOGGLE_LOWER_DETAILS },
 	{ "TOGGLE_CONTROL_BAR",												GameMessage::MSG_META_TOGGLE_CONTROL_BAR },
@@ -520,7 +522,7 @@ static Bool metaUpIgnoresModifiers( const MetaMapRec *map )
 //-------------------------------------------------------------------------------------------------
 static Bool isObserverMeta( GameMessage::Type meta )
 {
-	return meta >= GameMessage::MSG_META_OBSERVER_CAMERA_FREE && meta <= GameMessage::MSG_META_OBSERVER_PREV_STAT;
+	return meta >= GameMessage::MSG_META_OBSERVER_CAMERA_FREE && meta <= GameMessage::MSG_META_OBSERVER_VISION_CYCLE;
 }
 
 /// an observer, or knocked out and stayed (InGameUI's localPlayerWatching)
@@ -1028,6 +1030,8 @@ void MetaMap::keepArrowsForCamera()
 		{ GameMessage::MSG_META_OBSERVER_PREV_SEAT, MK_LEFT, ALT },
 		{ GameMessage::MSG_META_OBSERVER_NEXT_STAT, MK_DOWN, ALT },
 		{ GameMessage::MSG_META_OBSERVER_PREV_STAT, MK_UP, ALT },
+		{ GameMessage::MSG_META_OBSERVER_TOGGLE_STANDINGS, MK_S, ALT },
+		{ GameMessage::MSG_META_OBSERVER_VISION_CYCLE, MK_V, ALT },
 	};
 	for( size_t each = 0; each < sizeof( DEFAULTS ) / sizeof( DEFAULTS[ 0 ] ); ++each )
 	{

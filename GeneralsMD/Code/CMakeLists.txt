@@ -2494,6 +2494,9 @@ target_include_directories(test_ground_marks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 # GameClient/DirectStrikeHudLayout.h: where the Direct Strike HUD's boxes stand on a screen.
 add_lib_test(test_directstrikehud)
 target_include_directories(test_directstrikehud PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
+# GameClient/ObserverHudLayout.h: the watcher's radar box, right box, followed player's panel and Tab screen, 2 to 32 seats.
+add_lib_test(test_observerhud)
+target_include_directories(test_observerhud PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
 # W3DDevice/GameClient/TerrainSubdivide.h: the subdivided ground through the samples, near the plane.
 add_lib_test(test_terrain_subdivide)
 target_include_directories(test_terrain_subdivide PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)

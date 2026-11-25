@@ -516,6 +516,8 @@ public:
 		MSG_META_OBSERVER_PREV_SEAT,								///< observer HUD: previous seat
 		MSG_META_OBSERVER_NEXT_STAT,								///< observer HUD: next board stat
 		MSG_META_OBSERVER_PREV_STAT,								///< observer HUD: previous board stat
+		MSG_META_OBSERVER_TOGGLE_STANDINGS,					///< observer HUD: the standings in the roster's place, or the roster again
+		MSG_META_OBSERVER_VISION_CYCLE,							///< observer HUD: the vision key, all, team, seat, round again
 
 		MSG_END_META_MESSAGES,											///< Marker to delineate "meta" messages
 

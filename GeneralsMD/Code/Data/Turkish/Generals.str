@@ -16338,6 +16338,123 @@ GUI:ObsConPerMinute
 "/DK"
 END
 
+// Menu redesign package 14, the watcher's HUD as one more side bar
+GUI:ObsConPlayers
+"OYUNCULAR"
+END
+
+GUI:ObsConHighest
+"EN YÜKSEK"
+END
+
+GUI:ObsConReady
+"HAZIR"
+END
+
+GUI:ObsConCamFree
+"SERBEST"
+END
+
+GUI:ObsConCamFollow
+"TAKİP"
+END
+
+GUI:ObsConCamDirector
+"YÖNETMEN"
+END
+
+GUI:ObsConStatIncome_Short
+"GEL."
+END
+
+GUI:ObsConStatBuilds_Short
+"ÜRT."
+END
+
+GUI:ObsConStatSuper_Short
+"SÜP."
+END
+
+GUI:ObsConTipStandings
+"Sıralama"
+END
+
+GUI:ObsConTipStandingsLine
+"Her oyuncu seçtiğin istatistiğe göre sıralı"
+END
+
+GUI:ObsConTipVisionAll
+"Görüş: tümü"
+END
+
+GUI:ObsConTipVisionAllLine
+"Harita ve radar her oyuncunun gördüğünü gösterir"
+END
+
+GUI:ObsConTipVisionTeam
+"Görüş: takım"
+END
+
+GUI:ObsConTipVisionTeamLine
+"İzlenen oyuncunun takımının gördüğü"
+END
+
+GUI:ObsConTipVisionPlayer
+"Görüş: oyuncu"
+END
+
+GUI:ObsConTipVisionPlayerLine
+"İzlenen oyuncunun gördüğü"
+END
+
+GUI:ObsConTipChat
+"Sohbet"
+END
+
+GUI:ObsConTipChatLine
+"Maçtaki herkese yaz"
+END
+
+GUI:ObsConTipOptions
+"Seçenekler"
+END
+
+GUI:ObsConTipOptionsLine
+"Ses, görüntü ve tuşlar"
+END
+
+GUI:ObsConTipQuit
+"Menü"
+END
+
+GUI:ObsConTipQuitLine
+"Maçtan çık"
+END
+
+GUI:ObsConMap
+"HARİTA"
+END
+
+GUI:ObsConLength
+"SÜRE"
+END
+
+GUI:ObsConSpeed
+"HIZ"
+END
+
+GUI:ObsConObservers
+"İZLEYİCİ"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_STANDINGS
+"Sıralama aç/kapa"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_CYCLE
+"Sonraki görüş"
+END
+
 GUI:CheatPanelTitle
 "Hileler"
 END

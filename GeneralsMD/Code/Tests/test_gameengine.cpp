@@ -2740,7 +2740,7 @@ TEST(hotkeys_observer_rows_keep_their_own_chords)
 		freeCamera = freeCamera || ( rows[ each ].id == "OBSERVER_CAMERA_FREE" && rows[ each ].binding.key == "KEY_F" );
 		nextSeat = nextSeat || ( rows[ each ].id == "OBSERVER_NEXT_SEAT" && rows[ each ].binding.key == "KEY_RIGHT" );
 	}
-	CHECK_EQ( observer, 14 );
+	CHECK_EQ( observer, 16 );		// with the standings key and the vision key (package 14)
 	CHECK( freeCamera && nextSeat );
 	CHECK( !Hotkeys_canClash( "OBSERVER_VISION_ALL", "SELECT_ALL" ) );
 	CHECK( !Hotkeys_canClash( "COMMAND_SLOT11", "OBSERVER_VISION_ALL" ) );

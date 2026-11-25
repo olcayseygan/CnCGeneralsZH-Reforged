@@ -1642,6 +1642,124 @@ GUI:ObsConPerMinute
 "/MIN"
 END
 
+// Menu redesign package 14, the watcher's HUD as one more side bar: the lists' heads, the camera dropdown, the keys'
+// tooltips, the Tab screen's facts, the short forms of the stat words, and the two new observer hotkeys.
+GUI:ObsConPlayers
+"PLAYERS"
+END
+
+GUI:ObsConHighest
+"HIGHEST"
+END
+
+GUI:ObsConReady
+"READY"
+END
+
+GUI:ObsConCamFree
+"FREE"
+END
+
+GUI:ObsConCamFollow
+"FOLLOW"
+END
+
+GUI:ObsConCamDirector
+"DIRECTOR"
+END
+
+GUI:ObsConStatIncome_Short
+"INC."
+END
+
+GUI:ObsConStatBuilds_Short
+"BLD."
+END
+
+GUI:ObsConStatSuper_Short
+"SUP."
+END
+
+GUI:ObsConTipStandings
+"Standings"
+END
+
+GUI:ObsConTipStandingsLine
+"Every player ranked by the stat you pick"
+END
+
+GUI:ObsConTipVisionAll
+"Vision: all"
+END
+
+GUI:ObsConTipVisionAllLine
+"The map and radar show every player's sight"
+END
+
+GUI:ObsConTipVisionTeam
+"Vision: team"
+END
+
+GUI:ObsConTipVisionTeamLine
+"What the followed player's team sees"
+END
+
+GUI:ObsConTipVisionPlayer
+"Vision: player"
+END
+
+GUI:ObsConTipVisionPlayerLine
+"What the followed player sees"
+END
+
+GUI:ObsConTipChat
+"Chat"
+END
+
+GUI:ObsConTipChatLine
+"Write to everyone in the match"
+END
+
+GUI:ObsConTipOptions
+"Options"
+END
+
+GUI:ObsConTipOptionsLine
+"Sound, picture and keys"
+END
+
+GUI:ObsConTipQuit
+"Menu"
+END
+
+GUI:ObsConTipQuitLine
+"Leave the match"
+END
+
+GUI:ObsConMap
+"MAP"
+END
+
+GUI:ObsConLength
+"LENGTH"
+END
+
+GUI:ObsConSpeed
+"SPEED"
+END
+
+GUI:ObsConObservers
+"OBSERVERS"
+END
+
+GUI:HotkeysCommandOBSERVER_TOGGLE_STANDINGS
+"Standings on/off"
+END
+
+GUI:HotkeysCommandOBSERVER_VISION_CYCLE
+"Next vision"
+END
+
 // The cheat panel the console's "trainer" command opens.
 GUI:CheatPanelTitle
 "Cheats"

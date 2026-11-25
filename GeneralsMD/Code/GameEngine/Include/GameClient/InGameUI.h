@@ -1208,6 +1208,10 @@ public:  // ********************************************************************
 	/// one of the observer HUD's CommandMap commands (MSG_META_OBSERVER_*): TRUE when the local player
 	/// watches and the command was his, FALSE for anyone else, whose key goes on to the next record
 	Bool runObserverCommand( Int meta );
+	/// the watcher's Tab screen over its painting, the window's rect on the screen (Diplomacy.cpp's draw)
+	void drawObserverTab( const IRegion2D &panel );
+	/// a click on it at x, y: TRUE when a mute key took it
+	Bool clickObserverTab( Int x, Int y );
 	/// a command bar key while watching: TRUE when it picked a stat, Q W E R T Y A as shipped
 	Bool pickSpectatorStat( Int commandSlot );
 	/// a raw Q W E R T Y A press or release while watching: TRUE when the rack's stat keys took it
@@ -1733,8 +1737,9 @@ protected:
 	UnsignedInt									m_hudCellPass;						///< client passes, counted by update()
 	UnsignedInt									m_hudCellDrawnPass;				///< m_hudCellPass when postDraw last laid the cells out
 
-	/// while watching: the observer console along the screen's foot (its radar bay under the windows)
+	/// while watching: the watcher's HUD, the radar box's keys, the right box and the followed player's panel
 	void drawObserverConsole( void );
+	/// its radar box, the scheme's painting, under the windows so the radar paints on its glass
 	void drawObserverConsoleBay( void );
 	/// a player's own screen on the camera, the fog left as the watcher set it; the mode before is kept
 	void takePlayerCamera( Int playerIndex );

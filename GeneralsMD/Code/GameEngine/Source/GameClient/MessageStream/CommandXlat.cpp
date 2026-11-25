@@ -3772,6 +3772,8 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 		case GameMessage::MSG_META_OBSERVER_PREV_SEAT:
 		case GameMessage::MSG_META_OBSERVER_NEXT_STAT:
 		case GameMessage::MSG_META_OBSERVER_PREV_STAT:
+		case GameMessage::MSG_META_OBSERVER_TOGGLE_STANDINGS:
+		case GameMessage::MSG_META_OBSERVER_VISION_CYCLE:
 			if( TheInGameUI && TheInGameUI->runObserverCommand( (Int)t ) )
 				disp = DESTROY_MESSAGE;
 			break;

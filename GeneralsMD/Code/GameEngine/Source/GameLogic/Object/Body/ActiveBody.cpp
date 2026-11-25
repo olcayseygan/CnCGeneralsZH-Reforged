@@ -179,7 +179,8 @@ ActiveBody::ActiveBody( Thing *thing, const ModuleData* moduleData ) :
 	m_lastDamageCleared(false),
 	m_particleSystems(NULL),
 	m_currentSubdualDamage(0),
-	m_indestructible(false)
+	m_indestructible(false),
+	m_armorValidated(FALSE)
 {
 	m_currentHealth = getActiveBodyModuleData()->m_initialHealth;
 	m_prevHealth = getActiveBodyModuleData()->m_initialHealth;
@@ -272,6 +273,15 @@ void ActiveBody::setDamageState( BodyDamageType newState )
 //-------------------------------------------------------------------------------------------------
 void ActiveBody::validateArmorAndDamageFX() const
 {
+	/* The set is a pure function of the template and the flags, so flags that have not changed since the
+		 last time need no lookup: the mood searches ask this of every Object every frame, and the lookup's
+		 lock and map were most of that walk. Its answer for these flags stays in the template's cache, which
+		 is what a logic job reads, so the job still adds nothing to it. */
+	if (m_armorValidated && m_validatedArmorSetFlags == m_curArmorSetFlags)
+		return;
+	m_validatedArmorSetFlags = m_curArmorSetFlags;
+	m_armorValidated = TRUE;
+
 	const ArmorTemplateSet* set = getObject()->getTemplate()->findArmorTemplateSet(m_curArmorSetFlags);
 	DEBUG_ASSERTCRASH(set, ("findArmorSet should never return null"));
 	if (set && set != m_curArmorSet)
@@ -1806,5 +1816,8 @@ void ActiveBody::loadPostProcess( void )
 
 	// extend base class
 	BodyModule::loadPostProcess();
+
+	// the loaded flags, as setArmorSetFlag would have worked them out
+	validateArmorAndDamageFX();
 
 }  // end loadPostProcess

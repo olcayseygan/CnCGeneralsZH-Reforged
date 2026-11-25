@@ -382,6 +382,10 @@ struct AIArmourRow
 };
 static std::map<const ThingTemplate*, AIArmourRow> theArmourOfTemplate;
 
+/** Templates AI_prewarmTargetTables has filled the two tables for since AI::reset, one per slot. */
+enum { AI_PREWARMED_SLOTS = 512 };
+static const ThingTemplate *thePrewarmedTemplates[ AI_PREWARMED_SLOTS ];
+
 void AI::init( void )
 {
 	m_nextGroupID = 0;
@@ -423,6 +427,8 @@ void AI::reset( void )
 	m_loadedGroupMembers.clear();	// a load that threw after xferGroups left groups the loop above freed
 	theVariationParents.clear();
 	theArmourOfTemplate.clear();
+	for( Int i = 0; i < AI_PREWARMED_SLOTS; ++i )
+		thePrewarmedTemplates[ i ] = NULL;
 
 	// the mood searches run ahead belong to one match's frames (AIUpdate.cpp)
 	extern void AIUpdate_resetMoodSearches( void );
@@ -899,6 +905,24 @@ static Bool AI_jobMayNotFill( void )
 	return TRUE;
 }
 
+/** theVariationParents' entry for tmpl, worked out the first time; on the logic thread only. */
+static std::map<const ThingTemplate*, const ThingTemplate*>::iterator AI_variationParent( const ThingTemplate *tmpl )
+{
+	std::map<const ThingTemplate*, const ThingTemplate*>::iterator known = theVariationParents.find( tmpl );
+	if( known == theVariationParents.end() )
+	{
+		const ThingTemplate *parent = NULL;
+		for( const ThingTemplate *t = TheThingFactory->firstTemplate(); t != NULL && parent == NULL; t = t->friend_getNextTemplate() )
+		{
+			const std::vector<AsciiString> &variations = t->getBuildVariations();
+			if( std::find( variations.begin(), variations.end(), tmpl->getName() ) != variations.end() )
+				parent = t;
+		}
+		known = theVariationParents.insert( std::make_pair( tmpl, parent ) ).first;
+	}
+	return known;
+}
+
 /** What a target is worth: ThreatValue where the data sets it, else what its player pays for it. */
 static Int AI_targetValue( const Object *victim )
 {
@@ -914,16 +938,7 @@ static Int AI_targetValue( const Object *victim )
 		if( known == theVariationParents.end() && AI_jobMayNotFill() )
 			return 1;
 		if( known == theVariationParents.end() )
-		{
-			const ThingTemplate *parent = NULL;
-			for( const ThingTemplate *t = TheThingFactory->firstTemplate(); t != NULL && parent == NULL; t = t->friend_getNextTemplate() )
-			{
-				const std::vector<AsciiString> &variations = t->getBuildVariations();
-				if( std::find( variations.begin(), variations.end(), tmpl->getName() ) != variations.end() )
-					parent = t;
-			}
-			known = theVariationParents.insert( std::make_pair( tmpl, parent ) ).first;
-		}
+			known = AI_variationParent( tmpl );
 		if( known->second != NULL )
 		{
 			if( !known->second->hasNameKey() && AI_jobMayNotFill() )
@@ -971,8 +986,24 @@ static const AIArmourRow &AI_armourOf( const ThingTemplate *tmpl )
 	* process asked before, a client tooltip or an earlier match among it. */
 void AI_prewarmTargetTables( const Object *o )
 {
-	AI_armourOf( o->getTemplate() );
-	AI_targetValue( o );
+	/* Everything AI_targetValue may fill for any player's Object of this template is filled here, so
+		 the fill hangs on the template alone, and a template met once since AI::reset is skipped: the walk
+		 asks this of every Object every frame, and two map lookups and a cost apiece were most of it.
+		 Asking per Object filled the variation parent only where that Object's player prices it at
+		 nothing. Where a template lands in this table only decides what gets asked again. */
+	const ThingTemplate *tmpl = o->getTemplate();
+	const ThingTemplate *&seen = thePrewarmedTemplates[ ( (UnsignedInt)( (uintptr_t)tmpl >> 4 ) ) & ( AI_PREWARMED_SLOTS - 1 ) ];
+	if( seen == tmpl )
+		return;
+	AI_armourOf( tmpl );
+	if( tmpl->getThreatValue() <= 0 )
+	{
+		tmpl->getNameKey();
+		const ThingTemplate *parent = AI_variationParent( tmpl )->second;
+		if( parent != NULL )
+			parent->getNameKey();
+	}
+	seen = tmpl;
 }
 
 /** What the unit choosing brings to every candidate: its weapons as they fire now, once per search

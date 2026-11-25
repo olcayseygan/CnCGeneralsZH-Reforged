@@ -97,8 +97,10 @@ public:
 
 	void onVeterancyLevelChanged( VeterancyLevel oldLevel, VeterancyLevel newLevel, Bool provideFeedback = TRUE );
 
-	virtual void setArmorSetFlag(ArmorSetType ast) { m_curArmorSetFlags.set(ast, 1); }
-	virtual void clearArmorSetFlag(ArmorSetType ast) { m_curArmorSetFlags.set(ast, 0); }
+	// worked out at once, so the template's armour set cache always holds every Object's flags and a
+	// logic job reading it under Thing::CachePeek never adds to it (AIUpdate.cpp, runMoodSearches)
+	virtual void setArmorSetFlag(ArmorSetType ast) { m_curArmorSetFlags.set(ast, 1); validateArmorAndDamageFX(); }
+	virtual void clearArmorSetFlag(ArmorSetType ast) { m_curArmorSetFlags.set(ast, 0); validateArmorAndDamageFX(); }
 	virtual Bool testArmorSetFlag(ArmorSetType ast) { return m_curArmorSetFlags.test(ast); }
 
 	virtual void setInitialHealth(Int initialPercent); ///< Sets the inital load health %.
@@ -172,6 +174,8 @@ private:
 	mutable const ArmorTemplateSet*		m_curArmorSet;
 	mutable Armor											m_curArmor;
 	mutable const DamageFX*						m_curDamageFX;
+	mutable ArmorSetFlags							m_validatedArmorSetFlags;	///< the flags the three above were last worked out for
+	mutable Bool											m_armorValidated;					///< ... once they have been at all
 
 };
 

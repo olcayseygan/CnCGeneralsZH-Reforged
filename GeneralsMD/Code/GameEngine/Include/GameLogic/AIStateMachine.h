@@ -595,7 +595,8 @@ public:
 	//virtual ~AIAttackMoveToState();
 
 	virtual Bool isAttack() const { return m_attackMoveMachine ? m_attackMoveMachine->isInAttackState() : FALSE; }
-	Bool scansThisFrame( UnsignedInt now ) const { return m_attackMoveMachine->isInIdleState() && now >= m_frameToScanOn; }
+	// the clock first: it sits in this state, the sub-machine's state is two reads further on
+	Bool scansThisFrame( UnsignedInt now ) const { return now >= m_frameToScanOn && m_attackMoveMachine->isInIdleState(); }
 	virtual StateReturnType onEnter();
 	virtual void onExit( StateExitType status );
 	virtual StateReturnType update();

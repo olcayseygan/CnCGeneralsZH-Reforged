@@ -7542,8 +7542,21 @@ namespace
 		first.scan = triggerScan;
 		first.attackMove = triggerAttackMove;
 		s_moodSearches.push_back( first );
+		/* The lazy caches a search reads are filled in this one walk, on the logic thread, so the jobs only
+			 read them: the AI's worth and armour tables and name keys for every Object's template
+			 (AI_prewarmTargetTables), and an aircraft's facing for the searches that read it. They fill
+			 whether or not this frame then searches ahead; a fill is the same whenever it happens. An
+			 Object's own armour is not asked here any more: a job works it out under Thing::CachePeek
+			 without storing it, and the template's cache of armour sets it reads already holds every
+			 Object's flags, since ActiveBody works them out the moment they change. Asking it of every
+			 Object every frame was a lock and a map lookup apiece, about a third of this function at 3000
+			 objects. A height above the ground is likewise worked out in the job and not stored. */
+		Int objectCount = 0;
 		for( Object *o = TheGameLogic->getFirstObject(); o; o = o->getNextObject() )
 		{
+			AI_prewarmTargetTables( o );
+			++objectCount;
+
 			AIUpdateInterface *ai = o->getAI();
 			if( ai == NULL )
 				continue;
@@ -7581,20 +7594,6 @@ namespace
 			s_moodSearches[ i ].ai->m_moodBatchIndex = i;
 		}
 
-		/* The lazy caches a search reads are filled here, on the logic thread, so the jobs only read
-			 them: every Object's armour for its armour flags now, and the AI's worth and armour tables and
-			 name keys for its template (AI_prewarmTargetTables); an aircraft's facing is filled in the walk
-			 above. A height above the ground is worked out in the job and not stored (Thing::CachePeek). */
-		Int objectCount = 0;
-		for( Object *o = TheGameLogic->getFirstObject(); o; o = o->getNextObject() )
-		{
-			DamageInfoInput probe;
-			probe.m_damageType = DAMAGE_EXPLOSION;
-			probe.m_amount = 0.0f;
-			o->estimateDamage( probe );
-			AI_prewarmTargetTables( o );
-			++objectCount;
-		}
 		ThePartitionManager->prepareJobGathers();
 		/* A gather holds each object once and gives up past MOOD_SEARCH_CAPACITY, so no job's iterator
 			 fills past the smaller of the two. Its pool blocks are taken here, on the logic thread, by one

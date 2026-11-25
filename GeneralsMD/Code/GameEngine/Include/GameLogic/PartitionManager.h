@@ -1116,14 +1116,16 @@ protected:
  * Accept if they are at least partly clear, not wholly fogged or shrouded, or, given a radar
  * player, if that player's radar tracks them in the fog (RadarCoverageBehavior::isTracked)
  */
-/** The shroud questions a logic job asked, in order, with the answers peekShroudedStatus gave. The logic
-	thread asks them again for real (replayShroudPeeks): the same side effects in the same order, and the
-	job's answer stands only if every reply matches. */
+/** The shroud questions a logic job asked, in order, with whether peekShroudedStatus's answer let the
+	object through. The logic thread asks them again for real (replayShroudPeeks): the same side effects in
+	the same order, and the job's answer stands only if every reply lets the same objects through. The
+	verdict, not the status: fogged against shrouded hangs on "ever seen", which the drawing loop writes
+	on each machine for its own player, while at least partly clear is the cells' alone. */
 struct ShroudPeekRecord
 {
 	enum { CAPACITY = 48 };
 	const Object				*objects[ CAPACITY ];
-	ObjectShroudStatus	status[ CAPACITY ];
+	Bool								inSight[ CAPACITY ];	///< the answer was CLEAR or PARTIAL_CLEAR, what the fog filter lets through
 	Int									playerIndex;
 	Int									count;
 	Bool								overflowed;

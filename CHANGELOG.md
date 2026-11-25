@@ -11,6 +11,7 @@ found and fixed, EA's own, not port damage.**
 ## Huge battles run lighter
 
 - Late-game fights with thousands of units cost the computer players less to think about: picking a target and deciding when a unit pulls back skip the checks for enemies that are out of reach. At about 3000 units a frame takes roughly 14% less time. Replays recorded on an earlier build can drift apart in very dense battles.
+- A rare out-of-sync between players and observers in the same match, set off by fogged enemy buildings, is fixed: whether a unit reuses its last target search no longer depends on what a particular machine has drawn.
 
 ## The game room in the new menu look
 

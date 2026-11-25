@@ -1951,7 +1951,9 @@ ObjectShroudStatus PartitionData::peekShroudedStatus(Int playerIndex) const
 															ThePlayerList->getNthPlayer(playerIndex)->getRelationship(m_object->getTeam())))
 		return OBJECTSHROUD_SHROUDED;
 
-	if (m_shroudedness[playerIndex] != OBJECTSHROUD_INVALID)
+	// INVALID_BUT_PREVIOUS_VALID is no answer either: getShroudedStatus works it out again, and a load
+	// leaves it on whatever partition data the client's ghosts give their previous status to
+	if (m_shroudedness[playerIndex] != OBJECTSHROUD_INVALID && m_shroudedness[playerIndex] != OBJECTSHROUD_INVALID_BUT_PREVIOUS_VALID)
 		return m_shroudedness[playerIndex];
 
 	Int shroudedCells = 0;
@@ -6883,8 +6885,13 @@ Bool PartitionFilterRejectBuildings::allow( Object *other )
 //-----------------------------------------------------------------------------
 /** Partly in sight counts. Since hills and buildings block sight, a building hides its own back
 	cells from anyone lower than its roof and is never wholly clear, so taking only CLEAR here left
-	every unit the AI controls standing in front of an enemy base without firing a shot.
-	A beyond-vision shooter passes its player as radar and also takes what that player's radar
+	every unit the AI controls standing in front of an enemy base without firing a shot. */
+static inline Bool shroudLetsThrough( ObjectShroudStatus status )
+{
+	return status == OBJECTSHROUD_CLEAR || status == OBJECTSHROUD_PARTIAL_CLEAR;
+}
+
+/** A beyond-vision shooter passes its player as radar and also takes what that player's radar
 	tracks moving in the fog. */
 Bool PartitionFilterFreeOfFog::allow( Object *other )
 {
@@ -6903,28 +6910,29 @@ Bool PartitionFilterFreeOfFog::allow( Object *other )
 		else
 		{
 			m_peeks->objects[m_peeks->count] = other;
-			m_peeks->status[m_peeks->count] = status;
+			m_peeks->inSight[m_peeks->count] = shroudLetsThrough(status);
 			++m_peeks->count;
 		}
 		m_peeks->playerIndex = m_comparisonIndex;
 	}
 	else
 		status = other->getShroudedStatus(m_comparisonIndex);
-	return status == OBJECTSHROUD_CLEAR || status == OBJECTSHROUD_PARTIAL_CLEAR
-		|| (m_radar && RadarCoverageBehavior::isTracked(m_radar, other));
+	return shroudLetsThrough(status) || (m_radar && RadarCoverageBehavior::isTracked(m_radar, other));
 }
 
 //-----------------------------------------------------------------------------
 /** The logic thread's half of a job's shroud questions: asked again for real, in the job's order, so the
 	* caches and ghost snapshots move as the serial search would have moved them. FALSE at the first answer
-	* that differs from the job's peek, or when the job ran out of room to record. */
+	* the fog filter would judge otherwise than the job's peek, or when the job ran out of room to record.
+	* Fogged and shrouded count as one, both turned away: which of the two an immobile object gets depends
+	* on whether its player ever saw it, and that each machine's client notes differently. */
 Bool replayShroudPeeks( const ShroudPeekRecord &record )
 {
 	if (record.overflowed)
 		return FALSE;
 	for (Int i = 0; i < record.count; ++i)
 	{
-		if (record.objects[i]->getShroudedStatus(record.playerIndex) != record.status[i])
+		if (shroudLetsThrough(record.objects[i]->getShroudedStatus(record.playerIndex)) != record.inSight[i])
 			return FALSE;
 	}
 	return TRUE;

@@ -4829,10 +4829,6 @@ TOOLTIP:OnlineKeepSignedIn
 "Your password is never stored"
 END
 
-TOOLTIP:OnlineNeedsLauncher
-"Start online play from the launcher"
-END
-
 GUI:OnlineLoginSavedToken
 "Saved sign-in"
 END

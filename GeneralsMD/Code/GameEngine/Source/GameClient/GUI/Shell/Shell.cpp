@@ -47,6 +47,7 @@
 #include "GameNetwork/GameSpy/PeerDefsImplementation.h"
 #include "GameNetwork/GameSpy/MainMenuUtils.h"
 #include "GameNetwork/Online/OnlineQueues.h"
+#include "Common/EarlyCommandLine.h"
 
 static Bool s_onlineOpened = FALSE;		///< -onlineuser opened the online screens once, at the first showShell
 #include <rts/profile.h>
@@ -533,7 +534,18 @@ void Shell::showShell( Bool runInit )
 	//	}
 	
 
-	if (!TheGlobalData->m_shellMapOn && m_screenCount == 0)
+	/* -online with -onlinelogin is how the launcher's ONLINE key starts the game.  The switch turns the
+	   shell map off, as -lanlobby does, because a shell map pushes its main menu only when its map has
+	   loaded, which would land the menu over the login.  Here the main menu goes on the stack first, then
+	   the shell map is let back on, so the main menu's init starts it and its load only brings the login
+	   forward again (GameLogic::startNewGame): the player who backs out of the online screens lands on
+	   the menu over its live map.  -noshellmap, -onlineuser (a scripted test) and -headless keep it off. */
+	if( OnlineIsEnabled() && TheGlobalData->m_onlineLoginOnStart && TheGlobalData->m_onlineUser.isEmpty()
+		&& !s_onlineOpened && m_screenCount == 0 && !TheGlobalData->m_headless
+		&& findEarlyCommandLineOption( L"-noshellmap" ) == NULL )
+		TheWritableGlobalData->m_shellMapOn = TRUE;
+
+	if (m_screenCount == 0 && (!TheGlobalData->m_shellMapOn || TheGlobalData->m_onlineLoginOnStart))
   {
 #ifdef _PROFILE
     Profile::StopRange("init");

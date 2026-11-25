@@ -62,6 +62,7 @@
 // FORWARD REFERENCES /////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 class DisplayString;
+class GameFont;
 //-----------------------------------------------------------------------------
 // TYPE DEFINES ///////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
@@ -71,6 +72,8 @@ CREDIT_STYLE_TITLE = 0,
 CREDIT_STYLE_POSITION, 
 CREDIT_STYLE_NORMAL,
 CREDIT_STYLE_COLUMN,
+CREDIT_STYLE_ROLE,			///< a role left of the column's middle, its first name right of it (made at load)
+CREDIT_STYLE_NAME,			///< a role's next names, right of the middle (made at load)
 CREDIT_STYLE_BLANK,			///< Keep this second to last
 MAX_CREDIT_STYLES				///< Keep this last
 };
@@ -129,9 +132,19 @@ public:
 	Bool isFinished( void ) { return m_isFinished;	}
 	void addBlank( void );
 	void addText( AsciiString text );
+	/// the roll stands in this screen rectangle and fades out at its top and foot (the credits
+	/// column, CreditsMenu.cpp); without one it is the whole screen, as EA had it
+	void setRegion( const IRegion2D &region ) { m_region = region; m_hasRegion = TRUE; }
 private:
 
 	UnicodeString getUnicodeString(AsciiString str);
+	void addLine( Int style, const UnicodeString &text );
+	void pairRolesWithNames( void );
+	IRegion2D rollRegion( void );
+	GameFont *styleFont( Int style );
+
+	IRegion2D m_region;
+	Bool m_hasRegion;
 
 	typedef std::list<CreditsLine *> CreditsLineList;
 	CreditsLineList m_creditLineList;

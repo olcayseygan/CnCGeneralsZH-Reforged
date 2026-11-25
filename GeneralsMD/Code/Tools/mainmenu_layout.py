@@ -29,14 +29,34 @@ Both sit where the single player menu does, which is hidden while either shows. 
 are set from GUI:CampaignMission, GUI:CampaignZeroHour and GUI:CampaignGenerals; the transitions
 that flash them in and out are in Data/INI/WindowTransitionsReforged.ini.
 
-Last, the single player menu itself gains ButtonMods under Skirmish, a copy of Skirmish one step
-down with Back and the frame pushed down after it; GameWindowTransitions.cpp copies Skirmish's flash
-into every transition group for it.  Mods asks Direct Strike or Apocalypse (AskGameMode).
+The single player menu itself gains ButtonMods under Skirmish, a copy of Skirmish one step down
+with Back and the frame pushed down after it; GameWindowTransitions.cpp copies Skirmish's flash into
+every transition group for it.
+
+The menu redesign (docs/plans/MENU-REDESIGN.md, package 4) then turns the drop-downs into one rail on
+the right with the panels it opens beside it.  MainMenu.cpp places every window in code at one scale
+from the screen's right edge and draws them, so the rects this tool writes only have to hold the
+windows; the transitions are no longer played.  For that the layout gains:
+
+    MapBorder7 / EarthMap7                 the Mods panel, a clone of the multiplayer menu
+        ButtonModeDirectStrike, ButtonModeApocalypse   the two mode cards
+    ButtonOnline                           moved onto the main rail (EarthMap2); shown only in a
+                                           game started with -online, which the launcher's ONLINE
+                                           key does
+    LabelVersion                           a static text for the version at the rail's top right
+
+Multiplayer opens the LAN lobby straight, so the rest of the multiplayer menu (ButtonNetwork,
+ButtonMultiBack) stays only for the transitions that name it.  Every button's TOOLTIPTEXT goes: the
+mouse would draw it beside the card MainMenu.cpp draws, whose keys are TOOLTIPS below.
+
+The credits screen comes out of the same run: EA's CreditsMenu.wnd with a Back key (a clone of the
+single player menu's Back), which CreditsMenu.cpp places at the foot of the credits column.
 
     python bigfile.py extract ../../Run/WindowZH.big "Window\\Menus\\MainMenu.wnd" -o wnd
+    python bigfile.py extract ../../Run/WindowZH.big "Window\\Menus\\CreditsMenu.wnd" -o wnd
     python mainmenu_layout.py wnd/Window/Menus ../Data/Window/Menus
 
-The output is a tracked master under Code/Data; the build copies it to Run/Window/Menus/, where a
+The outputs are tracked masters under Code/Data; the build copies them to Run/Window/Menus/, where a
 loose file beats WindowZH.big.
 
     python mainmenu_layout.py selfcheck
@@ -57,6 +77,7 @@ from wndlayout import clone
 HERE = os.path.dirname(os.path.abspath(__file__))
 MENUS = os.path.join(HERE, "..", "Data", "Window", "Menus")
 PATCH_STR = os.path.join(HERE, "..", "Data", "Patch.str")
+TURKISH_STR = os.path.join(HERE, "..", "Data", "Turkish", "Generals.str")
 TRANSITIONS = os.path.join(HERE, "..", "Data", "INI", "WindowTransitionsReforged.ini")
 
 MENU = "MainMenu"
@@ -96,7 +117,31 @@ MODS_TOOLTIP = "TOOLTIP:Mods"
 # the mode buttons under Skirmish, top first
 MODE_BUTTONS = [(MODS, MODS_LABEL, MODS_TOOLTIP)]
 
-STRINGS = ["GUI:CampaignMission", "GUI:CampaignZeroHour", "GUI:CampaignGenerals", MODS_LABEL, MODS_TOOLTIP]
+# the Mods panel: the multiplayer menu cloned, its two first buttons the cards, Back dropped
+MODS_PANEL_RENAME = [
+    ("MapBorder1", "MapBorder7", None),
+    ("EarthMap1", "EarthMap7", None),
+    ("ButtonOnline", "ButtonModeDirectStrike", "GUI:GameModeDirectStrike"),
+    ("ButtonNetwork", "ButtonModeApocalypse", "GUI:GameModeApocalypse"),
+    ("ButtonMultiBack", "ButtonModeBack", None),
+]
+
+CREDITS = "CreditsMenu"
+CREDITS_BACK = "ButtonBack"
+
+# the card MainMenu.cpp draws beside a button (railTip there), one line each
+TOOLTIPS = ["TOOLTIP:MainMenu" + key for key in (
+    "Solo", "Multi", "Load", "Options", "Credits", "Exit", "Online", "USA", "GLA", "China", "Challenge",
+    "Skirmish", "Mods", "LoadGame", "Replay", "Generals", "ZH", "Mission", "Easy", "Medium", "Hard",
+    "Back")]
+
+# the main menu's own words (MainMenu.cpp, CreditsMenu.cpp); EA's exit question is QuitMenu's too
+MENU_STRINGS = ["GUI:MainMenuMission", "GUI:MainMenuDifficulty", "GUI:MainMenuExitTitle",
+                "GUI:MainMenuExitMessage", "GUI:CreditsReforged", "GUI:CreditsLead", "GUI:CreditsPort",
+                "GUI:HintEscBack"]
+
+STRINGS = ["GUI:CampaignMission", "GUI:CampaignZeroHour", "GUI:CampaignGenerals", MODS_LABEL, MODS_TOOLTIP] \
+    + TOOLTIPS + MENU_STRINGS
 
 
 def drop_prop(window, key):
@@ -187,12 +232,42 @@ def build(layout):
         window.rect = (l - PICK_WIDEN, t, r, b, cw, ch)
     layout.root.children.append(pick)
     add_mode_buttons(layout)
+    add_rail_windows(layout)
     return layout
 
 
-def read_strings():
+def add_rail_windows(layout):
+    """The menu redesign's windows: the Mods panel, ButtonOnline on the main rail, LabelVersion; and
+    no TOOLTIPTEXT anywhere, since the code draws the tooltips."""
+    mods = clone_panel(layout, MODS_PANEL_RENAME)
+    earth = mods.find("EarthMap7")
+    earth.children.remove(mods.find("ButtonModeBack"))
+    layout.root.children.append(mods)
+
+    online = layout.find("ButtonOnline")
+    layout.root.parent_of(online).children.remove(online)
+    layout.find("EarthMap2").children.append(online)
+
+    version = clone(layout.find("StaticTextSelectDifficulty"), full("LabelVersion"))
+    version.set_prop("STATUS", "ENABLED")
+    version.set_prop("TEXT", '""')
+    layout.root.children.append(version)
+
+    for window in layout.root.walk():
+        drop_prop(window, "TOOLTIPTEXT")
+
+
+def build_credits(layout, main):
+    """EA's credits screen with a Back key, cloned from the main menu's single player Back."""
+    back = clone(main.find("ButtonSingleBack"), "%s.wnd:%s" % (CREDITS, CREDITS_BACK))
+    drop_prop(back, "TOOLTIPTEXT")
+    layout.root.children.append(back)
+    return layout
+
+
+def read_strings(path=PATCH_STR):
     keys = set()
-    with open(PATCH_STR, "r", encoding="utf-8") as fp:
+    with open(path, "r", encoding="utf-8") as fp:
         for line in fp:
             line = line.strip()
             if line and not line.startswith("//") and not line.startswith('"') and line != "END":
@@ -222,8 +297,28 @@ def selfcheck():
         names = set((w.name or "").split(":")[-1] for w in layout.root.walk())
 
     wanted = set(mission_names()) | set(new for _, new, _ in PICK_RENAME) | transition_windows() | {name for name, _, _ in MODE_BUTTONS}
+    wanted |= set(new for _, new, _ in MODS_PANEL_RENAME if new != "ButtonModeBack") | {"LabelVersion", "ButtonOnline"}
     for name in sorted(wanted - names):
         problems.append("%s.wnd has no %s" % (MENU, name))
+    if os.path.exists(path):
+        if layout.find("ButtonOnline") not in layout.find("EarthMap2").children:
+            problems.append("ButtonOnline is not on the main rail (EarthMap2)")
+        tipped = [w.name for w in layout.root.walk() if w.prop("TOOLTIPTEXT")]
+        if tipped:
+            problems.append("TOOLTIPTEXT left on %s: the code draws the main menu's tooltips" % tipped)
+
+    credits = os.path.join(MENUS, CREDITS + ".wnd")
+    if not os.path.exists(credits):
+        problems.append("%s.wnd is not tracked under Data/Window/Menus" % CREDITS)
+    else:
+        for name in ("ParentCreditsWindow", "BackgroundWindow", "WinTextDraw", CREDITS_BACK):
+            if wndlayout.load(credits).find(name) is None:
+                problems.append("%s.wnd has no %s" % (CREDITS, name))
+
+    turkish = read_strings(TURKISH_STR)
+    for key in TOOLTIPS + MENU_STRINGS:
+        if key not in turkish:
+            problems.append("%s is not in Data/Turkish/Generals.str" % key)
 
     for problem in problems:
         print("  %s" % problem)
@@ -248,6 +343,10 @@ def main(argv):
     out = os.path.join(outdir, MENU + ".wnd")
     wndlayout.save(layout, out)
     print("%s: %d windows" % (out, sum(1 for _ in layout.root.walk())))
+    credits = build_credits(wndlayout.load(os.path.join(indir, CREDITS + ".wnd")), layout)
+    out = os.path.join(outdir, CREDITS + ".wnd")
+    wndlayout.save(credits, out)
+    print("%s: %d windows" % (out, sum(1 for _ in credits.root.walk())))
     return 0
 
 

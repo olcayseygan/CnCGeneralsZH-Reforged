@@ -57,6 +57,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GlobalLanguage.h"
+#include "GameClient/UIStyle.h"
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -136,6 +137,8 @@ CreditsManager::CreditsManager(void)
 	m_currentStyle = CREDIT_STYLE_NORMAL;
 	m_isFinished = FALSE;
 	m_normalFontHeight = 10;
+	m_hasRegion = FALSE;
+	m_region.lo.x = m_region.lo.y = m_region.hi.x = m_region.hi.y = 0;
 }
 
 CreditsManager::~CreditsManager(void)
@@ -160,6 +163,17 @@ void CreditsManager::init(void )
 
 void CreditsManager::load(void )
 {
+	// this edition's own section first (NOTICE.md), then EA's roll as Credits.ini has it
+	addLine( CREDIT_STYLE_POSITION, TheGameText->fetch( "GUI:CreditsReforged" ) );
+	addBlank();
+	addLine( CREDIT_STYLE_POSITION, TheGameText->fetch( "GUI:CreditsLead" ) );
+	addLine( CREDIT_STYLE_NORMAL, UnicodeString( u"Olcay Seygan" ) );
+	addBlank();
+	addLine( CREDIT_STYLE_POSITION, TheGameText->fetch( "GUI:CreditsPort" ) );
+	addLine( CREDIT_STYLE_NORMAL, UnicodeString( u"İlyas Akın" ) );
+	addBlank();
+	addBlank();
+
 	INI ini;
 	// Read from INI all the ControlBarSchemes
 	ini.load( AsciiString( "Data\\INI\\Credits.ini" ), INI_LOAD_OVERWRITE, NULL );
@@ -168,15 +182,83 @@ void CreditsManager::load(void )
 		m_scrollRatePerFrames = 1;
 	if(m_scrollRate <=0)
 		m_scrollRate = 1;
-	
-	GameFont *font = TheFontLibrary->getFont(TheGlobalLanguageData->m_creditsNormalFont.name,
-														TheGlobalLanguageData->adjustFontSize(TheGlobalLanguageData->m_creditsNormalFont.size),
-														TheGlobalLanguageData->m_creditsNormalFont.bold);
 
-	// getFont hands back NULL for a font it could not load - a malformed file, or one the language
-	// data names that is not installed.  Every other caller passes the answer straight to setFont,
-	// which checks; this one reads a field off it.
+	pairRolesWithNames();
+
+	// getFont hands back NULL for a font it could not load
+	GameFont *font = styleFont( CREDIT_STYLE_NAME );
 	m_normalFontHeight = font ? font->height : 0;
+}
+
+void CreditsManager::addLine( Int style, const UnicodeString &text )
+{
+	CreditsLine *cLine = new CreditsLine;
+	cLine->m_style = style;
+	cLine->m_text = text;
+	m_creditLineList.push_back( cLine );
+}
+
+/** A run of lines between two blanks that names a role and then people (a MINORTITLE then NORMAL
+	* lines in Credits.ini) is set as the credits column draws it: the role left of the middle on the
+	* first name's line, the names right of it.  A run of titles alone stays centred. */
+void CreditsManager::pairRolesWithNames( void )
+{
+	CreditsLineList::iterator it = m_creditLineList.begin();
+	while( it != m_creditLineList.end() )
+	{
+		CreditsLineList::iterator runEnd = it;
+		while( runEnd != m_creditLineList.end() && (*runEnd)->m_style != CREDIT_STYLE_BLANK )
+			++runEnd;
+		CreditsLine *role = NULL;
+		for( CreditsLineList::iterator line = it; line != runEnd; )
+		{
+			CreditsLine *cLine = *line;
+			if( cLine->m_style == CREDIT_STYLE_POSITION )
+			{
+				role = cLine;
+				++line;
+			}
+			else if( cLine->m_style == CREDIT_STYLE_NORMAL && role && role->m_style == CREDIT_STYLE_POSITION )
+			{
+				role->m_style = CREDIT_STYLE_ROLE;
+				role->m_secondText = cLine->m_text;
+				delete cLine;
+				line = m_creditLineList.erase( line );
+			}
+			else
+			{
+				if( cLine->m_style == CREDIT_STYLE_NORMAL && role )
+					cLine->m_style = CREDIT_STYLE_NAME;
+				++line;
+			}
+		}
+		it = runEnd;
+		if( it != m_creditLineList.end() )
+			++it;
+	}
+}
+
+IRegion2D CreditsManager::rollRegion( void )
+{
+	if( m_hasRegion )
+		return m_region;
+	IRegion2D whole;
+	whole.lo.x = whole.lo.y = 0;
+	whole.hi.x = TheDisplay->getWidth();
+	whole.hi.y = TheDisplay->getHeight();
+	return whole;
+}
+
+/// the menu language's sizes at 1080: a title 22 bold, a heading 18 bold, a role 15, a name 18
+GameFont *CreditsManager::styleFont( Int style )
+{
+	switch( style )
+	{
+		case CREDIT_STYLE_TITLE:		return UIStyle::menuFont( 22, TRUE );
+		case CREDIT_STYLE_POSITION:	return UIStyle::menuFont( UIStyle::MENU_TEXT_BODY, TRUE );
+		case CREDIT_STYLE_ROLE:			return UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+		default:										return UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	}
 }
 
 void CreditsManager::reset( void )
@@ -209,8 +291,9 @@ void CreditsManager::update( void )
 	Int y = 0;
 	Int yTest = 0;
 	Int lastHeight = 0;
-	Int start = m_scrollDown? 0:TheDisplay->getHeight();
-	Int end =m_scrollDown? TheDisplay->getHeight():0;
+	const IRegion2D roll = rollRegion();
+	Int start = m_scrollDown? roll.lo.y:roll.hi.y;
+	Int end =m_scrollDown? roll.hi.y:roll.lo.y;
 	Int offsetStartMultiplyer = m_scrollDown? -1:0;  // if we're scrolling from the top, we need to subtract the height
 	Int offsetEndMultiplyer = m_scrollDown? 0:1;
 	Int directionMultiplyer = m_scrollDown? 1:-1;
@@ -245,117 +328,29 @@ void CreditsManager::update( void )
 	if(m_creditLineListIt == m_creditLineList.end())
 		return;
 
+	// a line's words in its style's face; a role's name in a name's.  Its height is its tallest
+	// word's, a blank's a name's.
 	CreditsLine *cLine = *m_creditLineListIt;
 	ICoord2D pos;
-	switch (cLine->m_style) 
+	cLine->m_height = m_normalFontHeight;
+	if( cLine->m_style != CREDIT_STYLE_BLANK )
 	{
-	case CREDIT_STYLE_TITLE:
+		for( Int part = 0; part < 2; ++part )
 		{
-			cLine->m_color = m_titleColor;
-			
-			if(TheGlobalLanguageData&& !cLine->m_text.isEmpty())
-			{
-				DisplayString *ds = TheDisplayStringManager->newDisplayString();
-				if(!ds)
-					return;
-				ds->setFont(TheFontLibrary->getFont(TheGlobalLanguageData->m_creditsTitleFont.name,
-														TheGlobalLanguageData->adjustFontSize(TheGlobalLanguageData->m_creditsTitleFont.size),
-														TheGlobalLanguageData->m_creditsTitleFont.bold));
-				ds->setText(cLine->m_text);
-				ds->getSize(&pos.x,&pos.y);
-				cLine->m_height = pos.y;
-				cLine->m_pos.x = TheDisplay->getWidth()/2 - pos.x/2 ;
-				cLine->m_pos.y = start + (cLine->m_height * offsetStartMultiplyer);
-				cLine->m_displayString = ds;
-			}
+			const UnicodeString &words = part == 0 ? cLine->m_text : cLine->m_secondText;
+			if( words.isEmpty() )
+				continue;
+			DisplayString *ds = TheDisplayStringManager->newDisplayString();
+			if( !ds )
+				return;
+			ds->setFont( styleFont( part == 0 ? cLine->m_style : CREDIT_STYLE_NAME ) );
+			ds->setText( words );
+			ds->getSize( &pos.x, &pos.y );
+			cLine->m_height = part == 0 ? pos.y : max( cLine->m_height, pos.y );
+			( part == 0 ? cLine->m_displayString : cLine->m_secondDisplayString ) = ds;
 		}
-		break;
-	case CREDIT_STYLE_POSITION:
-		{
-			cLine->m_color = m_positionColor;
-			
-			if(TheGlobalLanguageData && !cLine->m_text.isEmpty())
-			{
-				DisplayString *ds = TheDisplayStringManager->newDisplayString();
-				if(!ds)
-					return;
-				ds->setFont(TheFontLibrary->getFont(TheGlobalLanguageData->m_creditsPositionFont.name,
-														TheGlobalLanguageData->adjustFontSize(TheGlobalLanguageData->m_creditsPositionFont.size),
-														TheGlobalLanguageData->m_creditsPositionFont.bold));
-				ds->setText(cLine->m_text);
-				ds->getSize(&pos.x,&pos.y);
-				cLine->m_height = pos.y;
-				cLine->m_pos.x = TheDisplay->getWidth()/2 - pos.x/2 ;
-				cLine->m_pos.y = start + (cLine->m_height * offsetStartMultiplyer);
-				cLine->m_displayString = ds;
-			}
-		}
-		break;
-	case CREDIT_STYLE_NORMAL:
-	 {
-			cLine->m_color = m_normalColor;
-			
-			if(TheGlobalLanguageData && !cLine->m_text.isEmpty())
-			{
-				DisplayString *ds = TheDisplayStringManager->newDisplayString();
-				if(!ds)
-					return;
-				ds->setFont(TheFontLibrary->getFont(TheGlobalLanguageData->m_creditsNormalFont.name,
-														TheGlobalLanguageData->adjustFontSize(TheGlobalLanguageData->m_creditsNormalFont.size),
-														TheGlobalLanguageData->m_creditsNormalFont.bold));
-				ds->setText(cLine->m_text);
-				ds->getSize(&pos.x,&pos.y);
-				cLine->m_height = pos.y;
-				cLine->m_pos.x = TheDisplay->getWidth()/2 - pos.x/2 ;
-				cLine->m_pos.y = start + (cLine->m_height * offsetStartMultiplyer);
-				cLine->m_displayString = ds;
-			}
-		}
-		break;
-	case CREDIT_STYLE_COLUMN:
-		{
-			cLine->m_color = m_normalColor;
-			
-			if(TheGlobalLanguageData && !cLine->m_text.isEmpty())
-			{
-				DisplayString *ds = TheDisplayStringManager->newDisplayString();
-				if(!ds)
-					return;
-				ds->setFont(TheFontLibrary->getFont(TheGlobalLanguageData->m_creditsNormalFont.name,
-														TheGlobalLanguageData->adjustFontSize(TheGlobalLanguageData->m_creditsNormalFont.size),
-														TheGlobalLanguageData->m_creditsNormalFont.bold));
-				ds->setText(cLine->m_text);
-				ds->getSize(&pos.x,&pos.y);
-				cLine->m_height = pos.y;
-				cLine->m_pos.x = TheDisplay->getWidth()/2 - pos.x/2 ;
-				cLine->m_pos.y = start + (cLine->m_height * offsetStartMultiplyer);
-				cLine->m_displayString = ds;
-			}
-			if(TheGlobalLanguageData && !cLine->m_secondText.isEmpty())
-			{
-				DisplayString *ds = TheDisplayStringManager->newDisplayString();
-				if(!ds)
-					return;
-				ds->setFont(TheFontLibrary->getFont(TheGlobalLanguageData->m_creditsNormalFont.name,
-														TheGlobalLanguageData->adjustFontSize(TheGlobalLanguageData->m_creditsNormalFont.size),
-														TheGlobalLanguageData->m_creditsNormalFont.bold));
-				ds->setText(cLine->m_secondText);
-				ds->getSize(&pos.x,&pos.y);
-				cLine->m_height = pos.y;
-				cLine->m_pos.x = TheDisplay->getWidth()/2 - pos.x/2 ;
-				cLine->m_pos.y = start + (cLine->m_height * offsetStartMultiplyer);
-				cLine->m_secondDisplayString = ds;
-				
-			}
-		}
-		break;
-	case CREDIT_STYLE_BLANK:
-		{
-			cLine->m_height = m_normalFontHeight;
-			cLine->m_pos.y = start + (cLine->m_height * offsetStartMultiplyer);
-		}
-		break;
 	}
+	cLine->m_pos.y = start + (cLine->m_height * offsetStartMultiplyer);
 
 	m_displayedCreditLineList.push_back(cLine);
 
@@ -366,57 +361,56 @@ void CreditsManager::update( void )
 
 void CreditsManager::draw( void )
 {
+	// in the roll's rectangle, fading out over 64 px at 1080 at its top and foot; a heading centred,
+	// a role MUTED ending 18 px left of the middle with its names starting 18 px right of it
+	IRegion2D roll = rollRegion();
+	const Real scale = UIStyle::boardFit( TheDisplay->getWidth(), TheDisplay->getHeight() ).scale;
+	const Int middle = ( roll.lo.x + roll.hi.x ) / 2;
+	const Int gap = REAL_TO_INT( 18 * scale + 0.5f );
+	const Int fade = m_hasRegion ? max( 1, REAL_TO_INT( 64 * scale + 0.5f ) ) : max( 1, (Int)TheDisplay->getHeight() / 3 );
 	CreditsLineList::iterator drawIt = m_displayedCreditLineList.begin();
 	while (drawIt != m_displayedCreditLineList.end())
 	{
 		CreditsLine *cLine = *drawIt;
-		Int heightChunk = TheDisplay->getHeight()/3;
-		Real perc = 0.0f;
-		if(cLine->m_pos.y < heightChunk || cLine->m_pos.y > heightChunk * 2)
-		{
-			// adjust the color
-			if( cLine->m_pos.y < 0 || cLine->m_pos.y > TheDisplay->getHeight())
-				perc = 0.0f;
-			else if( cLine->m_pos.y < heightChunk)
-				perc = INT_TO_REAL(cLine->m_pos.y) / heightChunk;
-			else
-				perc = 1 - INT_TO_REAL(cLine->m_pos.y - 2*heightChunk) / heightChunk;
-		}
-		else
-			perc = 1.0f;
-		UnsignedByte r,g,b,a;
-		GameGetColorComponents(cLine->m_color, &r, &g, &b, &a);		
-		Int color = GameMakeColor( r,g,b, a * perc);
-		Int bColor= GameMakeColor( 0,0,0, a * perc);
-
-		switch (cLine->m_style) {
-		case CREDIT_STYLE_TITLE:
-		case CREDIT_STYLE_POSITION:
-		case CREDIT_STYLE_NORMAL:
-			{
-				if(cLine->m_displayString)
-					cLine->m_displayString->draw(cLine->m_pos.x,cLine->m_pos.y,color, bColor, 1,1 );
-			}
-			break;
-		case CREDIT_STYLE_COLUMN:
-			{
-				Int chunk = TheDisplay->getWidth()/3;
-				ICoord2D pos;
-				if(cLine->m_displayString)
-				{
-					cLine->m_displayString->getSize(&pos.x, &pos.y);
-					cLine->m_displayString->draw(chunk - (pos.x/2),cLine->m_pos.y,color, bColor, 1,1 );
-				}
-				if(cLine->m_secondDisplayString)
-				{
-					cLine->m_secondDisplayString->getSize(&pos.x, &pos.y);
-					cLine->m_secondDisplayString->draw(2*chunk - (pos.x/2),cLine->m_pos.y,color, bColor, 1,1 );
-				}
-			}
-			break;
-		}
-
 		drawIt++;
+		const Int inside = min( cLine->m_pos.y - roll.lo.y, roll.hi.y - ( cLine->m_pos.y + cLine->m_height ) );
+		const Real perc = inside <= 0 ? 0.0f : min( 1.0f, INT_TO_REAL( inside ) / fade );
+		if( perc <= 0.0f )
+			continue;
+		const Int alpha = REAL_TO_INT( 255 * perc );
+		const Color ink = GameMakeColor( 255, 255, 255, alpha );
+		const Color muted = UIStyle::withAlpha( UIStyle::MUTED, alpha );
+		const Color shadow = GameMakeColor( 0, 0, 0, REAL_TO_INT( 160 * perc ) );
+		ICoord2D pos;
+		DisplayString *first = cLine->m_displayString, *second = cLine->m_secondDisplayString;
+		if( first )
+			first->setClipRegion( &roll );
+		if( second )
+			second->setClipRegion( &roll );
+		switch( cLine->m_style )
+		{
+			case CREDIT_STYLE_COLUMN:
+			case CREDIT_STYLE_ROLE:
+				if( first )
+				{
+					first->getSize( &pos.x, &pos.y );
+					first->draw( middle - gap - pos.x, cLine->m_pos.y, cLine->m_style == CREDIT_STYLE_ROLE ? muted : ink, shadow );
+				}
+				if( second )
+					second->draw( middle + gap, cLine->m_pos.y, ink, shadow );
+				break;
+			case CREDIT_STYLE_NAME:
+				if( first )
+					first->draw( middle + gap, cLine->m_pos.y, ink, shadow );
+				break;
+			default:
+				if( first )
+				{
+					first->getSize( &pos.x, &pos.y );
+					first->draw( middle - pos.x / 2, cLine->m_pos.y, ink, shadow );
+				}
+				break;
+		}
 	}
 }
 void CreditsManager::addBlank( void )

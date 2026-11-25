@@ -27,6 +27,15 @@
 // FILE: MainMenu.cpp /////////////////////////////////////////////////////////////////////////////
 // Author: Colin Day, October 2001
 // Description: Main menu window callbacks
+//
+// The menu is one rail on the right in the menu language (docs/plans/MENU-REDESIGN.md, package 4;
+// the design is experiments/proofs/2026-11-24/screens/main-menu/ in the wrapper): the game's name,
+// the open list's buttons, the leaving button set apart.  Solo Play and Load swap the rail's list;
+// a side, Generals' Challenge and Mods open a panel to the rail's left.  EA's drop-downs and their
+// window transitions are gone: every window comes from MainMenu.wnd (Tools/mainmenu_layout.py) and
+// is placed here at one scale from the screen's right edge (GameClient/MainMenuLayout.h) and drawn
+// here.  Multiplayer opens the LAN lobby; online play is entered from the launcher, which starts the
+// game with -online and -onlinelogin (Shell::showShell), and only such a game has an ONLINE key.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
@@ -48,10 +57,14 @@
 #include "GameClient/ExtendedMessageBox.h"
 #include "GameClient/MessageBox.h"
 #include "GameClient/Display.h"
+#include "GameClient/DisplayString.h"
+#include "GameClient/DisplayStringManager.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Gadget.h"
+#include "GameClient/GameFont.h"
 #include "GameClient/GameText.h"
 #include "GameClient/HeaderTemplate.h"
+#include "GameClient/MainMenuLayout.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/Shell.h"
 #include "GameClient/ShellHooks.h"
@@ -59,6 +72,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetPushButton.h"
+#include "GameClient/UIStyle.h"
 #include "GameNetwork/GUIUtil.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/WindowVideoManager.h"
@@ -78,6 +92,7 @@
 
 #include "GameNetwork/DownloadManager.h"
 #include "GameNetwork/GameSpy/MainMenuUtils.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 
 #include "GameClient/CDCheck.h"
 //Added By Saad
@@ -93,24 +108,9 @@
 
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
 
-enum
-{
-	DROPDOWN_NONE = 0,
-	DROPDOWN_SINGLE,
-	DROPDOWN_MULTIPLAYER,
-	DROPDOWN_MAIN,
-	DROPDOWN_LOADREPLAY,
-	DROPDOWN_DIFFICULTY,
-	DROPDOWN_MISSION,
-	DROPDOWN_CAMPAIGN,
-
-	DROPDOWN_COUNT // keep last
-};
-
 static Bool raiseMessageBoxes = TRUE;
 static Bool campaignSelected = FALSE;
 #if defined _DEBUG || defined _INTERNAL || defined _PROFILE
-static NameKeyType campaignID = NAMEKEY_INVALID;
 static GameWindow *buttonCampaign = NULL;
 #ifdef TEST_COMPRESSION
 static GameWindow *buttonCompressTest = NULL;
@@ -118,135 +118,108 @@ void DoCompressTest( void );
 #endif // TEST_COMPRESSION
 #endif
 
-
-// window ids -------------------------------------------------------------------------------------
-static NameKeyType mainMenuID = NAMEKEY_INVALID;
-static NameKeyType skirmishID = NAMEKEY_INVALID;
-// Mods, under Skirmish in the single player menu (Tools/mainmenu_layout.py): asks Direct Strike or
-// Apocalypse, then the skirmish room in that mode (SkirmishGameOptionsMenu.cpp)
-static NameKeyType modsID = NAMEKEY_INVALID;
 extern Bool skirmishDirectStrike;
 extern Bool skirmishApocalypse;
-static NameKeyType onlineID = NAMEKEY_INVALID;
-static NameKeyType networkID = NAMEKEY_INVALID;
-static NameKeyType optionsID = NAMEKEY_INVALID;
-static NameKeyType exitID = NAMEKEY_INVALID;
-static NameKeyType motdID = NAMEKEY_INVALID;
-static NameKeyType worldBuilderID = NAMEKEY_INVALID;
-static NameKeyType getUpdateID = NAMEKEY_INVALID;
-static NameKeyType buttonTRAININGID = NAMEKEY_INVALID;
-static NameKeyType buttonChallengeID = NAMEKEY_INVALID;
-static NameKeyType buttonUSAID = NAMEKEY_INVALID;
-static NameKeyType buttonGLAID = NAMEKEY_INVALID;
-static NameKeyType buttonChinaID = NAMEKEY_INVALID;
-static NameKeyType buttonUSARecentSaveID = NAMEKEY_INVALID;
-static NameKeyType buttonUSALoadGameID = NAMEKEY_INVALID;
-static NameKeyType buttonGLARecentSaveID = NAMEKEY_INVALID;
-static NameKeyType buttonGLALoadGameID = NAMEKEY_INVALID;
-static NameKeyType buttonChinaRecentSaveID = NAMEKEY_INVALID;
-static NameKeyType buttonChinaLoadGameID = NAMEKEY_INVALID;
-static NameKeyType buttonSinglePlayerID = NAMEKEY_INVALID;
-static NameKeyType buttonMultiPlayerID = NAMEKEY_INVALID;
-static NameKeyType buttonMultiBackID = NAMEKEY_INVALID;
-static NameKeyType buttonSingleBackID = NAMEKEY_INVALID;
-static NameKeyType buttonLoadReplayBackID = NAMEKEY_INVALID;
-static NameKeyType buttonReplayID = NAMEKEY_INVALID;
-static NameKeyType buttonLoadReplayID = NAMEKEY_INVALID;
-static NameKeyType buttonLoadID = NAMEKEY_INVALID;
-static NameKeyType buttonCreditsID = NAMEKEY_INVALID;
-static NameKeyType buttonEasyID = NAMEKEY_INVALID;
-static NameKeyType buttonMediumID = NAMEKEY_INVALID;
-static NameKeyType buttonHardID = NAMEKEY_INVALID;
-static NameKeyType buttonDiffBackID = NAMEKEY_INVALID;
-
 
 // window pointers --------------------------------------------------------------------------------
+static NameKeyType mainMenuID = NAMEKEY_INVALID;
 static GameWindow *parentMainMenu = NULL;
+
+// the main rail (MapBorder2)
 static GameWindow *buttonSinglePlayer = NULL;
 static GameWindow *buttonMultiPlayer = NULL;
-static GameWindow *buttonSkirmish = NULL;
 static GameWindow *buttonOnline = NULL;
-static GameWindow *buttonNetwork = NULL;
+static GameWindow *buttonLoadReplay = NULL;
 static GameWindow *buttonOptions = NULL;
+static GameWindow *buttonCredits = NULL;
 static GameWindow *buttonExit = NULL;
-static GameWindow *buttonMOTD = NULL;
-static GameWindow *buttonWorldBuilder = NULL;
-static GameWindow *mainMenuMovie = NULL;
-static GameWindow *getUpdate = NULL;
-static GameWindow *buttonTRAINING = NULL;
-static GameWindow *buttonChallenge = NULL;
+// the Solo Play rail (MapBorder)
 static GameWindow *buttonUSA = NULL;
 static GameWindow *buttonGLA = NULL;
 static GameWindow *buttonChina = NULL;
-static GameWindow *buttonUSARecentSave = NULL;
-static GameWindow *buttonUSALoadGame = NULL;
-static GameWindow *buttonGLARecentSave = NULL;
-static GameWindow *buttonGLALoadGame = NULL;
-static GameWindow *buttonChinaRecentSave = NULL;
-static GameWindow *buttonChinaLoadGame = NULL;
-static GameWindow *buttonReplay = NULL;
-static GameWindow *buttonLoadReplay = NULL;
+static GameWindow *buttonChallenge = NULL;
+static GameWindow *buttonSkirmish = NULL;
+static GameWindow *buttonMods = NULL;
+static GameWindow *buttonSingleBack = NULL;
+// the Load rail (MapBorder3)
 static GameWindow *buttonLoad = NULL;
-static GameWindow *buttonCredits = NULL;
+static GameWindow *buttonReplay = NULL;
+static GameWindow *buttonLoadReplayBack = NULL;
+// the campaign panel: the tabs (MapBorder6), the mission tiles (MapBorder5), the difficulty keys (MapBorder4)
+static GameWindow *buttonCampaignGenerals = NULL;
+static GameWindow *buttonCampaignZH = NULL;
+enum { MISSION_BUTTONS = 7 };
+static GameWindow *buttonMission[MISSION_BUTTONS];
+static AsciiString missionNames[MISSION_BUTTONS];
 static GameWindow *buttonEasy = NULL;
 static GameWindow *buttonMedium = NULL;
 static GameWindow *buttonHard = NULL;
-static GameWindow *buttonDiffBack = NULL;
-static GameWindow *dropDownWindows[DROPDOWN_COUNT];
+// the Mods panel (MapBorder7)
+static GameWindow *buttonModeDirectStrike = NULL;
+static GameWindow *buttonModeApocalypse = NULL;
+static GameWindow *labelVersion = NULL;
+static GameWindow *buttonWorldBuilder = NULL;
+static GameWindow *getUpdate = NULL;
 
-// The campaign mission panel (MapBorder5, Tools/mainmenu_layout.py): one button for each mission of
-// the campaign picked, every one open.  A campaign with more missions than buttons shows its first
-// MISSION_BUTTONS; Zero Hour's have five each, the original Generals campaigns seven.
-enum { MISSION_BUTTONS = 7 };
-static NameKeyType buttonMissionID[MISSION_BUTTONS];
-static NameKeyType buttonMissionBackID = NAMEKEY_INVALID;
-static GameWindow *buttonMission[MISSION_BUTTONS];
-static GameWindow *buttonMissionBack = NULL;
-static AsciiString missionNames[MISSION_BUTTONS];
-static GameWindow *missionFrame[2];		// MapBorder5, EarthMap5
+// the frames, each an outer and an inner window as EA nested them
+enum MenuFrame
+{
+	FRAME_MAIN,				// MapBorder2
+	FRAME_SOLO,				// MapBorder
+	FRAME_LOAD,				// MapBorder3
+	FRAME_MULTI,			// MapBorder1, EA's Multiplayer list: never shown
+	FRAME_TABS,				// MapBorder6
+	FRAME_TILES,			// MapBorder5
+	FRAME_KEYS,				// MapBorder4
+	FRAME_MODS,				// MapBorder7
+	FRAME_COUNT
+};
+static const char *const FRAME_NAMES[ FRAME_COUNT ][ 2 ] =
+{
+	{ "MainMenu.wnd:MapBorder2", "MainMenu.wnd:EarthMap2" },
+	{ "MainMenu.wnd:MapBorder", "MainMenu.wnd:EarthMap" },
+	{ "MainMenu.wnd:MapBorder3", "MainMenu.wnd:EarthMap3" },
+	{ "MainMenu.wnd:MapBorder1", "MainMenu.wnd:EarthMap1" },
+	{ "MainMenu.wnd:MapBorder6", "MainMenu.wnd:EarthMap6" },
+	{ "MainMenu.wnd:MapBorder5", "MainMenu.wnd:EarthMap5" },
+	{ "MainMenu.wnd:MapBorder4", "MainMenu.wnd:EarthMap4" },
+	{ "MainMenu.wnd:MapBorder7", "MainMenu.wnd:EarthMap7" },
+};
+static GameWindow *frames[ FRAME_COUNT ][ 2 ];
 
-// The campaign pick panel (MapBorder6): Zero Hour's campaign or the original Generals one, shown
-// between the side and the mission panel only when that side's Generals campaign is installed.
-static NameKeyType buttonCampaignZHID = NAMEKEY_INVALID;
-static NameKeyType buttonCampaignGeneralsID = NAMEKEY_INVALID;
-static NameKeyType buttonCampaignBackID = NAMEKEY_INVALID;
-static Bool campaignPickShown = FALSE;
+// EA's windows the rail does without: hidden whenever the menu shows
+static const char *const RETIRED_WINDOWS[] =
+{
+	"MainMenu.wnd:MainMenuRuler", "MainMenu.wnd:Logo", "MainMenu.wnd:GreenDot", "MainMenu.wnd:Clock",
+	"MainMenu.wnd:WinGrowMarker", "MainMenu.wnd:ButtonGetMapPack", "MainMenu.wnd:ButtonGetUpdate",
+	"MainMenu.wnd:ButtonUSARecentSave", "MainMenu.wnd:ButtonUSALoadGame", "MainMenu.wnd:ButtonGLARecentSave",
+	"MainMenu.wnd:ButtonGLALoadGame", "MainMenu.wnd:ButtonChinaRecentSave", "MainMenu.wnd:ButtonChinaLoadGame",
+	"MainMenu.wnd:WinFactionTraining", "MainMenu.wnd:WinFactionTrainingSmall", "MainMenu.wnd:WinFactionTrainingMedium",
+	"MainMenu.wnd:WinFactionSkirmish", "MainMenu.wnd:WinFactionSkirmishSmall", "MainMenu.wnd:WinFactionSkirmishMedium",
+	"MainMenu.wnd:WinFactionUS", "MainMenu.wnd:WinFactionUSSmall", "MainMenu.wnd:WinFactionUSMedium",
+	"MainMenu.wnd:WinFactionGLA", "MainMenu.wnd:WinFactionGLASmall", "MainMenu.wnd:WinFactionGLAMedium",
+	"MainMenu.wnd:WinFactionChina", "MainMenu.wnd:WinFactionChinaSmall", "MainMenu.wnd:WinFactionChinaMedium",
+	"MainMenu.wnd:ButtonCampaignBack", "MainMenu.wnd:ButtonMissionBack", "MainMenu.wnd:ButtonDiffBack",
+	"MainMenu.wnd:StaticTextSelectDifficulty",
+};
+
+// what the rail shows and what it has opened
+enum RailList { RAIL_MAIN, RAIL_SOLO, RAIL_LOAD };
+enum RailPanel { PANEL_NONE, PANEL_CAMPAIGN, PANEL_MODS };
+enum RailSide { SIDE_USA, SIDE_GLA, SIDE_CHINA, SIDE_CHALLENGE };
+static Int railList = RAIL_MAIN;
+static Int railPanel = PANEL_NONE;
+static Int railSide = SIDE_USA;
+static Bool campaignTabs = FALSE;		// the side's original Generals campaign is installed
+static Bool generalsOpen = FALSE;		// its tab is the open one
+static Int missionCount = 0;
+static Int missionPicked = 0;
 
 static Bool buttonPushed = FALSE;
 static Bool isShuttingDown = FALSE;
 static Bool startGame = FALSE;
-// Was 210 client frames (7s at the menu's 30Hz cadence) of staring at the shell map
-// before the menu UI fades in. Retail hid most of that behind the Bink intro movies,
-// which this port stubs out, so the wait read as "the menu never comes". One second
-// keeps the fade choreography without the dead air.
-static Int	initialGadgetDelay = 30;
-
-enum
-{
-	SHOW_NONE = 0,
-	SHOW_TRAINING,
-	SHOW_USA,
-	SHOW_GLA,
-	SHOW_CHINA,
-	SHOW_SKIRMISH,
-	SHOW_FRAMES_LIMIT = 20
-};
-
-static Bool showFade = FALSE;
-static Int dropDown = DROPDOWN_NONE;
-static Int pendingDropDown = DROPDOWN_NONE;
-static AnimateWindowManager *localAnimateWindowManager = NULL;
-static Bool notShown = TRUE;
-static Bool FirstTimeRunningTheGame = TRUE;
-
-static Bool showLogo = FALSE;
-static Int  showFrames = 0;
-static Int  showSide = SHOW_NONE;
-static Bool logoIsShown = FALSE;
-static Bool justEntered = FALSE;
 static Bool launchChallengeMenu = FALSE;
-
-static Bool dontAllowTransitions = FALSE;
+static Bool FirstTimeRunningTheGame = TRUE;
 
 //Added by Saad
 void AcceptResolution();
@@ -254,162 +227,20 @@ void DeclineResolution();
 GameWindow *resAcceptMenu = NULL;
 extern DisplaySettings oldDispSettings, newDispSettings;
 extern Bool dispChanged;
-//static time_t timeStarted = 0, currentTime = 0;
-//
 
-void diffReverseSide( void );
+static void layOutMenu( void );
+
 void HandleCanceledDownload( Bool resetDropDown )
 {
 	buttonPushed = FALSE;
-	if (resetDropDown)
+	if( resetDropDown )
 	{
-		dropDownWindows[DROPDOWN_MAIN]->winHide(FALSE);
-		TheTransitionHandler->setGroup("MainMenuDefaultMenuLogoFade");
+		railList = RAIL_MAIN;
+		railPanel = PANEL_NONE;
+		layOutMenu();
 	}
 }
 
-//-------------------------------------------------------------------------------------------------
-/** This is called when a shutdown is complete for this menu */
-//-------------------------------------------------------------------------------------------------
-
-static void showSelectiveButtons( Int show )
-{
-	buttonUSARecentSave->winHide(!(show == SHOW_USA ));
-	buttonUSALoadGame->winHide(!(show == SHOW_USA ));
-	buttonGLARecentSave->winHide(!(show == SHOW_GLA ));
-	buttonGLALoadGame->winHide(!(show == SHOW_GLA ));
-	buttonChinaRecentSave->winHide(!(show == SHOW_CHINA ));
-	buttonChinaLoadGame->winHide(!(show == SHOW_CHINA ));
-}
-
-// Label the mission panel's buttons for the campaign just picked and flash the panel in.  Back moves
-// up under the campaign's last mission and the frame shrinks with it.  A button past the last
-// mission is greyed, blank and moved off the screen sideways rather than hidden, since the
-// transition that flashes the panel in would show it again; the transitions read every position as
-// they start, so all of this happens before the group is set.  Everything is worked out from where
-// the windows are now, because MainMenuInit runs again on this same layout when a screen pushed
-// over the menu pops: no mission button ever moves up or down, and Back's x is theirs.
-static void showMissionMenu( const char *group )
-{
-	// a Campaign.ini can leave a side's campaign out; setCampaign found none, and that side's panel
-	// comes up with Back alone
-	Campaign *campaign = TheCampaignManager->getCurrentCampaign();
-	Mission *mission = campaign ? campaign->getNextMission( NULL ) : NULL;
-	Int backX, backY;
-	buttonMissionBack->winGetPosition( &backX, &backY );
-	Int x, y[MISSION_BUTTONS + 1];
-	Int count = 0;
-	for( Int i = 0; i < MISSION_BUTTONS; ++i )
-	{
-		buttonMission[i]->winGetPosition( &x, &y[i] );
-		UnicodeString label;
-		if( mission )
-		{
-			label.format( TheGameText->fetch( "GUI:CampaignMission" ), i + 1 );
-			missionNames[i] = mission->m_name;
-			mission = campaign->getNextMission( mission );
-			++count;
-		}
-		else
-			missionNames[i].clear();
-		buttonMission[i]->winSetPosition( missionNames[i].isEmpty() ? TheDisplay->getWidth() * 2 : backX, y[i] );
-		GadgetButtonSetText( buttonMission[i], label );
-		buttonMission[i]->winEnable( !missionNames[i].isEmpty() );
-	}
-	// Back's slot under the last button is one step below it, the step the layout spaced them by
-	y[MISSION_BUTTONS] = 2 * y[MISSION_BUTTONS - 1] - y[MISSION_BUTTONS - 2];
-	buttonMissionBack->winSetPosition( backX, y[count] );
-	for( Int f = 0; f < 2; ++f )
-	{
-		Int w, h;
-		missionFrame[f]->winGetSize( &w, &h );
-		missionFrame[f]->winSetSize( w, h + y[count] - backY );
-	}
-	TheTransitionHandler->setGroup( group );
-}
-
-// The side's original Generals campaign is offered when Campaign.ini names one and its first
-// mission's map is installed.  Leaves the campaign manager on it, or on none, so the side's own
-// campaign is set after this.
-static Bool generalsCampaignInstalled( const char *campaign )
-{
-	TheCampaignManager->setCampaign( campaign );
-	Mission *first = TheCampaignManager->getCurrentMission();
-	return first && TheFileSystem->doesFileExist( first->m_mapName.str() );
-}
-
-// A mod's own MainMenu.wnd is retail's layout: no mission panel, no pick panel.
-static Bool missionPanelPresent( void )
-{
-	if( !buttonMissionBack || !missionFrame[0] || !missionFrame[1] )
-		return FALSE;
-	for( Int i = 0; i < MISSION_BUTTONS; ++i )
-		if( !buttonMission[i] )
-			return FALSE;
-	return TRUE;
-}
-
-// A side button's next panel: the pick panel when the side has both campaigns, else the mission
-// panel for Zero Hour's as before; on a layout without them, retail's difficulty panel.
-static void showCampaignOrMissionMenu( const char *pickGroup, const char *missionGroup, const char *difficultyGroup )
-{
-	if( !missionPanelPresent() )
-	{
-		campaignPickShown = FALSE;
-		TheTransitionHandler->setGroup( difficultyGroup );
-	}
-	else if( campaignPickShown && dropDownWindows[DROPDOWN_CAMPAIGN] )
-		TheTransitionHandler->setGroup( pickGroup );
-	else
-		showMissionMenu( missionGroup );
-}
-
-// The pick panel's Back: the side's way back to the single player menu, as the mission panel's.
-static void campaignReverseSide( void )
-{
-	switch (showSide) {
-	case SHOW_USA:
-		TheTransitionHandler->reverse("MainMenuCampaignMenuUSBack");
-		TheTransitionHandler->setGroup("MainMenuSinglePlayerUSAMenuFromDiff");
-		break;
-	case SHOW_GLA:
-		TheTransitionHandler->reverse("MainMenuCampaignMenuGLABack");
-		TheTransitionHandler->setGroup("MainMenuSinglePlayerGLAMenuFromDiff");
-		break;
-	case SHOW_CHINA:
-		TheTransitionHandler->reverse("MainMenuCampaignMenuChinaBack");
-		TheTransitionHandler->setGroup("MainMenuSinglePlayerChinaMenuFromDiff");
-		break;
-	}
-}
-
-static Int missionButtonIndex( Int controlID )
-{
-	for( Int m = 0; m < MISSION_BUTTONS; ++m )
-		if( controlID == buttonMissionID[m] )
-			return m;
-	return -1;
-}
-
-// The mission panel's Back: what EA's difficulty Back did, from the mission panel.
-static void missionReverseSide( void )
-{
-	switch (showSide) {
-	case SHOW_USA:
-		TheTransitionHandler->reverse("MainMenuMissionMenuUSBack");
-		TheTransitionHandler->setGroup("MainMenuSinglePlayerUSAMenuFromDiff");
-		break;
-	case SHOW_GLA:
-		TheTransitionHandler->reverse("MainMenuMissionMenuGLABack");
-		TheTransitionHandler->setGroup("MainMenuSinglePlayerGLAMenuFromDiff");
-		break;
-	case SHOW_CHINA:
-		TheTransitionHandler->reverse("MainMenuMissionMenuChinaBack");
-		TheTransitionHandler->setGroup("MainMenuSinglePlayerChinaMenuFromDiff");
-		break;
-	}
-}
- 
 static void quitCallback( void )
 {
 	buttonPushed = TRUE;
@@ -417,20 +248,6 @@ static void quitCallback( void )
 	TheShell->pop();
 	TheGameEngine->setQuitting( TRUE );
 
-  
-
-	//if (!TheGameLODManager->didMemPass())
-	{	//GIANT CRAPTACULAR HACK ALERT!!!!  On sytems with little memory, we skip all normal exit code
-//		//and let Windows clean up the mess.  This reduces exit times from minutes to seconds.
-//		//8-19-03. MW
-//		delete TheGameClient;
-//		_exit(EXIT_SUCCESS);
-
-//  THE CRAP IS NOW EVEN MORE TACULAR
-//  NOW WE PERSUADE THE MEMORYPOOLMANAGER TO RETURN STUPID FROM ITS FREE()
-//    if (TheMemoryPoolFactory) TheMemoryPoolFactory->prepareForMinSpecShutDown();
-
-	}
 	if (TheGameLogic->isInGame())
 		TheMessageStream->appendMessage( GameMessage::MSG_CLEAR_GAME_DATA );
 }
@@ -439,15 +256,15 @@ static void quitCallback( void )
 void setupGameStart(AsciiString mapName, GameDifficulty diff)
 {
 	TheCampaignManager->setGameDifficulty(diff);
+	buttonPushed = TRUE;
 
 	if (launchChallengeMenu)
 	{
 		if (TheChallengeGenerals)
 			TheChallengeGenerals->setCurrentDifficulty(diff);
-		
+
 		campaignSelected = TRUE;
 		TheShell->push( AsciiString("Menus/ChallengeMenu.wnd") );
-		TheTransitionHandler->reverse("MainMenuDifficultyMenuTraining");
 	}
 	else
 	{
@@ -460,14 +277,12 @@ void setupGameStart(AsciiString mapName, GameDifficulty diff)
 
 void prepareCampaignGame(GameDifficulty diff)
 {
-	dontAllowTransitions = TRUE;
 	OptionPreferences pref;
 	pref.setCampaignDifficulty(diff);
 	pref.write();
 	TheScriptEngine->setGlobalDifficulty(diff);
 
 	buttonPushed = FALSE;
-	TheTransitionHandler->reverse("MainMenuDifficultyMenuBack");
 	setupGameStart(TheCampaignManager->getCurrentMap(), diff );
 }
 
@@ -521,19 +336,15 @@ static void checkCDBeforeCampaign(GameDifficulty diff)
 	}
 }
 
-/// Skirmish, or the Mods question's answer: the skirmish room in that mode (SkirmishGameOptionsMenu.cpp)
+/// Skirmish, or a Mods card: the skirmish room in that mode (SkirmishGameOptionsMenu.cpp)
 static void enterSkirmishRoom( Int mode )
 {
-	if(campaignSelected || dontAllowTransitions)
+	if( campaignSelected || buttonPushed )
 		return;
 	skirmishDirectStrike = mode == HOST_MODE_DIRECT_STRIKE;
 	skirmishApocalypse = mode == HOST_MODE_APOCALYPSE;
 	buttonPushed = TRUE;
 	campaignSelected = TRUE;
-	dropDownWindows[DROPDOWN_SINGLE]->winHide(FALSE);
-	TheTransitionHandler->remove("MainMenuFactionSkirmish");
-
-	TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBackSkirmish");
 #ifdef _CAMPEA_DEMO
 	TheCampaignManager->setCampaign( "MD_CAMPEA_DEMO" );
 	checkCDBeforeCampaign(DIFFICULTY_NORMAL);
@@ -546,7 +357,7 @@ static void enterSkirmishRoom( Int mode )
 static void shutdownComplete( WindowLayout *layout )
 {
 	isShuttingDown = FALSE;
-	
+
 	// hide the layout
 	layout->hide( TRUE );
 
@@ -555,95 +366,995 @@ static void shutdownComplete( WindowLayout *layout )
 
 }  // end if
 
+//=================================================================================================
+// The rail: where every window stands, and how each is drawn
+//=================================================================================================
 
+using MainMenuLayout::Rect;
 
-/*
-static void TimetToFileTime( time_t t, LPFILETIME pft )
+/// a 1080 length on this screen, by its height
+static Int len( Real at1080 )
 {
-	LONGLONG ll = Int32x32To64(t, 10000000) + 116444736000000000;
-	pft->dwLowDateTime = (DWORD) ll;
-	pft->dwHighDateTime = ll >>32;
-}
-*/
-
-void initialHide( void )
-{
-GameWindow *win = NULL;
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionGLA"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionChina"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionUS"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinGrowMarker"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionTraining"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionTrainingSmall"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionTrainingMedium"));
-	if(win)
-		win->winHide(TRUE);
-
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionSkirmish"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionSkirmishSmall"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionSkirmishMedium"));
-	if(win)
-		win->winHide(TRUE);
-
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionUS"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionUSSmall"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionUSMedium"));
-	if(win)
-		win->winHide(TRUE);
-
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionGLA"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionGLASmall"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionGLAMedium"));
-	if(win)
-		win->winHide(TRUE);
-
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionChina"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionChinaSmall"));
-	if(win)
-		win->winHide(TRUE);
-	win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionChinaMedium"));
-	if(win)
-		win->winHide(TRUE);
-
+	return MainMenuLayout::length( at1080, TheDisplay->getHeight() );
 }
 
-// EA held the buttons back on the first entry until the mouse moved 20 pixels or a key went down.
-// They now come up with the menu.
-static void revealMainMenu( void )
+static IRegion2D onScreen( const Rect &r1080 )
 {
-	initialGadgetDelay = 1;
-	dropDownWindows[DROPDOWN_MAIN]->winHide(FALSE);
-	TheTransitionHandler->setGroup("MainMenuFade", TRUE);
-	TheTransitionHandler->setGroup("MainMenuDefaultMenu");
-	TheMouse->setVisibility(TRUE);
-	notShown = FALSE;
+	const Rect r = MainMenuLayout::onScreen( r1080, TheDisplay->getWidth(), TheDisplay->getHeight() );
+	IRegion2D region;
+	region.lo.x = r.left;
+	region.lo.y = r.top;
+	region.hi.x = r.right;
+	region.hi.y = r.bottom;
+	return region;
 }
+
+static IRegion2D windowRegion( GameWindow *window )
+{
+	IRegion2D r;
+	Int w, h;
+	window->winGetScreenPosition( &r.lo.x, &r.lo.y );
+	window->winGetSize( &w, &h );
+	r.hi.x = r.lo.x + w;
+	r.hi.y = r.lo.y + h;
+	return r;
+}
+
+/** Arial at a size given at 1080, on the menu's scale (the height's), never under the menu
+	* language's floor.  UIStyle::menuFont scales by the smaller axis, which at 4:3 would set the
+	* rail's words a quarter smaller than its boxes. */
+static GameFont *railFont( Int px1080, Bool bold )
+{
+	const Int em = max( (Int)UIStyle::MENU_TEXT_FLOOR, len( (Real)px1080 ) );
+	return TheFontLibrary->getFont( AsciiString( "Arial" ), UIStyle::menuFontPoints( em ), bold );
+}
+
+/// put window on a 1080 rect, its parent already placed
+static void place( GameWindow *window, const Rect &r1080 )
+{
+	if( window == NULL )
+		return;
+	const IRegion2D r = onScreen( r1080 );
+	Int px = 0, py = 0;
+	if( window->winGetParent() )
+		window->winGetParent()->winGetScreenPosition( &px, &py );
+	window->winSetPosition( r.lo.x - px, r.lo.y - py );
+	window->winSetSize( r.hi.x - r.lo.x, r.hi.y - r.lo.y );
+}
+
+static void placeFrame( Int frame, const Rect &r1080 )
+{
+	place( frames[ frame ][ 0 ], r1080 );
+	place( frames[ frame ][ 1 ], r1080 );
+}
+
+static void showFrame( Int frame, Bool show )
+{
+	for( Int i = 0; i < 2; ++i )
+		if( frames[ frame ][ i ] )
+			frames[ frame ][ i ]->winHide( !show );
+}
+
+/// a window and its frames all shown
+static Bool isShown( GameWindow *window )
+{
+	for( ; window; window = window->winGetParent() )
+		if( window->winIsHidden() )
+			return FALSE;
+	return TRUE;
+}
+
+/// one line of text drawn by the menu itself; made on first use, freed with the menu
+static DisplayString *menuText( DisplayString *&words, const UnicodeString &text, GameFont *font )
+{
+	if( words == NULL )
+		words = TheDisplayStringManager->newDisplayString();
+	if( words->getFont() != font )
+		words->setFont( font );
+	if( words->getText().compare( text ) != 0 )
+		words->setText( text );
+	return words;
+}
+
+static void freeText( DisplayString *&words )
+{
+	if( words )
+		TheDisplayStringManager->freeDisplayString( words );
+	words = NULL;
+}
+
+static DisplayString *textFamily = NULL;
+static DisplayString *textWordmark[ 2 ] = { NULL, NULL };
+static DisplayString *textCaption = NULL;
+static DisplayString *textPanelTitle = NULL;
+static DisplayString *textMissionLabel = NULL;
+static DisplayString *textDifficultyLabel = NULL;
+static DisplayString *textTip = NULL;
+static DisplayString *textCard[ 2 ][ 3 ] = { { NULL, NULL, NULL }, { NULL, NULL, NULL } };
+
+static void freeMenuTexts( void )
+{
+	freeText( textFamily );
+	freeText( textWordmark[ 0 ] );
+	freeText( textWordmark[ 1 ] );
+	freeText( textCaption );
+	freeText( textPanelTitle );
+	freeText( textMissionLabel );
+	freeText( textDifficultyLabel );
+	freeText( textTip );
+	for( Int c = 0; c < 2; ++c )
+		for( Int i = 0; i < 3; ++i )
+			freeText( textCard[ c ][ i ] );
+}
+
+static Color shadowColor( void )
+{
+	return GameMakeColor( 0, 0, 0, 160 );
+}
+
+/// every button the menu draws and the tooltip each carries (Tools/mainmenu_layout.py TOOLTIPS)
+struct MenuButton
+{
+	GameWindow **window;
+	const char *tip;
+	Bool more;				///< opens a list or a panel: a chevron at its right
+	Bool onRail;			///< a rail button, else a panel's
+};
+static const MenuButton MENU_BUTTONS[] =
+{
+	{ &buttonSinglePlayer, "TOOLTIP:MainMenuSolo", TRUE, TRUE },
+	{ &buttonMultiPlayer, "TOOLTIP:MainMenuMulti", FALSE, TRUE },
+	{ &buttonOnline, "TOOLTIP:MainMenuOnline", FALSE, TRUE },
+	{ &buttonLoadReplay, "TOOLTIP:MainMenuLoad", TRUE, TRUE },
+	{ &buttonOptions, "TOOLTIP:MainMenuOptions", FALSE, TRUE },
+	{ &buttonCredits, "TOOLTIP:MainMenuCredits", FALSE, TRUE },
+	{ &buttonExit, "TOOLTIP:MainMenuExit", FALSE, TRUE },
+	{ &buttonUSA, "TOOLTIP:MainMenuUSA", TRUE, TRUE },
+	{ &buttonGLA, "TOOLTIP:MainMenuGLA", TRUE, TRUE },
+	{ &buttonChina, "TOOLTIP:MainMenuChina", TRUE, TRUE },
+	{ &buttonChallenge, "TOOLTIP:MainMenuChallenge", TRUE, TRUE },
+	{ &buttonSkirmish, "TOOLTIP:MainMenuSkirmish", FALSE, TRUE },
+	{ &buttonMods, "TOOLTIP:MainMenuMods", TRUE, TRUE },
+	{ &buttonSingleBack, "TOOLTIP:MainMenuBack", FALSE, TRUE },
+	{ &buttonLoad, "TOOLTIP:MainMenuLoadGame", FALSE, TRUE },
+	{ &buttonReplay, "TOOLTIP:MainMenuReplay", FALSE, TRUE },
+	{ &buttonLoadReplayBack, "TOOLTIP:MainMenuBack", FALSE, TRUE },
+	{ &buttonCampaignGenerals, "TOOLTIP:MainMenuGenerals", FALSE, FALSE },
+	{ &buttonCampaignZH, "TOOLTIP:MainMenuZH", FALSE, FALSE },
+	{ &buttonMission[ 0 ], "TOOLTIP:MainMenuMission", FALSE, FALSE },
+	{ &buttonMission[ 1 ], "TOOLTIP:MainMenuMission", FALSE, FALSE },
+	{ &buttonMission[ 2 ], "TOOLTIP:MainMenuMission", FALSE, FALSE },
+	{ &buttonMission[ 3 ], "TOOLTIP:MainMenuMission", FALSE, FALSE },
+	{ &buttonMission[ 4 ], "TOOLTIP:MainMenuMission", FALSE, FALSE },
+	{ &buttonMission[ 5 ], "TOOLTIP:MainMenuMission", FALSE, FALSE },
+	{ &buttonMission[ 6 ], "TOOLTIP:MainMenuMission", FALSE, FALSE },
+	{ &buttonEasy, "TOOLTIP:MainMenuEasy", FALSE, FALSE },
+	{ &buttonMedium, "TOOLTIP:MainMenuMedium", FALSE, FALSE },
+	{ &buttonHard, "TOOLTIP:MainMenuHard", FALSE, FALSE },
+	{ &buttonModeDirectStrike, "TOOLTIP:MainMenuMods", FALSE, FALSE },
+	{ &buttonModeApocalypse, "TOOLTIP:MainMenuMods", FALSE, FALSE },
+};
+
+static const MenuButton *menuButton( GameWindow *window )
+{
+	for( Int i = 0; i < (Int)ARRAY_SIZE( MENU_BUTTONS ); ++i )
+		if( window && *MENU_BUTTONS[ i ].window == window )
+			return &MENU_BUTTONS[ i ];
+	return NULL;
+}
+
+/// the rail's buttons in the open list, the leaving one last
+static Int railButtons( GameWindow *list[ 8 ] )
+{
+	Int n = 0;
+	if( railList == RAIL_SOLO )
+	{
+		GameWindow *solo[] = { buttonUSA, buttonGLA, buttonChina, buttonChallenge, buttonSkirmish, buttonMods, buttonSingleBack };
+		for( Int i = 0; i < (Int)ARRAY_SIZE( solo ); ++i )
+			list[ n++ ] = solo[ i ];
+	}
+	else if( railList == RAIL_LOAD )
+	{
+		list[ n++ ] = buttonLoad;
+		list[ n++ ] = buttonReplay;
+		list[ n++ ] = buttonLoadReplayBack;
+	}
+	else
+	{
+		list[ n++ ] = buttonSinglePlayer;
+		list[ n++ ] = buttonMultiPlayer;
+		// only a game the launcher started on its online part has a service to dial
+		if( buttonOnline && OnlineIsEnabled() )
+			list[ n++ ] = buttonOnline;
+		list[ n++ ] = buttonLoadReplay;
+		list[ n++ ] = buttonOptions;
+		list[ n++ ] = buttonCredits;
+		list[ n++ ] = buttonExit;
+	}
+	return n;
+}
+
+static Bool railCaption( void )
+{
+	return railList != RAIL_MAIN;
+}
+
+static Rect railRect( void )
+{
+	GameWindow *list[ 8 ];
+	return MainMenuLayout::railRect( railCaption(), railButtons( list ) - 1 );
+}
+
+/// the lit key Enter presses on the rail; Medium and Direct Strike light themselves in their panels
+static GameWindow *railPrimary( void )
+{
+	if( railList == RAIL_MAIN )
+		return buttonMultiPlayer;
+	if( railList == RAIL_LOAD )
+		return buttonLoad;
+	return NULL;
+}
+
+/// what Enter presses: the rail's lit key, or the open panel's
+static GameWindow *enterButton( void )
+{
+	if( railPanel == PANEL_CAMPAIGN )
+		return buttonMedium;
+	if( railPanel == PANEL_MODS )
+		return buttonModeDirectStrike;
+	return railPrimary();
+}
+
+/// the rail button whose panel is open, green
+static GameWindow *railOpen( void )
+{
+	if( railPanel == PANEL_MODS )
+		return buttonMods;
+	if( railPanel != PANEL_CAMPAIGN )
+		return NULL;
+	GameWindow *sides[] = { buttonUSA, buttonGLA, buttonChina, buttonChallenge };
+	return sides[ railSide ];
+}
+
+static MainMenuLayout::CampaignPanel campaignPanel( void )
+{
+	const Bool challenge = railSide == SIDE_CHALLENGE;
+	return MainMenuLayout::campaignPanel( campaignTabs && !challenge, !challenge );
+}
+
+/// the open panel on the board, FALSE with none
+static Bool panelRect( Rect &r )
+{
+	if( railPanel == PANEL_CAMPAIGN )
+	{
+		r = campaignPanel().panel;
+		return TRUE;
+	}
+	if( railPanel == PANEL_MODS )
+	{
+		r = MainMenuLayout::modsPanel( railRect().bottom );
+		return TRUE;
+	}
+	return FALSE;
+}
+
+/// every window where the rail and its panel put it, the rest hidden
+static void layOutMenu( void )
+{
+	if( parentMainMenu == NULL )
+		return;
+	for( Int i = 0; i < (Int)ARRAY_SIZE( RETIRED_WINDOWS ); ++i )
+	{
+		GameWindow *win = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( RETIRED_WINDOWS[ i ] ) );
+		if( win )
+			win->winHide( TRUE );
+	}
+	for( Int f = 0; f < FRAME_COUNT; ++f )
+		showFrame( f, FALSE );
+	if( buttonOnline )
+		buttonOnline->winHide( TRUE );
+
+	// the rail
+	const Int railFrame = railList == RAIL_SOLO ? FRAME_SOLO : railList == RAIL_LOAD ? FRAME_LOAD : FRAME_MAIN;
+	GameWindow *list[ 8 ];
+	const Int count = railButtons( list );
+	placeFrame( railFrame, railRect() );
+	showFrame( railFrame, TRUE );
+	for( Int b = 0; b < count; ++b )
+	{
+		place( list[ b ], MainMenuLayout::railButton( railCaption(), b, count - 1 ) );
+		if( list[ b ] )
+			list[ b ]->winHide( FALSE );
+	}
+	if( labelVersion )
+	{
+		place( labelVersion, MainMenuLayout::rect( MainMenuLayout::CONTENT_RIGHT - 240, MainMenuLayout::FAMILY_TOP,
+			MainMenuLayout::CONTENT_RIGHT, MainMenuLayout::FAMILY_TOP + 18 ) );
+		labelVersion->winHide( FALSE );
+	}
+
+	if( railPanel == PANEL_CAMPAIGN )
+	{
+		const MainMenuLayout::CampaignPanel p = campaignPanel();
+		const Int left = p.panel.left + MainMenuLayout::PANEL_PAD, right = p.panel.right - MainMenuLayout::PANEL_PAD;
+		if( p.tabsTop >= 0 )
+		{
+			placeFrame( FRAME_TABS, MainMenuLayout::rect( left, p.tabsTop, right, p.tabsTop + MainMenuLayout::TAB_HEIGHT ) );
+			showFrame( FRAME_TABS, TRUE );
+			place( buttonCampaignGenerals, MainMenuLayout::campaignTab( 0, p.tabsTop ) );
+			place( buttonCampaignZH, MainMenuLayout::campaignTab( 1, p.tabsTop ) );
+		}
+		if( p.tilesTop >= 0 )
+		{
+			placeFrame( FRAME_TILES, MainMenuLayout::rect( left, p.tilesTop, right, p.tilesTop + MainMenuLayout::TILE_HEIGHT ) );
+			showFrame( FRAME_TILES, TRUE );
+			for( Int m = 0; m < MISSION_BUTTONS; ++m )
+			{
+				if( buttonMission[ m ] == NULL )
+					continue;
+				buttonMission[ m ]->winHide( m >= missionCount );
+				if( m < missionCount )
+					place( buttonMission[ m ], MainMenuLayout::missionTile( m, missionCount, p.tilesTop ) );
+			}
+		}
+		placeFrame( FRAME_KEYS, MainMenuLayout::rect( left, p.keysTop, right, p.keysTop + MainMenuLayout::BUTTON_HEIGHT ) );
+		showFrame( FRAME_KEYS, TRUE );
+		place( buttonEasy, MainMenuLayout::difficultyKey( 0, p.keysTop ) );
+		place( buttonMedium, MainMenuLayout::difficultyKey( 1, p.keysTop ) );
+		place( buttonHard, MainMenuLayout::difficultyKey( 2, p.keysTop ) );
+	}
+	else if( railPanel == PANEL_MODS )
+	{
+		const Int foot = railRect().bottom;
+		const Rect a = MainMenuLayout::modeCard( 0, foot ), b = MainMenuLayout::modeCard( 1, foot );
+		placeFrame( FRAME_MODS, MainMenuLayout::rect( a.left, a.top, b.right, b.bottom ) );
+		showFrame( FRAME_MODS, TRUE );
+		place( buttonModeDirectStrike, a );
+		place( buttonModeApocalypse, b );
+	}
+}
+
+/// the campaign the manager is on, its missions into the tiles; the first one picked
+static void loadMissions( void )
+{
+	Campaign *campaign = TheCampaignManager->getCurrentCampaign();
+	Mission *mission = campaign ? campaign->getNextMission( NULL ) : NULL;
+	missionCount = 0;
+	for( Int i = 0; i < MISSION_BUTTONS; ++i )
+	{
+		missionNames[ i ].clear();
+		if( mission )
+		{
+			missionNames[ i ] = mission->m_name;
+			mission = campaign->getNextMission( mission );
+			missionCount = i + 1;
+		}
+	}
+	missionPicked = 0;
+}
+
+/// The side's original Generals campaign is offered when Campaign.ini names one and its first
+/// mission's map is installed.  Leaves the campaign manager on it, or on none.
+static Bool generalsCampaignInstalled( const char *campaign )
+{
+	TheCampaignManager->setCampaign( campaign );
+	Mission *first = TheCampaignManager->getCurrentMission();
+	return first && TheFileSystem->doesFileExist( first->m_mapName.str() );
+}
+
+static const char *const ZERO_HOUR_CAMPAIGNS[] = { "USA", "GLA", "China" };
+static const char *const GENERALS_CAMPAIGNS[] = { "GEN_USA", "GEN_GLA", "GEN_CHINA" };
+
+/// a side's panel: its Zero Hour campaign open, the original one on a tab when installed
+static void openCampaign( Int side )
+{
+	railSide = side;
+	railPanel = PANEL_CAMPAIGN;
+	generalsOpen = FALSE;
+	if( side == SIDE_CHALLENGE )
+	{
+		campaignTabs = FALSE;
+		TheCampaignManager->setCampaign( AsciiString::TheEmptyString );
+		missionCount = 0;
+	}
+	else
+	{
+		campaignTabs = generalsCampaignInstalled( GENERALS_CAMPAIGNS[ side ] );
+		TheCampaignManager->setCampaign( ZERO_HOUR_CAMPAIGNS[ side ] );
+#ifdef _CAMPEA_DEMO
+		static const char *const DEMO[] = { "MD_USA_1_DEMO", "MD_USA_2_DEMO", "MD_GLA_3_DEMO" };
+		TheCampaignManager->setCampaign( DEMO[ side ] );
+#endif
+		loadMissions();
+	}
+	layOutMenu();
+}
+
+static void closePanel( void )
+{
+	if( railPanel == PANEL_CAMPAIGN )
+		TheCampaignManager->setCampaign( AsciiString::TheEmptyString );
+	railPanel = PANEL_NONE;
+	layOutMenu();
+}
+
+static void showList( Int list )
+{
+	railList = list;
+	railPanel = PANEL_NONE;
+	layOutMenu();
+}
+
+/// a difficulty key: the picked mission, or Generals' Challenge's menu, at that difficulty
+static void startAtDifficulty( GameDifficulty diff )
+{
+	if( buttonPushed )
+		return;
+	launchChallengeMenu = railSide == SIDE_CHALLENGE;
+	if( !launchChallengeMenu )
+	{
+		Campaign *campaign = TheCampaignManager->getCurrentCampaign();
+		if( campaign == NULL || missionPicked >= missionCount )
+			return;
+		// the campaign starts here and carries on from it as it would have; every campaign mission
+		// starts at rank 0 whatever came before (CampaignManager::getRankPoints)
+		TheCampaignManager->setCampaignAndMission( campaign->m_name, missionNames[ missionPicked ] );
+	}
+	checkCDBeforeCampaign( diff );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Drawing
+//-------------------------------------------------------------------------------------------------
+
+static void drawNothing( GameWindow *, WinInstanceData * )
+{
+}
+
+static void fillRegion( const IRegion2D &r, Color color )
+{
+	TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, color );
+}
+
+static void outlineRegion( const IRegion2D &r, Color color )
+{
+	TheDisplay->drawOpenRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, 1.0f, color );
+}
+
+/** The world round the rail darkened as frame A's dim does, but only near it: strongest against the
+	* rail, gone 200 px out, so the shell map stays the open area's picture.  Ten rings. */
+static void dimNear( const IRegion2D &r )
+{
+	const Int ring = max( 1, len( 20.0f ) );
+	const Int w = TheDisplay->getWidth(), h = TheDisplay->getHeight();
+	for( Int i = 0; i < 10; ++i )
+	{
+		const Real fade = 1.0f - ( i + 0.5f ) / 10.0f;
+		const Color dim = GameMakeColor( 0, 0, 0, (Int)( 120.0f * fade * sqrtf( fade ) ) );
+		const Int in = i * ring, out = ( i + 1 ) * ring;
+		const Int x0 = max( 0, r.lo.x - out ), x1 = min( w, r.hi.x + out );
+		const Int y0 = max( 0, r.lo.y - out ), y1 = min( h, r.hi.y + out );
+		const Int ix0 = r.lo.x - in, ix1 = r.hi.x + in, iy0 = max( 0, r.lo.y - in ), iy1 = min( h, r.hi.y + in );
+		if( iy0 > y0 )
+			TheDisplay->drawFillRect( x0, y0, x1 - x0, iy0 - y0, dim );
+		if( y1 > iy1 )
+			TheDisplay->drawFillRect( x0, iy1, x1 - x0, y1 - iy1, dim );
+		if( ix0 > x0 )
+			TheDisplay->drawFillRect( x0, iy0, ix0 - x0, iy1 - iy0, dim );
+		if( x1 > ix1 )
+			TheDisplay->drawFillRect( ix1, iy0, x1 - ix1, iy1 - iy0, dim );
+	}
+}
+
+/** Frame A's measured edge round the rail: UIStyle::frameA without its dim of the whole world
+	* (dimNear instead), on the rail's scale.  ponytail: a copy of frameA's ticks and corners; one
+	* call once UIStyle can draw frame A without the dim. */
+static void railFrame( const IRegion2D &panel )
+{
+	const Int x0 = panel.lo.x, y0 = panel.lo.y, x1 = panel.hi.x, y1 = panel.hi.y;
+	UIStyle::litEdge( panel, UIStyle::EDGE );
+	for( Int pass = 0; pass < 2; ++pass )
+	{
+		for( Int i = 0; ; i++ )
+		{
+			const Int step = len( (Real)( UIStyle::FRAME_TICK_STEP * i ) );
+			const Int at = ( pass == 0 ? x0 : y0 ) + step;
+			if( i > 0 && at > ( pass == 0 ? x1 : y1 ) )
+				break;
+			const Int tick = UIStyle::frameTickLength( i );
+			const Int n = len( (Real)tick );
+			const Color color = tick == 14 ? UIStyle::withAlpha( UIStyle::EDGE, 230 )
+				: tick == 8 ? UIStyle::withAlpha( UIStyle::EDGE, 190 ) : UIStyle::withAlpha( UIStyle::FRAME, 200 );
+			if( pass == 0 )
+			{
+				TheDisplay->drawFillRect( at, y0 - n, 1, n, color );
+				TheDisplay->drawFillRect( at, y1, 1, n, color );
+			}
+			else
+			{
+				TheDisplay->drawFillRect( x0 - n, at, n, 1, color );
+				TheDisplay->drawFillRect( x1, at, n, 1, color );
+			}
+		}
+	}
+	const Int r = len( (Real)UIStyle::FRAME_RETURN );
+	const Int arm = 3 * r;
+	UIStyle::litLine( x0 - r, y0 - r, arm, 1, UIStyle::EDGE );
+	UIStyle::litLine( x0 - r, y0 - r, 1, arm, UIStyle::EDGE );
+	UIStyle::litLine( x1 + r - arm, y0 - r, arm, 1, UIStyle::EDGE );
+	UIStyle::litLine( x1 + r - 1, y0 - r, 1, arm, UIStyle::EDGE );
+	UIStyle::litLine( x0 - r, y1 + r - 1, arm, 1, UIStyle::EDGE );
+	UIStyle::litLine( x0 - r, y1 + r - arm, 1, arm, UIStyle::EDGE );
+	UIStyle::litLine( x1 + r - arm, y1 + r - 1, arm, 1, UIStyle::EDGE );
+	UIStyle::litLine( x1 + r - 1, y1 + r - arm, 1, arm, UIStyle::EDGE );
+	UIStyle::litLine( x0 + len( 32.0f ), y0 - len( 2.0f ), len( 200.0f ), len( 3.0f ), UIStyle::EDGE_LIT );
+}
+
+/// a lit rule two pixels at 1080, across a 1080 span
+static void rule( Int left, Int right, Int y, Color color )
+{
+	const IRegion2D r = onScreen( MainMenuLayout::rect( left, y, right, y + 2 ) );
+	UIStyle::litLine( r.lo.x, r.lo.y, r.hi.x - r.lo.x, max( 1, r.hi.y - r.lo.y ), color );
+}
+
+/// words at a 1080 point, left aligned, centred on the row of height
+static void drawWords( DisplayString *words, Int x1080, Int top1080, Int height1080, Color color )
+{
+	const IRegion2D r = onScreen( MainMenuLayout::rect( x1080, top1080, x1080, top1080 + height1080 ) );
+	Int w, h;
+	words->getSize( &w, &h );
+	words->draw( r.lo.x, ( r.lo.y + r.hi.y - h ) / 2, color, shadowColor() );
+}
+
+/// a panel beside the rail: its glass, its lit edge (no ticks; the rail carries the scale), its
+/// title and the rule under it
+static void drawPanel( const Rect &panel1080, const UnicodeString &title )
+{
+	const IRegion2D panel = onScreen( panel1080 );
+	UIStyle::glass( panel, 168 );
+	UIStyle::litEdge( panel, UIStyle::withAlpha( UIStyle::EDGE, 200 ) );
+	const Int left = panel1080.left + MainMenuLayout::PANEL_PAD, right = panel1080.right - MainMenuLayout::PANEL_PAD;
+	drawWords( menuText( textPanelTitle, UIStyle::capitals( title ), railFont( UIStyle::MENU_TEXT_TITLE, TRUE ) ),
+		left, panel1080.top + MainMenuLayout::PANEL_PAD, 50, UIStyle::INK );
+	rule( left, right, panel1080.top + MainMenuLayout::PANEL_PAD + MainMenuLayout::PANEL_TITLE_STEP, UIStyle::FRAME );
+}
+
+/// the hovered button's one line: left of the rail (or of the panel it opened) for a rail button,
+/// under the panel for a panel's
+static void drawTooltip( void )
+{
+	const MenuButton *hovered = NULL;
+	GameWindow *window = NULL;
+	for( Int i = 0; i < (Int)ARRAY_SIZE( MENU_BUTTONS ) && hovered == NULL; ++i )
+	{
+		GameWindow *each = *MENU_BUTTONS[ i ].window;
+		if( each && BitTest( each->winGetInstanceData()->getState(), WIN_STATE_HILITED ) && isShown( each ) )
+		{
+			hovered = &MENU_BUTTONS[ i ];
+			window = each;
+		}
+	}
+	if( hovered == NULL || !UIStyle::hasText( hovered->tip ) )
+		return;
+	DisplayString *words = menuText( textTip, TheGameText->fetch( hovered->tip ), railFont( UIStyle::MENU_TEXT_BODY, FALSE ) );
+	Int tw, th;
+	words->getSize( &tw, &th );
+	const IRegion2D button = windowRegion( window );
+	const Int w = tw + len( 36.0f ), h = len( (Real)MainMenuLayout::TOOLTIP_HEIGHT );
+	Rect panel1080;
+	const Bool panelOpen = panelRect( panel1080 );
+	IRegion2D card;
+	if( hovered->onRail )
+	{
+		const Int anchor = panelOpen ? onScreen( panel1080 ).lo.x : onScreen( railRect() ).lo.x;
+		card.hi.x = anchor - len( (Real)MainMenuLayout::TOOLTIP_OFF );
+		card.lo.x = card.hi.x - w;
+		card.lo.y = ( button.lo.y + button.hi.y - h ) / 2;
+	}
+	else
+	{
+		const IRegion2D panel = onScreen( panel1080 );
+		card.lo.x = max( 0, min( button.lo.x, panel.hi.x - w ) );
+		card.lo.y = panel.hi.y + len( (Real)MainMenuLayout::TOOLTIP_UNDER );
+	}
+	card.hi.x = card.lo.x + w;
+	card.hi.y = card.lo.y + h;
+	UIStyle::glass( card, 200 );
+	outlineRegion( card, UIStyle::EDGE );
+	words->draw( card.lo.x + len( 18.0f ), ( card.lo.y + card.hi.y - th ) / 2, UIStyle::INK, shadowColor() );
+}
+
+/// MainMenuParent's draw: everything that is not a button, behind the buttons
+static void drawMenu( GameWindow *, WinInstanceData * )
+{
+	using namespace MainMenuLayout;
+	const Rect rail1080 = railRect();
+	const IRegion2D rail = onScreen( rail1080 );
+	dimNear( rail );
+	UIStyle::glass( rail, 168 );
+	railFrame( rail );
+
+	// the game's name: the family line (the version is LabelVersion at its right), the wordmark
+	drawWords( menuText( textFamily, UnicodeString( u"COMMAND & CONQUER GENERALS" ), railFont( UIStyle::MENU_TEXT_LABEL, TRUE ) ),
+		CONTENT_LEFT, FAMILY_TOP, 18, UIStyle::MUTED );
+	GameFont *wordmarkFont = railFont( 50, TRUE );
+	menuText( textWordmark[ 0 ], UnicodeString( u"Zero Hour" ), wordmarkFont );
+	menuText( textWordmark[ 1 ], UnicodeString( u" Reforged" ), wordmarkFont );
+	Int first, second, height;
+	textWordmark[ 0 ]->getSize( &first, &height );
+	textWordmark[ 1 ]->getSize( &second, &height );
+	const IRegion2D mark = onScreen( rect( CONTENT_LEFT - 2, WORDMARK_TOP, CONTENT_RIGHT, WORDMARK_TOP + 60 ) );
+	UIStyle::wordmark( textWordmark, mark.lo.x + first + second, ( mark.lo.y + mark.hi.y - height ) / 2 );
+	rule( CONTENT_LEFT, CONTENT_RIGHT, HEADER_RULE, UIStyle::FRAME );
+
+	if( railCaption() )
+	{
+		const char *key = railList == RAIL_SOLO ? "GUI:SinglePlayer" : "GUI:ReplayMenu";
+		drawWords( menuText( textCaption, UIStyle::capitals( TheGameText->fetch( key ) ), railFont( UIStyle::MENU_TEXT_LABEL, TRUE ) ),
+			CONTENT_LEFT, LIST_TOP, 20, UIStyle::ACTIVE );
+	}
+	// the faint rule over the leaving button
+	GameWindow *list[ 8 ];
+	const Int count = railButtons( list );
+	const Int split = railButton( railCaption(), count - 1, count - 1 ).top - SPLIT / 2;
+	const IRegion2D faint = onScreen( rect( CONTENT_LEFT, split, CONTENT_RIGHT, split ) );
+	TheDisplay->drawFillRect( faint.lo.x, faint.lo.y, faint.hi.x - faint.lo.x, 1, UIStyle::withAlpha( UIStyle::FRAME, 110 ) );
+
+	Rect panel1080;
+	if( panelRect( panel1080 ) )
+	{
+		if( railPanel == PANEL_CAMPAIGN )
+		{
+			GameWindow *open = railOpen();
+			drawPanel( panel1080, open ? open->winGetText() : UnicodeString::TheEmptyString );
+			const CampaignPanel p = campaignPanel();
+			const Int left = panel1080.left + PANEL_PAD;
+			if( p.missionLabel >= 0 )
+				drawWords( menuText( textMissionLabel, UIStyle::capitals( TheGameText->fetch( "GUI:MainMenuMission" ) ),
+					railFont( UIStyle::MENU_TEXT_LABEL, TRUE ) ), left, p.missionLabel, 20, UIStyle::MUTED );
+			drawWords( menuText( textDifficultyLabel, UIStyle::capitals( TheGameText->fetch( "GUI:MainMenuDifficulty" ) ),
+				railFont( UIStyle::MENU_TEXT_LABEL, TRUE ) ), left, p.difficultyLabel, 20, UIStyle::MUTED );
+		}
+		else
+			drawPanel( panel1080, TheGameText->fetch( "GUI:Mods" ) );
+
+		// the open button's green line, run across to the panel it opened
+		GameWindow *open = railOpen();
+		if( open )
+		{
+			const IRegion2D b = windowRegion( open );
+			const IRegion2D panel = onScreen( panel1080 );
+			const Int y = ( b.lo.y + b.hi.y ) / 2 - 1;
+			UIStyle::litLine( panel.hi.x, y, b.lo.x - panel.hi.x, max( 1, len( 2.0f ) ), UIStyle::ACTIVE );
+		}
+	}
+	drawTooltip();
+}
+
+/** A rail button, menu_button in the design: black over the glass and a FRAME edge; the lit one an
+	* EDGE wash in a cyan lit edge; the open one green with a green bar; under the pointer a white lift
+	* and a white bar.  Its word left aligned in 22 px bold capitals, a chevron when it opens more. */
+static void drawRailButton( GameWindow *window, WinInstanceData *instData )
+{
+	const IRegion2D r = windowRegion( window );
+	const MenuButton *entry = menuButton( window );
+	const Bool enabled = BitTest( window->winGetStatus(), WIN_STATUS_ENABLED );
+	const Bool hover = BitTest( instData->getState(), WIN_STATE_HILITED );
+	const Bool pressed = BitTest( instData->getState(), WIN_STATE_SELECTED );
+	const Bool primary = window == railPrimary();
+	const Bool open = window == railOpen();
+	const Int w = r.hi.x - r.lo.x, h = r.hi.y - r.lo.y;
+	const Int bar = max( 2, len( 3.0f ) );
+	fillRegion( r, GameMakeColor( 0, 0, 0, 150 ) );
+	Color ink = UIStyle::INK;
+	if( !enabled )
+	{
+		outlineRegion( r, UIStyle::FRAME );
+		ink = UIStyle::MUTED;
+	}
+	else if( primary )
+	{
+		fillRegion( r, UIStyle::withAlpha( UIStyle::EDGE, pressed ? 110 : 60 ) );
+		const Int line = max( 1, len( 2.0f ) );
+		UIStyle::litLine( r.lo.x, r.lo.y, w, line, UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.lo.x, r.hi.y - line, w, line, UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.lo.x, r.lo.y, line, h, UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.hi.x - line, r.lo.y, line, h, UIStyle::EDGE_LIT );
+	}
+	else if( open )
+	{
+		fillRegion( r, UIStyle::withAlpha( UIStyle::ACTIVE, 14 ) );
+		outlineRegion( r, GameMakeColor( 90, 120, 40, 255 ) );
+		UIStyle::litLine( r.lo.x, r.lo.y, bar, h, UIStyle::ACTIVE );
+		ink = UIStyle::ACTIVE;
+	}
+	else if( hover || pressed )
+	{
+		fillRegion( r, GameMakeColor( 255, 255, 255, pressed ? 28 : 16 ) );
+		outlineRegion( r, UIStyle::EDGE );
+		UIStyle::litLine( r.lo.x, r.lo.y, bar, h, UIStyle::INK );
+	}
+	else
+		outlineRegion( r, UIStyle::FRAME );
+
+	DisplayString *words = instData->getTextDisplayString();
+	if( words )
+	{
+		GameFont *font = railFont( 22, TRUE );
+		if( words->getFont() != font )
+			words->setFont( font );
+		Int tw, th;
+		words->getSize( &tw, &th );
+		words->draw( r.lo.x + len( 28.0f ), ( r.lo.y + r.hi.y - th ) / 2, ink, shadowColor() );
+	}
+	if( entry && entry->more )
+	{
+		const Int x = r.hi.x - len( 28.0f ), cy = ( r.lo.y + r.hi.y ) / 2, c = len( 7.0f );
+		const Color color = open ? UIStyle::ACTIVE : UIStyle::MUTED;
+		const Real width = (Real)max( 1, len( 2.0f ) );
+		TheDisplay->drawLine( x - c * 3 / 5, cy - c, x + c * 2 / 5, cy, width, color );
+		TheDisplay->drawLine( x + c * 2 / 5, cy, x - c * 3 / 5, cy + c, width, color );
+	}
+}
+
+/// the campaign panel's tabs: Generals, Zero Hour
+static void drawCampaignTab( GameWindow *window, WinInstanceData *instData )
+{
+	const Bool open = ( window == buttonCampaignGenerals ) == generalsOpen;
+	UIStyle::menuTab( windowRegion( window ), instData->getTextDisplayString(), open,
+		BitTest( instData->getState(), WIN_STATE_HILITED ) );
+}
+
+/// a mission tile: its number, the picked one green with a lit foot
+static void drawMissionTile( GameWindow *window, WinInstanceData *instData )
+{
+	const IRegion2D r = windowRegion( window );
+	Bool picked = FALSE;
+	for( Int m = 0; m < MISSION_BUTTONS; ++m )
+		if( buttonMission[ m ] == window )
+			picked = m == missionPicked;
+	fillRegion( r, GameMakeColor( 0, 0, 0, 150 ) );
+	if( picked )
+	{
+		fillRegion( r, UIStyle::withAlpha( UIStyle::ACTIVE, 14 ) );
+		outlineRegion( r, GameMakeColor( 90, 120, 40, 255 ) );
+		const Int bar = max( 2, len( 3.0f ) );
+		UIStyle::litLine( r.lo.x, r.hi.y - bar, r.hi.x - r.lo.x, bar, UIStyle::ACTIVE );
+	}
+	else if( BitTest( instData->getState(), WIN_STATE_HILITED ) )
+	{
+		fillRegion( r, GameMakeColor( 255, 255, 255, 16 ) );
+		outlineRegion( r, UIStyle::EDGE );
+	}
+	else
+		outlineRegion( r, UIStyle::FRAME );
+	DisplayString *words = instData->getTextDisplayString();
+	if( words )
+	{
+		GameFont *font = railFont( UIStyle::MENU_TEXT_TITLE, FALSE );
+		if( words->getFont() != font )
+			words->setFont( font );
+		Int tw, th;
+		words->getSize( &tw, &th );
+		words->draw( ( r.lo.x + r.hi.x - tw ) / 2, ( r.lo.y + r.hi.y - th ) / 2, picked ? UIStyle::ACTIVE : UIStyle::INK, shadowColor() );
+	}
+}
+
+/** The mode's picture from flat shapes, the mode picker's (GUIUtil.cpp drawModeEmblem): a lane
+	* between two forts on an island, a walled basin in red fog.  ponytail: a copy of the picker's two
+	* pictures; one function once package 3a's mode box lands its own in the menu language. */
+static void drawModePicture( Int mode, const IRegion2D &b )
+{
+	const Int bw = b.hi.x - b.lo.x, bh = b.hi.y - b.lo.y;
+	const Color blue = GameMakeColor( 70, 120, 220, 255 ), red = GameMakeColor( 210, 60, 50, 255 );
+	const Int u = max( 1, min( bw, bh ) / 12 );
+	const Int cx = b.lo.x + bw / 2, cy = b.lo.y + bh / 2;
+	if( mode == HOST_MODE_DIRECT_STRIKE )
+	{
+		TheDisplay->drawFillRect( b.lo.x, b.lo.y, bw, bh, GameMakeColor( 18, 38, 64, 255 ) );
+		TheDisplay->drawFillRect( b.lo.x + u, cy - 2 * u, bw - 2 * u, 4 * u, GameMakeColor( 92, 104, 70, 255 ) );
+		TheDisplay->drawFillRect( b.lo.x + 2 * u, cy - 2 * u, 3 * u, 4 * u, blue );
+		TheDisplay->drawFillRect( b.hi.x - 5 * u, cy - 2 * u, 3 * u, 4 * u, red );
+		for( Int i = 0; i < 3; ++i )
+		{
+			TheDisplay->drawFillRect( cx - ( 4 - i ) * u * 3 / 2, cy - u / 2, u, u, blue );
+			TheDisplay->drawFillRect( cx + ( 2 + i ) * u * 3 / 2 - u, cy - u / 2, u, u, red );
+		}
+	}
+	else
+	{
+		TheDisplay->drawFillRect( b.lo.x, b.lo.y, bw, bh, GameMakeColor( 96, 20, 18, 255 ) );
+		const Int r = min( bw, bh ) / 3;
+		TheDisplay->drawFillRect( cx - r, cy - r, 2 * r, 2 * r, GameMakeColor( 58, 54, 48, 255 ) );
+		TheDisplay->drawOpenRect( cx - r, cy - r, 2 * r, 2 * r, (Real)max( 2, u / 2 ), GameMakeColor( 200, 200, 200, 255 ) );
+		const Int s = max( 2, u );
+		TheDisplay->drawFillRect( cx - u - s / 2, cy - u - s / 2, s, s, blue );
+		TheDisplay->drawFillRect( cx + u - s / 2, cy - u - s / 2, s, s, red );
+		TheDisplay->drawFillRect( cx - u - s / 2, cy + u - s / 2, s, s, GameMakeColor( 80, 170, 80, 255 ) );
+		TheDisplay->drawFillRect( cx + u - s / 2, cy + u - s / 2, s, s, GameMakeColor( 230, 140, 40, 255 ) );
+		for( Int i = 0; i < 6; ++i )
+		{
+			const Int ex = b.lo.x + u + ( i % 3 ) * ( bw - 3 * u ) / 2, ey = i < 3 ? b.lo.y + u : b.hi.y - 2 * u;
+			TheDisplay->drawFillRect( ex, ey, s, s, GameMakeColor( 230, 120, 100, 255 ) );
+		}
+	}
+}
+
+/// a Mods card, mode.py's: the picture, the name with its version tag, the fact line; Direct
+/// Strike lit as the card Enter picks
+static void drawModeCard( GameWindow *window, WinInstanceData *instData )
+{
+	const Bool strike = window == buttonModeDirectStrike;
+	const Int card = strike ? 0 : 1;
+	const IRegion2D r = windowRegion( window );
+	const Bool hover = BitTest( instData->getState(), WIN_STATE_HILITED );
+	const Bool pressed = BitTest( instData->getState(), WIN_STATE_SELECTED );
+	const Int w = r.hi.x - r.lo.x, h = r.hi.y - r.lo.y;
+	fillRegion( r, GameMakeColor( 0, 0, 0, 150 ) );
+	if( strike )
+	{
+		fillRegion( r, UIStyle::withAlpha( UIStyle::EDGE, pressed ? 110 : 60 ) );
+		const Int line = max( 1, len( 2.0f ) );
+		UIStyle::litLine( r.lo.x, r.lo.y, w, line, UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.lo.x, r.hi.y - line, w, line, UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.lo.x, r.lo.y, line, h, UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.hi.x - line, r.lo.y, line, h, UIStyle::EDGE_LIT );
+	}
+	else if( hover || pressed )
+	{
+		fillRegion( r, GameMakeColor( 255, 255, 255, pressed ? 28 : 16 ) );
+		outlineRegion( r, UIStyle::EDGE_LIT );
+	}
+	else
+		outlineRegion( r, UIStyle::EDGE );
+
+	IRegion2D picture;
+	picture.lo.x = r.lo.x + len( 10.0f );
+	picture.lo.y = r.lo.y + len( 10.0f );
+	picture.hi.x = r.hi.x - len( 10.0f );
+	picture.hi.y = r.lo.y + len( 184.0f );
+	drawModePicture( strike ? HOST_MODE_DIRECT_STRIKE : HOST_MODE_APOCALYPSE, picture );
+
+	Bool tagged = FALSE;
+	const UnicodeString tag = TheGameText->fetch( strike ? "GUI:DirectStrikeVersion" : "GUI:ApocalypseVersion", &tagged );
+	DisplayString *name = menuText( textCard[ card ][ 0 ], UIStyle::capitals( TheGameText->fetch( strike ? "GUI:GameModeDirectStrike" : "GUI:GameModeApocalypse" ) ),
+		railFont( UIStyle::MENU_TEXT_KEY, TRUE ) );
+	DisplayString *version = menuText( textCard[ card ][ 1 ], tagged ? tag : UnicodeString::TheEmptyString, railFont( UIStyle::MENU_TEXT_LABEL, FALSE ) );
+	DisplayString *fact = menuText( textCard[ card ][ 2 ], TheGameText->fetch( strike ? "GUI:GameModeDirectStrikeFact" : "GUI:GameModeApocalypseFact" ),
+		railFont( UIStyle::MENU_TEXT_BODY - 2, FALSE ) );
+	Int nw, nh, vw = 0, vh = 0, fw, fh;
+	name->getSize( &nw, &nh );
+	if( version->getTextLength() )
+		version->getSize( &vw, &vh );
+	fact->getSize( &fw, &fh );
+	const Int gap = vw ? len( 8.0f ) : 0;
+	const Int nameY = r.lo.y + len( 206.0f );
+	const Int left = ( r.lo.x + r.hi.x - nw - gap - vw ) / 2;
+	name->draw( left, nameY, UIStyle::INK, shadowColor() );
+	if( vw )
+		version->draw( left + nw + gap, nameY + nh - vh, UIStyle::MUTED, shadowColor() );
+	fact->draw( ( r.lo.x + r.hi.x - fw ) / 2, nameY + nh + len( 12.0f ), UIStyle::MUTED, shadowColor() );
+}
+
+/// the version at the rail's top right, a 14 px MUTED word
+static void drawVersion( GameWindow *window, WinInstanceData *instData )
+{
+	DisplayString *words = instData->getTextDisplayString();
+	if( words == NULL || words->getTextLength() == 0 )
+		return;
+	GameFont *font = railFont( UIStyle::MENU_TEXT_LABEL, FALSE );
+	if( words->getFont() != font )
+		words->setFont( font );
+	const IRegion2D r = windowRegion( window );
+	Int tw, th;
+	words->getSize( &tw, &th );
+	words->draw( r.hi.x - tw, ( r.lo.y + r.hi.y - th ) / 2, UIStyle::MUTED, shadowColor() );
+}
+
+/// each window's look, its words in capitals, and no gadget tooltip (drawTooltip draws them)
+static void dressMenu( void )
+{
+	parentMainMenu->winSetDrawFunc( drawMenu );
+	for( Int f = 0; f < FRAME_COUNT; ++f )
+		for( Int i = 0; i < 2; ++i )
+			if( frames[ f ][ i ] )
+				frames[ f ][ i ]->winSetDrawFunc( drawNothing );
+	for( Int i = 0; i < (Int)ARRAY_SIZE( MENU_BUTTONS ); ++i )
+	{
+		GameWindow *button = *MENU_BUTTONS[ i ].window;
+		if( button == NULL )
+			continue;
+		button->winSetTooltip( UnicodeString::TheEmptyString );
+		if( MENU_BUTTONS[ i ].onRail )
+		{
+			button->winSetDrawFunc( drawRailButton );
+			GadgetButtonSetText( button, UIStyle::capitals( button->winGetText() ) );
+		}
+	}
+	buttonCampaignGenerals->winSetDrawFunc( drawCampaignTab );
+	buttonCampaignZH->winSetDrawFunc( drawCampaignTab );
+	GadgetButtonSetText( buttonCampaignGenerals, UIStyle::capitals( TheGameText->fetch( "GUI:CampaignGenerals" ) ) );
+	GadgetButtonSetText( buttonCampaignZH, UIStyle::capitals( TheGameText->fetch( "GUI:CampaignZeroHour" ) ) );
+	for( Int m = 0; m < MISSION_BUTTONS; ++m )
+	{
+		UnicodeString number;
+		number.format( u"%d", m + 1 );
+		GadgetButtonSetText( buttonMission[ m ], number );
+		buttonMission[ m ]->winSetDrawFunc( drawMissionTile );
+		buttonMission[ m ]->winEnable( TRUE );
+	}
+	UIStyle::setMenuKey( buttonEasy, FALSE );
+	UIStyle::setMenuKey( buttonMedium, TRUE );
+	UIStyle::setMenuKey( buttonHard, FALSE );
+	buttonModeDirectStrike->winSetDrawFunc( drawModeCard );
+	buttonModeApocalypse->winSetDrawFunc( drawModeCard );
+	if( labelVersion )
+	{
+		labelVersion->winSetDrawFunc( drawVersion );
+		UnicodeString version;
+		if( TheVersion )
+			version.translate( TheVersion->getReleaseVersion() );
+		GadgetStaticTextSetText( labelVersion, version );
+	}
+}
+
+static GameWindow *findWindow( const char *name )
+{
+	return TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( AsciiString( name ) ) );
+}
+
+/** Every window the rail needs.  A mod's own MainMenu.wnd is retail's, without the panels, the Mods
+	* cards or the version label; the menu then keeps EA's look rather than face missing windows. */
+static Bool findMenuWindows( void )
+{
+	buttonSinglePlayer = findWindow( "MainMenu.wnd:ButtonSinglePlayer" );
+	buttonMultiPlayer = findWindow( "MainMenu.wnd:ButtonMultiplayer" );
+	buttonOnline = findWindow( "MainMenu.wnd:ButtonOnline" );
+	buttonLoadReplay = findWindow( "MainMenu.wnd:ButtonLoadReplay" );
+	buttonOptions = findWindow( "MainMenu.wnd:ButtonOptions" );
+	buttonCredits = findWindow( "MainMenu.wnd:ButtonCredits" );
+	buttonExit = findWindow( "MainMenu.wnd:ButtonExit" );
+	buttonUSA = findWindow( "MainMenu.wnd:ButtonUSA" );
+	buttonGLA = findWindow( "MainMenu.wnd:ButtonGLA" );
+	buttonChina = findWindow( "MainMenu.wnd:ButtonChina" );
+	buttonChallenge = findWindow( "MainMenu.wnd:ButtonChallenge" );
+	buttonSkirmish = findWindow( "MainMenu.wnd:ButtonSkirmish" );
+	buttonMods = findWindow( "MainMenu.wnd:ButtonMods" );
+	buttonSingleBack = findWindow( "MainMenu.wnd:ButtonSingleBack" );
+	buttonLoad = findWindow( "MainMenu.wnd:ButtonLoadGame" );
+	buttonReplay = findWindow( "MainMenu.wnd:ButtonReplay" );
+	buttonLoadReplayBack = findWindow( "MainMenu.wnd:ButtonLoadReplayBack" );
+	buttonCampaignGenerals = findWindow( "MainMenu.wnd:ButtonCampaignGenerals" );
+	buttonCampaignZH = findWindow( "MainMenu.wnd:ButtonCampaignZH" );
+	for( Int m = 0; m < MISSION_BUTTONS; ++m )
+	{
+		AsciiString name;
+		name.format( "MainMenu.wnd:ButtonMission%d", m + 1 );
+		buttonMission[ m ] = findWindow( name.str() );
+	}
+	buttonEasy = findWindow( "MainMenu.wnd:ButtonEasy" );
+	buttonMedium = findWindow( "MainMenu.wnd:ButtonMedium" );
+	buttonHard = findWindow( "MainMenu.wnd:ButtonHard" );
+	buttonModeDirectStrike = findWindow( "MainMenu.wnd:ButtonModeDirectStrike" );
+	buttonModeApocalypse = findWindow( "MainMenu.wnd:ButtonModeApocalypse" );
+	labelVersion = findWindow( "MainMenu.wnd:LabelVersion" );
+	buttonWorldBuilder = findWindow( "MainMenu.wnd:ButtonWorldBuilder" );
+	getUpdate = findWindow( "MainMenu.wnd:ButtonGetUpdate" );
+	for( Int f = 0; f < FRAME_COUNT; ++f )
+		for( Int i = 0; i < 2; ++i )
+			frames[ f ][ i ] = findWindow( FRAME_NAMES[ f ][ i ] );
+
+	for( Int i = 0; i < (Int)ARRAY_SIZE( MENU_BUTTONS ); ++i )
+		if( *MENU_BUTTONS[ i ].window == NULL && MENU_BUTTONS[ i ].window != &buttonOnline )
+			return FALSE;
+	for( Int f = 0; f < FRAME_COUNT; ++f )
+		if( frames[ f ][ 0 ] == NULL || frames[ f ][ 1 ] == NULL )
+			return FALSE;
+	return TRUE;
+}
+
+static Bool menuComplete = FALSE;
+
 //-------------------------------------------------------------------------------------------------
 /** Initialize the main menu */
 //-------------------------------------------------------------------------------------------------
@@ -653,133 +1364,26 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 
 	TheShell->showShellMap(TRUE);
 	TheMouse->setVisibility(TRUE);
-	//winVidManager = NEW WindowVideoManager;
 	buttonPushed = FALSE;
 	isShuttingDown = FALSE;
 	startGame = FALSE;
-	dropDown = DROPDOWN_NONE;
-	pendingDropDown = DROPDOWN_NONE;
-	for(Int i = 0; i < DROPDOWN_COUNT; ++i)
-		dropDownWindows[i] = NULL;
+	campaignSelected = FALSE;
+	launchChallengeMenu = FALSE;
 
-	// get ids for our windows
 	mainMenuID = TheNameKeyGenerator->nameToKey( AsciiString( "MainMenu.wnd:MainMenuParent" ) );
-//	campaignID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonCampaign") );
-	skirmishID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonSkirmish") );
-	modsID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonMods") );
-	onlineID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonOnline") );
-	networkID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonNetwork") );
-	optionsID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonOptions") );
-	exitID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonExit") );
-	motdID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonMOTD") );
-	worldBuilderID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonWorldBuilder") );
-//	NameKeyType versionID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:LabelVersion") );
-	getUpdateID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonGetUpdate") );
-//	buttonTRAININGID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonTRAINING") );
-	buttonChallengeID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonChallenge") );
-	buttonUSAID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonUSA") );
-	buttonGLAID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonGLA") );
-	buttonChinaID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonChina") );
-	buttonUSARecentSaveID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonUSARecentSave") );
-	buttonUSALoadGameID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonUSALoadGame") );
-	buttonGLARecentSaveID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonGLARecentSave") );
-	buttonGLALoadGameID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonGLALoadGame") );
-	buttonChinaRecentSaveID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonChinaRecentSave") );
-	buttonChinaLoadGameID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonChinaLoadGame") );
-	buttonSinglePlayerID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonSinglePlayer") );
-	buttonMultiPlayerID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonMultiplayer") );
-	buttonMultiBackID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonMultiBack") );
-	buttonSingleBackID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonSingleBack") );
-	buttonLoadReplayBackID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonLoadReplayBack") );
-	buttonReplayID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonReplay") );
-	buttonLoadReplayID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonLoadReplay") );
-	buttonLoadID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonLoadGame") );
-	buttonCreditsID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonCredits") );
-
-	buttonEasyID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonEasy") );
-	buttonMediumID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonMedium") );
-	buttonHardID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonHard") );
-	buttonDiffBackID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonDiffBack") );
-	for( Int m = 0; m < MISSION_BUTTONS; ++m )
-	{
-		AsciiString name;
-		name.format( "MainMenu.wnd:ButtonMission%d", m + 1 );
-		buttonMissionID[m] = TheNameKeyGenerator->nameToKey( name );
-	}
-	buttonMissionBackID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonMissionBack") );
-	buttonCampaignZHID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonCampaignZH") );
-	buttonCampaignGeneralsID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonCampaignGenerals") );
-	buttonCampaignBackID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonCampaignBack") );
-
-	// get pointers to the window buttons
 	parentMainMenu = TheWindowManager->winGetWindowFromId( NULL, mainMenuID );
-	//buttonCampaign = TheWindowManager->winGetWindowFromId( parentMainMenu, campaignID );
-	buttonSinglePlayer = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonSinglePlayerID );
-	buttonMultiPlayer = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonMultiPlayerID );
-	buttonSkirmish = TheWindowManager->winGetWindowFromId( parentMainMenu, skirmishID );
-	buttonOnline = TheWindowManager->winGetWindowFromId( parentMainMenu, onlineID );
-	// Started without the launcher's Online path there is no service to dial, and the button would only
-	// open a "could not connect" box: grey it and say why.
-	if( buttonOnline )
+	menuComplete = findMenuWindows();
+	DEBUG_ASSERTCRASH( menuComplete, ("MainMenu.wnd is not the fork's: the rail's windows are missing\n") );
+
+	// every entry, the first or back from a screen pushed over the menu, opens on the main list
+	railList = RAIL_MAIN;
+	railPanel = PANEL_NONE;
+	if( menuComplete )
 	{
-		const Bool canGoOnline = CanGoOnline();
-		buttonOnline->winEnable( canGoOnline );
-		buttonOnline->winSetTooltip( canGoOnline ? UnicodeString::TheEmptyString : TheGameText->fetch( "TOOLTIP:OnlineNeedsLauncher" ) );
+		dressMenu();
+		layOutMenu();
 	}
-	buttonNetwork = TheWindowManager->winGetWindowFromId( parentMainMenu, networkID );
-	buttonOptions = TheWindowManager->winGetWindowFromId( parentMainMenu, optionsID );
-	buttonExit = TheWindowManager->winGetWindowFromId( parentMainMenu, exitID );
-	buttonMOTD = TheWindowManager->winGetWindowFromId( parentMainMenu, motdID );
-	buttonWorldBuilder = TheWindowManager->winGetWindowFromId( parentMainMenu, worldBuilderID );
-	buttonReplay = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonReplayID );
-	buttonLoadReplay = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonLoadReplayID );
-	buttonLoad = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonLoadID );
-	buttonCredits = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonCreditsID );
 
-	buttonEasy = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonEasyID );
-	buttonMedium = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonMediumID );
-	buttonHard = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonHardID );
-	buttonDiffBack = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonDiffBackID );
-	for( Int m = 0; m < MISSION_BUTTONS; ++m )
-		buttonMission[m] = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonMissionID[m] );
-	buttonMissionBack = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonMissionBackID );
-	missionFrame[0] = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:MapBorder5") ) );
-	missionFrame[1] = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:EarthMap5") ) );
-
-
-//	GameWindow *labelVersion = TheWindowManager->winGetWindowFromId( parentMainMenu, versionID );
-	
-	getUpdate = TheWindowManager->winGetWindowFromId( parentMainMenu, getUpdateID );
-//	buttonTRAINING = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonTRAININGID );
-	buttonChallenge = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonChallengeID );
-	buttonUSA = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonUSAID );
-	buttonGLA = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonGLAID );
-	buttonChina = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonChinaID );
-	buttonUSARecentSave = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonUSARecentSaveID );
-	buttonUSALoadGame = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonUSALoadGameID );
-	buttonGLARecentSave = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonGLARecentSaveID );
-	buttonGLALoadGame = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonGLALoadGameID );
-	buttonChinaRecentSave = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonChinaRecentSaveID );
-	buttonChinaLoadGame = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonChinaLoadGameID );
-
-	dropDownWindows[DROPDOWN_SINGLE] = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:MapBorder") ));
-	dropDownWindows[DROPDOWN_MULTIPLAYER] = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:MapBorder1") ) );
-	dropDownWindows[DROPDOWN_MAIN] = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:MapBorder2") ) );
-	dropDownWindows[DROPDOWN_LOADREPLAY] = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:MapBorder3") ) );
-	dropDownWindows[DROPDOWN_DIFFICULTY] = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:MapBorder4") ) );
-	dropDownWindows[DROPDOWN_MISSION] = missionFrame[0];
-	dropDownWindows[DROPDOWN_CAMPAIGN] = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:MapBorder6") ) );
-	// i is used after the loop; VC6 for-scope let it escape.
-	Int i;
-	// a mod's MainMenu.wnd has retail's MapBorder..MapBorder4 and none of ours
-	for(i = 1; i < DROPDOWN_COUNT; ++i)
-		if( dropDownWindows[i] )
-			dropDownWindows[i]->winHide(TRUE);
-
-	initialHide();
-
-	showSelectiveButtons(SHOW_NONE);
-	// Set up the version number
 #if defined _DEBUG || defined _INTERNAL || defined _PROFILE
 	WinInstanceData instData;
 #ifdef TEST_COMPRESSION
@@ -787,69 +1391,26 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 	BitSet( instData.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK );
 	instData.m_textLabelString = "Debug: Compress/Decompress Maps";
 	instData.setTooltipText(UnicodeString(u"Only Used in Debug and Internal!"));
-	buttonCompressTest = TheWindowManager->gogoGadgetPushButton( parentMainMenu, 
-																									 WIN_STATUS_ENABLED | WIN_STATUS_IMAGE, 
-																									 25, 175, 
-																									 400, 400, 
+	buttonCompressTest = TheWindowManager->gogoGadgetPushButton( parentMainMenu,
+																									 WIN_STATUS_ENABLED | WIN_STATUS_IMAGE,
+																									 25, 175,
+																									 400, 400,
 																									 &instData, NULL, TRUE );
 #endif // TEST_COMPRESSION
 
 	instData.init();
 	BitSet( instData.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK );
 	instData.m_textLabelString = "Debug: Load Map";
-	
+
 	instData.setTooltipText(UnicodeString(u"Only Used in Debug and Internal!"));
-	buttonCampaign = TheWindowManager->gogoGadgetPushButton( parentMainMenu, 
-																									 WIN_STATUS_ENABLED, 
-																									 25, 54, 
-																									 180, 26, 
+	buttonCampaign = TheWindowManager->gogoGadgetPushButton( parentMainMenu,
+																									 WIN_STATUS_ENABLED,
+																									 25, 54,
+																									 180, 26,
 																									 &instData, NULL, TRUE );
-	
-//	if (TheVersion)
-//	{
-//		UnicodeString version;
-//		version.format(L"%s\n%s", TheVersion->getUnicodeVersion().str(), TheVersion->getUnicodeBuildTime().str());
-//		GadgetStaticTextSetText( labelVersion, version );
-//	}
-//	else
-//	{
-//		labelVersion->winHide( TRUE );
-//	}
-//#else
-	
-//	GadgetStaticTextSetText( labelVersion, TheVersion->getUnicodeVersion() );
 #endif
 
-	//TheShell->registerWithAnimateManager(buttonCampaign, WIN_ANIMATION_SLIDE_LEFT, TRUE, 800);
-	//TheShell->registerWithAnimateManager(buttonSkirmish, WIN_ANIMATION_SLIDE_LEFT, TRUE, 600);
-//	TheShell->registerWithAnimateManager(buttonSinglePlayer, WIN_ANIMATION_SLIDE_LEFT, TRUE, 400);
-//	TheShell->registerWithAnimateManager(buttonMultiPlayer, WIN_ANIMATION_SLIDE_LEFT, TRUE, 200);
-//	TheShell->registerWithAnimateManager(buttonOptions, WIN_ANIMATION_SLIDE_LEFT, TRUE, 1);
-//	TheShell->registerWithAnimateManager(buttonExit, WIN_ANIMATION_SLIDE_RIGHT, TRUE, 1);
-//	
 	layout->hide( FALSE );
-
-	/*
-	if (!checkedForUpdate)
-	{
-		DWORD state = 0;
-		Bool isConnected = InternetGetConnectedState(&state, 0);
-		if (isConnected && !(state & INTERNET_CONNECTION_MODEM_BUSY))
-		{
-			// wohoo - we're connected!  fire off a check for updates
-			checkedForUpdate = TRUE;
-			DEBUG_LOG(("Looking for a patch for productID=%d, versionStr=%s, distribution=%d\n",
-				gameProductID, gameVersionUniqueIDStr, gameDistributionID));
-			ptCheckForPatch( gameProductID, gameVersionUniqueIDStr, gameDistributionID, patchAvailableCallback, PTFalse, NULL );
-			//ptCheckForPatch( productID, versionUniqueIDStr, distributionID, mapPackAvailableCallback, PTFalse, NULL );
-		}
-	}
-	if (getUpdate != NULL)
-	{
-		getUpdate->winHide( TRUE );
-		//getUpdate->winEnable( FALSE );
-	}
-	/**/
 
 	if (TheGameSpyPeerMessageQueue && !TheGameSpyPeerMessageQueue->isConnected())
 	{
@@ -859,49 +1420,19 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 	if (TheMapCache)
 		TheMapCache->updateCache();
 
-	/*
-	if (MOTDBuffer && buttonMOTD)
-	{
-		buttonMOTD->winHide(FALSE);
-	}
-	*/
-	
 	TheShell->loadScheme("MainMenu");
 	raiseMessageBoxes = TRUE;
 
-//	if(!localAnimateWindowManager)
-//		localAnimateWindowManager = NEW AnimateWindowManager;
-
-	//pendingDropDown =DROPDOWN_MAIN;
-	
-
-	GameWindow *rule = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:MainMenuRuler") ) );
-	if(rule)
-		rule->winHide(TRUE);
-	campaignSelected = FALSE;
-//	dropDownWindows[DROPDOWN_MAIN]->winHide(FALSE);
 	if(FirstTimeRunningTheGame)
 	{
-		TheMouse->setVisibility(FALSE);
-
 		TheTransitionHandler->reverse("FadeWholeScreen");
-		FirstTimeRunningTheGame  = FALSE;
-		revealMainMenu();
-	}
-	else
-	{
-		showFade = TRUE;
-		justEntered = TRUE;
-		initialGadgetDelay = 2;
-		if(rule)
-		rule->winHide(FALSE);
+		FirstTimeRunningTheGame = FALSE;
 	}
 
-	layout->bringForward();	
-	// set keyboard focus to main parent
+	layout->bringForward();
+	// set keyboard focus to main parent: Escape and Enter come here
 	TheWindowManager->winSetFocus( parentMainMenu );
-	
-	
+
 }  // end MainMenuInit
 
 //-------------------------------------------------------------------------------------------------
@@ -916,24 +1447,9 @@ void MainMenuShutdown( WindowLayout *layout, void *userData )
 
 	// if we are shutting down for an immediate pop, skip the animations
 	Bool popImmediate = *(Bool *)userData;
-	
-//	if(winVidManager)
-	//		delete winVidManager;
-	//	winVidManager = NULL;
-	
 
 	if( popImmediate )
 	{
-		// A match started with nothing clicked (-autoskirmish, -netgame) leaves while the buttons are
-		// still coming in, and the load screen runs the window manager, so they played on over it.
-		TheTransitionHandler->remove( "MainMenuDefaultMenu", TRUE );
-		TheTransitionHandler->remove( "MainMenuFade", TRUE );
-
-//		if(localAnimateWindowManager)
-//		{
-//			delete localAnimateWindowManager;
-//			localAnimateWindowManager = NULL;
-//		}
 		shutdownComplete( layout );
 		return;
 
@@ -941,9 +1457,6 @@ void MainMenuShutdown( WindowLayout *layout, void *userData )
 
 	if (!startGame)
 		TheShell->reverseAnimatewindow();
-	//TheShell->reverseAnimatewindow();
-//	if(localAnimateWindowManager && dropDown != DROPDOWN_NONE)
-//		localAnimateWindowManager->reverseAnimateWindow();
 }  // end MainMenuShutdown
 
 extern Bool DontShowMainMenu;
@@ -951,7 +1464,7 @@ extern Bool DontShowMainMenu;
 ////////////////////////////////////////////////////////////////////////////
 //Added By Sadullah Nader
 //Added as a fix to the resolution change
-//Allows the user to confirm the change, goes back to the previous mode 
+//Allows the user to confirm the change, goes back to the previous mode
 //if the time to change expires.
 ////////////////////////////////////////////////////////////////////////////
 
@@ -971,10 +1484,10 @@ void AcceptResolution()
 //-------------------------------------------------------------------------------------------------
 void DeclineResolution()
 {
-	//Revert back to old resolution and reset all necessary 
+	//Revert back to old resolution and reset all necessary
 	//parts of the shell
 
-	if (TheDisplay->setDisplayMode(oldDispSettings.xRes, oldDispSettings.yRes, 
+	if (TheDisplay->setDisplayMode(oldDispSettings.xRes, oldDispSettings.yRes,
 										oldDispSettings.bitDepth, oldDispSettings.windowed))
 	{
 		dispChanged = FALSE;
@@ -982,13 +1495,13 @@ void DeclineResolution()
 
 		TheWritableGlobalData->m_xResolution = newDispSettings.xRes;
 		TheWritableGlobalData->m_yResolution = newDispSettings.yRes;
-		
+
 		TheHeaderTemplateManager->headerNotifyResolutionChange();
 		TheMouse->mouseNotifyResolutionChange();
-				
+
 		AsciiString prefString;
 		prefString.format("%d %d", newDispSettings.xRes, newDispSettings.yRes);
-		
+
 		OptionPreferences optionPref;
 		optionPref["Resolution"] = prefString;
 		optionPref.write();
@@ -1001,7 +1514,7 @@ void DeclineResolution()
 		TheShell = MSGNEW("GameClientSubsystem") Shell;
 		if( TheShell )
 			TheShell->init();
-		
+
 		TheInGameUI->notifyResolutionChange();
 
 		//
@@ -1023,56 +1536,17 @@ void DeclineResolution()
 }
 
 //-------------------------------------------------------------------------------------------------
-// Accept/Decline Resolution dialog method
+// Accept/Decline Resolution dialog method: the message box in the menu language, as every other
 //-------------------------------------------------------------------------------------------------
 void DoResolutionDialog()
 {
-	//Bring up a dialog to accept the resolution chosen in the options menu
 	UnicodeString resolutionNew;
-	
 	UnicodeString resTimerString = TheGameText->fetch("GUI:Resolution");
-	
 	resolutionNew.format(u": %dx%d\n", newDispSettings.xRes , newDispSettings.yRes);
-	
 	resTimerString.concat(resolutionNew);
-		
-	
-	// -1 keeps the layout's own place, the middle of the screen, where every other message box opens
-	resAcceptMenu = TheWindowManager->gogoMessageBox( -1, -1, -1, -1,MSG_BOX_OK | MSG_BOX_CANCEL , 
-																									 TheGameText->fetch("GUI:Resolution"), 
-																									 resTimerString, NULL, NULL, AcceptResolution, 
-																									 DeclineResolution);
-}
 
-/* This function is not being currently used because we do not need a timer on the 
-// dialog box.
-//-------------------------------------------------------------------------------------------------
-//ResolutionDialogUpdate() - if resolution dialog box is shown, this must count 10 seconds for 
-//	accepting resolution changes otherwise we go back to previous display settings 
-//-------------------------------------------------------------------------------------------------
-void ResolutionDialogUpdate()
-{
-	if (timeStarted == 0 && currentTime == 0)
-	{
-		timeStarted = currentTime = time(NULL);
-	}
-	else 
-	{
-		currentTime = time(NULL);
-	}
-	
-	if ( ( currentTime - timeStarted ) >= TIME_OUT)
-	{
-		currentTime = timeStarted = 0;
-		DeclineResolution();
-	}
-	//------------------------------------------------------------------------------------------------------
-	// Used for debugging purposes
-	//------------------------------------------------------------------------------------------------------
-	DEBUG_LOG(("Resolution Timer :  started at %d,  current time at %d, frameTicker is %d\n", timeStarted, 
-							time(NULL) , currentTime));
+	resAcceptMenu = MessageBoxOkCancel( TheGameText->fetch("GUI:Resolution"), resTimerString, AcceptResolution, DeclineResolution );
 }
-*/
 
 //-------------------------------------------------------------------------------------------------
 /** Main menu update method */
@@ -1084,91 +1558,12 @@ void MainMenuUpdate( WindowLayout *layout, void *userData )
 	{
 		return;
 	}
-	if(DontShowMainMenu && justEntered)
-		justEntered = FALSE;
-	
+
 	if (TheDownloadManager && !TheDownloadManager->isDone())
 	{
 		TheDownloadManager->update();
 		DownloadMenuUpdate(layout, userData);
 	}
-
-	// Added by Saad to the confirmation or decline of the resoluotion change
-	// dialog box.
-	/* This is also commented for the same reason as the top
-	if (dispChanged)
-	{
-		ResolutionDialogUpdate();
-		return;
-	}
-	*/
-
-	if(justEntered)
-	{
-		if(initialGadgetDelay == 1)
-		{
-			TheTransitionHandler->setGroup("MainMenuDefaultMenuLogoFade");
-			TheWindowManager->winSetFocus( parentMainMenu );
-			initialGadgetDelay = 2;
-			justEntered = FALSE;
-		}
-		else
-			initialGadgetDelay--;
-	}
-	
-	if(dontAllowTransitions && TheTransitionHandler->isFinished())
-		dontAllowTransitions = FALSE;
-
-	if(showLogo && dontAllowTransitions == FALSE)
-	{
-//		if(showFrames == SHOW_FRAMES_LIMIT)
-//		{
-//			TheTransitionHandler->remove("MainMenuSinglePlayerMenu");
-			switch (showSide) {
-			case SHOW_TRAINING:
-				TheTransitionHandler->setGroup("MainMenuFactionTraining");
-				break;
-			case SHOW_CHINA:
-				TheTransitionHandler->setGroup("MainMenuFactionChina");
-				break;
-			case SHOW_GLA:
-				TheTransitionHandler->setGroup("MainMenuFactionGLA");
-				break;
-			case SHOW_USA:
-				TheTransitionHandler->setGroup("MainMenuFactionUS");
-				break;
-			case SHOW_SKIRMISH:
-				TheTransitionHandler->setGroup("MainMenuFactionSkirmish");
-				break;
-			}
-			showLogo = FALSE;
-//			showFrames = 0;	
-//			logoIsShown = TRUE;
-//		}
-//		else
-//			showFrames++;
-	}
-
-//	if(showFade)
-//	{
-//		showFade = FALSE;
-//		TheTransitionHandler->reverse("FadeWholeScreen");
-//	}
-////
-//	if (notShown)
-//	{
-//		if(initialGadgetDelay == 1)
-//		{
-//			dropDownWindows[DROPDOWN_MAIN]->winHide(FALSE);
-//			TheTransitionHandler->setGroup("MainMenuFade", TRUE);
-//			TheTransitionHandler->setGroup("MainMenuDefaultMenu");
-//			TheMouse->setVisibility(TRUE);
-//			initialGadgetDelay = 2;
-//			notShown = FALSE;
-//		}
-//		else
-//			initialGadgetDelay--;
-//	}
 
 	if (raiseMessageBoxes)
 	{
@@ -1178,58 +1573,57 @@ void MainMenuUpdate( WindowLayout *layout, void *userData )
 
 	HTTPThinkWrapper();
 	GameSpyUpdateOverlays();
-//	if(localAnimateWindowManager)
-//		localAnimateWindowManager->update();
-//	if(localAnimateWindowManager && pendingDropDown != DROPDOWN_NONE && localAnimateWindowManager->isFinished())
-//	{
-//		localAnimateWindowManager->reset();
-//		if(dropDown != DROPDOWN_NONE)
-//			dropDownWindows[dropDown]->winHide(TRUE);
-//		dropDown = pendingDropDown;
-//		dropDownWindows[dropDown]->winHide(FALSE);
-//		localAnimateWindowManager->registerGameWindow(dropDownWindows[dropDown],WIN_ANIMATION_SLIDE_TOP_FAST,TRUE,1,1);						
-//		//buttonPushed = FALSE;
-//		pendingDropDown = DROPDOWN_NONE;
-//	}
-//	else if(localAnimateWindowManager && dropDown == DROPDOWN_NONE && pendingDropDown == DROPDOWN_NONE && localAnimateWindowManager->isReversed() && localAnimateWindowManager->isFinished())
-//	{
-//		localAnimateWindowManager->reset();
-//		for(Int i = 1; i < DROPDOWN_COUNT; ++i)
-//			dropDownWindows[i]->winHide(TRUE);
-//	}
-	
-	
-	
-	
 
 	if (startGame && TheShell->isAnimFinished() && TheTransitionHandler->isFinished())
 	{
 		doGameStart();
 	}
 
-	// We'll only be successful if we've requested to 
+	// We'll only be successful if we've requested to
 	if(isShuttingDown && TheShell->isAnimFinished() && TheTransitionHandler->isFinished())
 	{
 		shutdownComplete(layout);
 	}
-	
-
-	// We'll only be successful if we've requested to 
-//	if(TheShell->isAnimReversed() && TheShell->isAnimFinished())
-//		shutdownComplete( layout );
-
-//	if(winVidManager)
-//		winVidManager->update();
 
 }  // end MainMenuUpdate
 
+/// Escape goes up one: a panel closes, a list goes back to the main one
+static Bool menuBack( void )
+{
+	if( !menuComplete || buttonPushed )
+		return FALSE;
+	if( railPanel != PANEL_NONE )
+		closePanel();
+	else if( railList != RAIL_MAIN )
+		showList( RAIL_MAIN );
+	else
+		return FALSE;
+	return TRUE;
+}
+
 //-------------------------------------------------------------------------------------------------
-/** Main menu input callback */
+/** Main menu input callback: Escape goes up one, Enter presses the lit key */
 //-------------------------------------------------------------------------------------------------
 WindowMsgHandledType MainMenuInput( GameWindow *window, UnsignedInt msg,
 																		WindowMsgData mData1, WindowMsgData mData2 )
 {
-
+	if( msg != GWM_CHAR || !menuComplete )
+		return MSG_IGNORED;
+	const UnsignedByte key = (UnsignedByte)mData1;
+	const UnsignedByte state = (UnsignedByte)mData2;
+	if( key == KEY_ESC )
+	{
+		if( BitTest( state, KEY_STATE_UP ) )
+			menuBack();
+		return MSG_HANDLED;
+	}
+	if( key == KEY_ENTER || key == KEY_KPENTER )
+	{
+		GameWindow *lit = enterButton();
+		if( BitTest( state, KEY_STATE_UP ) && lit && isShown( lit ) )
+			TheWindowManager->winSendSystemMsg( parentMainMenu, GBM_SELECTED, (WindowMsgData)lit, lit->winGetWindowId() );
+		return MSG_HANDLED;
+	}
 	return MSG_IGNORED;
 
 }  // end MainMenuInput
@@ -1265,16 +1659,27 @@ void MainMenuKeepOnlineThroughRebuild( void )
 		: NULL;
 }
 
+/// the side a side button opens, -1 for any other
+static Int sideOf( GameWindow *control )
+{
+	if( control == buttonUSA )
+		return SIDE_USA;
+	if( control == buttonGLA )
+		return SIDE_GLA;
+	if( control == buttonChina )
+		return SIDE_CHINA;
+	if( control == buttonChallenge )
+		return SIDE_CHALLENGE;
+	return -1;
+}
+
 //-------------------------------------------------------------------------------------------------
 /** Main menu window system callback */
 //-------------------------------------------------------------------------------------------------
-WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg, 
+WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 										 WindowMsgData mData1, WindowMsgData mData2 )
 {
-	static Bool triedToInitWOLAPI = FALSE;
-	static Bool canInitWOLAPI = FALSE;
-	
-	switch( msg ) 
+	switch( msg )
 	{
 
 		//---------------------------------------------------------------------------------------------
@@ -1287,6 +1692,9 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 		//---------------------------------------------------------------------------------------------
 		case GWM_DESTROY:
 		{
+			freeMenuTexts();
+			parentMainMenu = NULL;
+			menuComplete = FALSE;
 			// Thrown away by a resolution change in a match, not left: the online session, its relay
 			// and the game info the running match reads every frame stay up.
 			if( window != NULL && window == mainMenuKeptOnline )
@@ -1316,412 +1724,115 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 		}  // end input
 		//---------------------------------------------------------------------------------------------
 		case GBM_MOUSE_ENTERING:
-		{
-			GameWindow *control = (GameWindow *)mData1;
-			Int controlID = control->winGetWindowId();
-			if(controlID == onlineID)
-			{
-				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_ONLINE_HIGHLIGHTED]);
-			}
-			else if(controlID == networkID)
-			{
-				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_NETWORK_HIGHLIGHTED]);
-			}
-			else if(controlID == optionsID)
-			{
-				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_OPTIONS_HIGHLIGHTED]);
-			}
-			else if(controlID == exitID)
-			{
-				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_EXIT_HIGHLIGHTED]);
-			}
-			else if(controlID == buttonChallengeID)
-			{
-				if(dontAllowTransitions && !campaignSelected)
-				{
-					showLogo = TRUE;
-					showSide = SHOW_TRAINING;
-				}
-
-				if(campaignSelected || dontAllowTransitions)
-					break;
-
-				TheTransitionHandler->setGroup("MainMenuFactionTraining");
-			}
-/*			else if(controlID == buttonTRAININGID)
-			{
-				if(dontAllowTransitions && !campaignSelected)
-				{
-					showLogo = TRUE;
-					showSide = SHOW_TRAINING;
-				}
-
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				//TheTransitionHandler->remove("MainMenuSinglePlayerMenu");
-
-				TheTransitionHandler->setGroup("MainMenuFactionTraining");
-
-				//showSelectiveButtons(SHOW_NONE);
-			}
-*/			else if(controlID == skirmishID || controlID == modsID)
-			{
-				if(dontAllowTransitions && !campaignSelected)
-				{
-					showLogo = TRUE;
-					showSide = SHOW_SKIRMISH;
-				}
-
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				//TheTransitionHandler->remove("MainMenuSinglePlayerMenu");
-
-				TheTransitionHandler->setGroup("MainMenuFactionSkirmish");
-				//showSelectiveButtons(SHOW_NONE);
-			}
-			
-			else if(controlID == buttonUSAID)
-			{
-				if(dontAllowTransitions && !campaignSelected)
-				{
-					showLogo = TRUE;
-					showSide = SHOW_USA;
-				}
-
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				//TheTransitionHandler->remove("MainMenuSinglePlayerMenu");
-
-				TheTransitionHandler->setGroup("MainMenuFactionUS");
-//				showLogo = TRUE;
-//				showFrames = 0;
-//				showSide = SHOW_USA;
-
-			}
-			else if(controlID == buttonGLAID)
-			{
-				if(dontAllowTransitions && !campaignSelected)
-				{
-					showLogo = TRUE;
-					showSide = SHOW_GLA;
-				}
-
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				//TheTransitionHandler->remove("MainMenuSinglePlayerMenu");
-				TheTransitionHandler->setGroup("MainMenuFactionGLA");
-//				showLogo = TRUE;
-//				showFrames = 0;
-//				showSide = SHOW_GLA;
-			}
-			else if(controlID == buttonChinaID)
-			{
-				if(dontAllowTransitions && !campaignSelected)
-				{
-					showLogo = TRUE;
-					showSide = SHOW_CHINA;
-				}
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				//TheTransitionHandler->remove("MainMenuSinglePlayerMenu");
-				TheTransitionHandler->setGroup("MainMenuFactionChina");
-//				showLogo = TRUE;
-//				showFrames = 0;
-//				showSide = SHOW_CHINA;
-			}
-			
-		break;
-		}
-		//---------------------------------------------------------------------------------------------
 		case GBM_MOUSE_LEAVING:
 		{
+			// the shell map's scripts listen for these; the faction logos EA flashed are gone
+			const Bool entering = msg == GBM_MOUSE_ENTERING;
 			GameWindow *control = (GameWindow *)mData1;
-			Int controlID = control->winGetWindowId();
-
-			if(controlID == onlineID)
-			{
-				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_ONLINE_UNHIGHLIGHTED]);
-			}
-			else if(controlID == networkID)
-			{
-				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_NETWORK_UNHIGHLIGHTED]);
-			}
-			else if(controlID == optionsID)
-			{
-				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_OPTIONS_UNHIGHLIGHTED]);
-			}
-			else if(controlID == exitID)
-			{
-				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_EXIT_UNHIGHLIGHTED]);
-			}
-			else if(controlID == buttonChallengeID)
-			{
-				if(dontAllowTransitions && !campaignSelected && showLogo)
-				{
-					showLogo = FALSE;
-					showSide = SHOW_NONE;
-				}
-
-				if(campaignSelected || dontAllowTransitions)
-					break;
-
-				// we'll just use the training logo anim for now
-				TheTransitionHandler->reverse("MainMenuFactionTraining");
-			}
-/*			else if(controlID == buttonTRAININGID)
-			{
-				if(dontAllowTransitions && !campaignSelected && showLogo)
-				{
-					showLogo = FALSE;
-					showSide = SHOW_NONE;
-				}
-
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				TheTransitionHandler->reverse("MainMenuFactionTraining");
-				
-				//showSelectiveButtons(SHOW_NONE);
-			}
-*/			else if(controlID == skirmishID || controlID == modsID)
-			{
-				if(dontAllowTransitions && !campaignSelected && showLogo)
-				{
-					showLogo = FALSE;
-					showSide = SHOW_NONE;
-				}
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				TheTransitionHandler->reverse("MainMenuFactionSkirmish");
-				//showSelectiveButtons(SHOW_NONE);
-			}
-			else if(controlID == buttonUSAID)
-			{
-				if(dontAllowTransitions && !campaignSelected && showLogo)
-				{
-					showLogo = FALSE;
-					showSide = SHOW_NONE;
-				}
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				TheTransitionHandler->reverse("MainMenuFactionUS");
-				
-				//showSelectiveButtons(SHOW_NONE);
-			}
-			else if(controlID == buttonGLAID)
-			{
-				if(dontAllowTransitions && !campaignSelected && showLogo)
-				{
-					showLogo = FALSE;
-					showSide = SHOW_NONE;
-				}
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				TheTransitionHandler->reverse("MainMenuFactionGLA");
-				//showSelectiveButtons(SHOW_NONE);
-			}
-			else if(controlID == buttonChinaID)
-			{
-				if(dontAllowTransitions && !campaignSelected && showLogo)
-				{
-					showLogo = FALSE;
-					showSide = SHOW_NONE;
-				}
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				TheTransitionHandler->reverse("MainMenuFactionChina");
-				//showSelectiveButtons(SHOW_NONE);
-			}	
-		break;
+			if( control == buttonOnline )
+				TheScriptEngine->signalUIInteract(TheShellHookNames[entering ? SHELL_SCRIPT_HOOK_MAIN_MENU_ONLINE_HIGHLIGHTED : SHELL_SCRIPT_HOOK_MAIN_MENU_ONLINE_UNHIGHLIGHTED]);
+			else if( control == buttonMultiPlayer )
+				TheScriptEngine->signalUIInteract(TheShellHookNames[entering ? SHELL_SCRIPT_HOOK_MAIN_MENU_NETWORK_HIGHLIGHTED : SHELL_SCRIPT_HOOK_MAIN_MENU_NETWORK_UNHIGHLIGHTED]);
+			else if( control == buttonOptions )
+				TheScriptEngine->signalUIInteract(TheShellHookNames[entering ? SHELL_SCRIPT_HOOK_MAIN_MENU_OPTIONS_HIGHLIGHTED : SHELL_SCRIPT_HOOK_MAIN_MENU_OPTIONS_UNHIGHLIGHTED]);
+			else if( control == buttonExit )
+				TheScriptEngine->signalUIInteract(TheShellHookNames[entering ? SHELL_SCRIPT_HOOK_MAIN_MENU_EXIT_HIGHLIGHTED : SHELL_SCRIPT_HOOK_MAIN_MENU_EXIT_UNHIGHLIGHTED]);
+			break;
 		}
 		//---------------------------------------------------------------------------------------------
 		case GBM_SELECTED:
 		{
-			
+
 			GameWindow *control = (GameWindow *)mData1;
-			Int controlID = control->winGetWindowId();
-			
-			if(buttonPushed)
+
+			if( buttonPushed )
 				break;
 
-			// the press that brought this click cut the transitions (Shell::cutAnimations), so the
-			// panel it was waiting on is in place: take the click now rather than on the next update
-			if(dontAllowTransitions && TheTransitionHandler->isFinished())
-				dontAllowTransitions = FALSE;
 #if defined _DEBUG || defined _INTERNAL || defined _PROFILE
 			if( control == buttonCampaign )
 			{
 				buttonPushed = TRUE;
 				TheShell->push(AsciiString( "Menus/MapSelectMenu.wnd" ));
-				// As soon as we have a campaign, add it in here!;
+				break;
 			}
 #ifdef TEST_COMPRESSION
-			else if( control == buttonCompressTest )
+			if( control == buttonCompressTest )
 			{
 				DoCompressTest();
+				break;
 			}
 #endif // TEST_COMPRESSION
-			else 
 #endif
+			if( !menuComplete )
+				break;
 
-			// don't allow mouse click slop that occurs during transitions to unset this flag
-			if (TheTransitionHandler->isFinished()
-				&& controlID != buttonEasyID && controlID != buttonMediumID && controlID != buttonHardID)
+			const Int side = sideOf( control );
+			if( control == buttonSinglePlayer )
+				showList( RAIL_SOLO );
+			else if( control == buttonLoadReplay )
+				showList( RAIL_LOAD );
+			else if( control == buttonSingleBack || control == buttonLoadReplayBack )
+				menuBack();
+			else if( control == buttonMultiPlayer )
 			{
-				// this toggle must only be reset if one of these buttons have not been pressed
-				// ...the difficulty selection behavior must have a chance to act upon this toggle
-				launchChallengeMenu = FALSE;
+				// straight to the LAN lobby (owner, 2026-11-25); Direct Connect is a key in there
+				buttonPushed = TRUE;
+				TheShell->push( AsciiString("Menus/LanLobbyMenu.wnd") );
+				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_NETWORK_SELECTED]);
 			}
-
-
-			if( controlID == buttonSinglePlayerID )
+			else if( control == buttonOnline )
 			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				//buttonPushed = TRUE;
-				buttonPushed = FALSE;
-				dropDownWindows[DROPDOWN_SINGLE]->winHide(FALSE);
-				TheTransitionHandler->remove("MainMenuDefaultMenu");
-				TheTransitionHandler->reverse("MainMenuDefaultMenuBack");
-				TheTransitionHandler->setGroup("MainMenuSinglePlayerMenu");
-			}  // end if
-			else if( controlID == buttonSingleBackID )
-			{
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				buttonPushed = FALSE;
-				dropDownWindows[DROPDOWN_MAIN]->winHide(FALSE);
-				TheTransitionHandler->remove("MainMenuSinglePlayerMenu");
-				TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBack");
-				TheTransitionHandler->setGroup("MainMenuDefaultMenu");
-				dontAllowTransitions = TRUE;
-			}  // end if
-			else if( controlID == buttonMultiBackID )
-			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				buttonPushed = FALSE;
-				dropDownWindows[DROPDOWN_MAIN]->winHide(FALSE);
-				TheTransitionHandler->remove("MainMenuMultiPlayerMenu");
-				TheTransitionHandler->reverse("MainMenuMultiPlayerMenuReverse");
-				TheTransitionHandler->setGroup("MainMenuDefaultMenu");
-			}  // end if
-			else if( controlID == buttonLoadReplayBackID )
-			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				buttonPushed = FALSE;
-				dropDownWindows[DROPDOWN_MAIN]->winHide(FALSE);
-				TheTransitionHandler->remove("MainMenuLoadReplayMenu");
-				TheTransitionHandler->reverse("MainMenuLoadReplayMenuBack");
-				TheTransitionHandler->setGroup("MainMenuDefaultMenu");
-			}  // end if
-			
+				// back to the online screens the launcher's start opened: login, then the hub
+				buttonPushed = TRUE;
+				StartPatchCheck();
+			}
 			else if( control == buttonCredits )
 			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
 				buttonPushed = TRUE;
-				TheShell->push("Menus/CreditsMenu.wnd" );
-				dropDownWindows[DROPDOWN_MAIN]->winHide(FALSE);
-				TheTransitionHandler->reverse("MainMenuDefaultMenu");
+				TheShell->push( "Menus/CreditsMenu.wnd" );
 			}
-			else if( controlID == buttonMultiPlayerID)
+			else if( control == buttonLoad )
 			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				//buttonPushed = TRUE;
-				buttonPushed = FALSE;
-				dropDownWindows[DROPDOWN_MULTIPLAYER]->winHide(FALSE);
-				TheTransitionHandler->remove("MainMenuDefaultMenu");
-				TheTransitionHandler->reverse("MainMenuDefaultMenuBack");
-				TheTransitionHandler->setGroup("MainMenuMultiPlayerMenu");		
-			}
-			else if( controlID == buttonLoadReplayID)
-			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				//buttonPushed = TRUE;
-				buttonPushed = FALSE;
-				dropDownWindows[DROPDOWN_LOADREPLAY]->winHide(FALSE);
-				TheTransitionHandler->remove("MainMenuDefaultMenu");
-				TheTransitionHandler->reverse("MainMenuDefaultMenuBack");
-				TheTransitionHandler->setGroup("MainMenuLoadReplayMenu");
-			}
-			else if( controlID == buttonLoadID )
-			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-//				SaveLoadLayoutType layoutType = SLLT_LOAD_ONLY;
-//        WindowLayout *saveLoadMenuLayout = TheShell->getSaveLoadMenuLayout();
-//				DEBUG_ASSERTCRASH( saveLoadMenuLayout, ("Unable to get save load menu layout.\n") );
-//				saveLoadMenuLayout->runInit( &layoutType );
-//				saveLoadMenuLayout->hide( FALSE );
-//				saveLoadMenuLayout->bringForward();
 				buttonPushed = TRUE;
-				dropDownWindows[DROPDOWN_LOADREPLAY]->winHide(FALSE);
-				TheTransitionHandler->reverse("MainMenuLoadReplayMenuBackTransition");
 				TheShell->push(AsciiString("Menus/SaveLoad.wnd"));
-
 			}
-			else if( controlID == buttonReplayID )
+			else if( control == buttonReplay )
 			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
 				buttonPushed = TRUE;
-				dropDownWindows[DROPDOWN_LOADREPLAY]->winHide(FALSE);
-				TheTransitionHandler->reverse("MainMenuLoadReplayMenuBackTransition");
 				TheShell->push(AsciiString("Menus/ReplayMenu.wnd"));
 			}
-			else if( controlID == skirmishID )
-			{
+			else if( control == buttonSkirmish )
 				enterSkirmishRoom( HOST_MODE_CLASSIC );
+			else if( control == buttonMods )
+			{
+				TheCampaignManager->setCampaign( AsciiString::TheEmptyString );
+				railPanel = PANEL_MODS;
+				layOutMenu();
 			}
-			else if( controlID == modsID )
+			else if( control == buttonModeDirectStrike )
+				enterSkirmishRoom( HOST_MODE_DIRECT_STRIKE );
+			else if( control == buttonModeApocalypse )
+				enterSkirmishRoom( HOST_MODE_APOCALYPSE );
+			else if( side >= 0 )
+				openCampaign( side );
+			else if( control == buttonCampaignZH || control == buttonCampaignGenerals )
 			{
-				// which mode; the answer opens its skirmish room
-				if( !campaignSelected && !dontAllowTransitions )
-					AskGameMode( enterSkirmishRoom );
+				if( railSide != SIDE_CHALLENGE )
+				{
+					generalsOpen = control == buttonCampaignGenerals;
+					TheCampaignManager->setCampaign( generalsOpen ? GENERALS_CAMPAIGNS[ railSide ] : ZERO_HOUR_CAMPAIGNS[ railSide ] );
+					loadMissions();
+					layOutMenu();
+				}
 			}
-			else if( controlID == onlineID )
+			else if( control == buttonEasy )
+				startAtDifficulty( DIFFICULTY_EASY );
+			else if( control == buttonMedium )
+				startAtDifficulty( DIFFICULTY_NORMAL );
+			else if( control == buttonHard )
+				startAtDifficulty( DIFFICULTY_HARD );
+			else if( control == buttonOptions )
 			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				buttonPushed = TRUE;
-				dropDownWindows[DROPDOWN_MULTIPLAYER]->winHide(FALSE);
-				TheTransitionHandler->reverse("MainMenuMultiPlayerMenuTransitionToNext");
-
-				StartPatchCheck();
-//				localAnimateWindowManager->reverseAnimateWindow();
-				dropDown = DROPDOWN_NONE;
-
-			}  // end else if
-			else if( controlID == networkID )
-			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				buttonPushed = TRUE;
-				dropDownWindows[DROPDOWN_MULTIPLAYER]->winHide(FALSE);
-				TheTransitionHandler->reverse("MainMenuMultiPlayerMenuTransitionToNext");
-				TheShell->push( AsciiString("Menus/LanLobbyMenu.wnd") );
-
-				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_NETWORK_SELECTED]);
-			}  // end else if
-			else if( controlID == optionsID )
-			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				//buttonPushed = TRUE;
 				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_OPTIONS_SELECTED]);
 
 				// load the options menu
@@ -1731,7 +1842,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				optLayout->hide(FALSE);
 				optLayout->bringForward();
 			}  // end else if
-			else if( controlID == worldBuilderID )
+			else if( control == buttonWorldBuilder && buttonWorldBuilder )
 			{
 #if defined _DEBUG
 				if(!startWorldBuilder("WorldBuilderD.exe"))
@@ -1744,245 +1855,30 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 					MessageBoxOk(TheGameText->fetch("GUI:WorldBuilder"), TheGameText->fetch("GUI:WorldBuilderLoadFailed"),NULL);
 #endif
 			}
-			else if( controlID == getUpdateID )
+			else if( control == getUpdate && getUpdate )
 			{
 				StartDownloadingPatches();
 			}
-			else if( controlID == exitID )
+			else if( control == buttonExit )
 			{
-				// If we ever want to add a dialog before we exit out of the game, uncomment this line and kill the quitCallback() line below.
-//#if defined(_DEBUG) || defined(_INTERNAL)
-				
-				//Added By Sadullah Nader
-				//Changed the preprocessing code to normal code
+				// a windowed game quits at once, as it always has; a fullscreen one asks first, with
+				// keys of its own (QuitMenu's "EXIT?" is about leaving a match)
 				if (TheGlobalData->m_windowed)
-				{
 					quitCallback();
-//#else	
-				}
 				else
-				{
-					QuitMessageBoxYesNo(TheGameText->fetch("GUI:QuitPopupTitle"), TheGameText->fetch("GUI:QuitPopupMessage"),quitCallback,NULL);
-				}
-				//
-//#endif
-				
+					QuitMessageBoxYesNo(TheGameText->fetch("GUI:MainMenuExitTitle"), TheGameText->fetch("GUI:MainMenuExitMessage"), quitCallback, NULL);
 			}  // end else if
-			else if(controlID == buttonChallengeID)
+			else
 			{
-				if(campaignSelected || dontAllowTransitions)
-					break;
-
-				// set up for the difficulty select into challenge menu
-				TheTransitionHandler->setGroup("MainMenuFactionTraining");
-				GameWindow *win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionTraining"));
-				if(win)
-					win->winHide(TRUE);
-				TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBackTraining");
-				TheTransitionHandler->setGroup("MainMenuDifficultyMenuTraining");
-				campaignSelected = TRUE;
-				showLogo = FALSE;
-				showSide = SHOW_TRAINING;
-				launchChallengeMenu = TRUE;
+				for( Int m = 0; m < missionCount; ++m )
+					if( control == buttonMission[ m ] )
+						missionPicked = m;
 			}
-			
-
-// This button has been removed for the mission disk -June 2003
-/*			else if(controlID == buttonTRAININGID)
-			{
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				TheCampaignManager->setCampaign( "TRAINING" );
-				TheTransitionHandler->setGroup("MainMenuFactionTraining");
-				TheTransitionHandler->remove("MainMenuFactionTraining", TRUE);
-				GameWindow *win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionTraining"));
-				if(win)
-					win->winHide(TRUE);
-				TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBackTraining");
-				TheTransitionHandler->setGroup("MainMenuDifficultyMenuTraining");
-				campaignSelected = TRUE;
-				showLogo = FALSE;
-				showSide = SHOW_TRAINING;
-
-//				setupGameStart(TheCampaignManager->getCurrentMap());
-			}
-*/			else if(controlID == buttonUSAID)
-			{
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				campaignPickShown = generalsCampaignInstalled( "GEN_USA" );
-				TheCampaignManager->setCampaign( "USA" );
-#ifdef _CAMPEA_DEMO
-				TheCampaignManager->setCampaign( "MD_USA_1_DEMO" );
-#endif
-				TheTransitionHandler->setGroup("MainMenuFactionUS");
-				TheTransitionHandler->remove("MainMenuFactionUS", TRUE);
-				GameWindow *win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionUS"));
-				if(win)
-					win->winHide(TRUE);
-				TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBackUS");
-				showCampaignOrMissionMenu("MainMenuCampaignMenuUS", "MainMenuMissionMenuUS", "MainMenuDifficultyMenuUS");
-				campaignSelected = TRUE;
-				logoIsShown = FALSE;
-				showLogo = FALSE;
-				showSide = SHOW_USA;
-//				launchChallengeMenu = FALSE;
-//				WindowLayout *layout = NULL;
-//				layout = TheWindowManager->winCreateLayout( AsciiString( "Menus/DifficultySelect.wnd" ) );
-//				layout->runInit();
-//				layout->hide( FALSE );
-//				layout->bringForward();
-
-//				setupGameStart(TheCampaignManager->getCurrentMap());
-			}
-			else if(controlID == buttonGLAID)
-			{
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				campaignPickShown = generalsCampaignInstalled( "GEN_GLA" );
-				TheCampaignManager->setCampaign( "GLA" );
-#ifdef _CAMPEA_DEMO
-				TheCampaignManager->setCampaign( "MD_USA_2_DEMO" );
-#endif
-				TheTransitionHandler->setGroup("MainMenuFactionGLA");
-				TheTransitionHandler->remove("MainMenuFactionGLA", TRUE);
-				GameWindow *win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionGLA"));
-				if(win)
-					win->winHide(TRUE);				
-				TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBackGLA");
-				showCampaignOrMissionMenu("MainMenuCampaignMenuGLA", "MainMenuMissionMenuGLA", "MainMenuDifficultyMenuGLA");
-				campaignSelected = TRUE;
-				logoIsShown = FALSE;
-				showLogo = FALSE;
-				showSide = SHOW_GLA;
-//				launchChallengeMenu = FALSE;
-//				WindowLayout *layout = NULL;
-//				layout = TheWindowManager->winCreateLayout( AsciiString( "Menus/DifficultySelect.wnd" ) );
-//				layout->runInit();
-//				layout->hide( FALSE );
-//				layout->bringForward();
-
-//				setupGameStart(TheCampaignManager->getCurrentMap());
-			}
-			else if(controlID == buttonChinaID)
-			{
-				if(campaignSelected || dontAllowTransitions)
-					break;
-				campaignPickShown = generalsCampaignInstalled( "GEN_CHINA" );
-				TheCampaignManager->setCampaign( "China" );
-#ifdef _CAMPEA_DEMO
-				TheCampaignManager->setCampaign( "MD_GLA_3_DEMO" );
-#endif
-				TheTransitionHandler->setGroup("MainMenuFactionChina");
-				TheTransitionHandler->remove("MainMenuFactionChina", TRUE);
-				GameWindow *win = TheWindowManager->winGetWindowFromId(parentMainMenu, TheNameKeyGenerator->nameToKey("MainMenu.wnd:WinFactionChina"));
-				if(win)
-					win->winHide(TRUE);				
-				TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBackChina");
-				showCampaignOrMissionMenu("MainMenuCampaignMenuChina", "MainMenuMissionMenuChina", "MainMenuDifficultyMenuChina");
-				campaignSelected = TRUE;
-				logoIsShown = FALSE;
-				showLogo = FALSE;
-				showSide = SHOW_CHINA;
-//				launchChallengeMenu = FALSE;
-//				WindowLayout *layout = NULL;
-//				layout = TheWindowManager->winCreateLayout( AsciiString( "Menus/DifficultySelect.wnd" ) );
-//				layout->runInit();
-//				layout->hide( FALSE );
-//				layout->bringForward();
-
-//				setupGameStart(TheCampaignManager->getCurrentMap());
-			}// end else if
-			else if(controlID == buttonEasyID)
-			{
-				if(dontAllowTransitions)
-					break;
-
-				checkCDBeforeCampaign(DIFFICULTY_EASY);
-			}
-			else if(controlID == buttonMediumID)
-			{
-				if(dontAllowTransitions)
-					break;
-
-				checkCDBeforeCampaign(DIFFICULTY_NORMAL);
-			}
-			else if(controlID == buttonHardID)
-			{
-				if(dontAllowTransitions)
-					break;
-
-				checkCDBeforeCampaign(DIFFICULTY_HARD);
-			}
-			else if(controlID == buttonDiffBackID && (showSide == SHOW_USA || showSide == SHOW_GLA || showSide == SHOW_CHINA) && missionPanelPresent())
-			{
-				// a campaign's difficulty panel came from its mission panel, so Back goes there
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				TheTransitionHandler->reverse("MainMenuDifficultyPanelOut");
-				TheTransitionHandler->setGroup("MainMenuMissionPanel");
-			}
-			else if(controlID == buttonDiffBackID)
-			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				TheCampaignManager->setCampaign( AsciiString::TheEmptyString );
-				diffReverseSide();
-				campaignSelected = FALSE;
-			}
-			else if(controlID == buttonMissionBackID && campaignPickShown)
-			{
-				// the mission panel came from the pick panel, so Back goes there
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				TheTransitionHandler->reverse("MainMenuMissionPanelOut");
-				TheTransitionHandler->setGroup("MainMenuCampaignPanel");
-			}
-			else if(controlID == buttonMissionBackID || controlID == buttonCampaignBackID)
-			{
-				if(dontAllowTransitions)
-					break;
-				dontAllowTransitions = TRUE;
-				TheCampaignManager->setCampaign( AsciiString::TheEmptyString );
-				if(controlID == buttonCampaignBackID)
-					campaignReverseSide();
-				else
-					missionReverseSide();
-				campaignSelected = FALSE;
-			}
-			else if(controlID == buttonCampaignZHID || controlID == buttonCampaignGeneralsID)
-			{
-				if(dontAllowTransitions)
-					break;
-				static const char *const zeroHour[] = { "USA", "GLA", "China" };
-				static const char *const generals[] = { "GEN_USA", "GEN_GLA", "GEN_CHINA" };
-				const Int side = showSide - SHOW_USA;
-				TheCampaignManager->setCampaign( controlID == buttonCampaignZHID ? zeroHour[side] : generals[side] );
-				dontAllowTransitions = TRUE;
-				TheTransitionHandler->reverse("MainMenuCampaignPanelOut");
-				showMissionMenu("MainMenuMissionPanel");
-			}
-			else if(missionButtonIndex(controlID) >= 0)
-			{
-				if(dontAllowTransitions)
-					break;
-				Int m = missionButtonIndex(controlID);
-				// the campaign starts here and carries on from it as it would have; every campaign
-				// mission starts at rank 0 whatever came before (CampaignManager::getRankPoints)
-				TheCampaignManager->setCampaignAndMission( TheCampaignManager->getCurrentCampaign()->m_name, missionNames[m] );
-				dontAllowTransitions = TRUE;
-				TheTransitionHandler->reverse("MainMenuMissionPanelOut");
-				TheTransitionHandler->setGroup("MainMenuDifficultyPanel");
-			}
-
 
 			break;
 
 		}  // end selected
-		
+
 		//---------------------------------------------------------------------------------------------
 		default:
 			return MSG_IGNORED;
@@ -1992,26 +1888,3 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 	return MSG_HANDLED;
 
 }  // end MainMenuSystem
-
-void diffReverseSide( void )
-{
-	switch (showSide) {
-	case SHOW_TRAINING:
-		TheTransitionHandler->reverse("MainMenuDifficultyMenuTrainingBack");
-		TheTransitionHandler->setGroup("MainMenuSinglePlayerTrainingMenuFromDiff");
-		break;
-	case SHOW_USA:
-		TheTransitionHandler->reverse("MainMenuDifficultyMenuUSBack");
-		TheTransitionHandler->setGroup("MainMenuSinglePlayerUSAMenuFromDiff");
-		break;
-	case SHOW_GLA:
-		TheTransitionHandler->reverse("MainMenuDifficultyMenuGLABack");
-		TheTransitionHandler->setGroup("MainMenuSinglePlayerGLAMenuFromDiff");
-		break;
-	case SHOW_CHINA:
-		TheTransitionHandler->reverse("MainMenuDifficultyMenuChinaBack");
-		TheTransitionHandler->setGroup("MainMenuSinglePlayerChinaMenuFromDiff");
-
-		break;
-	}
-}

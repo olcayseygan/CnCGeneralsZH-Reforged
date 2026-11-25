@@ -10705,10 +10705,6 @@ TOOLTIP:OnlineKeepSignedIn
 "Şifren hiçbir yere kaydedilmez"
 END
 
-TOOLTIP:OnlineNeedsLauncher
-"Çevrimiçi oyunu başlatıcıdan aç"
-END
-
 GUI:OnlineLoginSavedToken
 "Kayıtlı oturum"
 END

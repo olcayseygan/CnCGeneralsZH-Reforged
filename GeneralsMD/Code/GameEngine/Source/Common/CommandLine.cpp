@@ -2760,8 +2760,11 @@ Int parseOnlineStart(char *args[], int num)
 	return hasNumber ? 2 : 1;
 }
 
-/* -onlinelogin: the online login screen at startup with empty fields, for a person trying the service by
-	 hand; the shell map goes off as it does for -onlineuser */
+/* -onlinelogin: the online login screen at startup, over the main menu; a remembered token signs in by
+	 itself and lands on the hub.  With -online this is the launcher's ONLINE key (a game started without
+	 both has no online key anywhere in the shell).  The shell map goes off here as it does for
+	 -onlineuser, and Shell::showShell turns it back on once the main menu is under the login, so Back
+	 from the online screens lands on the menu over its live map; -noshellmap and -headless keep it off. */
 Int parseOnlineLogin(char *args[], int num)
 {
 	if (TheWritableGlobalData)

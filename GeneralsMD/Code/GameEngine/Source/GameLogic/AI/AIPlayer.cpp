@@ -22126,6 +22126,28 @@ Bool AIPlayer::fightsOnItsOwn( Object *obj )
 }
 
 //----------------------------------------------------------------------------------------------------------
+/** The players whose Objects me->getRelationship calls ENEMIES, for a search's onlyPlayers, as
+	* Team::getEnemyPlayerMask is for a team's view.  With no team-keyed override, me's answer for a team
+	* depends only on that team's player, so the player's default team answers for all of its teams;
+	* otherwise, or when a default team was handed to another player, every player. */
+static PlayerMaskType enemyPlayersOf( const Player *me )
+{
+	if( me->hasTeamRelationships() )
+		return PLAYERMASK_ALL;
+	PlayerMaskType mask = PLAYERMASK_NONE;
+	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+	{
+		const Player *player = ThePlayerList->getNthPlayer( i );
+		const Team *team = player ? player->getDefaultTeam() : NULL;
+		if( team == NULL || team->getControllingPlayer() != player )
+			return PLAYERMASK_ALL;
+		if( me->getRelationship( team ) == ENEMIES )
+			mask |= player->getPlayerMask();
+	}
+	return mask;
+}
+
+//----------------------------------------------------------------------------------------------------------
 void AIPlayer::tacticsFor( Object *obj )
 {
 	if( !fightsOnItsOwn( obj ) )
@@ -22204,13 +22226,16 @@ void AIPlayer::tacticsFor( Object *obj )
 	// a hurt unit on ground it cannot win goes home, where the next wave will pick it up; one already
 	// at home has nowhere better to be and fights where it stands
 	const BodyModuleInterface *body = obj->getBodyModule();
+	const Bool hurtAway = body && body->getHealth() < body->getMaxHealth() * HURT_HEALTH_SHARE && !isAtHome( pos );
 	// with the map layers our guns here are weighed against the army we remember, so a cell of tank guns does not
-	// count as covered against helicopters
-	const Real friendsHere = m_influence.friendAt( pos->x, pos->y, friendReadMix() );
+	// count as covered against helicopters.  Read only for a hurt unit away from home: the remembered army is a
+	// walk over the whole ledger, and nothing writes the ledger between here and the end of this seat's update,
+	// so whoever reads it first in the frame reads the same mix
+	const Real friendsHere = hurtAway ? m_influence.friendAt( pos->x, pos->y, friendReadMix() ) : 0.0f;
 	// read by class, a hurt Crusader's own gun equals a Battlemaster's to the bit, and a third of a tank in an even
 	// fight is a dead one (maplayers_hazard): with the layers an even reading pulls it out too
 	const Bool outgunned = threatHere > friendsHere || (layersHere() && threatHere > 0.0f && threatHere >= friendsHere);
-	if( body && body->getHealth() < body->getMaxHealth() * HURT_HEALTH_SHARE && outgunned && !isAtHome( pos ) )
+	if( hurtAway && outgunned )
 	{
 		// out to the first ground nothing known covers, not all the way home: on a big map the walk home
 		// crossed the ground it was pulled out of, and it stays near enough to guard the road behind the
@@ -22245,17 +22270,59 @@ void AIPlayer::tacticsFor( Object *obj )
 		return;
 	}
 
+	// fire, then step: a gun that is ready or aiming shoots first, and the hop happens while it reloads.
+	// Hopping on the clock alone had a Tomahawk step back every second and never finish a launch.
+	// Once the enemy's gun already reaches it, it steps whatever its own gun is doing: a Tomahawk that
+	// waited to finish aiming while four tanks drove up to it died aiming.
+	const Weapon *gun = obj->getCurrentWeapon();
+	// ... and only when what it is shooting at is in reach; a gun that is ready while it drives towards a
+	// target further off is not about to fire, and waiting on it let a buggy drive into the tanks
+	const Bool gunBusy = gun && (gun->getStatus() == READY_TO_FIRE || gun->getStatus() == PRE_ATTACK) && victim != NULL &&
+		sqr( victim->getPosition()->x - pos->x ) + sqr( victim->getPosition()->y - pos->y ) <= sqr( myRange );
+	// Only what can aim without driving: infantry, or a gun on a turret.  A Rocket Buggy's rack is fixed
+	// to the chassis and a car cannot turn on the spot, so every hop cost it a three-second circle to
+	// face the tank again, and it fired less kiting than standing.
+	const Bool aimsWithoutDriving = obj->isKindOf( KINDOF_INFANTRY ) || ai->getWhichTurretForCurWeapon() != TURRET_INVALID;
+	// the gun in reach matters only to a unit whose target is out of reach
+	const Bool victimOutOfReach = victim &&
+		sqr( victim->getPosition()->x - pos->x ) + sqr( victim->getPosition()->y - pos->y ) > sqr( myRange );
+	// the attack test below asked every slot's status for each enemy in reach, and Weapon::getStatus writes the
+	// answer back, which holdToRetailFireCycle reads; a unit that skips the test writes it here, as it did
+	if( !victimOutOfReach )
+	{
+		for( Int slot = PRIMARY_WEAPON; slot < WEAPONSLOT_COUNT; ++slot )
+		{
+			const Weapon *weapon = obj->getWeaponInWeaponSlot( (WeaponSlotType)slot );
+			if( weapon )
+				weapon->getStatus();
+		}
+	}
+
+	/* The search goes only as far as its answer can be used, and only over this player's enemies.  Without a
+		 target out of reach the nearest armed thing is never read, and a kite steps from something nearer than its
+		 reach less two margins (AIKite_standoffDistance's standoff, less the margin below), so the nearest thing to
+		 kite from beyond that is no step either.  Over the nearer ground the same objects come back in the same
+		 order, so the same nearest ones win; a whole crowd's search per unit was most of this function. */
+	const Real kiteReach = myRange - 2.0f * KITE_MARGIN;
+	Real searchRange = 0.0f;
+	if( victimOutOfReach || (aimsWithoutDriving && kiteReach <= 0.0f) )
+		searchRange = myRange;
+	else if( aimsWithoutDriving )
+		searchRange = min( myRange, kiteReach + 1.0f );
+
 	// kite: the nearest thing that is about to reach it and that it outranges
 	Object *closing = NULL;
 	Real closingRange = 0.0f;
 	Real closingDistSqr = 0.0f;
 	Object *nearestArmed = NULL;			// the closest armed thing in this unit's reach, whatever else it is
 	Real nearestArmedDistSqr = 0.0f;
+	if( searchRange > 0.0f )
 	{
 		PartitionFilterPlayerAffiliation enemies( m_player, ALLOW_ENEMIES, true );
 		PartitionFilterAlive alive;
 		PartitionFilter *filters[] = { &enemies, &alive, NULL };
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( pos, myRange, FROM_CENTER_2D, filters );
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( pos, searchRange, FROM_CENTER_2D, filters, ITER_FASTEST,
+			enemyPlayersOf( m_player ) );
 		MemoryPoolObjectHolder hold( iter );
 		for( Object *enemy = iter->first(); enemy; enemy = iter->next() )
 		{
@@ -22271,12 +22338,14 @@ void AIPlayer::tacticsFor( Object *obj )
 			const Real distSqr = sqr( enemy->getPosition()->x - pos->x ) + sqr( enemy->getPosition()->y - pos->y );
 			// and only one it can shoot: without this a Battlemaster "turned on" every Helix overhead,
 			// 410 times in two matches, and drove after aircraft its gun cannot reach
-			if( (nearestArmed == NULL || distSqr < nearestArmedDistSqr) &&
+			if( victimOutOfReach && (nearestArmed == NULL || distSqr < nearestArmedDistSqr) &&
 					obj->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, enemy, CMD_FROM_AI ) == ATTACKRESULT_POSSIBLE )
 			{
 				nearestArmed = enemy;
 				nearestArmedDistSqr = distSqr;
 			}
+			if( !aimsWithoutDriving )
+				continue;		// nothing to kite with
 			// watched from as far out as the unit drives while it turns round, since a vehicle cannot
 			// reverse: a buggy that started its turn at the enemy's reach finished it inside
 			if( distSqr > sqr( reach + KITE_WATCH_MARGIN + ai->getCurLocomotorSpeed() * KITE_TURN_FRAMES ) )
@@ -22312,20 +22381,7 @@ void AIPlayer::tacticsFor( Object *obj )
 			}
 		}
 	}
-	// fire, then step: a gun that is ready or aiming shoots first, and the hop happens while it reloads.
-	// Hopping on the clock alone had a Tomahawk step back every second and never finish a launch.
-	// Once the enemy's gun already reaches it, it steps whatever its own gun is doing: a Tomahawk that
-	// waited to finish aiming while four tanks drove up to it died aiming.
-	const Weapon *gun = obj->getCurrentWeapon();
-	// ... and only when what it is shooting at is in reach; a gun that is ready while it drives towards a
-	// target further off is not about to fire, and waiting on it let a buggy drive into the tanks
-	const Bool gunBusy = gun && (gun->getStatus() == READY_TO_FIRE || gun->getStatus() == PRE_ATTACK) && victim != NULL &&
-		sqr( victim->getPosition()->x - pos->x ) + sqr( victim->getPosition()->y - pos->y ) <= sqr( myRange );
 	const Bool alreadyHit = closing && closingDistSqr <= sqr( closingRange );
-	// Only what can aim without driving: infantry, or a gun on a turret.  A Rocket Buggy's rack is fixed
-	// to the chassis and a car cannot turn on the spot, so every hop cost it a three-second circle to
-	// face the tank again, and it fired less kiting than standing.
-	const Bool aimsWithoutDriving = obj->isKindOf( KINDOF_INFANTRY ) || ai->getWhichTurretForCurWeapon() != TURRET_INVALID;
 	Real standoff = 0.0f;
 	if( aimsWithoutDriving && closing && (alreadyHit || !gunBusy) && AIKite_standoffDistance( myRange, closingRange, KITE_MARGIN, &standoff ) &&
 			closingDistSqr < sqr( standoff - KITE_MARGIN ) )		// already standing off: a step would only slide it sideways
@@ -22354,8 +22410,7 @@ void AIPlayer::tacticsFor( Object *obj )
 	// A target out of reach is walked to, through whatever is in reach on the way.  Four buggies sent at
 	// the last of four tanks drove past the other three with their rockets loaded and died without one
 	// shot fired.  With an armed enemy already in reach, that is the one it shoots.
-	if( victim && nearestArmed && nearestArmed != victim &&
-			sqr( victim->getPosition()->x - pos->x ) + sqr( victim->getPosition()->y - pos->y ) > sqr( myRange ) )
+	if( victimOutOfReach && nearestArmed && nearestArmed != victim )
 	{
 		DEBUG_LOG(("AI TACTICS frame %d player %d turns '%s' on the '%s' in reach instead of walking to its target\n", now,
 			m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), nearestArmed->getTemplate()->getName().str()));

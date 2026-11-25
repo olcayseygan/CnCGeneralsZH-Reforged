@@ -56,6 +56,10 @@
 #include "GameClient/DisconnectMenu.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameNetwork/GameInfo.h"
+#include "Common/GlobalData.h"
+#include "GameClient/CampaignManager.h"
+#include "GameClient/MapUtil.h"
+#include "GameClient/MenuBoxParts.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -116,6 +120,221 @@ static void initGadgetsNoSaveQuit( void )
 
 }
 
+//-------------------------------------------------------------------------------------------------
+// The in-game menu in the menu language (docs/plans/MENU-REDESIGN.md, package 5; the boxes README's
+// boxes-1-ingame-menu and -1b): a 560 box over the match, clear of the command bar, PAUSED (MENU in a
+// network game, where nothing pauses) with the map and the clock after it, the main menu rail's keys
+// with Return lit on top, the keys that leave the match set apart under a faint rule, the Esc hint.
+// Tools/boxes_layout.py writes the same rects into QuitMenu.wnd and QuitNoSave.wnd.
+//-------------------------------------------------------------------------------------------------
+static const Int RAIL_KEY = 62, RAIL_GAP = 10, RAIL_SPLIT = 24, RAIL_HINT = 60;
+static const Int RAIL_TEXT = 22;
+
+static DisplayString *quitTitle = NULL;
+static DisplayString *quitFacts = NULL;
+static DisplayString *quitHint = NULL;
+static Int quitRuleY1080 = 0;		///< the faint rule between the keys that stay and the keys that leave
+
+/// the box's height for that many keys: the head, 24 of air, the keys, the split, the hint
+Int QuitMenuBoxHeight( Int keys )
+{
+	return UIStyle::BOX_HEAD + 24 + keys * RAIL_KEY + ( keys - 1 ) * RAIL_GAP + RAIL_SPLIT + RAIL_HINT;
+}
+
+/// "Tournament Desert  ·  12:41": the match's map (a mission's place) and its clock in wall time
+UnicodeString MatchFactsLine( void )
+{
+	const Mission *mission = ( TheGameLogic->getGameMode() == GAME_SINGLE_PLAYER && TheCampaignManager )
+													 ? TheCampaignManager->getCurrentMission() : NULL;
+	UnicodeString map;
+	const MapMetaData *meta = TheMapCache ? TheMapCache->findMap( TheGlobalData->m_mapName ) : NULL;
+	if( mission && !mission->m_locationNameLabel.isEmpty() )
+		map = TheGameText->fetch( mission->m_locationNameLabel );
+	else if( meta )
+		map = meta->m_displayName;
+	else
+		map.translate( TheGameState->getMapLeafName( TheGlobalData->m_mapName ) );
+	UnsignedInt frame = TheVictoryConditions && TheVictoryConditions->getEndFrame() ? TheVictoryConditions->getEndFrame()
+																																							 : TheGameLogic->getFrame();
+	const UnsignedInt seconds = frame / LOGICFRAMES_PER_SECOND;
+	UnicodeString line;
+	if( seconds >= 3600 )
+		line.format( u"%ls  ·  %d:%02d:%02d", map.str(), seconds / 3600, seconds / 60 % 60, seconds % 60 );
+	else
+		line.format( u"%ls  ·  %d:%02d", map.str(), seconds / 60, seconds % 60 );
+	return line;
+}
+
+/// a key of the rail: black over the glass, a FRAME edge; lit, hovered, pressed and disabled as the
+/// main menu draws them; the word left in 22 px bold capitals, a chevron when it opens a panel
+static void railKey( GameWindow *window, WinInstanceData *instData, Bool primary )
+{
+	const IRegion2D r = MenuBox::windowRect( window );
+	const Bool enabled = BitTest( window->winGetStatus(), WIN_STATUS_ENABLED );
+	const Bool pressed = BitTest( instData->getState(), WIN_STATE_SELECTED );
+	const Bool hover = BitTest( instData->getState(), WIN_STATE_HILITED );
+	const Int w = r.hi.x - r.lo.x, h = r.hi.y - r.lo.y;
+	MenuBox::fill( r, GameMakeColor( 0, 0, 0, 150 ) );
+	Color ink = UIStyle::INK;
+	if( !enabled )
+	{
+		MenuBox::outline( r, UIStyle::withAlpha( UIStyle::FRAME, 140 ) );
+		ink = UIStyle::MUTED;
+	}
+	else if( primary )
+	{
+		MenuBox::fill( r, UIStyle::withAlpha( UIStyle::EDGE, pressed ? 110 : 60 ) );
+		const Int line = max( 1, UIStyle::px( 2.0f ) );
+		UIStyle::litLine( r.lo.x, r.lo.y, w, line, UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.lo.x, r.hi.y - line, w, line, UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.lo.x, r.lo.y, line, h, UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.hi.x - line, r.lo.y, line, h, UIStyle::EDGE_LIT );
+		if( hover )
+			MenuBox::fill( r, GameMakeColor( 255, 255, 255, 12 ) );
+	}
+	else if( pressed )
+	{
+		MenuBox::fill( r, UIStyle::withAlpha( UIStyle::EDGE, 90 ) );
+		MenuBox::outline( r, UIStyle::EDGE );
+	}
+	else if( hover )
+	{
+		MenuBox::fill( r, GameMakeColor( 255, 255, 255, 16 ) );
+		MenuBox::outline( r, UIStyle::EDGE );
+		UIStyle::litLine( r.lo.x, r.lo.y, max( 2, UIStyle::px( 3.0f ) ), h, UIStyle::INK );
+	}
+	else
+		MenuBox::outline( r, UIStyle::FRAME );
+	MenuBox::words( instData->getTextDisplayString(), UIStyle::menuFont( RAIL_TEXT, TRUE ), r.lo.x + UIStyle::px( 28.0f ),
+		( r.lo.y + r.hi.y ) / 2, ink );
+	if( window == buttonSaveLoadWin )
+	{
+		const Int cx = r.hi.x - UIStyle::px( 28.0f ), cy = ( r.lo.y + r.hi.y ) / 2, s = UIStyle::px( 6.0f );
+		const Real line = (Real)max( 1, UIStyle::px( 2.0f ) );
+		TheDisplay->drawLine( cx - s / 2, cy - s, cx + s / 2, cy, line, UIStyle::MUTED );
+		TheDisplay->drawLine( cx + s / 2, cy, cx - s / 2, cy + s, line, UIStyle::MUTED );
+	}
+}
+
+static void railKeyDraw( GameWindow *window, WinInstanceData *instData )
+{
+	railKey( window, instData, FALSE );
+}
+
+static void railPrimaryDraw( GameWindow *window, WinInstanceData *instData )
+{
+	railKey( window, instData, TRUE );
+}
+
+static void quitMenuDraw( GameWindow *window, WinInstanceData * )
+{
+	const IRegion2D r = MenuBox::windowRect( window );
+	UIStyle::boxShell( r, quitTitle, TRUE );
+	Int tw = 0, th = 0;
+	if( quitTitle )
+		quitTitle->getSize( &tw, &th );
+	const Int x0 = r.lo.x + UIStyle::px( (Real)UIStyle::BOX_PAD );
+	const Int x1 = r.hi.x - UIStyle::px( (Real)UIStyle::BOX_PAD );
+	// the facts after the title, on its middle line (boxShell sets the title 24 to 64 down)
+	MenuBox::words( quitFacts, UIStyle::menuFont( UIStyle::MENU_TEXT_BODY ), x0 + tw + UIStyle::px( 20.0f ),
+		r.lo.y + UIStyle::px( 44.0f ), UIStyle::MUTED );
+	const IRegion2D rule = UIStyle::boardRect( 0, quitRuleY1080, 1, quitRuleY1080 + 1 );
+	MenuBox::rule( x0, x1, rule.lo.y, 110 );
+	MenuBox::words( quitHint, UIStyle::menuFont( UIStyle::MENU_TEXT_HINT ), x0,
+		r.hi.y - UIStyle::px( (Real)RAIL_HINT - 20.0f ), UIStyle::MUTED );
+}
+
+static void freeQuitWords( void )
+{
+	if( TheDisplayStringManager )
+	{
+		TheDisplayStringManager->freeDisplayString( quitTitle );
+		TheDisplayStringManager->freeDisplayString( quitFacts );
+		TheDisplayStringManager->freeDisplayString( quitHint );
+	}
+	quitTitle = quitFacts = quitHint = NULL;
+}
+
+/// lays the open menu out on the board and hands its drawing to the code; run on every opening, as
+/// a resolution change builds the menu again and the clock moves on
+static void dressQuitMenu( WindowLayout *layout )
+{
+	GameWindow *parent = layout ? layout->getFirstWindow() : NULL;
+	if( parent == NULL )
+		return;
+	GameWindow *returnWin = TheWindowManager->winGetWindowFromId( parent, buttonReturn );
+	GameWindow *stay[ 3 ] = { returnWin, buttonSaveLoadWin, buttonOptionsWin };
+	GameWindow *leave[ 2 ] = { buttonRestartWin, buttonExitWin };
+	Int keys = 0;
+	for( Int each = 0; each < 3; each++ )
+		keys += stay[ each ] ? 1 : 0;
+	keys += 2;
+
+	const IRegion2D box = UIStyle::boxRect1080( UIStyle::BOX_MENU, QuitMenuBoxHeight( keys ), TRUE );
+	MenuBox::place( parent, box );
+	const Int x0 = box.lo.x + UIStyle::BOX_PAD, x1 = box.hi.x - UIStyle::BOX_PAD;
+	Int y = box.lo.y + UIStyle::BOX_HEAD + 24;
+	for( Int each = 0; each < 3; each++ )
+	{
+		if( stay[ each ] == NULL )
+			continue;
+		MenuBox::place( stay[ each ], MenuBox::region( x0, y, x1, y + RAIL_KEY ) );
+		stay[ each ]->winSetDrawFunc( stay[ each ] == returnWin ? railPrimaryDraw : railKeyDraw );
+		y += RAIL_KEY + RAIL_GAP;
+	}
+	quitRuleY1080 = y - RAIL_GAP + RAIL_SPLIT / 2;
+	y += RAIL_SPLIT - RAIL_GAP;
+	for( Int each = 0; each < 2; each++ )
+	{
+		MenuBox::place( leave[ each ], MenuBox::region( x0, y, x1, y + RAIL_KEY ) );
+		if( leave[ each ] )
+			leave[ each ]->winSetDrawFunc( railKeyDraw );
+		y += RAIL_KEY + RAIL_GAP;
+	}
+	// the words in capitals, as the rail draws them; the layout's own art stays hidden
+	GameWindow *all[ 5 ] = { returnWin, buttonSaveLoadWin, buttonOptionsWin, buttonRestartWin, buttonExitWin };
+	for( Int each = 0; each < 5; each++ )
+		if( all[ each ] )
+			GadgetButtonSetText( all[ each ], UIStyle::capitals( all[ each ]->winGetInstanceData()->getText() ) );
+
+	freeQuitWords();
+	const Bool network = TheGameLogic->isInMultiplayerGame() && !TheGameLogic->isInSkirmishGame();
+	quitTitle = TheDisplayStringManager->newDisplayString();
+	quitTitle->setText( UIStyle::capitals( TheGameText->fetch( network ? "GUI:InGameMenu" : "GUI:Paused" ) ) );
+	quitFacts = TheDisplayStringManager->newDisplayString();
+	quitFacts->setText( MatchFactsLine() );
+	quitHint = TheDisplayStringManager->newDisplayString();
+	quitHint->setText( TheGameText->fetch( "GUI:EscReturns" ) );
+	parent->winSetDrawFunc( quitMenuDraw );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Victorious, Defeat, LocalDefeat and ObserverQuit as the band of the menu language (the boxes
+	* README's boxes-7): frame A over the match above the bar, VICTORY, DEFEAT or GAME OVER at the
+	* end screen's title size, gold for a victory alone, a short lit rule, the map and the clock in
+	* MUTED.  Named in each layout's DRAWCALLBACK (Tools/boxes_layout.py); ScriptActions opens them
+	* as it always did. */
+//-------------------------------------------------------------------------------------------------
+void MatchBandDraw( GameWindow *window, WinInstanceData * )
+{
+	static const NameKeyType victory = NAMEKEY( "Victorious.wnd:" );
+	static const NameKeyType observer = NAMEKEY( "ObserverQuit.wnd:" );
+	static MenuBox::TextPool pool;
+	const NameKeyType id = (NameKeyType)window->winGetWindowId();
+	const char *key = id == victory ? "GUI:Victory" : id == observer ? "GUI:GameOver" : "GUI:Defeat";
+
+	const IRegion2D band = UIStyle::boardRect( 600, 318, 1320, 486 );
+	UIStyle::boxShell( band, NULL, TRUE );
+	const Int cx = ( band.lo.x + band.hi.x ) / 2;
+	pool.begin();
+	MenuBox::words( pool.get( UIStyle::capitals( TheGameText->fetch( key ) ) ), UIStyle::menuFont( UIStyle::MENU_TEXT_TITLE, TRUE ),
+		cx, band.lo.y + UIStyle::px( 65.0f ), id == victory ? UIStyle::GOLD : UIStyle::INK, MenuBox::CENTRE );
+	const Int half = UIStyle::px( 120.0f );
+	UIStyle::litLine( cx - half, band.lo.y + UIStyle::px( 108.0f ), 2 * half, max( 1, UIStyle::px( 2.0f ) ), UIStyle::FRAME );
+	MenuBox::words( pool.get( MatchFactsLine() ), UIStyle::menuFont( UIStyle::MENU_TEXT_BODY ), cx,
+		band.lo.y + UIStyle::px( 132.0f ), UIStyle::MUTED, MenuBox::CENTRE );
+}
+
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////////////////////////
 
 void destroyQuitMenu()
@@ -135,6 +354,7 @@ void destroyQuitMenu()
 	}
 	noSaveLoadQuitMenuLayout = NULL;
 	quitMenuLayout = NULL;
+	freeQuitWords();
 
 	//
 	// The save/load layout is the shell's, not this file's - it is handed over by
@@ -352,25 +572,21 @@ static void restartMissionMenu()
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The menu's coming and going: the layout's own transitions, as the game shipped, or none at all
-	* with window animation off. */
+/** The menu's coming and going.  EA's QuitFull and QuitNoSave transitions flashed its art in key by
+	* key; the menu language draws no art and the box stands as it opens, so it is shown and hidden
+	* outright, as it already was with window animation off. */
 //-------------------------------------------------------------------------------------------------
 static void showQuitMenuLayout( const char *group )
 {
 	TheTransitionHandler->remove( group );
-	TheTransitionHandler->setGroup( group );
-	if( !TheGlobalData->m_animateWindows )
-		TheTransitionHandler->remove( group, TRUE );
+	quitMenuLayout->hide( FALSE );
 }
 
 static void hideQuitMenuLayout( void )
 {
 	if( quitMenuLayout == NULL )
 		return;
-	if( !TheGlobalData->m_animateWindows )
-		quitMenuLayout->hide( TRUE );
-	else
-		TheTransitionHandler->reverse( quitMenuLayout == noSaveLoadQuitMenuLayout ? "QuitNoSaveBack" : "QuitFullBack" );
+	quitMenuLayout->hide( TRUE );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -537,6 +753,8 @@ void ToggleQuitMenu()
 		}
 
 
+		dressQuitMenu( quitMenuLayout );
+
 		if (quitConfirmationWindow)
 			TheWindowManager->winDestroy(quitConfirmationWindow);
 		quitConfirmationWindow = NULL;
@@ -637,17 +855,17 @@ WindowMsgHandledType QuitMenuSystem( GameWindow *window, UnsignedInt msg,
 			{
 				if ( TheGameLogic->isInMultiplayerGame() )
 				{
-					// we really want to surrender
-					quitConfirmationWindow = MessageBoxYesNo(TheGameText->fetch("GUI:SurrenderConfirmationTitle"), 
+					// we really want to surrender; it loses the match, so No is lit and Enter answers No
+					quitConfirmationWindow = MessageBoxYesNo(TheGameText->fetch("GUI:SurrenderConfirmationTitle"),
 																			TheGameText->fetch("GUI:SurrenderConfirmation"),
-																			/*quitCallback*/surrenderQuitMenu,noExitQuitMenu);
+																			/*quitCallback*/surrenderQuitMenu,noExitQuitMenu, MSG_BOX_NO);
 				}
 				else
 				{
-					//we really want to restart
-					quitConfirmationWindow = MessageBoxYesNo(TheGameText->fetch("GUI:RestartConfirmationTitle"), 
+					//we really want to restart; it loses the match played so far, No lit as for surrender
+					quitConfirmationWindow = MessageBoxYesNo(TheGameText->fetch("GUI:RestartConfirmationTitle"),
 																			TheGameText->fetch("GUI:RestartConfirmation"),
-																			/*quitCallback*/restartMissionMenu,noExitQuitMenu);
+																			/*quitCallback*/restartMissionMenu,noExitQuitMenu, MSG_BOX_NO);
 				}
 			}  // end else if
 

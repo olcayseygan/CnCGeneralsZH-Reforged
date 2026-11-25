@@ -495,7 +495,8 @@ void DisconnectManager::applyDisconnectVote(Int slot, UnsignedInt frame, Int fro
 	DEBUG_LOG(("DisconnectManager::applyDisconnectVote - added a vote to disconnect slot %d, from slot %d, for frame %d, current votes are %d\n", slot, fromSlot, frame, numVotes));
 	Int transSlot = translatedSlotPosition(slot, conMgr->getLocalPlayerID());
 	if (transSlot != -1) {
-		TheDisconnectMenu->updateVotes(transSlot, numVotes);
+		// the count beside it is isPlayerVotedOut's threshold, for the screen's "2 / 5"
+		TheDisconnectMenu->updateVotes(transSlot, numVotes, conMgr->getNumPlayers() - 1);
 	}
 }
 
@@ -598,7 +599,7 @@ void DisconnectManager::populateDisconnectScreen(ConnectionManager *conMgr) {
 			m_seatHeld[slot] = FALSE;
 
 			Int numVotes = countVotesForPlayer(i);
-			TheDisconnectMenu->updateVotes(slot, numVotes);
+			TheDisconnectMenu->updateVotes(slot, numVotes, conMgr->getNumPlayers() - 1);
 		}
 	}
 }
@@ -971,6 +972,6 @@ void DisconnectManager::resetPlayersVotes(Int playerID, UnsignedInt frame, Conne
 	DEBUG_LOG(("DisconnectManager::resetPlayersVotes - after adjusting votes, player %d has %d votes\n", playerID, numVotes));
 	Int transSlot = translatedSlotPosition(playerID, conMgr->getLocalPlayerID());
 	if (transSlot != -1) {
-		TheDisconnectMenu->updateVotes(transSlot, numVotes);
+		TheDisconnectMenu->updateVotes(transSlot, numVotes, conMgr->getNumPlayers() - 1);
 	}
 }

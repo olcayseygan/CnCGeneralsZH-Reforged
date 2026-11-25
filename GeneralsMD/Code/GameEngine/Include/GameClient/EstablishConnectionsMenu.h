@@ -44,12 +44,15 @@ public:
 	void setPlayerName(Int slot, UnicodeString name);
 	void setPlayerStatus(Int slot, NATConnectionState state);
 
+	/// what the box draws (EstablishConnectionsWindow.cpp): a seat's name, empty when nobody sits
+	/// there, and where its connection stands.  EA's layout held seven; the engine seats 32
+	const UnicodeString &getPlayerName(Int slot) const { return m_names[slot]; }
+	NATConnectionState getPlayerStatus(Int slot) const { return m_states[slot]; }
+
 protected:
 	EstablishConnectionsMenuStateType m_menuState;
-
-	static char *m_playerReadyControlNames[MAX_SLOTS];
-	static char *m_playerNameControlNames[MAX_SLOTS];
-	static char *m_playerStatusControlNames[MAX_SLOTS];
+	UnicodeString m_names[MAX_SLOTS];
+	NATConnectionState m_states[MAX_SLOTS];
 };
 
 extern EstablishConnectionsMenu *TheEstablishConnectionsMenu;

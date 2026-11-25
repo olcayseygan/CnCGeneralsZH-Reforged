@@ -35,7 +35,9 @@
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameClient.h"
+#include "GameClient/UIStyle.h"
 #include "GameClient/DisconnectMenu.h"
 #include "GameClient/GameWindowManager.h"
 #include "Common/NameKeyGenerator.h"
@@ -68,6 +70,13 @@ static GameWindow *buttonVotePlayer5Window = NULL;
 static GameWindow *buttonVotePlayer6Window = NULL;
 static GameWindow *buttonVotePlayer7Window = NULL;
 
+static void DisconnectBoxDraw( GameWindow *window, WinInstanceData * )
+{
+	if (TheDisconnectMenu != NULL) {
+		TheDisconnectMenu->drawBox(window);
+	}
+}
+
 static void InitDisconnectWindow( void ) {
 	textEntryID = TheNameKeyGenerator->nameToKey( AsciiString("DisconnectScreen.wnd:TextEntry"));
 	textDisplayID = TheNameKeyGenerator->nameToKey( AsciiString("DisconnectScreen.wnd:ListboxTextDisplay"));
@@ -98,6 +107,17 @@ static void InitDisconnectWindow( void ) {
 	buttonVotePlayer5Window = TheWindowManager->winGetWindowFromId(NULL, buttonVotePlayer5ID);
 	buttonVotePlayer6Window = TheWindowManager->winGetWindowFromId(NULL, buttonVotePlayer6ID);
 	buttonVotePlayer7Window = TheWindowManager->winGetWindowFromId(NULL, buttonVotePlayer7ID);
+
+	// the menu language's box (DisconnectMenu::drawBox): rows, votes and chat are drawn, QUIT GAME is
+	// the one key and it is not lit
+	GameWindow *box = TheWindowManager->winGetWindowFromId(NULL, TheNameKeyGenerator->nameToKey("DisconnectScreen.wnd:DisconnectWindow"));
+	if (box != NULL) {
+		box->winSetDrawFunc(DisconnectBoxDraw);
+	}
+	UIStyle::setMenuKey(buttonQuitWindow, FALSE);
+	if (buttonQuitWindow != NULL) {
+		GadgetButtonSetText(buttonQuitWindow, UIStyle::capitals(buttonQuitWindow->winGetInstanceData()->getText()));
+	}
 }
 
 //------------------------------------------------------
@@ -178,7 +198,13 @@ void HideDisconnectWindow( void )
 WindowMsgHandledType DisconnectControlInput( GameWindow *window, UnsignedInt msg,
 																						WindowMsgData mData1, WindowMsgData mData2 )
 {
-
+	// the vote keys are drawn rows, not windows: a click on one votes against its seat.  Establish
+	// Connections names this callback too and has no TheDisconnectMenu rows to hit
+	if (msg == GWM_LEFT_UP && TheDisconnectMenu != NULL && TheDisconnectMenu->isScreenVisible()) {
+		if (TheDisconnectMenu->voteAt(LOLONGTOSHORT(mData1), HILONGTOSHORT(mData1))) {
+			return MSG_HANDLED;
+		}
+	}
 	return MSG_IGNORED;
 
 } // end DisconnectControlInput

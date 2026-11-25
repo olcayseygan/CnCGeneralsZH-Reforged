@@ -53,7 +53,9 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetProgressBar.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameText.h"
+#include "GameClient/MenuBoxParts.h"
 #include "GameClient/MessageBox.h"
 
 #include "GameLogic/GameLogic.h"
@@ -76,6 +78,47 @@ static GameWindow * staticTextStatus = NULL;
 static GameWindow * progressBarMunkee = NULL;
 
 static GameWindow *parent = NULL;
+static Int downloadPercent = 0;
+
+//-------------------------------------------------------------------------------------------------
+// The download box in the menu language (docs/plans/MENU-REDESIGN.md, package 5; the boxes README's
+// boxes-5-progress): a 720 box, DOWNLOADING and the file after it, the status line with the percent
+// as its figure, a track with its white fill, the size and the time left under it, CANCEL in the
+// foot and not lit, as nothing here goes forward.  The layout's texts and bar stay, hidden, holding
+// what the downloader writes; this draws their words.
+//-------------------------------------------------------------------------------------------------
+static void downloadBoxDraw( GameWindow *window, WinInstanceData * )
+{
+	static MenuBox::TextPool pool;
+	pool.begin();
+	const IRegion2D r = MenuBox::windowRect( window );
+	DisplayString *title = pool.get( UIStyle::capitals( TheGameText->fetch( "GUI:Downloading" ) ) );
+	UIStyle::boxShell( r, title, FALSE );
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	GameFont *hintFont = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+	const Int x0 = r.lo.x + UIStyle::px( 32.0f ), x1 = r.hi.x - UIStyle::px( 32.0f );
+	if( staticTextFile )
+		MenuBox::words( pool.get( GadgetStaticTextGetText( staticTextFile ) ), body, x0 + title->getWidth() + UIStyle::px( 20.0f ),
+			r.lo.y + UIStyle::px( 44.0f ), UIStyle::MUTED );
+	Int y = r.lo.y + UIStyle::px( (Real)UIStyle::BOX_HEAD + 24 );
+	const Int line = UIStyle::px( 34.0f );
+	if( staticTextStatus )
+		MenuBox::words( pool.get( GadgetStaticTextGetText( staticTextStatus ) ), body, x0, y + line / 2, UIStyle::INK );
+	UnicodeString percent;
+	percent.format( u"%d%%", downloadPercent );
+	MenuBox::words( pool.get( percent ), UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE ), x1, y + line / 2, UIStyle::INK, MenuBox::RIGHT );
+	y += line + UIStyle::px( 8.0f );
+	const Int track = max( 2, UIStyle::px( 6.0f ) );
+	TheDisplay->drawFillRect( x0, y, x1 - x0, track, UIStyle::withAlpha( UIStyle::FRAME, 90 ) );
+	UIStyle::litLine( x0, y, ( x1 - x0 ) * max( 0, min( 100, downloadPercent ) ) / 100, track, UIStyle::INK );
+	y += track + UIStyle::px( 4.0f );
+	const Int under = y + UIStyle::px( 15.0f );
+	if( staticTextSize )
+		MenuBox::words( pool.get( GadgetStaticTextGetText( staticTextSize ) ), hintFont, x0, under, UIStyle::MUTED );
+	if( staticTextTime )
+		MenuBox::words( pool.get( GadgetStaticTextGetText( staticTextTime ) ), hintFont, x1, under, UIStyle::MUTED, MenuBox::RIGHT );
+	UIStyle::boxFootRule( r );
+}
 
 static void closeDownloadWindow( void )
 {
@@ -195,6 +238,7 @@ HRESULT DownloadManagerMunkee::OnProgressUpdate( Int bytesread, Int totalsize, I
 	{
 		Int percent = bytesread * 100 / totalsize;
 		GadgetProgressBarSetProgress( progressBarMunkee, percent );
+		downloadPercent = percent;
 	}
 
 	if (staticTextSize)
@@ -264,6 +308,20 @@ void DownloadMenuInit( WindowLayout *layout, void *userData )
 	staticTextFile = TheWindowManager->winGetWindowFromId( parent, staticTextFileID );
 	staticTextStatus = TheWindowManager->winGetWindowFromId( parent, staticTextStatusID );
 	progressBarMunkee = TheWindowManager->winGetWindowFromId( parent, progressBarMunkeeID );
+
+	// the menu language's box: laid out on the board, drawn by downloadBoxDraw, CANCEL not lit
+	downloadPercent = 0;
+	if( parent )
+	{
+		const IRegion2D box = UIStyle::boxRect1080( UIStyle::BOX_QUESTION, UIStyle::BOX_HEAD + 24 + 34 + 18 + 30 + 20 + UIStyle::BOX_FOOT, FALSE );
+		MenuBox::place( parent, box );
+		GameWindow *cancel = TheWindowManager->winGetWindowFromId( parent, buttonCancelID );
+		MenuBox::place( cancel, UIStyle::boxKeyRect1080( box, 0 ) );
+		UIStyle::setMenuKey( cancel, FALSE );
+		if( cancel )
+			GadgetButtonSetText( cancel, UIStyle::capitals( cancel->winGetInstanceData()->getText() ) );
+		parent->winSetDrawFunc( downloadBoxDraw );
+	}
 
 	DEBUG_ASSERTCRASH(!TheDownloadManager, ("Download manager already exists"));
 	if (TheDownloadManager)

@@ -51,6 +51,7 @@
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetRadioButton.h"
 #include "GameClient/Display.h"
+#include "GameClient/MenuBoxParts.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/BuddyDefs.h"
@@ -720,6 +721,88 @@ void PopulateOldBuddyMessages(void)
 //-------------------------------------------------------------------------------------------------
 /** Initialize the WOL Buddy Overlay */
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+// The friends box in the menu language (docs/plans/MENU-REDESIGN.md, package 5; the boxes README's
+// boxes-4-friends-right-click): a 1040 list box over the menu, FRIENDS, two tabs, the list at the
+// left, the chat with the picked friend at the right, the chat line and CLOSE in the foot, no key
+// lit.  Tools/boxes_layout.py places the windows; this draws the box, the tabs and the key.  The
+// rows are still the list box EA fills from the buddy list: what a row shows (presence, where a
+// friend is, a request chip) is the friends package's to draw, from its own data.
+//-------------------------------------------------------------------------------------------------
+static DisplayString *friendsTitle = NULL;
+
+static void friendsBoxDraw( GameWindow *window, WinInstanceData * )
+{
+	const IRegion2D r = MenuBox::windowRect( window );
+	UIStyle::boxShell( r, friendsTitle, FALSE );
+	UIStyle::boxFootRule( r );
+}
+
+static void friendsTabDraw( GameWindow *window, WinInstanceData *instData )
+{
+	UIStyle::menuTab( MenuBox::windowRect( window ), instData->getTextDisplayString(),
+		BitTest( instData->getState(), WIN_STATE_SELECTED ), BitTest( instData->getState(), WIN_STATE_HILITED ) );
+}
+
+static void dressFriendsBox( GameWindow *box )
+{
+	if( box == NULL )
+		return;
+	if( friendsTitle == NULL )
+		friendsTitle = TheDisplayStringManager->newDisplayString();
+	friendsTitle->setText( UIStyle::capitals( TheGameText->fetch( "GUI:Friends" ) ) );
+	box->winSetDrawFunc( friendsBoxDraw );
+	if( radioButtonBuddies )
+		radioButtonBuddies->winSetDrawFunc( friendsTabDraw );
+	if( radioButtonIgnore )
+		radioButtonIgnore->winSetDrawFunc( friendsTabDraw );
+	// CLOSE takes the player nowhere new: no key of this box is lit
+	UIStyle::setMenuKey( buttonHide, FALSE );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The six right-click menus (RC*Menu.wnd), named in their layouts' DRAWCALLBACK: the room's open
+	* list at the pointer, nearly opaque black with the lit edge and a shadow, the player's name over
+	* the entries in small capitals (the game's menu, opened on a game, has no name line to fill), an
+	* entry a row, the one under the pointer lifted with the rail's white bar. */
+//-------------------------------------------------------------------------------------------------
+void RightClickMenuDraw( GameWindow *window, WinInstanceData * )
+{
+	static const NameKeyType gameMenu = NAMEKEY( "RCGameDetailsMenu.wnd:RCParent" );
+	static MenuBox::TextPool pool;
+	const IRegion2D r = MenuBox::windowRect( window );
+	const Int shadow = UIStyle::px( 6.0f );
+	MenuBox::fill( MenuBox::region( r.lo.x + shadow, r.lo.y + shadow, r.hi.x + shadow, r.hi.y + shadow ), GameMakeColor( 0, 0, 0, 120 ) );
+	MenuBox::fill( r, GameMakeColor( 4, 6, 12, 242 ) );
+	MenuBox::outline( r, UIStyle::EDGE_LIT );
+	pool.begin();
+	if( (NameKeyType)window->winGetWindowId() != gameMenu && window->winGetUserData() )
+	{
+		const GameSpyRCMenuData *data = (const GameSpyRCMenuData *)window->winGetUserData();
+		UnicodeString name;
+		name.translate( data->m_nick );
+		MenuBox::words( pool.get( UIStyle::nameCapitals( name ) ), UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE ),
+			r.lo.x + UIStyle::px( 16.0f ), r.lo.y + UIStyle::px( 18.0f ), UIStyle::MUTED );
+	}
+	MenuBox::rule( r.lo.x + 1, r.hi.x - 1, r.lo.y + UIStyle::px( 33.0f ), 160 );
+}
+
+void RightClickEntryDraw( GameWindow *window, WinInstanceData *instData )
+{
+	const IRegion2D r = MenuBox::windowRect( window );
+	const UnicodeString text = instData->getText();
+	const UnicodeString capitals = UIStyle::capitals( text );
+	if( text.compare( capitals ) != 0 )
+		GadgetButtonSetText( window, capitals );
+	if( BitTest( instData->getState(), WIN_STATE_HILITED ) )
+	{
+		MenuBox::fill( r, GameMakeColor( 255, 255, 255, 22 ) );
+		UIStyle::litLine( r.lo.x, r.lo.y, max( 2, UIStyle::px( 3.0f ) ), r.hi.y - r.lo.y, UIStyle::INK );
+	}
+	MenuBox::words( instData->getTextDisplayString(), UIStyle::menuFont( UIStyle::MENU_TEXT_HINT, TRUE ),
+		r.lo.x + UIStyle::px( 15.0f ), ( r.lo.y + r.hi.y ) / 2, UIStyle::INK );
+}
+
 void WOLBuddyOverlayInit( WindowLayout *layout, void *userData )
 {
 	parentID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLBuddyOverlay.wnd:BuddyMenuParent" ) );
@@ -762,6 +845,8 @@ void WOLBuddyOverlayInit( WindowLayout *layout, void *userData )
 	//GadgetTextEntrySetText(textEntry, UnicodeString::TheEmptyString);
 
 	PopulateOldBuddyMessages();
+
+	dressFriendsBox( parent );
 
 	// Show Menu
 	layout->hide( FALSE );

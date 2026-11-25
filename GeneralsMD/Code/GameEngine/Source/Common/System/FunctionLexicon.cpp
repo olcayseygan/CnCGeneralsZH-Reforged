@@ -65,11 +65,20 @@ extern WindowMsgHandledType ExtendedMessageBoxSystem( GameWindow *window, Unsign
 // the Create Game and Host buttons' mode question (GUIUtil.cpp AskGameMode) ----------------------------
 extern WindowMsgHandledType GameModeBoxSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 
+// the box family's draws, named by its layouts (Tools/boxes_layout.py): the Victory band (QuitMenu.cpp)
+// and the right-click menus (WOLBuddyOverlay.cpp) ---------------------------------------------------
+extern void MatchBandDraw( GameWindow *window, WinInstanceData *instData );
+extern void RightClickMenuDraw( GameWindow *window, WinInstanceData *instData );
+extern void RightClickEntryDraw( GameWindow *window, WinInstanceData *instData );
+
 // game window draw table -----------------------------------------------------------------------
-static FunctionLexicon::TableEntry gameWinDrawTable[] = 
+static FunctionLexicon::TableEntry gameWinDrawTable[] =
 {
 	{ NAMEKEY_INVALID, "IMECandidateMainDraw",						(void *)IMECandidateMainDraw },
 	{ NAMEKEY_INVALID, "IMECandidateTextAreaDraw",				(void *)IMECandidateTextAreaDraw },
+	{ NAMEKEY_INVALID, "MatchBandDraw",										(void *)MatchBandDraw },
+	{ NAMEKEY_INVALID, "RightClickMenuDraw",							(void *)RightClickMenuDraw },
+	{ NAMEKEY_INVALID, "RightClickEntryDraw",							(void *)RightClickEntryDraw },
 	{ NAMEKEY_INVALID, NULL,																NULL }
 };
 

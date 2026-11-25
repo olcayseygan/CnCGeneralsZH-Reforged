@@ -28,50 +28,17 @@
 
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/EstablishConnectionsMenu.h"
-#include "Common/NameKeyGenerator.h"
-#include "GameClient/GameWindow.h"
-#include "GameClient/GameWindowManager.h"
-#include "GameClient/GadgetStaticText.h"
-#include "GameClient/GameText.h"
 
 EstablishConnectionsMenu *TheEstablishConnectionsMenu = NULL;
-
-char *EstablishConnectionsMenu::m_playerReadyControlNames[] = {
-	"EstablishConnectionsScreen.wnd:ButtonAccept1",
-	"EstablishConnectionsScreen.wnd:ButtonAccept2",
-	"EstablishConnectionsScreen.wnd:ButtonAccept3",
-	"EstablishConnectionsScreen.wnd:ButtonAccept4",
-	"EstablishConnectionsScreen.wnd:ButtonAccept5",
-	"EstablishConnectionsScreen.wnd:ButtonAccept6",
-	"EstablishConnectionsScreen.wnd:ButtonAccept7",
-	NULL};
-
-char *EstablishConnectionsMenu::m_playerNameControlNames[] = {
-	"EstablishConnectionsScreen.wnd:StaticPlayer1Name",
-	"EstablishConnectionsScreen.wnd:StaticPlayer2Name",
-	"EstablishConnectionsScreen.wnd:StaticPlayer3Name",
-	"EstablishConnectionsScreen.wnd:StaticPlayer4Name",
-	"EstablishConnectionsScreen.wnd:StaticPlayer5Name",
-	"EstablishConnectionsScreen.wnd:StaticPlayer6Name",
-	"EstablishConnectionsScreen.wnd:StaticPlayer7Name",
-	NULL
-};
-
-char *EstablishConnectionsMenu::m_playerStatusControlNames[] = {
-	"EstablishConnectionsScreen.wnd:StaticPlayer1Status",
-	"EstablishConnectionsScreen.wnd:StaticPlayer2Status",
-	"EstablishConnectionsScreen.wnd:StaticPlayer3Status",
-	"EstablishConnectionsScreen.wnd:StaticPlayer4Status",
-	"EstablishConnectionsScreen.wnd:StaticPlayer5Status",
-	"EstablishConnectionsScreen.wnd:StaticPlayer6Status",
-	"EstablishConnectionsScreen.wnd:StaticPlayer7Status",
-	NULL
-};
 
 /**
  Constructor
  */
 EstablishConnectionsMenu::EstablishConnectionsMenu() {
+	m_menuState = ESTABLISHCONNECTIONSMENUSTATETYPE_SCREENOFF;
+	for (Int i = 0; i < MAX_SLOTS; ++i) {
+		m_states[i] = NATCONNECTIONSTATE_NOSTATE;
+	}
 }
 
 /**
@@ -84,6 +51,10 @@ EstablishConnectionsMenu::~EstablishConnectionsMenu() {
  Initialize the menu
  */
 void EstablishConnectionsMenu::initMenu() {
+	for (Int i = 0; i < MAX_SLOTS; ++i) {
+		m_names[i].clear();
+		m_states[i] = NATCONNECTIONSTATE_NOSTATE;
+	}
 	ShowEstablishConnectionsWindow();
 }
 
@@ -104,45 +75,16 @@ void EstablishConnectionsMenu::endMenu() {
 void EstablishConnectionsMenu::abortGame() {
 }
 
-// the slot number passed in is the index we are to use for the menu.
+// the slot number passed in is the index we are to use for the menu.  The box draws a row a named
+// seat (EstablishConnectionsWindow.cpp), so every seat the engine has is shown, not EA's seven.
 void EstablishConnectionsMenu::setPlayerName(Int slot, UnicodeString name) {
-	if (m_playerNameControlNames[slot] == NULL)
-		return; // the layout has 7 rows; players past them are not shown
-	NameKeyType controlID = TheNameKeyGenerator->nameToKey(m_playerNameControlNames[slot]);
-	GameWindow *control = TheWindowManager->winGetWindowFromId(NULL, controlID);
-
-	if (control == NULL) {
-		DEBUG_ASSERTCRASH(control != NULL, ("player name control for slot %d is NULL", slot));
+	if (slot < 0 || slot >= MAX_SLOTS)
 		return;
-	}
-	GadgetStaticTextSetText(control, name);
+	m_names[slot] = name;
 }
 
 void EstablishConnectionsMenu::setPlayerStatus(Int slot, NATConnectionState state) {
-	if (m_playerStatusControlNames[slot] == NULL)
+	if (slot < 0 || slot >= MAX_SLOTS)
 		return;
-	NameKeyType controlID = TheNameKeyGenerator->nameToKey(m_playerStatusControlNames[slot]);
-	GameWindow *control = TheWindowManager->winGetWindowFromId(NULL, controlID);
-
-	if (control == NULL) {
-		DEBUG_ASSERTCRASH(control != NULL, ("player status control for slot %d is NULL", slot));
-		return;
-	}
-//	if (state == NATCONNECTIONSTATE_NETGEARDELAY) {
-//		GadgetStaticTextSetText(control, TheGameText->fetch("GUI:NetgearDelay"));
-	if (state == NATCONNECTIONSTATE_WAITINGFORMANGLERRESPONSE) {
-		GadgetStaticTextSetText(control, TheGameText->fetch("GUI:WaitingForManglerResponse"));
-	} else if (state == NATCONNECTIONSTATE_WAITINGFORMANGLEDPORT) {
-		GadgetStaticTextSetText(control, TheGameText->fetch("GUI:WaitingForMangledPort"));
-	} else if (state == NATCONNECTIONSTATE_WAITINGFORRESPONSE) {
-		GadgetStaticTextSetText(control, TheGameText->fetch("GUI:WaitingForResponse"));
-	} else if (state == NATCONNECTIONSTATE_DONE) {
-		GadgetStaticTextSetText(control, TheGameText->fetch("GUI:ConnectionDone"));
-	} else if (state == NATCONNECTIONSTATE_FAILED) {
-		GadgetStaticTextSetText(control, TheGameText->fetch("GUI:ConnectionFailed"));
-	} else if (state == NATCONNECTIONSTATE_WAITINGTOBEGIN) {
-		GadgetStaticTextSetText(control, TheGameText->fetch("GUI:WaitingToBeginConnection"));
-	} else {
-		GadgetStaticTextSetText(control, TheGameText->fetch("GUI:UnknownConnectionState"));
-	}
+	m_states[slot] = state;
 }

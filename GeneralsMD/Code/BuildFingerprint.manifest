@@ -1869,6 +1869,8 @@ Data/Window/GeneralsExpPoints.wnd
 Data/Window/InGameChat.wnd
 Data/Window/Menus/Defeat.wnd
 Data/Window/Menus/DisconnectScreen.wnd
+Data/Window/Menus/DownloadMenu.wnd
+Data/Window/Menus/EstablishConnectionsScreen.wnd
 Data/Window/Menus/GameModeBox.wnd
 Data/Window/Menus/GameSpyGameOptionsMenu.wnd
 Data/Window/Menus/GameSpyLoginProfile.wnd
@@ -1882,10 +1884,19 @@ Data/Window/Menus/ObserverQuit.wnd
 Data/Window/Menus/OptionsMenuClassic.wnd
 Data/Window/Menus/PopupHostGame.wnd
 Data/Window/Menus/PopupPlayerInfo.wnd
+Data/Window/Menus/QuitMenu.wnd
 Data/Window/Menus/QuitMessageBox.wnd
+Data/Window/Menus/QuitNoSave.wnd
+Data/Window/Menus/RCBuddiesMenu.wnd
+Data/Window/Menus/RCBuddyRequestMenu.wnd
+Data/Window/Menus/RCGameDetailsMenu.wnd
+Data/Window/Menus/RCLocalPlayerMenu.wnd
+Data/Window/Menus/RCNoProfileMenu.wnd
+Data/Window/Menus/RCNonBuddiesMenu.wnd
 Data/Window/Menus/SkirmishGameOptionsMenu.wnd
 Data/Window/Menus/SkirmishMapSelectMenu.wnd
 Data/Window/Menus/Victorious.wnd
+Data/Window/Menus/WOLBuddyOverlay.wnd
 Data/Window/Menus/WOLCustomLobby.wnd
 Data/Window/Menus/WOLLadderScreen.wnd
 Data/Window/Menus/WOLMapSelectMenu.wnd
@@ -2143,6 +2154,7 @@ GameEngine/Include/GameClient/LoadScreenLayout.h
 GameEngine/Include/GameClient/LookAtXlat.h
 GameEngine/Include/GameClient/MapUtil.h
 GameEngine/Include/GameClient/MatchClock.h
+GameEngine/Include/GameClient/MenuBoxParts.h
 GameEngine/Include/GameClient/MessageBox.h
 GameEngine/Include/GameClient/MetaEvent.h
 GameEngine/Include/GameClient/Module/AnimatedParticleSysBoneClientUpdate.h
@@ -4824,6 +4836,7 @@ Tests/test_load_screen.inc
 Tests/test_macos_app.sh
 Tests/test_main.cpp
 Tests/test_map_ini_rollback.inc
+Tests/test_menu_boxes.inc
 Tests/test_menu_style.inc
 Tests/test_miles_effects.cpp
 Tests/test_miles_miniaudio.cpp

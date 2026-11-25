@@ -7910,3 +7910,138 @@ END
 GUI:GameModeApocalypseSolo
 "YOU AND UP TO 3 AI"
 END
+
+// Menu redesign package 5, the boxes: the in-game menu, the disconnect box, Establish Connections, the
+// download box, the friends box and its right-click menus.  EA's own keys here (surrender, the vote key,
+// Establish Connections' states) take the design's words.
+GUI:Paused
+"Paused"
+END
+
+GUI:InGameMenu
+"Menu"
+END
+
+GUI:EscReturns
+"Esc returns to the game"
+END
+
+GUI:SurrenderConfirmationTitle
+"Surrender"
+END
+
+GUI:SurrenderConfirmation
+"Give up this match? It counts as a loss."
+END
+
+GUI:WaitingForPlayers
+"Waiting for players"
+END
+
+GUI:NotRespondingCount
+"%d not responding"
+END
+
+GUI:DisconnectPlayer
+"Player"
+END
+
+GUI:DisconnectState
+"State"
+END
+
+GUI:DisconnectVotes
+"Votes"
+END
+
+GUI:DropsIn
+"Drops in"
+END
+
+GUI:DropsIn_Short
+"Drops"
+END
+
+GUI:NotResponding
+"Not responding"
+END
+
+GUI:NotResponding_Short
+"No reply"
+END
+
+GUI:Reconnecting
+"Reconnecting"
+END
+
+GUI:Reconnecting_Short
+"Rejoining"
+END
+
+GUI:HostNotResponding
+"Host not responding"
+END
+
+GUI:ConnectedCaps
+"Connected"
+END
+
+Network:Vote
+"Vote to drop"
+END
+
+Network:Vote_Short
+"Vote"
+END
+
+GUI:Voted
+"Voted"
+END
+
+GUI:Voted_Short
+"Voted"
+END
+
+GUI:Connecting
+"Connecting"
+END
+
+GUI:ReadyCount
+"%d of %d ready"
+END
+
+GUI:WaitingForResponse
+"Waiting for a reply"
+END
+
+GUI:WaitingForMangledPort
+"Opening a port"
+END
+
+GUI:ConnectionDone
+"Connected"
+END
+
+GUI:ConnectionFailed
+"Failed"
+END
+
+GUI:Downloading
+"Downloading"
+END
+
+GUI:Friends
+"Friends"
+END
+
+GUI:PlayerCard
+"Player card"
+END
+
+GUI:AddFriend
+"Add friend"
+END
+
+GUI:RemoveFriend
+"Remove friend"
+END

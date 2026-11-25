@@ -886,19 +886,19 @@ GUI:WaitingForManglerResponse
 END
 
 GUI:WaitingForMangledPort
-"Port numarası bekleniyor"
+"Port açılıyor"
 END
 
 GUI:WaitingForResponse
-"Yoklama yanıtı bekleniyor"
+"Yanıt bekleniyor"
 END
 
 GUI:ConnectionDone
-"Bağlantı tamamlandı"
+"Bağlandı"
 END
 
 GUI:ConnectionFailed
-"Bağlantı başarısız oldu"
+"Başarısız"
 END
 
 GUI:UnknownConnectionState
@@ -6166,7 +6166,7 @@ Network:PlayerLeftGame
 END
 
 Network:Vote
-"Oy Ver"
+"Atılsın"
 END
 
 Network:QuitGame
@@ -7754,7 +7754,7 @@ CONTROLBAR:ToolTipFireTomahawkAtPosition
 END
 
 GUI:SurrenderConfirmation
-"Teslim olmak istediğinizden emin misiniz?"
+"Bu maçtan çekilinsin mi? Yenilgi sayılır."
 END
 
 GUI:GameOver
@@ -9574,7 +9574,7 @@ GUI:RestartConfirmationTitle
 END
 
 GUI:SurrenderConfirmationTitle
-"TESLİM OLUNSUN MU?"
+"Teslim ol"
 END
 
 TOOLTIP:StartPositionN
@@ -22127,4 +22127,110 @@ END
 
 GUI:GameModeApocalypseSolo
 "SEN VE EN ÇOK 3 YZ"
+END
+
+// Menu redesign package 5, the boxes: the in-game menu, the disconnect box, Establish Connections, the
+// download box, the friends box and its right-click menus.
+GUI:Paused
+"Duraklatıldı"
+END
+
+GUI:InGameMenu
+"Menü"
+END
+
+GUI:EscReturns
+"Esc oyuna döndürür"
+END
+
+GUI:WaitingForPlayers
+"Oyuncular bekleniyor"
+END
+
+GUI:NotRespondingCount
+"%d yanıt vermiyor"
+END
+
+GUI:DisconnectPlayer
+"Oyuncu"
+END
+
+GUI:DisconnectState
+"Durum"
+END
+
+GUI:DisconnectVotes
+"Oylar"
+END
+
+GUI:DropsIn
+"Atılmaya kalan"
+END
+
+GUI:DropsIn_Short
+"Kalan"
+END
+
+GUI:NotResponding
+"Yanıt vermiyor"
+END
+
+GUI:NotResponding_Short
+"Yanıt yok"
+END
+
+GUI:Reconnecting
+"Yeniden bağlanıyor"
+END
+
+GUI:Reconnecting_Short
+"Bağlanıyor"
+END
+
+GUI:HostNotResponding
+"Kurucu yanıt vermiyor"
+END
+
+GUI:ConnectedCaps
+"Bağlı"
+END
+
+Network:Vote_Short
+"Oyla"
+END
+
+GUI:Voted
+"Oy verildi"
+END
+
+GUI:Voted_Short
+"Verildi"
+END
+
+GUI:Connecting
+"Bağlanılıyor"
+END
+
+GUI:ReadyCount
+"%d / %d hazır"
+END
+
+GUI:Downloading
+"İndiriliyor"
+END
+
+GUI:Friends
+"Arkadaşlar"
+END
+
+GUI:PlayerCard
+"Oyuncu kartı"
+END
+
+GUI:AddFriend
+"Arkadaş ekle"
+END
+
+GUI:RemoveFriend
+"Arkadaşı sil"
 END

@@ -2885,6 +2885,20 @@ void AIPlayer::noteSuperweaponAim( const Coord3D *pos )
 	m_strikeNext = (m_strikeNext + 1) % MAX_REMEMBERED_STRIKES;
 }
 
+static void collectKnownDefences( const Player *player, std::vector<KnownDefence> *defences );
+
+/** Whether a known defence's guns reach anywhere within radius of a drop spot. */
+static Bool dropCovered( const std::vector<KnownDefence> &guns, const Coord3D *at, Real radius )
+{
+	for( size_t g = 0; g < guns.size(); ++g )
+	{
+		const Coord3D *gun = guns[ g ].m_object->getPosition();
+		if( sqr( gun->x - at->x ) + sqr( gun->y - at->y ) <= sqr( guns[ g ].m_reach + radius ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+
 //----------------------------------------------------------------------------------------------------------
 /**
  * Find a good spot to fire a superweapon.
@@ -2953,6 +2967,15 @@ Bool AIPlayer::computeSuperweaponTarget(const SpecialPowerTemplate *power, Coord
 		targetMilitaryUnits = FALSE;
 	}
 
+	// a power that drops soldiers drops them where no defence this AI knows of reaches the drop: aimed by price
+	// alone, the Air Force's paradrops fell among China's Gattling Cannons round its Internet Center, and 214
+	// paratroopers died to defences in 16 Hard matches, 147 of them standing where they had landed
+	std::vector<KnownDefence> dropGuns;
+	const SpecialPowerType powerKind = power->getSpecialPowerType();
+	if( runsOwnAI() && killZoneWeight() > 0.0f && (powerKind == SPECIAL_PARADROP_AMERICA || powerKind == INFA_SPECIAL_PARADROP_AMERICA ||
+			powerKind == SPECIAL_TANK_PARADROP || powerKind == SPECIAL_AMBUSH) )
+		collectKnownDefences( m_player, &dropGuns );
+
 	//Randomize which way we iterate the grid. We don't always want to start in the bottom left corner incase
 	//of a bad calculation, it'll would always end up there.
 	switch( GameLogicRandomValue( 1, 4 ) )
@@ -2990,6 +3013,8 @@ Bool AIPlayer::computeSuperweaponTarget(const SpecialPowerTemplate *power, Coord
 			pos.x = bounds.lo.x + ( bounds.width() * xIndex ) / xCount;
 			pos.y = bounds.lo.y + ( bounds.height() * yIndex ) / yCount;
 			pos.z = 0;
+			if( dropCovered( dropGuns, &pos, weaponRadius ) )
+				continue;
 			Int curCash = superweaponScore( &pos, playerNdx, 2*weaponRadius, targetMilitaryUnits );
 			if ( curCash > cash)
 			{
@@ -3034,6 +3059,8 @@ Bool AIPlayer::computeSuperweaponTarget(const SpecialPowerTemplate *power, Coord
 
 					Coord3D pos = *pObj->getPosition();
 					pos.z = 0;
+					if( dropCovered( dropGuns, &pos, weaponRadius ) )
+						continue;
 					Int curCash = superweaponScore( &pos, playerNdx, 2*weaponRadius, targetMilitaryUnits );
 					if( curCash > cash )
 					{
@@ -3045,19 +3072,25 @@ Bool AIPlayer::computeSuperweaponTarget(const SpecialPowerTemplate *power, Coord
 		}
 	}
 
+	// every spot under a known gun: the soldiers wait for the next ready power
+	if( !dropGuns.empty() && cash < 0 )
+		return FALSE;
+
 	//Fine tune that position by looking at a even smaller radius.
 	Coord3D veryBestPos;
 	xCount = 11;
 	yCount = 11;
 	cash = -1;
 	Int count = 0;
-	for( x = 0; x < xCount; x++ ) 
+	for( x = 0; x < xCount; x++ )
 	{
-		for( y = 0; y < yCount; y++ ) 
+		for( y = 0; y < yCount; y++ )
 		{
 			pos.x = bestPos.x + (x-5)*(weaponRadius/10);
 			pos.y = bestPos.y + (y-5)*(weaponRadius/10);	// was (x-5): only the diagonal was scanned
 			pos.z = 0;
+			if( dropCovered( dropGuns, &pos, weaponRadius ) )
+				continue;
 			Int curCash = superweaponScore( &pos, playerNdx, weaponRadius, targetMilitaryUnits );
 			if ( curCash > cash) 
 			{
@@ -3073,6 +3106,8 @@ Bool AIPlayer::computeSuperweaponTarget(const SpecialPowerTemplate *power, Coord
 			}
 		}
 	}
+	if( !dropGuns.empty() && cash < 0 )
+		return FALSE;
 	if (count>1) {
 		veryBestPos.x /= count;
 		veryBestPos.y /= count;
@@ -3080,7 +3115,8 @@ Bool AIPlayer::computeSuperweaponTarget(const SpecialPowerTemplate *power, Coord
 	veryBestPos.z = TheTerrainLogic->getGroundHeight(veryBestPos.x, veryBestPos.y);
 	*retPos = veryBestPos;
 
-  success = ( cash > -1 );
+	// the mean of the even spots can fall between them, under a gun
+  success = ( cash > -1 ) && !dropCovered( dropGuns, &veryBestPos, weaponRadius );
 
 	if( success )
 	{

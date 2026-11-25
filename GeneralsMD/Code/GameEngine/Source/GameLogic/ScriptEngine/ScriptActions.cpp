@@ -4357,7 +4357,9 @@ void ScriptActions::doSkirmishFireSpecialPowerAtMostCost( const AsciiString &pla
 						}
 					}
 
-          DEBUG_ASSERTCRASH( locationFound, ("ScriptActions::doSkirmishFireSpecialPowerAtMostCost() could not find a valid (costly) location.") );
+          // a skirmish AI holds a troop drop while every spot is under a gun it knows (computeSuperweaponTarget)
+          if( !locationFound )
+            DEBUG_LOG(("ScriptActions::doSkirmishFireSpecialPowerAtMostCost() found no spot for '%s'\n", power->getName().str()));
 
 					if( locationFound && location.lengthSqr() > 0.0f )
 					{

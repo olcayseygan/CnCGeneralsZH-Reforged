@@ -76,6 +76,10 @@
 #include "W3DDevice/GameClient/BaseHeightMap.h"
 #include "W3DDevice/GameClient/W3DTerrainTracks.h"
 #include "W3DDevice/GameClient/WorldHeightMap.h"
+#include "W3DDevice/GameClient/W3DPropBuffer.h"
+#include "W3DDevice/GameClient/FireLights.h"
+#include "WW3D2/camera.h"
+#include "WW3D2/pointgr.h"
 #include "WW3D2/hanim.h"
 #include "WW3D2/hlod.h"
 #include "WW3D2/htree.h"
@@ -97,6 +101,15 @@
 static std::vector<W3DModelDraw*> s_headlightQueue;
 static UnsignedInt s_headlightPass = 1;
 static Bool s_headlightDrawn = FALSE;
+
+/// The night lights (FireLights.h's NightLights) the drawables put up while being drawn, and those of
+/// the last pass that drew, which pickNightLights reads: by value, so a drawable gone since leaves
+/// nothing behind.  And the lamp cards the last pick found in view.
+static std::vector<NightLights::Light> s_nightLit;
+static std::vector<NightLights::Light> s_nightShown;
+static std::vector<NightLights::Light> s_nightGlows;
+static Bool s_nightDrawn = FALSE;
+static Bool nightLightOf(RenderObjClass* robj, const Drawable* draw, const ModelConditionInfo* state, NightLights::Light& light);
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -2599,6 +2612,24 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 			}
 		}
 	}
+
+	// What lights up at night throws light round it (pickNightLights), on the same terms: the NIGHT
+	// condition both a night map and the day and night cycle set, the Direct3D 11 frame, not Classic.
+	// A drawable's modules draw one after the other, so its second one finds its first's light last.
+	s_nightDrawn = TRUE;
+	// The cap keeps the list bounded should no frame pick it up.
+	if (m_renderObject && !m_renderObject->Is_Hidden() && getDrawable()->getModelConditionFlags().test(MODELCONDITION_NIGHT)
+		&& s_nightLit.size() < 4096 && RenderLighting::LightsPerPixel() && !TheGlobalData->m_classicGraphics)
+	{
+		const UnsignedInt id = (UnsignedInt)getDrawable()->getID();
+		NightLights::Light light;
+		if ((s_nightLit.empty() || s_nightLit.back().id != id)
+			&& nightLightOf(m_renderObject, getDrawable(), m_curState, light))
+		{
+			light.id = id;
+			s_nightLit.push_back(light);
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3729,19 +3760,20 @@ void W3DModelDraw::hideAllHeadlights(Bool hide)
 	* the beam starts at the mesh's pivot and runs along whichever of its own axes reaches furthest
 	* from it, +Y on 84 of the 95 beams in W3DZH.big and +X on the Avenger and the train.  The origin
 	* is the middle of the mesh across that axis, so a mesh holding both lamps puts one light between
-	* them.  Several meshes are averaged into one light.  FALSE when no beam is showing. */
-Bool W3DModelDraw::headlightBeam(Vector3& origin, Vector3& direction, Real& reach) const
+	* them.  Several meshes are averaged into one light.  FALSE when no beam is showing.  The
+	* searchlight's SEARCHLIGHTBEAM is read the same way (beamOf). */
+static Bool beamOf(RenderObjClass* robj, const char* name, Vector3& origin, Vector3& direction, Real& reach)
 {
 	origin.Set(0.0f, 0.0f, 0.0f);
 	direction.Set(0.0f, 0.0f, 0.0f);
 	reach = 0.0f;
-	if (m_renderObject == NULL)
+	if (robj == NULL)
 		return FALSE;
 	Int beams = 0;
-	for (Int subObj = 0; subObj < m_renderObject->Get_Num_Sub_Objects(); subObj++)
+	for (Int subObj = 0; subObj < robj->Get_Num_Sub_Objects(); subObj++)
 	{
-		RenderObjClass* test = m_renderObject->Get_Sub_Object(subObj);
-		if (!test->Is_Hidden() && strstr(test->Get_Name(), "HEADLIGHT"))
+		RenderObjClass* test = robj->Get_Sub_Object(subObj);
+		if (!test->Is_Hidden() && strstr(test->Get_Name(), name))
 		{
 			AABoxClass box;
 			test->Get_Obj_Space_Bounding_Box(box);
@@ -3780,6 +3812,189 @@ Bool W3DModelDraw::headlightBeam(Vector3& origin, Vector3& direction, Real& reac
 	origin /= (Real)beams;
 	direction.Normalize();
 	return TRUE;
+}
+
+Bool W3DModelDraw::headlightBeam(Vector3& origin, Vector3& direction, Real& reach) const
+{
+	return beamOf(m_renderObject, "HEADLIGHT", origin, direction, reach);
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A lamp's or a searchlight's light out of its render object, whichever made it (a drawable or a prop). */
+static Bool nightLampOf(RenderObjClass* robj, Int kind, NightLights::Light& light)
+{
+	if (kind == NightLights::LAMP)
+	{
+		AABoxClass box = robj->Get_Bounding_Box();
+		light = NightLights::lamp(box.Center.X, box.Center.Y, box.Center.Z + box.Extent.Z, 2.0f * box.Extent.Z);
+		return TRUE;
+	}
+	if (kind != NightLights::SPOT || TheTerrainRenderObject == NULL)
+		return FALSE;
+	// the pool where the beam comes down, on the ground under the beam's far end
+	Vector3 origin, direction;
+	Real reach;
+	if (!beamOf(robj, "SEARCHLIGHTBEAM", origin, direction, reach))
+		return FALSE;
+	const Vector3 end = origin + direction * reach;
+	light = NightLights::spot(end.X, end.Y, TheTerrainRenderObject->getDrawHeight(end.X, end.Y), origin.X, origin.Y, origin.Z);
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** What this model lights at night, if anything: a lamp or a searchlight by its model, or a structure
+	whose lit-window night model is showing.  A structure's light needs its object alive and built. */
+static Bool nightLightOf(RenderObjClass* robj, const Drawable* draw, const ModelConditionInfo* state, NightLights::Light& light)
+{
+	// a lamp post knocked over keeps its model for twenty seconds on the ground
+	if (state == NULL || draw->isObjectDeadForDraw())
+		return FALSE;
+	const char* model = state->m_modelName.str();
+	const Int kind = NightLights::kindOfModel(model);
+	if (kind != NightLights::NONE)
+		return nightLampOf(robj, kind, light);
+	if (!draw->isKindOf(KINDOF_STRUCTURE) || !NightLights::isLitNightModel(model))
+		return FALSE;
+	const ModelConditionFlags& flags = draw->getModelConditionFlags();
+	if (flags.test(MODELCONDITION_PARTIALLY_CONSTRUCTED) || flags.test(MODELCONDITION_RUBBLE))
+		return FALSE;
+	AABoxClass box = robj->Get_Bounding_Box();
+	light = NightLights::building(box.Center.X, box.Center.Y, box.Center.Z - box.Extent.Z,
+		box.Extent.X, box.Extent.Y, 2.0f * box.Extent.Z);
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+// ponytail: last frame's picks rank as if 1.3 times nearer, so lights near the cap do not swap as
+// the camera pans over a dense town; a fade over a few frames if a swap still pops.
+Int W3DModelDraw::pickNightLights(const CameraClass& camera, NightLights::Light* out)
+{
+	static Real kept[NightLights::MAX_LIGHTS][4];	// x, y, z, drawable id (0 a prop)
+	static Int keptCount = 0;
+	// a pass that drew the drawables replaces what the last one found lit
+	if (s_nightDrawn)
+	{
+		s_nightShown.swap(s_nightLit);
+		s_nightLit.clear();
+		s_nightDrawn = FALSE;
+	}
+	s_nightGlows.clear();
+	// Classic keeps the old picture: no sun's map, so no program would take the light, and no cards
+	if (TheGlobalData->m_classicGraphics)
+		return 0;
+
+	// the props: no NIGHT condition, so the night on screen, or the map's own hour with the cycle off
+	static std::vector<NightLights::Light> props;
+	props.clear();
+	const W3DPropBuffer* propBuffer = TheTerrainRenderObject ? TheTerrainRenderObject->getPropBuffer() : NULL;
+	if (propBuffer)
+	{
+		const Real night = DayNight_isOn() ? DayNight_lightAmount() : (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT ? 1.0f : 0.0f);
+		enum { MAX_PROP_LAMPS = 512 };
+		RenderObjClass* robjs[MAX_PROP_LAMPS];
+		Int kinds[MAX_PROP_LAMPS];
+		const Int count = propBuffer->getNightLamps(camera, night, robjs, kinds, MAX_PROP_LAMPS);
+		for (Int i = 0; i < count; ++i)
+		{
+			NightLights::Light light;
+			if (nightLampOf(robjs[i], kinds[i], light))
+				props.push_back(light);
+		}
+	}
+
+	// While this frame's rays trace the slots' lights (the Ray Traced shadow level), a building's light,
+	// which sits inside the building, would be stopped by its own walls on every ray: the buildings
+	// (the lights with no card) sit it out and the lamps keep theirs.
+#ifdef _WIN32
+	const Bool traced = Direct3D11_Ray_Shade_Waiting();
+#else
+	const Bool traced = FALSE;
+#endif
+
+	const Vector3 eye = camera.Get_Position();
+	static std::vector< std::pair<Real, const NightLights::Light*> > nearest;
+	nearest.clear();
+	const std::vector<NightLights::Light>* lists[2] = { &s_nightShown, &props };
+	for (Int l = 0; l < 2; ++l)
+	{
+		for (size_t i = 0; i < lists[l]->size(); ++i)
+		{
+			const NightLights::Light& light = (*lists[l])[i];
+			if (light.glowSize > 0.0f && s_nightGlows.size() < NightLights::MAX_GLOWS
+				&& !camera.Cull_Sphere(SphereClass(Vector3(light.glowX, light.glowY, light.glowZ), light.glowSize)))
+				s_nightGlows.push_back(light);
+			if (traced && light.glowSize <= 0.0f)
+				continue;
+			const Vector3 at(light.x, light.y, light.z);
+			if (camera.Cull_Sphere(SphereClass(at, light.reach)))
+				continue;
+			Real distance2 = (at - eye).Length2();
+			// the same light as last frame: a drawable's by its id (an animated building's box moves),
+			// a prop's by where it stands
+			for (Int k = 0; k < keptCount; ++k)
+				if (light.id != 0 ? kept[k][3] == (Real)light.id
+					: (kept[k][3] == 0.0f && (Vector3(kept[k][0], kept[k][1], kept[k][2]) - at).Length2() < 16.0f))
+				{
+					distance2 *= 0.6f;	// 1.3 squared, upside down
+					break;
+				}
+			nearest.push_back(std::make_pair(distance2, &light));
+		}
+	}
+	const size_t count = nearest.size() < (size_t)NightLights::MAX_LIGHTS ? nearest.size() : (size_t)NightLights::MAX_LIGHTS;
+	std::partial_sort(nearest.begin(), nearest.begin() + count, nearest.end(),
+		[](const std::pair<Real, const NightLights::Light*>& a, const std::pair<Real, const NightLights::Light*>& b)
+		{ return a.first < b.first; });
+	for (size_t i = 0; i < count; ++i)
+	{
+		out[i] = *nearest[i].second;
+		kept[i][0] = out[i].x; kept[i][1] = out[i].y; kept[i][2] = out[i].z; kept[i][3] = (Real)out[i].id;
+	}
+	keptCount = (Int)count;
+
+#ifdef DEBUG_LOGGING
+	static UnsignedInt s_nextLog = 0;
+	const UnsignedInt frame = TheGameLogic ? TheGameLogic->getFrame() : 0;
+	if (frame >= s_nextLog && (count > 0 || !s_nightGlows.empty()))
+	{
+		s_nextLog = frame + 10 * LOGICFRAMES_PER_SECOND;
+		DEBUG_LOG(( "NIGHTLIGHTS frame %u: %d drawn lit, %d lamp props, %d in view, %d lit, %d cards\n",
+			frame, (Int)s_nightShown.size(), (Int)props.size(), (Int)nearest.size(), (Int)count, (Int)s_nightGlows.size() ));
+	}
+#endif
+	return (Int)count;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** One additive card a lamp, warm, the searchlight's white, into the sorting pool as the particles'
+	billboards go: the additive sprite preset carries GLOW_ENABLE, so the bloom takes them, and they
+	are emissive, so no moon shadow or smoke shade dims a lamp.  Buildings have none. */
+void W3DModelDraw::drawNightGlows(RenderInfoClass& /*rinfo*/)
+{
+	const ShaderClass shader = ShaderClass::_PresetAdditiveSpriteShader;
+	if (s_nightGlows.empty() || W3DDisplay::m_assetManager == NULL || !PointGroupClass::Would_Sort_Billboards(shader))
+		return;
+	// ponytail: taken once and kept for the process
+	static TextureClass* texture = W3DDisplay::m_assetManager->Get_Texture("EXFuzzyDot.tga");
+	if (texture == NULL)
+		return;	// an untextured additive card would be a white square
+	Matrix4x4 view;
+	DX8Wrapper::Get_Transform(D3DTS_VIEW, view);
+	const Int count = (Int)s_nightGlows.size();
+	PointGroupClass::SortingBillboardRange range;
+	PointGroupClass::Reserve_Sorted_Billboards(count, &range);
+	const Vector3 noGlow(0.0f, 0.0f, 0.0f);
+	for (Int i = 0; i < count; ++i)
+	{
+		const NightLights::Light& light = s_nightGlows[i];
+		// the light's own hue, brightest channel at 0.9
+		const Real peak = WWMath::Max(light.red, WWMath::Max(light.green, light.blue));
+		const Real scale = peak > 0.0f ? 0.9f / peak : 0.0f;
+		const unsigned colour = DX8Wrapper::Convert_Color_Clamp(Vector4(light.red * scale, light.green * scale, light.blue * scale, 1.0f));
+		PointGroupClass::Write_Billboard(range.Vertices + 4 * i, view, Vector3(light.glowX, light.glowY, light.glowZ),
+			light.glowSize, 0, colour, noGlow);
+	}
+	PointGroupClass::Insert_Sorted_Billboards(&range, count, texture, shader, false, false, true, false);
 }
 
 //-------------------------------------------------------------------------------------------------

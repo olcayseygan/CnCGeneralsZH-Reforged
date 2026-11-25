@@ -65,6 +65,7 @@
 #include "W3DDevice/GameClient/W3DDynamicLight.h"
 #include "W3DDevice/GameClient/W3DParticleSys.h"
 #include "W3DDevice/GameClient/FireLights.h"
+#include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "W3DDevice/GameClient/W3DGranny.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
 #include "W3DDevice/GameClient/W3DVolumetricShadow.h"
@@ -1631,9 +1632,11 @@ void RTS3DScene::Render(RenderInfoClass & rinfo)
 		colours go over divided by the map's terrain light, the way the headlights' gain is worked out
 		(W3DModelDraw::lightHeadlights), so the shader multiplies the lit pixel by one plus the sum.
 		Lights the terrain relight would skip (a near reach under a tenth of a unit) are skipped here
-		too.  Client only: the lights are what FX lists put up and nothing in logic reads them. */
-static void handBlastLights(RefRenderObjListClass &dynamicLights, const Vector3 &camera)
+		too.  Client only: the lights are what FX lists put up and nothing in logic reads them.  The
+		night lights (W3DModelDraw::pickNightLights) follow the fires, the same way. */
+static void handBlastLights(RefRenderObjListClass &dynamicLights, const CameraClass &sceneCamera)
 {
+	const Vector3 camera = sceneCamera.Get_Position();
 	if (!RenderLighting::LightsPerPixel())
 		return;
 
@@ -1680,6 +1683,20 @@ static void handBlastLights(RefRenderObjListClass &dynamicLights, const Vector3 
 		slot[4] = fire.red / base[0]; slot[5] = fire.green / base[1]; slot[6] = fire.blue / base[2];
 		slot[7] = fire.inner;
 		slot[8] = slot[4] * FireLights::AMBIENT_SHARE; slot[9] = slot[5] * FireLights::AMBIENT_SHARE; slot[10] = slot[6] * FireLights::AMBIENT_SHARE;
+		slot[11] = 0.0f;
+	}
+	// Lit windows, street lamps and searchlights at night, after the fires and before the pulses, so
+	// a barrage cannot put a street out for a frame; NightLights::MAX_LIGHTS leaves the pulses ten.
+	NightLights::Light nights[NightLights::MAX_LIGHTS];
+	const Int nightCount = W3DModelDraw::pickNightLights(sceneCamera, nights);
+	for (Int i = 0; i < nightCount && count < BLAST_LIGHT_SLOTS; ++i)
+	{
+		const NightLights::Light &night = nights[i];
+		float *slot = lights[count++];
+		slot[0] = night.x; slot[1] = night.y; slot[2] = night.z; slot[3] = night.reach;
+		slot[4] = night.red / base[0]; slot[5] = night.green / base[1]; slot[6] = night.blue / base[2];
+		slot[7] = night.inner;
+		slot[8] = slot[4] * night.ambient; slot[9] = slot[5] * night.ambient; slot[10] = slot[6] * night.ambient;
 		slot[11] = 0.0f;
 	}
 	for (size_t i = 0; i < nearest.size() && count < BLAST_LIGHT_SLOTS; ++i)
@@ -1767,7 +1784,7 @@ void RTS3DScene::Customized_Render( RenderInfoClass &rinfo )
 
 	// After the lights' fade has stepped and before the terrain and the models are lit.
 	if (m_customPassMode == SCENE_PASS_DEFAULT && !ShaderClass::Is_Backface_Culling_Inverted())
-		handBlastLights(m_dynamicLightList, rinfo.Camera.Get_Position());
+		handBlastLights(m_dynamicLightList, rinfo.Camera);
 
 	//terrain needs to be rendered first
 	if (terrainObject)	// Don't check visibility - terrain is always visible. jba.
@@ -1833,7 +1850,12 @@ void RTS3DScene::Customized_Render( RenderInfoClass &rinfo )
 		TheGrannyRenderObjSystem->Flush();
 	}
 #endif
-	
+
+	// the lamps' and searchlights' cards, which handBlastLights' night pick found in view
+	if (m_customPassMode == SCENE_PASS_DEFAULT && !ShaderClass::Is_Backface_Culling_Inverted()
+		&& Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE && RenderLighting::LightsPerPixel())
+		W3DModelDraw::drawNightGlows(rinfo);
+
 	//Tell shadow manager to render shadows at the end of this frame
 	//Don't draw shadows if there is no terrain present.
 	if (TheW3DShadowManager && terrainObject && !ShaderClass::Is_Backface_Culling_Inverted() &&

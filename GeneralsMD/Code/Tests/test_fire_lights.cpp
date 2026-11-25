@@ -125,3 +125,52 @@ TEST(the_flicker_stays_in_its_band_and_moves)
 	CHECK(high <= 1.0f + 0.001f);
 	CHECK(high - low > 0.1f);
 }
+
+TEST(night_lights_take_lit_window_models_and_lamps_by_their_names)
+{
+	// EA's night models, pristine, damaged, snowy and the animated ones, light
+	CHECK(NightLights::isLitNightModel("CBTownHs01_N"));
+	CHECK(NightLights::isLitNightModel("CBAirport_DN"));
+	CHECK(NightLights::isLitNightModel("ABBtCmdHQ_NS"));
+	CHECK(NightLights::isLitNightModel("NBPowerPlant_A4N"));
+	// the day's, the rubble's, the wreck's and no model at all do not
+	CHECK(!NightLights::isLitNightModel("CBTownHs01"));
+	CHECK(!NightLights::isLitNightModel("CBTownHs01_D"));
+	CHECK(!NightLights::isLitNightModel("CBTownHs01_RN"));
+	CHECK(!NightLights::isLitNightModel("CBTownHs01_EN"));
+	CHECK(!NightLights::isLitNightModel("None"));
+	CHECK(!NightLights::isLitNightModel("UBSNATK_Sanm"));
+	CHECK(!NightLights::isLitNightModel("UBSNKATK_1ANM"));
+
+	CHECK_EQ(NightLights::kindOfModel("pmstrtlamp"), NightLights::LAMP);
+	CHECK_EQ(NightLights::kindOfModel("CBStadLight"), NightLights::LAMP);
+	CHECK_EQ(NightLights::kindOfModel("PEStrtLamp_D"), NightLights::NONE);
+	CHECK_EQ(NightLights::kindOfModel("Searchlight"), NightLights::SPOT);
+	CHECK_EQ(NightLights::kindOfModel("CBTownHs01_N"), NightLights::NONE);
+}
+
+TEST(a_building_lights_past_its_walls_and_never_glows_and_a_lamp_does)
+{
+	const NightLights::Light house = NightLights::building(0.0f, 0.0f, 0.0f, 40.0f, 30.0f, 50.0f);
+	CHECK(house.reach > 50.0f + 40.0f);	// past the walls, half diagonal 50
+	CHECK(house.inner < 50.0f);
+	CHECK(house.z > 0.0f && house.z < 50.0f);
+	CHECK_EQ(house.glowSize, 0.0f);
+	const NightLights::Light lamp = NightLights::lamp(0.0f, 0.0f, 30.0f, 30.0f);
+	CHECK(lamp.glowSize > 0.0f);
+	CHECK(lamp.z < 30.0f);
+	CHECK(lamp.reach >= 70.0f);
+}
+
+TEST(lamp_props_come_on_one_by_one_through_the_dusk)
+{
+	int lit[3] = { 0, 0, 0 };
+	const float amounts[3] = { 0.3f, 0.5f, 0.7f };
+	for (int a = 0; a < 3; ++a)
+		for (int i = 0; i < 200; ++i)
+			lit[a] += NightLights::propLit(amounts[a], 37.0f * i, 91.0f * i) ? 1 : 0;
+	CHECK_EQ(lit[0], 0);
+	CHECK(lit[1] > 20 && lit[1] < 180);
+	CHECK_EQ(lit[2], 200);
+	CHECK(!NightLights::propLit(0.0f, 0.0f, 0.0f));
+}

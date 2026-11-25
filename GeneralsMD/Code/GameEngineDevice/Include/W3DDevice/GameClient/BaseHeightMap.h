@@ -219,6 +219,7 @@ public:
 
 	void addProp(Int id, Coord3D location, Real angle, Real scale, const AsciiString &modelName);
 	void removeProp(Int id);
+	const W3DPropBuffer *getPropBuffer(void) const { return m_propBuffer; }	///< the map's own props, for their night lamps
 	/// Hand a model's shadow to the tree buffer, which lays its triangles on the ground.
 	Bool addModelShadow(DrawableID id, RenderObjClass *robj);
 	void removeModelShadow(DrawableID id);

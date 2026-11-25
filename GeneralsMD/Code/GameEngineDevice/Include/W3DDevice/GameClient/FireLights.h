@@ -215,3 +215,128 @@ private:
 };
 
 }	// namespace FireLights
+
+// Night lights: what lights up after dark throws light on the ground and the units beside it, in the
+// same per pixel slots, after the fires.  A structure whose lit-window night model is showing, a street
+// lamp and a searchlight's spot, keyed to the NIGHT model condition (W3DModelDraw::pickNightLights).
+// The names are EA's art, so nothing here needs data.  Client only.
+namespace NightLights {
+
+enum {
+	MAX_LIGHTS = 10,		///< a frame's night lights, after the fires' FireLights::MAX_LIGHTS of the 32 slots
+	MAX_GLOWS = 256			///< lamp cards in view
+};
+
+enum Kind { NONE, LAMP, SPOT };
+
+struct Light {
+	float x, y, z, reach, inner;
+	float red, green, blue;		///< the facing surface's light
+	float ambient;						///< of that, on every surface it reaches whichever way it faces
+	float glowX, glowY, glowZ, glowSize;	///< the lamp's own card; size 0 for none
+	unsigned int id;					///< the drawable's, so its second draw module adds no second light
+};
+
+inline bool sameNoCase(const char *a, const char *b)
+{
+	for (; *a && *b; ++a, ++b) {
+		const char ca = (*a >= 'A' && *a <= 'Z') ? (char)(*a + 32) : *a;
+		const char cb = (*b >= 'A' && *b <= 'Z') ? (char)(*b + 32) : *b;
+		if (ca != cb)
+			return false;
+	}
+	return *a == *b;
+}
+
+/// A night model with its windows lit: EA's are named with a last suffix that holds an N (_N, _DN,
+/// _NS, _A4N...).  One that also holds an R (rubble) or an E (wrecked) stays dark, and so does an
+/// animation's model (_Sanm, _1ANM, the Sneak Attack's).
+inline bool isLitNightModel(const char *name)
+{
+	const char *suffix = 0;
+	for (const char *c = name; *c; ++c)
+		if (*c == '_')
+			suffix = c;
+	if (suffix == 0)
+		return false;
+	bool night = false;
+	char previous = 0;
+	for (const char *c = suffix + 1; *c; ++c) {
+		const char l = (*c >= 'A' && *c <= 'Z') ? (char)(*c + 32) : *c;
+		if (l == 'r' || l == 'e' || (l == 'm' && previous == 'n'))
+			return false;
+		night = night || l == 'n';
+		previous = l;
+	}
+	return night;
+}
+
+/// The street lamps' and the searchlight's models, whole: a lamp's damaged model (_D) is out.
+inline Kind kindOfModel(const char *name)
+{
+	static const char *const LAMPS[] = { "PMStrtLamp", "PMLamp01", "PEStrtLamp", "PAStrtLamp",
+		"PMLitPol01", "PMLitPol02", "PMOStrLmp", "CBStadLight" };
+	for (unsigned i = 0; i < sizeof(LAMPS) / sizeof(LAMPS[0]); ++i)
+		if (sameNoCase(name, LAMPS[i]))
+			return LAMP;
+	return sameNoCase(name, "Searchlight") ? SPOT : NONE;
+}
+
+/// A lamp, out of its model's world box: a light under the lamp head pooling round the pole, and a card on the head.
+inline Light lamp(float cx, float cy, float top, float height)
+{
+	Light light;
+	light.x = cx; light.y = cy; light.z = top - 2.0f;
+	const float reach = height * 2.4f;
+	light.reach = reach < 70.0f ? 70.0f : (reach > 240.0f ? 240.0f : reach);
+	light.inner = 8.0f;
+	light.red = 0.9f; light.green = 0.66f; light.blue = 0.36f;
+	light.ambient = 0.25f;
+	light.glowX = cx; light.glowY = cy; light.glowZ = top - 1.0f;
+	const float size = height * 0.35f;
+	light.glowSize = size < 10.0f ? 10.0f : (size > 40.0f ? 40.0f : size);
+	light.id = 0;
+	return light;
+}
+
+/// A building whose windows are lit, out of its model's world box: inside it a little above the
+/// ground, so its own walls and roof face away and only the ground round it and what stands there
+/// take the light.  No card: buildings never glow.
+inline Light building(float cx, float cy, float bottom, float halfX, float halfY, float height)
+{
+	Light light;
+	const float half = sqrtf(halfX * halfX + halfY * halfY);
+	light.x = cx; light.y = cy;
+	light.z = bottom + (height * 0.4f < 35.0f ? height * 0.4f : 35.0f);
+	light.reach = half + 60.0f < 260.0f ? half + 60.0f : 260.0f;
+	light.inner = half * 0.6f;
+	light.red = 0.85f; light.green = 0.55f; light.blue = 0.22f;
+	light.ambient = 0.08f;
+	light.glowX = light.glowY = light.glowZ = light.glowSize = 0.0f;
+	light.id = 0;
+	return light;
+}
+
+/// A searchlight: a white pool where its beam comes down, and a card on the lamp.
+inline Light spot(float x, float y, float ground, float headX, float headY, float headZ)
+{
+	Light light;
+	light.x = x; light.y = y; light.z = ground + 20.0f;
+	light.reach = 70.0f;
+	light.inner = 15.0f;
+	light.red = 0.8f; light.green = 0.8f; light.blue = 0.85f;
+	light.ambient = 0.2f;
+	light.glowX = headX; light.glowY = headY; light.glowZ = headZ; light.glowSize = 18.0f;
+	light.id = 0;
+	return light;
+}
+
+/// A prop (a lamp made client side, which takes no NIGHT condition) lit at this much night, 0 to 1:
+/// each spot of the map from a threshold of its own between 0.35 and 0.65, so a street comes on lamp by lamp.
+inline bool propLit(float nightAmount, float x, float y)
+{
+	const unsigned int h = (unsigned int)(int)floorf(x / 16.0f) * 73856093u ^ (unsigned int)(int)floorf(y / 16.0f) * 19349663u;
+	return nightAmount >= 0.35f + 0.3f * (float)(h % 1000u) / 1000.0f;
+}
+
+}	// namespace NightLights

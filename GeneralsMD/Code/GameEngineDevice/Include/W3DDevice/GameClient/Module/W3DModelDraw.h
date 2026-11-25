@@ -66,6 +66,9 @@ class RenderObjClass;
 class Shadow;
 class TerrainTracksRenderObjClass;
 class HAnimClass;
+class CameraClass;
+class RenderInfoClass;
+namespace NightLights { struct Light; }
 //-------------------------------------------------------------------------------------------------
 /** The default client update module */
 //-------------------------------------------------------------------------------------------------
@@ -379,6 +382,12 @@ public:
 	/// Hands the frame's lit headlights to the Direct3D 11 frame, nearest the camera first.  Once a
 	/// frame, after the smooth motion has placed every model and before anything is drawn.
 	static void lightHeadlights(const Vector3& cameraPosition);
+	/// The night lights for the frame's per pixel slots (FireLights.h's NightLights): of the lit
+	/// structures, lamps and searchlights last drawn and the lamp props, the NightLights::MAX_LIGHTS in
+	/// view nearest the camera into out; returns how many.  Keeps every lamp card in view for drawNightGlows.
+	static Int pickNightLights(const CameraClass &camera, NightLights::Light *out);
+	/// The cards on the lamps and searchlights the last pickNightLights found in view.
+	static void drawNightGlows(RenderInfoClass &rinfo);
 	/// For a render object whose animation carries it out of its bind pose, which is the volume W3D
 	/// culls by: the sphere round its parts posed at this frame.  FALSE, and the sphere untouched,
 	/// for every other render object.

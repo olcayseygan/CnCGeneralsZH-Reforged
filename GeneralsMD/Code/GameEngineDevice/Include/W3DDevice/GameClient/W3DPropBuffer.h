@@ -127,6 +127,9 @@ public:
 	Int drawPropCasters(RenderInfoClass &sunInfo, const SunShadowCasterCull &cull);
 	/// The radius of a model's bounding sphere at scale one, loading its type; 0 when it will not load.
 	Real getPropRadius(const AsciiString &modelName);
+	/// The lamps and searchlights whose light can reach the camera's view, in the clear, that are lit at
+	/// this much night (NightLights::propLit), with their NightLights::Kind, into robjs and kinds; returns how many.
+	Int getNightLamps(const CameraClass &camera, Real nightAmount, RenderObjClass **robjs, Int *kinds, Int max) const;
 
 	/// Add a type of prop.  Name is the w3d model name.
 	Int addPropType(const AsciiString &modelName);

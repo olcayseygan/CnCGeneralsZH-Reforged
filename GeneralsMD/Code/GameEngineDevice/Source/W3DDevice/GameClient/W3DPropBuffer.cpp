@@ -66,6 +66,7 @@
 #include "W3DDevice/GameClient/W3DShroud.h"
 #include "W3DDevice/GameClient/BaseHeightMap.h"
 #include "W3DDevice/GameClient/SunShadowCasterCull.h"
+#include "W3DDevice/GameClient/FireLights.h"
 #include "GameLogic/PartitionManager.h"
 
 #ifdef _INTERNAL
@@ -248,6 +249,48 @@ Real W3DPropBuffer::getPropRadius(const AsciiString &modelName)
 	}
 	const Int type = addPropType(modelName);
 	return type < 0 ? 0.0f : m_propTypes[type].m_bounds.Radius;
+}
+
+/** A lamp made client side (multiplayer, and below High detail every street lamp is one) has no
+drawable and so no NIGHT condition: the night on screen decides, lamp by lamp.  Culled by the scene's
+camera here, since the visible flags are whichever pass drew last (a water mirror's narrow view on a
+map whose water reflects).  The shroud is last frame's draw's: a lamp in fog or shroud gives no light,
+as a lamp made as an object is not drawn there. */
+Int W3DPropBuffer::getNightLamps(const CameraClass &camera, Real nightAmount, RenderObjClass **robjs, Int *kinds, Int max) const
+{
+	if (nightAmount <= 0.0f) {
+		return 0;
+	}
+	Int typeKind[MAX_TYPES];
+	Bool any = FALSE;
+	for (Int t=0; t<m_numPropTypes; t++) {
+		typeKind[t] = NightLights::kindOfModel(m_propTypes[t].m_robjName.str());
+		any = any || typeKind[t] != NightLights::NONE;
+	}
+	if (!any) {
+		return 0;
+	}
+	Int count = 0;
+	for (Int i=0; i<m_numProps && count<max; i++) {
+		const TProp &prop = m_props[i];
+		if (prop.m_robj == NULL || prop.propType < 0 || typeKind[prop.propType] == NightLights::NONE) {
+			continue;
+		}
+		if (prop.ss > OBJECTSHROUD_PARTIAL_CLEAR || prop.ss <= OBJECTSHROUD_INVALID) {
+			continue;
+		}
+		// the bounds and the reach of the light the lamp would throw
+		if (camera.Cull_Sphere(SphereClass(prop.bounds.Center, prop.bounds.Radius + 240.0f))) {
+			continue;
+		}
+		if (!NightLights::propLit(nightAmount, prop.location.x, prop.location.y)) {
+			continue;
+		}
+		robjs[count] = prop.m_robj;
+		kinds[count] = typeKind[prop.propType];
+		++count;
+	}
+	return count;
 }
 
 Bool W3DPropBuffer::addSceneryProp(Coord3D location, Real angle, Real scale, const AsciiString &modelName)

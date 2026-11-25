@@ -18,8 +18,8 @@
 
 // FILE: DirectStrikeTheme.h //////////////////////////////////////////////////////////////////////
 //
-// The one look every Direct Strike screen draws in: the in-match HUD (DirectStrikeHud.cpp), the lobby
-// (DirectStrikeLobby.cpp) and, once it moves over, the end screen.  It holds the palette, the type, the
+// The one look the Direct Strike steel screens draw in: the in-match HUD (DirectStrikeHud.cpp) and the observer's
+// pieces; the lobby left it for the menu language on 2026-11-25 and keeps only its text calls.  It holds the palette, the type, the
 // side's art and how a piece is named, and the shapes made of pieces (the 9-slice panel, the 3-slice
 // bar, dropdown and key, a chip, a portrait well, a lamp).  A piece is asked for by its Piece below and
 // never by a string: PIECE_NAMES in DirectStrikeTheme.cpp is the only place a mapped image's name is
@@ -171,55 +171,7 @@ namespace DirectStrikeTheme
 		QUEUE_BAND_C,				///< in the left end's x 6..12, one glass channel from x 14 to 15 short of the right end,
 		QUEUE_BAND_R,				///< which caps it with two rivets (the common sheet only)
 
-		// the lobby's own, README-lobby.md
-		LOBBY_PICK_TILE,
-		LOBBY_ISLAND,
-		LOBBY_ISLAND_BAND,			///< the island on the map band
-		LOBBY_HEADQUARTERS_AMERICA,	///< a plain side's portrait: its command centre's build button picture
-		LOBBY_HEADQUARTERS_CHINA,
-		LOBBY_HEADQUARTERS_GLA,
-		LOBBY_RANDOM,
-		LOBBY_OPEN,
-		LOBBY_CLOSED,
-		LOBBY_PING1,
-		LOBBY_PING2,
-		LOBBY_PING3,
-		LOBBY_PING4,
-		LOBBY_AI,
-		LOBBY_CHECK,
-
-		// the Spearhead lobby on the common sheet: a pointed piece is drawn in its own light, so a team's piece and
-		// its mirror are two (Right points right, team 1's; Left points left, team 2's)
-		CONSOLE_TL, CONSOLE_T, CONSOLE_TR, CONSOLE_L, CONSOLE_C, CONSOLE_R, CONSOLE_BL, CONSOLE_B, CONSOLE_BR,
-		SPEAR_RIGHT_L, SPEAR_RIGHT_C, SPEAR_RIGHT_R,				///< a seat with a player, 148 high
-		SPEAR_LEFT_L, SPEAR_LEFT_C, SPEAR_LEFT_R,
-		SPEAR_YOU_RIGHT_L, SPEAR_YOU_RIGHT_C, SPEAR_YOU_RIGHT_R,	///< the local player's seat, its lip bright
-		SPEAR_YOU_LEFT_L, SPEAR_YOU_LEFT_C, SPEAR_YOU_LEFT_R,
-		BAY_RIGHT_L, BAY_RIGHT_C, BAY_RIGHT_R,							///< an open or closed seat
-		BAY_LEFT_L, BAY_LEFT_C, BAY_LEFT_R,
-		SPEAR_HEAD_RIGHT_L, SPEAR_HEAD_RIGHT_C, SPEAR_HEAD_RIGHT_R,	///< a team head, 44 high
-		SPEAR_HEAD_LEFT_L, SPEAR_HEAD_LEFT_C, SPEAR_HEAD_LEFT_R,
-		HEX_TITLE_L, HEX_TITLE_C, HEX_TITLE_R,
-		TUG_L, TUG_C, TUG_R,
-		SEG,						///< a seat lip's segment, unlit
-		SEG_LIT,				///< lit: white, drawn tinted at its core grown by GLOW
-		TUG_SEG,
-		TUG_SEG_LIT,
-		LED,						///< a team head's readiness light
-		LED_LIT,
-		CHEVRON_R,			///< white, tinted, pointing right
-		CHEVRON_L,
-
-		// the Riveted Clamp controls of the shared screens
-		CLAMP_START_L, CLAMP_START_C, CLAMP_START_R,
-		CLAMP_BACK,
-		CLAMP_PLUS,			///< an open seat's key: sit here
-		CLAMP_SEND,
-		CLAMP_CHIP_L, CLAMP_CHIP_C, CLAMP_CHIP_R,
-		CLAMP_CHIP_FIELD_R,	///< a chip's right end without its caret block
-		CLAMP_BOX_TL, CLAMP_BOX_T, CLAMP_BOX_TR, CLAMP_BOX_L, CLAMP_BOX_C, CLAMP_BOX_R, CLAMP_BOX_BL, CLAMP_BOX_B, CLAMP_BOX_BR,
-		CLAMP_BAND_L, CLAMP_BAND_C, CLAMP_BAND_R,
-		CLAMP_WORD_L, CLAMP_WORD_C, CLAMP_WORD_R,	///< a clamp key for a word (MAIN MENU), ends 24, 72 high, "" H P I
+		// the lobby's steel pieces retired on 2026-11-25: the menu language draws the lobby in code (DirectStrikeLobby.cpp)
 
 		// the observer HUD (the Ledger) on the common sheet: the wrapper's experiments/observer-console/PIECES.md
 		OBS_RADAR,					///< the radar's scope housing, 250 square, open left and bottom, its glass from 18 in
@@ -306,7 +258,7 @@ namespace DirectStrikeTheme
 	void key( const DirectStrikeHudBox &b, Piece piece, Bool lit, Bool disabled = FALSE );
 	/// a chip of the HUD's floating top: its piece, or a card's flat face with its glass 5 in
 	void chip( const DirectStrikeHudBox &b, Piece piece );
-	/// a 9-slice from its top left piece (PANEL_TL, PANEL_LIT_TL, PLATE_TL, WELL_TL, CONSOLE_TL, CLAMP_BOX_TL),
+	/// a 9-slice from its top left piece (PANEL_TL, PANEL_LIT_TL, PLATE_TL, WELL_TL, OBS_BOARD_TL, OBS_CARD_TL),
 	/// corners at their own size times the scale; a flat well where the pieces are missing.  The middles stretch,
 	/// unless the centre is a textured tile (wider than TILE_MIN): then the edges and the centre repeat from the
 	/// top left at their own size, the last copy cut, so the scratches are never smeared
@@ -318,9 +270,6 @@ namespace DirectStrikeTheme
 	void threeSlice( const DirectStrikeHudBox &b, Piece left, Piece centre, Piece right, const char *state = "", Color tint = 0xFFFFFFFF );
 	/// a dropdown ("" up, H hot, P open), or a field without its caret
 	void dropdown( const DirectStrikeHudBox &b, const char *state, Bool field );
-	/// the keys row's chip (team size, game speed), the Riveted Clamp's dropdown at 72: "" up, H hot, P open, or a
-	/// field without its caret block
-	void clampChip( const DirectStrikeHudBox &b, const char *state, Bool field );
 	/// a lit piece (white, its halo in the alpha) at its core grown by GLOW on every side, in the colour
 	void glow( Piece piece, const DirectStrikeHudBox &core, Color tint );
 	/// a picture filling a square well from its centre top, the colour band 6 high at its foot
@@ -342,11 +291,6 @@ namespace DirectStrikeTheme
 	/// a watcher's team 0 to 3 in its INK colour (us, them, green, violet)
 	Color teamColour( Int team );
 
-	/// the general's face from the challenge menu, NULL for a plain side
-	const Image *generalPortrait( const PlayerTemplate *army );
-	/// a plain side's command centre, its build button picture's centre square at a portrait well's 172 on the local
-	/// side's sheet
-	const Image *headquartersPicture( Side side );
 }
 
 #endif // __DIRECTSTRIKETHEME_H_

@@ -7487,6 +7487,87 @@ GUI:DirectStrikeBrutal
 "Brutal"
 END
 
+// menu package 3c: the Direct Strike lobby in the menu language
+GUI:DirectStrikeSkirmish
+"Skirmish"
+END
+
+GUI:DirectStrikeLan
+"LAN"
+END
+
+GUI:DirectStrikeOnline
+"Online"
+END
+
+GUI:DirectStrikeTakeSeat
+"TAKE SEAT"
+END
+
+GUI:DirectStrikeAddComputer
+"ADD COMPUTER"
+END
+
+GUI:DirectStrikeMoveHere
+"MOVE HERE"
+END
+
+GUI:DirectStrikeTeamsLabel
+"TEAMS"
+END
+
+GUI:DirectStrikeSpeedLabel
+"SPEED"
+END
+
+GUI:DirectStrikeHost
+"HOST"
+END
+
+GUI:DirectStrikeWaiting
+"WAITING"
+END
+
+GUI:DirectStrikeWaitingFor
+"WAITING FOR %d PLAYERS"
+END
+
+GUI:DirectStrikeWaitingForOne
+"WAITING FOR 1 PLAYER"
+END
+
+GUI:DirectStrikeAllReady
+"ALL READY"
+END
+
+GUI:DirectStrikeFortress
+"Fortress"
+END
+
+GUI:DirectStrikePlot
+"Player's plot"
+END
+
+GUI:DirectStrikePlotOpen
+"Open plot"
+END
+
+GUI:DirectStrikeYou
+"You"
+END
+
+GUI:DirectStrikeTypeToChat
+"Type to chat"
+END
+
+GUI:DirectStrikeSend
+"SEND"
+END
+
+GUI:DirectStrikePing
+"%d ms"
+END
+
 GUI:Munkee
 ""
 END

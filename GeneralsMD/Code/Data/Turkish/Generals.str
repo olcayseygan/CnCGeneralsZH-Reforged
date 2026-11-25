@@ -21711,6 +21711,87 @@ GUI:DirectStrikeBrutal
 "Acımasız"
 END
 
+// menu package 3c: the Direct Strike lobby in the menu language
+GUI:DirectStrikeSkirmish
+"Çatışma"
+END
+
+GUI:DirectStrikeLan
+"LAN"
+END
+
+GUI:DirectStrikeOnline
+"Çevrimiçi"
+END
+
+GUI:DirectStrikeTakeSeat
+"BURAYA GEÇ"
+END
+
+GUI:DirectStrikeAddComputer
+"BİLGİSAYAR EKLE"
+END
+
+GUI:DirectStrikeMoveHere
+"BURAYA GEÇ"
+END
+
+GUI:DirectStrikeTeamsLabel
+"TAKIM"
+END
+
+GUI:DirectStrikeSpeedLabel
+"HIZ"
+END
+
+GUI:DirectStrikeHost
+"KURUCU"
+END
+
+GUI:DirectStrikeWaiting
+"BEKLİYOR"
+END
+
+GUI:DirectStrikeWaitingFor
+"%d OYUNCU BEKLENİYOR"
+END
+
+GUI:DirectStrikeWaitingForOne
+"1 OYUNCU BEKLENİYOR"
+END
+
+GUI:DirectStrikeAllReady
+"HERKES HAZIR"
+END
+
+GUI:DirectStrikeFortress
+"Kale"
+END
+
+GUI:DirectStrikePlot
+"Oyuncu alanı"
+END
+
+GUI:DirectStrikePlotOpen
+"Boş alan"
+END
+
+GUI:DirectStrikeYou
+"Sen"
+END
+
+GUI:DirectStrikeTypeToChat
+"Yazmak için tıkla"
+END
+
+GUI:DirectStrikeSend
+"GÖNDER"
+END
+
+GUI:DirectStrikePing
+"%d ms"
+END
+
 GUI:Munkee
 ""
 END

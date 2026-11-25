@@ -20,13 +20,12 @@
 //
 // Where the Direct Strike screens stand, in plain integers so test_directstrikehud checks them alone.  A screen
 // is authored at 1920x1080 and put on any screen by the frame: k = min(W / 1920, H / 1080), the 1920k
-// by 1080k box centred.  The lobby's rects began as hud-artist's README-lobby.md of 2026-11-21 and are the
-// Spearhead console of 2026-11-23 now (the owner's direction C, docs/reference/DIRECT-STRIKE-THEME.md): one
-// console, every plate pointing at the lane, every seat a full card, the centre column square on the seat
-// rows; the in-match HUD keeps its own anchoring in DirectStrikeHudLayout.h.  DirectStrikeTheme.h is what draws in
-// them.
+// by 1080k box centred.  The lobby's rects are the menu language's of 2026-11-25 (the wrapper's
+// experiments/proofs/2026-11-24/lobbies/direct-strike/README-ds-lobby.md, ds_lobby_menu2.py): frame A's
+// panel, the two teams' wings of three seat cards, the island, chat and START in the centre column and the
+// readiness lane along the foot; the in-match HUD keeps its own anchoring in DirectStrikeHudLayout.h.
 //
-// A seat is a place on the console and the start the player stands on: seat n is start n, team 1 the even
+// A seat is a place on the screen and the start the player stands on: seat n is start n, team 1 the even
 // seats on the left and team 2 the odd ones on the right (DirectStrike_teamOfStart), row n / 2 down.  A seat is
 // not a slot: a player keeps his slot and moves by his start, so DirectStrikeLobby_seats says which slot
 // shows at which seat.
@@ -97,7 +96,7 @@ inline void DirectStrike_toDesign( const DirectStrikeFrame &f, int x, int y, flo
 }
 
 //-------------------------------------------------------------------------------------------------
-// The lobby, the Spearhead console
+// The lobby, in the menu language
 //-------------------------------------------------------------------------------------------------
 
 enum
@@ -106,62 +105,80 @@ enum
 	DSLOBBY_ROWS = 3,						///< seats a team
 	DSLOBBY_SEATS = DSLOBBY_TEAMS * DSLOBBY_ROWS,
 	DSLOBBY_SEAT_ROWS = 6,			///< the host's seat control: Open, Closed and four levels
+	DSLOBBY_HUMAN_SEAT_ROWS = 2,	///< on a human's seat only Open and Closed (the kick)
+	DSLOBBY_LEVELS = 4,					///< the computer levels an open seat's keys add: Easy, Medium, Hard, Brutal
 	DSLOBBY_ARMY_COLUMNS = 3,
 	DSLOBBY_ARMY_TILES = 4,			///< down a column: the side, then its three generals
 	DSLOBBY_COLOR_COLUMNS = 4,
+	DSLOBBY_SIZES = 3,					///< the team size list: 1 v 1, 2 v 2, 3 v 3
+	DSLOBBY_SPEEDS = 4,					///< the speed list: PLAYER_GAME_SPEED_PERCENTS, 1.0x to 2.0x
 
-	// the console: the title over its top rim, the team heads and three cards a team beside the centre column,
-	// the tug bar under them, the whole centred down the screen.  An open or closed seat is a full card too
-	// (a bay), so both columns always end at DSLOBBY_BOTTOM.
-	DSLOBBY_CARD_W = 600,
-	DSLOBBY_CARD_H = 148,				///< the 128 well and two rows of chips; the seat plates are drawn at this height
-	DSLOBBY_CARD_GAP = 12,
+	// frame A's panel and the end screens' content inset
+	DSLOBBY_PANEL_X0 = 32,
+	DSLOBBY_PANEL_Y0 = 28,
+	DSLOBBY_PANEL_X1 = 1888,
+	DSLOBBY_PANEL_Y1 = 1052,
+	DSLOBBY_X0 = 60,
+	DSLOBBY_X1 = 1860,
+	DSLOBBY_TITLE_Y0 = 46,
+	DSLOBBY_TITLE_Y1 = 94,
+	DSLOBBY_RULE_Y = 112,				///< the header rule, 2 high; each team's ready share under it
+	DSLOBBY_HEAD_Y = 128,
 	DSLOBBY_HEAD_H = 44,
-	DSLOBBY_HEAD_GAP = 16,
-	DSLOBBY_TITLE_H = 72,
-	DSLOBBY_TITLE_GAP = 24,
-	DSLOBBY_TUG_GAP = 24,				///< between the columns' foot and the tug bar
-	DSLOBBY_TUG_H = 30,
-	DSLOBBY_CONSOLE_FOOT = 26,	///< the console's floor and rim under the tug bar
-	DSLOBBY_COLUMN_H = DSLOBBY_HEAD_H + DSLOBBY_HEAD_GAP + DSLOBBY_ROWS * DSLOBBY_CARD_H + ( DSLOBBY_ROWS - 1 ) * DSLOBBY_CARD_GAP,
-	DSLOBBY_TITLE_TOP = ( 1080 - DSLOBBY_TITLE_H - DSLOBBY_TITLE_GAP - DSLOBBY_COLUMN_H - DSLOBBY_TUG_GAP - DSLOBBY_TUG_H
-		- DSLOBBY_CONSOLE_FOOT ) / 2,
-	DSLOBBY_TOP = DSLOBBY_TITLE_TOP + DSLOBBY_TITLE_H + DSLOBBY_TITLE_GAP,		///< the team heads' and the centre column's top
-	DSLOBBY_BOTTOM = DSLOBBY_TOP + DSLOBBY_COLUMN_H,	///< a column's foot and the start key's
-	DSLOBBY_TEAM_X0 = 64,				///< team 1's column; 36 clear of the centre column, which a seat's point needs
-	DSLOBBY_TEAM_X1 = 1256,			///< team 2's
-	DSLOBBY_SPEAR = 22,					///< a seat plate's point past its card on the inner side
-	DSLOBBY_HEAD_SPEAR = 18,		///< a team head's point past its rect
-	DSLOBBY_LIP_SEGS = 27,			///< a seat's lip segments, 12 x 6 every 16 from 152 in, 4 down
-	DSLOBBY_LIP_X = 152,
-	DSLOBBY_LIP_STEP = 16,
-	DSLOBBY_LIP_Y = 4,
-	DSLOBBY_SEG_W = 12,
-	DSLOBBY_SEG_H = 6,
-	DSLOBBY_HEAD_LEDS = 3,			///< a head's readiness lights, 16 x 10 every 22 from 468 in, 17 down
-	DSLOBBY_HEAD_CHEVRONS = 3,	///< and its chevrons nearer the point, 14 x 18 every 14 from 542 in, 13 down
-	DSLOBBY_TUG_SEGS = 47,			///< a team's tug segments, 14 x 18 every 18 from 96 in from its end
-	DSLOBBY_TUG_SEG_X = 96,
-	DSLOBBY_TUG_SEG_STEP = 18,
-	DSLOBBY_TUG_SEG_W = 14,
-	DSLOBBY_TUG_SEG_H = 18,
-	DSLOBBY_KEY_H = 72,
-	DSLOBBY_ROW_GAP = 12,				///< between the centre column's parts
-	DSLOBBY_SIZE_W = 112,				///< the team size chip between the back key and the speed chip
-	DSLOBBY_SIZES = 3,					///< its list: 1 v 1, 2 v 2, 3 v 3
-	DSLOBBY_SPEED_W = 112,			///< the game speed chip between the team size and start (2026-11-23)
-	DSLOBBY_SPEEDS = 4,					///< its list: PLAYER_GAME_SPEED_PERCENTS, 1.0x to 2.0x
+	DSLOBBY_SEAT_Y = 188,
+	DSLOBBY_CARD_W = 550,
+	DSLOBBY_CARD_H = 250,
+	DSLOBBY_CARD_GAP = 12,
+	DSLOBBY_TEAM_X0 = 60,				///< team 1's wing
+	DSLOBBY_TEAM_X1 = 1310,			///< team 2's, laid out like team 1's
+	DSLOBBY_CENTRE_X0 = 640,
+	DSLOBBY_CENTRE_X1 = 1280,
+	DSLOBBY_FOOT = DSLOBBY_SEAT_Y + DSLOBBY_ROWS * DSLOBBY_CARD_H + ( DSLOBBY_ROWS - 1 ) * DSLOBBY_CARD_GAP,	///< 962: the seats' and START's foot
+	DSLOBBY_PICTURE = 226,			///< a seat's picture, PAD in from its card's corner
+	DSLOBBY_PAD = 12,
+	DSLOBBY_LINE_H = 56,				///< the seat line, the army and the colour beside the picture
+	DSLOBBY_SETUP_GAP = 16,			///< between the team size chip and the speed chip
+
+	// the readiness lane along the panel's foot: the track and its ticks, the network status above its middle
+	// (the design's box over the track hid team 2's third segment, so the status stands over it instead)
+	DSLOBBY_LANE_Y0 = 976,
+	DSLOBBY_LANE_Y1 = 1036,
+	DSLOBBY_TRACK_X0 = 100,
+	DSLOBBY_TRACK_X1 = 1820,
+	DSLOBBY_TRACK_Y0 = 1000,
+	DSLOBBY_TRACK_Y1 = 1020,
+	DSLOBBY_TRACK_SEG_GAP = 6,
+	DSLOBBY_STATUS_Y0 = 979,
+	DSLOBBY_STATUS_Y1 = 997,
+
+	DSLOBBY_CHAT_LINE = 30,			///< chat lines this far apart
+	DSLOBBY_LIST_GAP = 4,				///< an open list stands this far from its chip
+	DSLOBBY_LIST_ROW = 40,
+	DSLOBBY_LIST_PAD = 8,
+	DSLOBBY_PICKER_PAD = 12,
+	DSLOBBY_PICKER_RANDOM_H = 44,
+	DSLOBBY_TILE_GAP = 8,
+	DSLOBBY_TILE_W = ( DSLOBBY_CARD_W - 2 * DSLOBBY_PICKER_PAD - ( DSLOBBY_ARMY_COLUMNS - 1 ) * DSLOBBY_TILE_GAP ) / DSLOBBY_ARMY_COLUMNS,
+	DSLOBBY_TILE_H = 146,
+	DSLOBBY_TILE_PICTURE = 104,
+	DSLOBBY_PICKER_H = 2 * DSLOBBY_PICKER_PAD + DSLOBBY_PICKER_RANDOM_H + 10 + DSLOBBY_ARMY_TILES * DSLOBBY_TILE_H
+		+ ( DSLOBBY_ARMY_TILES - 1 ) * DSLOBBY_TILE_GAP,
+	DSLOBBY_COLOR_CELL_W = 64,
+	DSLOBBY_COLOR_CELL_H = 48,
+	DSLOBBY_COLOR_GAP = 8,
+	DSLOBBY_COLOR_PAD = 12,
+	DSLOBBY_COLOR_NAME_H = 30,	///< the hovered colour's name under the cells
+	DSLOBBY_LEVEL_GAP = 6,			///< between an open seat's level keys
 };
 
-/// the part of a seat card, README-lobby.md "The seat card"
+/// the part of a seat card, README-ds-lobby.md "The seat card"; every team's card is laid out alike
 enum DirectStrikeSeatPart
 {
 	DSSEAT_PORTRAIT,
 	DSSEAT_LINE,
-	DSSEAT_LAMP,
 	DSSEAT_ARMY,
 	DSSEAT_COLOR,
-	DSSEAT_PING,
+	DSSEAT_TAG,		///< a network seat's readiness tag on the picture's top, its word right (team 1) or left (team 2) aligned
 	DSSEAT_PARTS
 };
 
@@ -213,315 +230,225 @@ inline void DirectStrikeLobby_seats( const int start[ DSLOBBY_SEATS ], int seatO
 		slotAt[ seatOf[ slot ] ] = slot;
 }
 
-/// a rect given from the left of `box` for team 1, mirrored about the box for team 2 (x becoming its width - x)
-inline DirectStrikeRect DirectStrikeLobby_mirrored( const DirectStrikeRect &box, int team, float x0, float y0, float x1, float y1 )
+inline DirectStrikeRect DirectStrikeLobby_panel( void )
 {
-	if( team == 0 )
-		return DirectStrike_rect( box.x0 + x0, box.y0 + y0, box.x0 + x1, box.y0 + y1 );
-	return DirectStrike_rect( box.x1 - x1, box.y0 + y0, box.x1 - x0, box.y0 + y1 );
+	return DirectStrike_rect( DSLOBBY_PANEL_X0, DSLOBBY_PANEL_Y0, DSLOBBY_PANEL_X1, DSLOBBY_PANEL_Y1 );
 }
 
-/// a rect grown by `by` on its team's inner side, toward the lane: the pointed plate drawn behind it
-inline DirectStrikeRect DirectStrikeLobby_pointed( const DirectStrikeRect &r, int team, float by )
-{
-	return team == 0 ? DirectStrike_rect( r.x0, r.y0, r.x1 + by, r.y1 ) : DirectStrike_rect( r.x0 - by, r.y0, r.x1, r.y1 );
-}
-
-/// the console behind everything, from the title's middle to under the tug bar
-inline DirectStrikeRect DirectStrikeLobby_console( void )
-{
-	return DirectStrike_rect( 24, DSLOBBY_TITLE_TOP + DSLOBBY_TITLE_H / 2, 1896,
-		DSLOBBY_BOTTOM + DSLOBBY_TUG_GAP + DSLOBBY_TUG_H + DSLOBBY_CONSOLE_FOOT );
-}
-
-inline DirectStrikeRect DirectStrikeLobby_title( void )
-{
-	return DirectStrike_rect( 640, DSLOBBY_TITLE_TOP, 1280, DSLOBBY_TITLE_TOP + DSLOBBY_TITLE_H );
-}
-
-/// the title's chevrons, 14 x 18 on its middle: team 1's two pointing right at its left, team 2's at its right,
-/// 24 in from its ends and clear of the spaced name, which runs about 220 either side of the middle at 1080
-/// (on a 520 plate they stood 26 in and ran into the D and the E, 2026-11-24)
-inline DirectStrikeRect DirectStrikeLobby_titleChevron( int team, int i )
-{
-	const float x = team == 0 ? 664.0f + 14.0f * (float)i : 1920.0f - 664.0f - 14.0f * (float)i - 14.0f;
-	const float y = DSLOBBY_TITLE_TOP + DSLOBBY_TITLE_H / 2 - 9.0f;
-	return DirectStrike_rect( x, y, x + 14.0f, y + 18.0f );
-}
+/// the header: the title at the top left, the facts after it, BACK at the right
+inline DirectStrikeRect DirectStrikeLobby_title( void ) { return DirectStrike_rect( DSLOBBY_X0, DSLOBBY_TITLE_Y0, 520, DSLOBBY_TITLE_Y1 ); }
+inline DirectStrikeRect DirectStrikeLobby_back( void ) { return DirectStrike_rect( DSLOBBY_X1 - 156, DSLOBBY_TITLE_Y0 + 2, DSLOBBY_X1, DSLOBBY_TITLE_Y1 - 2 ); }
 
 inline float DirectStrikeLobby_teamX( int team ) { return team == 0 ? (float)DSLOBBY_TEAM_X0 : (float)DSLOBBY_TEAM_X1; }
 
 inline DirectStrikeRect DirectStrikeLobby_teamHead( int team )
 {
 	const float x = DirectStrikeLobby_teamX( team );
-	return DirectStrike_rect( x, DSLOBBY_TOP, x + DSLOBBY_CARD_W, DSLOBBY_TOP + DSLOBBY_HEAD_H );
-}
-
-/// a head's readiness light `i`, counted from its outer end, and its chevron `i`
-inline DirectStrikeRect DirectStrikeLobby_headLed( int team, int i )
-{
-	const float x = 468.0f + 22.0f * (float)i;
-	return DirectStrikeLobby_mirrored( DirectStrikeLobby_teamHead( team ), team, x, 17, x + 16, 27 );
-}
-inline DirectStrikeRect DirectStrikeLobby_headChevron( int team, int i )
-{
-	const float x = 542.0f + 14.0f * (float)i;
-	return DirectStrikeLobby_mirrored( DirectStrikeLobby_teamHead( team ), team, x, 13, x + 14, 31 );
+	return DirectStrike_rect( x, DSLOBBY_HEAD_Y, x + DSLOBBY_CARD_W, DSLOBBY_HEAD_Y + DSLOBBY_HEAD_H );
 }
 
 /// a seat's card: the team's three stack under its head
 inline DirectStrikeRect DirectStrikeLobby_card( int seat )
 {
 	const float x = DirectStrikeLobby_teamX( DirectStrikeLobby_team( seat ) );
-	const float y = (float)( DSLOBBY_TOP + DSLOBBY_HEAD_H + DSLOBBY_HEAD_GAP + DirectStrikeLobby_row( seat ) * ( DSLOBBY_CARD_H + DSLOBBY_CARD_GAP ) );
+	const float y = (float)( DSLOBBY_SEAT_Y + DirectStrikeLobby_row( seat ) * ( DSLOBBY_CARD_H + DSLOBBY_CARD_GAP ) );
 	return DirectStrike_rect( x, y, x + DSLOBBY_CARD_W, y + DSLOBBY_CARD_H );
 }
 
-/// a lip segment of a seat, `k` from the portrait's side
-inline DirectStrikeRect DirectStrikeLobby_lipSeg( int seat, int k )
+/// the three lines beside the picture, 29 apart: 0 the seat line, 1 the army, 2 the colour
+inline DirectStrikeRect DirectStrikeLobby_line( int seat, int line )
 {
-	const float x = (float)( DSLOBBY_LIP_X + DSLOBBY_LIP_STEP * k );
-	return DirectStrikeLobby_mirrored( DirectStrikeLobby_card( seat ), DirectStrikeLobby_team( seat ), x, DSLOBBY_LIP_Y, x + DSLOBBY_SEG_W,
-		DSLOBBY_LIP_Y + DSLOBBY_SEG_H );
+	const DirectStrikeRect c = DirectStrikeLobby_card( seat );
+	const float x0 = c.x0 + DSLOBBY_PAD + DSLOBBY_PICTURE + 18, x1 = c.x1 - DSLOBBY_PAD;
+	const float y = c.y0 + DSLOBBY_PAD + (float)( line * ( ( DSLOBBY_PICTURE - DSLOBBY_LINE_H ) / 2 ) );
+	return DirectStrike_rect( x0, y, x1, y + DSLOBBY_LINE_H );
 }
 
-/// a network seat's lights strip, the well round its ready lamp and ping
-inline DirectStrikeRect DirectStrikeLobby_strip( int seat )
+/// a part of a seat's card in the design's space
+inline DirectStrikeRect DirectStrikeLobby_part( int seat, DirectStrikeSeatPart part )
 {
-	return DirectStrikeLobby_mirrored( DirectStrikeLobby_card( seat ), DirectStrikeLobby_team( seat ), 542, 14, 588, 134 );
-}
-
-/// a part of a seat's card in the design's space; team 2's card is team 1's mirrored, x becoming 600 - x.
-/// `lights` is a network room, with a ready lamp and a ping at the inner edge; offline the line and the chips
-/// run to that edge instead.
-inline DirectStrikeRect DirectStrikeLobby_part( int seat, DirectStrikeSeatPart part, bool lights = true )
-{
-	static const float FULL[ 2 ][ DSSEAT_PARTS ][ 4 ] =
+	const DirectStrikeRect c = DirectStrikeLobby_card( seat );
+	const DirectStrikeRect picture = DirectStrike_rect( c.x0 + DSLOBBY_PAD, c.y0 + DSLOBBY_PAD, c.x0 + DSLOBBY_PAD + DSLOBBY_PICTURE,
+		c.y0 + DSLOBBY_PAD + DSLOBBY_PICTURE );
+	switch( part )
 	{
-		{	// offline
-			{ 10, 10, 138, 138 },			// portrait well
-			{ 152, 18, 588, 66 },			// seat line
-			{ 548, 26, 580, 58 },			// ready lamp, not drawn
-			{ 152, 82, 480, 130 },		// army chip
-			{ 492, 82, 588, 130 },		// colour chip
-			{ 552, 94, 580, 118 },		// ping, not drawn
-		},
-		{	// a network room
-			{ 10, 10, 138, 138 },
-			{ 152, 18, 532, 66 },
-			{ 548, 26, 580, 58 },
-			{ 152, 82, 428, 130 },
-			{ 440, 82, 536, 130 },
-			{ 552, 94, 580, 118 },
-		},
-	};
-	const float *p = FULL[ lights ? 1 : 0 ][ part ];
-	return DirectStrikeLobby_mirrored( DirectStrikeLobby_card( seat ), DirectStrikeLobby_team( seat ), p[ 0 ], p[ 1 ], p[ 2 ], p[ 3 ] );
+		case DSSEAT_LINE: return DirectStrikeLobby_line( seat, 0 );
+		case DSSEAT_ARMY: return DirectStrikeLobby_line( seat, 1 );
+		case DSSEAT_COLOR: return DirectStrikeLobby_line( seat, 2 );
+		case DSSEAT_TAG: return DirectStrike_rect( picture.x0 + 6, picture.y0 + 6, picture.x1 - 6, picture.y0 + 32 );
+		default: return picture;
+	}
 }
 
-/// the tug bar along the console's foot, and a team's segment `i` from its own end
-inline DirectStrikeRect DirectStrikeLobby_tug( void )
+/// a client's TAKE SEAT key on an open seat, over the army and colour lines
+inline DirectStrikeRect DirectStrikeLobby_takeSeat( int seat )
 {
-	const float y = (float)( DSLOBBY_BOTTOM + DSLOBBY_TUG_GAP );
-	return DirectStrike_rect( 80, y, 1840, y + DSLOBBY_TUG_H );
-}
-inline DirectStrikeRect DirectStrikeLobby_tugSeg( int team, int i )
-{
-	const float x = team == 0 ? (float)( DSLOBBY_TUG_SEG_X + DSLOBBY_TUG_SEG_STEP * i )
-		: 1920.0f - (float)( DSLOBBY_TUG_SEG_X + DSLOBBY_TUG_SEG_STEP * i + DSLOBBY_TUG_SEG_W );
-	const float y = DirectStrikeLobby_tug().y0 + ( DSLOBBY_TUG_H - DSLOBBY_TUG_SEG_H ) / 2;
-	return DirectStrike_rect( x, y, x + DSLOBBY_TUG_SEG_W, y + DSLOBBY_TUG_SEG_H );
+	const DirectStrikeRect army = DirectStrikeLobby_line( seat, 1 ), color = DirectStrikeLobby_line( seat, 2 );
+	return DirectStrike_rect( army.x0, army.y0 + 14, color.x1, color.y1 );
 }
 
-/// the keys row at the centre column's foot, level with a full team column's: back, the team size chip, the
-/// game speed chip, start
-inline DirectStrikeRect DirectStrikeLobby_back( void ) { return DirectStrike_rect( 700, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 772, DSLOBBY_BOTTOM ); }
-inline DirectStrikeRect DirectStrikeLobby_size( void )
+/** The host's level key `level` on an open or closed seat, in the colour line's place: each key its word's
+	* width (words[ i ], in 1080 pixels) and the slack shared out, DSLOBBY_LEVEL_GAP between them. */
+inline DirectStrikeRect DirectStrikeLobby_levelKey( int seat, int level, const float words[ DSLOBBY_LEVELS ] )
 {
-	return DirectStrike_rect( 784, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 784 + DSLOBBY_SIZE_W, DSLOBBY_BOTTOM );
-}
-inline DirectStrikeRect DirectStrikeLobby_speed( void )
-{
-	const float x = 784 + DSLOBBY_SIZE_W + DSLOBBY_ROW_GAP;
-	return DirectStrike_rect( x, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, x + DSLOBBY_SPEED_W, DSLOBBY_BOTTOM );
-}
-inline DirectStrikeRect DirectStrikeLobby_start( void )
-{
-	return DirectStrike_rect( DirectStrikeLobby_speed().x1 + DSLOBBY_ROW_GAP, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 1220, DSLOBBY_BOTTOM );
+	const DirectStrikeRect row = DirectStrikeLobby_line( seat, 2 );
+	float sum = 0;
+	for( int i = 0; i < DSLOBBY_LEVELS; ++i )
+		sum += words[ i ];
+	const float slack = ( row.x1 - row.x0 - DSLOBBY_LEVEL_GAP * ( DSLOBBY_LEVELS - 1 ) - sum ) / DSLOBBY_LEVELS;
+	float x = row.x0;
+	for( int i = 0; i < level; ++i )
+		x += words[ i ] + slack + DSLOBBY_LEVEL_GAP;
+	return DirectStrike_rect( x, row.y0, x + words[ level ] + slack, row.y1 );
 }
 
-// The centre column, square on the seat rows: the map band on the head row, the chat over the first and second
-// seat rows, its input and send key on the top of the third, the keys at its foot
+// The centre column: offline the island over the caption, the team size and speed chips and START; in a network
+// room a shorter island, then the chat and its entry, the chips and START
 
-// a network room: the input and the send key level with the third row's top, 48 high
-inline DirectStrikeRect DirectStrikeLobby_chatInput( void )
+inline DirectStrikeRect DirectStrikeLobby_island( bool network )
 {
-	const float y0 = DirectStrikeLobby_card( DirectStrikeLobby_seat( 0, 2 ) ).y0;
-	return DirectStrike_rect( 700, y0, 1160, y0 + 48 );
+	return DirectStrike_rect( DSLOBBY_CENTRE_X0, DSLOBBY_HEAD_Y, DSLOBBY_CENTRE_X1, network ? 344.0f : 708.0f );
 }
-inline DirectStrikeRect DirectStrikeLobby_send( void )
+/// the island's key strip, its last 34
+inline DirectStrikeRect DirectStrikeLobby_islandKey( bool network )
 {
-	const DirectStrikeRect input = DirectStrikeLobby_chatInput();
-	return DirectStrike_rect( 1172, input.y0, 1220, input.y1 );
+	const DirectStrikeRect island = DirectStrikeLobby_island( network );
+	return DirectStrike_rect( island.x0, island.y1 - 34, island.x1, island.y1 );
 }
-
-// offline: the island panel, the head row down to where the input's foot would be, the picture and its caption
-inline DirectStrikeRect DirectStrikeLobby_islandPanel( void )
+inline DirectStrikeRect DirectStrikeLobby_caption( bool network )
 {
-	return DirectStrike_rect( 700, DSLOBBY_TOP, 1220, DirectStrikeLobby_chatInput().y1 );
+	return network ? DirectStrike_rect( DSLOBBY_CENTRE_X0, 352, DSLOBBY_CENTRE_X1, 384 ) : DirectStrike_rect( DSLOBBY_CENTRE_X0, 720, DSLOBBY_CENTRE_X1, 756 );
 }
-inline DirectStrikeRect DirectStrikeLobby_island( void ) { return DirectStrike_rect( 780, DSLOBBY_TOP + 14, 1140, DSLOBBY_TOP + 374 ); }
-
-// a network room: the map band on the head row, its island in a well, the chat over the first two seat rows
-inline DirectStrikeRect DirectStrikeLobby_islandChip( void ) { return DirectStrike_rect( 700, DSLOBBY_TOP, 1220, DSLOBBY_TOP + DSLOBBY_HEAD_H ); }
-inline DirectStrikeRect DirectStrikeLobby_islandWell( void ) { return DirectStrike_rect( 708, DSLOBBY_TOP + 6, 784, DSLOBBY_TOP + 38 ); }
-inline DirectStrikeRect DirectStrikeLobby_islandSmall( void ) { return DirectStrike_rect( 710, DSLOBBY_TOP + 7, 782, DSLOBBY_TOP + 37 ); }
-
-/** The host's Mixed box (2026-11-24), its check and its name: in a network room at the map band's right end, offline
-	* on the island caption's second line, where the island's note stood. */
+/// the host's Mixed box at the caption's right end: its 20 square and its name, which ends at the column's edge
 inline DirectStrikeRect DirectStrikeLobby_mixed( bool network )
 {
-	if( network )
-		return DirectStrike_rect( 1020, DSLOBBY_TOP + 10, 1212, DSLOBBY_TOP + 34 );
-	return DirectStrike_rect( 860, DSLOBBY_TOP + 404, 1060, DSLOBBY_TOP + 426 );
+	const DirectStrikeRect caption = DirectStrikeLobby_caption( network );
+	return DirectStrike_rect( DSLOBBY_CENTRE_X1 - 240, caption.y0, DSLOBBY_CENTRE_X1, caption.y1 );
 }
-inline DirectStrikeRect DirectStrikeLobby_chat( void )
+inline DirectStrikeRect DirectStrikeLobby_size( bool network )
 {
-	return DirectStrike_rect( 700, DirectStrikeLobby_card( DirectStrikeLobby_seat( 0, 0 ) ).y0, 1220,
-		DirectStrikeLobby_card( DirectStrikeLobby_seat( 0, 1 ) ).y1 );
+	const float y0 = network ? 788.0f : 772.0f, y1 = network ? 836.0f : 824.0f;
+	const float half = ( DSLOBBY_CENTRE_X1 - DSLOBBY_CENTRE_X0 - DSLOBBY_SETUP_GAP ) * 0.5f;
+	return DirectStrike_rect( DSLOBBY_CENTRE_X0, y0, DSLOBBY_CENTRE_X0 + half, y1 );
 }
-/// the chat box's glass, the log clipped to it: 11 lines of DSLOBBY_CHAT_LINE
-inline DirectStrikeRect DirectStrikeLobby_chatGlass( void )
+inline DirectStrikeRect DirectStrikeLobby_speed( bool network )
 {
-	const DirectStrikeRect chat = DirectStrikeLobby_chat();
-	return DirectStrike_rect( chat.x0 + 12, chat.y0 + 6, chat.x1 - 12, chat.y1 - 6 );
+	const DirectStrikeRect size = DirectStrikeLobby_size( network );
+	return DirectStrike_rect( size.x1 + DSLOBBY_SETUP_GAP, size.y0, DSLOBBY_CENTRE_X1, size.y1 );
+}
+inline DirectStrikeRect DirectStrikeLobby_start( bool network )
+{
+	return DirectStrike_rect( DSLOBBY_CENTRE_X0, network ? 852.0f : 840.0f, DSLOBBY_CENTRE_X1, DSLOBBY_FOOT );
+}
+inline DirectStrikeRect DirectStrikeLobby_chat( void ) { return DirectStrike_rect( DSLOBBY_CENTRE_X0, 396, DSLOBBY_CENTRE_X1, 720 ); }
+inline DirectStrikeRect DirectStrikeLobby_chatInput( void ) { return DirectStrike_rect( DSLOBBY_CENTRE_X0, 728, 1150, 774 ); }
+inline DirectStrikeRect DirectStrikeLobby_send( void ) { return DirectStrike_rect( 1160, 728, DSLOBBY_CENTRE_X1, 774 ); }
+
+/// the readiness lane, its track, and team `team`'s segment `i` of `size` from its own fortress toward the middle
+inline DirectStrikeRect DirectStrikeLobby_lane( void ) { return DirectStrike_rect( DSLOBBY_X0, DSLOBBY_LANE_Y0, DSLOBBY_X1, DSLOBBY_LANE_Y1 ); }
+inline DirectStrikeRect DirectStrikeLobby_track( void )
+{
+	return DirectStrike_rect( DSLOBBY_TRACK_X0, DSLOBBY_TRACK_Y0, DSLOBBY_TRACK_X1, DSLOBBY_TRACK_Y1 );
+}
+inline DirectStrikeRect DirectStrikeLobby_laneSeg( int team, int i, int size )
+{
+	const float mid = 0.5f * ( DSLOBBY_TRACK_X0 + DSLOBBY_TRACK_X1 );
+	const float half = mid - DSLOBBY_TRACK_X0 - 10.0f;
+	const float w = ( half - DSLOBBY_TRACK_SEG_GAP * (float)( size - 1 ) ) / (float)( size > 0 ? size : 1 );
+	const float x = team == 0 ? DSLOBBY_TRACK_X0 + 4.0f + (float)i * ( w + DSLOBBY_TRACK_SEG_GAP )
+		: DSLOBBY_TRACK_X1 - 4.0f - (float)( i + 1 ) * w - (float)i * DSLOBBY_TRACK_SEG_GAP;
+	return DirectStrike_rect( x, DSLOBBY_TRACK_Y0 + 4, x + w, DSLOBBY_TRACK_Y1 - 4 );
+}
+/// a network room's status, centred over the track's middle
+inline DirectStrikeRect DirectStrikeLobby_status( void )
+{
+	return DirectStrike_rect( DSLOBBY_CENTRE_X0, DSLOBBY_STATUS_Y0, DSLOBBY_CENTRE_X1, DSLOBBY_STATUS_Y1 );
 }
 
-enum
+/** An open list of height h at its chip: under it, 4 off, unless it would pass the panel's foot (or `up` asks),
+	* then over it; one that fits neither way starts at the head row, over its own chip. */
+inline DirectStrikeRect DirectStrikeLobby_place( const DirectStrikeRect &chip, float w, float h, bool up )
 {
-	DSLOBBY_CHAT_LINE = 26,			///< chat lines this far apart
-	DSLOBBY_LIST_GAP = 4,				///< an open list stands this far from its chip
-	DSLOBBY_LIST_ROW = 36,			///< a row of the seat control
-	DSLOBBY_LIST_PAD = 8,				///< the seat control's rows start this far in
-	DSLOBBY_PICKER_W = 456,
-	DSLOBBY_PICKER_H = 564,
-	DSLOBBY_TILE_W = 136,
-	DSLOBBY_TILE_H = 112,
-	DSLOBBY_TILE_GAP = 8,
-	DSLOBBY_PICKER_INNER = DSLOBBY_ARMY_COLUMNS * DSLOBBY_TILE_W + ( DSLOBBY_ARMY_COLUMNS - 1 ) * DSLOBBY_TILE_GAP,
-	DSLOBBY_COLOR_CELL_W = 48,
-	DSLOBBY_COLOR_CELL_H = 40,
-	DSLOBBY_COLOR_PAD = 16,
-};
-
-/// an open list of height h under its chip, or above it when it would run past the screen's foot
-inline DirectStrikeRect DirectStrikeLobby_dropBelow( const DirectStrikeRect &chip, float w, float h, bool alignRight )
-{
-	const float x0 = alignRight ? chip.x1 - w : chip.x0;
-	if( chip.y1 + DSLOBBY_LIST_GAP + h > 1080.0f )
-		return DirectStrike_rect( x0, chip.y0 - DSLOBBY_LIST_GAP - h, x0 + w, chip.y0 - DSLOBBY_LIST_GAP );
-	return DirectStrike_rect( x0, chip.y1 + DSLOBBY_LIST_GAP, x0 + w, chip.y1 + DSLOBBY_LIST_GAP + h );
+	if( !up && chip.y1 + DSLOBBY_LIST_GAP + h <= (float)( DSLOBBY_PANEL_Y1 - 8 ) )
+		return DirectStrike_rect( chip.x0, chip.y1 + DSLOBBY_LIST_GAP, chip.x0 + w, chip.y1 + DSLOBBY_LIST_GAP + h );
+	if( chip.y0 - DSLOBBY_LIST_GAP - h >= (float)DSLOBBY_HEAD_Y )
+		return DirectStrike_rect( chip.x0, chip.y0 - DSLOBBY_LIST_GAP - h, chip.x0 + w, chip.y0 - DSLOBBY_LIST_GAP );
+	return DirectStrike_rect( chip.x0, DSLOBBY_HEAD_Y, chip.x0 + w, DSLOBBY_HEAD_Y + h );
 }
 
-/// the host's seat control under a seat line
-inline DirectStrikeRect DirectStrikeLobby_seatList( int seat, bool lights = true )
+/// a list's row `row` of DSLOBBY_LIST_ROW, DSLOBBY_LIST_PAD in
+inline DirectStrikeRect DirectStrikeLobby_listRow( const DirectStrikeRect &list, int row )
 {
-	const DirectStrikeRect line = DirectStrikeLobby_part( seat, DSSEAT_LINE, lights );
-	return DirectStrikeLobby_dropBelow( line, line.x1 - line.x0, 2.0f * DSLOBBY_LIST_PAD + DSLOBBY_SEAT_ROWS * DSLOBBY_LIST_ROW, false );
-}
-
-inline DirectStrikeRect DirectStrikeLobby_seatRow( int seat, int row, bool lights = true )
-{
-	const DirectStrikeRect list = DirectStrikeLobby_seatList( seat, lights );
 	const float y = list.y0 + DSLOBBY_LIST_PAD + DSLOBBY_LIST_ROW * (float)row;
 	return DirectStrike_rect( list.x0 + DSLOBBY_LIST_PAD, y, list.x1 - DSLOBBY_LIST_PAD, y + DSLOBBY_LIST_ROW );
 }
+inline float DirectStrikeLobby_listHeight( int rows ) { return 2.0f * DSLOBBY_LIST_PAD + (float)rows * DSLOBBY_LIST_ROW; }
 
-/// the host's team size list under its chip, and its row for `size` - 1
-inline DirectStrikeRect DirectStrikeLobby_sizeList( void )
+/// the host's seat control at a seat line, `rows` long (DSLOBBY_SEAT_ROWS, a human's DSLOBBY_HUMAN_SEAT_ROWS)
+inline DirectStrikeRect DirectStrikeLobby_seatList( int seat, int rows = DSLOBBY_SEAT_ROWS )
 {
-	const DirectStrikeRect chip = DirectStrikeLobby_size();
-	return DirectStrikeLobby_dropBelow( chip, chip.x1 - chip.x0, 2.0f * DSLOBBY_LIST_PAD + DSLOBBY_SIZES * DSLOBBY_LIST_ROW, false );
+	const DirectStrikeRect line = DirectStrikeLobby_part( seat, DSSEAT_LINE );
+	return DirectStrikeLobby_place( line, line.x1 - line.x0, DirectStrikeLobby_listHeight( rows ), false );
 }
 
-inline DirectStrikeRect DirectStrikeLobby_sizeRow( int row )
+/// the host's team size and speed lists, both over their chips
+inline DirectStrikeRect DirectStrikeLobby_sizeList( bool network )
 {
-	const DirectStrikeRect list = DirectStrikeLobby_sizeList();
-	const float y = list.y0 + DSLOBBY_LIST_PAD + DSLOBBY_LIST_ROW * (float)row;
-	return DirectStrike_rect( list.x0 + DSLOBBY_LIST_PAD, y, list.x1 - DSLOBBY_LIST_PAD, y + DSLOBBY_LIST_ROW );
+	const DirectStrikeRect chip = DirectStrikeLobby_size( network );
+	return DirectStrikeLobby_place( chip, chip.x1 - chip.x0, DirectStrikeLobby_listHeight( DSLOBBY_SIZES ), true );
+}
+inline DirectStrikeRect DirectStrikeLobby_speedList( bool network )
+{
+	const DirectStrikeRect chip = DirectStrikeLobby_speed( network );
+	return DirectStrikeLobby_place( chip, chip.x1 - chip.x0, DirectStrikeLobby_listHeight( DSLOBBY_SPEEDS ), true );
 }
 
-/// the host's game speed list under its chip, and its row for PLAYER_GAME_SPEED_PERCENTS[ row ]
-inline DirectStrikeRect DirectStrikeLobby_speedList( void )
+/// the army picker, the wing's width: down from the first row's army, over the last row's, from the head row for the middle
+inline DirectStrikeRect DirectStrikeLobby_picker( int seat )
 {
-	const DirectStrikeRect chip = DirectStrikeLobby_speed();
-	return DirectStrikeLobby_dropBelow( chip, chip.x1 - chip.x0, 2.0f * DSLOBBY_LIST_PAD + DSLOBBY_SPEEDS * DSLOBBY_LIST_ROW, false );
+	const DirectStrikeRect chip = DirectStrikeLobby_part( seat, DSSEAT_ARMY );
+	const float x0 = DirectStrikeLobby_teamX( DirectStrikeLobby_team( seat ) );
+	return DirectStrikeLobby_place( DirectStrike_rect( x0, chip.y0, x0 + DSLOBBY_CARD_W, chip.y1 ), DSLOBBY_CARD_W, DSLOBBY_PICKER_H,
+		DirectStrikeLobby_row( seat ) == DSLOBBY_ROWS - 1 );
 }
-
-inline DirectStrikeRect DirectStrikeLobby_speedRow( int row )
+inline DirectStrikeRect DirectStrikeLobby_pickerRandom( int seat )
 {
-	const DirectStrikeRect list = DirectStrikeLobby_speedList();
-	const float y = list.y0 + DSLOBBY_LIST_PAD + DSLOBBY_LIST_ROW * (float)row;
-	return DirectStrike_rect( list.x0 + DSLOBBY_LIST_PAD, y, list.x1 - DSLOBBY_LIST_PAD, y + DSLOBBY_LIST_ROW );
+	const DirectStrikeRect p = DirectStrikeLobby_picker( seat );
+	return DirectStrike_rect( p.x0 + DSLOBBY_PICKER_PAD, p.y0 + DSLOBBY_PICKER_PAD, p.x1 - DSLOBBY_PICKER_PAD,
+		p.y0 + DSLOBBY_PICKER_PAD + DSLOBBY_PICKER_RANDOM_H );
 }
-
-/// the army picker: team 1's right edge under its chip's right edge, team 2's left under the left; the last
-/// row opens up.  One that fits neither under nor over its chip covers the centre column's width level with
-/// the chip, over the island and the chat, its tiles centred in it.
-inline DirectStrikeRect DirectStrikeLobby_picker( int seat, bool lights = true )
-{
-	const DirectStrikeRect chip = DirectStrikeLobby_part( seat, DSSEAT_ARMY, lights );
-	const bool left = DirectStrikeLobby_team( seat ) == 0;
-	const float x0 = left ? chip.x1 - DSLOBBY_PICKER_W : chip.x0;
-	const float above = chip.y0 - DSLOBBY_LIST_GAP - DSLOBBY_PICKER_H;
-	if( DirectStrikeLobby_row( seat ) == DSLOBBY_ROWS - 1 )
-		return DirectStrike_rect( x0, above, x0 + DSLOBBY_PICKER_W, chip.y0 - DSLOBBY_LIST_GAP );
-	if( chip.y1 + DSLOBBY_LIST_GAP + DSLOBBY_PICKER_H > 1080.0f && above < 0.0f )
-	{
-		const float y0 = ( chip.y0 + chip.y1 - DSLOBBY_PICKER_H ) * 0.5f;
-		return DirectStrike_rect( 700, y0, 1220, y0 + DSLOBBY_PICKER_H );
-	}
-	return DirectStrikeLobby_dropBelow( chip, DSLOBBY_PICKER_W, DSLOBBY_PICKER_H, left );
-}
-
-/// where the picker's random key and tiles start across: centred in whatever width the picker has
-inline float DirectStrikeLobby_pickerInset( const DirectStrikeRect &picker )
-{
-	return ( picker.x1 - picker.x0 - DSLOBBY_PICKER_INNER ) * 0.5f;
-}
-
-inline DirectStrikeRect DirectStrikeLobby_pickerRandom( int seat, bool lights = true )
-{
-	const DirectStrikeRect p = DirectStrikeLobby_picker( seat, lights );
-	const float x = p.x0 + DirectStrikeLobby_pickerInset( p );
-	return DirectStrike_rect( x, p.y0 + 16, x + DSLOBBY_PICKER_INNER, p.y0 + 16 + 48 );
-}
-
 /// tile `tile` (0 the side, 1 to 3 its generals) of column `column` (USA, China, GLA)
-inline DirectStrikeRect DirectStrikeLobby_pickerTile( int seat, int column, int tile, bool lights = true )
+inline DirectStrikeRect DirectStrikeLobby_pickerTile( int seat, int column, int tile )
 {
-	const DirectStrikeRect p = DirectStrikeLobby_picker( seat, lights );
-	const float x = p.x0 + DirectStrikeLobby_pickerInset( p ) + (float)column * ( DSLOBBY_TILE_W + DSLOBBY_TILE_GAP );
-	const float y = p.y0 + 76 + (float)tile * ( DSLOBBY_TILE_H + DSLOBBY_TILE_GAP );
+	const DirectStrikeRect p = DirectStrikeLobby_picker( seat );
+	const float x = p.x0 + DSLOBBY_PICKER_PAD + (float)column * ( DSLOBBY_TILE_W + DSLOBBY_TILE_GAP );
+	const float y = DirectStrikeLobby_pickerRandom( seat ).y1 + 10 + (float)tile * ( DSLOBBY_TILE_H + DSLOBBY_TILE_GAP );
 	return DirectStrike_rect( x, y, x + DSLOBBY_TILE_W, y + DSLOBBY_TILE_H );
 }
 
-/// the colour list under the colour chip: cells of 48x40 in rows of four, 16 padding round them
-inline DirectStrikeRect DirectStrikeLobby_colorList( int seat, int colors, bool lights = true )
+/// the colour list at the colour line: `colors` cells of 64x48 in rows of four, then the hovered one's name
+inline DirectStrikeRect DirectStrikeLobby_colorList( int seat, int colors )
 {
-	const DirectStrikeRect chip = DirectStrikeLobby_part( seat, DSSEAT_COLOR, lights );
+	const DirectStrikeRect chip = DirectStrikeLobby_part( seat, DSSEAT_COLOR );
 	const int rows = ( colors + DSLOBBY_COLOR_COLUMNS - 1 ) / DSLOBBY_COLOR_COLUMNS;
-	const float w = 2.0f * DSLOBBY_COLOR_PAD + DSLOBBY_COLOR_COLUMNS * DSLOBBY_COLOR_CELL_W;
-	const float h = 2.0f * DSLOBBY_COLOR_PAD + (float)rows * DSLOBBY_COLOR_CELL_H;
-	return DirectStrikeLobby_dropBelow( chip, w, h, DirectStrikeLobby_team( seat ) != 0 );
+	const float w = 2.0f * DSLOBBY_COLOR_PAD + DSLOBBY_COLOR_COLUMNS * DSLOBBY_COLOR_CELL_W + ( DSLOBBY_COLOR_COLUMNS - 1 ) * DSLOBBY_COLOR_GAP;
+	const float h = 2.0f * DSLOBBY_COLOR_PAD + (float)rows * DSLOBBY_COLOR_CELL_H + (float)( rows > 0 ? rows - 1 : 0 ) * DSLOBBY_COLOR_GAP
+		+ DSLOBBY_COLOR_NAME_H;
+	return DirectStrikeLobby_place( DirectStrike_rect( chip.x0, chip.y0, chip.x0 + w, chip.y1 ), w, h, false );
 }
-
-inline DirectStrikeRect DirectStrikeLobby_colorCell( int seat, int colors, int index, bool lights = true )
+inline DirectStrikeRect DirectStrikeLobby_colorCell( int seat, int colors, int index )
 {
-	const DirectStrikeRect list = DirectStrikeLobby_colorList( seat, colors, lights );
-	const float x = list.x0 + DSLOBBY_COLOR_PAD + (float)( index % DSLOBBY_COLOR_COLUMNS ) * DSLOBBY_COLOR_CELL_W;
-	const float y = list.y0 + DSLOBBY_COLOR_PAD + (float)( index / DSLOBBY_COLOR_COLUMNS ) * DSLOBBY_COLOR_CELL_H;
+	const DirectStrikeRect list = DirectStrikeLobby_colorList( seat, colors );
+	const float x = list.x0 + DSLOBBY_COLOR_PAD + (float)( index % DSLOBBY_COLOR_COLUMNS ) * ( DSLOBBY_COLOR_CELL_W + DSLOBBY_COLOR_GAP );
+	const float y = list.y0 + DSLOBBY_COLOR_PAD + (float)( index / DSLOBBY_COLOR_COLUMNS ) * ( DSLOBBY_COLOR_CELL_H + DSLOBBY_COLOR_GAP );
 	return DirectStrike_rect( x, y, x + DSLOBBY_COLOR_CELL_W, y + DSLOBBY_COLOR_CELL_H );
 }
+
+/** Where the lane map's fortress stands: its distance from the map's middle as a share of the team's starts'
+	* distance from it.  The generator's numbers (RandomMapGenerator.cpp, RMG_LANE_*), its fortress
+	* RMG_LANE_FORTRESS_AT of the half-lane (180) from the middle and a start (a plot's middle) RMG_LANE_PLOT_GAP plus
+	* half a plot (14 + 12) past the lane's end: 0.7 * 180 / ( 180 + 26 ).  The lobby has the starts from the map's
+	* waypoints and no fortress. */
+inline float DirectStrikeLobby_fortressShare( void ) { return 0.70f * 180.0f / ( 180.0f + 14.0f + 12.0f ); }
 
 #endif // __DIRECTSTRIKELAYOUT_H_

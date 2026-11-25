@@ -18,10 +18,10 @@
 
 // FILE: DirectStrikeLobby.h //////////////////////////////////////////////////////////////////////
 //
-// The Direct Strike room, README-lobby.md in experiments/proofs/2026-11-21/ds-lobby: three seat cards a
-// team facing each other, the island between them (the chat with it in a network room), Back and
-// Start.  One screen for the skirmish, LAN and online rooms, drawn on DirectStrikeTheme over the room's
-// own layout.
+// The Direct Strike room in the menu language, README-ds-lobby.md in the wrapper's
+// experiments/proofs/2026-11-24/lobbies/direct-strike: three seat cards a team in each wing, the island
+// between them (the chat under it in a network room), START, and the readiness lane along the foot.  One
+// screen for the skirmish, LAN and online rooms, drawn over the room's own layout.
 //
 // The room's windows stay and keep doing the work: the lobby hides every one of them but the chat
 // entry, draws in their place from the room's parent window, and a choice made on it is made on the

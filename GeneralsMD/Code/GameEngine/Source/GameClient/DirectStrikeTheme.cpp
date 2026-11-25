@@ -107,52 +107,6 @@ namespace
 		"ObsBandC",
 		"ObsBandR",
 
-		"LobbyPickTile",
-		"LobbyIsland",
-		"LobbyIslandBand",
-		"LobbyHeadquartersAmerica",
-		"LobbyHeadquartersChina",
-		"LobbyHeadquartersGla",
-		"LobbyRandom",
-		"LobbyOpen",
-		"LobbyClosed",
-		"LobbyPing1",
-		"LobbyPing2",
-		"LobbyPing3",
-		"LobbyPing4",
-		"LobbyAI",
-		"LobbyCheck",
-
-		"DSConsoleTL", "DSConsoleT", "DSConsoleTR", "DSConsoleL", "DSConsoleC", "DSConsoleR", "DSConsoleBL", "DSConsoleB", "DSConsoleBR",
-		"DSSpearRightL", "DSSpearRightC", "DSSpearRightR",
-		"DSSpearLeftL", "DSSpearLeftC", "DSSpearLeftR",
-		"DSSpearYouRightL", "DSSpearYouRightC", "DSSpearYouRightR",
-		"DSSpearYouLeftL", "DSSpearYouLeftC", "DSSpearYouLeftR",
-		"DSBayRightL", "DSBayRightC", "DSBayRightR",
-		"DSBayLeftL", "DSBayLeftC", "DSBayLeftR",
-		"DSSpearHeadRightL", "DSSpearHeadRightC", "DSSpearHeadRightR",
-		"DSSpearHeadLeftL", "DSSpearHeadLeftC", "DSSpearHeadLeftR",
-		"DSHexTitleL", "DSHexTitleC", "DSHexTitleR",
-		"DSTugL", "DSTugC", "DSTugR",
-		"DSSeg",
-		"DSSegLit",
-		"DSTugSeg",
-		"DSTugSegLit",
-		"DSLed",
-		"DSLedLit",
-		"DSChevronR",
-		"DSChevronL",
-
-		"DSClampStartL", "DSClampStartC", "DSClampStartR",
-		"DSClampBack",
-		"DSClampPlus",
-		"DSClampSend",
-		"DSClampChipL", "DSClampChipC", "DSClampChipR",
-		"DSClampChipFieldR",
-		"DSClampBoxTL", "DSClampBoxT", "DSClampBoxTR", "DSClampBoxL", "DSClampBoxC", "DSClampBoxR", "DSClampBoxBL", "DSClampBoxB", "DSClampBoxBR",
-		"DSClampBandL", "DSClampBandC", "DSClampBandR",
-		"DSClampWordL", "DSClampWordC", "DSClampWordR",
-
 		"ObsRadar",
 		"ObsBoardHead",
 		"ObsBoardTL", "ObsBoardT", "ObsBoardTR", "ObsBoardL", "ObsBoardC", "ObsBoardR", "ObsBoardBL", "ObsBoardB", "ObsBoardBR",
@@ -568,11 +522,6 @@ void dropdown( const DirectStrikeHudBox &b, const char *state, Bool field )
 	threeSlice( b, DROP_L, DROP_C, field ? FIELD_R : DROP_R, field ? "" : state );
 }
 
-void clampChip( const DirectStrikeHudBox &b, const char *state, Bool field )
-{
-	threeSlice( b, CLAMP_CHIP_L, CLAMP_CHIP_C, field ? CLAMP_CHIP_FIELD_R : CLAMP_CHIP_R, field ? "" : state );
-}
-
 void glow( Piece piece, const DirectStrikeHudBox &core, Color tint )
 {
 	const Int g = px( GLOW );
@@ -636,22 +585,6 @@ Color teamColour( Int team )
 {
 	static const Color TEAMS[ 4 ] = { TEAM_US, TEAM_THEM, TEXT_GREEN, TEAM_VIOLET };
 	return TEAMS[ max( 0, team ) % 4 ];
-}
-
-const Image *generalPortrait( const PlayerTemplate *army )
-{
-	if( army == NULL || TheChallengeGenerals == NULL )
-		return NULL;
-	const GeneralPersona *general = TheChallengeGenerals->getGeneralByTemplateName( army->getName() );
-	if( general == NULL )
-		return NULL;
-	return general->getBioPortraitLarge() != NULL ? general->getBioPortraitLarge() : general->getBioPortraitSmall();
-}
-
-const Image *headquartersPicture( Side side )
-{
-	static const Piece HEADQUARTERS[ SIDE_COUNT ] = { LOBBY_HEADQUARTERS_AMERICA, LOBBY_HEADQUARTERS_CHINA, LOBBY_HEADQUARTERS_GLA };
-	return art( HEADQUARTERS[ side ] );
 }
 
 }	// namespace DirectStrikeTheme

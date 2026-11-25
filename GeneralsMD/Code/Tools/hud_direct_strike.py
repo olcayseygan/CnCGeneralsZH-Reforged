@@ -1,4 +1,4 @@
-"""Direct Strike's sheets: every piece of the mode (the match HUD, the lobby, the end screen) named, drawn from
+"""Direct Strike's sheets: every piece of the mode (the match HUD, the end screen, the observer's) named, drawn from
 hud_direct_strike_theme, packed one sheet a side, and written with its mapped INI in one go.
 
     python Tools/hud_direct_strike.py --png DIR            the sheets and every piece as PNG, nothing shipped
@@ -11,14 +11,12 @@ the contract the code reads.
 """
 import argparse
 import filecmp
-import io
 import os
 import shutil
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
-import bigfile
 import hud_command_bar as H
 import hud_direct_strike_theme as T
 from hud_command_bar import plate, rotated, shape
@@ -52,16 +50,6 @@ ROW_H, ROW_CAP, ROW_BAR = 36, 12, 4               # a list row: the lobby's 36, 
 MASTER, WELL_AT = T.MASTER, (24, 24, 136, 136)  # the 9-slices are cut from a panel this size; the well's own from this rect
 BUTTON = (432, 72)                              # the wide text key the 3-slice is cut from
 LAMP, COIN = 32, 28
-# a plain side's portrait: its command centre's build button picture (SAComCentr_L, SNComCentr_L, SUHeadquarters_L,
-# 120x96 or less), cut from the installed EnglishZH.big and enlarged here to the portrait well's 172 square, so the
-# game never stretches it at 1080
-CAMEO_ARCHIVE = os.path.join(RUN, "EnglishZH.big")
-CAMEOS = {"America": ("SAUserInterface512_002.tga", (367, 1, 487, 97)),
-          "China": ("SNUserInterface512_003.tga", (1, 197, 109, 286)),
-          "Gla": ("SUUserInterface512_003.tga", (245, 197, 365, 293))}
-WELL_PICTURE = 172
-PICK_TILE = (136, 112)
-ISLAND, ISLAND_SMALL = (480, 480), (96, 60)
 
 
 def tab_lock():
@@ -335,87 +323,6 @@ def button_layers(kind, build):
         return [([plate(2.5, 4.5, 19.5, 17.5)], 255), ([plate(4.4, 6.4, 17.6, 15.6)], 0), ([[(9, 7.8), (9, 14.2), (14.4, 11)]], 255)]
     return icon_layers("Options", build)
 
-
-def arrow_layers(kind):
-    if kind == "back":
-        return [([[(3.5, 11), (10, 4.5), (10, 8.6), (18.5, 8.6), (18.5, 13.4), (10, 13.4), (10, 17.5)]], 255)]
-    return [([[(17, 4), (19.4, 4), (19.4, 14.2), (8.5, 14.2), (8.5, 17.8), (2.6, 12.8), (8.5, 7.8), (8.5, 11.4), (17, 11.4)]], 255)]
-
-
-def lobby_glyphs():
-    """The marks the lobby lays on its pieces: ping, AI, an open seat, a closed one, Random's portrait, the list's
-    check."""
-    out = {}
-    green = T.INK["green"]
-    for n, col in ((1, (214, 60, 44)), (2, (236, 150, 40)), (3, (200, 214, 60)), (4, green)):
-        def bars(d, k, n=n):
-            for i in range(4):
-                h = 6 + 5 * i
-                d.rectangle(((1 + 7 * i) * k, (24 - h) * k, (6 + 7 * i) * k, 24 * k), fill=255 if i < n else 70)
-        out["LobbyPing%d" % n] = T.mask((28, 24), bars, col)
-
-    def chip(d, k):
-        d.rectangle((6 * k, 6 * k, 22 * k, 22 * k), fill=255)
-        d.rectangle((9 * k, 9 * k, 19 * k, 19 * k), fill=0)
-        d.rectangle((11.5 * k, 11.5 * k, 16.5 * k, 16.5 * k), fill=255)
-        for t in (9.5, 13.25, 17):
-            for r in ((t, 1, t + 1.6, 6), (t, 22, t + 1.6, 27), (1, t, 6, t + 1.6), (22, t, 27, t + 1.6)):
-                d.rectangle(tuple(v * k for v in r), fill=255)
-    out["LobbyAI"] = T.mask((28, 28), chip, T.INK["grey"])
-
-    def open_seat(d, k):
-        d.ellipse((4 * k, 4 * k, 68 * k, 68 * k), fill=255)
-        d.ellipse((8 * k, 8 * k, 64 * k, 64 * k), fill=0)
-        d.rectangle((33.5 * k, 20 * k, 38.5 * k, 52 * k), fill=255)
-        d.rectangle((20 * k, 33.5 * k, 52 * k, 38.5 * k), fill=255)
-    out["LobbyOpen"] = T.mask((72, 72), open_seat, T.INK["muted"])
-
-    def lock(d, k):
-        d.rounded_rectangle((8 * k, 21 * k, 40 * k, 44 * k), 3 * k, fill=255)
-        d.ellipse((13 * k, 4 * k, 35 * k, 30 * k), fill=255)
-        d.ellipse((17.5 * k, 8.5 * k, 30.5 * k, 25.5 * k), fill=0)
-        d.rectangle((17.5 * k, 16 * k, 30.5 * k, 21 * k), fill=0)
-        d.ellipse((21 * k, 28 * k, 27 * k, 34 * k), fill=0)
-        d.rectangle((22.6 * k, 31 * k, 25.4 * k, 39 * k), fill=0)
-    out["LobbyClosed"] = T.mask((48, 48), lock, T.INK["dim"])
-
-    def hoop(d, k):
-        d.ellipse((2 * k, 2 * k, 70 * k, 70 * k), fill=255)
-        d.ellipse((6 * k, 6 * k, 66 * k, 66 * k), fill=0)
-    q = T.mask((72, 72), hoop, T.INK["muted"])
-    ImageDraw.Draw(q).text((36, 38), "?", font=T.font(44), fill=T.INK["muted"] + (255,), anchor="mm")
-    out["LobbyRandom"] = q
-
-    def check(d, k):
-        d.line([(3 * k, 10 * k), (8 * k, 15 * k), (17 * k, 4 * k)], fill=255, width=int(3 * k), joint="curve")
-    out["LobbyCheck"] = T.mask((20, 20), check)
-    return out
-
-
-def island_art(w, h, seed=11):
-    """A random island: sea, an organic coast with a lane of earth across it, a question mark over the middle."""
-    from scipy import ndimage
-    k = 3
-    rng = np.random.default_rng(seed)
-    yy, xx = np.mgrid[0:h * k, 0:w * k].astype(np.float32)
-    n = ndimage.gaussian_filter(rng.standard_normal((h * k, w * k)), w * k * 0.05)
-    n /= n.std()
-    r = np.sqrt(((xx - w * k / 2) / (w * k * 0.42)) ** 2 + ((yy - h * k / 2) / (h * k * 0.34)) ** 2) + 0.11 * n
-    img = np.zeros((h * k, w * k, 3), np.float32)
-    img[:] = (16, 34, 54)
-    img[r < 1.06] = (26, 52, 74)
-    land = r < 1.0
-    img[land] = (48, 70, 40)
-    lane = land & (r < 0.9) & (np.abs(yy - h * k / 2 - h * k * 0.03 * np.sin(xx / (w * k) * 6.0)) < h * k * 0.07)
-    img[lane] = (92, 78, 58)
-    img *= (1 + 0.07 * ndimage.gaussian_filter(rng.standard_normal((h * k, w * k)), 2))[..., None]
-    out = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).resize((w, h), Image.BOX).convert("RGBA")
-    d = ImageDraw.Draw(out)
-    for y in range(int(h * 0.36), int(h * 0.64), 10):
-        d.line([(w / 2, y), (w / 2, y + 5)], fill=T.INK["gold"] + (230,), width=2)
-    if h >= 100:                                # the chip's small island is too small for the mark
-        T.text(d, (w / 2, h / 2), "?", int(h * 0.24), T.INK["white"] + (220,), "mm")
-    return out
 
 # ---------------------------------------------------------------------------------------------- the pieces
 
@@ -779,14 +686,10 @@ def end(side):
 
 
 def lobby(side):
-    """The lobby's own pieces; its plates, keys, dropdowns, coins and lamps are the shared ones."""
-    out = {"LobbyIsland": island_art(*ISLAND)}
-    out.update(lobby_glyphs())
-    for s in T.SIDES:
-        out["LobbyHeadquarters" + s] = headquarters(s)
-    out.update(spearhead(side))
-    out.update(clamp_controls(side))
-    return out
+    """The lobby left the steel for the menu language on 2026-11-25 and is drawn in code (DirectStrikeLobby.cpp); its
+    pieces went with it.  What stays on the common sheet is the Riveted Clamp dropdown, field end and list rows, which
+    the observer screens draw under the shared names."""
+    return clamp_controls(side)
 
 # ---------------------------------------------------------------------------------------------- the Riveted Clamp controls
 # The owner's pick of 2026-11-23 (buttons study B, stage/buttons/buttons.py): every key, dropdown, list and box of the
@@ -798,13 +701,6 @@ def lobby(side):
 CLAMP_KEY_C, CLAMP_HERO_C = 7, 10               # a key's notched corner, START's
 CLAMP_BLOCK = 30                                # a dropdown's caret block
 CLAMP_END = 44                                  # a dropdown's or chip's right end: the block and the frame past it
-CLAMP_CAP = 36                                  # START's ends: the notch, the doubled frame and the clamp's arm
-CLAMP_NINE = 34                                 # a box's 9-slice corner: its notch and its clamp
-CHIP_H = 72                                     # the keys row's chips (team size, game speed)
-BAND_H = 44                                     # the map band: the head row's height
-ISLAND_BAND = (72, 30)                          # the island in the map band
-# a box's clamps, one size up from a key's and in bright steel, so they read on a full screen (the owner, 2026-11-23)
-BOX_ARM, BOX_TH, BOX_RIVET, BOX_RISE = 24, 10.0, 1.9, 2.8      # the bars reach past the lip onto the glass, so they read
 
 
 def clamp_bars(o, w, h, c, arm, th, mat, arm_v=None, rivet=1.25, rise=1.8):
@@ -893,17 +789,6 @@ def clamp_drop(side, w, h, state):
     return img
 
 
-def clamp_box(side, w=96, h=96):
-    """A box (the chat, an open list's panel, the offline island panel; at BAND_H the map band): the notched frame, a
-    bright riveted clamp on each corner, glass 6 in.  Drawn square for the 9-slice, wide for the band's 3-slice;
-    everything but the corners is plain, so it stretches."""
-    def draw(o, b):
-        o.tiers([notched(0, 0, w, h, 6)], T.CLOSED, 3, 6, 3.0, T.LIP_BEVEL["machined"], 2.4)
-        o.sink([notched(6, 6, w - 6, h - 6, 3)], 4, 1.3)
-        clamp_bars(o, w, h, 6, BOX_ARM, BOX_TH, H.BRIGHT, min(BOX_ARM, h / 2 - 10), BOX_RIVET, BOX_RISE)
-    return T.small(side, w, h, draw)
-
-
 def clamp_row(side, state):
     """An open list's row as a 3-slice (ends 12): H a faint light band, P the lit colour with brass clamp ticks on its
     four corners."""
@@ -922,142 +807,15 @@ def clamp_row(side, state):
 
 
 def clamp_controls(side):
-    """The Riveted Clamp set on a common sheet.  DSDrop, DSFieldR, DSRow and LobbyPickTile keep their names and sizes
-    (the code draws them already); the rest are new."""
+    """The Riveted Clamp dropdown, field end and list rows on a common sheet, under the shared DSDrop, DSFieldR and
+    DSRow names."""
     out = {}
-    for name, kind, size in (("DSClampBack", "back", (72, 72)), ("DSClampSend", "send", (48, 48)), ("DSClampPlus", "plus", (72, 72))):
-        for s in STATES:
-            out[name + s] = clamp_key(side, *size, s, CLAMP_GLYPHS[kind])
-    for s in STATES:                            # START: ends CLAMP_CAP, the middle the code stretches
-        out.update({"DSClampStart" + part + s: img for part, img in
-                    T.three_cut_ends(clamp_key(side, 2 * CLAMP_CAP + 64, CHIP_H, s, hero=True), CLAMP_CAP, CLAMP_CAP).items()})
     for s in ("", "H", "P"):
-        chip = T.three_cut_ends(clamp_drop(side, 160, CHIP_H, s), 16, CLAMP_END)
-        out.update({"DSClampChip" + part + s: img for part, img in chip.items()})
         drop = T.three_cut_ends(clamp_drop(side, 160, T.DROP_H, s), T.DROP_L, CLAMP_END)
         out.update({"DSDrop" + part + s: img for part, img in drop.items()})
-        out["LobbyPickTile" + s] = clamp_key(side, *PICK_TILE, s)
-    out["DSClampChipFieldR"] = clamp_drop(side, 160, CHIP_H, "F").crop((160 - CLAMP_END, 0, 160, CHIP_H))
     out["DSFieldR"] = clamp_drop(side, 160, T.DROP_H, "F").crop((160 - T.FIELD_R, 0, 160, T.DROP_H))
-    out.update(slices("DSClampBox", lambda st: T.nine_cut(clamp_box(side), CLAMP_NINE)))
-    out.update(slices("DSClampBand", lambda st: T.three_cut_ends(clamp_box(side, 160, BAND_H), CLAMP_NINE, CLAMP_NINE)))
     out.update(slices("DSRow", lambda st: clamp_row(side, st), ("H", "P")))
-    out["LobbyIslandBand"] = island_art(*ISLAND_BAND)
     return out
-
-
-CLAMP_GLYPHS = {"back": arrow_layers("back"), "send": arrow_layers("send"), "plus":[([[(9.2, 3), (12.8, 3), (12.8, 9.2), (19, 9.2), (19, 12.8), (12.8, 12.8),
-                                                         (12.8, 19), (9.2, 19), (9.2, 12.8), (3, 12.8), (3, 9.2), (9.2, 9.2)]], 255)]}
-
-# ---------------------------------------------------------------------------------------------- the Spearhead Front lobby
-# Heights are the lobby's own at 1080 (DirectStrikeLayout.h): every 3-slice is drawn at its piece's height, so each
-# plate the lobby shows at a new height is a piece of its own.  (height, left point, right point) a bar; a pointed end
-# is drawn in its own light, never flipped, so a team's piece and its mirror are two pieces.
-
-SPEAR_SEAT, SPEAR_HEAD = (148, 22), (44, 18)    # the seat card and the team head: height, the point toward the lane
-HEX = {"DSHexTitle": (72, 30, 30), "DSHexChip": (104, 22, 22), "DSHexChat": (268, 16, 16), "DSHexTall": (444, 22, 22),
-       "DSHexField": (48, 14, 0), "DSTug": (30, 14, 14)}
-HEX_WELL = {"DSHexTitle": 8, "DSHexChat": 9, "DSHexField": 5, "DSTug": 4}         # a bar with its own glass, this far in
-HEX_LIT = ("DSHexTitle",)
-HEX_BUILT = ("DSHexTitle", "DSTug")
-HEX_DROP, HEX_START = (72, 12, 12), (72, 24, 24)
-SPEAR_BACK, SPEAR_SEND = (72, 72, 18, 0), (48, 48, 0, 12)                         # whole keys: w, h, left, right point
-SEG, TUG_SEG, LED, CHEVRON = (12, 6), (14, 18), (16, 10), (14, 18)
-ISLAND_WIDE = (152, 72)
-CHEVRON_CORE = [(0, 0), (5, 0), (14, 9), (5, 18), (0, 18), (9, 9)]
-
-
-def bar_slices(full, dl, dr, side=None):
-    """The 3-slice of a Spearhead bar; a textured (tiled) frame's plates keep a whole tile for C, which the code repeats."""
-    if side is not None and T.look(side).get("tile"):
-        return T.three_tile(full, T.spear_cap(dl), T.spear_cap(dr))
-    return T.three_cut_ends(full, T.spear_cap(dl), T.spear_cap(dr))
-
-
-def ref_width(dl, dr, side=None):
-    tiled = side is not None and T.look(side).get("tile")
-    return T.spear_cap(dl) + T.spear_cap(dr) + (T.TILE + T.TILE_BLEND + 32 if tiled else 64)
-
-
-def hex_drop(side, state, field=False):
-    """The keys row's dropdown (team size, game speed): a hex key the code writes on, the caret in its right end
-    (gold on H, up and dark on P); field drops the caret, for a guest who reads the value and cannot change it."""
-    h, dl, dr = HEX_DROP
-    w = ref_width(dl, dr) + 24
-    full = T.spear_key(side, w, h, dl, dr, state)
-    cut = bar_slices(full, dl, dr)
-    cut["R"] = full.crop((w - T.spear_cap(dr) - 18, 0, w, h))   # room for the caret
-    if field:
-        return cut
-    right = cut["R"]
-    rw = right.width
-    cx, cy, half, rise, stroke = rw - dr - 16, h / 2, 7.0, 4.0, 2.75
-    colour = T.INK["on_lit"] if state == "P" else T.INK["gold"] if state == "H" else T.INK["white"]
-    tip = -1 if state == "P" else 1
-    d = ImageDraw.Draw(right)
-    d.line([(cx - 15, 22), (cx - 15, h - 22)], fill=T.INK["keyline"] + (230 if state != "P" else 110,), width=1)
-    d.line([(cx - 14, 22), (cx - 14, h - 22)], fill=(255, 255, 255, 34 if state != "P" else 70), width=1)
-
-    def chevron(dx, dy):
-        def draw(dd, k):
-            arm = [(cx - half + dx, cy - tip * rise / 2 + dy), (cx + dx, cy + tip * rise / 2 + dy), (cx + half + dx, cy - tip * rise / 2 + dy)]
-            dd.line([(x * k, y * k) for x, y in arm], fill=255, width=int(stroke * k), joint="curve")
-        return draw
-    if state != "P":
-        right.alpha_composite(T.mask((rw, h), chevron(0.8, 0.8), T.INK["keyline"]))
-    right.alpha_composite(T.mask((rw, h), chevron(0, 0), colour))
-    return cut
-
-
-def spearhead(side):
-    """The Spearhead Front lobby's pieces, all names the lobby draws by besides the shared DSWell, DSDrop, DSFieldR,
-    DSLamp, DSRow, DSCoin and the Lobby glyphs."""
-    out = {}
-    tiled = T.look(side).get("tile")
-    master = T.console(side)
-    out.update(slices("DSConsole", lambda st: T.nine_tile(master, T.CONSOLE_NINE) if tiled else T.nine_cut(master, T.CONSOLE_NINE)))
-    h, d = SPEAR_SEAT
-    for toward, dl, dr in (("Right", 0, d), ("Left", d, 0)):   # Right points right (team 1), Left left (team 2)
-        w = ref_width(dl, dr, side)
-        out.update(slices("DSSpear" + toward, lambda st: bar_slices(T.spear_plate(side, w, h, dl, dr), dl, dr, side)))
-        out.update(slices("DSSpearYou" + toward, lambda st: bar_slices(T.spear_plate(side, w, h, dl, dr, lit=True), dl, dr, side)))
-        out.update(slices("DSBay" + toward, lambda st: bar_slices(T.spear_plate(side, w, h, dl, dr, bay=True), dl, dr, side)))
-    h, d = SPEAR_HEAD
-    for toward, dl, dr in (("Right", 0, d), ("Left", d, 0)):
-        w = ref_width(dl, dr, side)
-        out.update(slices("DSSpearHead" + toward, lambda st: bar_slices(T.spear_plate(side, w, h, dl, dr, well=T.INSET), dl, dr, side)))
-    # the centre column went square on 2026-11-23 (the owner: "chat kısmı da kare olsun"): the chip, chat, offline panel
-    # and input are Riveted Clamp boxes and drops now, the keys are the clamp keys; only the title and the tug stay
-    # pointed.  hex_drop and the spear keys stay as code, not built.
-    for name in HEX_BUILT:
-        h, dl, dr = HEX[name]
-        w = ref_width(dl, dr, side)
-        out.update(slices(name, lambda st: bar_slices(T.spear_plate(side, w, h, dl, dr, name in HEX_LIT, HEX_WELL.get(name)), dl, dr, side)))
-    out["DSSeg"], out["DSSegLit"] = T.slot_piece(*SEG), T.lit_piece(*SEG)
-    out["DSTugSeg"], out["DSTugSegLit"] = T.slot_piece(*TUG_SEG), T.lit_piece(*TUG_SEG)
-    out["DSLed"], out["DSLedLit"] = T.slot_piece(*LED, (26, 30, 36)), T.lit_piece(*LED)
-    out["DSChevronR"] = T.lit_piece(*CHEVRON, [CHEVRON_CORE])
-    out["DSChevronL"] = T.lit_piece(*CHEVRON, [[(CHEVRON[0] - x, y) for x, y in CHEVRON_CORE]])
-    return out
-
-
-def headquarters(side):
-    """The side's command centre button picture as a square the well's size, like a general's portrait: the cameo's
-    centre square (its sides cut), enlarged with Lanczos and a light unsharp mask, which held its edges where a plain
-    resize went soft."""
-    texture, crop = CAMEOS[side]
-    member = "data\\english\\art\\textures\\" + texture.lower()
-    with open(CAMEO_ARCHIVE, "rb") as archive:
-        found = [(offset, size) for path, offset, size in list(bigfile._read_index(archive)) if path.lower() == member]
-        assert found, "%s has no %s" % (CAMEO_ARCHIVE, member)
-        archive.seek(found[0][0])
-        cameo = Image.open(io.BytesIO(archive.read(found[0][1]))).convert("RGBA").crop(crop)
-    side_length = min(cameo.size)
-    left, top = (cameo.width - side_length) // 2, (cameo.height - side_length) // 2
-    square = cameo.crop((left, top, left + side_length, top + side_length))
-    return square.resize((WELL_PICTURE, WELL_PICTURE), Image.LANCZOS).filter(
-        ImageFilter.UnsharpMask(radius=1.2, percent=70, threshold=2))
-
 
 def pieces(side):
     """Every piece of the side's sheet by its name after the side's prefix."""

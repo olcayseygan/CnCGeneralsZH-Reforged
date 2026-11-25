@@ -7801,6 +7801,129 @@ ERROR:D3DFailureMessage
 "The graphics card did not start.\n\nUpdate the graphics driver. Close overlays and other fullscreen programs. Do not start the game over remote desktop or on a locked screen. Restart the PC, or start the game with -win."
 END
 
+// Menu redesign package 4, the main menu: the one line the menu draws beside each button, the campaign
+// panel's labels, the exit question (QuitMenu keeps EA's for leaving a match), the credits' own section
+// and the credits foot's hint.
+TOOLTIP:MainMenuSolo
+"Campaigns, Generals' Challenge and skirmish against the computer."
+END
+
+TOOLTIP:MainMenuMulti
+"Host or join a game on your local network."
+END
+
+TOOLTIP:MainMenuOnline
+"Quick Match, custom rooms and the ladder."
+END
+
+TOOLTIP:MainMenuLoad
+"Continue a saved game or watch a replay."
+END
+
+TOOLTIP:MainMenuOptions
+"Display, sound, controls, hotkeys and language."
+END
+
+TOOLTIP:MainMenuCredits
+"The people who made the game and this edition."
+END
+
+TOOLTIP:MainMenuExit
+"Close the game."
+END
+
+TOOLTIP:MainMenuUSA
+"The USA campaign, from any mission."
+END
+
+TOOLTIP:MainMenuGLA
+"The GLA campaign, from any mission."
+END
+
+TOOLTIP:MainMenuChina
+"The China campaign, from any mission."
+END
+
+TOOLTIP:MainMenuChallenge
+"Beat the other generals one by one."
+END
+
+TOOLTIP:MainMenuSkirmish
+"A match against the computer on any map, with your rules."
+END
+
+TOOLTIP:MainMenuMods
+"Direct Strike or Apocalypse against the computer."
+END
+
+TOOLTIP:MainMenuLoadGame
+"Continue from a saved game."
+END
+
+TOOLTIP:MainMenuReplay
+"Watch a recorded match."
+END
+
+TOOLTIP:MainMenuGenerals
+"The original 2003 campaign."
+END
+
+TOOLTIP:MainMenuZH
+"Zero Hour's campaign."
+END
+
+TOOLTIP:MainMenuMission
+"Start the campaign at this mission."
+END
+
+TOOLTIP:MainMenuEasy
+"A softer enemy, for learning the mission."
+END
+
+TOOLTIP:MainMenuMedium
+"The mission as it was designed."
+END
+
+TOOLTIP:MainMenuHard
+"A tougher enemy with more units."
+END
+
+TOOLTIP:MainMenuBack
+"Up one menu."
+END
+
+GUI:MainMenuMission
+"Mission"
+END
+
+GUI:MainMenuDifficulty
+"Difficulty"
+END
+
+GUI:MainMenuExitTitle
+"Exit Game"
+END
+
+GUI:MainMenuExitMessage
+"Close Zero Hour Reforged and go back to the desktop?"
+END
+
+GUI:CreditsReforged
+"Zero Hour Reforged"
+END
+
+GUI:CreditsLead
+"Project lead"
+END
+
+GUI:CreditsPort
+"macOS and Linux port"
+END
+
+GUI:HintEscBack
+"Esc: Back"
+END
+
 // Menu redesign package 2, the message box: the foot's hint says what Escape and Enter press.
 GUI:HintEscNoEnterYes
 "Esc: No  ·  Enter: Yes"

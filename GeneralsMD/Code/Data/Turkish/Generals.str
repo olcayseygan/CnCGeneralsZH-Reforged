@@ -22020,6 +22020,128 @@ OBJECT:ApocalypseZombiePlagueKing
 "Veba Kralı"
 END
 
+// Menu redesign package 4, the main menu: the one line the menu draws beside each button, the campaign
+// panel's labels, the exit question, the credits' own section and the credits foot's hint.
+TOOLTIP:MainMenuSolo
+"Kampanyalar, Generallerin Meydan Okuması ve bilgisayara karşı çatışma."
+END
+
+TOOLTIP:MainMenuMulti
+"Yerel ağda oyun kur ya da katıl."
+END
+
+TOOLTIP:MainMenuOnline
+"Hızlı Maç, özel odalar ve sıralama."
+END
+
+TOOLTIP:MainMenuLoad
+"Kayıtlı oyuna devam et ya da tekrar izle."
+END
+
+TOOLTIP:MainMenuOptions
+"Görüntü, ses, kontroller, kısayollar ve dil."
+END
+
+TOOLTIP:MainMenuCredits
+"Oyunu ve bu sürümü yapanlar."
+END
+
+TOOLTIP:MainMenuExit
+"Oyunu kapat."
+END
+
+TOOLTIP:MainMenuUSA
+"ABD kampanyası, istediğin görevden."
+END
+
+TOOLTIP:MainMenuGLA
+"GLA kampanyası, istediğin görevden."
+END
+
+TOOLTIP:MainMenuChina
+"Çin kampanyası, istediğin görevden."
+END
+
+TOOLTIP:MainMenuChallenge
+"Diğer generalleri tek tek yen."
+END
+
+TOOLTIP:MainMenuSkirmish
+"Herhangi bir haritada, kendi kurallarınla bilgisayara karşı maç."
+END
+
+TOOLTIP:MainMenuMods
+"Bilgisayara karşı Direct Strike ya da Apocalypse."
+END
+
+TOOLTIP:MainMenuLoadGame
+"Kayıtlı oyundan devam et."
+END
+
+TOOLTIP:MainMenuReplay
+"Kaydedilmiş bir maçı izle."
+END
+
+TOOLTIP:MainMenuGenerals
+"2003'ün ilk kampanyası."
+END
+
+TOOLTIP:MainMenuZH
+"Zero Hour kampanyası."
+END
+
+TOOLTIP:MainMenuMission
+"Kampanyayı bu görevden başlat."
+END
+
+TOOLTIP:MainMenuEasy
+"Görevi öğrenmek için daha yumuşak bir düşman."
+END
+
+TOOLTIP:MainMenuMedium
+"Görev tasarlandığı gibi."
+END
+
+TOOLTIP:MainMenuHard
+"Daha çok birimi olan sert bir düşman."
+END
+
+TOOLTIP:MainMenuBack
+"Bir üst menü."
+END
+
+GUI:MainMenuMission
+"Görev"
+END
+
+GUI:MainMenuDifficulty
+"Zorluk"
+END
+
+GUI:MainMenuExitTitle
+"Oyundan Çık"
+END
+
+GUI:MainMenuExitMessage
+"Zero Hour Reforged kapatılıp masaüstüne dönülsün mü?"
+END
+
+GUI:CreditsReforged
+"Zero Hour Reforged"
+END
+
+GUI:CreditsLead
+"Proje lideri"
+END
+
+GUI:CreditsPort
+"macOS ve Linux portu"
+END
+
+GUI:HintEscBack
+"Esc: Geri"
+END
+
 // Menu redesign package 2, the message box: the foot's hint says what Escape and Enter press.
 GUI:HintEscNoEnterYes
 "Esc: Hayır  ·  Enter: Evet"

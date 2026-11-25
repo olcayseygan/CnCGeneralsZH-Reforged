@@ -151,7 +151,7 @@ OnlineSession &OnlineSession::get()
 OnlineSession::OnlineSession() :
 	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ), failRetry( 0 ),
 	noticeSerial( 0 ), maintenanceRefused( FALSE ), relayTicketFresh( FALSE ), rejoinSerial( 0 ), cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), historySerial( 0 ), revealing( FALSE ),
-	revealSerial( 0 ), aiSpeed( 100 ), aiVerdictSerial( 0 ), peer( NULL ), buddy( NULL ), ps( NULL )
+	revealSerial( 0 ), aiSpeed( 100 ), aiVerdictSerial( 0 ), friendsOn( FALSE ), friendsSerial( 0 ), invitesSerial( 0 ), peer( NULL ), buddy( NULL ), ps( NULL )
 {
 	connectionGone();
 	forgetAccount();
@@ -167,6 +167,7 @@ void OnlineSession::connectionGone()
 	pingSentMs = 0;
 	pingSmoothedMs = -1;
 	pingRefused = FALSE;
+	friendsOn = FALSE;		// the next welcome says it again
 	if (!noticeKind.empty())
 		++noticeSerial;
 	noticeKind.clear();
@@ -238,6 +239,7 @@ void OnlineSession::forgetAccount()
 	rejoinState = ONLINE_REJOIN_IDLE;
 	rejoinOk.clear();
 	rejoinRefusal.clear();
+	forgetFriends();		// the next account's list comes with its sign-in
 }
 
 void OnlineSession::pingServer()
@@ -342,6 +344,7 @@ OnlineMessage OnlineHelloLine( UnsignedInt exe, UnsignedInt ini, const char *ver
 	hello.setInt( "files", 1 );		// the install files' hashes come before the login (OnlineSession::sendFiles)
 	hello.setInt( "notice", 1 );	// the server's notices and maintenance, after the welcome and on every change
 	hello.setInt( "speedask", 1 );	// a Quick Match's faster pick may be put to us (qm.matched speedAsk)
+	hello.setInt( "friends", 1 );		// friends, presence and invites; a server that has them echoes it in the welcome
 	return hello;
 }
 
@@ -588,6 +591,7 @@ void OnlineSession::gameListEntry( const OnlineMessage &m )
 	r.stagingRoom.numPlayers = (Int)m.getInt( "count" );
 	r.stagingRoom.maxPlayers = (Int)m.getInt( "maxp", MAX_SLOTS );
 	r.stagingRoom.useStats = TRUE;
+	r.stagingRoom.requiresPassword = m.getBool( "locked" );		// a friends server's password room
 	r.stagingRoomPlayerNames[0] = m.getString( "host" );
 	// a host sits in its staging room, out of the chat room, so the list's ping column reads its card from here
 	if (m.has( "hostPing" ) && !m.getString( "host" ).empty())
@@ -640,6 +644,8 @@ static void playerResponse( OnlineSession &s, Int type, RoomType roomType, long 
 	r.nick = nick;
 	r.player.roomType = roomType;
 	r.player.profileID = (Int)who;
+	if (who > 0 && !nick.empty())
+		s.nicksById[who] = nick;		// EA's ADDBUDDY names the id, friend.add the nick
 	std::map<long long, UnsignedInt>::const_iterator it = s.vips.find( who );
 	if (it != s.vips.end())
 		r.player.IP = OnlineHostToNet( it->second );		// GameSpy's player IP is in network order
@@ -829,6 +835,10 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	if (hostLeftGame && t != "game.start")
 		resolveHostLeft();
 
+	// friends, invites and their refusals (OnlineBuddy.cpp)
+	if (friendLine( m ))
+		return;
+
 	if (t == "welcome")
 	{
 		motd = m.getString( "motd" );
@@ -838,6 +848,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		registerUrl = m.getString( "registerUrl" );
 		resetUrl = m.getString( "resetUrl" );
 		accountUrl = m.getString( "accountUrl" );
+		friendsOn = m.getInt( "friends" ) == 1;		// an older server: no friends, everything as before them
 		m.getObject( "counts", counts );		// none from an older server: cleared
 		hasServerInfo = m.getObject( "server", serverInfo );
 		status = ONLINE_WELCOMED;
@@ -951,7 +962,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			PeerResponse r = makePeer( PeerResponse::PEERRESPONSE_JOINSTAGINGROOM );
 			r.joinStagingRoom.id = (Int)joiningGame;
 			r.joinStagingRoom.ok = FALSE;
-			r.joinStagingRoom.result = code == "full" ? PEERFullRoom : PEERJoinFailed;
+			r.joinStagingRoom.result = code == "full" ? PEERFullRoom : code == "badpass" ? PEERBadPassword : PEERJoinFailed;
 			joiningGame = 0;
 			peerResponse( r );
 		}
@@ -1629,6 +1640,8 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 		// server that does not know "apocalypse" refuses the room (badgame), which the host sees as a failed create
 		m.setString( "mode", TheHostGameMode == HOST_MODE_DIRECT_STRIKE ? "directstrike"
 			: TheHostGameMode == HOST_MODE_APOCALYPSE ? "apocalypse" : "classic" );
+		if (s.friendsOn && !req.password.empty())
+			m.setString( "pass", req.password );		// the host popup's password, which the list shows as locked
 		s.send( m );
 		return;
 
@@ -1689,6 +1702,8 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 		leaveChatRoom( s );
 		s.joiningGame = req.stagingRoom.id;
 		m.setString( "t", "game.join" ).setInt( "id", req.stagingRoom.id );
+		if (s.friendsOn && !req.password.empty())
+			m.setString( "pass", req.password );		// a server before friends has no room passwords
 		s.send( m );
 		return;
 

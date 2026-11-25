@@ -3293,3 +3293,375 @@ TEST(online_maintenance_refusals)
 	rig.feed( "{\"t\":\"game.start\",\"match\":\"m2\",\"ids\":[7],\"nicks\":[\"Tank\"],\"vips\":[167772163]}" );
 	CHECK( rig.peerResponses().empty() );
 }
+
+//-------------------------------------------------------------------------------------------------
+// friends and invites
+//-------------------------------------------------------------------------------------------------
+
+/* Signed in as Tank (7) on a server whose welcome says friends:1 (or not), the sent lines cleared. */
+static void friendsLogin( AdapterRig &rig, bool friends )
+{
+	rig.feed( friends ? "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094,\"friends\":1}"
+		: "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094}" );
+	rig.login();
+}
+
+static std::vector<BuddyResponse> buddyResponses( AdapterRig &rig )
+{
+	std::vector<BuddyResponse> out;
+	BuddyResponse b;
+	while (rig.buddy->getResponse( b ))
+		out.push_back( b );
+	return out;
+}
+
+static void buddyRequest( AdapterRig &rig, Int type, Int id )
+{
+	BuddyRequest req;
+	memset( &req, 0, sizeof(req) );
+	req.buddyRequestType = (decltype(req.buddyRequestType))type;
+	if (type == BuddyRequest::BUDDYREQUEST_ADDBUDDY)
+		req.arg.addbuddy.id = id;
+	else
+		req.arg.profile.id = id;
+	rig.buddy->addRequest( req );
+}
+
+TEST(online_friends_old_server_behaves_as_before)
+{
+	CHECK_EQ( OnlineHelloLine( 1, 2, "4.1.0" ).getInt( "friends" ), 1ll );
+
+	AdapterRig rig;
+	friendsLogin( rig, false );
+	CHECK( !OnlineFriendsAvailable() );
+	rig.feed( "{\"t\":\"room\",\"id\":\"lobby1\",\"ids\":[9],\"nicks\":[\"Rex\"]}" );
+	rig.peerResponses();
+
+	// nothing of friends goes to a server that did not echo friends:1
+	OnlineRequestFriends();
+	OnlineAddFriend( "Rex" );
+	OnlineAnswerFriend( 9, TRUE );
+	OnlineRemoveFriend( 9 );
+	OnlineBlockPlayer( 9 );
+	OnlineInviteFriend( 9 );
+	OnlineAnswerInvite( 9, 5, TRUE );
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_ADDBUDDY, 9 );
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_OKADD, 9 );
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_DENYADD, 9 );
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_DELBUDDY, 9 );
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_SETSTATUS, 0 );
+	CHECK_EQ( rig.sent.size(), (size_t)0 );
+
+	// and a stray friend line from it changes nothing
+	rig.feed( "{\"t\":\"friends\",\"rows\":[{\"id\":9,\"nick\":\"Rex\",\"status\":\"accepted\",\"presence\":\"online\"}]}" );
+	rig.feed( "{\"t\":\"invite\",\"from\":9,\"nick\":\"Rex\",\"game\":5,\"name\":\"g\",\"mode\":\"classic\",\"map\":\"m\"}" );
+	std::vector<OnlineFriend> friends;
+	std::vector<OnlineInvite> invites;
+	OnlineGetFriends( friends );
+	CHECK( friends.empty() );
+	OnlineGetInvites( invites );
+	CHECK( invites.empty() );
+	CHECK( buddyResponses( rig ).empty() );
+
+	// a room password stays off the wire, as the host popup had it before
+	PeerRequest host;
+	host.peerRequestType = PeerRequest::PEERREQUEST_CREATESTAGINGROOM;
+	host.text = u"g";
+	host.password = "pw";
+	memset( &host.stagingRoomCreation, 0, sizeof(host.stagingRoomCreation) );
+	rig.peer->addRequest( host );		// after the lobby's room.leave
+	CHECK( !rig.sent.empty() && rig.sent.back().type() == "game.host" && !rig.sent.back().has( "pass" ) );
+	PeerRequest join;
+	join.peerRequestType = PeerRequest::PEERREQUEST_JOINSTAGINGROOM;
+	join.stagingRoom.id = 5;
+	join.password = "pw";
+	rig.peer->addRequest( join );
+	CHECK( !rig.sent.empty() && rig.sent.back().type() == "game.join" && !rig.sent.back().has( "pass" ) );
+}
+
+TEST(online_friends_rows_presence_and_buddy_status)
+{
+	AdapterRig rig;
+	friendsLogin( rig, true );
+	CHECK( OnlineFriendsAvailable() );
+	rig.feed( "{\"t\":\"friends\",\"rows\":["
+		"{\"id\":12,\"nick\":\"zed\",\"status\":\"blocked\",\"presence\":\"offline\"},"
+		"{\"id\":11,\"nick\":\"Out\",\"status\":\"pending\",\"dir\":\"out\",\"presence\":\"offline\"},"
+		"{\"id\":10,\"nick\":\"Asker\",\"status\":\"pending\",\"dir\":\"in\",\"presence\":\"offline\"},"
+		"{\"id\":9,\"nick\":\"Rex\",\"status\":\"accepted\",\"presence\":\"room\",\"game\":5,\"name\":\"Rex's room\",\"joinable\":true,\"locked\":true},"
+		"{\"id\":8,\"nick\":\"amy\",\"status\":\"accepted\",\"presence\":\"offline\"},"
+		"{\"nick\":\"no id\",\"status\":\"accepted\"}]}" );
+
+	std::vector<OnlineFriend> f;
+	const UnsignedInt first = OnlineGetFriends( f );
+	CHECK( first != 0 );
+	CHECK_EQ( f.size(), (size_t)5 );
+	if (f.size() == 5)
+	{
+		// accepted by nick (amy before Rex, case aside), requests to us, ours out, blocked
+		CHECK_STR( f[0].nick.str(), "amy" );
+		CHECK_EQ( (int)f[0].presence, (int)ONLINE_PRESENCE_OFFLINE );
+		CHECK_STR( f[1].nick.str(), "Rex" );
+		CHECK_EQ( (int)f[1].status, (int)ONLINE_FRIEND_ACCEPTED );
+		CHECK_EQ( (int)f[1].presence, (int)ONLINE_PRESENCE_ROOM );
+		CHECK_EQ( f[1].game, 5 );
+		CHECK( f[1].roomName == UnicodeString( u"Rex's room" ) );
+		CHECK( f[1].joinable );
+		CHECK( f[1].locked );
+		CHECK_EQ( (int)f[2].status, (int)ONLINE_FRIEND_PENDING_IN );
+		CHECK_EQ( f[2].id, 10 );
+		CHECK_EQ( (int)f[3].status, (int)ONLINE_FRIEND_PENDING_OUT );
+		CHECK_EQ( (int)f[4].status, (int)ONLINE_FRIEND_BLOCKED );
+	}
+	CHECK_EQ( OnlineCountFriendsOnline(), 1 );
+
+	// EA's overlay: a status per accepted friend, a request for the one asking us, nothing for the rest
+	std::vector<BuddyResponse> b = buddyResponses( rig );
+	CHECK_EQ( b.size(), (size_t)3 );
+	Int statuses = 0, requests = 0;
+	for (size_t i = 0; i < b.size(); ++i)
+	{
+		if (b[i].buddyResponseType == BuddyResponse::BUDDYRESPONSE_STATUS)
+		{
+			++statuses;
+			if (b[i].profile == 9)
+			{
+				CHECK_EQ( (int)b[i].arg.status.status, (int)GP_STAGING );
+				CHECK_STR( b[i].arg.status.statusString, "Staging" );
+				CHECK_STR( b[i].arg.status.location, "Rex's room" );
+				CHECK_STR( b[i].arg.status.nick, "Rex" );
+			}
+			else
+			{
+				CHECK_EQ( b[i].profile, 8 );
+				CHECK_EQ( (int)b[i].arg.status.status, (int)GP_OFFLINE );
+				CHECK_STR( b[i].arg.status.statusString, "Offline" );
+			}
+		}
+		else if (b[i].buddyResponseType == BuddyResponse::BUDDYRESPONSE_REQUEST)
+		{
+			++requests;
+			CHECK_EQ( b[i].profile, 10 );
+			CHECK_STR( b[i].arg.request.nick, "Asker" );
+		}
+	}
+	CHECK_EQ( statuses, 2 );
+	CHECK_EQ( requests, 1 );
+
+	// presence moves: into a match, then the same row again is no news
+	rig.feed( "{\"t\":\"friend\",\"id\":9,\"nick\":\"Rex\",\"status\":\"accepted\",\"presence\":\"match\"}" );
+	b = buddyResponses( rig );
+	CHECK( b.size() == 1 && b[0].buddyResponseType == BuddyResponse::BUDDYRESPONSE_STATUS && b[0].arg.status.status == GP_PLAYING );
+	CHECK( b.size() == 1 && strcmp( b[0].arg.status.location, "" ) == 0 );		// the room's name went with the room
+	const UnsignedInt moved = OnlineGetFriends( f );
+	CHECK( moved != first );
+	rig.feed( "{\"t\":\"friend\",\"id\":9,\"nick\":\"Rex\",\"status\":\"accepted\",\"presence\":\"match\"}" );
+	CHECK( buddyResponses( rig ).empty() );
+	CHECK_EQ( OnlineGetFriends( f ), moved );
+	rig.feed( "{\"t\":\"friend\",\"id\":8,\"nick\":\"amy\",\"status\":\"accepted\",\"presence\":\"lobby\"}" );
+	b = buddyResponses( rig );
+	CHECK( b.size() == 1 && b[0].arg.status.status == GP_CHATTING && strcmp( b[0].arg.status.statusString, "Chatting" ) == 0 );
+	CHECK_EQ( OnlineCountFriendsOnline(), 2 );
+
+	// presence of anyone but a friend reads offline, whatever the line says
+	rig.feed( "{\"t\":\"friend\",\"id\":11,\"nick\":\"Out\",\"status\":\"pending\",\"dir\":\"out\",\"presence\":\"online\"}" );
+	OnlineGetFriends( f );
+	for (size_t i = 0; i < f.size(); ++i)
+		if (f[i].id == 11)
+			CHECK_EQ( (int)f[i].presence, (int)ONLINE_PRESENCE_OFFLINE );
+
+	// a request arriving: friend.request names it, the row behind it raises one request
+	rig.feed( "{\"t\":\"friend.request\",\"id\":20,\"nick\":\"New\"}" );
+	rig.feed( "{\"t\":\"friend\",\"id\":20,\"nick\":\"New\",\"status\":\"pending\",\"dir\":\"in\",\"presence\":\"offline\"}" );
+	b = buddyResponses( rig );
+	CHECK( b.size() == 1 && b[0].buddyResponseType == BuddyResponse::BUDDYRESPONSE_REQUEST && b[0].profile == 20 );
+
+	// status none: gone
+	rig.feed( "{\"t\":\"friend\",\"id\":9,\"nick\":\"Rex\",\"status\":\"none\",\"presence\":\"offline\"}" );
+	OnlineGetFriends( f );
+	Bool rexThere = FALSE;
+	for (size_t i = 0; i < f.size(); ++i)
+		rexThere = rexThere || f[i].id == 9;
+	CHECK( !rexThere );
+
+	// a sign-out forgets the account's rows
+	OnlineSession::get().forgetAccount();
+	CHECK( OnlineGetFriends( f ) != 0 && f.empty() );
+	CHECK( !OnlineFriendsAvailable() );
+}
+
+TEST(online_friends_requests_encode)
+{
+	AdapterRig rig;
+	friendsLogin( rig, true );
+	rig.feed( "{\"t\":\"friends\",\"rows\":[{\"id\":10,\"nick\":\"Asker\",\"status\":\"pending\",\"dir\":\"in\",\"presence\":\"offline\"},"
+		"{\"id\":13,\"nick\":\"Shy\",\"status\":\"pending\",\"dir\":\"in\",\"presence\":\"offline\"}]}" );
+	rig.feed( "{\"t\":\"room\",\"id\":\"lobby1\",\"ids\":[9],\"nicks\":[\"Rex\"]}" );
+	rig.peerResponses();
+	buddyResponses( rig );
+	rig.sent.clear();
+
+	OnlineRequestFriends();
+	CHECK_STR( rig.sentType( 0 ).c_str(), "friends.get" );
+	OnlineAddFriend( "Kim" );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "friend.add" );
+	CHECK_STR( rig.sent[1].getString( "nick" ).c_str(), "Kim" );
+	OnlineAddFriend( "" );		// nothing
+	CHECK_EQ( rig.sent.size(), (size_t)2 );
+
+	// EA's ADDBUDDY by profile id: a nick a room told us
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_ADDBUDDY, 9 );
+	CHECK_STR( rig.sentType( 2 ).c_str(), "friend.add" );
+	CHECK_STR( rig.sent[2].getString( "nick" ).c_str(), "Rex" );
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_ADDBUDDY, 99 );		// nobody we know: nothing
+	CHECK_EQ( rig.sent.size(), (size_t)3 );
+
+	// OKADD, then EA's own ADDBUDDY behind it: one answer
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_OKADD, 10 );
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_ADDBUDDY, 10 );
+	CHECK_EQ( rig.sent.size(), (size_t)4 );
+	CHECK_STR( rig.sentType( 3 ).c_str(), "friend.answer" );
+	CHECK_EQ( rig.sent[3].getInt( "id" ), 10ll );
+	CHECK( rig.sent[3].getBool( "ok" ) );
+
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_DENYADD, 13 );
+	CHECK_STR( rig.sentType( 4 ).c_str(), "friend.answer" );
+	CHECK_EQ( rig.sent[4].getInt( "id" ), 13ll );
+	CHECK( rig.sent[4].has( "ok" ) && !rig.sent[4].getBool( "ok", true ) );
+	std::vector<OnlineFriend> f;
+	OnlineGetFriends( f );
+	CHECK( f.size() == 1 && f[0].id == 10 && f[0].status == ONLINE_FRIEND_ACCEPTED );
+
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_DELBUDDY, 10 );
+	CHECK_STR( rig.sentType( 5 ).c_str(), "friend.remove" );
+	CHECK_EQ( rig.sent[5].getInt( "id" ), 10ll );
+	OnlineBlockPlayer( 9 );
+	CHECK_STR( rig.sentType( 6 ).c_str(), "friend.block" );
+	CHECK_EQ( rig.sent[6].getInt( "id" ), 9ll );
+	buddyRequest( rig, BuddyRequest::BUDDYREQUEST_SETSTATUS, 0 );		// the server works presence out itself
+	CHECK_EQ( rig.sent.size(), (size_t)7 );
+
+	// a refusal, once, and it is not the lobby's
+	rig.feed( "{\"t\":\"error\",\"for\":\"friend.add\",\"code\":\"not_found\"}" );
+	AsciiString what, code;
+	CHECK( OnlineTakeFriendError( what, code ) );
+	CHECK_STR( what.str(), "friend.add" );
+	CHECK_STR( code.str(), "not_found" );
+	CHECK( !OnlineTakeFriendError( what, code ) );
+	CHECK( rig.peerResponses().empty() );
+	CHECK( OnlineFriendsAvailable() );
+
+	// a server that turns out not to know them: as one that never said friends:1
+	rig.feed( "{\"t\":\"error\",\"for\":\"friends.get\",\"code\":\"unknown\"}" );
+	CHECK( !OnlineFriendsAvailable() );
+	OnlineAddFriend( "Kim" );
+	CHECK_EQ( rig.sent.size(), (size_t)7 );
+}
+
+TEST(online_friends_invites_and_room_passwords)
+{
+	AdapterRig rig;
+	friendsLogin( rig, true );
+
+	// a password room: game.host carries it, the list reads it as locked, a wrong one is EA's bad password
+	PeerRequest host;
+	host.peerRequestType = PeerRequest::PEERREQUEST_CREATESTAGINGROOM;
+	host.text = u"g";
+	host.password = "pw";
+	memset( &host.stagingRoomCreation, 0, sizeof(host.stagingRoomCreation) );
+	rig.peer->addRequest( host );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "game.host" );
+	CHECK_STR( rig.sent[0].getString( "pass" ).c_str(), "pw" );
+	host.password = "";
+	rig.peer->addRequest( host );
+	CHECK( !rig.sent.back().has( "pass" ) );
+	rig.feed( "{\"t\":\"error\",\"for\":\"game.host\",\"code\":\"throttled\"}" );
+	rig.feed( "{\"t\":\"game\",\"action\":\"add\",\"id\":6,\"name\":\"locked\",\"host\":\"Kim\",\"count\":1,\"maxp\":8,\"locked\":true}" );
+	rig.feed( "{\"t\":\"game\",\"action\":\"add\",\"id\":7,\"name\":\"open\",\"host\":\"Lou\",\"count\":1,\"maxp\":8}" );
+	PeerRequest join;
+	join.peerRequestType = PeerRequest::PEERREQUEST_JOINSTAGINGROOM;
+	join.stagingRoom.id = 6;
+	join.password = "nope";
+	rig.peer->addRequest( join );
+	CHECK_STR( rig.sent.back().type().c_str(), "game.join" );
+	CHECK_STR( rig.sent.back().getString( "pass" ).c_str(), "nope" );
+	rig.feed( "{\"t\":\"error\",\"for\":\"game.join\",\"code\":\"badpass\"}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	Int listed = 0;
+	for (size_t i = 0; i < r.size(); ++i)
+	{
+		if (r[i].peerResponseType == PeerResponse::PEERRESPONSE_STAGINGROOM && r[i].stagingRoom.id == 6)
+		{
+			CHECK( r[i].stagingRoom.requiresPassword );
+			++listed;
+		}
+		if (r[i].peerResponseType == PeerResponse::PEERRESPONSE_STAGINGROOM && r[i].stagingRoom.id == 7)
+		{
+			CHECK( !r[i].stagingRoom.requiresPassword );
+			++listed;
+		}
+	}
+	CHECK_EQ( listed, 2 );
+	CHECK( !r.empty() && r.back().peerResponseType == PeerResponse::PEERRESPONSE_JOINSTAGINGROOM
+		&& !r.back().joinStagingRoom.ok && r.back().joinStagingRoom.result == PEERBadPassword );
+
+	// seated in a room: invite{to,game}
+	OnlineInviteFriend( 9 );		// not in one yet: nothing
+	rig.sent.clear();
+	rig.feed( "{\"t\":\"game.joined\",\"id\":5,\"host\":\"Tank\",\"hostId\":7,\"ids\":[7],\"nicks\":[\"Tank\"]}" );
+	rig.peerResponses();
+	rig.sent.clear();
+	OnlineInviteFriend( 9 );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "invite" );
+	CHECK_EQ( rig.sent[0].getInt( "to" ), 9ll );
+	CHECK_EQ( rig.sent[0].getInt( "game" ), 5ll );
+
+	// invites to us: kept oldest first, one per inviter and room, gone on invite.gone
+	rig.feed( "{\"t\":\"invite\",\"from\":9,\"nick\":\"Rex\",\"game\":3,\"name\":\"Rex's room\",\"mode\":\"directstrike\",\"map\":\"maps/a.map\"}" );
+	rig.feed( "{\"t\":\"invite\",\"from\":8,\"nick\":\"Amy\",\"game\":4,\"name\":\"Amy's\",\"mode\":\"classic\",\"map\":\"maps/b.map\"}" );
+	rig.feed( "{\"t\":\"invite\",\"from\":9,\"nick\":\"Rex\",\"game\":3,\"name\":\"Rex's room\",\"mode\":\"directstrike\",\"map\":\"maps/a.map\"}" );
+	rig.feed( "{\"t\":\"invite\",\"from\":0,\"nick\":\"bad\",\"game\":3}" );
+	std::vector<OnlineInvite> inv;
+	const UnsignedInt s1 = OnlineGetInvites( inv );
+	CHECK_EQ( inv.size(), (size_t)2 );
+	if (inv.size() == 2)
+	{
+		CHECK_EQ( inv[0].from, 8 );
+		CHECK_EQ( inv[1].from, 9 );
+		CHECK_EQ( inv[1].game, 3 );
+		CHECK_STR( inv[1].nick.str(), "Rex" );
+		CHECK( inv[1].roomName == UnicodeString( u"Rex's room" ) );
+		CHECK_STR( inv[1].mode.str(), "directstrike" );
+		CHECK_STR( inv[1].map.str(), "maps/a.map" );
+		CHECK( inv[1].msLeft > ONLINE_INVITE_MS - 5000 && inv[1].msLeft <= ONLINE_INVITE_MS );
+	}
+	rig.feed( "{\"t\":\"invite.gone\",\"from\":8,\"game\":4}" );
+	CHECK( OnlineGetInvites( inv ) != s1 );
+	CHECK( inv.size() == 1 && inv[0].from == 9 );
+
+	// declined: invite.answer{ok:false}, forgotten
+	OnlineAnswerInvite( 9, 3, FALSE );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "invite.answer" );
+	CHECK_EQ( rig.sent[1].getInt( "from" ), 9ll );
+	CHECK_EQ( rig.sent[1].getInt( "game" ), 3ll );
+	CHECK( !rig.sent[1].getBool( "ok", true ) );
+	OnlineGetInvites( inv );
+	CHECK( inv.empty() );
+
+	// accepted: answered as a game.join is, game.joined or a refusal
+	rig.feed( "{\"t\":\"invite\",\"from\":9,\"nick\":\"Rex\",\"game\":3,\"name\":\"r\",\"mode\":\"classic\",\"map\":\"m\"}" );
+	OnlineAnswerInvite( 9, 3, TRUE );
+	CHECK( rig.sent.back().getBool( "ok" ) );
+	rig.feed( "{\"t\":\"game.joined\",\"id\":3,\"host\":\"Rex\",\"hostId\":9,\"ids\":[9,7],\"nicks\":[\"Rex\",\"Tank\"]}" );
+	r = rig.peerResponses();
+	CHECK( !r.empty() && r[0].peerResponseType == PeerResponse::PEERRESPONSE_JOINSTAGINGROOM && r[0].joinStagingRoom.ok && r[0].joinStagingRoom.id == 3 );
+
+	// accepted too late: the server's invite.gone is the join refused
+	rig.feed( "{\"t\":\"invite\",\"from\":8,\"nick\":\"Amy\",\"game\":4,\"name\":\"a\",\"mode\":\"classic\",\"map\":\"m\"}" );
+	OnlineAnswerInvite( 8, 4, TRUE );
+	rig.feed( "{\"t\":\"invite.gone\",\"from\":8,\"game\":4}" );
+	r = rig.peerResponses();
+	CHECK( r.size() == 1 && r[0].peerResponseType == PeerResponse::PEERRESPONSE_JOINSTAGINGROOM && !r[0].joinStagingRoom.ok
+		&& r[0].joinStagingRoom.id == 4 );
+	CHECK_EQ( OnlineSession::get().joiningGame, 0ll );
+}

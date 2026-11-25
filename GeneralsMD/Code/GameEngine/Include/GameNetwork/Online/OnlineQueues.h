@@ -559,4 +559,58 @@ AsciiString OnlineCurrentMatchId( void );
 	 (IsDirectStrikeMap, IsApocalypseMap), and every game.opts the host sends names the mode and seed that
 	 map carries ("classic", "directstrike" or "apocalypse"), for the server's records and room list only. */
 
+/* Friends and invites.  The hello says friends:1; a server that echoes it in the welcome has them.  Against
+	 any other server OnlineFriendsAvailable is FALSE, every call below sends nothing, the lists stay empty
+	 and the buddy queue answers nothing beyond the login and private messages, as before friends.
+	 EA's buddy queue is served too: ADDBUDDY (by profile id), DELBUDDY, OKADD and DENYADD become friend
+	 lines, an accepted friend's presence arrives as BUDDYRESPONSE_STATUS (offline GP_OFFLINE "Offline",
+	 online GP_ONLINE "Online", lobby GP_CHATTING "Chatting", room GP_STAGING "Staging" with the room's name
+	 as location, match GP_PLAYING "Playing") and a request to us as BUDDYRESPONSE_REQUEST.  A removal and an
+	 invite reach only the calls below.  SETSTATUS sends nothing: the server works presence out itself. */
+Bool OnlineFriendsAvailable( void );
+enum OnlineFriendStatus { ONLINE_FRIEND_ACCEPTED, ONLINE_FRIEND_PENDING_IN, ONLINE_FRIEND_PENDING_OUT, ONLINE_FRIEND_BLOCKED };
+enum OnlinePresence { ONLINE_PRESENCE_OFFLINE, ONLINE_PRESENCE_ONLINE, ONLINE_PRESENCE_LOBBY, ONLINE_PRESENCE_ROOM, ONLINE_PRESENCE_MATCH };
+struct OnlineFriend
+{
+	Int id;
+	AsciiString nick;
+	OnlineFriendStatus status;
+	OnlinePresence presence;	///< offline for anything but an accepted friend
+	Int game;									///< in a room: its game id, else 0
+	UnicodeString roomName;
+	Bool joinable;						///< the room has a free seat and has not started
+	Bool locked;							///< the room has a password (an invite waives it)
+};
+/* Every row, accepted friends first, then requests to us, ours out, blocked; by nick inside each.  Returns
+	 a serial that moves on with every change (0 before any list this sign-in). */
+UnsignedInt OnlineGetFriends( std::vector<OnlineFriend> &out );
+Int OnlineCountFriendsOnline( void );						///< accepted friends not offline: the FRIENDS key's number
+void OnlineRequestFriends( void );							///< friends.get (the sign-in already brings the list)
+void OnlineAddFriend( const AsciiString &nick );	///< friend.add; a request back to one waiting from them accepts it
+void OnlineAnswerFriend( Int id, Bool ok );			///< friend.answer to a request to us
+void OnlineRemoveFriend( Int id );							///< friend.remove: a friend, a request either way, or our block
+void OnlineBlockPlayer( Int id );								///< friend.block, listed or not
+/* An invite to a custom room, live for ONLINE_INVITE_MS from its arrival unless the room fills, starts or
+	 goes first (invite.gone). */
+struct OnlineInvite
+{
+	Int from;
+	AsciiString nick;
+	Int game;
+	UnicodeString roomName;
+	AsciiString mode;					///< classic, directstrike or apocalypse
+	AsciiString map;
+	Int msLeft;
+};
+UnsignedInt OnlineGetInvites( std::vector<OnlineInvite> &out );	///< oldest first; a serial as OnlineGetFriends'
+void OnlineInviteFriend( Int to );					///< invite{to,game} from the staging room we sit in
+/* Answers an invite and forgets it.  ok joins that room as a game.join does, the password waived: the
+	 answers are game.join's (PEERRESPONSE_JOINSTAGINGROOM, a refusal as its failure), so the screen that
+	 accepts leaves its own room first, as before any join.  An invite already gone answers invite.gone. */
+void OnlineAnswerInvite( Int from, Int game, Bool ok );
+/* The last refused friend or invite request, once: forWhat friend.add, friend.answer, friend.remove,
+	 friend.block, invite, invite.answer or friends.get, code the server's (not_found, already, full, rate,
+	 throttled, blocked as not_found, offline, inmatch, nogame, unavailable). */
+Bool OnlineTakeFriendError( AsciiString &forWhat, AsciiString &code );
+
 #endif // _ONLINE_QUEUES_H_

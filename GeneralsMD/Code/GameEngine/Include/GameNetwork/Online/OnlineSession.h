@@ -149,6 +149,34 @@ struct OnlineHistoryEntry
 	OnlineHistoryEntry() : state( ONLINE_LADDER_FAILED ), serial( 0 ), askedMs( 0 ) {}
 };
 
+/* One friends row as the server keeps it for us (friends{rows[]}, friend{...}): status accepted, pending or
+	 blocked, dir in or out for pending, presence offline, online, lobby, room or match, and the room's
+	 game, name, joinable and locked while in one. */
+struct OnlineFriendRow
+{
+	long long id;
+	std::string nick, status, dir, presence;
+	long long game;
+	std::string name;
+	Bool joinable, locked;
+
+	OnlineFriendRow() : id( 0 ), game( 0 ), joinable( FALSE ), locked( FALSE ) {}
+};
+
+/* invite{from,nick,game,name,mode,map}, kept until invite.gone, an answer or ONLINE_INVITE_MS. */
+enum { ONLINE_INVITE_MS = 120000 };
+struct OnlineInviteEntry
+{
+	long long from, game;
+	std::string nick, name, mode, map;
+	long long atMs;					///< OnlineNowMs when it arrived
+
+	OnlineInviteEntry() : from( 0 ), game( 0 ), atMs( 0 ) {}
+};
+
+/* A friends row off the wire; FALSE for a line without a usable id. */
+Bool OnlineParseFriendRow( const OnlineMessage &m, OnlineFriendRow &out );
+
 struct OnlineSession
 {
 	static OnlineSession &get();
@@ -291,6 +319,15 @@ struct OnlineSession
 	OnlineMessage aiVerdict;	///< the last ai.rated or ai.unrated
 	UnsignedInt aiVerdictSerial;
 
+	// friends and invites (OnlineBuddy.cpp), only once the welcome said friends:1
+	Bool friendsOn;					///< welcome.friends; an error{for:friends.get,code:unknown} takes it back
+	std::map<long long, OnlineFriendRow> friendRows;		///< by account id
+	UnsignedInt friendsSerial;	///< moves on with every change to friendRows
+	std::deque<OnlineInviteEntry> invites;		///< oldest first, one per inviter and game
+	UnsignedInt invitesSerial;
+	std::string friendErrorFor, friendErrorCode;	///< the last error{for} of a friend or invite request, until taken
+	std::map<long long, std::string> nicksById;	///< every id and nick a room or game told us: ADDBUDDY names an id, friend.add a nick
+
 	OnlinePeerQueue *peer;
 	OnlineBuddyQueue *buddy;
 	OnlinePSQueue *ps;
@@ -316,6 +353,12 @@ struct OnlineSession
 	void historyRefused( const OnlineMessage &m );	///< error{for:history}: the key it names, else the oldest ask
 	void historySettled( const OnlineHistoryKey &key, Int state );		///< the key's ask is over: state, serial, asks
 	void expireHistory();														///< asks out longer than ONLINE_HISTORY_TIMEOUT_MS fail
+	// friends (OnlineBuddy.cpp)
+	Bool friendLine( const OnlineMessage &m );		///< TRUE when m was a friends or invite line, handled
+	void forgetFriends();												///< the account's rows, invites and error
+	void noteFriendRow( const OnlineFriendRow &row );	///< one row in, its buddy response out
+	void expireInvites();												///< invites older than ONLINE_INVITE_MS go
+	void sendFriend( const OnlineMessage &m );	///< m, when the server knows friends; nothing otherwise
 
 private:
 	OnlineSession();

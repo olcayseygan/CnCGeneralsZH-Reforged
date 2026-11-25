@@ -12,6 +12,10 @@ found and fixed, EA's own, not port damage.**
 
 - Every question the game asks outside a match, from Exit to a failed join, used to come up in EA's fixed box of 2003: drawn for an 800x600 screen and stretched, 300 by 328 of that screen whatever it held. It is now the first piece of the new menu look: a thin lit blue edge with a ruler's ticks round see-through glass, the title in capitals over a lit rule, the question at 18 px on a 1080p screen and 12 at 720, and the box as tall as its text, 28 px a line. The key Enter presses is lit and sits at the right; Escape answers No or Cancel, and the foot says which key does what. A key acts only when the box saw it pressed, so the Enter that sent a chat line or a join no longer answers the box that opened from it.
 
+## Password rooms online
+
+- The password box in Host Game did nothing online: the room opened to everyone. On a server with friends the password now locks the room, the game list marks it, a wrong password is refused as one, and a friend you invite walks in without it. Against an older server the game behaves exactly as before.
+
 ## Computer guards, medics and paratroopers stop wasting time
 
 - A computer's base guards kept grabbing a target their teammate had picked, a Comanche overhead or a tank across the map, dropped it the same instant because they could not reach it, and grabbed it again a few seconds later. One four-player Hard match logged 52,257 of those turns, a single Microwave Tank 7,616 of them. A guard now takes the team's target only when it stands inside its own circle and it can hit it, and it no longer picks an aircraft out of its weapons' reach. Over the same twelve four-player matches the turns fell from 60,149 to 18,793.

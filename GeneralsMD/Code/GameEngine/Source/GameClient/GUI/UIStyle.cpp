@@ -36,6 +36,10 @@
 #include "GameClient/GameClient.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetComboBox.h"
+#include "GameClient/GadgetListBox.h"
+
+#include <map>
+#include <string>
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameFont.h"
 #include "GameClient/GameText.h"
@@ -1871,6 +1875,176 @@ void boxFootRule( const IRegion2D &box )
 	const Int pad = menuPx( (Real)BOX_PAD );
 	TheDisplay->drawFillRect( box.lo.x + pad, box.hi.y - menuPx( (Real)BOX_FOOT ), box.hi.x - box.lo.x - 2 * pad, 1,
 		withAlpha( FRAME, 110 ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+// The rooms' additions.
+//-------------------------------------------------------------------------------------------------
+
+/// one string per font and text, kept for the run: a tracked letter, a tab's count.  ponytail: never
+/// freed until exit; a few hundred small strings at most (the letters of the labels in use, per font)
+static DisplayString *cachedText( GameFont *font, const UnicodeString &text )
+{
+	typedef std::pair< GameFont *, std::basic_string< WideChar > > Key;
+	static std::map< Key, DisplayString * > s_cache;
+	const Key key( font, std::basic_string< WideChar >( text.str() ) );
+	std::map< Key, DisplayString * >::iterator found = s_cache.find( key );
+	if( found != s_cache.end() )
+		return found->second;
+	DisplayString *s = TheDisplayStringManager->newDisplayString();
+	s->setFont( font );
+	s->setText( text );
+	s_cache[ key ] = s;
+	return s;
+}
+
+static Int letterAdvance( const UnicodeString &letter, void *context )
+{
+	return cachedText( (GameFont *)context, letter )->getWidth( -1 );
+}
+
+Int trackedWidthOf( const UnicodeString &text, Int trackingPx, TextMeasure measure, void *context )
+{
+	Int width = 0;
+	const Int length = text.getLength();
+	for( Int each = 0; each < length; each++ )
+	{
+		UnicodeString letter;
+		letter.concat( text.getCharAt( each ) );
+		width += measure( letter, context );
+		if( each + 1 < length )
+			width += trackingPx;
+	}
+	return width;
+}
+
+Int trackedWidth( const UnicodeString &text, GameFont *font, Real tracking1080 )
+{
+	return trackedWidthOf( text, REAL_TO_INT( tracking1080 * boardFit( TheDisplay->getWidth(), TheDisplay->getHeight() ).scale + 0.5f ),
+		letterAdvance, font );
+}
+
+Int drawTracked( const UnicodeString &text, GameFont *font, Int x, Int y, Color color, Real tracking1080 )
+{
+	const Int tracking = REAL_TO_INT( tracking1080 * boardFit( TheDisplay->getWidth(), TheDisplay->getHeight() ).scale + 0.5f );
+	Int at = x;
+	const Int length = text.getLength();
+	for( Int each = 0; each < length; each++ )
+	{
+		UnicodeString letter;
+		letter.concat( text.getCharAt( each ) );
+		DisplayString *s = cachedText( font, letter );
+		if( letter.getCharAt( 0 ) != u' ' )
+			s->draw( at, y, color, black( 160 ) );
+		at += s->getWidth( -1 ) + ( each + 1 < length ? tracking : 0 );
+	}
+	return at - x;
+}
+
+void columnHeadAt( DisplayString *words, Int left, Int middle, Color color, Bool sorted, Real tracking1080 )
+{
+	if( words == NULL || words->getTextLength() == 0 )
+		return;
+	GameFont *font = menuFont( MENU_TEXT_LABEL, TRUE );
+	if( words->getFont() != font )
+		words->setFont( font );
+	Int w, h;
+	words->getSize( &w, &h );
+	drawTracked( words->getText(), font, left, middle - h / 2, sorted ? ACTIVE : color, tracking1080 );
+	if( sorted )
+	{
+		const Int size = menuPx( 8.0f );
+		const Int x = left - menuPx( 6.0f ) - size;
+		const Int y = middle - size / 4;
+		for( Int row = 0; row < size / 2; row++ )
+			TheDisplay->drawFillRect( x + row, y + row, size - 2 * row, 1, ACTIVE );
+	}
+}
+
+void menuTab( const IRegion2D &box, DisplayString *label, Bool open, Bool hovered, Int count )
+{
+	if( count <= 0 || label == NULL || label->getTextLength() == 0 )
+	{
+		menuTab( box, label, open, hovered );
+		return;
+	}
+	// the tab without its words, then the words and the count as one line, centred as menuTab centres
+	menuTab( box, NULL, open, hovered );
+	GameFont *font = menuFont( MENU_TEXT_LABEL + 2, TRUE );
+	if( label->getFont() != font )
+		label->setFont( font );
+	UnicodeString number;
+	number.format( u"  %d", count );
+	DisplayString *tail = cachedText( font, number );
+	Int tailW, h;
+	tail->getSize( &tailW, &h );
+	const Int lead = label->getWidth( -1 );
+	const Color words = open ? ACTIVE : INK;
+	const Int x = ( box.lo.x + box.hi.x - lead - tailW ) / 2;
+	const Int y = ( box.lo.y + box.hi.y - h ) / 2;
+	label->draw( x, y, words, black( 160 ) );
+	tail->draw( x + lead, y, words, black( 160 ) );
+}
+
+static void menuComboPinnedDraw( GameWindow *window, WinInstanceData *instData )
+{
+	if( BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ) )
+		menuComboDraw( window, instData );
+}
+
+static void menuCaretPinnedDraw( GameWindow *window, WinInstanceData *instData )
+{
+	GameWindow *combo = window->winGetParent();
+	if( combo && BitTest( combo->winGetStatus(), WIN_STATUS_ENABLED ) )
+		menuCaretDraw( window, instData );
+}
+
+void setMenuComboBoxPinned( GameWindow *comboBox )
+{
+	if( comboBox == NULL )
+		return;
+	setMenuComboBox( comboBox );
+	comboBox->winSetDrawFunc( menuComboPinnedDraw );
+	if( GameWindow *button = GadgetComboBoxGetDropDownButton( comboBox ) )
+		button->winSetDrawFunc( menuCaretPinnedDraw );
+}
+
+static void menuFieldDraw( GameWindow *window, WinInstanceData * )
+{
+	EntryData *e = (EntryData *)window->winGetUserData();
+	if( e == NULL || e->text == NULL )
+		return;
+	const IRegion2D r = windowRegion( window );
+	GameFont *font = window->winGetFont();
+	if( e->text->getFont() != font )
+		e->text->setFont( font );
+	IRegion2D clip = r;
+	e->text->setClipRegion( &clip );
+	Int w, h;
+	e->text->getSize( &w, &h );
+	e->text->draw( r.lo.x + menuPx( 10.0f ), ( r.lo.y + r.hi.y - h ) / 2, INK, black( 160 ) );
+}
+
+void setMenuComboField( GameWindow *comboBox )
+{
+	if( comboBox == NULL )
+		return;
+	if( GameWindow *edit = GadgetComboBoxGetEditBox( comboBox ) )
+		edit->winSetDrawFunc( menuFieldDraw );
+}
+
+void setMenuListBox( GameWindow *listBox )
+{
+	if( listBox == NULL )
+		return;
+	const Color ground = black( 235 );
+	const Color picked = withAlpha( EDGE, 90 );
+	GadgetListBoxSetColors( listBox,
+		ground, EDGE, picked, EDGE_LIT,
+		ground, FRAME, withAlpha( FRAME, 90 ), FRAME,
+		ground, EDGE_LIT, picked, EDGE_LIT );
+	listBox->winClearStatus( WIN_STATUS_IMAGE );
+	listBox->winSetDrawFunc( TheWindowManager->getListBoxDrawFunc() );
 }
 
 }

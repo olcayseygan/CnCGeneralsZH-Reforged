@@ -2519,8 +2519,6 @@ namespace
 	Int theRoomBound[MAX_SLOTS];					///< the seats the binder last got
 	Int theRoomBoundCount = -1;
 	LobbyRowBinder theRoomBinder = NULL;
-	GameWinDrawFunc theMenuComboDraw = NULL;
-	GameWinDrawFunc theMenuCaretDraw = NULL;
 	GameWindow *theRoomChat = NULL;
 	Int theRoomChatSeen = 0;
 	const Int ROOM_SORT_UNSET = -99;
@@ -2774,32 +2772,13 @@ namespace
 			TheDisplay->drawFillRect(left + e->text->getWidth() + roomPx(2), y + roomPx(8), max(1, roomPx(2)), h - 2 * roomPx(8), UIStyle::GOLD);
 	}
 
-	/// a combo nobody here may change is pinned: its value as plain words, no box and no caret
-	void drawRoomCombo(GameWindow *window, WinInstanceData *instData)
-	{
-		if (BitTest(window->winGetStatus(), WIN_STATUS_ENABLED) && theMenuComboDraw)
-			theMenuComboDraw(window, instData);
-	}
-
-	void drawRoomCaret(GameWindow *window, WinInstanceData *instData)
-	{
-		GameWindow *combo = window->winGetParent();
-		if (combo && BitTest(combo->winGetStatus(), WIN_STATUS_ENABLED) && theMenuCaretDraw)
-			theMenuCaretDraw(window, instData);
-	}
-
+	/// a combo nobody here may change is pinned (its value as plain words, no box and no caret); its
+	/// field is the room's own, with a colour's swatch, a team's pennant and the local player's gold
 	void styleRoomCombo(GameWindow *combo, Int px1080)
 	{
 		if (combo == NULL)
 			return;
-		UIStyle::setMenuComboBox(combo);
-		theMenuComboDraw = combo->winGetDrawFunc();
-		combo->winSetDrawFunc(drawRoomCombo);
-		if (GameWindow *button = GadgetComboBoxGetDropDownButton(combo))
-		{
-			theMenuCaretDraw = button->winGetDrawFunc();
-			button->winSetDrawFunc(drawRoomCaret);
-		}
+		UIStyle::setMenuComboBoxPinned(combo);
 		if (GameWindow *edit = GadgetComboBoxGetEditBox(combo))
 			edit->winSetDrawFunc(drawRoomField);
 		roomFont(combo, px1080);
@@ -2861,23 +2840,13 @@ namespace
 		box.hi.y = y + h;
 		const Bool open = !BitTest(window->winGetStatus(), WIN_STATUS_ENABLED);
 		DisplayString *label = instData->getTextDisplayString();
-		if (theRoomChat && open != theRoomChat->winIsHidden() && label)
-		{
-			// the chat's own tab while the chat is closed, with the lines that came since it was open
-			const Int lines = GadgetListBoxGetNumEntries(theRoomChat);
-			const Int unread = max(0, lines - theRoomChatSeen);
-			if (!open && unread > 0)
-			{
-				UnicodeString counted = label->getText();
-				UnicodeString number;
-				number.format(u"  %d", unread);
-				counted.concat(number);
-				label = roomText(TEXT_TAB, counted, UIStyle::menuFont(UIStyle::MENU_TEXT_LABEL + 2, TRUE));
-			}
-		}
+		// the chat's own tab while the chat is closed counts the lines that came since it was open
+		Int unread = 0;
+		if (theRoomChat && open != theRoomChat->winIsHidden() && label && !open)
+			unread = max(0, GadgetListBoxGetNumEntries(theRoomChat) - theRoomChatSeen);
 		if (theRoomChat && !theRoomChat->winIsHidden())
 			theRoomChatSeen = GadgetListBoxGetNumEntries(theRoomChat);
-		UIStyle::menuTab(box, label, open, !open && BitTest(instData->getState(), WIN_STATE_HILITED));
+		UIStyle::menuTab(box, label, open, !open && BitTest(instData->getState(), WIN_STATE_HILITED), unread);
 	}
 
 	void drawRoomChevrons(Int x, Int middle, Bool up)
@@ -3087,10 +3056,7 @@ namespace
 		// a map picker over the seats has the seat column to itself
 		for (Int h = theSeatsUnderPicker ? (Int)ARRAY_SIZE(heads) - 1 : 0; h < (Int)ARRAY_SIZE(heads); ++h)
 		{
-			DisplayString *s = roomText(TEXT_HEADS + h, TheGameText->fetch(heads[h]), label);
-			Int w, hh;
-			s->getSize(&w, &hh);
-			UIStyle::columnHead(s, roomX(headX[h]) + w, roomY(137), FALSE);
+			UIStyle::columnHeadAt(roomText(TEXT_HEADS + h, TheGameText->fetch(heads[h]), label), roomX(headX[h]), roomY(137), UIStyle::INK);
 		}
 		roomFill(ROOM_COLUMN_LEFT, 152, ROOM_RIGHT, 153, UIStyle::withAlpha(UIStyle::FRAME, 150));
 
@@ -3160,10 +3126,7 @@ namespace
 		}
 		if (theRoomKind == ROOM_SKIRMISH)
 		{
-			DisplayString *s = roomText(TEXT_MAP + 2, TheGameText->fetch("GUI:RoomRules"), label);
-			Int w, hh;
-			s->getSize(&w, &hh);
-			UIStyle::columnHead(s, roomX(ROOM_COLUMN_LEFT + 2) + w, roomY(517), FALSE);
+			UIStyle::columnHeadAt(roomText(TEXT_MAP + 2, TheGameText->fetch("GUI:RoomRules"), label), roomX(ROOM_COLUMN_LEFT + 2), roomY(517), UIStyle::INK);
 			roomFill(ROOM_COLUMN_LEFT, 532, ROOM_RIGHT, 533, UIStyle::withAlpha(UIStyle::FRAME, 150));
 		}
 

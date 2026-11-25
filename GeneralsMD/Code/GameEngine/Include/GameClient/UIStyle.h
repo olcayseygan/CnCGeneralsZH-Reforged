@@ -494,6 +494,43 @@ namespace UIStyle
 	void boxShell( const IRegion2D &box, DisplayString *title, Bool overMatch );
 	/// the faint rule over the box's foot
 	void boxFootRule( const IRegion2D &box );
+
+	//-----------------------------------------------------------------------------------------------
+	// Added for the rooms (package 3a found the gaps): tracked capitals, heads from a left edge, a
+	// tab's count, a pinned combo, a combo's text-only field and the open list.
+	//-----------------------------------------------------------------------------------------------
+
+	/** Words letter-spaced, as the designs set their capitals (14 px labels at 1.2, a box title at 12
+		* percent of its size).  DisplayString cannot do it: Render2DSentenceClass builds a whole string
+		* into one texture with its glyphs edge to edge, and spacing there would be a change to WW3D2 and
+		* to every getWidth.  So each letter is drawn from a cached string of its own (one per font and
+		* letter, kept for the run) at its advance plus the tracking.  tracking1080 is the space added
+		* after each letter at 1080, scaled with the board.  Returns the width drawn. */
+	Int drawTracked( const UnicodeString &text, GameFont *font, Int x, Int y, Color color, Real tracking1080 );
+	Int trackedWidth( const UnicodeString &text, GameFont *font, Real tracking1080 );
+	/// the pure part: the letters' advances summed, trackingPx between each two
+	Int trackedWidthOf( const UnicodeString &text, Int trackingPx, TextMeasure measure, void *context );
+	const Real MENU_LABEL_TRACKING = 1.2f;		///< the 14 px capitals' spacing at 1080
+
+	/// columnHead from its left edge, in color (MUTED, the design's heads), tracked; the sorted one
+	/// ACTIVE with its caret before it.  This sets the words' font.
+	void columnHeadAt( DisplayString *words, Int left, Int middle, Color color = MUTED, Bool sorted = FALSE,
+		Real tracking1080 = MENU_LABEL_TRACKING );
+
+	/// menuTab with a count after its label in the label's colour (a closed chat's unread lines), two
+	/// spaces after it; no count when count is 0 or less
+	void menuTab( const IRegion2D &box, DisplayString *label, Bool open, Bool hovered, Int count );
+
+	/// setMenuComboBox, pinned: while the combo is disabled (nobody here may change it) it draws as its
+	/// value's words alone, no box and no caret
+	void setMenuComboBoxPinned( GameWindow *comboBox );
+	/// a combo's field as its words alone, in the field's font (GadgetComboBoxSetFont sets the field's,
+	/// never the combo's own), INK, 10 px in, clipped to the field; setMenuComboBox leaves EA's draw
+	void setMenuComboField( GameWindow *comboBox );
+	/// a list box (a combo's open list: GadgetComboBoxGetListBox) on EA's colour draw in the language:
+	/// near opaque black, a 1 px EDGE edge (cyan while hovered), the picked row an EDGE wash edged cyan.
+	/// Its scroll bar keeps EA's art.
+	void setMenuListBox( GameWindow *listBox );
 }
 
 #endif // _UISTYLE_H_

@@ -157,3 +157,13 @@ TEST( menu_style_wrap_lines )
 	CHECK_EQ( (Int)lines.size(), 1 );
 	CHECK_EQ( questionBoxHeight( (Int)lines.size() ), 250 );
 }
+
+TEST( menu_style_tracked_width )
+{
+	using namespace UIStyle;
+	// letters 10, a space 5, tracking between each two and none after the last
+	CHECK_EQ( trackedWidthOf( UnicodeString( u"AB C" ), 2, menuTestMeasure, NULL ), 41 );
+	CHECK_EQ( trackedWidthOf( UnicodeString( u"A" ), 7, menuTestMeasure, NULL ), 10 );
+	CHECK_EQ( trackedWidthOf( UnicodeString::TheEmptyString, 3, menuTestMeasure, NULL ), 0 );
+	CHECK_EQ( trackedWidthOf( UnicodeString( u"ABCD" ), 0, menuTestMeasure, NULL ), menuTestMeasure( UnicodeString( u"ABCD" ), NULL ) );
+}

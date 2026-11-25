@@ -947,7 +947,7 @@ static void setLanRoomTitle( void )
 	GameWindow *title = TheWindowManager->winGetWindowFromId( parentLanGameOptions, NAMEKEY( "LanGameOptionsMenu.wnd:StaticTextTitle" ) );
 	if ( title )
 		GadgetStaticTextSetText( title, s_apocalypse ? ModeNameWithVersion( "GUI:Apocalypse", "GUI:ApocalypseVersion" )
-			: TheGameText->fetch( "GUI:GameOptions" ) );
+			: TheGameText->fetch( "GUI:RoomLanGame" ) );
 }
 
 void lanUpdateSlotList( void )
@@ -1155,6 +1155,7 @@ void InitLanGameGadgets( void )
 	InitAIPersonaComboBoxes( parentLanGameOptions, "LanGameOptionsMenu.wnd", comboBoxAIPersona, comboBoxAIPersonaID );
 	InitHandicapComboBoxes( parentLanGameOptions, "LanGameOptionsMenu.wnd", comboBoxHandicap, comboBoxHandicapID );
 	InitLobbySeatVisuals( parentLanGameOptions, "LanGameOptionsMenu.wnd" );
+	SetLobbyRoomClassic( !s_directStrike );
 	SnapLobbyRulesLists( parentLanGameOptions, "LanGameOptionsMenu.wnd" );
 
 	// the settings page and the chat log share one rectangle; this opens on the chat log
@@ -1503,6 +1504,9 @@ void LanGameOptionsMenuUpdate( WindowLayout * layout, void *userData)
 	// a seat that joined, left or changed team: the Direct Strike rules again, and out to everyone
 	else if (parentLanGameOptions && !LANisShuttingDown && s_directStrike && TheLAN->AmIHost() && FitDirectStrikeRoom(TheLAN->GetMyGame()))
 		PostToLanGameOptions(SEND_GAME_OPTS);
+	// a team change held while its list was open lands now
+	if (parentLanGameOptions && !LANisShuttingDown)
+		LobbyRoomUpdate();
 	//TheLAN->update(); // this is handled in the lobby
 }// void LanGameOptionsMenuUpdate( WindowLayout * layout, void *userData)
 
@@ -1542,6 +1546,15 @@ WindowMsgHandledType LanGameOptionsMenuInput( GameWindow *window, UnsignedInt ms
 				}  // end escape
 			}  // end switch( key )
 		}  // end char
+		break;
+
+		// the wheel over the seats, a click on their strips or track
+		case GWM_WHEEL_UP:
+		case GWM_WHEEL_DOWN:
+		case GWM_LEFT_DOWN:
+			if ( LobbyRoomInput( msg, mData1 ) )
+				return MSG_HANDLED;
+			break;
 	}  // end switch( msg )
 	return MSG_IGNORED;
 }//WindowMsgHandledType LanGameOptionsMenuInput( GameWindow *window, UnsignedInt msg,
@@ -1731,8 +1744,9 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
 					// Clean up the text (remove leading/trailing chars, etc)
 					txtInput.trim();
 					// Echo the user's input to the chat window
+					// the button is SEND beside the line now, so it sends what Enter would, as online's does
 					if (!txtInput.isEmpty())
-						TheLAN->RequestChat(txtInput, LANAPIInterface::LANCHAT_EMOTE);
+						TheLAN->RequestChat(txtInput, LANAPIInterface::LANCHAT_NORMAL);
 				} //if ( controlID == buttonEmote )
 				else if ( controlID == buttonSelectMapID )
 				{

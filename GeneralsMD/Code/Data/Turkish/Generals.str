@@ -21531,15 +21531,15 @@ GUI:GameModeApocalypse
 END
 
 GUI:GameModeClassicFact
-"Her harita"
+"Her harita, her kural senin"
 END
 
 GUI:GameModeDirectStrikeFact
-"En çok 6 oyuncu"
+"Dalganı kur, koridordan yürüsün"
 END
 
 GUI:GameModeApocalypseFact
-"En çok 4, co-op"
+"Ölülere karşı surları tut"
 END
 
 GUI:ApocalypseLower
@@ -21853,4 +21853,161 @@ END
 
 GUI:HintEscCancel
 "Esc: İptal"
+END
+
+// Menu redesign package 3a, the Classic room and the mode question.
+GUI:RoomTeam
+"TAKIM %d"
+END
+
+GUI:RoomSeats
+"%d YER"
+END
+
+GUI:RoomSeat
+"%d YER"
+END
+
+GUI:RoomNoTeam
+"TAKIMSIZ, HERKES TEK"
+END
+
+GUI:RoomNoTeamYet
+"TAKIM SEÇİLMEDİ"
+END
+
+GUI:RoomSeatsAbove
+"%d YER YUKARIDA"
+END
+
+GUI:RoomSeatsBelow
+"%d YER AŞAĞIDA"
+END
+
+GUI:RoomHost
+"KURUCU"
+END
+
+GUI:RoomReady
+"HAZIR"
+END
+
+GUI:RoomNotReady
+"HAZIR DEĞİL"
+END
+
+GUI:RoomPlayersReady
+"OYUNCU HAZIR"
+END
+
+GUI:RoomPreset
+"HAZIR AYAR"
+END
+
+GUI:RoomSeatsTaken
+"%d / %d yer dolu"
+END
+
+GUI:RoomHostPicksMap
+"Haritayı kurucu seçer"
+END
+
+GUI:RoomMapPlayers
+"%d oyuncu"
+END
+
+GUI:RoomRules
+"KURALLAR"
+END
+
+GUI:RoomChat
+"SOHBET"
+END
+
+GUI:RoomSend
+"GÖNDER"
+END
+
+GUI:RoomPlayer
+"OYUNCU"
+END
+
+GUI:RoomArmy
+"ORDU"
+END
+
+GUI:RoomColour
+"RENK"
+END
+
+GUI:RoomTeamHead
+"TAKIM"
+END
+
+GUI:RoomHandicap
+"HANDİKAP"
+END
+
+GUI:RoomMap
+"HARİTA"
+END
+
+GUI:RoomVersus
+"v"
+END
+
+GUI:RoomLanGame
+"LAN Oyunu"
+END
+
+GUI:RoomWins
+"GALİBİYET"
+END
+
+GUI:RoomLosses
+"YENİLGİ"
+END
+
+GUI:RoomStreak
+"SERİ"
+END
+
+GUI:RoomBestStreak
+"EN İYİ SERİ"
+END
+
+GUI:GameModeSoloTitle
+"Tek Oyuncu"
+END
+
+GUI:GameModeSoloQuestion
+"Hangi modu oynayacaksın?"
+END
+
+GUI:GameModeHint
+"Esc iptal eder, Enter yanan kartı seçer"
+END
+
+GUI:GameModeClassicSeats
+"EN ÇOK 32 OYUNCU"
+END
+
+GUI:GameModeDirectStrikeSeats
+"EN ÇOK 6 OYUNCU"
+END
+
+GUI:GameModeApocalypseSeats
+"EN ÇOK 4, CO-OP"
+END
+
+GUI:GameModeClassicSolo
+"SEN VE EN ÇOK 31 YZ"
+END
+
+GUI:GameModeDirectStrikeSolo
+"SEN VE EN ÇOK 5 YZ"
+END
+
+GUI:GameModeApocalypseSolo
+"SEN VE EN ÇOK 3 YZ"
 END

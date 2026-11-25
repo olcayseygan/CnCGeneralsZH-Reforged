@@ -1188,7 +1188,9 @@ void positionStartSpots( AsciiString mapName, GameWindow *buttonMapStartPosition
 	else
 	{
 		MapMetaData mmd = it->second;
-		
+		// the room's map takes the map's own shape before the spots are put on it
+		FitLobbyRoomMap(mapWindow, &it->second);
+
 		Image *image = getMapPreviewImage(mapName);
 		if (mapWindow != NULL) {
 			mapWindow->winSetUserData((void *)TheMapCache->findMap(mapName));
@@ -1622,10 +1624,10 @@ static void handleSupplyPileLimitSelection()
 }
 
 // The seat table ------------------------------------------------------------------------------
-// The layout has fourteen rows (as many as reach the rules page's foot, lobbyroom_layout.py) and the
-// room seats MAX_SLOTS. The first row is always the local player's; the rows under it show the
-// seats from seatScroll + 1 on, moved by the scroll bar
-// beside them. The seat arrays above stay indexed by seat, as every slot loop and the GUIUtil
+// The layout has sixteen rows (lobbyroom_layout.py) and the room seats MAX_SLOTS. The room look in
+// GUIUtil.cpp orders the seats by team and says which seats its window shows (bindSkirmishSeats);
+// the first row is always the local player's, wherever it stands, and the others take the shown
+// seats in order. The seat arrays above stay indexed by seat, as every slot loop and the GUIUtil
 // functions they are handed expect: bindSeatRows points a seat's entries at the row that shows it
 // and leaves every other seat's NULL, the way a seat past a stock layout's rows always was.
 struct SeatRowWindows
@@ -1635,22 +1637,7 @@ struct SeatRowWindows
 };
 static SeatRowWindows seatRows[MAX_SLOTS];
 static Int seatRowCount = 0;
-static Int seatScroll = 0;
-static GameWindow *seatScrollSlider = NULL;
-static NameKeyType seatScrollUpID = NAMEKEY_INVALID;
-static NameKeyType seatScrollDownID = NAMEKEY_INVALID;
-
-static Int seatScrollMax( void )
-{
-	// an Apocalypse room's four seats all fit the first page
-	return seatScrollSlider && seatRowCount > 1 && !skirmishApocalypse ? MAX_SLOTS - seatRowCount : 0;
-}
-
-/// the seat a row shows; row 0 is the local player's whatever the scroll
-static Int seatOfRow( Int row )
-{
-	return row == 0 ? 0 : seatScroll + row;
-}
+static Int rowSeat[MAX_SLOTS];		///< the seat each row shows, -1 for none
 
 static void bindSeatRows( void )
 {
@@ -1665,7 +1652,9 @@ static void bindSeatRows( void )
 	}
 	for ( Int row = 0; row < seatRowCount; ++row )
 	{
-		const Int seat = seatOfRow( row );
+		const Int seat = rowSeat[ row ];
+		if ( seat < 0 || seat >= MAX_SLOTS )
+			continue;
 		const SeatRowWindows &w = seatRows[ row ];
 		seatRow[ seat ] = row;
 		comboBoxPlayer[ seat ] = w.player;						comboBoxPlayerID[ seat ] = w.playerID;
@@ -1694,57 +1683,15 @@ static void captureSeatRows( void )
 		w.handicap = comboBoxHandicap[ row ];				w.handicapID = comboBoxHandicapID[ row ];
 	}
 
-	// The rows run down to the foot of the rules page, so a lower seat's list has no room under it:
-	// each box's list stays inside the seat table, opening upwards where only the room above holds it
-	if ( seatRowCount > 1 )
-	{
-		Int x, tableTop, tableBottom, width, height;
-		seatRows[ 0 ].color->winGetScreenPosition( &x, &tableTop );
-		seatRows[ seatRowCount - 1 ].color->winGetScreenPosition( &x, &tableBottom );
-		seatRows[ seatRowCount - 1 ].color->winGetSize( &width, &height );
-		tableBottom += height;
-		for ( Int row = 0; row < seatRowCount; ++row )
-		{
-			GameWindow *combos[] = { seatRows[ row ].player, seatRows[ row ].color, seatRows[ row ].army,
-				seatRows[ row ].team, seatRows[ row ].persona, seatRows[ row ].handicap };
-			for ( Int c = 0; c < (Int)ARRAY_SIZE( combos ); ++c )
-			{
-				if ( !combos[ c ] )
-					continue;
-				Int top;
-				combos[ c ]->winGetScreenPosition( &x, &top );
-				combos[ c ]->winGetSize( &width, &height );
-				GadgetComboBoxSetDropDownPitch( combos[ c ], 1, tableBottom - ( top + height ), top - tableTop );
-			}
-		}
-	}
-
-	// a layout from before the scroll bar keeps its rows on their own seats
-	seatScroll = 0;
-	seatScrollSlider = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, NAMEKEY( "SkirmishGameOptionsMenu.wnd:SliderSeatScroll" ) );
-	seatScrollUpID = NAMEKEY( "SkirmishGameOptionsMenu.wnd:ButtonSeatScrollUp" );
-	seatScrollDownID = NAMEKEY( "SkirmishGameOptionsMenu.wnd:ButtonSeatScrollDown" );
-	if ( seatScrollSlider )
-	{
-		// the track's frame is drawn as a list box draws its own; the image draw would leave it out
-		seatScrollSlider->winSetDrawFunc( TheWindowManager->getVerticalSliderDrawFunc() );
-		TheWindowManager->winSendSystemMsg( seatScrollSlider, GSM_SET_MIN_MAX, 0, max( 1, seatScrollMax() ) );
-		GadgetSliderSetPosition( seatScrollSlider, seatScrollMax() );	// the top of the track is the first seat
-	}
-	// an Apocalypse room has one page of seats and no scroll; the classic room keeps its own
-	const char *const scrollParts[] = { "SkirmishGameOptionsMenu.wnd:SliderSeatScroll",
-		"SkirmishGameOptionsMenu.wnd:ButtonSeatScrollUp", "SkirmishGameOptionsMenu.wnd:ButtonSeatScrollDown" };
-	for ( Int i = 0; i < (Int)ARRAY_SIZE( scrollParts ); ++i )
-		if ( GameWindow *part = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, NAMEKEY( scrollParts[ i ] ) ) )
-			part->winHide( skirmishApocalypse );
+	// the rows start on their own seats, as a Direct Strike lobby reads them; the room look moves them
+	for ( Int row = 0; row < MAX_SLOTS; ++row )
+		rowSeat[ row ] = row < seatRowCount ? row : -1;
 }
 
-/// force repaints the rows where they are, after their seats changed under them
-static void scrollSeats( Int scroll, Bool force = FALSE )
+/** The room look's binder (SetLobbyRowBinder): the window shows these seats, so the first row takes
+	* seat 0 and the others the rest in order; then the rows repaint for the seats they now show. */
+static void bindSkirmishSeats( const Int seats[], Int count )
 {
-	scroll = max( 0, min( seatScrollMax(), scroll ) );
-	if ( scroll == seatScroll && !force )
-		return;
 	for ( Int row = 0; row < seatRowCount; ++row )
 	{
 		GameWindow *combos[] = { seatRows[ row ].player, seatRows[ row ].color, seatRows[ row ].army,
@@ -1752,17 +1699,30 @@ static void scrollSeats( Int scroll, Bool force = FALSE )
 		for ( Int c = 0; c < (Int)ARRAY_SIZE( combos ); ++c )
 			if ( combos[ c ] )
 				GadgetComboBoxHideList( combos[ c ] );
+		rowSeat[ row ] = row == 0 ? 0 : -1;
 	}
-	seatScroll = scroll;
+	Int next = 1;
+	for ( Int i = 0; i < count && next < seatRowCount; ++i )
+		if ( seats[ i ] != 0 )
+			rowSeat[ next++ ] = seats[ i ];
 	bindSeatRows();
 	// the colour boxes leave out the colours other seats hold, which now are other seats
 	for ( Int row = 1; row < seatRowCount; ++row )
 	{
-		const Int seat = seatOfRow( row );
-		PopulateColorComboBox( seat, comboBoxColor, TheSkirmishGameInfo,
-			TheSkirmishGameInfo->getConstSlot( seat )->getPlayerTemplate() == PLAYERTEMPLATE_OBSERVER );
+		const Int seat = rowSeat[ row ];
+		if ( seat >= 0 )
+			PopulateColorComboBox( seat, comboBoxColor, TheSkirmishGameInfo,
+				TheSkirmishGameInfo->getConstSlot( seat )->getPlayerTemplate() == PLAYERTEMPLATE_OBSERVER );
 	}
-	GadgetSliderSetPosition( seatScrollSlider, seatScrollMax() - seatScroll );
+	UpdateSlotList( TheSkirmishGameInfo, comboBoxPlayer, comboBoxColor, comboBoxPlayerTemplate,
+		comboBoxTeam, NULL, buttonStart, buttonMapStartPosition );
+	UpdateAIPersonaComboBoxes( TheSkirmishGameInfo, comboBoxAIPersona );
+	UpdateHandicapComboBoxes( TheSkirmishGameInfo, comboBoxHandicap, comboBoxTeam );
+}
+
+/// the rows repainted where they are, after their seats changed under them (a preset loaded)
+static void scrollSeats( Int, Bool = FALSE )
+{
 	skirmishUpdateSlotList();
 }
 
@@ -1958,6 +1918,9 @@ void InitSkirmishGameGadgets( void )
 	InitLobbySeatVisuals( parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd" );
 	captureSeatRows();
 	bindSeatRows();
+	// a Direct Strike lobby reads the seats by the layout's rows, so only the classic room sorts them
+	SetLobbyRoomClassic( !skirmishDirectStrike );
+	SetLobbyRowBinder( skirmishDirectStrike ? NULL : bindSkirmishSeats );
 	SnapLobbyRulesLists( parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd" );
 
 	populateSkirmishBattleHonors();
@@ -2356,6 +2319,9 @@ void SkirmishGameOptionsMenuUpdate( WindowLayout * layout, void *userData)
 		skirmishUpdateSlotList();
 	}
 
+	// a team change held while its list was open lands now
+	LobbyRoomUpdate();
+
 	if(TheShell->isAnimFinished() && TheTransitionHandler->isFinished())
 			TheShell->shutdownComplete( layout );
 }// void SkirmishGameOptionsMenuUpdate( WindowLayout * layout, void *userData)
@@ -2401,25 +2367,16 @@ WindowMsgHandledType SkirmishGameOptionsMenuInput( GameWindow *window, UnsignedI
 		}  // end char
 		break;
 
-		// a wheel over the seats that nothing under it took scrolls them, from the first row to the bar
+		// a wheel over the seats, or a click on their strips and track, that nothing under it took scrolls them
 		case GWM_WHEEL_UP:
 		case GWM_WHEEL_DOWN:
+		case GWM_LEFT_DOWN:
 		{
-			if ( !seatScrollSlider || seatScrollMax() == 0 || ( recordPopover && !recordPopover->winIsHidden() )
-				|| ( presetPopover && !presetPopover->winIsHidden() ) )
+			if ( ( recordPopover && !recordPopover->winIsHidden() ) || ( presetPopover && !presetPopover->winIsHidden() ) )
 				break;
-			Int x, y, width, height, firstX, top, lastX, bottom;
-			seatScrollSlider->winGetScreenPosition( &x, &y );
-			seatScrollSlider->winGetSize( &width, &height );
-			seatRows[ 1 ].color->winGetScreenPosition( &firstX, &top );
-			seatRows[ seatRowCount - 1 ].color->winGetScreenPosition( &lastX, &bottom );
-			seatRows[ seatRowCount - 1 ].color->winGetSize( &lastX, &height );
-			bottom += height;
-			const Int mouseX = LOLONGTOSHORT( mData1 ), mouseY = HILONGTOSHORT( mData1 );
-			if ( mouseX > x + width || mouseY < top || mouseY > bottom )
-				break;
-			scrollSeats( seatScroll + ( msg == GWM_WHEEL_UP ? -1 : 1 ) );
-			return MSG_HANDLED;
+			if ( LobbyRoomInput( msg, mData1 ) )
+				return MSG_HANDLED;
+			break;
 		}
 	}  // end switch( msg )
 	return MSG_IGNORED;
@@ -2534,11 +2491,6 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
 				}
 				if ( LobbyTabClicked( (NameKeyType)controlID ) )
 					break;
-				if ( controlID == seatScrollUpID || controlID == seatScrollDownID )
-				{
-					scrollSeats( seatScroll + ( controlID == seatScrollUpID ? -1 : 1 ) );
-					break;
-				}
 				if ( controlID == buttonRecordID || controlID == buttonRecordCloseID )
 				{
 					showRecord( controlID == buttonRecordID );
@@ -2749,14 +2701,6 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
 				FitRandomMapToRoom( TheSkirmishGameInfo );
 			skirmishPositionStartSpots();
 			scrollSeats( 0, TRUE );
-			break;
-		}
-		//-------------------------------------------------------------------------------------------------
-		case GSM_SLIDER_TRACK:
-		{
-			// the track's top is its highest value, the first seats
-			if ( (GameWindow *)mData1 == seatScrollSlider )
-				scrollSeats( seatScrollMax() - (Int)mData2 );
 			break;
 		}
 		//-------------------------------------------------------------------------------------------------

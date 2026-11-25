@@ -72,9 +72,8 @@ def box(window):
 
 def room_geometry(room_layout):
     """The seat table, the map preview and the Select Map button, as the room lays them out."""
-    last_card = room.need(room_layout, "SeatCard%d" % (room.SEAT_COUNT - 1))
-    table_bottom = last_card.rect[3]
-    table = (room.INNER_LEFT, room.HEADER_TOP, room.SEAT_RIGHT - room.INNER_LEFT, table_bottom - room.HEADER_TOP)
+    # the seat column as frame A's room has it (the code lays the rows out, so no row window marks its foot)
+    table = (room.INNER_LEFT, room.HEADER_TOP, room.SEAT_RIGHT - room.INNER_LEFT, room.SEATS_BOTTOM - room.HEADER_TOP)
     return table, box(room.need(room_layout, "MapWindow")), box(room.need(room_layout, "ButtonSelectMap"))
 
 

@@ -161,6 +161,8 @@ void EnableAcceptControls(Bool Enabled, GameInfo *myGame, GameWindow *comboPlaye
 // mark or ping that was already hidden for its own reason stays hidden.  Kept by name, since the
 // windows can be destroyed while the list waits.
 static std::vector<NameKeyType> theUnderlyingHidden;
+// a map picker lies over the seat column: the room look draws no seats under it
+static Bool theSeatsUnderPicker = FALSE;
 
 static void hideUnderlying( GameWindow *parent, NameKeyType id )
 {
@@ -174,6 +176,7 @@ static void hideUnderlying( GameWindow *parent, NameKeyType id )
 void ShowUnderlyingGUIElements( Bool show, const char *layoutFilename, const char *parentName,
 															 const char **gadgetsToHide, const char **perPlayerGadgetsToHide )
 {
+	theSeatsUnderPicker = !show;
 	AsciiString parentNameStr;
 	parentNameStr.format("%s:%s", layoutFilename, parentName);
 	NameKeyType parentID = NAMEKEY(parentNameStr);
@@ -859,6 +862,8 @@ static GameWindow *theLobbySettingsTab = NULL;
 static GameWindow *theLobbyOtherTab = NULL;
 static NameKeyType theLobbySettingsTabID = NAMEKEY_INVALID;
 static NameKeyType theLobbyOtherTabID = NAMEKEY_INVALID;
+static GameWindow *theLobbyChatEntry = NULL;
+static GameWindow *theLobbyChatSend = NULL;
 
 static void showLobbySettings( Bool settings )
 {
@@ -867,6 +872,11 @@ static void showLobbySettings( Bool settings )
 
   theLobbySettingsPage->winHide( !settings );
   theLobbyOtherWindow->winHide( settings );
+  // the chat's line to write in and its SEND go with it
+  if ( theLobbyChatEntry )
+    theLobbyChatEntry->winHide( settings );
+  if ( theLobbyChatSend )
+    theLobbyChatSend->winHide( settings );
   // the tab you are on is the disabled one, which is the only tab feedback there is without
   // artwork nobody drew
   theLobbySettingsTab->winEnable( !settings );
@@ -891,6 +901,10 @@ void InitLobbyTabs(GameWindow *parent, const char *layoutFilename,
 
   name.format( "%s:%s", layoutFilename, otherWindowName );
   theLobbyOtherWindow = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( name ) );
+  name.format( "%s:TextEntryChat", layoutFilename );
+  theLobbyChatEntry = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( name ) );
+  name.format( "%s:ButtonEmote", layoutFilename );
+  theLobbyChatSend = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( name ) );
 
   // A player whose Window/Menus copy is older than his exe gets a lobby without the tabs rather
   // than one he cannot click; layouts are not in the multiplayer checksum, so that copy joins games.
@@ -934,19 +948,15 @@ void ShutdownLobbyTabs(void)
   theLobbyOtherTab = NULL;
   theLobbySettingsTabID = NAMEKEY_INVALID;
   theLobbyOtherTabID = NAMEKEY_INVALID;
+  theLobbyChatEntry = NULL;
+  theLobbyChatSend = NULL;
 }
 
 // -----------------------------------------------------------------------------
 
-// The personality column has no heading and only a computer's seat fills it; on any other seat the
-// player box (and the online room's name over it) reaches across it.  The two widths are taken from
-// the persona box and the army box after it, which never move, so a second init of a layout whose
-// boxes are already wide measures the same.
-static GameWindow *thePersonaSeatPlayer[MAX_SLOTS];
-static GameWindow *thePersonaSeatName[MAX_SLOTS];
+// The personality box stands under a computer's level and only a computer's seat shows it (the room
+// look places both); it goes with the seat's army box, which a map list over the seats hides.
 static GameWindow *thePersonaSeatArmy[MAX_SLOTS];
-static Int thePersonaSeatNarrow[MAX_SLOTS];
-static Int thePersonaSeatWide[MAX_SLOTS];
 // the arrays above and the seat windows below are kept by the layout's row; this says which row a
 // seat is on (SetLobbySeatRows)
 static Int theSeatRow[MAX_SLOTS];
@@ -972,37 +982,7 @@ static GameWindow *findSeatWindow(GameWindow *parent, const char *layoutFilename
 
 static void measurePersonaSeat(GameWindow *parent, const char *layoutFilename, GameWindow *persona, Int seat)
 {
-	GameWindow *player = findSeatWindow(parent, layoutFilename, "ComboBoxPlayer", seat);
-	if (!player)
-	{
-		// the skirmish room's own seat is a text entry
-		AsciiString full;
-		full.format("%s:TextEntryPlayerName", layoutFilename);
-		player = TheWindowManager->winGetWindowFromId(parent, NAMEKEY(full));
-	}
-	thePersonaSeatPlayer[seat] = player;
-	thePersonaSeatName[seat] = findSeatWindow(parent, layoutFilename, "StaticTextPlayer", seat);
-	GameWindow *army = findSeatWindow(parent, layoutFilename, "ComboBoxPlayerTemplate", seat);
-	thePersonaSeatArmy[seat] = army;
-
-	Int playerX, personaX, armyX, y, personaWidth, height;
-	player->winGetScreenPosition(&playerX, &y);
-	persona->winGetScreenPosition(&personaX, &y);
-	persona->winGetSize(&personaWidth, &height);
-	army->winGetScreenPosition(&armyX, &y);
-	const Int gap = armyX - (personaX + personaWidth);
-	thePersonaSeatNarrow[seat] = personaX - gap - playerX;
-	thePersonaSeatWide[seat] = personaX + personaWidth - playerX;
-}
-
-static void setSeatPlayerWidth(GameWindow *window, Int width)
-{
-	if (!window)
-		return;	// only the online room has a name over the box
-	Int oldWidth, height;
-	window->winGetSize(&oldWidth, &height);
-	if (oldWidth != width)
-		window->winSetSize(width, height);
+	thePersonaSeatArmy[seat] = findSeatWindow(parent, layoutFilename, "ComboBoxPlayerTemplate", seat);
 }
 
 static UnicodeString personaTooltip(Int persona)
@@ -1085,9 +1065,8 @@ void UpdateAIPersonaComboBoxes(GameInfo *myGame, GameWindow *comboPersona[])
 		// the personality goes with the seat's army box, which ShowUnderlyingGUIElements hides while a
 		// map list lies over the seats, so a network update then cannot bring it back through the list
 		comboPersona[i]->winHide(!computer || thePersonaSeatArmy[row]->winIsHidden());
-		const Int width = computer ? thePersonaSeatNarrow[row] : thePersonaSeatWide[row];
-		setSeatPlayerWidth(thePersonaSeatPlayer[row], width);
-		setSeatPlayerWidth(thePersonaSeatName[row], width);
+		// the room lays the player box out over the personality itself (the room look); a Direct
+		// Strike lobby lies over both
 		if (!computer)
 			continue;
 		comboPersona[i]->winEnable(myGame->amIHost());
@@ -1844,6 +1823,7 @@ Bool FitDirectStrikeRoom(GameInfo *game)
 
 void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, const GameInfo *game)
 {
+	SetLobbyRoomClassic(FALSE);		// the lobby reads the seats by the layout's rows
 	DirectStrikeLobby_attach(parent, layoutFilename, game);
 }
 
@@ -1941,35 +1921,7 @@ void HideLobbySeatRowsFrom(GameWindow *parent, const char *layoutFilename, Int f
 				if (!window->winIsHidden())
 					window->winHide(TRUE);
 	}
-
-	/* The network rooms' chat sits under the last row (lobbyroom_layout.py, place_chat: 16 under the
-		 cards at 1080), so the rows let go left an empty band over it.  The chat grows up into the band,
-		 its foot where it was; a second call finds it there already. */
-	GameWindow *lastCard = firstHiddenRow > 0 ? findSeatWindow(parent, layoutFilename, "SeatCard", firstHiddenRow - 1) : NULL;
-	if (lastCard == NULL)
-		return;
-	Int cardX, cardY, cardW, cardH;
-	lastCard->winGetScreenPosition(&cardX, &cardY);
-	lastCard->winGetSize(&cardW, &cardH);
-	const Int top = cardY + cardH + UIStyle::px(16.0f);
-	static const char *const chats[] = { "ListboxChatWindowLanGame", "ListboxChatWindowGameSpyGameSetup" };
-	for (Int c = 0; c < (Int)ARRAY_SIZE(chats); ++c)
-	{
-		AsciiString full;
-		full.format("%s:%s", layoutFilename, chats[c]);
-		GameWindow *chat = TheWindowManager->winGetWindowFromId(parent, NAMEKEY(full));
-		if (chat == NULL)
-			continue;
-		Int x, y, width, height;
-		chat->winGetScreenPosition(&x, &y);
-		chat->winGetSize(&width, &height);
-		if (top >= y)
-			continue;
-		Int left, above;
-		chat->winGetPosition(&left, &above);
-		chat->winSetPosition(left, above + top - y);
-		chat->winSetSize(width, height + y - top);
-	}
+	// the chat is a tab in the right column now (lobbyroom_layout.py), so nothing under the seats grows
 }
 
 Bool IsApocalypseMap(const AsciiString &map)
@@ -2033,34 +1985,60 @@ WindowMsgHandledType GameModeBoxSystem(GameWindow *window, UnsignedInt msg, Wind
 	return MSG_HANDLED;
 }
 
-/* The mode picker's face.  GameModeBox.wnd (Tools/gamemode_layout.py) brings the windows: the modal
-	 root, its panel, and four buttons whose clicks GameModeBoxSystem answers.  Nothing of EA's message
-	 box is drawn: the panel is a steel plate in the Direct Strike lobby's material (DirectStrikeTheme),
-	 the three mode buttons are cards side by side, each with a drawn emblem, its name and version tag
-	 and one fact line, and Cancel is a small key under them.  Sizes are 1080 pixels times the screen's
-	 height over 1080: the panel is 1012 by 478 at 1080 and 562 by 266 at 800x600. */
+/* The mode question's face, a box in the menu language (README-classic-room.md, "The box pattern";
+	 mode.py draws it).  GameModeBox.wnd (Tools/gamemode_layout.py) brings the windows: the modal root,
+	 its panel, and four buttons whose clicks GameModeBoxSystem answers.  Nothing of EA's message box is
+	 drawn: the panel is the box (frame A on its glass, the title with its question after it, the lit
+	 rule), the three mode buttons are cards 340 by 304 with a drawn picture, the name and its version
+	 tag, a line and the seats, the default one lit as Enter's key, and Cancel is a key at the foot's
+	 right with the hint at its left.  Every number is at 1080 on the menu board. */
 namespace
 {
 	enum
 	{
-		PICKER_CARD_W = 300, PICKER_CARD_H = 290, PICKER_GAP = 24, PICKER_PAD = 32, PICKER_TITLE_H = 56,
-		PICKER_CANCEL_W = 220, PICKER_CANCEL_H = 44, PICKER_CANCEL_GAP = 24, PICKER_INSET = 14, PICKER_EMBLEM_H = 170,
-		PICKER_PANEL_H = 2 * PICKER_PAD + PICKER_TITLE_H + PICKER_CARD_H + PICKER_CANCEL_GAP + PICKER_CANCEL_H,
+		PICKER_CARD_W = 340, PICKER_CARD_H = 304, PICKER_GAP = 24, PICKER_PAD = 32, PICKER_CARDS_TOP = 106,
+		PICKER_INSET = 14, PICKER_PICTURE_H = 176, PICKER_KEY_W = 220, PICKER_KEY_H = 48,
+		PICKER_PANEL_H = 514,
 	};
-	/// the panel round `cards` cards in a row
+	/// the box round `cards` cards in a row
 	Int pickerPanelW(Int cards) { return 2 * PICKER_PAD + cards * PICKER_CARD_W + (cards - 1) * PICKER_GAP; }
 	Bool thePickerModsOnly = TRUE;		///< the box up now is the Mods buttons' (no Classic card)
-	struct PickerCard { const char *button, *nameKey, *versionKey, *factKey; Int mode; };
+	Bool thePickerSolo = FALSE;				///< Solo Play's words
+	struct PickerCard { const char *button, *nameKey, *versionKey, *lineKey, *seatsKey, *soloKey; Int mode; };
 	const PickerCard thePickerCards[] =
 	{
-		{ "GameModeBox.wnd:ButtonClassic", "GUI:GameModeClassic", NULL, "GUI:GameModeClassicFact", HOST_MODE_CLASSIC },
-		{ "GameModeBox.wnd:ButtonDirectStrike", "GUI:GameModeDirectStrike", "GUI:DirectStrikeVersion", "GUI:GameModeDirectStrikeFact", HOST_MODE_DIRECT_STRIKE },
-		{ "GameModeBox.wnd:ButtonApocalypse", "GUI:GameModeApocalypse", "GUI:ApocalypseVersion", "GUI:GameModeApocalypseFact", HOST_MODE_APOCALYPSE },
+		{ "GameModeBox.wnd:ButtonClassic", "GUI:GameModeClassic", NULL, "GUI:GameModeClassicFact", "GUI:GameModeClassicSeats", "GUI:GameModeClassicSolo", HOST_MODE_CLASSIC },
+		{ "GameModeBox.wnd:ButtonDirectStrike", "GUI:GameModeDirectStrike", "GUI:DirectStrikeVersion", "GUI:GameModeDirectStrikeFact", "GUI:GameModeDirectStrikeSeats", "GUI:GameModeDirectStrikeSolo", HOST_MODE_DIRECT_STRIKE },
+		{ "GameModeBox.wnd:ButtonApocalypse", "GUI:GameModeApocalypse", "GUI:ApocalypseVersion", "GUI:GameModeApocalypseFact", "GUI:GameModeApocalypseSeats", "GUI:GameModeApocalypseSolo", HOST_MODE_APOCALYPSE },
 	};
+	/// the card Enter picks: Classic, or Direct Strike when the box has no Classic card
+	Int pickerLitMode(void) { return thePickerModsOnly ? HOST_MODE_DIRECT_STRIKE : HOST_MODE_CLASSIC; }
+	enum { PICKER_TEXTS = 16 };
+	DisplayString *thePickerTexts[PICKER_TEXTS];
+	DisplayString *pickerText(Int key, const UnicodeString &text, GameFont *font)
+	{
+		DisplayString *&s = thePickerTexts[key];
+		if (s == NULL)
+			s = TheDisplayStringManager->newDisplayString();
+		if (s->getFont() != font)
+			s->setFont(font);
+		if (s->getText().compare(text) != 0)
+			s->setText(text);
+		return s;
+	}
+	/// words centred on x and y, or from x when left; their width
+	Int pickerDraw(Int key, const UnicodeString &text, GameFont *font, Int x, Int y, Color color, Bool left = FALSE)
+	{
+		DisplayString *s = pickerText(key, text, font);
+		Int w, h;
+		s->getSize(&w, &h);
+		s->draw(left ? x : x - w / 2, y - h / 2, color, GameMakeColor(0, 0, 0, 160));
+		return w;
+	}
 
 	Real pickerScale(void)
 	{
-		return TheDisplay && TheDisplay->getHeight() > 0 ? (Real)TheDisplay->getHeight() / 1080.0f : 1.0f;
+		return TheDisplay ? UIStyle::boardFit(TheDisplay->getWidth(), TheDisplay->getHeight()).scale : 1.0f;
 	}
 	Int px(Int v1080)
 	{
@@ -2132,69 +2110,118 @@ namespace
 		}
 	}
 
+	IRegion2D windowRegion(GameWindow *window)
+	{
+		IRegion2D r;
+		Int w, h;
+		window->winGetScreenPosition(&r.lo.x, &r.lo.y);
+		window->winGetSize(&w, &h);
+		r.hi.x = r.lo.x + w;
+		r.hi.y = r.lo.y + h;
+		return r;
+	}
+
 	void drawPickerRoot(GameWindow *, WinInstanceData *)
 	{
-		DirectStrikeTheme::begin(DirectStrikeTheme::SIDE_AMERICA, pickerScale());
-		TheDisplay->drawFillRect(0, 0, (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight(), DirectStrikeTheme::VEIL);
+		// boxShell steps the screen back itself
 	}
 
 	void drawPickerPanel(GameWindow *window, WinInstanceData *)
 	{
-		const DirectStrikeHudBox b = screenBox(window);
-		DirectStrikeTheme::nineSlice(b, DirectStrikeTheme::PANEL_LIT_TL);
-		DirectStrikeTheme::drawSpaced(TheGameText->fetch(thePickerModsOnly ? "GUI:Mods" : "GUI:GameModeTitle"), DirectStrikeTheme::font(DirectStrikeTheme::TYPE_NAME),
-			b.x + b.w / 2, b.y + px(PICKER_PAD) / 2, px(PICKER_TITLE_H), DirectStrikeTheme::TYPE_NAME * DirectStrikeTheme::TRACK_TEAM,
-			DirectStrikeTheme::TEXT_WHITE, 0);
+		const IRegion2D box = windowRegion(window);
+		DisplayString *title = pickerText(0, UIStyle::capitals(TheGameText->fetch(thePickerModsOnly ? "GUI:Mods" : thePickerSolo ? "GUI:GameModeSoloTitle" : "GUI:GameModeTitle")),
+			UIStyle::menuFont(UIStyle::MENU_TEXT_BOX_TITLE, TRUE));
+		UIStyle::boxShell(box, title, FALSE);
+		// the question after the title on its line, MUTED
+		Int titleW, titleH;
+		title->getSize(&titleW, &titleH);
+		if (!thePickerModsOnly)
+			pickerDraw(1, TheGameText->fetch(thePickerSolo ? "GUI:GameModeSoloQuestion" : "GUI:GameModeBody"), UIStyle::menuFont(UIStyle::MENU_TEXT_BODY),
+				box.lo.x + px(PICKER_PAD) + titleW + px(18), box.lo.y + px(46), UIStyle::MUTED, TRUE);
+		UIStyle::boxFootRule(box);
+		pickerDraw(2, TheGameText->fetch("GUI:GameModeHint"), UIStyle::menuFont(UIStyle::MENU_TEXT_HINT),
+			box.lo.x + px(PICKER_PAD), box.hi.y - px(44), UIStyle::MUTED, TRUE);
 	}
 
 	void drawPickerCard(GameWindow *window, WinInstanceData *instData)
 	{
 		const PickerCard *card = NULL;
+		Int index = 0;
 		for (Int i = 0; i < (Int)ARRAY_SIZE(thePickerCards); ++i)
 			if (window->winGetWindowId() == NAMEKEY(thePickerCards[i].button))
+			{
 				card = &thePickerCards[i];
+				index = i;
+			}
 		if (card == NULL)
 			return;
 		const Bool hot = BitTest(instData->getState(), WIN_STATE_HILITED);
 		const Bool pressed = BitTest(instData->getState(), WIN_STATE_SELECTED);
-		const DirectStrikeHudBox b = screenBox(window);
-		DirectStrikeTheme::nineSlice(b, hot ? DirectStrikeTheme::PANEL_LIT_TL : DirectStrikeTheme::PANEL_TL);
-		const DirectStrikeHudBox picture = { b.x + px(PICKER_INSET), b.y + px(PICKER_INSET), b.w - 2 * px(PICKER_INSET), px(PICKER_EMBLEM_H) };
+		const Bool lit = card->mode == pickerLitMode();
+		const IRegion2D box = windowRegion(window);
+		const Int w = box.hi.x - box.lo.x, h = box.hi.y - box.lo.y;
+		// the card: a FRAME line, the lit one the primary key's light, the pointer's a white lift
+		TheDisplay->drawFillRect(box.lo.x, box.lo.y, w, h, GameMakeColor(0, 0, 0, 150));
+		if (lit)
+		{
+			TheDisplay->drawFillRect(box.lo.x, box.lo.y, w, h, UIStyle::withAlpha(UIStyle::EDGE, pressed ? 110 : 60));
+			UIStyle::litEdge(box, UIStyle::EDGE_LIT);
+		}
+		else
+			TheDisplay->drawOpenRect(box.lo.x, box.lo.y, w, h, 1.0f, hot ? UIStyle::EDGE_LIT : UIStyle::FRAME);
+		if (hot)
+			TheDisplay->drawFillRect(box.lo.x, box.lo.y, w, h, GameMakeColor(255, 255, 255, 14));
+		const DirectStrikeHudBox picture = { box.lo.x + px(PICKER_INSET), box.lo.y + px(PICKER_INSET), w - 2 * px(PICKER_INSET), px(PICKER_PICTURE_H) };
 		drawModeEmblem(card->mode, picture);
+		TheDisplay->drawOpenRect(picture.x, picture.y, picture.w, picture.h, 1.0f, UIStyle::withAlpha(UIStyle::EDGE, 160));
 		if (pressed)
 			fill(picture.x, picture.y, picture.w, picture.h, GameMakeColor(0, 0, 0, 90));
 
-		// the name, and the version tag small and grey after it, the two centred together
-		GameFont *nameFont = DirectStrikeTheme::font(DirectStrikeTheme::TYPE_NAME);
-		GameFont *tagFont = DirectStrikeTheme::font(DirectStrikeTheme::TYPE_BODY);
-		const UnicodeString name = TheGameText->fetch(card->nameKey);
+		// the name in spaced capitals with its version tag small after it, the two centred together
+		GameFont *nameFont = UIStyle::menuFont(UIStyle::MENU_TEXT_BOX_TITLE, TRUE);
+		GameFont *tagFont = UIStyle::menuFont(UIStyle::MENU_TEXT_HINT);
 		Bool tagged = FALSE;
 		const UnicodeString tag = card->versionKey ? TheGameText->fetch(card->versionKey, &tagged) : UnicodeString::TheEmptyString;
-		const Int tagGap = px(8);
-		const Int nameW = DirectStrikeTheme::textWidth(name, nameFont);
-		const Int tagW = tagged && !tag.isEmpty() ? DirectStrikeTheme::textWidth(tag, tagFont) : 0;
-		const Int pairW = nameW + (tagW > 0 ? tagGap + tagW : 0);
-		const Int nameY = picture.y + picture.h + px(10), nameH = px(40);
-		const Int left = b.x + (b.w - pairW) / 2;
-		DirectStrikeTheme::drawText(name, nameFont, left, nameY, nameH, hot ? DirectStrikeTheme::TEXT_GOLD : DirectStrikeTheme::TEXT_WHITE, -1);
-		if (tagW > 0)
-			DirectStrikeTheme::drawText(tag, tagFont, left + nameW + tagGap, nameY, nameH, DirectStrikeTheme::TEXT_GREY, -1);
-		DirectStrikeTheme::drawText(TheGameText->fetch(card->factKey), DirectStrikeTheme::font(DirectStrikeTheme::TYPE_BODY),
-			b.x + b.w / 2, nameY + nameH, px(30), DirectStrikeTheme::TEXT_GREY, 0);
-		if (hot)
-			DirectStrikeTheme::currentFrame(b);
+		DisplayString *name = pickerText(3 + 4 * index, TheGameText->fetch(card->nameKey), nameFont);
+		Int nameW, nameH;
+		name->getSize(&nameW, &nameH);
+		Int tagW = 0, tagH = 0;
+		DisplayString *tagText = NULL;
+		if (tagged && !tag.isEmpty())
+		{
+			tagText = pickerText(4 + 4 * index, tag, tagFont);
+			tagText->getSize(&tagW, &tagH);
+		}
+		const Int pairW = nameW + (tagW > 0 ? px(10) + tagW : 0);
+		const Int nameY = box.lo.y + px(221);
+		const Int left = box.lo.x + (w - pairW) / 2;
+		name->draw(left, nameY - nameH / 2, UIStyle::INK, GameMakeColor(0, 0, 0, 160));
+		if (tagText)
+			tagText->draw(left + nameW + px(10), nameY - tagH / 2 + px(2), UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
+		const Int centre = box.lo.x + w / 2;
+		pickerDraw(5 + 4 * index, TheGameText->fetch(card->lineKey), UIStyle::menuFont(UIStyle::MENU_TEXT_BODY), centre, box.lo.y + px(257), UIStyle::INK);
+		pickerDraw(6 + 4 * index, TheGameText->fetch(thePickerSolo ? card->soloKey : card->seatsKey), UIStyle::menuFont(UIStyle::MENU_TEXT_LABEL, TRUE),
+			centre, box.lo.y + px(284), UIStyle::EDGE_LIT);
 	}
 
 	void drawPickerCancel(GameWindow *window, WinInstanceData *instData)
 	{
 		const Bool hot = BitTest(instData->getState(), WIN_STATE_HILITED);
-		const DirectStrikeHudBox b = screenBox(window);
-		DirectStrikeTheme::nineSlice(b, hot ? DirectStrikeTheme::PANEL_LIT_TL : DirectStrikeTheme::PANEL_TL);
-		DirectStrikeTheme::drawText(TheGameText->fetch("GUI:Cancel"), DirectStrikeTheme::font(DirectStrikeTheme::TYPE_LABEL),
-			b.x + b.w / 2, b.y, b.h, hot ? DirectStrikeTheme::TEXT_GOLD : DirectStrikeTheme::TEXT_WHITE, 0);
+		const Bool pressed = BitTest(instData->getState(), WIN_STATE_SELECTED);
+		DisplayString *words = pickerText(15, UIStyle::capitals(TheGameText->fetch("GUI:Cancel")), UIStyle::menuFont(UIStyle::MENU_TEXT_KEY, TRUE));
+		UIStyle::menuKey(windowRegion(window), words, pressed ? UIStyle::KEY_PRESSED : hot ? UIStyle::KEY_HOVER : UIStyle::KEY_NORMAL, FALSE);
 	}
 
-	// Escape closes the picker unanswered, as Cancel does
+	/// the card Enter picks, by its mode
+	GameWindow *pickerCard(GameWindow *box, Int mode)
+	{
+		for (Int i = 0; i < (Int)ARRAY_SIZE(thePickerCards); ++i)
+			if (thePickerCards[i].mode == mode)
+				return TheWindowManager->winGetWindowFromId(box, NAMEKEY(thePickerCards[i].button));
+		return NULL;
+	}
+
+	// Escape closes the question unanswered, as Cancel does; Enter picks the lit card
 	WindowMsgHandledType pickerInput(GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2)
 	{
 		if (msg == GWM_CHAR && mData1 == KEY_ESC)
@@ -2203,13 +2230,22 @@ namespace
 				TheWindowManager->winDestroy(window->winGetParent());
 			return MSG_HANDLED;
 		}
+		if (msg == GWM_CHAR && (mData1 == KEY_ENTER || mData1 == KEY_KPENTER))
+		{
+			GameWindow *root = window->winGetParent();
+			GameWindow *card = root ? pickerCard(root, pickerLitMode()) : NULL;
+			if (BitTest(mData2, KEY_STATE_UP) && card)
+				TheWindowManager->winSendSystemMsg(root, GBM_SELECTED, (WindowMsgData)card, card->winGetWindowId());
+			return MSG_HANDLED;
+		}
 		return MSG_IGNORED;
 	}
 }
 
-void AskGameMode(void (*answer)(Int mode), Bool modsOnly)
+void AskGameMode(void (*answer)(Int mode), Bool modsOnly, Bool solo)
 {
 	thePickerModsOnly = modsOnly;
+	thePickerSolo = solo && !modsOnly;
 	GameWindow *box = TheWindowManager->winCreateFromScript(AsciiString("Menus/GameModeBox.wnd"));
 	if (box == NULL)
 		return;
@@ -2240,14 +2276,14 @@ void AskGameMode(void (*answer)(Int mode), Bool modsOnly)
 	panel->winSetDrawFunc(drawPickerPanel);
 	panel->winSetInputFunc(pickerInput);
 
-	// the plate centred on the screen, the cards in a row (the Mods buttons' without Classic), Cancel centred under them
+	// the box centred on the board, the cards in a row (the Mods buttons' without Classic), Cancel at the foot's right
 	Int rootW, rootH;
 	box->winGetSize(&rootW, &rootH);
 	const Int first = modsOnly ? 1 : 0;
 	const Int panelW = px(pickerPanelW(3 - first)), panelH = px(PICKER_PANEL_H);
 	panel->winSetSize(panelW, panelH);
 	panel->winSetPosition((rootW - panelW) / 2, (rootH - panelH) / 2);
-	const Int cardsY = px(PICKER_PAD + PICKER_TITLE_H);
+	const Int cardsY = px(PICKER_CARDS_TOP);
 	for (Int i = first; i < 3; ++i)
 	{
 		buttons[i]->winSetSize(px(PICKER_CARD_W), px(PICKER_CARD_H));
@@ -2255,8 +2291,8 @@ void AskGameMode(void (*answer)(Int mode), Bool modsOnly)
 		buttons[i]->winSetDrawFunc(drawPickerCard);
 		buttons[i]->winHide(FALSE);
 	}
-	buttons[3]->winSetSize(px(PICKER_CANCEL_W), px(PICKER_CANCEL_H));
-	buttons[3]->winSetPosition((panelW - px(PICKER_CANCEL_W)) / 2, cardsY + px(PICKER_CARD_H + PICKER_CANCEL_GAP));
+	buttons[3]->winSetSize(px(PICKER_KEY_W), px(PICKER_KEY_H));
+	buttons[3]->winSetPosition(panelW - px(PICKER_PAD + PICKER_KEY_W), panelH - px(20 + PICKER_KEY_H));
 	buttons[3]->winSetDrawFunc(drawPickerCancel);
 	buttons[3]->winHide(FALSE);
 	panel->winHide(FALSE);
@@ -2339,11 +2375,1248 @@ static void detachSeatRatings(void)
 	}
 }
 
+// =============================================================================================
+// The Classic room in the menu language (MENU-REDESIGN.md package 3a, README-classic-room.md).
+// The order and the window are pure and tested (test_room_layout.inc); the look below them draws
+// on the room's container and moves its rows.
+// =============================================================================================
+
+/// alone first, then the teams by size and number, the unseated last
+static Bool lobbyGroupBefore(Int group, Int size, Int other, Int otherSize)
+{
+	const Int rank = group == LOBBY_GROUP_ALONE ? 0 : group == LOBBY_GROUP_UNSEATED ? 2 : 1;
+	const Int otherRank = other == LOBBY_GROUP_ALONE ? 0 : other == LOBBY_GROUP_UNSEATED ? 2 : 1;
+	if (rank != otherRank)
+		return rank < otherRank;
+	if (size != otherSize)
+		return size < otherSize;
+	return group < other;
+}
+
+void LobbyOrderSeats(const LobbySeatState seats[], Int count, Int order[], Int group[])
+{
+	count = max(0, min(count, (Int)MAX_SLOTS));
+	Int groupOf[MAX_SLOTS];
+	Int groups[MAX_SLOTS], sizes[MAX_SLOTS];
+	Int groupCount = 0;
+	for (Int i = 0; i < count; ++i)
+	{
+		groupOf[i] = seats[i].team >= 0 ? seats[i].team : seats[i].seated ? LOBBY_GROUP_ALONE : LOBBY_GROUP_UNSEATED;
+		Int g = 0;
+		while (g < groupCount && groups[g] != groupOf[i])
+			++g;
+		if (g == groupCount)
+		{
+			groups[g] = groupOf[i];
+			sizes[g] = 0;
+			++groupCount;
+		}
+		++sizes[g];
+	}
+	// an insertion sort: a room holds 32 groups at most
+	for (Int a = 1; a < groupCount; ++a)
+		for (Int b = a; b > 0 && lobbyGroupBefore(groups[b], sizes[b], groups[b - 1], sizes[b - 1]); --b)
+		{
+			std::swap(groups[b], groups[b - 1]);
+			std::swap(sizes[b], sizes[b - 1]);
+		}
+	Int n = 0;
+	for (Int g = 0; g < groupCount; ++g)
+		for (Int i = 0; i < count; ++i)
+			if (groupOf[i] == groups[g])
+			{
+				order[n] = i;
+				group[n] = groups[g];
+				++n;
+			}
+}
+
+/// the window from the ordered seat `first`: what it shows, into plan when given; the seats shown
+static Int lobbyLayRoom(const LobbySeatState seats[], const Int order[], const Int group[], Int count, Int first,
+	Int height, Int mostShown, LobbyRoomPlan *plan)
+{
+	Int y = first > 0 ? LOBBY_ROW_STRIP : 0;
+	Int shown = 0, items = 0;
+	for (Int k = first; k < count && shown < mostShown; ++k)
+	{
+		const Bool newGroup = k == first || group[k] != group[k - 1];
+		const Int rowHeight = seats[order[k]].seated ? LOBBY_ROW_SEAT : LOBBY_ROW_EMPTY;
+		// a seat after this one needs the foot's strip should it not fit
+		const Int reserve = k < count - 1 ? LOBBY_ROW_STRIP : 0;
+		if (y + (newGroup ? LOBBY_ROW_HEAD : 0) + rowHeight + reserve > height)
+			break;
+		if (newGroup)
+		{
+			if (plan)
+			{
+				Int size = 0;
+				for (Int j = 0; j < count; ++j)
+					size += group[j] == group[k] ? 1 : 0;
+				const LobbyRoomItem head = { TRUE, group[k], -1, size, y, LOBBY_ROW_HEAD };
+				plan->items[items++] = head;
+			}
+			y += LOBBY_ROW_HEAD;
+		}
+		if (plan)
+		{
+			const LobbyRoomItem row = { FALSE, group[k], order[k], 1, y, rowHeight };
+			plan->items[items++] = row;
+		}
+		y += rowHeight;
+		++shown;
+	}
+	if (plan)
+	{
+		plan->itemCount = items;
+		plan->above = first;
+		plan->below = count - first - shown;
+	}
+	return shown;
+}
+
+void LobbyPlanRoom(const LobbySeatState seats[], Int count, Int scroll, Int height, Int mostShown, LobbyRoomPlan &plan)
+{
+	count = max(0, min(count, (Int)MAX_SLOTS));
+	Int group[MAX_SLOTS];
+	LobbyOrderSeats(seats, count, plan.order, group);
+	plan.orderCount = count;
+	// the furthest the list scrolls: the first seat from which the rest all fit
+	plan.maxScroll = 0;
+	while (plan.maxScroll < count - 1
+		&& lobbyLayRoom(seats, plan.order, group, count, plan.maxScroll, height, mostShown, NULL) < count - plan.maxScroll)
+		++plan.maxScroll;
+	plan.scroll = max(0, min(scroll, plan.maxScroll));
+	lobbyLayRoom(seats, plan.order, group, count, plan.scroll, height, mostShown, &plan);
+}
+
+namespace
+{
+	enum RoomKind { ROOM_NONE, ROOM_SKIRMISH, ROOM_LAN, ROOM_ONLINE };
+	struct RoomRow
+	{
+		GameWindow *player, *name, *persona, *army, *colour, *team, *handicap, *ping;
+	};
+	RoomKind theRoomKind = ROOM_NONE;
+	Bool theRoomClassic = TRUE;
+	GameWindow *theRoomParent = NULL;
+	GameWindow *theRoomContainer = NULL;
+	GameWindow *theRoomTitle = NULL;
+	GameWindow *theRoomMap = NULL;
+	GameWindow *theRoomMapName = NULL;
+	GameWindow *theRoomSelectMap = NULL;
+	GameWindow *theRoomPresets = NULL;
+	GameWindow *theRoomStats[4];					///< the skirmish record's wins, losses, streak, best streak
+	RoomRow theRoomRows[MAX_SLOTS];
+	Int theRoomRowCount = 0;
+	GameInfo *theRoomGame = NULL;
+	LobbyRoomPlan theRoomPlan;
+	Int theRoomScroll = 0;
+	Int theRoomSortTeam[MAX_SLOTS];
+	Bool theRoomHeld = FALSE;							///< a team change waits for its list to close
+	Bool theRoomDirty = FALSE;
+	Int theRoomMoved = -1;								///< the seat that just changed group, lit for a second
+	UnsignedInt theRoomMovedUntil = 0;
+	Int theRoomBound[MAX_SLOTS];					///< the seats the binder last got
+	Int theRoomBoundCount = -1;
+	LobbyRowBinder theRoomBinder = NULL;
+	GameWinDrawFunc theMenuComboDraw = NULL;
+	GameWinDrawFunc theMenuCaretDraw = NULL;
+	GameWindow *theRoomChat = NULL;
+	Int theRoomChatSeen = 0;
+	const Int ROOM_SORT_UNSET = -99;
+	const Int ROOM_SEAT_COLUMN_RIGHT = 1294;
+	const Int ROOM_CELLS_RIGHT = 1262;
+	const Int ROOM_COLUMN_LEFT = 1318;
+	const Int ROOM_RIGHT = 1860;
+	const Int ROOM_LEFT = 60;
+
+	// one display string a place on the screen, so a string's texture is rebuilt only when its words change
+	enum
+	{
+		TEXT_HEADS = 0, TEXT_TITLE = 8, TEXT_SUBTITLE, TEXT_TENANT, TEXT_TENANT_NAME, TEXT_TENANT_SEATS,
+		TEXT_FOOT = 16, TEXT_STRIPS = 28, TEXT_MAP = 32, TEXT_TAB = 36, TEXT_GROUPS = 40, TEXT_ROWS = 120,
+		TEXT_COUNT = TEXT_ROWS + 4 * MAX_SLOTS
+	};
+	DisplayString *theRoomTexts[TEXT_COUNT];
+
+	DisplayString *roomText(Int key, const UnicodeString &text, GameFont *font)
+	{
+		if (key < 0 || key >= TEXT_COUNT)
+			return NULL;
+		DisplayString *&s = theRoomTexts[key];
+		if (s == NULL)
+			s = TheDisplayStringManager->newDisplayString();
+		if (s->getFont() != font)
+			s->setFont(font);
+		if (s->getText().compare(text) != 0)
+			s->setText(text);
+		return s;
+	}
+
+	Int roomX(Int x) { return UIStyle::boardRect(x, 0, x, 0).lo.x; }
+	Int roomY(Int y) { return UIStyle::boardRect(0, y, 0, y).lo.y; }
+	Int roomPx(Int length) { return UIStyle::pxOn((Real)length, TheDisplay->getWidth(), TheDisplay->getHeight()); }
+	void roomFill(Int l, Int t, Int r, Int b, Color color)
+	{
+		const IRegion2D box = UIStyle::boardRect(l, t, r, b);
+		TheDisplay->drawFillRect(box.lo.x, box.lo.y, max(1, box.hi.x - box.lo.x), max(1, box.hi.y - box.lo.y), color);
+	}
+
+	/// words at board x (left, centre or right by align 0, 1, 2), centred on board y; their width on screen
+	Int roomDraw(Int key, const UnicodeString &text, GameFont *font, Int x, Int middle, Color color, Int align = 0)
+	{
+		DisplayString *s = roomText(key, text, font);
+		if (s == NULL || text.isEmpty())
+			return 0;
+		Int w, h;
+		s->getSize(&w, &h);
+		Int left = roomX(x);
+		if (align == 1)
+			left -= w / 2;
+		else if (align == 2)
+			left -= w;
+		s->draw(left, roomY(middle) - h / 2, color, GameMakeColor(0, 0, 0, 160));
+		return w;
+	}
+
+	Bool roomComboOpen(GameWindow *combo)
+	{
+		GameWindow *list = combo ? GadgetComboBoxGetListBox(combo) : NULL;
+		return list != NULL && !list->winIsHidden();
+	}
+
+	/// a combo at a size: its caret block square on its height, the field the rest
+	void roomSizeCombo(GameWindow *combo, Int width, Int height)
+	{
+		combo->winSetSize(width, height);
+		if (GameWindow *button = GadgetComboBoxGetDropDownButton(combo))
+		{
+			button->winSetSize(height, height);
+			button->winSetPosition(width - height, 0);
+		}
+		if (GameWindow *edit = GadgetComboBoxGetEditBox(combo))
+		{
+			edit->winSetSize(width - height, height);
+			edit->winSetPosition(0, 0);
+		}
+	}
+
+	/// a window on a board rectangle, its parent's offset taken off
+	void roomPlace(GameWindow *window, Int l, Int t, Int r, Int b)
+	{
+		if (window == NULL)
+			return;
+		const IRegion2D box = UIStyle::boardRect(l, t, r, b);
+		Int parentX = 0, parentY = 0;
+		if (GameWindow *parent = window->winGetParent())
+			parent->winGetScreenPosition(&parentX, &parentY);
+		Int x, y, w, h;
+		window->winGetPosition(&x, &y);
+		if (x != box.lo.x - parentX || y != box.lo.y - parentY)
+			window->winSetPosition(box.lo.x - parentX, box.lo.y - parentY);
+		window->winGetSize(&w, &h);
+		const Int width = box.hi.x - box.lo.x, height = box.hi.y - box.lo.y;
+		if (w == width && h == height)
+			return;
+		if (BitTest(window->winGetStyle(), GWS_COMBO_BOX))
+			roomSizeCombo(window, width, height);
+		else
+			window->winSetSize(width, height);
+	}
+
+	/// ponytail: a row out of the window is parked off the board rather than hidden, so the hidden
+	/// states the room's own code keeps (a computer's personality, a map list over the seats) stay its own
+	void roomPark(GameWindow *window)
+	{
+		if (window == NULL)
+			return;
+		if (BitTest(window->winGetStyle(), GWS_COMBO_BOX))
+			GadgetComboBoxHideList(window);
+		Int x, y;
+		window->winGetPosition(&x, &y);
+		if (x != -20000)
+			window->winSetPosition(-20000, -20000);
+	}
+
+	void roomFont(GameWindow *window, Int px1080, Bool bold = FALSE)
+	{
+		if (window == NULL)
+			return;
+		GameFont *font = UIStyle::menuFont(px1080, bold);
+		if (BitTest(window->winGetStyle(), GWS_COMBO_BOX))
+		{
+			// GadgetComboBoxSetFont leaves the combo's own font as the layout had it: ask its field
+			GameWindow *edit = GadgetComboBoxGetEditBox(window);
+			if (edit == NULL || edit->winGetFont() != font)
+				GadgetComboBoxSetFont(window, font);
+			return;
+		}
+		if (window->winGetFont() == font)
+			return;
+		if (BitTest(window->winGetStyle(), GWS_COMBO_BOX))
+			GadgetComboBoxSetFont(window, font);
+		else if (BitTest(window->winGetStyle(), GWS_ENTRY_FIELD))
+			GadgetTextEntrySetFont(window, font);
+		else if (BitTest(window->winGetStyle(), GWS_SCROLL_LISTBOX))
+			GadgetListBoxSetFont(window, font);
+		else if (BitTest(window->winGetStyle(), GWS_STATIC_TEXT))
+			GadgetStaticTextSetFont(window, font);
+		else
+			window->winSetFont(font);
+	}
+
+	const GameSlot *roomSlot(Int seat)
+	{
+		return theRoomGame && seat >= 0 && seat < MAX_SLOTS ? theRoomGame->getConstSlot(seat) : NULL;
+	}
+
+	/// the row a seat's combo is on, and which of its boxes it is: 0 colour, 1 team, 2 player, -1 none
+	Int roomFieldOf(GameWindow *combo, Int *seat)
+	{
+		*seat = -1;
+		for (Int row = 0; row < theRoomRowCount; ++row)
+		{
+			const RoomRow &w = theRoomRows[row];
+			const Int kind = combo == w.colour ? 0 : combo == w.team ? 1 : combo == w.player ? 2 : -1;
+			if (kind < 0)
+				continue;
+			for (Int s = 0; s < MAX_SLOTS; ++s)
+				if (theSeatRow[s] == row)
+					*seat = s;
+			return kind;
+		}
+		return -1;
+	}
+
+	/// a team's pennant: a pole and a flag, filled for a team (TEAM 1 the light one), hollow for none
+	void roomPennant(Int x, Int y, Int size, Color color, Bool filled)
+	{
+		const Real line = (Real)max(1, size / 8);
+		TheDisplay->drawLine(x, y, x, y + size, line, color);
+		const Int flagW = size * 3 / 4, flagH = size / 2;
+		if (filled)
+			for (Int row = 0; row < flagH; ++row)
+			{
+				const Int reach = flagW * (flagH - abs(2 * row - flagH)) / flagH;
+				TheDisplay->drawFillRect(x, y + row, max(1, reach), 1, color);
+			}
+		else
+		{
+			TheDisplay->drawLine(x, y, x + flagW, y + flagH / 2, line, color);
+			TheDisplay->drawLine(x + flagW, y + flagH / 2, x, y + flagH, line, color);
+		}
+	}
+
+	/// a combo's field, the room's way: its words in body type, a colour's swatch or a team's pennant
+	/// before them, the local player's name in gold; nothing of EA's art
+	void drawRoomField(GameWindow *window, WinInstanceData *)
+	{
+		EntryData *e = (EntryData *)window->winGetUserData();
+		if (e == NULL || e->text == NULL)
+			return;
+		GameWindow *combo = window->winGetParent();
+		Int x, y, w, h;
+		window->winGetScreenPosition(&x, &y);
+		window->winGetSize(&w, &h);
+		Int seat = -1;
+		const Int kind = combo ? roomFieldOf(combo, &seat) : -1;
+		const GameSlot *slot = roomSlot(seat);
+		Int left = x + roomPx(10);
+		if (kind == 0 && slot && slot->isOccupied())
+		{
+			const Int side = roomPx(16);
+			const Int top = y + (h - side) / 2;
+			TheDisplay->drawFillRect(left, top, side, side, LobbySeatColor(slot));
+			TheDisplay->drawOpenRect(left, top, side, side, 1.0f, GameMakeColor(0, 0, 0, 200));
+			left += roomPx(26);
+		}
+		else if (kind == 1 && slot && slot->isOccupied() && slot->getTeamNumber() >= 0)
+		{
+			const Int side = roomPx(16);
+			roomPennant(left + roomPx(2), y + (h - side) / 2, side, UIStyle::INK, slot->getTeamNumber() == 0);
+			left += roomPx(26);
+		}
+		GameFont *font = window->winGetFont();
+		if (e->text->getFont() != font)
+			e->text->setFont(font);
+		IRegion2D clip;
+		clip.lo.x = x;
+		clip.lo.y = y;
+		clip.hi.x = x + w;
+		clip.hi.y = y + h;
+		e->text->setClipRegion(&clip);
+		Int textW, textH;
+		e->text->getSize(&textW, &textH);
+		const Bool local = kind == 2 && theRoomGame && seat >= 0 && seat == theRoomGame->getLocalSlotNum();
+		e->text->draw(left, y + (h - textH) / 2, local ? UIStyle::GOLD : UIStyle::INK, GameMakeColor(0, 0, 0, 160));
+	}
+
+	/// the skirmish room's own name, a text entry: the field's box and the name in gold
+	void drawRoomNameEntry(GameWindow *window, WinInstanceData *instData)
+	{
+		const Bool focused = window == TheWindowManager->winGetFocus();
+		Int x, y, w, h;
+		window->winGetScreenPosition(&x, &y);
+		window->winGetSize(&w, &h);
+		TheDisplay->drawFillRect(x, y, w, h, GameMakeColor(0, 0, 0, 120));
+		TheDisplay->drawOpenRect(x, y, w, h, 1.0f, focused ? UIStyle::EDGE_LIT : UIStyle::FRAME);
+		EntryData *e = (EntryData *)window->winGetUserData();
+		if (e == NULL || e->text == NULL)
+			return;
+		if (e->text->getFont() != window->winGetFont())
+			e->text->setFont(window->winGetFont());
+		Int textW, textH;
+		e->text->getSize(&textW, &textH);
+		const Int left = x + roomPx(10);
+		e->text->draw(left, y + (h - textH) / 2, UIStyle::GOLD, GameMakeColor(0, 0, 0, 160));
+		// the caret while it is being typed in, blinking as EA's did
+		if (focused && ((Clock_Milliseconds() / 400) & 1))
+			TheDisplay->drawFillRect(left + e->text->getWidth() + roomPx(2), y + roomPx(8), max(1, roomPx(2)), h - 2 * roomPx(8), UIStyle::GOLD);
+	}
+
+	/// a combo nobody here may change is pinned: its value as plain words, no box and no caret
+	void drawRoomCombo(GameWindow *window, WinInstanceData *instData)
+	{
+		if (BitTest(window->winGetStatus(), WIN_STATUS_ENABLED) && theMenuComboDraw)
+			theMenuComboDraw(window, instData);
+	}
+
+	void drawRoomCaret(GameWindow *window, WinInstanceData *instData)
+	{
+		GameWindow *combo = window->winGetParent();
+		if (combo && BitTest(combo->winGetStatus(), WIN_STATUS_ENABLED) && theMenuCaretDraw)
+			theMenuCaretDraw(window, instData);
+	}
+
+	void styleRoomCombo(GameWindow *combo, Int px1080)
+	{
+		if (combo == NULL)
+			return;
+		UIStyle::setMenuComboBox(combo);
+		theMenuComboDraw = combo->winGetDrawFunc();
+		combo->winSetDrawFunc(drawRoomCombo);
+		if (GameWindow *button = GadgetComboBoxGetDropDownButton(combo))
+		{
+			theMenuCaretDraw = button->winGetDrawFunc();
+			button->winSetDrawFunc(drawRoomCaret);
+		}
+		if (GameWindow *edit = GadgetComboBoxGetEditBox(combo))
+			edit->winSetDrawFunc(drawRoomField);
+		roomFont(combo, px1080);
+	}
+
+	/// the skirmish room's PRESET field in the header: a combo's look over the presets key
+	void drawRoomPresetField(GameWindow *window, WinInstanceData *instData)
+	{
+		Int x, y, w, h;
+		window->winGetScreenPosition(&x, &y);
+		window->winGetSize(&w, &h);
+		const Bool enabled = BitTest(window->winGetStatus(), WIN_STATUS_ENABLED);
+		const Bool hovered = enabled && BitTest(instData->getState(), WIN_STATE_HILITED);
+		TheDisplay->drawFillRect(x, y, w, h, GameMakeColor(0, 0, 0, 120));
+		TheDisplay->drawOpenRect(x, y, w, h, 1.0f, hovered ? UIStyle::EDGE_LIT : UIStyle::FRAME);
+		IRegion2D caret;
+		caret.lo.x = x + w - h;
+		caret.lo.y = y;
+		caret.hi.x = x + w;
+		caret.hi.y = y + h;
+		UIStyle::caretBlock(caret, hovered);
+		DisplayString *words = instData->getTextDisplayString();
+		if (words && words->getTextLength())
+		{
+			if (words->getFont() != UIStyle::menuFont(UIStyle::MENU_TEXT_BODY))
+				words->setFont(UIStyle::menuFont(UIStyle::MENU_TEXT_BODY));
+			Int tw, th;
+			words->getSize(&tw, &th);
+			words->draw(x + roomPx(10), y + (h - th) / 2, enabled ? UIStyle::INK : UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
+		}
+	}
+
+	/// a record or presets box over the room: frame A on its glass
+	void drawRoomBox(GameWindow *window, WinInstanceData *)
+	{
+		Int x, y, w, h;
+		window->winGetScreenPosition(&x, &y);
+		window->winGetSize(&w, &h);
+		IRegion2D box;
+		box.lo.x = x;
+		box.lo.y = y;
+		box.hi.x = x + w;
+		box.hi.y = y + h;
+		UIStyle::glass(box, 220);
+		UIStyle::frameA(box);
+	}
+
+	/// RULES and CHAT: the open one is the disabled one (showLobbySettings), drawn lit; CHAT closed
+	/// counts the lines it has not shown
+	void drawRoomTab(GameWindow *window, WinInstanceData *instData)
+	{
+		Int x, y, w, h;
+		window->winGetScreenPosition(&x, &y);
+		window->winGetSize(&w, &h);
+		IRegion2D box;
+		box.lo.x = x;
+		box.lo.y = y;
+		box.hi.x = x + w;
+		box.hi.y = y + h;
+		const Bool open = !BitTest(window->winGetStatus(), WIN_STATUS_ENABLED);
+		DisplayString *label = instData->getTextDisplayString();
+		if (theRoomChat && open != theRoomChat->winIsHidden() && label)
+		{
+			// the chat's own tab while the chat is closed, with the lines that came since it was open
+			const Int lines = GadgetListBoxGetNumEntries(theRoomChat);
+			const Int unread = max(0, lines - theRoomChatSeen);
+			if (!open && unread > 0)
+			{
+				UnicodeString counted = label->getText();
+				UnicodeString number;
+				number.format(u"  %d", unread);
+				counted.concat(number);
+				label = roomText(TEXT_TAB, counted, UIStyle::menuFont(UIStyle::MENU_TEXT_LABEL + 2, TRUE));
+			}
+		}
+		if (theRoomChat && !theRoomChat->winIsHidden())
+			theRoomChatSeen = GadgetListBoxGetNumEntries(theRoomChat);
+		UIStyle::menuTab(box, label, open, !open && BitTest(instData->getState(), WIN_STATE_HILITED));
+	}
+
+	void drawRoomChevrons(Int x, Int middle, Bool up)
+	{
+		const Int size = roomPx(8);
+		const Int cx = roomX(x), cy = roomY(middle);
+		const Real line = (Real)max(1, roomPx(2));
+		for (Int i = 0; i < 2; ++i)
+		{
+			const Int left = cx + i * (size + roomPx(3));
+			const Int tip = up ? cy - size / 2 : cy + size / 2;
+			const Int base = up ? cy + size / 2 : cy - size / 2;
+			TheDisplay->drawLine(left, base, left + size / 2, tip, line, UIStyle::EDGE_LIT);
+			TheDisplay->drawLine(left + size / 2, tip, left + size, base, line, UIStyle::EDGE_LIT);
+		}
+	}
+
+	UnicodeString roomCountText(const char *key, Int count)
+	{
+		UnicodeString words;
+		words.format(TheGameText->fetch(key).str(), count);
+		return words;
+	}
+
+	/// a group's head: the pennant, TEAM n or the no-team words, the seat count, a faint rule
+	void drawRoomHead(Int index, const LobbyRoomItem &item, Int top)
+	{
+		const Int middle = top + item.height / 2 + 2;
+		const Int pennant = roomPx(16);
+		if (item.group >= 0)
+			roomPennant(roomX(ROOM_LEFT + 10), roomY(middle) - pennant / 2, pennant, UIStyle::INK, item.group == 0);
+		UnicodeString name;
+		if (item.group >= 0)
+			name = roomCountText("GUI:RoomTeam", item.group + 1);
+		else
+			name = TheGameText->fetch(item.group == LOBBY_GROUP_ALONE ? "GUI:RoomNoTeam" : "GUI:RoomNoTeamYet");
+		GameFont *label = UIStyle::menuFont(UIStyle::MENU_TEXT_LABEL, TRUE);
+		const Int nameX = item.group >= 0 ? ROOM_LEFT + 34 : ROOM_LEFT + 8;
+		const Int nameW = roomDraw(TEXT_GROUPS + 2 * index, name, label, nameX, middle, UIStyle::INK);
+		const UnicodeString seats = roomCountText(item.count == 1 ? "GUI:RoomSeat" : "GUI:RoomSeats", item.count);
+		const Int seatsX = roomX(nameX) + nameW + roomPx(14);
+		DisplayString *s = roomText(TEXT_GROUPS + 2 * index + 1, seats, label);
+		Int w, h;
+		s->getSize(&w, &h);
+		s->draw(seatsX, roomY(middle) - h / 2, UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
+		const Int ruleX = seatsX + w + roomPx(16);
+		TheDisplay->drawFillRect(ruleX, roomY(middle), max(0, roomX(ROOM_CELLS_RIGHT) - ruleX), 1, UIStyle::withAlpha(UIStyle::FRAME, 110));
+	}
+
+	/// a seat's row: its wash, the slot's number, the army's portrait, a network player's second line
+	void drawRoomSeat(Int index, const LobbyRoomItem &item, Int top)
+	{
+		const GameSlot *slot = roomSlot(item.slot);
+		if (slot == NULL)
+			return;
+		const Bool network = theRoomKind != ROOM_SKIRMISH;
+		const Bool local = item.slot == theRoomGame->getLocalSlotNum();
+		const Bool ready = network && slot->isHuman() && item.slot != 0 && slot->isAccepted();
+		const IRegion2D row = UIStyle::boardRect(ROOM_LEFT, top + 3, ROOM_SEAT_COLUMN_RIGHT - 24, top + item.height - 3);
+		if (ready)
+			TheDisplay->drawFillRect(row.lo.x, row.lo.y, row.hi.x - row.lo.x, row.hi.y - row.lo.y, GameMakeColor(22, 74, 40, 150));
+		const Bool moved = item.slot == theRoomMoved && Clock_Milliseconds() < theRoomMovedUntil;
+		UIStyle::menuRow(row, local ? UIStyle::ROW_LOCAL : moved ? UIStyle::ROW_HOVER : UIStyle::ROW_PLAIN, index % 2 == 1);
+
+		const Int middle = top + item.height / 2;
+		UnicodeString number;
+		number.format(u"%d", item.slot + 1);
+		const Int key = TEXT_ROWS + 4 * (item.slot % MAX_SLOTS);
+		roomDraw(key, number, UIStyle::menuFont(UIStyle::MENU_TEXT_BODY), ROOM_LEFT + 17, middle, UIStyle::MUTED, 1);
+		if (!slot->isOccupied())
+			return;
+
+		// the portrait, 76 square, the seat's colour under it
+		const IRegion2D picture = UIStyle::boardRect(96, middle - 38, 172, middle + 38);
+		const Int pick = slot->getPlayerTemplate();
+		const PlayerTemplate *army = pick >= 0 && pick < ThePlayerTemplateStore->getPlayerTemplateCount()
+			? ThePlayerTemplateStore->getNthPlayerTemplate(pick) : NULL;
+		const Image *portrait = army ? UIStyle::armyPortrait(army) : NULL;
+		TheDisplay->drawFillRect(picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y, GameMakeColor(0, 0, 0, 170));
+		if (portrait)
+			UIStyle::coverImage(portrait, picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y);
+		else
+		{
+			TheDisplay->drawOpenRect(picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y, 1.0f, UIStyle::FRAME);
+			roomDraw(key + 1, UnicodeString(u"?"), UIStyle::menuFont(UIStyle::MENU_TEXT_TITLE), 134, middle, UIStyle::INK, 1);
+		}
+		const Int stripe = max(2, roomPx(3));
+		TheDisplay->drawFillRect(picture.lo.x, picture.hi.y - stripe, picture.hi.x - picture.lo.x, stripe, LobbySeatColor(slot));
+
+		if (!network || !slot->isHuman())
+			return;
+		// the second line: the online rating after the ping light, the seat's state at the cell's right
+		const Int line = top + 66;
+		if (theRoomKind == ROOM_ONLINE)
+		{
+			AsciiString nick;
+			nick.translate(slot->getName());
+			OnlinePlayerInfo card;
+			if (OnlineGetPlayerInfo(nick, card) && card.hasRating)
+				roomDraw(key + 2, UIStyle::ladderText(card.shown(), card.hasElo), UIStyle::menuFont(UIStyle::MENU_TEXT_HINT),
+					216, line, UIStyle::MUTED);
+		}
+		const char *state = item.slot == 0 ? "GUI:RoomHost" : ready ? "GUI:RoomReady" : "GUI:RoomNotReady";
+		GameFont *label = UIStyle::menuFont(UIStyle::MENU_TEXT_LABEL, TRUE);
+		const Int stateW = roomDraw(key + 3, TheGameText->fetch(state), label, 444, line, ready ? UIStyle::ACTIVE : UIStyle::MUTED, 2);
+		if (ready)
+		{
+			// the tick before READY
+			const Int size = roomPx(10);
+			const Int tx = roomX(444) - stateW - roomPx(6) - size, ty = roomY(line);
+			const Real width = (Real)max(1, roomPx(2));
+			TheDisplay->drawLine(tx, ty, tx + size / 3, ty + size / 3, width, UIStyle::ACTIVE);
+			TheDisplay->drawLine(tx + size / 3, ty + size / 3, tx + size, ty - size / 2, width, UIStyle::ACTIVE);
+		}
+	}
+
+	/// the room's own look, on its container under every window it holds
+	void drawRoom(GameWindow *window, WinInstanceData *)
+	{
+		if (!theRoomClassic || theRoomGame == NULL)
+			return;
+		const IRegion2D panel = UIStyle::boardRect(UIStyle::MENU_PANEL_LEFT, UIStyle::MENU_PANEL_TOP, UIStyle::MENU_PANEL_RIGHT, UIStyle::MENU_PANEL_BOTTOM);
+		UIStyle::glass(panel, 168);
+		UIStyle::frameA(panel);
+
+		// the title, the map and the format after it, the header's tenant at the right
+		UnicodeString title = theRoomTitle ? GadgetStaticTextGetText(theRoomTitle) : UnicodeString::TheEmptyString;
+		if (theRoomKind != ROOM_ONLINE)
+			title = UIStyle::capitals(title);
+		UnicodeString subtitle;
+		const MapMetaData *md = TheMapCache ? TheMapCache->findMap(theRoomGame->getMap()) : NULL;
+		if (md)
+			subtitle = md->m_displayName;
+		{
+			// the format: each team's seated count, a player with no team on his own
+			Int sizes[MAX_SLOTS], teams[MAX_SLOTS], groups = 0;
+			for (Int i = 0; i < MAX_SLOTS; ++i)
+			{
+				const GameSlot *slot = theRoomGame->getConstSlot(i);
+				if (slot == NULL || !slot->isOccupied() || slot->getPlayerTemplate() == PLAYERTEMPLATE_OBSERVER)
+					continue;
+				Int g = 0;
+				while (slot->getTeamNumber() >= 0 && g < groups && teams[g] != slot->getTeamNumber())
+					++g;
+				if (slot->getTeamNumber() < 0 || g == groups)
+				{
+					teams[groups] = slot->getTeamNumber();
+					sizes[groups++] = 0;
+					g = groups - 1;
+				}
+				++sizes[g];
+			}
+			std::sort(sizes, sizes + groups);
+			UnicodeString format;
+			for (Int g = 0; g < groups; ++g)
+			{
+				UnicodeString one;
+				one.format(u"%d", sizes[g]);
+				if (g > 0)
+				{
+					// the string file trims a value's spaces, so the joiner's are the code's
+					format.concat(u" ");
+					format.concat(TheGameText->fetch("GUI:RoomVersus"));
+					format.concat(u" ");
+				}
+				format.concat(one);
+			}
+			if (groups > 1)
+			{
+				if (!subtitle.isEmpty())
+					subtitle.concat(UIStyle::HEADER_JOINER);
+				subtitle.concat(format);
+			}
+		}
+		UIStyle::menuHeader(roomText(TEXT_TITLE, title, UIStyle::menuFont(UIStyle::MENU_TEXT_TITLE, TRUE)),
+			roomText(TEXT_SUBTITLE, subtitle, UIStyle::menuFont(UIStyle::MENU_TEXT_BODY)));
+		GameFont *label = UIStyle::menuFont(UIStyle::MENU_TEXT_LABEL, TRUE);
+		if (theRoomKind == ROOM_SKIRMISH)
+		{
+			if (theRoomPresets && !theRoomPresets->winIsHidden())
+				roomDraw(TEXT_TENANT, TheGameText->fetch("GUI:RoomPreset"), label, 1486, 71, UIStyle::MUTED, 2);
+		}
+		else
+		{
+			const GameSlot *host = theRoomGame->getConstSlot(0);
+			roomDraw(TEXT_TENANT, TheGameText->fetch("GUI:RoomHost"), label, 1440, 59, UIStyle::MUTED);
+			if (host && host->isHuman())
+				roomDraw(TEXT_TENANT_NAME, UIStyle::fitName(host->getName(), UIStyle::menuFont(UIStyle::MENU_TEXT_KEY), roomPx(240)),
+					UIStyle::menuFont(UIStyle::MENU_TEXT_KEY), 1440, 82, theRoomGame->amIHost() ? UIStyle::GOLD : UIStyle::INK);
+			Int taken = 0, open = 0;
+			for (Int i = 0; i < theRoomRowCount; ++i)
+			{
+				const GameSlot *slot = theRoomGame->getConstSlot(i);
+				if (slot && slot->isOccupied())
+					++taken;
+				if (slot && (slot->isOccupied() || slot->isOpen()))
+					++open;
+			}
+			UnicodeString seats;
+			seats.format(TheGameText->fetch("GUI:RoomSeatsTaken").str(), taken, open);
+			roomDraw(TEXT_TENANT_SEATS, seats, UIStyle::menuFont(UIStyle::MENU_TEXT_BODY), ROOM_RIGHT, 82, UIStyle::MUTED, 2);
+		}
+
+		// the column heads and the rule under them
+		static const char *const heads[] = { "GUI:RoomPlayer", "GUI:RoomArmy", "GUI:RoomColour", "GUI:RoomTeamHead", "GUI:RoomHandicap", "GUI:RoomMap" };
+		static const Int headX[] = { 186, 462, 798, 994, 1122, ROOM_COLUMN_LEFT + 2 };
+		// a map picker over the seats has the seat column to itself
+		for (Int h = theSeatsUnderPicker ? (Int)ARRAY_SIZE(heads) - 1 : 0; h < (Int)ARRAY_SIZE(heads); ++h)
+		{
+			DisplayString *s = roomText(TEXT_HEADS + h, TheGameText->fetch(heads[h]), label);
+			Int w, hh;
+			s->getSize(&w, &hh);
+			UIStyle::columnHead(s, roomX(headX[h]) + w, roomY(137), FALSE);
+		}
+		roomFill(ROOM_COLUMN_LEFT, 152, ROOM_RIGHT, 153, UIStyle::withAlpha(UIStyle::FRAME, 150));
+
+		// the seats as the plan lays them, the strips and the track
+		Int seatIndex = 0, headIndex = 0;
+		if (!theSeatsUnderPicker)
+			roomFill(ROOM_LEFT, 152, ROOM_CELLS_RIGHT, 153, UIStyle::withAlpha(UIStyle::FRAME, 150));
+		for (Int i = 0; i < (theSeatsUnderPicker ? 0 : theRoomPlan.itemCount); ++i)
+		{
+			const LobbyRoomItem &item = theRoomPlan.items[i];
+			const Int top = LOBBY_SEATS_TOP + item.top;
+			if (item.head)
+				drawRoomHead(min(headIndex++, (Int)(TEXT_ROWS - TEXT_GROUPS) / 2 - 1), item, top);
+			else
+				drawRoomSeat(seatIndex++, item, top);
+		}
+		if (theRoomPlan.above > 0 && !theSeatsUnderPicker)
+		{
+			drawRoomChevrons(ROOM_LEFT + 12, LOBBY_SEATS_TOP + 13, TRUE);
+			roomDraw(TEXT_STRIPS, roomCountText("GUI:RoomSeatsAbove", theRoomPlan.above), label, ROOM_LEFT + 44, LOBBY_SEATS_TOP + 13, UIStyle::EDGE_LIT);
+		}
+		if (theRoomPlan.below > 0 && !theSeatsUnderPicker)
+		{
+			// the rows under the window fade out over its foot
+			for (Int step = 0; step < 7; ++step)
+				roomFill(ROOM_LEFT, LOBBY_SEATS_BOTTOM - 54 + 4 * step, ROOM_CELLS_RIGHT, LOBBY_SEATS_BOTTOM - 50 + 4 * step, GameMakeColor(0, 0, 0, 12 * step));
+			drawRoomChevrons(ROOM_LEFT + 12, LOBBY_SEATS_BOTTOM - 13, FALSE);
+			roomDraw(TEXT_STRIPS + 1, roomCountText("GUI:RoomSeatsBelow", theRoomPlan.below), label, ROOM_LEFT + 44, LOBBY_SEATS_BOTTOM - 13, UIStyle::EDGE_LIT);
+		}
+		if (theRoomPlan.maxScroll > 0 && theRoomPlan.orderCount > 0 && !theSeatsUnderPicker)
+		{
+			const Int span = LOBBY_SEATS_BOTTOM - LOBBY_SEATS_TOP;
+			const Int shown = theRoomPlan.orderCount - theRoomPlan.above - theRoomPlan.below;
+			const Int thumbTop = LOBBY_SEATS_TOP + span * theRoomPlan.above / theRoomPlan.orderCount;
+			const Int thumbBottom = thumbTop + max(24, span * shown / theRoomPlan.orderCount);
+			roomFill(1286, LOBBY_SEATS_TOP, 1288, LOBBY_SEATS_BOTTOM, UIStyle::withAlpha(UIStyle::FRAME, 160));
+			roomFill(1282, thumbTop, 1292, thumbBottom, UIStyle::withAlpha(UIStyle::EDGE, 200));
+			const IRegion2D thumb = UIStyle::boardRect(1282, thumbTop, 1292, thumbBottom);
+			UIStyle::litLine(thumb.lo.x, thumb.lo.y, thumb.hi.x - thumb.lo.x, 1, UIStyle::EDGE_LIT);
+			UIStyle::litLine(thumb.lo.x, thumb.hi.y - 1, thumb.hi.x - thumb.lo.x, 1, UIStyle::EDGE_LIT);
+			roomFill(1284, (thumbTop + thumbBottom) / 2 - 3, 1290, (thumbTop + thumbBottom) / 2 - 2, UIStyle::EDGE_LIT);
+			roomFill(1284, (thumbTop + thumbBottom) / 2 + 2, 1290, (thumbTop + thumbBottom) / 2 + 3, UIStyle::EDGE_LIT);
+		}
+
+		// the map's facts under its name; a joiner reads who picks it
+		if (md && theRoomMapName)
+		{
+			Int x, y, w, h;
+			theRoomMapName->winGetScreenPosition(&x, &y);
+			theRoomMapName->winGetSize(&w, &h);
+			UnicodeString players;
+			players.format(TheGameText->fetch("GUI:RoomMapPlayers").str(), md->m_numPlayers);
+			DisplayString *s = roomText(TEXT_MAP, players, UIStyle::menuFont(UIStyle::MENU_TEXT_HINT));
+			Int sw, sh;
+			s->getSize(&sw, &sh);
+			s->draw(x, y + h + roomPx(2), UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
+		}
+		if (theRoomSelectMap && theRoomSelectMap->winIsHidden())
+		{
+			Int x, y, w, h;
+			theRoomSelectMap->winGetScreenPosition(&x, &y);
+			theRoomSelectMap->winGetSize(&w, &h);
+			DisplayString *s = roomText(TEXT_MAP + 1, TheGameText->fetch("GUI:RoomHostPicksMap"), UIStyle::menuFont(UIStyle::MENU_TEXT_HINT));
+			Int sw, sh;
+			s->getSize(&sw, &sh);
+			s->draw(x + w - sw, y + (h - sh) / 2, UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
+		}
+		if (theRoomKind == ROOM_SKIRMISH)
+		{
+			DisplayString *s = roomText(TEXT_MAP + 2, TheGameText->fetch("GUI:RoomRules"), label);
+			Int w, hh;
+			s->getSize(&w, &hh);
+			UIStyle::columnHead(s, roomX(ROOM_COLUMN_LEFT + 2) + w, roomY(517), FALSE);
+			roomFill(ROOM_COLUMN_LEFT, 532, ROOM_RIGHT, 533, UIStyle::withAlpha(UIStyle::FRAME, 150));
+		}
+
+		// the foot: its rule, then the record (skirmish) or who is ready (network) beside the keys
+		roomFill(ROOM_LEFT, 962, ROOM_RIGHT, 963, UIStyle::withAlpha(UIStyle::FRAME, 110));
+		GameFont *figure = UIStyle::menuFont(UIStyle::MENU_TEXT_ROW_FIGURE);
+		if (theRoomKind == ROOM_SKIRMISH)
+		{
+			static const char *const words[] = { "GUI:RoomWins", "GUI:RoomLosses", "GUI:RoomStreak", "GUI:RoomBestStreak" };
+			static const Int at[] = { 588, 765, 940, 1116 };
+			for (Int i = 0; i < 4; ++i)
+			{
+				if (theRoomStats[i] == NULL)
+					continue;
+				const Int w = roomDraw(TEXT_FOOT + 2 * i, GadgetStaticTextGetText(theRoomStats[i]), figure, at[i], 1002, UIStyle::INK);
+				DisplayString *s = roomText(TEXT_FOOT + 2 * i + 1, TheGameText->fetch(words[i]), label);
+				Int sw, sh;
+				s->getSize(&sw, &sh);
+				s->draw(roomX(at[i]) + w + roomPx(10), roomY(1002) - sh / 2, UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
+			}
+		}
+		else
+		{
+			Int humans = 0, ready = 0;
+			for (Int i = 1; i < theRoomRowCount; ++i)
+			{
+				const GameSlot *slot = theRoomGame->getConstSlot(i);
+				if (slot && slot->isHuman())
+				{
+					++humans;
+					ready += slot->isAccepted() ? 1 : 0;
+				}
+			}
+			UnicodeString count;
+			count.format(u"%d / %d", ready, humans);
+			const Int w = roomDraw(TEXT_FOOT, count, figure, 588, 1002, UIStyle::INK);
+			DisplayString *s = roomText(TEXT_FOOT + 1, TheGameText->fetch("GUI:RoomPlayersReady"), label);
+			Int sw, sh;
+			s->getSize(&sw, &sh);
+			s->draw(roomX(588) + w + roomPx(12), roomY(1002) - sh / 2, UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
+		}
+	}
+
+	/// a seat's row's windows round its top: a computer's level over its personality, a network
+	/// player's name over his second line, an open or closed seat's one box
+	void placeRoomRow(Int row, Int seat, Int top)
+	{
+		const GameSlot *slot = roomSlot(seat);
+		RoomRow &w = theRoomRows[row];
+		roomPark(w.name);
+		if (slot == NULL)
+			return;
+		const Bool seated = slot->isOccupied();
+		const Bool computer = slot->isAI();
+		const Bool network = theRoomKind != ROOM_SKIRMISH;
+		if (!seated)
+		{
+			roomPlace(w.player, 184, top + 4, 444, top + 48);
+			roomFont(w.player, UIStyle::MENU_TEXT_BODY);
+			GameWindow *rest[] = { w.persona, w.army, w.colour, w.team, w.handicap, w.ping };
+			for (Int i = 0; i < (Int)ARRAY_SIZE(rest); ++i)
+				roomPark(rest[i]);
+			return;
+		}
+		if (computer)
+		{
+			roomPlace(w.player, 184, top + 9, 444, top + 47);
+			roomPlace(w.persona, 184, top + 51, 444, top + 81);
+		}
+		else
+		{
+			if (network)
+				roomPlace(w.player, 184, top + 8, 444, top + 46);
+			else
+				roomPlace(w.player, 184, top + 23, 444, top + 67);
+			roomPark(w.persona);
+		}
+		roomFont(w.player, UIStyle::MENU_TEXT_ROW_FIGURE);
+		roomFont(w.persona, UIStyle::MENU_TEXT_HINT);
+		if (w.ping && theRoomKind == ROOM_ONLINE && slot->isHuman())
+			roomPlace(w.ping, 184, top + 56, 208, top + 80);
+		else
+			roomPark(w.ping);
+		roomPlace(w.army, 460, top + 23, 780, top + 67);
+		roomPlace(w.colour, 796, top + 23, 976, top + 67);
+		roomPlace(w.team, 992, top + 23, 1104, top + 67);
+		roomPlace(w.handicap, 1120, top + 23, 1262, top + 67);
+	}
+
+	void parkRoomRow(Int row)
+	{
+		RoomRow &w = theRoomRows[row];
+		GameWindow *all[] = { w.player, w.name, w.persona, w.army, w.colour, w.team, w.handicap, w.ping };
+		for (Int i = 0; i < (Int)ARRAY_SIZE(all); ++i)
+			roomPark(all[i]);
+	}
+
+	/// the order, the window, the binding and the rows' places from the game as it stands
+	void roomRefresh(void)
+	{
+		theRoomDirty = FALSE;
+		if (theRoomGame == NULL || theRoomParent == NULL || !theRoomClassic || theRoomRowCount == 0)
+			return;
+		Int count = theRoomRowCount;
+		if (theRoomKind == ROOM_SKIRMISH)
+		{
+			// the seats the map holds, and any seat past them someone sits in or left open; the closed
+			// tail of the 32 is not listed (README-classic-room.md: the list shows what the map allows)
+			count = 0;
+			for (Int i = 0; i < MAX_SLOTS; ++i)
+			{
+				const GameSlot *slot = theRoomGame->getConstSlot(i);
+				if (slot && slot->getState() != SLOT_CLOSED)
+					count = i + 1;
+			}
+			const MapMetaData *md = TheMapCache ? TheMapCache->findMap(theRoomGame->getMap()) : NULL;
+			if (md)
+				count = max(count, min((Int)MAX_SLOTS, md->m_numPlayers));
+		}
+		if (IsApocalypseMap(theRoomGame->getMap()))
+			count = min(count, (Int)APOCALYPSE_SEATS);
+		Bool listOpen = FALSE;
+		for (Int row = 0; row < theRoomRowCount; ++row)
+			listOpen = listOpen || roomComboOpen(theRoomRows[row].team);
+		LobbySeatState seats[MAX_SLOTS];
+		Int moved = -1, movedCount = 0;
+		theRoomHeld = FALSE;
+		for (Int i = 0; i < count; ++i)
+		{
+			const GameSlot *slot = theRoomGame->getConstSlot(i);
+			const Int team = slot ? slot->getTeamNumber() : -1;
+			if (theRoomSortTeam[i] != team)
+			{
+				if (listOpen && theRoomSortTeam[i] != ROOM_SORT_UNSET)
+					theRoomHeld = TRUE;		// the seat goes to its new group when the list closes
+				else
+				{
+					if (theRoomSortTeam[i] != ROOM_SORT_UNSET)
+					{
+						moved = i;
+						++movedCount;
+					}
+					theRoomSortTeam[i] = team;
+				}
+			}
+			seats[i].team = theRoomSortTeam[i];
+			seats[i].seated = slot && slot->isOccupied();
+		}
+		// a joiner reads who picks the map where Select Map would be (drawRoom)
+		if (theRoomSelectMap && theRoomKind != ROOM_SKIRMISH && theRoomSelectMap->winIsHidden() == theRoomGame->amIHost())
+			theRoomSelectMap->winHide(!theRoomGame->amIHost());
+		const Int height = LOBBY_SEATS_BOTTOM - LOBBY_SEATS_TOP;
+		// the skirmish room's first row is the local seat's, wherever it shows
+		const Int mostShown = theRoomBinder ? theRoomRowCount - 1 : theRoomRowCount;
+		// one seat's team change is followed and lit; a preset or a host's options that move many are not
+		if (movedCount != 1)
+			moved = -1;
+		LobbyPlanRoom(seats, count, theRoomScroll, height, mostShown, theRoomPlan);
+		if (moved >= 0)
+		{
+			Bool shown = FALSE;
+			for (Int i = 0; i < theRoomPlan.itemCount; ++i)
+				shown = shown || (!theRoomPlan.items[i].head && theRoomPlan.items[i].slot == moved);
+			if (!shown)
+			{
+				// the window follows the seat to its new group
+				for (Int k = 0; k < theRoomPlan.orderCount; ++k)
+					if (theRoomPlan.order[k] == moved)
+						LobbyPlanRoom(seats, count, k, height, mostShown, theRoomPlan);
+			}
+			theRoomMoved = moved;
+			theRoomMovedUntil = Clock_Milliseconds() + 1000;
+		}
+		theRoomScroll = theRoomPlan.scroll;
+
+		if (theRoomBinder)
+		{
+			Int visible[MAX_SLOTS], n = 0;
+			for (Int i = 0; i < theRoomPlan.itemCount; ++i)
+				if (!theRoomPlan.items[i].head)
+					visible[n++] = theRoomPlan.items[i].slot;
+			Bool same = n == theRoomBoundCount;
+			for (Int i = 0; same && i < n; ++i)
+				same = visible[i] == theRoomBound[i];
+			if (!same)
+			{
+				for (Int i = 0; i < n; ++i)
+					theRoomBound[i] = visible[i];
+				theRoomBoundCount = n;
+				theRoomBinder(visible, n);
+			}
+		}
+
+		Bool placed[MAX_SLOTS];
+		for (Int row = 0; row < MAX_SLOTS; ++row)
+			placed[row] = FALSE;
+		for (Int i = 0; i < theRoomPlan.itemCount; ++i)
+		{
+			const LobbyRoomItem &item = theRoomPlan.items[i];
+			if (item.head)
+				continue;
+			const Int row = theSeatRow[item.slot];
+			if (row < 0 || row >= theRoomRowCount)
+				continue;
+			placeRoomRow(row, item.slot, LOBBY_SEATS_TOP + item.top);
+			placed[row] = TRUE;
+		}
+		for (Int row = 0; row < theRoomRowCount; ++row)
+			if (!placed[row])
+				parkRoomRow(row);
+	}
+
+	GameWindow *roomWindow(const char *layoutFilename, const char *name)
+	{
+		AsciiString full;
+		full.format("%s:%s", layoutFilename, name);
+		return TheWindowManager->winGetWindowFromId(theRoomParent, NAMEKEY(full));
+	}
+
+	void initRoomLook(GameWindow *parent, const char *layoutFilename)
+	{
+		theRoomParent = parent;
+		theSeatsUnderPicker = FALSE;
+		theRoomKind = strcmp(layoutFilename, "SkirmishGameOptionsMenu.wnd") == 0 ? ROOM_SKIRMISH
+			: strcmp(layoutFilename, "LanGameOptionsMenu.wnd") == 0 ? ROOM_LAN : ROOM_ONLINE;
+		static const char *const containers[] = { "SubParent", "GadgetParent", "FadeParent" };
+		theRoomContainer = roomWindow(layoutFilename, containers[theRoomKind - ROOM_SKIRMISH]);
+		theRoomTitle = roomWindow(layoutFilename, theRoomKind == ROOM_ONLINE ? "StaticTextGameName" : "StaticTextTitle");
+		theRoomMap = roomWindow(layoutFilename, "MapWindow");
+		theRoomMapName = roomWindow(layoutFilename, "TextEntryMapDisplay");
+		theRoomSelectMap = roomWindow(layoutFilename, "ButtonSelectMap");
+		theRoomPresets = theRoomKind == ROOM_SKIRMISH ? roomWindow(layoutFilename, "ButtonPresets") : NULL;
+		static const char *const stats[] = { "StaticTextWinsValue", "StaticTextLossesValue", "StaticTextStreakValue", "StaticTextBestStreakValue" };
+		for (Int i = 0; i < 4; ++i)
+			theRoomStats[i] = theRoomKind == ROOM_SKIRMISH ? roomWindow(layoutFilename, stats[i]) : NULL;
+		theRoomGame = NULL;
+		theRoomScroll = 0;
+		theRoomHeld = FALSE;
+		theRoomDirty = FALSE;
+		theRoomMoved = -1;
+		theRoomBoundCount = -1;
+		theRoomBinder = NULL;
+		theRoomChat = NULL;
+		theRoomChatSeen = 0;
+		theRoomPlan.itemCount = 0;
+		theRoomPlan.orderCount = 0;
+		theRoomPlan.maxScroll = 0;
+		theRoomPlan.above = theRoomPlan.below = 0;
+		for (Int i = 0; i < MAX_SLOTS; ++i)
+			theRoomSortTeam[i] = ROOM_SORT_UNSET;
+
+		// the rows the layout has, each row's windows by its number
+		theRoomRowCount = 0;
+		while (theRoomRowCount < MAX_SLOTS && findSeatWindow(parent, layoutFilename, "ComboBoxColor", theRoomRowCount))
+		{
+			const Int row = theRoomRowCount++;
+			RoomRow &w = theRoomRows[row];
+			w.player = findSeatWindow(parent, layoutFilename, "ComboBoxPlayer", row);
+			if (theRoomKind == ROOM_SKIRMISH && row == 0)
+				w.player = roomWindow(layoutFilename, "TextEntryPlayerName");
+			w.name = findSeatWindow(parent, layoutFilename, "StaticTextPlayer", row);
+			w.persona = findSeatWindow(parent, layoutFilename, "ComboBoxAIPersona", row);
+			w.army = findSeatWindow(parent, layoutFilename, "ComboBoxPlayerTemplate", row);
+			w.colour = findSeatWindow(parent, layoutFilename, "ComboBoxColor", row);
+			w.team = findSeatWindow(parent, layoutFilename, "ComboBoxTeam", row);
+			w.handicap = findSeatWindow(parent, layoutFilename, "ComboBoxHandicap", row);
+			w.ping = findSeatWindow(parent, layoutFilename, "GenericPing", row);
+			GameWindow *combos[] = { w.persona, w.army, w.colour, w.team, w.handicap };
+			for (Int c = 0; c < (Int)ARRAY_SIZE(combos); ++c)
+				styleRoomCombo(combos[c], combos[c] == w.persona ? UIStyle::MENU_TEXT_HINT : UIStyle::MENU_TEXT_BODY);
+			if (w.player && BitTest(w.player->winGetStyle(), GWS_COMBO_BOX))
+				styleRoomCombo(w.player, UIStyle::MENU_TEXT_ROW_FIGURE);
+			else if (w.player)
+			{
+				w.player->winSetDrawFunc(drawRoomNameEntry);
+				roomFont(w.player, UIStyle::MENU_TEXT_ROW_FIGURE);
+			}
+			// a seat's list opens over the seats around it, as far as the seat column goes
+			GameWindow *lists[] = { w.player, w.persona, w.army, w.colour, w.team, w.handicap };
+			for (Int c = 0; c < (Int)ARRAY_SIZE(lists); ++c)
+				if (lists[c] && BitTest(lists[c]->winGetStyle(), GWS_COMBO_BOX))
+					GadgetComboBoxSetDropDownPitch(lists[c], 1, roomPx(300), roomPx(300));
+		}
+		if (theRoomContainer)
+			theRoomContainer->winSetDrawFunc(drawRoom);
+		if (theRoomTitle && !theRoomTitle->winIsHidden())
+			theRoomTitle->winHide(TRUE);
+
+		// the rules: every combo and check box on the page, its labels in body type
+		if (GameWindow *page = roomWindow(layoutFilename, "PageLobbySettings"))
+			for (GameWindow *child = page->winGetChild(); child; child = child->winGetNext())
+			{
+				if (BitTest(child->winGetStyle(), GWS_COMBO_BOX))
+					styleRoomCombo(child, UIStyle::MENU_TEXT_BODY);
+				else if (BitTest(child->winGetStyle(), GWS_CHECK_BOX))
+					UIStyle::setMenuCheckBox(child);
+				else if (BitTest(child->winGetStyle(), GWS_STATIC_TEXT))
+					roomFont(child, UIStyle::MENU_TEXT_BODY);
+			}
+		roomFont(theRoomMapName, UIStyle::MENU_TEXT_ROW_FIGURE);
+
+		// the keys: Play / Start the one lit, the rest outlined; the presets key is the header's field
+		static const char *const keys[] = { "ButtonBack", "ButtonRecord", "ButtonCommunicator", "ButtonSelectMap", "ButtonEmote",
+			"ButtonRecordClose", "ButtonPresetsClose", "ButtonPresetLoad", "ButtonPresetSave", "ButtonPresetClear" };
+		for (Int k = 0; k < (Int)ARRAY_SIZE(keys); ++k)
+			UIStyle::setMenuKey(roomWindow(layoutFilename, keys[k]), FALSE);
+		UIStyle::setMenuKey(roomWindow(layoutFilename, "ButtonStart"), TRUE);
+		if (theRoomPresets)
+			theRoomPresets->winSetDrawFunc(drawRoomPresetField);
+		static const char *const boxes[] = { "RecordPopover", "PresetPopover" };
+		for (Int b = 0; b < (Int)ARRAY_SIZE(boxes); ++b)
+			if (GameWindow *box = roomWindow(layoutFilename, boxes[b]))
+				box->winSetDrawFunc(drawRoomBox);
+
+		// the chat's tabs sized to their words, its lines and the line to write in body type
+		static const char *const chats[] = { "ListboxChatWindowLanGame", "ListboxChatWindowGameSpyGameSetup" };
+		for (Int c = 0; c < (Int)ARRAY_SIZE(chats) && theRoomChat == NULL; ++c)
+			theRoomChat = roomWindow(layoutFilename, chats[c]);
+		roomFont(theRoomChat, UIStyle::MENU_TEXT_HINT);
+		roomFont(roomWindow(layoutFilename, "TextEntryChat"), UIStyle::MENU_TEXT_HINT);
+		Int tabLeft = ROOM_COLUMN_LEFT;
+		static const char *const tabs[] = { "TabLobbySettings", "TabChat" };
+		for (Int t = 0; t < (Int)ARRAY_SIZE(tabs); ++t)
+		{
+			GameWindow *tab = roomWindow(layoutFilename, tabs[t]);
+			if (tab == NULL)
+				continue;
+			tab->winSetDrawFunc(drawRoomTab);
+			DisplayString *words = roomText(TEXT_TAB + 1 + t, tab->winGetText(), UIStyle::menuFont(UIStyle::MENU_TEXT_LABEL + 2, TRUE));
+			Int w, h;
+			words->getSize(&w, &h);
+			const Int width = REAL_TO_INT(w / UIStyle::boardFit(TheDisplay->getWidth(), TheDisplay->getHeight()).scale) + 36 + 28;
+			roomPlace(tab, tabLeft, 506, tabLeft + width, 536);
+			tabLeft += width + 8;
+		}
+	}
+
+	void shutdownRoomLook(void)
+	{
+		for (Int i = 0; i < TEXT_COUNT; ++i)
+		{
+			if (theRoomTexts[i])
+				TheDisplayStringManager->freeDisplayString(theRoomTexts[i]);
+			theRoomTexts[i] = NULL;
+		}
+		theRoomParent = theRoomContainer = theRoomTitle = theRoomMap = theRoomMapName = theRoomSelectMap = theRoomPresets = NULL;
+		theRoomChat = NULL;
+		for (Int i = 0; i < 4; ++i)
+			theRoomStats[i] = NULL;
+		theRoomRowCount = 0;
+		theRoomGame = NULL;
+		theRoomBinder = NULL;
+		theRoomKind = ROOM_NONE;
+		theRoomClassic = TRUE;
+	}
+}
+
+void SetLobbyRoomClassic(Bool classic)
+{
+	theRoomClassic = classic;
+	if (!classic)
+		theRoomPlan.itemCount = 0;
+}
+
+void SetLobbyRowBinder(LobbyRowBinder binder)
+{
+	theRoomBinder = binder;
+	theRoomBoundCount = -1;
+}
+
+void LobbyRoomUpdate(void)
+{
+	if (theRoomParent == NULL || !theRoomClassic)
+		return;
+	Bool listOpen = FALSE;
+	for (Int row = 0; row < theRoomRowCount; ++row)
+		listOpen = listOpen || roomComboOpen(theRoomRows[row].team);
+	if (theRoomDirty || (theRoomHeld && !listOpen))
+		roomRefresh();
+}
+
+Bool LobbyRoomInput(UnsignedInt msg, UnsignedIntPtr mData1)
+{
+	if (theRoomParent == NULL || !theRoomClassic || theRoomGame == NULL || theRoomPlan.maxScroll == 0 || theSeatsUnderPicker)
+		return FALSE;
+	const Int mouseX = (Short)LOLONGTOSHORT(mData1), mouseY = (Short)HILONGTOSHORT(mData1);
+	const IRegion2D seats = UIStyle::boardRect(ROOM_LEFT, LOBBY_SEATS_TOP, ROOM_SEAT_COLUMN_RIGHT, LOBBY_SEATS_BOTTOM);
+	if (mouseX < seats.lo.x || mouseX >= seats.hi.x || mouseY < seats.lo.y || mouseY >= seats.hi.y)
+		return FALSE;
+	Int step = 0;
+	if (msg == GWM_WHEEL_UP || msg == GWM_WHEEL_DOWN)
+		step = msg == GWM_WHEEL_UP ? -1 : 1;
+	else if (msg == GWM_LEFT_DOWN)
+	{
+		// a strip moves a seat; the track a window's worth above or below its thumb
+		const Int shown = max(1, theRoomPlan.orderCount - theRoomPlan.above - theRoomPlan.below);
+		const IRegion2D above = UIStyle::boardRect(ROOM_LEFT, LOBBY_SEATS_TOP, ROOM_CELLS_RIGHT, LOBBY_SEATS_TOP + LOBBY_ROW_STRIP);
+		const IRegion2D below = UIStyle::boardRect(ROOM_LEFT, LOBBY_SEATS_BOTTOM - LOBBY_ROW_STRIP, ROOM_CELLS_RIGHT, LOBBY_SEATS_BOTTOM);
+		if (theRoomPlan.above > 0 && mouseY < above.hi.y && mouseX < above.hi.x)
+			step = -1;
+		else if (theRoomPlan.below > 0 && mouseY >= below.lo.y && mouseX < below.hi.x)
+			step = 1;
+		else if (mouseX >= UIStyle::boardRect(1276, 0, 1276, 0).lo.x)
+		{
+			const Int span = LOBBY_SEATS_BOTTOM - LOBBY_SEATS_TOP;
+			const Int thumbTop = roomY(LOBBY_SEATS_TOP + span * theRoomPlan.above / max(1, theRoomPlan.orderCount));
+			step = mouseY < thumbTop ? -shown : shown;
+		}
+	}
+	if (step == 0)
+		return FALSE;
+	theRoomScroll = max(0, min(theRoomPlan.maxScroll, theRoomScroll + step));
+	roomRefresh();
+	return TRUE;
+}
+
+void FitLobbyRoomMap(GameWindow *mapWindow, const MapMetaData *map)
+{
+	if (mapWindow == NULL || mapWindow != theRoomMap || !theRoomClassic)
+		return;
+	Real ratio = 542.0f / 278.0f;
+	if (map)
+	{
+		const Real w = map->m_extent.hi.x - map->m_extent.lo.x;
+		const Real h = map->m_extent.hi.y - map->m_extent.lo.y;
+		if (w > 0.0f && h > 0.0f)
+			ratio = w / h;
+	}
+	if (ratio >= 1.3f)
+	{
+		// wide: the column's width at its own shape, at most 278 tall, the name under it
+		const Int height = min(278, REAL_TO_INT(542.0f / ratio + 0.5f));
+		roomPlace(mapWindow, ROOM_COLUMN_LEFT, LOBBY_SEATS_TOP, ROOM_RIGHT, LOBBY_SEATS_TOP + height);
+		roomPlace(theRoomMapName, ROOM_COLUMN_LEFT, 448, ROOM_RIGHT - 208, 478);
+		roomPlace(theRoomSelectMap, ROOM_RIGHT - 200, 448, ROOM_RIGHT, 494);
+	}
+	else
+	{
+		// squarer: 324 tall at the left, its name and Select Map beside it
+		const Int width = min(324, REAL_TO_INT(324.0f * ratio + 0.5f));
+		roomPlace(mapWindow, ROOM_COLUMN_LEFT, LOBBY_SEATS_TOP, ROOM_COLUMN_LEFT + width, LOBBY_SEATS_TOP + 324);
+		// two lines for a long name beside the picture
+		roomPlace(theRoomMapName, ROOM_COLUMN_LEFT + 344, LOBBY_SEATS_TOP, ROOM_RIGHT, LOBBY_SEATS_TOP + 64);
+		roomPlace(theRoomSelectMap, ROOM_RIGHT - 200, LOBBY_SEATS_TOP + 278, ROOM_RIGHT, LOBBY_SEATS_TOP + 324);
+	}
+}
+
 void InitLobbySeatVisuals(GameWindow *parent, const char *layoutFilename)
 {
 	DirectStrikeLobby_restoreRoom();	// what a Direct Strike room before this one hid
 	resetSeatRows();
 	attachSeatRatings(parent, layoutFilename);
+	initRoomLook(parent, layoutFilename);
 	GameWindow **const windows[] = { theSeatCard, theSeatBar, theSeatSwatch, theSeatTeam };
 	const char *const names[] = { "SeatCard", "SeatBar", "SeatSwatch", "SeatTeam" };
 	for (Int kind = 0; kind < (Int)ARRAY_SIZE(names); ++kind)
@@ -2414,6 +3687,7 @@ void SnapLobbyRulesLists(GameWindow *parent, const char *layoutFilename)
 void ShutdownLobbySeatVisuals(void)
 {
 	detachSeatRatings();
+	shutdownRoomLook();
 	FactionPickerDetach();
 	DirectStrikeLobby_detach();
 	for (Int i = 0; i < MAX_SLOTS; ++i)
@@ -2456,6 +3730,9 @@ void UpdateLobbySeatVisuals(GameInfo *myGame)
 		theSeatCard[row]->winSetEnabledColor(0, ready ? theCardReadyColor : UIStyle::PANEL);
 		theSeatCard[row]->winSetEnabledBorderColor(0, host ? UIStyle::GOLD : UIStyle::FRAME);
 	}
+	// the room's order, window and rows from the slots as they now stand
+	theRoomGame = myGame;
+	roomRefresh();
 }
 
 // -----------------------------------------------------------------------------

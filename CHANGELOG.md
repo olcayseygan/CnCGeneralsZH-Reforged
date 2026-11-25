@@ -8,6 +8,21 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## The game room in the new menu look
+
+- The room you set up every skirmish, LAN game and online custom game in is the next screen in the new menu look: the thin lit frame with its ruler ticks, one lit key (Play Game, Start or Accept), and every drop-down and check box drawn in the same lines instead of EA's 2003 art.
+- Seats sit under a head for their team, the smallest team first, so a 4 v 4 reads as two blocks of four and a 1 v 31 last stand shows the one player on top. Players with no team come first, open and closed seats last. Change a seat's team and the row moves to its new group once the list closes, and lights up for a second so you can see where it went.
+- Every row is the same size at 32 seats as at 8: the list scrolls past what fits, with "12 SEATS ABOVE" and "13 SEATS BELOW" at its edges, and the wheel, those strips and the track move it a seat or a page at a time. Each seat shows its army's portrait, a computer its level over its personality, and in a network room every player says HOST, READY or NOT READY under his name.
+- In a LAN or online room the chat is a tab beside the rules instead of a band under the seats, so all eight seats stay on screen, and a closed chat counts the lines you have not read. SEND beside the line sends what Enter sends; in a LAN room that button used to send an emote.
+- The map keeps its own shape: a wide map like Iron Dragon fills the column 542 by 278 with its name under it, a squarer one stands at the left with its name beside it. A joiner reads "The host picks the map" where Select Map would be.
+- The mode question behind the Mods buttons is a box in the same look: a card a mode with its picture, a line on what it plays and how many seats it takes, the default lit, Esc to cancel and Enter for the lit card.
+
+## The main menu in the new menu look
+
+- EA's main menu was a stack of drop-downs laid out for an 800x600 screen and stretched: Multiplayer opened a list of Online and Network, a campaign took three lists in a row (Generals or Zero Hour, then the mission, then the difficulty), and the side emblems and EA's logo filled what was left. It is now one rail on the right in the new menu look, the game's name and version at its head and the shell map clear and undimmed beside it. Multiplayer opens the LAN lobby in one click, and Direct Connect is still in there. A side opens one panel beside the rail: the original and the Zero Hour campaign as two tabs, the missions as numbered tiles, and Easy, Medium and Hard as keys that start the mission you picked. Mods shows Direct Strike and Apocalypse as two cards. Every button says in one line what it opens, Enter presses the lit key and Esc goes back up one.
+- Online play starts from the launcher's Online key: the game opens on the login over the main menu, or straight on the hub when it remembers you, and Back from the online screens lands on that menu, whose rail keeps an Online key to go back in. A game started any other way no longer shows an Online button that could only tell you to use the launcher.
+- Exit Game asks "Close Zero Hour Reforged and go back to the desktop?" in its own box, where it used to borrow the in-match "Are you sure you want to exit?". The credits roll in a column of glass over the live shell map, with this edition's people first.
+
 ## Message boxes in the new menu look
 
 - Every question the game asks outside a match, from Exit to a failed join, used to come up in EA's fixed box of 2003: drawn for an 800x600 screen and stretched, 300 by 328 of that screen whatever it held. It is now the first piece of the new menu look: a thin lit blue edge with a ruler's ticks round see-through glass, the title in capitals over a lit rule, the question at 18 px on a 1080p screen and 12 at 720, and the box as tall as its text, 28 px a line. The key Enter presses is lit and sits at the right; Escape answers No or Cancel, and the foot says which key does what. A key acts only when the box saw it pressed, so the Enter that sent a chat line or a join no longer answers the box that opened from it.

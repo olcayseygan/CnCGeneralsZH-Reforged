@@ -32,10 +32,12 @@
 #define __GUIUTIL_H__
 
 #include "Common/NameKeyGenerator.h"		// NameKeyType, which LobbyTabClicked takes
+#include "GameNetwork/NetworkDefs.h"		// MAX_SLOTS, which the room plan holds
 
 class GameWindow;
 class GameInfo;
 class GameSlot;
+class MapMetaData;
 
 // Hides the named windows of a room while a popup (a map list) lies over them; showing brings back
 // only the ones the last hide took down, so a box hidden for its own reason stays hidden.
@@ -264,15 +266,84 @@ Bool IsApocalypseMap(const AsciiString &map);
 // hidden.  A room calls it after each slot list repaint, which would show them again
 void HideLobbySeatRowsFrom(GameWindow *parent, const char *layoutFilename, Int firstHiddenRow);
 
+// The Classic room in the menu language (docs/plans/MENU-REDESIGN.md package 3a in the wrapper, the
+// design README-classic-room.md).  The three rooms keep their layouts' windows; InitLobbySeatVisuals
+// gives them frame A, the heads, the drawn rows and the menu's keys, and UpdateLobbySeatVisuals lays
+// the seat rows out from a team-grouped order: one head a team, teams from the fewest seats to the
+// most (seated players with no team first, open and closed seats with no team last), a scroll past
+// what the seat column holds, every row the same size at 32 seats as at 8.  A team change takes its
+// row to its new group only once the team list has closed.  Everything at 1080, in board pixels.
+enum
+{
+	LOBBY_ROW_SEAT = 90,				///< a seated row
+	LOBBY_ROW_EMPTY = 52,				///< an open or closed seat: one box
+	LOBBY_ROW_HEAD = 34,				///< a team's head
+	LOBBY_ROW_STRIP = 26,				///< "n SEATS ABOVE" or "BELOW" at the window's edge
+	LOBBY_SEATS_TOP = 160,
+	LOBBY_SEATS_BOTTOM = 952,
+	LOBBY_GROUP_ALONE = -1,			///< seated players with no team, under NO TEAM, EACH ALONE
+	LOBBY_GROUP_UNSEATED = -2		///< open and closed seats with no team, under NO TEAM YET
+};
+struct LobbySeatState
+{
+	Int team;			///< the team the order sorts the seat by, -1 for none
+	Bool seated;	///< a human or a computer sits there
+};
+struct LobbyRoomItem
+{
+	Bool head;		///< a team's head; else a seat's row
+	Int group;		///< the team, or LOBBY_GROUP_ALONE / LOBBY_GROUP_UNSEATED
+	Int slot;			///< the seat a row shows, -1 for a head
+	Int count;		///< the seats in the group, for a head
+	Int top;			///< from the window's top
+	Int height;
+};
+struct LobbyRoomPlan
+{
+	LobbyRoomItem items[ 2 * MAX_SLOTS ];
+	Int itemCount;
+	Int order[ MAX_SLOTS ];		///< every seat, in the order the room shows them
+	Int orderCount;
+	Int scroll;								///< the first seat shown, an index into order
+	Int maxScroll;
+	Int above, below;					///< seats past the window's top and foot
+};
+/// the seats of count slots in the room's order: groups as above, slots in order inside a group;
+/// group[] is each ordered seat's group
+void LobbyOrderSeats( const LobbySeatState seats[], Int count, Int order[], Int group[] );
+/// the window of that order from scroll (clamped) in height pixels, at most mostShown rows: the first
+/// seat's head always (a group the window cuts repeats it), whole rows only, a strip for what is past
+/// either edge
+void LobbyPlanRoom( const LobbySeatState seats[], Int count, Int scroll, Int height, Int mostShown, LobbyRoomPlan &plan );
+/// FALSE while a Direct Strike lobby lies over the room, which reads its seats by the layout's rows:
+/// the room then binds rows to seats one to one and lays nothing out.  Each room says it at init and
+/// a network room again once a joiner learns the mode.
+void SetLobbyRoomClassic( Bool classic );
+/// The skirmish room has fewer rows than seats: the plan hands it the seats the window shows (seat 0
+/// first when shown), and it points its rows at them and repaints them.  The network rooms have a row
+/// a seat and set none.
+typedef void (*LobbyRowBinder)( const Int seats[], Int count );
+void SetLobbyRowBinder( LobbyRowBinder binder );
+/// The room's map at its own shape in the right column: a wide map 542 wide and at most 278 tall
+/// with its name under it, a squarer one 324 tall at the left with its name beside it.  Only the
+/// room's own map window moves; a picker's passes through.  positionStartSpots calls it first.
+void FitLobbyRoomMap( GameWindow *mapWindow, const MapMetaData *map );
+/// a room's Update: lays the rows out again when a held team change or a scroll is owed
+void LobbyRoomUpdate( void );
+/// a room's Input: the wheel over the seats and a click on a strip or the track scroll them; TRUE
+/// when it took the message
+Bool LobbyRoomInput( UnsignedInt msg, UnsignedIntPtr mData1 );
+
 // The mode a host's room is for, the Create Game and Host buttons' question.  Set by the lobby that
 // asked, read by the room it opens: LAN spends it at room init, online keeps it while hosting
 // (OnlinePeer's game.host and the options it holds back until the mode's map is staged).
 enum HostGameMode { HOST_MODE_CLASSIC = 0, HOST_MODE_DIRECT_STRIKE, HOST_MODE_APOCALYPSE };
 extern Int TheHostGameMode;
-// The Mods buttons' question (main menu, LAN lobby, online custom lobby): GameModeBox.wnd's Direct
-// Strike and Apocalypse, and Cancel, which answers nothing; Create Game and Host give Classic unasked.
-// `modsOnly` FALSE puts the Classic card back in front of them.  The answer gets the HostGameMode picked
-void AskGameMode(void (*answer)(Int mode), Bool modsOnly = TRUE);
+// The mode question, a box in the menu language (GameModeBox.wnd's windows, drawn by code): three
+// cards, Classic lit as Enter's, and Cancel, which answers nothing.  `modsOnly` TRUE is the old Mods
+// buttons' question without the Classic card; FALSE asks all three, Create Game's.  `solo` words it
+// for Solo Play (its facts count the computer seats).  The answer gets the HostGameMode picked
+void AskGameMode(void (*answer)(Int mode), Bool modsOnly = TRUE, Bool solo = FALSE);
 /// a mode's name with its version tag after it ("Direct Strike v1.0"): the name's key, then the one key
 /// that holds the version for every place the mode is named; the bare name when that key is missing or empty
 UnicodeString ModeNameWithVersion(const char *nameKey, const char *versionKey);

@@ -1761,6 +1761,7 @@ void InitWOLGameGadgets( void )
 	InitAIPersonaComboBoxes( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd", comboBoxAIPersona, comboBoxAIPersonaID );
 	InitHandicapComboBoxes( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd", comboBoxHandicap, comboBoxHandicapID );
 	InitLobbySeatVisuals( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd" );
+	SetLobbyRoomClassic( !s_directStrike );
 	SnapLobbyRulesLists( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd" );
 
 	// the settings page and the chat log share one rectangle; this opens on the chat log
@@ -2317,7 +2318,11 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 	GameSpyStagingRoom *room = TheGameSpyInfo->getCurrentStagingRoom();
 	// the shutdown clears the gadgets before its exit animation plays, and this runs through that animation
 	if (parentWOLGameSetup && room && !room->isGameInProgress())
+	{
 		fitRandomMapToRoom(room);
+		// a team change held while its list was open lands now
+		LobbyRoomUpdate();
+	}
 
 	if (TheShell->isAnimFinished() && !buttonPushed && TheGameSpyPeerMessageQueue)
 	{
@@ -3233,8 +3238,11 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 WindowMsgHandledType WOLGameSetupMenuInput( GameWindow *window, UnsignedInt msg,
 																			 WindowMsgData mData1, WindowMsgData mData2 )
 {
+	// the wheel over the seats, a click on their strips or track
+	if ( ( msg == GWM_WHEEL_UP || msg == GWM_WHEEL_DOWN || msg == GWM_LEFT_DOWN ) && LobbyRoomInput( msg, mData1 ) )
+		return MSG_HANDLED;
 	/*
-	switch( msg ) 
+	switch( msg )
 	{
 
 		//-------------------------------------------------------------------------------------------------

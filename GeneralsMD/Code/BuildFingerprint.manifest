@@ -4856,6 +4856,7 @@ Tests/test_renderer_lighting.cpp
 Tests/test_renderer_particles.cpp
 Tests/test_renderer_water_foam.cpp
 Tests/test_road_buffer.cpp
+Tests/test_room_layout.inc
 Tests/test_score_screen.inc
 Tests/test_sdl_ao.cpp
 Tests/test_sdl_atmosphere.cpp

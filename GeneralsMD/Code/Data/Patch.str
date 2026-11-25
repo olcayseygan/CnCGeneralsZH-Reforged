@@ -7306,15 +7306,15 @@ GUI:GameModeApocalypse
 END
 
 GUI:GameModeClassicFact
-"Any map"
+"Any map, every rule yours"
 END
 
 GUI:GameModeDirectStrikeFact
-"Up to 6 players"
+"Build a wave, it marches the lane"
 END
 
 GUI:GameModeApocalypseFact
-"Up to 4, co-op"
+"Hold the walls against the dead"
 END
 
 GUI:ApocalypseLower
@@ -7633,4 +7633,162 @@ END
 
 GUI:HintEscCancel
 "Esc: Cancel"
+END
+
+// Menu redesign package 3a, the Classic room and the mode question: the seat list's heads and strips,
+// the columns, the header's host and seats, the chat tab, the foot's record, the mode cards' seats.
+GUI:RoomTeam
+"TEAM %d"
+END
+
+GUI:RoomSeats
+"%d SEATS"
+END
+
+GUI:RoomSeat
+"%d SEAT"
+END
+
+GUI:RoomNoTeam
+"NO TEAM, EACH ALONE"
+END
+
+GUI:RoomNoTeamYet
+"NO TEAM YET"
+END
+
+GUI:RoomSeatsAbove
+"%d SEATS ABOVE"
+END
+
+GUI:RoomSeatsBelow
+"%d SEATS BELOW"
+END
+
+GUI:RoomHost
+"HOST"
+END
+
+GUI:RoomReady
+"READY"
+END
+
+GUI:RoomNotReady
+"NOT READY"
+END
+
+GUI:RoomPlayersReady
+"PLAYERS READY"
+END
+
+GUI:RoomPreset
+"PRESET"
+END
+
+GUI:RoomSeatsTaken
+"%d of %d seats"
+END
+
+GUI:RoomHostPicksMap
+"The host picks the map"
+END
+
+GUI:RoomMapPlayers
+"%d players"
+END
+
+GUI:RoomRules
+"RULES"
+END
+
+GUI:RoomChat
+"CHAT"
+END
+
+GUI:RoomSend
+"SEND"
+END
+
+GUI:RoomPlayer
+"PLAYER"
+END
+
+GUI:RoomArmy
+"ARMY"
+END
+
+GUI:RoomColour
+"COLOUR"
+END
+
+GUI:RoomTeamHead
+"TEAM"
+END
+
+GUI:RoomHandicap
+"HANDICAP"
+END
+
+GUI:RoomMap
+"MAP"
+END
+
+GUI:RoomVersus
+"v"
+END
+
+GUI:RoomLanGame
+"LAN Game"
+END
+
+GUI:RoomWins
+"WINS"
+END
+
+GUI:RoomLosses
+"LOSSES"
+END
+
+GUI:RoomStreak
+"STREAK"
+END
+
+GUI:RoomBestStreak
+"BEST STREAK"
+END
+
+GUI:GameModeSoloTitle
+"Solo Play"
+END
+
+GUI:GameModeSoloQuestion
+"Which mode will you play?"
+END
+
+GUI:GameModeHint
+"Esc cancels, Enter picks the lit one"
+END
+
+GUI:GameModeClassicSeats
+"UP TO 32 PLAYERS"
+END
+
+GUI:GameModeDirectStrikeSeats
+"UP TO 6 PLAYERS"
+END
+
+GUI:GameModeApocalypseSeats
+"UP TO 4, CO-OP"
+END
+
+GUI:GameModeClassicSolo
+"YOU AND UP TO 31 AI"
+END
+
+GUI:GameModeDirectStrikeSolo
+"YOU AND UP TO 5 AI"
+END
+
+GUI:GameModeApocalypseSolo
+"YOU AND UP TO 3 AI"
 END

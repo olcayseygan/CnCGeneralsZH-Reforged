@@ -134,6 +134,18 @@ Bool DockUpdate::isClearToApproach( Object const* docker ) const
 	return FALSE;
 }
 
+Int DockUpdate::countDockersOtherThan( Object const* docker ) const
+{
+	const ObjectID dockerID = docker ? docker->getID() : INVALID_ID;
+	Int count = 0;
+	for( Int positionIndex = 0; positionIndex < m_approachPositionOwners.size(); ++positionIndex )
+		if( m_approachPositionOwners[positionIndex] != INVALID_ID && m_approachPositionOwners[positionIndex] != dockerID )
+			++count;
+	if( m_activeDocker != INVALID_ID && m_activeDocker != dockerID )
+		++count;
+	return count;
+}
+
 Bool DockUpdate::reserveApproachPosition( Object* docker, Coord3D *position, Int *index )
 {
 

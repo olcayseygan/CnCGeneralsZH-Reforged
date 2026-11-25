@@ -426,8 +426,12 @@ public:
  	Bool isSupplySourceSafe( Int minSupplies );
 	/// Is a supply source attacked?
 	Bool isSupplySourceAttacked( void );
-	/// Would a flying gatherer of ours cross a known anti-air gun to reach this pile?
-	Bool gathererShunsPile( const Object *gatherer, const Object *pile );
+	/// Would a flying gatherer of ours cross a known anti-air gun to reach this pile or supply center?
+	Bool gathererShunsDock( const Object *gatherer, const Object *dock );
+	/// Does a known anti-air gun reach this supply center of ours, so a flying gatherer dies there?
+	Bool supplyCenterUnderAirGuns( const Object *center );
+	/// How much farther this pile counts for a gatherer of ours for the dockers ahead of it there
+	Real gathererLineDistance( Object *gatherer, Object *pile );
 
 	Bool isLocationSafe( const Coord3D *pos, const ThingTemplate *tthing);
 

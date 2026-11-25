@@ -80,6 +80,7 @@
 #include "GameLogic/Module/RebuildHoleBehavior.h"
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
+#include "GameLogic/Locomotor.h"
 #include "GameLogic/PartitionManager.h"
 #include "Common/ActionManager.h"				// canCaptureBuilding, for the tech buildings
 #include "GameLogic/Module/SpecialPowerModule.h"	// ... and the module that does it
@@ -979,6 +980,8 @@ void AIPlayer::queueSupplyTruck( void )
 				}
 				// Ok, it has supplies available near it.
 				checkForSupplyCenter(info, supplyCenter);
+				// a flying gatherer is not sent back to a center under a known anti-air gun; it finds a safe one itself
+				const Bool underAirGuns = supplyCenterUnderAirGuns( supplyCenter );
 				Int curGatherers = 0;
 				// See how many harvesters we have servicing this supply src.
 				// Scan my units.
@@ -1000,7 +1003,7 @@ void AIPlayer::queueSupplyTruck( void )
 								ObjectID dock = supplyTruckAI->getPreferredDockID();
 								if (dock == supplyCenter->getID()) {
 									curGatherers++;
-									if (!supplyTruckAI->isCurrentlyFerryingSupplies()) {
+									if (!supplyTruckAI->isCurrentlyFerryingSupplies() && !(underAirGuns && obj->isKindOf(KINDOF_AIRCRAFT))) {
 										// Note - although this is the ai, we are sending in CMD_FROM_PLAYER.
 										// This causes the dock object to stick in the docking interface.
 										// The supply truck ai issues dock commands, and they become confused.
@@ -1067,9 +1070,13 @@ void AIPlayer::queueSupplyTruck( void )
 				 and no center buys while a gatherer of another stands idle beside boxes it cannot get at. */
 			Object *center = TheGameLogic->findObjectByID(info->getObjectID());
 			Bool truckWaiting = FALSE;
+			// a center under a known anti-air gun gets no flying gatherer, idle or bought: a Hard USA bought 19
+			// Chinooks by frame 7,200 for one a Stinger Site reached, and lost 17 of them unloading there
+			Bool underAirGuns = FALSE;
 			if (center && !center->isKindOf(KINDOF_REBUILD_HOLE)) {
+				underAirGuns = supplyCenterUnderAirGuns(center);
 				Object *idleTruck = findIdleTruck(m_player, this, center, &truckWaiting);
-				if (idleTruck) {
+				if (idleTruck && !(underAirGuns && idleTruck->isKindOf(KINDOF_AIRCRAFT))) {
 					DEBUG_LOG(("AI GATHERER frame %d player %d sends idle '%s' %d to center %d at (%.0f,%.0f), %d of %d there\n",
 						TheGameLogic->getFrame(), m_player->getPlayerIndex(), idleTruck->getTemplate()->getName().str(), idleTruck->getID(),
 						center->getID(), center->getPosition()->x, center->getPosition()->y, max(info->getCurrentGatherers(), 0) + 1, desiredGatherers));
@@ -1100,7 +1107,7 @@ void AIPlayer::queueSupplyTruck( void )
 					// carries the side's own truck, whose price and prerequisites the factory really uses
 					const ThingTemplate *own = ownTemplate(m_player, tTemplate);
 					Object *factory = findFactory(own, false);
-					if (factory) {
+					if (factory && !(underAirGuns && own->isKindOf(KINDOF_AIRCRAFT))) {
 						// we can build one.
 						WorkOrder *order = newInstance(WorkOrder);
 						order->m_thing = own;
@@ -16121,24 +16128,87 @@ void AIPlayer::collectKnownGuns( std::vector<AIKnownGun> *guns ) const
 	guns->insert( guns->end(), m_knownGuns.begin(), m_knownGuns.end() );
 }
 
-/** Whether a gatherer that flies shuns a pile: Medium and up, when the flight from where it is to the pile
-	* crosses a known anti-air gun (gunsOverFlight, the pile itself included).  On Tournament Desert China puts
-	* Gattling Cannons beside the middle docks, and the Air Force's supply Chinooks flew to them under the guns
-	* trip after trip.  The guns are read afresh rather than from collectKnownGuns' frame copy: this is asked in
-	* the object updates, before the AI's own pass, and a copy taken there would be the one the pass reads,
-	* where a save loaded on this frame would read its own.  The same rung lets steerAircraft fly a jet that is
-	* going home on its own round the guns. */
+/** Whether a gatherer that flies shuns a dock, a pile or a supply center: Medium and up, when the flight from
+	* where it is to the dock crosses a known anti-air gun (gunsOverFlight, the dock itself included).  On
+	* Tournament Desert China puts Gattling Cannons beside the middle docks, and the Air Force's supply Chinooks
+	* flew to them under the guns trip after trip.  The guns are read afresh rather than from collectKnownGuns'
+	* frame copy: this is asked in the object updates, before the AI's own pass, and a copy taken there would be
+	* the one the pass reads, where a save loaded on this frame would read its own.  The same rung lets
+	* steerAircraft fly a jet that is going home on its own round the guns. */
 static const AIRungReal AIR_SHUNS_KNOWN_GUNS = { { 0.0f, 1.0f, 1.0f }, AIKNOB_GATED };
 
-Bool AIPlayer::gathererShunsPile( const Object *gatherer, const Object *pile )
+static Bool airGunReaches( const AIKnownGun &gun, Real x, Real y )
+{
+	return gun.m_airReach > 0.0f && sqr( gun.m_x - x ) + sqr( gun.m_y - y ) <= sqr( gun.m_airReach + HELIX_GUN_MARGIN );
+}
+
+Bool AIPlayer::gathererShunsDock( const Object *gatherer, const Object *dock )
 {
 	if( !gatherer->isKindOf( KINDOF_AIRCRAFT ) || !runsOwnAI() || aiRatingLerp( m_rating, AIR_SHUNS_KNOWN_GUNS ) <= 0.0f )
 		return FALSE;
 	std::vector<AIKnownGun> guns;
 	readKnownGuns( &guns );
 	const Coord3D *from = gatherer->getPosition();
-	const Coord3D *to = pile->getPosition();
+	const Coord3D *to = dock->getPosition();
+	// a gun that reaches where the gatherer already is and not the dock is one it gets away from by going: it
+	// held a Chinook that had just unloaded under a Stinger Site, every pile shunned, until it was shot there
+	for( size_t g = guns.size(); g-- > 0; )
+		if( airGunReaches( guns[ g ], from->x, from->y ) && !airGunReaches( guns[ g ], to->x, to->y ) )
+			guns.erase( guns.begin() + g );
 	return gunsOverFlight( guns, from->x, from->y, to->x, to->y ) > 0;
+}
+
+/** A known anti-air gun reaches this supply center: a Chinook unloads there landed for three seconds, and 98 of
+	* the 120 that a Hard USA lost to a Medium GLA by frame 7,200 (seeds 400-419, both seat orders) were shot doing
+	* it, a Stinger Site or a Quad Cannon 80 to 430 away, while the center bought another for 1,200 every time. */
+Bool AIPlayer::supplyCenterUnderAirGuns( const Object *center )
+{
+	if( !runsOwnAI() || aiRatingLerp( m_rating, AIR_SHUNS_KNOWN_GUNS ) <= 0.0f )
+		return FALSE;
+	std::vector<AIKnownGun> guns;
+	readKnownGuns( &guns );
+	for( size_t g = 0; g < guns.size(); ++g )
+		if( airGunReaches( guns[ g ], center->getPosition()->x, center->getPosition()->y ) )
+			return TRUE;
+	return FALSE;
+}
+
+/// the template's undamaged top speed on its normal locomotors, a frame; a landed Chinook taxis
+static Real normalTopSpeed( const ThingTemplate *tmpl )
+{
+	Real fastest = 0.0f;
+	const ModuleInfo &modules = tmpl->getBehaviorModuleInfo();
+	for( Int m = 0; m < modules.getCount(); ++m )
+	{
+		const ModuleData *data = modules.getNthData( m );
+		if( data == NULL || !data->isAiModuleData() )
+			continue;
+		const LocomotorTemplateVector *set = static_cast< const AIUpdateModuleData * >( data )->findLocomotorTemplateVector( LOCOMOTORSET_NORMAL );
+		for( size_t i = 0; set != NULL && i < set->size(); ++i )
+			fastest = max( fastest, ( *set )[ i ]->getMaxSpeed() );
+		break;
+	}
+	return fastest;
+}
+
+/** How much farther a pile counts for a gatherer of ours for the line at it.  A pile docks one at a time, and
+	* a Chinook holds it for its whole load, eight boxes at 1.25 s, so a Hard USA's Chinooks queued at the
+	* nearest pile while others stood free in their reach: its home pile was picked every 196 to 252 frames
+	* all match, the time one load takes.  Each docker ahead costs that load's wait, worth half of it flown
+	* there and back; a GLA Worker's box takes three frames and its line costs next to nothing. */
+Real AIPlayer::gathererLineDistance( Object *gatherer, Object *pile )
+{
+	if( !runsOwnAI() )
+		return 0.0f;
+	AIUpdateInterface *ai = gatherer->getAI();
+	SupplyTruckAIInterface *truck = ai ? ai->getSupplyTruckAIInterface() : NULL;
+	DockUpdateInterface *dock = pile->getDockUpdateInterface();
+	if( truck == NULL || dock == NULL )
+		return 0.0f;
+	const Int ahead = dock->countDockersOtherThan( gatherer );
+	if( ahead <= 0 )
+		return 0.0f;
+	return ahead * normalTopSpeed( gatherer->getTemplate() ) * 0.5f * truck->getActionDelayForDock( pile );
 }
 
 static Bool carriesWeapon( const Object *obj )

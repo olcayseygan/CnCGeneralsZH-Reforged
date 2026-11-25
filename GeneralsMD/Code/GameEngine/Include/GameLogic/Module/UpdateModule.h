@@ -347,6 +347,9 @@ public:
 	virtual Bool isAllowPassthroughType() = 0;	///< Not all docks allow you to path through them in your AIDock machine
 	
 	virtual Bool isRallyPointAfterDockType() = 0; ///< A minority of docks want to give you a final command to their rally point
+
+	/// How many dockers other than this one are inside or hold a place in the line, those on the way included
+	virtual Int countDockersOtherThan( Object const* docker ) const = 0;
 };
 
 //-------------------------------------------------------------------------------------------------

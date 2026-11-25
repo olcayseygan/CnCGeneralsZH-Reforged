@@ -224,9 +224,13 @@ Object *ResourceGatheringManager::findBestSupplyWarehouse( Object *queryObject )
 		{
 			Real distanceSquared;
 			Real currentCost = computeRelativeCost( queryObject, currentWarehouse, &distanceSquared );
+			// a skirmish AI's gatherer weighs the line already at the pile against the way to another
+			const Real line = ( ai && currentCost != FLT_MAX ) ? ai->gathererLineDistance( queryObject, currentWarehouse ) : 0.0f;
+			if( line > 0.0f )
+				currentCost = sqr( (Real)sqrt( distanceSquared ) + line );
 			if( (currentCost < bestCost) && (distanceSquared < maxDistanceSquared) &&
 					!isPileOfAnotherPlayer( queryObject->getControllingPlayer(), currentWarehouse ) &&
-					!(ai && ai->gathererShunsPile( queryObject, currentWarehouse )) )
+					!(ai && ai->gathererShunsDock( queryObject, currentWarehouse )) )
 			{
 				bestWarehouse = currentWarehouse;
 				bestCost = currentCost;
@@ -244,6 +248,11 @@ Object *ResourceGatheringManager::findBestSupplyCenter( Object *queryObject )
 	if( ( queryObject == NULL ) || ( queryObject->getAI() == NULL ) )
 		return NULL;
 
+	// A skirmish AI's flying gatherer keeps away from a center under anti-air guns it knows of, its own
+	// favourite included: 98 of 120 Chinooks a Hard USA lost to Medium GLA by frame 7,200 (seeds 400-419)
+	// were shot while unloading at a center a Stinger Site or Quad Cannon reached.
+	AIPlayer *ai = queryObject->getControllingPlayer() ? queryObject->getControllingPlayer()->getAIPlayer() : NULL;
+
 	SupplyTruckAIInterface *supplyTruckAI = queryObject->getAI()->getSupplyTruckAIInterface();
 	if( supplyTruckAI )
 	{
@@ -255,7 +264,8 @@ Object *ResourceGatheringManager::findBestSupplyCenter( Object *queryObject )
 			static const NameKeyType key_centerUpdate = NAMEKEY("SupplyCenterDockUpdate");
 			SupplyWarehouseDockUpdate *centerModule = (SupplyWarehouseDockUpdate*)dock->findUpdateModule( key_centerUpdate );
 			//If remotely okay, let User win.
-			if( centerModule && computeRelativeCost( queryObject, dock, NULL ) != FLT_MAX )
+			if( centerModule && computeRelativeCost( queryObject, dock, NULL ) != FLT_MAX &&
+					!(ai && ai->gathererShunsDock( queryObject, dock )) )
 				return dock;
 		}
 		// Please note, there is not a separate Warehouse and Center memory by Design.  Because
@@ -271,6 +281,7 @@ Object *ResourceGatheringManager::findBestSupplyCenterInList(Object *queryObject
 {
 	Object *bestCenter = NULL;
 	Real bestCost = FLT_MAX;
+	AIPlayer *ai = queryObject->getControllingPlayer() ? queryObject->getControllingPlayer()->getAIPlayer() : NULL;
 
 	objectIDListIterator iterator = m_supplyCenters.begin();
 	while( iterator != m_supplyCenters.end() )
@@ -285,7 +296,7 @@ Object *ResourceGatheringManager::findBestSupplyCenterInList(Object *queryObject
 		else
 		{
 			Real currentCost = computeRelativeCost( queryObject, currentCenter, NULL );
-			if( currentCost < bestCost )
+			if( currentCost < bestCost && !(ai && ai->gathererShunsDock( queryObject, currentCenter )) )
 			{
 				bestCenter = currentCenter;
 				bestCost = currentCost;

@@ -32,6 +32,7 @@
 #include "Common/Player.h"
 #include "Common/ResourceGatheringManager.h"
 #include "Common/ThingTemplate.h"
+#include "GameLogic/AIPlayer.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
@@ -631,6 +632,10 @@ TheInGameUI->DEBUG_addFloatingText("entering regrouping state", getMachineOwner(
 	kindofnot.clear();
 	// can't do best supply center of the player's resource brain, because that adds canTransfer checks.
 	destinationObject = ownerPlayer->findClosestByKindOf( owner, kindof, kindofnot );
+	// a skirmish AI's Chinook that found no safe center does not wait at one under anti-air guns
+	AIPlayer *ai = ownerPlayer->getAIPlayer();
+	if( destinationObject && owner->isKindOf( KINDOF_AIRCRAFT ) && ai && ai->supplyCenterUnderAirGuns( destinationObject ) )
+		destinationObject = NULL;
 	if( !destinationObject )
 	{
 		kindof.clear();

@@ -125,6 +125,7 @@ public:
 
 	/// Who is inside right now, INVALID_ID for nobody - an empty dock is not one to queue outside of
 	virtual ObjectID getActiveDocker( void ) const { return m_activeDocker; }
+	virtual Int countDockersOtherThan( Object const* docker ) const;
 	virtual void setDockOpen( Bool open ) { m_dockOpen = open; }	///< Open/Close the dock
 
 	virtual Bool isAllowPassthroughType();	///< Not all docks allow you to path through them in your AIDock machine

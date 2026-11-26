@@ -2105,6 +2105,7 @@ GameEngine/Include/GameClient/DrawGroupInfo.h
 GameEngine/Include/GameClient/Drawable.h
 GameEngine/Include/GameClient/DrawableInfo.h
 GameEngine/Include/GameClient/DrawableManager.h
+GameEngine/Include/GameClient/EndScreenLayout.h
 GameEngine/Include/GameClient/EstablishConnectionsMenu.h
 GameEngine/Include/GameClient/Eva.h
 GameEngine/Include/GameClient/ExtendedMessageBox.h
@@ -4875,6 +4876,7 @@ Tests/test_renderer_particles.cpp
 Tests/test_renderer_water_foam.cpp
 Tests/test_road_buffer.cpp
 Tests/test_room_layout.inc
+Tests/test_score_layout.inc
 Tests/test_score_screen.inc
 Tests/test_sdl_ao.cpp
 Tests/test_sdl_atmosphere.cpp

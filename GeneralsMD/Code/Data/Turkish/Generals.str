@@ -22551,3 +22551,72 @@ END
 GUI:QMMatchHead
 "Maç"
 END
+
+// Menu redesign package 13, the end screens.
+GUI:ScorePlace
+"Sıra"
+END
+
+GUI:ScorePlaces
+"Sıra %d–%d"
+END
+
+GUI:ScoreObservers
+"İzleyici"
+END
+
+GUI:ScoreTotal
+"Toplam"
+END
+
+GUI:ScoreBestInColumn
+"Sütunun en iyisi"
+END
+
+GUI:ScoreChat
+"Sohbet"
+END
+
+GUI:ScoreHighlightDestroyedValue
+"%ls yok edildi"
+END
+
+GUI:ScoreHighlightEarnedValue
+"%ls kazanıldı"
+END
+
+GUI:ScoreHighlightArmyValue
+"Ordu en çok %ls"
+END
+
+GUI:BuildOrderUnit
+"Birlik"
+END
+
+GUI:BuildOrderStructure
+"Yapı"
+END
+
+GUI:BuildOrderFolded
+"Yapım yok, katlandı"
+END
+
+GUI:BuildOrderAxis
+"Eksen son yapımda biter, %ls · maç %ls sürdü"
+END
+
+GUI:LaneEndTopUnit
+"En iyi birlik"
+END
+
+GUI:LaneEndTimelineMiddle
+"Orta"
+END
+
+GUI:LaneEndTowerDown
+"Kule yıkıldı"
+END
+
+GUI:LaneEndWaveSent
+"Dalga gönderildi"
+END

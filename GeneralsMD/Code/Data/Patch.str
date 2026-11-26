@@ -8363,3 +8363,73 @@ END
 GUI:QMMatchHead
 "Match"
 END
+
+// Menu redesign package 13, the end screens: the Summary's places, totals and foot, the build order's
+// axis and frames, the Direct Strike results' head, rows and timeline.
+GUI:ScorePlace
+"Place"
+END
+
+GUI:ScorePlaces
+"Places %d–%d"
+END
+
+GUI:ScoreObservers
+"Observers"
+END
+
+GUI:ScoreTotal
+"Total"
+END
+
+GUI:ScoreBestInColumn
+"Best in column"
+END
+
+GUI:ScoreChat
+"Chat"
+END
+
+GUI:ScoreHighlightDestroyedValue
+"%ls destroyed"
+END
+
+GUI:ScoreHighlightEarnedValue
+"%ls earned"
+END
+
+GUI:ScoreHighlightArmyValue
+"Army peaked at %ls"
+END
+
+GUI:BuildOrderUnit
+"Unit"
+END
+
+GUI:BuildOrderStructure
+"Structure"
+END
+
+GUI:BuildOrderFolded
+"No builds here, folded"
+END
+
+GUI:BuildOrderAxis
+"Axis ends at the last build, %ls · the match ran %ls"
+END
+
+GUI:LaneEndTopUnit
+"Top unit"
+END
+
+GUI:LaneEndTimelineMiddle
+"Middle"
+END
+
+GUI:LaneEndTowerDown
+"Tower destroyed"
+END
+
+GUI:LaneEndWaveSent
+"Wave sent"
+END

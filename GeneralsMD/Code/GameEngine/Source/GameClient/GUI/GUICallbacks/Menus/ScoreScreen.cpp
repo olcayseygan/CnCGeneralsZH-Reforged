@@ -112,6 +112,7 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/ChallengeGenerals.h"
 #include "GameClient/UIStyle.h"
+#include "GameClient/EndScreenLayout.h"
 #include "GameClient/ScoreScreenLayout.h"
 
 #ifdef _INTERNAL
@@ -158,14 +159,17 @@ GameWindow *listboxChatWindowScoreScreen = NULL;
 
 std::string LastReplayFileName;
 static Bool canSaveReplay = FALSE;
+static Bool s_chatWindows = FALSE;		///< the match has a chat, which the Summary's foot shows while it is open
+static Bool s_chatLine = FALSE;				///< and a line to type in (online keeps its chat line hidden)
 extern void PopupReplayUpdate(WindowLayout *layout, void *userData);
 // the summary and graphs panel that replaces the layout's score table, ScoreScreenGraphs.cpp
 extern void ScoreScreenGraphsInit( GameWindow *backdrop );
 extern void ScoreScreenGraphsAddPlayer( Player *player, const UnicodeString &name, Color color );
 extern void ScoreScreenGraphsAddSide( const UnicodeString &name, Color color, Int score, Int unitsBuilt, Int unitsLost, Int unitsDestroyed,
 	Int buildingsBuilt, Int buildingsLost, Int buildingsDestroyed, Int earned, Int spent );
-extern void ScoreScreenGraphsShow( GameWindow *floor, Bool chat );
-extern Real ScoreScreenGraphsChatTop( Real listBottom );
+extern void ScoreScreenGraphsShow( Int keys, Bool chat, Bool card );
+extern Int ScoreScreenGraphsFootShows( void );
+extern void ScoreScreenGraphsFootArea( Real &x0, Real &y0, Real &x1, Real &y1 );
 extern void ScoreScreenGraphsSinglePlayer( void );
 extern void ScoreScreenGraphsShutdown( void );
 extern Bool ScoreScreenGraphsSummaryOpen( void );
@@ -187,7 +191,9 @@ void initReplaySinglePlayer(void);
 void grabMultiPlayerInfo( void );
 void grabSinglePlayerInfo( void );
 static void hideScoreTable( void );
-static void placeButtonRow( void );
+static Int placeButtonRow( void );
+static void placeFoot( void );
+static void showFoot( void );
 static void placeOnBoard( GameWindow *win, Real x0, Real y0, Real x1, Real y1 );
 void ScoreScreenEnableControls(Bool enable);
 void displayChallengewinLoss( Image *imageGeneral, AsciiString strGeneral );
@@ -494,7 +500,9 @@ static void drawRatingCard( GameWindow *window, WinInstanceData *instData )
 	Int x, y, width, height;
 	window->winGetScreenPosition( &x, &y );
 	window->winGetSize( &width, &height );
-	UIStyle::panel( x, y, width, height, UIStyle::PANEL );
+	// the foot's middle in the menu language: dark glass inside a 1 px FRAME edge
+	TheDisplay->drawFillRect( x, y, width, height, GameMakeColor( 0, 0, 0, 120 ) );
+	TheDisplay->drawOpenRect( x, y, width, height, 1.0f, UIStyle::FRAME );
 	const Int pad = UIStyle::px( 24.0f );
 	const Int right = x + width - pad;
 	UIStyle::heading( s_cardText[ CARD_HEADING ], x + pad, y + UIStyle::px( 18.0f ) );
@@ -574,11 +582,6 @@ static GameWindow *makeCardWindow( Real top, Real bottom, GameWinDrawFunc draw )
 	return window;
 }
 
-/// the chat's place after an AI match, which has no chat: nothing drawn, only the floor the seats stop over
-static void drawNothing( GameWindow *, WinInstanceData * )
-{
-}
-
 /* The send holds Exit, the wide button and the card's Ladder or Quick Match button, every way off the
 	 screen, as the "Sending Results" box held the screen: from the first time the screen sees it, while
 	 it lasts, a second at least and thirty at most, and once a screen, so chat sent after it does not
@@ -614,7 +617,8 @@ static void updateRatingCard( void )
 	if( s_card == SCORE_CARD_NONE || s_cardWindow == NULL )
 		return;
 	OnlineUpdate();
-	s_cardWindow->winHide( !ScoreScreenGraphsSummaryOpen() );
+	// the card stands in the Summary's foot, where the chat key swaps it for the chat
+	s_cardWindow->winHide( ScoreScreenGraphsFootShows() != 2 );
 	const RatingFacts facts = readRatingFacts();
 	if( s_cardBuilt && facts == s_cardFacts )
 		return;
@@ -660,10 +664,8 @@ static void initRatingCard( void )
 		GadgetButtonSetText( buttonContinue, TheGameText->fetch( s_card == SCORE_CARD_AI ? "GUI:OnlineScorePlayAgain" : "GUI:OnlineScoreAgain" ) );
 	}
 
+	// placed in the foot's middle once the panel has laid its foot out (placeFoot), and built there
 	s_cardWindow = makeCardWindow( SCORE_RATING_TOP, SCORE_RATING_BOTTOM, drawRatingCard );
-	if( s_card == SCORE_CARD_AI )
-		s_aiFloor = makeCardWindow( SCORE_CHAT_TOP, SCORE_CONTENT_BOTTOM, drawNothing );
-	updateRatingCard();
 }
 
 static void freeRatingCard( void )
@@ -852,6 +854,7 @@ void ScoreScreenInit( WindowLayout *layout, void *userData )
 	DontShowMainMenu = TRUE; //KRIS
 	buttonIsFinishCampaign = FALSE;
 	s_onlineVerdictShown = FALSE;
+	s_chatWindows = s_chatLine = FALSE;
 
 	//Store the keys so we have them later
 	parentID = TheNameKeyGenerator->nameToKey( AsciiString( "ScoreScreen.wnd:ParentScoreScreen" ) );
@@ -954,18 +957,17 @@ void ScoreScreenInit( WindowLayout *layout, void *userData )
 	// network match and above the "game saved" line after a mission.
 	hideScoreTable();
 	if (!isChallengeCampaign)
-		placeButtonRow();
-	if (screenType == SCORESCREEN_SINGLEPLAYER)
 	{
-		if (!isChallengeCampaign)
-			ScoreScreenGraphsShow(staticTextGameSaved, FALSE);
+		// the keys on frame A's key row, then the panel, whose foot holds the chat, the rating card or
+		// the "game saved" line in its middle
+		s_chatWindows = listboxChatWindowScoreScreen && !listboxChatWindowScoreScreen->winIsHidden();
+		s_chatLine = s_chatWindows && textEntryChat && !textEntryChat->winIsHidden();
+		const Int keys = placeButtonRow();
+		ScoreScreenGraphsShow( keys, s_chatWindows, s_card != SCORE_CARD_NONE );
+		placeFoot();
+		showFoot();
+		updateRatingCard();
 	}
-	else if (s_aiFloor)
-		ScoreScreenGraphsShow(s_aiFloor, TRUE);		// the seats stop over the chat's place as after a network match
-	else if (listboxChatWindowScoreScreen->winIsHidden())
-		ScoreScreenGraphsShow(NULL, FALSE);
-	else
-		ScoreScreenGraphsShow(listboxChatWindowScoreScreen, TRUE);
 
 	// Make Sure the layout is visible
 	layout->hide( FALSE );
@@ -1040,6 +1042,7 @@ void ScoreScreenUpdate( WindowLayout * layout, void *userData)
 
 	showOnlineVerdict();
 	updateSendingHold();
+	showFoot();
 	updateRatingCard();
 
 	//TheGameLogic->clearGameData() gets called after ScoreScreenInit and before the
@@ -1570,9 +1573,13 @@ void finishSinglePlayerInit( void )
 //	if (buttonRehost)
 //		buttonRehost->winHide(TRUE);
 
-	// Continue is back, so the row is laid out again; a Challenge keeps its own page
+	// Continue is back, so the row and the foot that ends at it are laid out again; a Challenge keeps
+	// its own page
 	if (!TheCampaignManager->getCurrentCampaign() || !TheCampaignManager->getCurrentCampaign()->isChallengeCampaign())
-		placeButtonRow();
+	{
+		ScoreScreenGraphsShow( placeButtonRow(), FALSE, FALSE );
+		placeFoot();
+	}
 }
 
 /** Special Init path for making this a single player replay Score Screen */
@@ -2692,10 +2699,6 @@ static void hideScoreTable( void )
 	}
 }
 
-/** The staging rooms' button row, inside the panel on the ruler frame: Save Replay and Buddies from
-	* the left where a room has Back and Record, Continue (or the way out alone) wide at the right where
-	* it has Start. The chat line and the "game saved" line sat where the row stands now and move up
-	* over it, the chat above them along. Laid out again once Continue is shown, so it runs twice. */
 /** A window on the 1920x1080 board from x0,y0 to x1,y1, wherever its parent stands. */
 static void placeOnBoard( GameWindow *win, Real x0, Real y0, Real x1, Real y1 )
 {
@@ -2708,69 +2711,75 @@ static void placeOnBoard( GameWindow *win, Real x0, Real y0, Real x1, Real y1 )
 	win->winSetSize( UIStyle::px( x1 - x0 ), UIStyle::px( y1 - y0 ) );
 }
 
-static void placeButtonRow( void )
+/** Frame A's key row (EndScreen::keyRect), right to left: the one lit key (Continue where it shows,
+	* else the way out), then the way out, the online card's Ladder or Quick Match, Save Replay.  The
+	* panel's chat key takes the next place.  Returns how many keys stand on the row. */
+static Int placeButtonRow( void )
 {
-	const Int top = UIStyle::boardY( UIStyle::ROOM_BUTTON_TOP );
-	const Int height = UIStyle::px( UIStyle::ROOM_BUTTON_BOTTOM - UIStyle::ROOM_BUTTON_TOP );
-	const Int gap = UIStyle::px( UIStyle::ROOM_BUTTON_GAP );
-	const Int width = UIStyle::px( UIStyle::ROOM_BUTTON_WIDTH );
-
-	GameWindow *fromLeft[] = { TheWindowManager->winGetWindowFromId( parent, buttonSaveReplayID ), buttonBuddies };
-	Int x = UIStyle::boardX( UIStyle::ROOM_INSET );
-	for( Int each = 0; each < ARRAY_SIZE( fromLeft ); ++each )
+	GameWindow *keys[] = { buttonContinue, buttonOk, buttonBuddies, TheWindowManager->winGetWindowFromId( parent, buttonSaveReplayID ) };
+	Int placed = 0;
+	for( Int each = 0; each < ARRAY_SIZE( keys ); ++each )
 	{
-		if( fromLeft[ each ]->winIsHidden() )
+		if( keys[ each ] == NULL || keys[ each ]->winIsHidden() )
 			continue;
-		fromLeft[ each ]->winSetPosition( x, top );
-		fromLeft[ each ]->winSetSize( width, height );
-		x += width + gap;
+		Int x0, x1;
+		EndScreen::keyRect( placed, x0, x1 );
+		placeOnBoard( keys[ each ], (Real)x0, (Real)EndScreen::KEYS_TOP, (Real)x1, (Real)EndScreen::KEYS_BOTTOM );
+		UIStyle::setMenuKey( keys[ each ], placed == 0 );
+		placed++;
 	}
+	return placed;
+}
 
-	GameWindow *fromRight[] = { buttonContinue, buttonOk };
-	x = UIStyle::boardX( UIStyle::ROOM_PANEL_RIGHT + UIStyle::ROOM_PANEL_LEFT - UIStyle::ROOM_INSET );
-	Bool first = TRUE;
-	for( Int each = 0; each < ARRAY_SIZE( fromRight ); ++each )
+/// the chat's border, which the foot's own lines replace
+static void drawNoBorder( GameWindow *, WinInstanceData * )
+{
+}
+
+/** What stands in the Summary's foot, between the map and the keys, where the panel laid it out: the
+	* rating card, the chat (its last lines, the line to type in and the emote key), or the "game saved"
+	* line after a mission.  The border first, since the others may be its children and are placed by
+	* their screen position. */
+static void placeFoot( void )
+{
+	Real x0, y0, x1, y1;
+	ScoreScreenGraphsFootArea( x0, y0, x1, y1 );
+	if( s_cardWindow )
 	{
-		if( fromRight[ each ]->winIsHidden() )
-			continue;
-		const Int buttonWidth = first ? UIStyle::px( UIStyle::ROOM_WIDE_BUTTON_WIDTH ) : width;
-		x -= buttonWidth;
-		fromRight[ each ]->winSetPosition( x, top );
-		fromRight[ each ]->winSetSize( buttonWidth, height );
-		x -= gap;
-		first = FALSE;
+		placeOnBoard( s_cardWindow, x0, y0, x1, y1 );
+		s_cardBuilt = FALSE;		// built again at its new width
 	}
-
-	Int entryX, entryY, entryWidth, entryHeight;
-	textEntryChat->winGetScreenPosition( &entryX, &entryY );
-	textEntryChat->winGetSize( &entryWidth, &entryHeight );
-	const Int lift = entryY + entryHeight - ( top - gap );
-	if( lift > 0 )
+	if( staticTextGameSaved )
+		placeOnBoard( staticTextGameSaved, x0, y0, x1, y0 + 40.0f );
+	if( !s_chatWindows )
+		return;
+	if( chatBoxBorder )
 	{
-		GameWindow *foot[] = { textEntryChat, buttonEmote, staticTextGameSaved, listboxChatWindowScoreScreen };
-		for( Int each = 0; each < ARRAY_SIZE( foot ); ++each )
-		{
-			Int footX, footY;
-			foot[ each ]->winGetPosition( &footX, &footY );
-			foot[ each ]->winSetPosition( footX, footY - lift );
-		}
+		placeOnBoard( chatBoxBorder, x0, y0, x1, y1 );
+		chatBoxBorder->winSetDrawFunc( drawNoBorder );
 	}
-
-	// after a network match the chat stands where the network rooms keep theirs: under the seats, in
-	// the seats' column, the chat line and the emote button on the column's foot; the list starts
-	// lower where eight players in teams need the room.  The border first, since the others may be its
-	// children and are placed by their screen position.
-	if( listboxChatWindowScoreScreen && !listboxChatWindowScoreScreen->winIsHidden() )
+	const Real entryTop = y1 - 34.0f;
+	placeOnBoard( listboxChatWindowScoreScreen, x0, y0, x1, s_chatLine ? entryTop - 8.0f : y1 );
+	UIStyle::setMenuListBox( listboxChatWindowScoreScreen );
+	if( s_chatLine )
 	{
-		const Real emoteLeft = SCORE_LEFT_RIGHT - 64.0f;
-		// online hides the chat line, and the list then runs to the frame's foot
-		const Bool chatLine = textEntryChat && !textEntryChat->winIsHidden();
-		const Real listBottom = chatLine ? SCORE_CHAT_LIST_BOTTOM : SCORE_CONTENT_BOTTOM;
-		const Real chatTop = ScoreScreenGraphsChatTop( listBottom );
-		placeOnBoard( chatBoxBorder, SCORE_LEFT, chatTop, SCORE_LEFT_RIGHT, SCORE_CONTENT_BOTTOM );
-		placeOnBoard( listboxChatWindowScoreScreen, SCORE_LEFT, chatTop, SCORE_LEFT_RIGHT, listBottom );
-		placeOnBoard( textEntryChat, SCORE_LEFT, SCORE_CHAT_ENTRY_TOP, emoteLeft - 8.0f, SCORE_CONTENT_BOTTOM );
-		placeOnBoard( buttonEmote, emoteLeft, SCORE_CHAT_ENTRY_TOP, SCORE_LEFT_RIGHT, SCORE_CONTENT_BOTTOM );
+		placeOnBoard( textEntryChat, x0, entryTop, x1 - 140.0f, y1 );
+		placeOnBoard( buttonEmote, x1 - 130.0f, entryTop, x1, y1 );
+		UIStyle::setMenuKey( buttonEmote, FALSE );
+	}
+}
+
+/// the chat's windows shown while the foot shows the chat, hidden under the highlights and the card
+static void showFoot( void )
+{
+	if( !s_chatWindows )
+		return;
+	const Bool hide = ScoreScreenGraphsFootShows() != 1;
+	GameWindow *chat[] = { chatBoxBorder, listboxChatWindowScoreScreen, s_chatLine ? textEntryChat : NULL, s_chatLine ? buttonEmote : NULL };
+	for( Int each = 0; each < ARRAY_SIZE( chat ); ++each )
+	{
+		if( chat[ each ] && chat[ each ]->winIsHidden() != hide )
+			chat[ each ]->winHide( hide );
 	}
 }
 

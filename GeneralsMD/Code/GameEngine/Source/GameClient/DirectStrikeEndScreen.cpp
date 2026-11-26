@@ -19,11 +19,13 @@
 // FILE: DirectStrikeEndScreen.cpp /////////////////////////////////////////////////////////////////////
 //
 // The end of a Direct Strike match, the owner's concept B, "the hand" (experiments/proofs/2026-11-21/
-// direct-strike-end/README-end.md in the wrapper).  Drawn on the 1920x1080 board with no window of
-// its own.  Its pieces come from the common frame's sheet, ReforgedHudCommonDirectStrike, by the
-// README's names (CommonProLaneEndCard and the rest): every player of the match sees the same frame,
-// a card's side shown by its portrait, colour band and stats, not its plate (the owner, 2026-11-23).
-// A piece the sheet does not have is a flat fill.
+// direct-strike-end/README-end.md in the wrapper): the finale while the beaten fortress comes down, the
+// result card dealt over two backs, then the results screen.  Since menu package 13 the card and the
+// results screen are drawn in the menu language (experiments/proofs/2026-11-24/spirit/c-bridge/
+// README-end3.md, "Direct Strike's end screen"; ds_end.py): frame A, the result as the title with the
+// match's facts after it, a wing a team with its head (the fortress's end health large), a row a seat,
+// the timeline of the middle and the fortresses under them, and the end screen's keys.  Drawn on the
+// 1920x1080 board with no window of its own; the rects are EndScreenLayout.h's.
 //
 // Times run on logic frames, which keep coming at LOGICFRAMES_PER_SECOND a wall second after the
 // decision, since the match keeps running under the end: no stock timer drops it to the shell.
@@ -48,6 +50,8 @@
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
+#include "GameClient/EndScreenLayout.h"
+#include "GameClient/GameFont.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/Image.h"
@@ -69,122 +73,53 @@
 namespace
 {
 
-enum { STATS = 7, TEXT_POOL = 200, KEYS = 3 };
+enum { STATS = EndScreen::DS_COLUMNS, TEXT_POOL = 260, KEYS = 3 };
 enum { KEY_REMATCH, KEY_REPLAY, KEY_MENU };
 
 //=================================================================================================
-// The look.  Every colour, font, rect and sheet piece name the end draws with is here and nowhere
-// else, so the shared Direct Strike theme takes it over in one step.  Rects are on the 1920x1080
-// board; a card's are from its top left corner.
+// The look.  Colours past the language's, the result card's rects (from its top left corner), the
+// timeline's and the sheet's glyph names.  Rects are on the 1920x1080 board.
 //=================================================================================================
 namespace Look
 {
 
-struct FontSpec { Bool title; Int points; Bool bold; };
 struct Box { Real x0, y0, x1, y1; };
 
-// colours
+// the teams' colours, ours blue and theirs red, as the lobby and the HUD show them
 const Color OUR_BLUE = GameMakeColor( 66, 112, 236, 255 );
 const Color THEIR_RED = GameMakeColor( 214, 44, 36, 255 );
 const Real THEIR_RED_COLUMN_ALPHA = 170.0f / 255.0f;		///< their middle columns, under our blue
-const Color GOLD = GameMakeColor( 242, 194, 48, 255 );
-const Color WORD_WHITE = GameMakeColor( 236, 238, 242, 255 );
-const Color WORD_GREY = GameMakeColor( 196, 200, 208, 255 );
-const Color TIME_GREY = GameMakeColor( 176, 182, 192, 255 );
 const Color GREYED = GameMakeColor( 199, 199, 199, 255 );		///< a beaten side's portrait, 0.78 bright
-const Color STEEL = GameMakeColor( 30, 36, 44, 255 );				///< the flat card backs
-const Color STEEL_LIP = GameMakeColor( 96, 108, 124, 255 );	///< their lip, and a beaten card's
-const Color RESULT_FLAT = GameMakeColor( 22, 28, 36, 255 );
-const Color RESULT_WELL = GameMakeColor( 8, 10, 14, 255 );
-const Color CARD_FLAT = GameMakeColor( 34, 40, 48, 240 );
-const Color CARD_WELL = GameMakeColor( 10, 12, 16, 230 );
-const Color HEADER_FLAT = GameMakeColor( 16, 22, 30, 240 );
-const Color HEADER_LIP = GameMakeColor( 150, 170, 196, 255 );
-const Color TIMELINE_FLAT = GameMakeColor( 26, 32, 40, 240 );
-const Color TIMELINE_PLOT = GameMakeColor( 8, 14, 22, 235 );
-const Color PANEL_LIP = GameMakeColor( 110, 124, 140, 255 );	///< the flat timeline's and keys' lip
-const Color KEY_FLAT = GameMakeColor( 24, 30, 38, 240 );
-const Color SHADE_RESULT = GameMakeColor( 0, 0, 0, 115 );			///< the world under the result, at 0.55
-const Color SHADE_RESULTS = GameMakeColor( 0, 0, 0, 150 );
-const Real VIGNETTE_FINALE = 0.7f, VIGNETTE_RESULT = 0.7f, VIGNETTE_RESULTS = 0.6f;
+const Color CARD_GLASS = GameMakeColor( 0, 0, 0, 200 );
+const Color BACK_GLASS = GameMakeColor( 0, 0, 0, 150 );
+const Color WELL = GameMakeColor( 10, 12, 22, 230 );
+const Color MARK_FILL = GameMakeColor( 6, 8, 12, 230 );
+const Color LIGHT_KEY = GameMakeColor( 220, 224, 236, 255 );
+const Real VIGNETTE_FINALE = 0.7f, VIGNETTE_RESULT = 0.7f;
 const Int VIGNETTE_BANDS = 32;				///< layers of the gradient
 const Int VIGNETTE_DEPTH_SHARE = 4;		///< a quarter of the screen's height in from each edge
+const Color SHADE_RESULT = GameMakeColor( 0, 0, 0, 115 );			///< the world under the result, at 0.55
 const Real BACKS_ALPHA = 0.75f;
-const Real KEY_DIM_ALPHA = 0.4f;				///< a key not wired yet, where the sheet has no I piece for it
-const Real TICK_ALPHA = 0.6f, MARK_LINE_ALPHA = 0.35f;
-const Real PLATE_LIP = 2.0f, LOCAL_FRAME_LINE = 1.0f, HEALTH_LINE = 2.0f;
-
-// fonts
-const FontSpec WORD_FONTS[ 2 ] = { { TRUE, UIStyle::TEXT_DISPLAY, FALSE }, { TRUE, UIStyle::TEXT_TITLE, FALSE } };
-const FontSpec NAME_FONTS[ 2 ] = { { FALSE, UIStyle::TEXT_HEADING, TRUE }, { FALSE, UIStyle::TEXT_BODY, TRUE } };
-const FontSpec CLOCK_FONT = { FALSE, UIStyle::TEXT_STRONG, TRUE };
-const FontSpec NUMBER_FONT = { FALSE, UIStyle::TEXT_STRONG, TRUE };
-const FontSpec LABEL_FONT = { FALSE, UIStyle::TEXT_SMALL, FALSE };
-const FontSpec NO_MVP_FONT = { FALSE, UIStyle::TEXT_HEADING, TRUE };
-const FontSpec TICK_FONT = { FALSE, UIStyle::TEXT_SMALL, FALSE };
-const FontSpec KEY_FONT = { FALSE, UIStyle::TEXT_SMALL, TRUE };
-const FontSpec TOOLTIP_FONT = { FALSE, UIStyle::TEXT_BODY, FALSE };
-const FontSpec REASON_FONTS[ 2 ] = { { FALSE, UIStyle::TEXT_SMALL, TRUE }, { FALSE, UIStyle::TEXT_SMALL, FALSE } };
+const Real HEALTH_LINE = 2.0f;
 
 // the result card, dealt over two backs
 const Real RESULT_CENTRE_X = 960.0f, RESULT_CENTRE_Y = 540.0f, RESULT_W = 340.0f, RESULT_H = 452.0f;
 const Real BACK_OFFSET_X = 70.0f, BACK_OFFSET_Y = 12.0f, DEAL_DROP = 80.0f;
 const Box RESULT_PORTRAIT = { 10.0f, 10.0f, 330.0f, 300.0f };
-const Box RESULT_RULE = { 10.0f, 303.0f, 330.0f, 305.0f };		///< gold under a won portrait, flat card only
+const Box RESULT_RULE = { 10.0f, 303.0f, 330.0f, 305.0f };		///< green under a won portrait
 const Real RESULT_WORD_X = 170.0f, RESULT_WORD_Y = 362.0f, RESULT_WORD_MAX = 300.0f;	///< alone on its line, centred
 const Real RESULT_CLOCK_Y = 413.0f;		///< the match's length on its own line under the word, centred
 const Real RESULT_REASON_Y = 437.0f, RESULT_REASON_MAX = 300.0f;	///< a team that left, under the length
-const Real CLOCK_GLYPH_SIZE = 16.0f, CLOCK_GLYPH_GAP = 6.0f;
 
-// a player's card on the results screen
-const Real CARD_W = 250.0f, CARD_H = 590.0f, LOCAL_FRAME_GAP = 3.0f;
-const Real CARDS_OURS[ DIRECTSTRIKE_SEATS ] = { 110.0f, 375.0f, 640.0f };
-const Real CARDS_THEIRS[ DIRECTSTRIKE_SEATS ] = { 1030.0f, 1295.0f, 1560.0f };
-const Real CARD_Y = 128.0f, CARD_Y_LOCAL = 116.0f;
-const Box CARD_PORTRAIT = { 10.0f, 10.0f, 240.0f, 232.0f };
-const Box CARD_BAND = { 10.0f, 240.0f, 240.0f, 244.0f };		///< the player's colour
-const Real CARD_NAME_X = 125.0f, CARD_NAME_Y = 260.0f, CARD_NAME_MAX = 224.0f;
-const Box CARD_MVP_WELL = { 64.0f, 278.0f, 186.0f, 376.0f };
-const Box CARD_MVP = { 65.0f, 279.0f, 185.0f, 375.0f };
-const Box CARD_STATS_WELL = { 10.0f, 388.0f, 240.0f, 580.0f };
-const Real STAT_ROW_Y = 402.0f, STAT_ROW_STEP = 26.0f, STAT_ROW_H = 18.0f;
-const Real STAT_GLYPH_X = 22.0f, STAT_GLYPH_SIZE = 18.0f, STAT_NUMBER_X = 228.0f;
-
-// the header chip, the middle line and the timeline
-const Box HEADER = { 750.0f, 26.0f, 1170.0f, 102.0f };
-const Real HEADER_WORD_X = 960.0f, HEADER_WORD_Y = 64.0f, HEADER_WORD_MAX = 380.0f;	///< alone in the chip, centred
-const Real HEADER_CLOCK_Y = 120.0f;		///< under the chip, centred in the gap between the teams' cards
-const Real HEADER_REASON_Y = 142.0f, HEADER_REASON_MAX = 136.0f;	///< a team that left, under the clock in the same gap
-const Real MIDDLE_LINE_X = 960.0f, MIDDLE_LINE_TOP = 140.0f, MIDDLE_LINE_BOTTOM = 712.0f, MIDDLE_DASH = 6.0f;
-const Real MIDDLE_LINE_TOP_UNDER_REASON = 158.0f;
-const Box TIMELINE = { 110.0f, 744.0f, 1810.0f, 912.0f };
-const Real TIMELINE_SLICE_END = 24.0f, TIMELINE_PLOT_INSET = 8.0f;
-const Real PLOT_LEFT = 152.0f, PLOT_RIGHT = 1792.0f;
-const Real TIMELINE_GLYPH_X = 126.0f, TIMELINE_GLYPH_SIZE = 18.0f, MIDDLE_GLYPH_Y = 781.0f, FORTRESS_GLYPH_Y = 852.0f;
-const Real TICK_TOP = 900.0f, TICK_BOTTOM = 904.0f;
-const Real MARK_LINE_TOP = 752.0f, MARK_LINE_BOTTOM = 890.0f, MARK_LABEL_Y = 896.0f;	///< the time marks
-const Real MIDDLE_Y = 790.0f, MIDDLE_REACH = 34.0f;
+// the timeline under the rows: its labels' column, the middle's band over the fortresses'
+const Real PLOT_LEFT = 180.0f, PLOT_RIGHT = 1852.0f;
+const Real MIDDLE_SHARE = 0.42f;			///< of the timeline's height, the middle's band
 const Int MIDDLE_COLUMN_SECONDS = 2;
-const Real HEALTH_FULL_Y = 836.0f, HEALTH_ZERO_Y = 886.0f;
-const Real TOWER_MARK_RISE = 10.0f, TOWER_MARK_HALF = 8.0f, TOWER_MARK_FLAT_HALF = 4.0f;
+const Real TOWER_MARK_HALF = 10.0f;
 
-// the keys under the timeline
-const Real KEY_X[ KEYS ] = { 852.0f, 940.0f, 1028.0f };
-const Real KEY_W = 72.0f, KEY_TOP = 940.0f, KEY_BOTTOM = 996.0f, KEY_LABEL_Y = 968.0f, TOOLTIP_Y = 1014.0f;
-
-// sheet pieces, each looked up as <common prefix><name> first, the common frame's (DirectStrikeTheme's SIDE_COMMON)
+// sheet glyphs, looked up as <common prefix><name> first (DirectStrikeTheme's SIDE_COMMON)
 const char *const PREFIX = "CommonPro";
-const char *const PIECE_RESULT = "LaneEndResult";			///< also the backs, its wells left empty
-const char *const PIECE_RESULT_WON = "LaneEndResultWon";
-const char *const PIECE_CARD = "LaneEndCard", *const PIECE_CARD_WON = "LaneEndCardWon";
-const char *const PIECE_HEADER = "LaneEndHeader";
-const char *const PIECE_TIMELINE_L = "LaneEndTimelineL", *const PIECE_TIMELINE_C = "LaneEndTimelineC", *const PIECE_TIMELINE_R = "LaneEndTimelineR";
-const char *const PIECE_TIME = "LaneStatTime", *const PIECE_FORTRESS = "LaneStatFortress";
-const char *const PIECE_MIDDLE = "LaneStatMiddle", *const PIECE_TOWER_DOWN = "LaneStatDamage";
-const char *const STAT_GLYPHS[ STATS ] = { "LaneStatWaves", "LaneStatPlaced", "LaneStatEarned", "LaneStatSpent",
-	"LaneStatKills", "LaneStatDamage", "LaneStatMiddle" };
-const char *const KEY_PIECES[ KEYS ] = { "LaneEndRematch", "LaneEndReplay", "LaneEndMenu" };
-const char *const KEY_HOT_SUFFIX = "H", *const KEY_HELD_SUFFIX = "P", *const KEY_DEAD_SUFFIX = "I";
+const char *const PIECE_TOWER_DOWN = "LaneStatDamage";
 const char *const CREST_AMERICA = "SAFactionLogo144_US", *const CREST_CHINA = "SNFactionLogo144_China", *const CREST_GLA = "SUFactionLogo144_GLA";
 
 }	// namespace Look
@@ -207,6 +142,7 @@ const Real RESULTS_AT = CARD_AT + DEAL_SECONDS + 2.0f;
 struct Seat
 {
 	UnicodeString name;
+	UnicodeString side;
 	Color color;
 	Int team;
 	Bool local;
@@ -264,6 +200,8 @@ void slowMotion( Bool on )
 Int bx( Real x ) { return UIStyle::boardX( x ); }
 Int by( Real y ) { return UIStyle::boardY( y ); }
 Int px( Real l ) { return UIStyle::px( l ); }
+/// a width on the screen as a length on the board
+Real bw( Int screen ) { return (Real)screen * 1000.0f / (Real)max( UIStyle::px( 1000.0f ), 1 ); }
 
 Real clamp01( Real v ) { return v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; }
 
@@ -273,9 +211,9 @@ Color withAlpha( Color c, Real a )
 	return (Color)( ( (UnsignedInt)c & 0x00FFFFFF ) | ( alpha << 24 ) );
 }
 
-GameFont *fontOf( const Look::FontSpec &spec )
+GameFont *font( Int px1080, Bool bold = FALSE )
 {
-	return spec.title ? UIStyle::titleFont( spec.points ) : UIStyle::readableFont( spec.points, spec.bold );
+	return UIStyle::menuFont( px1080, bold );
 }
 
 /// a piece of the common frame by its name, else a loose image of that bare name; NULL while missing
@@ -305,53 +243,49 @@ const Image *portraitOf( const Player *player )
 }
 
 //-------------------------------------------------------------------------------------------------
-/// text at x (align -1 from x, 0 centred on x, +1 ending at x), its middle at y
-void drawText( const UnicodeString &text, const Look::FontSpec &spec, Int x, Int y, Color color, Int align = -1 )
+/// a pooled string of text in font, made once and kept while it says the same
+DisplayString *pooled( const UnicodeString &text, GameFont *face )
 {
-	if( s_poolUsed >= TEXT_POOL || text.isEmpty() )
-		return;
-	GameFont *font = fontOf( spec );
+	if( s_poolUsed >= TEXT_POOL )
+		return NULL;
 	DisplayString *&s = s_pool[ s_poolUsed++ ];
 	if( s == NULL )
 		s = TheDisplayStringManager->newDisplayString();
-	if( s->getFont() != font )
-		s->setFont( font );
+	if( s->getFont() != face )
+		s->setFont( face );
 	if( s->getText().compare( text ) != 0 )
 		s->setText( text );
+	return s;
+}
+
+/// text at screen x (align -1 from x, 0 centred on x, +1 ending at x), its middle at screen y; its width
+Int drawText( const UnicodeString &text, GameFont *face, Int x, Int y, Color color, Int align = -1 )
+{
+	if( text.isEmpty() )
+		return 0;
+	DisplayString *s = pooled( text, face );
+	if( s == NULL )
+		return 0;
 	Int w = 0, h = 0;
 	s->getSize( &w, &h );
 	s->draw( align < 0 ? x : align == 0 ? x - w / 2 : x - w, y - h / 2, color, UIStyle::SHADOW );
+	return w;
 }
 
-/** The same within maxWidth pixels: the first of the two fonts it fits in, else the second with the
-	* text cut short.  A player's name is the machine's for a LAN seat and can be any length. */
-void drawFitted( const UnicodeString &text, const Look::FontSpec *specs, Int x, Int y, Color color, Int align, Int maxWidth )
+/// a label fitted to maxWidth pixels by the language's rule, a name cut with an ellipsis
+Int drawFitted( const UnicodeString &text, GameFont *face, Int x, Int y, Color color, Int align, Int maxWidth, Bool name = FALSE )
 {
-	if( s_poolUsed >= TEXT_POOL || text.isEmpty() )
-		return;
-	DisplayString *&s = s_pool[ s_poolUsed ];
-	if( s == NULL )
-		s = TheDisplayStringManager->newDisplayString();
-	Int w = 0, h = 0;
-	for( Int f = 0; f < 2; ++f )
-	{
-		s->setFont( fontOf( specs[ f ] ) );
-		s->setText( text );
-		s->getSize( &w, &h );
-		if( w <= maxWidth )
-			break;
-	}
-	UnicodeString cut = text;
-	while( w > maxWidth && cut.getLength() > 1 )
-	{
-		cut.removeLastChar();
-		UnicodeString shown = cut;
-		shown.concat( u".." );
-		s->setText( shown );
-		s->getSize( &w, &h );
-	}
-	++s_poolUsed;
-	s->draw( align < 0 ? x : align == 0 ? x - w / 2 : x - w, y - h / 2, color, UIStyle::SHADOW );
+	return drawText( name ? UIStyle::fitName( text, face, maxWidth ) : UIStyle::fitText( text, face, max( maxWidth, 1 ) ), face, x, y, color, align );
+}
+
+/// tracked capitals from screen x, their middle at y; their width
+Int drawCaps( const UnicodeString &text, GameFont *face, Int x, Int y, Color color, Real tracking, Int align = -1 )
+{
+	const UnicodeString caps = UIStyle::capitals( text );
+	const Int width = UIStyle::trackedWidth( caps, face, tracking );
+	const Int left = align < 0 ? x : align == 0 ? x - width / 2 : x - width;
+	UIStyle::drawTracked( caps, face, left, y - face->height / 2, color, tracking );
+	return width;
 }
 
 UnicodeString clockText( Int seconds )
@@ -361,31 +295,10 @@ UnicodeString clockText( Int seconds )
 	return text;
 }
 
-/// the match's length with the clock glyph before it, the pair centred on the board's cx
-void drawMatchTime( Real cx, Real cy, Color tint )
-{
-	static DisplayString *measure = NULL;
-	if( measure == NULL )
-		measure = TheDisplayStringManager->newDisplayString();
-	const UnicodeString text = clockText( s_matchSeconds );
-	GameFont *font = fontOf( Look::CLOCK_FONT );
-	if( measure->getFont() != font )
-		measure->setFont( font );
-	measure->setText( text );
-	Int textWidth = 0, textHeight = 0;
-	measure->getSize( &textWidth, &textHeight );
-	const Image *clock = piece( Look::PIECE_TIME );
-	const Int glyph = px( Look::CLOCK_GLYPH_SIZE ), gap = clock != NULL ? glyph + px( Look::CLOCK_GLYPH_GAP ) : 0;
-	const Int left = bx( cx ) - ( gap + textWidth ) / 2, middle = by( cy );
-	if( clock != NULL )
-		TheDisplay->drawImage( clock, left, middle - glyph / 2, left + glyph, middle + glyph / 2, tint );
-	drawText( text, Look::CLOCK_FONT, left + gap, middle, tint );
-}
-
 /// a board rect, x0 y0 to x1 y1 at 1080
 void fill( Real x0, Real y0, Real x1, Real y1, Color c )
 {
-	TheDisplay->drawFillRect( bx( x0 ), by( y0 ), bx( x1 ) - bx( x0 ), by( y1 ) - by( y0 ), c );
+	TheDisplay->drawFillRect( bx( x0 ), by( y0 ), max( bx( x1 ) - bx( x0 ), 1 ), max( by( y1 ) - by( y0 ), 1 ), c );
 }
 
 /// a box of the look, moved to a card's corner
@@ -394,9 +307,9 @@ void fillAt( const Look::Box &b, Real x0, Real y0, Color c )
 	fill( x0 + b.x0, y0 + b.y0, x0 + b.x1, y0 + b.y1, c );
 }
 
-void imageAt( const Image *image, const Look::Box &b, Real x0, Real y0, Color tint )
+void lit( Real x0, Real y0, Real x1, Real y1, Color c )
 {
-	TheDisplay->drawImage( image, bx( x0 + b.x0 ), by( y0 + b.y0 ), bx( x0 + b.x1 ), by( y0 + b.y1 ), tint );
+	UIStyle::litLine( bx( x0 ), by( y0 ), max( bx( x1 ) - bx( x0 ), 1 ), max( by( y1 ) - by( y0 ), 1 ), c );
 }
 
 void frame( Real x0, Real y0, Real x1, Real y1, Real width, Color c )
@@ -404,25 +317,12 @@ void frame( Real x0, Real y0, Real x1, Real y1, Real width, Color c )
 	TheDisplay->drawOpenRect( bx( x0 ), by( y0 ), bx( x1 ) - bx( x0 ), by( y1 ) - by( y0 ), width, c );
 }
 
-/// a piece of the sheet stretched over the rect, or the flat stand-in for it
-void plate( const Image *image, Real x0, Real y0, Real x1, Real y1, Color flat, Color lip, Real alpha = 1.0f )
-{
-	if( image != NULL )
-	{
-		TheDisplay->drawImage( image, bx( x0 ), by( y0 ), bx( x1 ), by( y1 ), withAlpha( 0xFFFFFFFF, alpha ) );
-		return;
-	}
-	fill( x0, y0, x1, y1, withAlpha( flat, alpha ) );
-	frame( x0, y0, x1, y1, Look::PLATE_LIP, withAlpha( lip, alpha ) );
-}
-
-/// an image inside a well, its aspect kept, against the well's top
-void fitTop( const Image *image, const Look::Box &b, Real cardX, Real cardY, Color tint )
+/// an image inside a box, its aspect kept, against the box's top
+void fitTop( const Image *image, Real x0, Real y0, Real x1, Real y1, Color tint )
 {
 	if( image == NULL || image->getImageWidth() <= 0 || image->getImageHeight() <= 0 )
 		return;
-	const Real x0 = cardX + b.x0, y0 = cardY + b.y0;
-	const Real w = b.x1 - b.x0, h = b.y1 - b.y0;
+	const Real w = x1 - x0, h = y1 - y0;
 	const Real aspect = (Real)image->getImageWidth() / (Real)image->getImageHeight();
 	Real dw = w, dh = w / aspect;
 	if( dh > h )
@@ -461,9 +361,8 @@ void shade( Color c )
 	TheDisplay->drawFillRect( 0, 0, (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight(), c );
 }
 
-UnicodeString resultWord( Color *color )
+UnicodeString resultWord( void )
 {
-	*color = Look::WORD_WHITE;
 	if( s_winner < 0 )
 		return TheGameText->fetch( "GUI:LaneEndDraw" );
 	if( s_localTeam < 0 )
@@ -472,10 +371,7 @@ UnicodeString resultWord( Color *color )
 		word.format( TheGameText->fetch( "GUI:LaneEndTeamWins" ), s_winner + 1 );
 		return word;
 	}
-	if( s_localTeam == s_winner )
-		return TheGameText->fetch( "GUI:Victory" );
-	*color = Look::WORD_GREY;
-	return TheGameText->fetch( "GUI:Defeat" );
+	return TheGameText->fetch( s_localTeam == s_winner ? "GUI:Victory" : "GUI:Defeat" );
 }
 
 Bool won( void ) { return s_winner >= 0 && ( s_localTeam < 0 || s_localTeam == s_winner ); }
@@ -489,19 +385,21 @@ UnicodeString reasonText( void )
 	return text;
 }
 
+Color teamColor( Int team ) { return team == s_ourTeam ? Look::OUR_BLUE : Look::THEIR_RED; }
+
 //-------------------------------------------------------------------------------------------------
-// The result card: two card backs, then the card dealt on them
+// The result card: two card backs, then the card dealt on them, dark glass in a lit blue edge
 //-------------------------------------------------------------------------------------------------
 void drawResult( Real t )
 {
 	using namespace Look;
 	const Real backs = clamp01( ( t - BACKS_AT ) / DEAL_SECONDS );
-	const Image *back = piece( PIECE_RESULT );
 	for( Int k = -1; k <= 1; k += 2 )
 	{
 		const Real ox = RESULT_CENTRE_X + BACK_OFFSET_X * k, oy = RESULT_CENTRE_Y + BACK_OFFSET_Y;
-		plate( back, ox - RESULT_W * 0.5f, oy - RESULT_H * 0.5f, ox + RESULT_W * 0.5f, oy + RESULT_H * 0.5f, STEEL, STEEL_LIP,
-					 BACKS_ALPHA * backs );
+		const Real a = BACKS_ALPHA * backs;
+		fill( ox - RESULT_W * 0.5f, oy - RESULT_H * 0.5f, ox + RESULT_W * 0.5f, oy + RESULT_H * 0.5f, withAlpha( BACK_GLASS, a ) );
+		frame( ox - RESULT_W * 0.5f, oy - RESULT_H * 0.5f, ox + RESULT_W * 0.5f, oy + RESULT_H * 0.5f, 1.0f, withAlpha( UIStyle::FRAME, a ) );
 	}
 
 	const Real deal = clamp01( ( t - CARD_AT ) / DEAL_SECONDS );
@@ -509,115 +407,198 @@ void drawResult( Real t )
 		return;
 	const Real x0 = RESULT_CENTRE_X - RESULT_W * 0.5f, y0 = RESULT_CENTRE_Y - RESULT_H * 0.5f + ( 1.0f - deal ) * DEAL_DROP;
 	const Bool victory = won();
-	const Image *art = piece( victory ? PIECE_RESULT_WON : PIECE_RESULT );
-	plate( art, x0, y0, x0 + RESULT_W, y0 + RESULT_H, RESULT_FLAT, victory ? GOLD : STEEL_LIP, deal );
-	if( art == NULL )
-		fillAt( RESULT_PORTRAIT, x0, y0, withAlpha( RESULT_WELL, deal ) );
-	fitTop( s_resultPortrait, RESULT_PORTRAIT, x0, y0, withAlpha( victory ? 0xFFFFFFFF : GREYED, deal ) );
-	if( victory && art == NULL )
-		fillAt( RESULT_RULE, x0, y0, withAlpha( GOLD, deal ) );
-	Color wordColor;
-	const UnicodeString word = resultWord( &wordColor );
-	drawFitted( word, WORD_FONTS, bx( x0 + RESULT_WORD_X ), by( y0 + RESULT_WORD_Y ), withAlpha( wordColor, deal ), 0, px( RESULT_WORD_MAX ) );
-	drawMatchTime( x0 + RESULT_W * 0.5f, y0 + RESULT_CLOCK_Y, withAlpha( TIME_GREY, deal ) );
-	drawFitted( reasonText(), REASON_FONTS, bx( x0 + RESULT_WORD_X ), by( y0 + RESULT_REASON_Y ), withAlpha( TIME_GREY, deal ), 0,
-							px( RESULT_REASON_MAX ) );
+	fill( x0, y0, x0 + RESULT_W, y0 + RESULT_H, withAlpha( CARD_GLASS, deal ) );
+	if( deal >= 1.0f )
+		UIStyle::litEdge( UIStyle::boardRect( (Int)x0, (Int)y0, (Int)( x0 + RESULT_W ), (Int)( y0 + RESULT_H ) ), UIStyle::EDGE );
+	else
+		frame( x0, y0, x0 + RESULT_W, y0 + RESULT_H, 1.0f, withAlpha( UIStyle::EDGE, deal ) );
+	fillAt( RESULT_PORTRAIT, x0, y0, withAlpha( WELL, deal ) );
+	fitTop( s_resultPortrait, x0 + RESULT_PORTRAIT.x0, y0 + RESULT_PORTRAIT.y0, x0 + RESULT_PORTRAIT.x1, y0 + RESULT_PORTRAIT.y1,
+		withAlpha( victory ? 0xFFFFFFFF : GREYED, deal ) );
+	if( victory )
+		fillAt( RESULT_RULE, x0, y0, withAlpha( UIStyle::ACTIVE, deal ) );
+	GameFont *word = font( UIStyle::MENU_TEXT_TITLE, TRUE );
+	const UnicodeString caps = UIStyle::fitText( UIStyle::capitals( resultWord() ), word, px( RESULT_WORD_MAX ) );
+	drawText( caps, word, bx( x0 + RESULT_WORD_X ), by( y0 + RESULT_WORD_Y ), withAlpha( UIStyle::INK, deal ), 0 );
+	drawText( clockText( s_matchSeconds ), font( 20 ), bx( x0 + RESULT_W * 0.5f ), by( y0 + RESULT_CLOCK_Y ), withAlpha( UIStyle::MUTED, deal ), 0 );
+	drawFitted( reasonText(), font( UIStyle::MENU_TEXT_LABEL ), bx( x0 + RESULT_WORD_X ), by( y0 + RESULT_REASON_Y ), withAlpha( UIStyle::MUTED, deal ), 0,
+		px( RESULT_REASON_MAX ) );
 }
 
 //-------------------------------------------------------------------------------------------------
 // The results screen
 //-------------------------------------------------------------------------------------------------
-void drawCard( const Seat &s, Real x0, Real y0 )
+/// the seats on a team, and the most any team has
+Int seatsOf( Int team )
 {
-	using namespace Look;
-	const Bool winners = s.team == s_winner;
-	const Real x1 = x0 + CARD_W, y1 = y0 + CARD_H;
-	if( s.local )
-		frame( x0 - LOCAL_FRAME_GAP, y0 - LOCAL_FRAME_GAP, x1 + LOCAL_FRAME_GAP, y1 + LOCAL_FRAME_GAP, LOCAL_FRAME_LINE, GOLD );
-	const Image *art = piece( winners ? PIECE_CARD_WON : PIECE_CARD );
-	plate( art, x0, y0, x1, y1, CARD_FLAT, winners ? GOLD : STEEL_LIP );
+	Int seats = 0;
+	for( size_t i = 0; i < s_seats.size(); ++i )
+		if( s_seats[ i ].team == team )
+			++seats;
+	return seats;
+}
 
-	// the sheet's card has its wells; the flat stand-in gets dark ones
-	const Color well = art != NULL ? 0 : CARD_WELL;
-	const Color tint = winners ? 0xFFFFFFFF : GREYED;
-	fillAt( CARD_PORTRAIT, x0, y0, well );
-	fitTop( s.portrait, CARD_PORTRAIT, x0, y0, tint );
-	fillAt( CARD_BAND, x0, y0, s.color );
-	drawFitted( s.name, NAME_FONTS, bx( x0 + CARD_NAME_X ), by( y0 + CARD_NAME_Y ), WORD_WHITE, 0, px( CARD_NAME_MAX ) );
+/// a team's fortress at the end, as a share of the most it ever held
+Int fortressPercent( Int team )
+{
+	Int most = 1;
+	for( size_t k = 0; k < s_samples.size(); ++k )
+		most = max( most, s_samples[ k ].fortress[ team ] );
+	if( s_samples.empty() )
+		return 0;
+	return UIStyle::percent( s_samples.back().fortress[ team ], most );
+}
 
-	fillAt( CARD_MVP_WELL, x0, y0, well );
-	if( s.mvp != NULL )
-		imageAt( s.mvp, CARD_MVP, x0, y0, tint );
-	else
-		drawText( UnicodeString( u"-" ), NO_MVP_FONT, bx( x0 + ( CARD_MVP.x0 + CARD_MVP.x1 ) * 0.5f ),
-							by( y0 + ( CARD_MVP.y0 + CARD_MVP.y1 ) * 0.5f ), TIME_GREY, 0 );
-
-	fillAt( CARD_STATS_WELL, x0, y0, well );
-	const Color ink = winners ? WORD_WHITE : WORD_GREY;
-	for( Int i = 0; i < STATS; ++i )
+/// our share of the time a team held the middle, 0 to 1 (a half with nobody holding it)
+Real ourMiddleShare( void )
+{
+	const Int sign = s_ourTeam == 0 ? 1 : -1;
+	Real ours = 0.0f, theirs = 0.0f;
+	for( size_t k = 0; k < s_samples.size(); ++k )
 	{
-		const Real ry = y0 + STAT_ROW_Y + STAT_ROW_STEP * i, mid = ry + STAT_ROW_H * 0.5f;
-		const Image *glyph = piece( STAT_GLYPHS[ i ] );
-		if( glyph != NULL )
-			TheDisplay->drawImage( glyph, bx( x0 + STAT_GLYPH_X ), by( ry ), bx( x0 + STAT_GLYPH_X + STAT_GLYPH_SIZE ), by( ry + STAT_GLYPH_SIZE ),
-														 TIME_GREY );
+		const Int held = s_samples[ k ].middle * sign;
+		if( held > 0 )
+			ours += (Real)held;
 		else
-			drawText( TheGameText->fetch( STAT_LABELS[ i ] ), LABEL_FONT, bx( x0 + STAT_GLYPH_X ), by( mid ), TIME_GREY );
-		const UnicodeString value = i == STATS - 1 ? clockText( s.stat[ i ] ) : UIStyle::grouped( s.stat[ i ] );
-		drawText( value, NUMBER_FONT, bx( x0 + STAT_NUMBER_X ), by( mid ), ink, 1 );
+			theirs -= (Real)held;
+	}
+	return ours + theirs > 0.0f ? ours / ( ours + theirs ) : 0.5f;
+}
+
+/** A team's head from y: its lit bar, TEAM n and VICTORY or DEFEAT, its fortress's end health large,
+	* the column words right over the figures with DAMAGE green and sorted, the lit rule under them. */
+void drawTeamHead( Int team, Real x0, Real x1, Real y, const Int left[ STATS ], const Int right[ STATS ] )
+{
+	lit( x0, y + 8.0f, x0 + 4.0f, y + 44.0f, teamColor( team ) );
+	UnicodeString name;
+	name.format( TheGameText->fetch( "GUI:LoadTeam" ), team + 1 );
+	const Int nameWidth = drawCaps( name, font( 22, TRUE ), bx( x0 + 16.0f ), by( y + 26.0f ), UIStyle::INK, 2.4f );
+	if( s_winner >= 0 )
+	{
+		const Bool winners = team == s_winner;
+		drawCaps( TheGameText->fetch( winners ? "GUI:Victory" : "GUI:Defeat" ), font( UIStyle::MENU_TEXT_LABEL, TRUE ), bx( x0 + 32.0f ) + nameWidth,
+			by( y + 27.0f ), winners ? UIStyle::ACTIVE : UIStyle::MUTED, 1.4f );
+	}
+	const Int figure = drawText( UIStyle::percentText( fortressPercent( team ) ), font( UIStyle::MENU_TEXT_TEAM_FIGURE ), bx( x1 - 8.0f ), by( y + 26.0f ),
+		UIStyle::INK, 1 );
+	drawCaps( TheGameText->fetch( "GUI:DirectStrikeFortress" ), font( UIStyle::MENU_TEXT_LABEL, TRUE ), bx( x1 - 20.0f ) - figure, by( y + 30.0f ), UIStyle::MUTED,
+		1.2f, 1 );
+
+	GameFont *caps = font( UIStyle::MENU_TEXT_LABEL, TRUE );
+	for( Int col = 0; col < STATS; ++col )
+	{
+		const Bool sorted = col == EndScreen::DS_LEAD_COLUMN;
+		const UnicodeString words = UIStyle::capitals( UIStyle::fitKey( STAT_LABELS[ col ], caps, px( (Real)( right[ col ] - left[ col ] + 10 ) ) ) );
+		const Int width = drawText( words, caps, bx( (Real)right[ col ] + 1.0f ), by( y + 70.0f ), sorted ? UIStyle::ACTIVE : UIStyle::MUTED, 1 );
+		if( sorted )
+		{
+			const Int size = max( px( 8.0f ), 4 );
+			const Int cx = bx( (Real)right[ col ] ) - width - px( 6.0f ) - size;
+			const Int cy = by( y + 70.0f ) - size / 4;
+			for( Int row = 0; row < size / 2; ++row )
+				TheDisplay->drawFillRect( cx + row, cy + row, size - 2 * row, 1, UIStyle::ACTIVE );
+		}
+	}
+	lit( x0, y + 92.0f, x1, y + 93.0f, UIStyle::FRAME );
+}
+
+/** A seat's row: his army's picture with his colour along its foot, his name (gold for the local player)
+	* and side, TOP UNIT and its picture at the line's right, his seven figures on the foot, the damage at
+	* 24 with its bar; a column's best in cyan when three seats or more stand. */
+void drawSeatRow( const Seat &s, Real x0, Real y0, Real x1, Real y1, const Int left[ STATS ], const Int right[ STATS ], const Int best[ STATS ],
+	Int topDamage )
+{
+	const Bool winners = s.team == s_winner;
+	const ICoord2D *mouse = &TheMouse->getMouseStatus()->pos;
+	const IRegion2D row = UIStyle::boardRect( (Int)x0, (Int)y0, (Int)x1, (Int)y1 );
+	const Bool hovered = mouse->x >= row.lo.x && mouse->x < row.hi.x && mouse->y >= row.lo.y && mouse->y < row.hi.y;
+	UIStyle::menuRow( row, s.local ? UIStyle::ROW_LOCAL : hovered ? UIStyle::ROW_HOVER : UIStyle::ROW_PLAIN );
+
+	const Real pic = y1 - y0 - 16.0f;
+	const Real px0 = x0 + 8.0f, py0 = y0 + 8.0f;
+	fill( px0, py0, px0 + pic, py0 + pic, Look::WELL );
+	fitTop( s.portrait, px0, py0, px0 + pic, py0 + pic, winners || s_winner < 0 ? 0xFFFFFFFF : Look::GREYED );
+	fill( px0, py0 + pic - 4.0f, px0 + pic, py0 + pic, s.color );
+	if( UIStyle::readable( s.color ) != s.color )
+		fill( px0, py0 + pic - 5.0f, px0 + pic, py0 + pic - 4.0f, Look::LIGHT_KEY );
+
+	// the top unit at the line's right, framed in his colour (gold for the local player)
+	const Real nameY = y0 + 24.0f;
+	const Real mvpH = 40.0f, mvpW = mvpH * 1.36f;
+	const Real mvpX1 = x1 - 8.0f, mvpX0 = mvpX1 - mvpW;
+	fill( mvpX0, nameY - mvpH * 0.5f, mvpX1, nameY + mvpH * 0.5f, Look::MARK_FILL );
+	if( s.mvp != NULL )
+		TheDisplay->drawImage( s.mvp, bx( mvpX0 ) + 2, by( nameY - mvpH * 0.5f ) + 2, bx( mvpX1 ) - 2, by( nameY + mvpH * 0.5f ) - 2 );
+	else
+		drawText( UnicodeString( u"-" ), font( UIStyle::MENU_TEXT_BODY, TRUE ), bx( ( mvpX0 + mvpX1 ) * 0.5f ), by( nameY ), UIStyle::MUTED, 0 );
+	frame( mvpX0, nameY - mvpH * 0.5f, mvpX1, nameY + mvpH * 0.5f, 2.0f, s.local ? UIStyle::GOLD : UIStyle::readable( s.color ) );
+	const Int topWidth = drawCaps( TheGameText->fetch( "GUI:LaneEndTopUnit" ), font( UIStyle::MENU_TEXT_LABEL, TRUE ), bx( mvpX0 - 12.0f ), by( nameY ),
+		UIStyle::MUTED, 1.2f, 1 );
+
+	const Real nameX = px0 + pic + 16.0f;
+	GameFont *nameFont = font( UIStyle::MENU_TEXT_ROW_FIGURE );
+	const Int room = bx( mvpX0 - 24.0f ) - topWidth - bx( nameX );
+	const Int nameWidth = drawFitted( s.name, nameFont, bx( nameX ), by( nameY ), s.local ? UIStyle::GOLD : UIStyle::INK, -1, room / 2 + room / 4, TRUE );
+	drawFitted( s.side, font( 16 ), bx( nameX ) + nameWidth + px( 12.0f ), by( nameY + 2.0f ), UIStyle::MUTED, -1, room - nameWidth - px( 12.0f ) );
+
+	// the figures on the foot line; the damage, the lead, at 24 with its bar
+	const Real figureY = y1 - 26.0f;
+	for( Int col = 0; col < STATS; ++col )
+	{
+		const Bool lead = col == EndScreen::DS_LEAD_COLUMN;
+		GameFont *face = font( lead ? UIStyle::MENU_TEXT_ROW_FIGURE : UIStyle::MENU_TEXT_BODY );
+		const UnicodeString value = col == STATS - 1 ? clockText( s.stat[ col ] ) : UIStyle::grouped( s.stat[ col ] );
+		const Bool isBest = best[ col ] >= 0 && s.stat[ col ] == best[ col ];
+		const Int width = drawText( value, face, bx( (Real)right[ col ] ), by( figureY ), isBest ? UIStyle::EDGE_LIT : UIStyle::INK, 1 );
+		const Int under = by( figureY ) + face->height / 2 + 1;
+		if( isBest )
+			TheDisplay->drawFillRect( bx( (Real)right[ col ] ) - width, under, width, max( px( 2.0f ), 1 ), UIStyle::EDGE_LIT );
+		if( lead )
+		{
+			const Int barLeft = bx( (Real)left[ col ] );
+			const Int full = bx( (Real)right[ col ] ) - barLeft;
+			const Real share = topDamage > 0 ? (Real)s.stat[ col ] / topDamage : 0.0f;
+			TheDisplay->drawFillRect( barLeft, under + 1, max( (Int)( full * clamp01( share ) ), 1 ), max( px( 3.0f ), 2 ),
+				isBest ? UIStyle::EDGE_LIT : UIStyle::readable( teamColor( s.team ) ) );
+		}
 	}
 }
 
 /// the x of a frame on the timeline's plot
-Real timelineX( UnsignedInt frame )
+Real timelineX( UnsignedInt frameAt )
 {
 	const Real span = s_endFrame > 0 ? (Real)s_endFrame : 1.0f;
-	return Look::PLOT_LEFT + ( Look::PLOT_RIGHT - Look::PLOT_LEFT ) * clamp01( (Real)frame / span );
+	return Look::PLOT_LEFT + ( Look::PLOT_RIGHT - Look::PLOT_LEFT ) * clamp01( (Real)frameAt / span );
 }
 
-void drawGlyph( const Image *glyph, Real x, Real y, Real size, Color tint )
-{
-	if( glyph != NULL )
-		TheDisplay->drawImage( glyph, bx( x ), by( y ), bx( x + size ), by( y + size ), tint );
-}
-
-void drawTimeline( void )
+/** The timeline from top to bottom: MIDDLE, each team's hold in its colour from a white centre line, a
+	* column every two seconds, the teams named at the left; FORTRESS, the two health step lines on 0, 50
+	* and 100 % gridlines with a mark where a tower fell; a tick every wave and the minutes under them, the
+	* match's end in bold at the right. */
+void drawTimeline( Real top, Real bottom )
 {
 	using namespace Look;
-	// a 3-slice: the ends at their size, the middle stretched between them
-	const Image *sliceL = piece( PIECE_TIMELINE_L ), *sliceC = piece( PIECE_TIMELINE_C );
-	const Image *sliceR = piece( PIECE_TIMELINE_R );
-	if( sliceL != NULL && sliceC != NULL && sliceR != NULL )
-	{
-		const Real innerL = TIMELINE.x0 + TIMELINE_SLICE_END, innerR = TIMELINE.x1 - TIMELINE_SLICE_END;
-		TheDisplay->drawImage( sliceL, bx( TIMELINE.x0 ), by( TIMELINE.y0 ), bx( innerL ), by( TIMELINE.y1 ) );
-		TheDisplay->drawImage( sliceC, bx( innerL ), by( TIMELINE.y0 ), bx( innerR ), by( TIMELINE.y1 ) );
-		TheDisplay->drawImage( sliceR, bx( innerR ), by( TIMELINE.y0 ), bx( TIMELINE.x1 ), by( TIMELINE.y1 ) );
-	}
-	else
-	{
-		plate( NULL, TIMELINE.x0, TIMELINE.y0, TIMELINE.x1, TIMELINE.y1, TIMELINE_FLAT, PANEL_LIP );
-		fill( TIMELINE.x0 + TIMELINE_PLOT_INSET, TIMELINE.y0 + TIMELINE_PLOT_INSET, TIMELINE.x1 - TIMELINE_PLOT_INSET,
-					TIMELINE.y1 - TIMELINE_PLOT_INSET, TIMELINE_PLOT );
-	}
+	GameFont *caps = font( UIStyle::MENU_TEXT_LABEL, TRUE );
+	GameFont *labelFont =font( UIStyle::MENU_TEXT_LABEL );
+	const Real axisY = bottom - 18.0f;
+	const Real middleTop = top + 6.0f, middleBottom = top + ( axisY - top ) * MIDDLE_SHARE;
+	const Real middleY = ( middleTop + middleBottom ) * 0.5f, reach = ( middleBottom - middleTop ) * 0.5f;
+	const Real healthTop = middleBottom + 22.0f, healthBottom = axisY - 6.0f;
 
-	// the glyphs at the left: the middle by the top band, the fortress by the bottom one
-	drawGlyph( piece( PIECE_MIDDLE ), TIMELINE_GLYPH_X, MIDDLE_GLYPH_Y, TIMELINE_GLYPH_SIZE, TIME_GREY );
-	drawGlyph( piece( PIECE_FORTRESS ), TIMELINE_GLYPH_X, FORTRESS_GLYPH_Y, TIMELINE_GLYPH_SIZE, TIME_GREY );
-
-	// the foot: a tick every spawn tick, then a faint line and the time every mark, a minute apart under
-	// ten minutes, five under half an hour and ten after that
-	const UnsignedInt tickFrames = DIRECTSTRIKE_TICK_FRAMES, minute = 60 * LOGICFRAMES_PER_SECOND;
-	const UnsignedInt markFrames = s_endFrame < 10 * minute ? minute : s_endFrame < 30 * minute ? 5 * minute : 10 * minute;
-	for( UnsignedInt f = DIRECTSTRIKE_FIRST_TICK_FRAMES; f < s_endFrame; f += tickFrames )
-		fill( timelineX( f ), TICK_TOP, timelineX( f ) + 1.0f, TICK_BOTTOM, withAlpha( TIME_GREY, TICK_ALPHA ) );
-	for( UnsignedInt f = markFrames; f < s_endFrame; f += markFrames )
+	// the bands' names at the left
+	drawCaps( TheGameText->fetch( "GUI:LaneEndTimelineMiddle" ), caps, bx( EndScreen::INSET_LEFT ), by( middleTop + 8.0f ), UIStyle::INK, 1.2f );
+	for( Int t = 0; t < DIRECTSTRIKE_TEAMS; ++t )
 	{
-		fill( timelineX( f ), MARK_LINE_TOP, timelineX( f ) + 1.0f, MARK_LINE_BOTTOM, withAlpha( 0xFFFFFFFF, MARK_LINE_ALPHA ) );
-		drawText( clockText( (Int)( f / LOGICFRAMES_PER_SECOND ) ), TICK_FONT, bx( timelineX( f ) ), by( MARK_LABEL_Y ), TIME_GREY, 0 );
+		UnicodeString name;
+		name.format( TheGameText->fetch( "GUI:LoadTeam" ), t + 1 );
+		const Bool above = t == s_ourTeam;
+		const Real y = above ? middleY - reach * 0.5f : middleY + reach * 0.5f;
+		fill( EndScreen::INSET_LEFT, y - 6.0f, EndScreen::INSET_LEFT + 4.0f, y + 6.0f, teamColor( t ) );
+		drawFitted( name, labelFont,bx( EndScreen::INSET_LEFT + 12.0f ), by( y ), UIStyle::MUTED, -1, px( PLOT_LEFT - EndScreen::INSET_LEFT - 20.0f ) );
 	}
+	drawCaps( TheGameText->fetch( "GUI:DirectStrikeFortress" ), caps, bx( EndScreen::INSET_LEFT ), by( healthTop + 8.0f ), UIStyle::INK, 1.2f );
 
-	// the middle: our share past the line above the gold line in blue, theirs below in red, in columns
+	// the middle: our share past the line above it in blue, theirs below in red, in columns
 	const UnsignedInt column = MIDDLE_COLUMN_SECONDS * LOGICFRAMES_PER_SECOND;
 	const Int sign = s_ourTeam == 0 ? 1 : -1;
 	size_t i = 0;
@@ -635,13 +616,19 @@ void drawTimeline( void )
 		const Real share = (Real)sum / ( 100.0f * count );
 		const Real x0 = timelineX( f0 ), x1 = timelineX( f0 + column );
 		if( share > 0.0f )
-			fill( x0, MIDDLE_Y - MIDDLE_REACH * share, x1, MIDDLE_Y, OUR_BLUE );
+			fill( x0, middleY - reach * share, x1, middleY, OUR_BLUE );
 		else if( share < 0.0f )
-			fill( x0, MIDDLE_Y, x1, MIDDLE_Y - MIDDLE_REACH * share, withAlpha( THEIR_RED, THEIR_RED_COLUMN_ALPHA ) );
+			fill( x0, middleY, x1, middleY - reach * share, withAlpha( THEIR_RED, THEIR_RED_COLUMN_ALPHA ) );
 	}
-	fill( PLOT_LEFT, MIDDLE_Y, PLOT_RIGHT, MIDDLE_Y + 1.0f, GOLD );
+	fill( PLOT_LEFT, middleY, PLOT_RIGHT, middleY + 1.0f, UIStyle::INK );
 
-	// the fortresses' health, a run drawn once for as long as it holds
+	// the fortresses' health on its gridlines, a run drawn once for as long as it holds
+	for( Int step = 0; step <= 2; ++step )
+	{
+		const Real y = healthBottom - ( healthBottom - healthTop ) * step * 0.5f;
+		fill( PLOT_LEFT, y, PLOT_RIGHT, y + 1.0f, UIStyle::GRID );
+		drawText( UIStyle::percentText( step * 50 ), labelFont,bx( PLOT_LEFT - 8.0f ), by( y ), UIStyle::MUTED, 1 );
+	}
 	Int most = 1;
 	for( size_t k = 0; k < s_samples.size(); ++k )
 		for( Int t = 0; t < DIRECTSTRIKE_TEAMS; ++t )
@@ -649,11 +636,11 @@ void drawTimeline( void )
 	const Image *mark = piece( PIECE_TOWER_DOWN );
 	for( Int t = 0; t < DIRECTSTRIKE_TEAMS; ++t )
 	{
-		const Color c = t == s_ourTeam ? OUR_BLUE : THEIR_RED;
-		Real runX = timelineX( 0 ), runY = HEALTH_FULL_Y;
+		const Color c = teamColor( t );
+		Real runX = timelineX( 0 ), runY = healthTop;
 		for( size_t k = 0; k < s_samples.size(); ++k )
 		{
-			const Real y = HEALTH_ZERO_Y - ( HEALTH_ZERO_Y - HEALTH_FULL_Y ) * s_samples[ k ].fortress[ t ] / most;
+			const Real y = healthBottom - ( healthBottom - healthTop ) * s_samples[ k ].fortress[ t ] / most;
 			const Real x = timelineX( s_samples[ k ].frame );
 			if( y != runY || k + 1 == s_samples.size() )
 			{
@@ -664,24 +651,49 @@ void drawTimeline( void )
 			}
 		}
 
-		// where a tower fell, the damage mark in the team's colour over its line
+		// where a tower fell: a dark mark ringed in the team's colour on the full line
 		for( Int k = 0; k < 2; ++k )
 		{
 			if( s_towerDown[ t ][ k ] == 0 )
 				continue;
-			const Real x = timelineX( s_towerDown[ t ][ k ] ), y = HEALTH_FULL_Y - TOWER_MARK_RISE;
+			const Real x = timelineX( s_towerDown[ t ][ k ] ), y = healthTop - 4.0f;
+			fill( x - TOWER_MARK_HALF, y - TOWER_MARK_HALF, x + TOWER_MARK_HALF, y + TOWER_MARK_HALF, MARK_FILL );
+			frame( x - TOWER_MARK_HALF, y - TOWER_MARK_HALF, x + TOWER_MARK_HALF, y + TOWER_MARK_HALF, 1.0f, c );
 			if( mark != NULL )
-				drawGlyph( mark, x - TOWER_MARK_HALF, y - TOWER_MARK_HALF, 2.0f * TOWER_MARK_HALF, c );
-			else
-				fill( x - TOWER_MARK_FLAT_HALF, y - TOWER_MARK_FLAT_HALF, x + TOWER_MARK_FLAT_HALF, y + TOWER_MARK_FLAT_HALF, c );
+				TheDisplay->drawImage( mark, bx( x - TOWER_MARK_HALF + 3.0f ), by( y - TOWER_MARK_HALF + 3.0f ), bx( x + TOWER_MARK_HALF - 3.0f ),
+					by( y + TOWER_MARK_HALF - 3.0f ), UIStyle::INK );
 		}
 	}
+
+	// the foot: a tick every wave, the minutes (every five past ten minutes), the end in bold
+	const UnsignedInt tickFrames = DIRECTSTRIKE_TICK_FRAMES, minute = 60 * LOGICFRAMES_PER_SECOND;
+	const UnsignedInt markFrames = s_endFrame < 10 * minute ? minute : s_endFrame < 30 * minute ? 5 * minute : 10 * minute;
+	for( UnsignedInt f = DIRECTSTRIKE_FIRST_TICK_FRAMES; f < s_endFrame && tickFrames > 0; f += tickFrames )
+		fill( timelineX( f ), axisY - 4.0f, timelineX( f ) + 1.0f, axisY, withAlpha( UIStyle::MUTED, 0.6f ) );
+	const Real endX = timelineX( s_endFrame );
+	for( UnsignedInt f = 0; f < s_endFrame; f += markFrames )
+	{
+		const Real x = timelineX( f );
+		if( endX - x < 60.0f )
+			break;
+		fill( x, middleTop, x + 1.0f, axisY, withAlpha( UIStyle::GRID, 0.8f ) );
+		drawText( clockText( (Int)( f / LOGICFRAMES_PER_SECOND ) ), labelFont,bx( x ), by( axisY + 9.0f ), UIStyle::MUTED, f == 0 ? -1 : 0 );
+	}
+	drawText( clockText( s_matchSeconds ), caps, bx( endX ), by( axisY + 9.0f ), UIStyle::INK, 1 );
+}
+
+/// the key's rect on the key row: Rematch (or Lobby) lit at the right, then Replay, then Back to menu
+IRegion2D keyRect( Int k )
+{
+	Int x0, x1;
+	EndScreen::keyRect( k, x0, x1 );
+	return UIStyle::boardRect( x0, EndScreen::KEYS_TOP, x1, EndScreen::KEYS_BOTTOM );
 }
 
 Bool overKey( Int k, const ICoord2D *mouse )
 {
-	using namespace Look;
-	return mouse->x >= bx( KEY_X[ k ] ) && mouse->x < bx( KEY_X[ k ] + KEY_W ) && mouse->y >= by( KEY_TOP ) && mouse->y < by( KEY_BOTTOM );
+	const IRegion2D r = keyRect( k );
+	return mouse->x >= r.lo.x && mouse->x < r.hi.x && mouse->y >= r.lo.y && mouse->y < r.hi.y;
 }
 
 Bool watchingReplay( void ) { return TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK; }
@@ -754,69 +766,124 @@ void rematch( void )
 	GameEngine_appendNewGameRates( msg, gameSpeedPercent );
 }
 
+/** The end screen's keys: Rematch (Lobby in a network match, which only goes back to its room) lit, Replay
+	* and Back to menu; a key that cannot work here in the dimmed state. */
 void drawKeys( void )
 {
-	using namespace Look;
 	const ICoord2D *mouse = &TheMouse->getMouseStatus()->pos;
 	const Bool down = TheMouse->getMouseStatus()->leftState != MBS_Up;
+	GameFont *face = font( UIStyle::MENU_TEXT_KEY, TRUE );
 	for( Int k = 0; k < KEYS; ++k )
 	{
-		// the Riveted Clamp key's states: I when it does nothing here, P while the button is held on it, H under the pointer
 		const Bool live = keyLive( k ), hot = live && overKey( k, mouse );
-		const char *state = !live ? KEY_DEAD_SUFFIX : hot && down ? KEY_HELD_SUFFIX : hot ? KEY_HOT_SUFFIX : "";
-		AsciiString name( KEY_PIECES[ k ] );
-		name.concat( state );
-		const Image *art = piece( name.str() );
-		Bool dim = !live;
-		if( art != NULL )
-			dim = FALSE;		// the I piece is drawn dark already
-		else if( *state != 0 )
-			art = piece( KEY_PIECES[ k ] );	// a sheet without the state's piece: the plain key, an unwired one faded
-		const Real alpha = dim ? KEY_DIM_ALPHA : 1.0f;
-		const Real centre = KEY_X[ k ] + KEY_W * 0.5f;
-		plate( art, KEY_X[ k ], KEY_TOP, KEY_X[ k ] + KEY_W, KEY_BOTTOM, KEY_FLAT, hot ? GOLD : PANEL_LIP, alpha );
-		// in a network game the first key only leaves for the lobby (rematch), so it says so
-		const char *label = k == 0 && TheGameLogic->isInMultiplayerGame() ? "GUI:LaneEndLobby" : KEY_LABELS[ k ];
-		if( art == NULL )
-			drawText( TheGameText->fetch( label ), KEY_FONT, bx( centre ), by( KEY_LABEL_Y ), withAlpha( hot ? GOLD : WORD_WHITE, alpha ), 0 );
-		if( overKey( k, mouse ) )
-			drawText( TheGameText->fetch( label ), TOOLTIP_FONT, bx( centre ), by( TOOLTIP_Y ), WORD_WHITE, 0 );
+		const UIStyle::KeyState state = !live ? UIStyle::KEY_DISABLED : hot && down ? UIStyle::KEY_PRESSED : hot ? UIStyle::KEY_HOVER : UIStyle::KEY_NORMAL;
+		const char *label = k == KEY_REMATCH && TheGameLogic->isInMultiplayerGame() ? "GUI:LaneEndLobby" : KEY_LABELS[ k ];
+		const IRegion2D box = keyRect( k );
+		DisplayString *words = pooled( UIStyle::fitText( UIStyle::capitals( TheGameText->fetch( label ) ), face, box.hi.x - box.lo.x - px( 16.0f ) ), face );
+		UIStyle::menuKey( box, words, state, k == KEY_REMATCH && live );
 	}
 }
 
 void drawResults( void )
 {
-	using namespace Look;
-	shade( SHADE_RESULTS );
-	vignette( VIGNETTE_RESULTS );
+	using namespace EndScreen;
+	const IRegion2D panel = UIStyle::boardRect( PANEL_LEFT, PANEL_TOP, PANEL_RIGHT, PANEL_BOTTOM );
+	UIStyle::glass( panel, 168 );
+	UIStyle::frameA( panel );
 
-	// the header chip: the word between the chip's left lip and the clock, then the match's length
-	plate( piece( PIECE_HEADER ), HEADER.x0, HEADER.y0, HEADER.x1, HEADER.y1, HEADER_FLAT, HEADER_LIP );
-	Color wordColor;
-	const UnicodeString word = resultWord( &wordColor );
-	drawFitted( word, WORD_FONTS, bx( HEADER_WORD_X ), by( HEADER_WORD_Y ), wordColor, 0, px( HEADER_WORD_MAX ) );
-	drawMatchTime( HEADER_WORD_X, HEADER_CLOCK_Y, TIME_GREY );
+	// the title and the facts after it: Direct Strike, the format, the length, a team that left
+	const Real titleMiddle = ( TITLE_TOP + TITLE_BOTTOM ) * 0.5f;
+	const Int titleWidth = drawCaps( resultWord(), font( UIStyle::MENU_TEXT_TITLE, TRUE ), bx( INSET_LEFT ), by( titleMiddle ), UIStyle::INK,
+		UIStyle::MENU_TEXT_TITLE * 0.12f );
+	static const WideChar DOT[] = { u' ', 0x00B7, u' ', 0 };
+	UnicodeString facts = TheGameText->fetch( "GUI:DirectStrikeLower" );
+	UnicodeString format;
+	format.format( u"%dv%d", seatsOf( s_ourTeam ), seatsOf( 1 - s_ourTeam ) );
+	facts.concat( DOT );
+	facts.concat( format );
+	facts.concat( DOT );
+	facts.concat( clockText( s_matchSeconds ) );
 	const UnicodeString reason = reasonText();
-	drawFitted( reason, REASON_FONTS, bx( HEADER_WORD_X ), by( HEADER_REASON_Y ), TIME_GREY, 0, px( HEADER_REASON_MAX ) );
-
-	// the cards, ours on the left, the local player's raised; a team short of three seats keeps its
-	// cards next to the middle line
-	Int seated[ DIRECTSTRIKE_TEAMS ] = { 0, 0 }, placed[ DIRECTSTRIKE_TEAMS ] = { 0, 0 };
-	for( size_t i = 0; i < s_seats.size(); ++i )
-		++seated[ s_seats[ i ].team ];
-	for( size_t i = 0; i < s_seats.size(); ++i )
+	if( !reason.isEmpty() )
 	{
-		const Seat &s = s_seats[ i ];
-		const Int slot = placed[ s.team ]++;
-		const Real x = s.team == s_ourTeam ? CARDS_OURS[ DIRECTSTRIKE_SEATS - seated[ s.team ] + slot ] : CARDS_THEIRS[ slot ];
-		drawCard( s, x, s.local ? CARD_Y_LOCAL : CARD_Y );
+		facts.concat( DOT );
+		facts.concat( reason );
+	}
+	const Int factsLeft = bx( INSET_LEFT ) + titleWidth + px( 24.0f );
+	drawFitted( facts, font( 20 ), factsLeft, by( titleMiddle + 2.0f ), UIStyle::MUTED, -1, bx( INSET_RIGHT ) - factsLeft );
+
+	// the lit rule, and the share of the middle each team held as a line under it
+	lit( PANEL_LEFT + 2, RULE_Y, PANEL_RIGHT - 2, RULE_Y + 2, UIStyle::FRAME );
+	const Real x0 = PANEL_LEFT + 2, x1 = PANEL_RIGHT - 2;
+	const Real split = x0 + ( x1 - x0 ) * ourMiddleShare();
+	lit( x0, SHARE_TOP, split, SHARE_BOTTOM, teamColor( s_ourTeam ) );
+	lit( split, SHARE_TOP, x1, SHARE_BOTTOM, teamColor( 1 - s_ourTeam ) );
+	fill( ( x0 + x1 ) * 0.5f, SHARE_TOP - 4.0f, ( x0 + x1 ) * 0.5f + 1.0f, SHARE_BOTTOM + 4.0f, UIStyle::INK );
+
+	// a wing a team, ours on the left; a column's best in cyan when three seats or more stand
+	const Int most = max( seatsOf( 0 ), seatsOf( 1 ) );
+	const Real rowHeight = (Real)directStrikeRowHeight( most );
+	Int best[ STATS ];
+	Int topDamage = 0;
+	for( Int col = 0; col < STATS; ++col )
+	{
+		best[ col ] = -1;
+		if( s_seats.size() < 3 || col == 3 )		// money spent is no achievement
+			continue;
+		Int value = -1, holders = 0;
+		for( size_t i = 0; i < s_seats.size(); ++i )
+		{
+			if( s_seats[ i ].stat[ col ] > value )
+			{
+				value = s_seats[ i ].stat[ col ];
+				holders = 1;
+			}
+			else if( s_seats[ i ].stat[ col ] == value )
+				++holders;
+		}
+		if( holders == 1 && value > 0 )
+			best[ col ] = value;
+	}
+	for( size_t i = 0; i < s_seats.size(); ++i )
+		topDamage = max( topDamage, s_seats[ i ].stat[ DS_LEAD_COLUMN ] );
+	for( Int side = 0; side < DIRECTSTRIKE_TEAMS; ++side )
+	{
+		const Int team = side == 0 ? s_ourTeam : 1 - s_ourTeam;
+		const Real wx0 = side == 0 ? (Real)WING_LEFT_X0 : (Real)WING_RIGHT_X0;
+		const Real wx1 = side == 0 ? (Real)WING_LEFT_X1 : (Real)WING_RIGHT_X1;
+		Int left[ STATS ], right[ STATS ];
+		directStrikeColumns( (Int)wx1, left, right );
+		drawTeamHead( team, wx0, wx1, CONTENT_TOP, left, right );
+		Real y = CONTENT_TOP + TEAM_HEAD;
+		for( size_t i = 0; i < s_seats.size(); ++i )
+		{
+			if( s_seats[ i ].team != team )
+				continue;
+			drawSeatRow( s_seats[ i ], wx0, y, wx1, y + rowHeight, left, right, best, topDamage );
+			y += rowHeight;
+		}
 	}
 
-	// the lane's middle line between the teams, gold dashes
-	for( Real y = reason.isEmpty() ? MIDDLE_LINE_TOP : MIDDLE_LINE_TOP_UNDER_REASON; y < MIDDLE_LINE_BOTTOM; y += 2.0f * MIDDLE_DASH )
-		fill( MIDDLE_LINE_X - 1.0f, y, MIDDLE_LINE_X + 1.0f, min( y + MIDDLE_DASH, MIDDLE_LINE_BOTTOM ), GOLD );
+	// the lane's centre between the wings, a dashed line down the gap
+	const Real timelineTop = (Real)directStrikeTimelineTop( most );
+	const Real centre = ( WING_LEFT_X1 + WING_RIGHT_X0 ) * 0.5f;
+	for( Real y = CONTENT_TOP; y < timelineTop - DS_TIMELINE_GAP; y += 12.0f )
+		fill( centre, y, centre + 1.0f, min( y + 6.0f, timelineTop - DS_TIMELINE_GAP ), UIStyle::FRAME );
 
-	drawTimeline();
+	drawTimeline( timelineTop, (Real)DS_TIMELINE_BOTTOM );
+
+	// the foot names the marks, the keys stand on the key row
+	fill( INSET_LEFT, PAGE_FOOT_RULE, INSET_RIGHT, PAGE_FOOT_RULE + 1, UIStyle::withAlpha( UIStyle::FRAME, 110 ) );
+	GameFont *labelFont =font( UIStyle::MENU_TEXT_LABEL );
+	const Real footY = ( KEYS_TOP + KEYS_BOTTOM ) * 0.5f;
+	Real at = INSET_LEFT;
+	fill( at, footY - 8.0f, at + 16.0f, footY + 8.0f, Look::MARK_FILL );
+	frame( at, footY - 8.0f, at + 16.0f, footY + 8.0f, 1.0f, UIStyle::MUTED );
+	at += 24.0f;
+	at += bw( drawText( TheGameText->fetch( "GUI:LaneEndTowerDown" ), labelFont,bx( at ), by( footY ), UIStyle::MUTED ) ) + 28.0f;
+	fill( at, footY - 4.0f, at + 1.0f, footY + 4.0f, UIStyle::MUTED );
+	at += 10.0f;
+	drawText( TheGameText->fetch( "GUI:LaneEndWaveSent" ), labelFont,bx( at ), by( footY ), UIStyle::MUTED );
 	drawKeys();
 }
 
@@ -935,6 +1002,7 @@ void DirectStrikeEndScreen_preDraw( void )
 			const DirectStrikeSeatStats &st = TheDirectStrikeStats->getSeat( t, s );
 			Seat c;
 			c.name = player->getPlayerDisplayName();
+			c.side = player->getPlayerTemplate() ? player->getPlayerTemplate()->getDisplayName() : UnicodeString::TheEmptyString;
 			c.color = player->getPlayerColor();
 			c.team = t;
 			c.local = player == local && s_localTeam >= 0;

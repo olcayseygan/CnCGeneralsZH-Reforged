@@ -9428,3 +9428,113 @@ END
 OPTIONTIP:Quality
 "Left runs fastest, right looks best; the four presets are points along it. Drag it first, then change single boxes if you want."
 END
+
+// Menu redesign package 10, game lists: Custom games and the LAN lobby, their rows, the picked game, the
+// Host Game, Join Game and Direct Connect boxes.
+GUI:LANLobby
+"LAN Lobby"
+END
+
+GUI:LocalNetwork
+"Local network"
+END
+
+GUI:LobbyPlayerName
+"Player name"
+END
+
+GUI:LobbyModeClassic
+"Classic"
+END
+
+GUI:LobbyGeneratedIsland
+"Generated island"
+END
+
+GUI:LobbyGeneratedBasin
+"Generated basin"
+END
+
+GUI:LobbyOtherBuild
+"Other build"
+END
+
+GUI:LobbyPassword
+"Password"
+END
+
+GUI:LobbyEmptyOnline
+"No open games on %ls. Host one."
+END
+
+GUI:LobbyEmptyLan
+"No games on this network yet. Create one."
+END
+
+GUI:LobbyHintJoin
+"Enter joins the picked game"
+END
+
+GUI:LobbyHintHost
+"Nothing to join yet"
+END
+
+GUI:LobbyPickedGame
+"Picked game"
+END
+
+GUI:LobbyHostOf
+"Host %ls"
+END
+
+GUI:LobbyOpenSeats
+"%d open seats"
+END
+
+GUI:LobbyWinsLosses
+"Wins-losses"
+END
+
+GUI:LobbyJoinGame
+"Join game"
+END
+
+GUI:LobbyFieldName
+"Game name"
+END
+
+GUI:HostQuestion
+"A %ls room on %ls"
+END
+
+GUI:PasswordHint
+"Empty is an open game"
+END
+
+GUI:LimitArmiesLine
+"USA, China and GLA only, no generals' armies"
+END
+
+GUI:JoinPasswordLine
+"This game asks for its password"
+END
+
+GUI:DirectConnectQuestion
+"Play with a friend by address"
+END
+
+GUI:YourName
+"Your name"
+END
+
+GUI:YourAddress
+"Your address"
+END
+
+GUI:TheirAddress
+"Their address"
+END
+
+GUI:AddressHint
+"Give this to your friend"
+END

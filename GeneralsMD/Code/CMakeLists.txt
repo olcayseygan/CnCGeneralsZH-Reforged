@@ -3203,6 +3203,12 @@ if(Python3_Interpreter_FOUND)
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/Tools/online_layout.py selfcheck)
 
+  # The LAN lobby on frame A's board: every window its callback looks up, nothing overlapping, the keys
+  # on the foot row's pitch.
+  add_test(NAME lanlobby_layout_selfcheck
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/Tools/lanlobby_layout.py selfcheck)
+
   # The map pickers stand where the rooms' seat table and map preview stand, read from the rooms'
   # own layouts, so a room laid out again without the pickers following is caught here.
   add_test(NAME mapselect_selfcheck

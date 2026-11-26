@@ -37,6 +37,8 @@
 #include "GameNetwork/LANGameInfo.h"
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/GUIUtil.h"
+#include "GameNetwork/GameSpy/LobbyUtils.h"
+#include "GameClient/UIStyle.h"
 #include "Common/MultiplayerSettings.h"
 #include "strtok_r.h"
 /*
@@ -226,32 +228,15 @@ void LANDisplayGameList( GameWindow *gameListbox, LANGameInfo *gameList )
 		const Int topVisible = GadgetListBoxGetTopVisibleEntry(gameListbox);
 
 		GadgetListBoxReset(gameListbox);
-		
+		// the lobby draws each row from its game (LanLobbyMenu.cpp, the design's columns); the list keeps the
+		// host's name and, in a column of no width, a blank image 40 high at the board's scale for the row
+		static const Int percent[ 2 ] = { 100, 0 };
+		LobbySetColumns(gameListbox, 2, percent);
+
 		while (gameList)
 		{
-			UnicodeString txtGName;
-			txtGName = u"";
-			if( gameList->isGameInProgress() )
-			{
-				txtGName.concat(u"[");
-			}
-			txtGName.concat(gameList->getPlayerName(0));
-			if( gameList->isGameInProgress() )
-			{
-				txtGName.concat(u"]");
-			}
-			// the mode is the map, which the announcement carries
-			if( IsDirectStrikeMap( gameList->getMap() ) )
-			{
-				txtGName.concat(u" - ");
-				txtGName.concat(ModeNameWithVersion("GUI:DirectStrikeLower", "GUI:DirectStrikeVersion"));
-			}
-			else if( IsApocalypseMap( gameList->getMap() ) )
-			{
-				txtGName.concat(u" - ");
-				txtGName.concat(ModeNameWithVersion("GUI:ApocalypseLower", "GUI:ApocalypseVersion"));
-			}
-			Int addedIndex = GadgetListBoxAddEntryText(gameListbox, txtGName, (gameList->isGameInProgress())?gameInProgressColor:gameColor, -1, -1);
+			Int addedIndex = GadgetListBoxAddEntryText(gameListbox, gameList->getPlayerName(0), (gameList->isGameInProgress())?gameInProgressColor:gameColor, -1, 0);
+			GadgetListBoxAddEntryImage(gameListbox, NULL, addedIndex, 1, UIStyle::px(40.0f) - 1, 1);
 			GadgetListBoxSetItemData(gameListbox, (void *)gameList, addedIndex, 0 );
 
 			if (selectedPtr == gameList)

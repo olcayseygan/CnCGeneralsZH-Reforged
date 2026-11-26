@@ -52,6 +52,9 @@
 #include "GameNetwork/LANAPI.h"
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/GUIUtil.h"
+#include "GameNetwork/GameSpy/LobbyUtils.h"
+#include "GameClient/GadgetListBox.h"
+#include "GameClient/UIStyle.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -259,6 +262,69 @@ void JoinDirectConnectGame()
 	TheLAN->RequestGameJoinDirectConnect(ipaddress);
 }
 
+/* Direct Connect as a box of the message box's pattern over the backdrop (README-game-lists.md
+	 "lists-direct-connect"), on EA's screen: the box on the board at 580,295 to 1340,785, YOUR NAME, YOUR ADDRESS
+	 with its hint and THEIR ADDRESS down its left, the fields at 852 to 1308, BACK, HOST and JOIN at its foot,
+	 JOIN lit.  EA's screen stays a screen; its parents are fitted to the box so every gadget inside takes clicks. */
+enum { DC_LEFT = 580, DC_TOP = 295, DC_RIGHT = 1340, DC_BOTTOM = 785, DC_FIELD = 852, DC_KEY_TOP = 717 };
+
+static void drawDirectConnect( GameWindow *window, WinInstanceData * )
+{
+	(void)window;
+	const IRegion2D box = UIStyle::boardRect( DC_LEFT, DC_TOP, DC_RIGHT, DC_BOTTOM );
+	LobbyDrawBoxHead( box, TheGameText->fetch( "GUI:DirectConnect" ), TheGameText->fetch( "GUI:DirectConnectQuestion" ),
+		UnicodeString::TheEmptyString );
+	const Int x = UIStyle::boardX( 612.0f );
+	LobbyDrawBoxLabel( TheGameText->fetch( "GUI:YourName" ), x, UIStyle::boardY( 425.0f ) );
+	LobbyDrawBoxLabel( TheGameText->fetch( "GUI:YourAddress" ), x, UIStyle::boardY( 497.0f ) );
+	LobbyDrawBoxLabel( TheGameText->fetch( "GUI:TheirAddress" ), x, UIStyle::boardY( 569.0f ) );
+	if (staticLocalIP)
+		LobbyDrawWords( LOBBY_TEXT_BOX + 3, GadgetStaticTextGetText( staticLocalIP ), UIStyle::MENU_TEXT_ROW_FIGURE, FALSE,
+			UIStyle::boardX( 864.0f ), UIStyle::boardY( 497.0f ), UIStyle::INK );
+	LobbyDrawWords( LOBBY_TEXT_BOX + 4, TheGameText->fetch( "GUI:AddressHint" ), UIStyle::MENU_TEXT_HINT, FALSE,
+		UIStyle::boardX( 1308.0f ), UIStyle::boardY( 497.0f ), UIStyle::MUTED, TRUE );
+}
+
+/// EA's screen fitted into the box, its labels and rule hidden for the code's, its gadgets in the language
+static void initDirectConnectLook( GameWindow *root )
+{
+	if (root)
+		root->winSetDrawFunc( drawDirectConnect );
+	GameWindow *gadgets = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "NetworkDirectConnect.wnd:GadgetParent" ) );
+	GameWindow *inner = buttonHost ? buttonHost->winGetParent() : NULL;
+	LobbyPlaceOnBoard( gadgets, DC_LEFT, DC_TOP, DC_RIGHT, DC_BOTTOM );
+	if (inner && inner != gadgets)
+		LobbyPlaceOnBoard( inner, DC_LEFT, DC_TOP, DC_RIGHT, DC_BOTTOM );
+	LobbyPlaceOnBoard( editPlayerName, DC_FIELD, 401, 1308, 449 );
+	LobbyPlaceOnBoard( comboboxRemoteIP, DC_FIELD, 545, 1308, 593 );
+	LobbyPlaceOnBoard( buttonBack, 624, DC_KEY_TOP, 844, DC_KEY_TOP + 48 );
+	LobbyPlaceOnBoard( buttonHost, 856, DC_KEY_TOP, 1076, DC_KEY_TOP + 48 );
+	LobbyPlaceOnBoard( buttonJoin, 1088, DC_KEY_TOP, 1308, DC_KEY_TOP + 48 );
+	static const char *const drawn[] = { "StaticRemoteIPDescription", "StaticLocalIPDescription", "StaticPlayerNameDescription",
+		"Line", "StaticWindowLabel", "StaticLocalIP" };
+	for (Int i = 0; i < (Int)ARRAY_SIZE( drawn ); ++i)
+	{
+		AsciiString name;
+		name.format( "NetworkDirectConnect.wnd:%s", drawn[ i ] );
+		if (GameWindow *window = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( name ) ))
+			window->winHide( TRUE );
+	}
+	LobbyMenuEntry( editPlayerName, UIStyle::MENU_TEXT_ROW_FIGURE, UIStyle::GOLD );
+	if (comboboxRemoteIP)
+	{
+		UIStyle::setMenuComboBox( comboboxRemoteIP );
+		LobbyMenuEntry( GadgetComboBoxGetEditBox( comboboxRemoteIP ), UIStyle::MENU_TEXT_BODY, UIStyle::INK );
+		if (GameWindow *list = GadgetComboBoxGetListBox( comboboxRemoteIP ))
+		{
+			UIStyle::setMenuListBox( list );
+			GadgetListBoxSetFont( list, UIStyle::menuFont( UIStyle::MENU_TEXT_HINT + 1 ) );
+		}
+	}
+	LobbyMenuKey( buttonBack, FALSE );
+	LobbyMenuKey( buttonHost, FALSE );
+	LobbyMenuKey( buttonJoin, TRUE );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** Initialize the WOL Welcome Menu */
 //-------------------------------------------------------------------------------------------------
@@ -290,6 +356,7 @@ void NetworkDirectConnectInit( WindowLayout *layout, void *userData )
 	editPlayerName = TheWindowManager->winGetWindowFromId( NULL,	editPlayerNameID);
 	comboboxRemoteIP = TheWindowManager->winGetWindowFromId( NULL,	comboboxRemoteIPID);
 	staticLocalIP = TheWindowManager->winGetWindowFromId( NULL, staticLocalIPID);
+	initDirectConnectLook( TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "NetworkDirectConnect.wnd:NetworkDirectConnectParent" ) ) );
 
 //	// animate controls
 //	TheShell->registerWithAnimateManager(buttonBack, WIN_ANIMATION_SLIDE_LEFT, TRUE, 800);

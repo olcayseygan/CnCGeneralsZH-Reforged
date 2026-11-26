@@ -78,6 +78,12 @@ found and fixed, EA's own, not port damage.**
 - The hub's Play vs AI and Quick Match cards show your last five results as W and L chips. The recent matches table mixes both modes newest first, and each rating change carries a bar as long as the change. The Custom games card lists the first three open games with their map and free seats. A player with no matches yet gets the ladder's top five where his empty table would be.
 - Quick Match puts your picks in one box beside the army cards and the colour boxes: the general's portrait, your ladder figure, place, record and how many are queued. While it searches, three big figures say how long it has searched, how many others search on your server and which win chances it takes now, over a 0 to 100 track that marks the next widening and where widening stops; your last five Quick Matches sit under it. When an opponent is found both seats face each other with your win chance between them and the match's mode, server and speed beneath.
 
+## Game lists in the new menu look
+
+- The online Custom games page and the LAN lobby are one screen in the new look. The games fill a list with a column each for the game, its mode, its map, the seats taken out of how many with a bar, the host's ping online, and whether it is Open, Full, Playing or from another build; the first game is picked for you, and the picked one shows its map, host and every seat (army, colour and record where the game knows them) in the right column over the players. Click GAME or PING to sort by it.
+- Host Game and Create Game ask which of the three modes the room is for, Classic, Direct Strike or Apocalypse, so the separate Mods key is gone. Join is the lit key while a game you can take is picked, Host Game otherwise, and Enter on an empty chat line joins the picked game.
+- Host Game, the password box and Direct Connect are boxes over the lobby in the same look, with Enter for the lit key and Esc to cancel. Join Game now has a JOIN key; EA's only joined on Enter.
+
 ## Password rooms online
 
 - The password box in Host Game did nothing online: the room opened to everyone. On a server with friends the password now locks the room, the game list marks it, a wrong password is refused as one, and a friend you invite walks in without it. Against an older server the game behaves exactly as before.

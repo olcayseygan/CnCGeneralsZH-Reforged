@@ -59,6 +59,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
+#include "GameClient/MapUtil.h"
 #include "GameClient/UIStyle.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/Online/OnlineQueues.h"
@@ -130,16 +131,16 @@ Bool DontShowMainMenu = FALSE;
 	 the ping light, whose image is a row high, and the whole nick in a column of no width, which is what
 	 the right-click menu and the tooltip look a player up by. */
 enum { PLAYER_NICK, PLAYER_TIER, PLAYER_RATING, PLAYER_LIGHT, PLAYER_KEY, PLAYER_COLUMNS };
-// the mockup's 190, 136, 104 and 58 of a 488 list
-static const Int PLAYER_COLUMN_PERCENT[ PLAYER_COLUMNS ] = { 39, 28, 21, 12, 0 };
-static const Real PLAYER_ROW_HEIGHT = 36.0f;		///< at 1080
+// README-game-lists.md "The players": PLAYER from 1346, TIER from 1532, RATING ending 1774, the light at 1824,
+// of the 509 the list leaves its rows beside its scroll bar
+static const Int PLAYER_COLUMN_PERCENT[ PLAYER_COLUMNS ] = { 37, 22, 31, 10, 0 };
+static const Real PLAYER_ROW_HEIGHT = 34.0f;		///< at 1080
 static const Real LOBBY_PAD = 10.0f;
 
 // window ids ------------------------------------------------------------------------------
 static NameKeyType parentWOLLobbyID = NAMEKEY_INVALID;
 static NameKeyType buttonBackID = NAMEKEY_INVALID;
 static NameKeyType buttonHostID = NAMEKEY_INVALID;
-static NameKeyType buttonModsID = NAMEKEY_INVALID;
 static NameKeyType buttonRefreshID = NAMEKEY_INVALID;
 static NameKeyType buttonJoinID = NAMEKEY_INVALID;
 static NameKeyType buttonBuddyID = NAMEKEY_INVALID;
@@ -263,8 +264,8 @@ void SetLobbyAttemptHostJoin(Bool start)
 		LobbySetJoiningGame( 0 );		// the join came back, or the password box was cancelled
 }
 
-/* The host popup for a Classic room (the Host button), or the Mods button's answer (AskGameMode): a Direct
-	 Strike or Apocalypse one, whose staging room stands on that mode's generated map from the start (TheHostGameMode). */
+/* The host popup for the mode Host Game's question answered (AskGameMode): a Classic room, or a Direct Strike or
+	 Apocalypse one, whose staging room stands on that mode's generated map from the start (TheHostGameMode). */
 static void hostRoom( Int mode )
 {
 	if (!TheGameSpyInfo || s_tryingToHostOrJoin)
@@ -310,11 +311,10 @@ static void onlineLobbyScript( void )
 			 is made under the popup's own rules.  Building the request here once hid that the popup made
 			 every online room a stats room, with every option locked for its host. */
 		GameWindow *popupName = NULL, *popupCreate = NULL, *popup = NULL;
-		// "ask" presses Mods and leaves its mode question up, for a picture of it
-		GameWindow *buttonMods = TheWindowManager->winGetWindowFromId( parent, buttonModsID );
-		if (buttonMods && TheGlobalData->m_onlineMap.compareNoCase( "ask" ) == 0)
+		// "ask" presses Host Game and leaves its mode question up, for a picture of it
+		if (buttonHost && TheGlobalData->m_onlineMap.compareNoCase( "ask" ) == 0)
 		{
-			TheWindowManager->winSendSystemMsg( parent, GBM_SELECTED, (WindowMsgData)buttonMods, buttonModsID );
+			TheWindowManager->winSendSystemMsg( parent, GBM_SELECTED, (WindowMsgData)buttonHost, buttonHostID );
 			DEBUG_LOG(("ONLINE HOST asked\n"));
 			return;
 		}
@@ -621,8 +621,6 @@ static void drawPlayerRow( GameWindow *list, Int row, const IRegion2D &rect, con
 	LobbyDrawCell( list, row, PLAYER_TIER, rect, clip, LOBBY_ALIGN_LEFT );
 	LobbyDrawCell( list, row, PLAYER_RATING, rect, clip, LOBBY_ALIGN_RIGHT );
 	LobbyDrawCell( list, row, PLAYER_LIGHT, rect, clip, LOBBY_ALIGN_CENTER );
-	if (rect.hi.y <= clip.hi.y)
-		TheDisplay->drawFillRect( rect.lo.x, rect.hi.y - 1, rect.hi.x - rect.lo.x, 1, UIStyle::GRID );
 }
 
 /* The player's own row, lit in the selection's art but never selected: GameSpyInfo::sendChat reads the
@@ -760,24 +758,27 @@ void PopulateLobbyPlayerListbox(void)
 //-------------------------------------------------------------------------------------------------
 enum LobbyText
 {
-	TEXT_GAMES,					///< the game box's heading
-	TEXT_GAMES_COUNT,		///< "12 open"
-	TEXT_PLAYERS,				///< "In General"
-	TEXT_PLAYERS_COUNT,
+	TEXT_PLAYER,				///< the players' column words
+	TEXT_TIER,
+	TEXT_RATING,
+	TEXT_PING,
 	TEXT_COUNT
 };
 enum { MAX_ROOM_TABS = 8 };
 static DisplayString *s_text[ TEXT_COUNT ];
-static UnicodeString s_playersWords;							///< the player box's heading before it was fitted
 static DisplayString *s_roomTab[ MAX_ROOM_TABS ];
-static UnicodeString s_roomTabWords[ MAX_ROOM_TABS ];	///< each tab's label before it was fitted
 static Int s_roomTabGroup[ MAX_ROOM_TABS ];
 static IRegion2D s_roomTabRect[ MAX_ROOM_TABS ];
 static Int s_roomTabsShown = 0;
 static GameWinDrawFunc s_gadgetParentDraw = NULL;
-static GameWinDrawFunc s_panelGamesDraw = NULL;
 static GameWinDrawFunc s_panelPlayersDraw = NULL;
-
+static GameWinDrawFunc s_panelPickedDraw = NULL;
+static Int s_pickedID = -1;					///< the game the picked block and Join are for, 0 for none
+static Bool s_joinLit = FALSE;				///< a game a join can take is picked
+static Int s_keysLit = -1;						///< which key is lit: 0 none, 1 Join, 2 Host
+static Int s_playersTop = 558;				///< the players' head on the board: under the picked game, or at the top
+static AsciiString s_previewMap;
+static const Image *s_preview = NULL;
 /// a chat room's name; the online server's one room (OnlinePeer.cpp's "Lobby") is the design's General
 static UnicodeString roomName( const GameSpyGroupRoom &room )
 {
@@ -828,9 +829,9 @@ static void joinRoom( Int groupID )
 	}
 }
 
-/* The chat rooms the server listed, as tabs in the strip the hidden room combo box keeps: "General 41",
-	 the open one's label ACTIVE, all of them MUTED while a game is being hosted or joined.  A click lands in
-	 WOLLobbyMenuInput, which finds the tab by the rectangles drawn here. */
+/* The chat rooms the server listed, as tabs in the strip the hidden room combo box keeps: "GENERAL  41",
+	 the open one green, sized to their words.  A click lands in WOLLobbyMenuInput, which finds the tab by the
+	 rectangles drawn here. */
 static void drawRoomTabs( void )
 {
 	s_roomTabsShown = 0;
@@ -840,9 +841,9 @@ static void drawRoomTabs( void )
 	comboLobbyGroupRooms->winGetScreenPosition( &x, &y );
 	comboLobbyGroupRooms->winGetSize( &width, &height );
 	const Int right = x + width;
-	const Int pad = UIStyle::tallPx( 22.0f );		// the page tabs' pad either side of a label
+	const Int pad = UIStyle::px( 16.0f );
 	const Int gap = UIStyle::px( 8.0f );
-	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
+	GameFont *font = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL + 2, TRUE );
 	const MouseIO *mouse = TheMouse ? TheMouse->getMouseStatus() : NULL;
 	GroupRoomMap *rooms = TheGameSpyInfo->getGroupRoomList();
 	for (GroupRoomMap::const_iterator it = rooms->begin(); it != rooms->end() && s_roomTabsShown < MAX_ROOM_TABS; ++it)
@@ -852,12 +853,11 @@ static void drawRoomTabs( void )
 			continue;
 		const Int tab = s_roomTabsShown;
 		UnicodeString words;
-		words.format( TheGameText->fetch( "GUI:OnlineLobbyRoomCount" ), roomName( room ).str(), roomCount( room ) );
-		if (words.compare( s_roomTabWords[ tab ] ) != 0)
-		{
-			s_roomTabWords[ tab ] = words;
-			s_roomTab[ tab ]->setText( UIStyle::fitText( words, body, max( width - 2 * pad, 1 ) ) );
-		}
+		words.format( u"%ls  %d", UIStyle::capitals( roomName( room ) ).str(), roomCount( room ) );
+		if (s_roomTab[ tab ]->getFont() != font)
+			s_roomTab[ tab ]->setFont( font );
+		if (words.compare( s_roomTab[ tab ]->getText() ) != 0)
+			s_roomTab[ tab ]->setText( words );
 		Int w, h;
 		s_roomTab[ tab ]->getSize( &w, &h );
 		const Int tabWidth = w + 2 * pad;
@@ -870,94 +870,114 @@ static void drawRoomTabs( void )
 		rect.hi.x = x + tabWidth;
 		rect.hi.y = y + height;
 		const Bool open = room.m_groupID == TheGameSpyInfo->getCurrentGroupRoom();
-		const Bool hovered = mouse && !open && mouse->pos.x >= rect.lo.x && mouse->pos.x < rect.hi.x
+		const Bool hovered = mouse && !open && !s_tryingToHostOrJoin && mouse->pos.x >= rect.lo.x && mouse->pos.x < rect.hi.x
 			&& mouse->pos.y >= rect.lo.y && mouse->pos.y < rect.hi.y;
-		const Color color = UIStyle::tab( x, y, tabWidth, height, !s_tryingToHostOrJoin, open, hovered );
-		s_roomTab[ tab ]->draw( x + pad, y + ( height - h ) / 2, color, UIStyle::SHADOW );
+		UIStyle::menuTab( rect, s_roomTab[ tab ], open, hovered );
 		s_roomTabGroup[ tab ] = room.m_groupID;
 		++s_roomTabsShown;
 		x += tabWidth + gap;
 	}
 }
 
-/// the room panel, then the header on it (the title, the server line, the wordmark, the player's line)
+/// the room panel, then the header on it (the title, the server line, the player's line), the room tabs and
+/// the foot's hint after Back
 static void drawGadgetParent( GameWindow *window, WinInstanceData *instData )
 {
 	if (s_gadgetParentDraw)
 		s_gadgetParentDraw( window, instData );
 	UIStyle::onlineHeader( TheGameText->fetch( "GUI:OnlineTabCustom" ) );
 	drawRoomTabs();
+	if (!s_tryingToHostOrJoin)
+		LobbyDrawWords( 12, TheGameText->fetch( s_joinLit ? "GUI:LobbyHintJoin" : "GUI:LobbyHintHost" ), UIStyle::MENU_TEXT_HINT, FALSE,
+			UIStyle::boardX( 384.0f ), UIStyle::boardY( 1002.0f ), UIStyle::MUTED );
 }
 
-/// a box's heading ACTIVE in the section face and its count MUTED at its right, in the band over its list
-static void drawBoxHeading( GameWindow *box, DisplayString *heading, DisplayString *count )
-{
-	if (!heading || !count)
-		return;
-	Int x, y, width, height;
-	box->winGetScreenPosition( &x, &y );
-	box->winGetSize( &width, &height );
-	const Int band = UIStyle::px( 56.0f );		// the layout starts a box's list this far under its top
-	Int w, h;
-	heading->getSize( &w, &h );
-	UIStyle::heading( heading, x + UIStyle::px( 24.0f ), y + ( band - h ) / 2 );
-	count->getSize( &w, &h );
-	count->draw( x + width - UIStyle::px( 48.0f ) - w, y + ( band - h ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
-}
-
-/// the game box: "Games", and how many a Join can take, with how many are being played when any are
-static void drawPanelGames( GameWindow *window, WinInstanceData *instData )
-{
-	if (s_panelGamesDraw)
-		s_panelGamesDraw( window, instData );
-	Int open = 0;
-	Int playing = 0;
-	StagingRoomMap *games = TheGameSpyInfo->getStagingRoomList();
-	for (StagingRoomMap::iterator it = games->begin(); it != games->end(); ++it)
-	{
-		GameSpyStagingRoom *game = it->second;
-		if (!game)
-			continue;
-		if (game->isGameInProgress())
-		{
-			++playing;
-			continue;
-		}
-		if (!LobbyGameFull(game) && game->getExeCRC() == TheGlobalData->m_exeCRC && game->getIniCRC() == TheGlobalData->m_iniCRC)
-			++open;
-	}
-	UnicodeString count;
-	if (playing > 0)
-		count.format( TheGameText->fetch( "GUI:OnlineLobbyCount" ), open, playing );
-	else
-		count.format( TheGameText->fetch( "GUI:OnlineLobbyCountOpen" ), open );
-	if (s_text[ TEXT_GAMES_COUNT ])
-		s_text[ TEXT_GAMES_COUNT ]->setText( count );
-	drawBoxHeading( window, s_text[ TEXT_GAMES ], s_text[ TEXT_GAMES_COUNT ] );
-}
-
-/// the player box: "In General" and how many are in it
+/// the players' box: "IN GENERAL" and how many, the column words over their lit rule
 static void drawPanelPlayers( GameWindow *window, WinInstanceData *instData )
 {
 	if (s_panelPlayersDraw)
 		s_panelPlayersDraw( window, instData );
-	if (!s_text[ TEXT_PLAYERS ] || !s_text[ TEXT_PLAYERS_COUNT ])
-		return;
 	const GameSpyGroupRoom *room = currentRoom();
-	const UnicodeString name = room ? roomName( *room ) : UnicodeString::TheEmptyString;
-	UnicodeString words;
-	words.format( TheGameText->fetch( "GUI:OnlineLobbyInRoom" ), name.str() );
-	if (words.compare( s_playersWords ) != 0)
-	{
-		Int width, height;
-		window->winGetSize( &width, &height );
-		s_playersWords = words;
-		s_text[ TEXT_PLAYERS ]->setText( UIStyle::fitText( words, UIStyle::sectionFont(), max( width - UIStyle::px( 120.0f ), 1 ) ) );
-	}
-	UnicodeString count;
+	UnicodeString words, count;
+	words.format( TheGameText->fetch( "GUI:OnlineLobbyInRoom" ), room ? roomName( *room ).str() : u"" );
 	count.format( u"%d", (Int)TheGameSpyInfo->getPlayerInfoMap()->size() );
-	s_text[ TEXT_PLAYERS_COUNT ]->setText( count );
-	drawBoxHeading( window, s_text[ TEXT_PLAYERS ], s_text[ TEXT_PLAYERS_COUNT ] );
+	LobbyDrawSection( words, count, 1334, s_playersTop, 1860, 11 );
+
+	if (!s_text[ TEXT_PLAYER ])
+		return;
+	const Int middle = UIStyle::boardY( (Real)s_playersTop + 41 );
+	GameFont *font = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	UIStyle::columnHeadAt( s_text[ TEXT_PLAYER ], UIStyle::boardX( 1346.0f ), middle );
+	UIStyle::columnHeadAt( s_text[ TEXT_TIER ], UIStyle::boardX( 1532.0f ), middle );
+	// the sorted figure's word ends over its figures, its caret before it; the light's word over the light
+	UIStyle::columnHeadAt( s_text[ TEXT_RATING ], UIStyle::boardX( 1774.0f )
+		- UIStyle::trackedWidth( s_text[ TEXT_RATING ]->getText(), font, UIStyle::MENU_LABEL_TRACKING ), middle, UIStyle::MUTED, OnlineIsEnabled() );
+	UIStyle::columnHeadAt( s_text[ TEXT_PING ], UIStyle::boardX( 1846.0f )
+		- UIStyle::trackedWidth( s_text[ TEXT_PING ]->getText(), font, UIStyle::MENU_LABEL_TRACKING ), middle );
+	UIStyle::litLine( UIStyle::boardX( 1334.0f ), UIStyle::boardY( (Real)s_playersTop + 56 ),
+		UIStyle::boardX( 1846.0f ) - UIStyle::boardX( 1334.0f ), 1, UIStyle::FRAME );
+}
+
+/// the picked game's room from the list's selection, NULL for none
+static GameSpyStagingRoom *pickedRoom( void )
+{
+	return s_pickedID > 0 ? TheGameSpyInfo->findStagingRoomByID( s_pickedID ) : NULL;
+}
+
+/// the picked game: the map, its words, its seats with their records, as the listing and the extended info say
+static void drawPanelPicked( GameWindow *window, WinInstanceData *instData )
+{
+	if (s_panelPickedDraw)
+		s_panelPickedDraw( window, instData );
+	GameSpyStagingRoom *room = pickedRoom();
+	if (room == NULL)
+		return;
+	room->cleanUpSlotPointers();
+	LobbyPicked game;
+	const AsciiString map = room->getMap();
+	game.name = room->getGameName();
+	game.mode = LobbyMapMode( map );
+	game.map = LobbyMapName( map );
+	game.password = room->getHasPassword();
+	game.seated = room->getReportedNumPlayers();
+	game.seats = room->getReportedMaxPlayers();
+	if (map.compare( s_previewMap ) != 0)
+	{
+		// the preview is made once a map; a mode game's map is generated at load and has none yet
+		s_previewMap = map;
+		const MapMetaData *md = TheMapCache ? TheMapCache->findMap( map ) : NULL;
+		s_preview = md && game.mode == HOST_MODE_CLASSIC ? getMapPreviewImage( md->m_fileName ) : NULL;
+	}
+	game.preview = s_preview;
+
+	game.line = LobbyModeName( game.mode );
+	game.seatCount = 0;
+	for (Int i = 0; i < MAX_SLOTS && game.seatCount < LobbyPicked::SEATS; ++i)
+	{
+		GameSpyGameSlot *slot = room->getGameSpySlot( i );
+		if (slot == NULL || !slot->isOccupied())
+			continue;
+		LobbySeat &seat = game.seat[ game.seatCount++ ];
+		seat.portrait = NULL;
+		seat.known = FALSE;
+		seat.color = UIStyle::MUTED;
+		if (slot->isHuman())
+		{
+			seat.name = slot->getName();
+			if (slot->getWins() + slot->getLosses() > 0)
+				seat.record.format( u"%d-%d", slot->getWins(), slot->getLosses() );
+			if (i == 0)
+			{
+				UnicodeString host;
+				host.format( TheGameText->fetch( "GUI:LobbyHostOf" ), slot->getName().str() );
+				game.line.concat( UIStyle::HEADER_JOINER );
+				game.line.concat( host );
+			}
+		}
+		else
+			seat.name = SlotStateName( slot->getState(), slot->getAIRating() );
+	}
+	LobbyDrawPicked( game, 1334, UIStyle::MENU_CONTENT_TOP, 1860, 548, FALSE );
 }
 
 /// puts draw over a window's own; a second init on the same layout keeps the first capture, or the
@@ -977,6 +997,59 @@ static GameWindow *lobbyWindow( const char *name )
 	return TheWindowManager->winGetWindowFromId( parent, NAMEKEY( full ) );
 }
 
+/// the players under the picked game, or the whole column while nothing is picked
+static void placeSideColumn( Bool picked )
+{
+	s_playersTop = picked ? 558 : UIStyle::MENU_CONTENT_TOP;
+	LobbyPlaceOnBoard( lobbyWindow( "PanelPlayers" ), 1334, s_playersTop, 1860, 946 );
+	LobbyPlaceOnBoard( listboxLobbyPlayers, 1334, s_playersTop + 60, 1860, 946 );
+	if (GameWindow *box = lobbyWindow( "PanelPicked" ))
+		box->winHide( !picked );
+}
+
+/* Each frame: the first game is picked while games exist and none is; the picked game's seats are asked for
+	 when it changes; Join takes any game not yet started and is lit for one it can take, else Host Game is
+	 the lit key, and while a host or a join is under way neither. */
+static void syncPicked( void )
+{
+	GameWindow *list = GetGameListBox();
+	if (list == NULL || buttonJoin == NULL || buttonHost == NULL)
+		return;
+	Int selected = -1;
+	GadgetListBoxGetSelected( list, &selected );
+	if (selected < 0 && GadgetListBoxGetNumEntries( list ) > 0)
+	{
+		GadgetListBoxSetSelected( list, 0 );
+		selected = 0;
+	}
+	const Int id = selected >= 0 ? (Int)(intptr_t)GadgetListBoxGetItemData( list, selected ) : 0;
+	GameSpyStagingRoom *room = id > 0 ? TheGameSpyInfo->findStagingRoomByID( id ) : NULL;
+	if (id != s_pickedID)
+	{
+		s_pickedID = id;
+		placeSideColumn( room != NULL );
+		if (room)
+		{
+			PeerRequest req;
+			req.peerRequestType = PeerRequest::PEERREQUEST_GETEXTENDEDSTAGINGROOMINFO;
+			req.stagingRoom.id = id;
+			TheGameSpyPeerMessageQueue->addRequest( req );
+		}
+	}
+	const Bool takes = room && !room->isGameInProgress();
+	s_joinLit = takes && !LobbyGameFull( room )
+		&& room->getExeCRC() == TheGlobalData->m_exeCRC && room->getIniCRC() == TheGlobalData->m_iniCRC;
+	buttonJoin->winEnable( takes && !s_tryingToHostOrJoin );
+	buttonHost->winEnable( !s_tryingToHostOrJoin );
+	const Int lit = s_tryingToHostOrJoin ? 0 : s_joinLit ? 1 : 2;
+	if (lit != s_keysLit)
+	{
+		s_keysLit = lit;
+		LobbyMenuKey( buttonJoin, lit == 1 );
+		LobbyMenuKey( buttonHost, lit == 2 );
+	}
+}
+
 static void freeLobbyText( void )
 {
 	for (Int each = 0; each < TEXT_COUNT; ++each)
@@ -990,10 +1063,10 @@ static void freeLobbyText( void )
 		if (s_roomTab[ tab ])
 			TheDisplayStringManager->freeDisplayString( s_roomTab[ tab ] );
 		s_roomTab[ tab ] = NULL;
-		s_roomTabWords[ tab ].clear();
 	}
-	s_playersWords.clear();
 	s_roomTabsShown = 0;
+	s_previewMap.clear();
+	s_preview = NULL;
 }
 
 /// the page's frame on the layout's windows, from its init
@@ -1006,31 +1079,35 @@ static void initLobbyLook( void )
 		title->winHide( TRUE );
 
 	hookDraw( lobbyWindow( "GadgetParent" ), s_gadgetParentDraw, drawGadgetParent );
-	hookDraw( lobbyWindow( "PanelGames" ), s_panelGamesDraw, drawPanelGames );
 	hookDraw( lobbyWindow( "PanelPlayers" ), s_panelPlayersDraw, drawPanelPlayers );
+	hookDraw( lobbyWindow( "PanelPicked" ), s_panelPickedDraw, drawPanelPicked );
 
 	// the player list: a line a row, the page's columns, the page's rows
 	if (listboxLobbyPlayers)
 	{
 		listboxLobbyPlayers->winSetStatus( WIN_STATUS_ONE_LINE );
 		LobbySetColumns( listboxLobbyPlayers, PLAYER_COLUMNS, PLAYER_COLUMN_PERCENT );
+		GadgetListBoxSetFont( listboxLobbyPlayers, UIStyle::menuFont( UIStyle::MENU_TEXT_BODY ) );
 		listboxLobbyPlayers->winSetDrawFunc( drawPlayerList );
 	}
+	LobbyMenuChat( listboxLobbyChat, UIStyle::MENU_TEXT_LABEL + 2 );
+	LobbyMenuEntry( textEntryChat, UIStyle::MENU_TEXT_BODY, UIStyle::INK );
+	LobbyMenuKey( buttonBack, FALSE );
+	LobbyMenuKey( buttonEmote, FALSE );
+	s_keysLit = -1;
+	s_pickedID = -1;
+	s_joinLit = FALSE;
 
 	freeLobbyText();
-	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	GameFont *const faces[ TEXT_COUNT ] = { UIStyle::sectionFont(), body, UIStyle::sectionFont(), body };
+	static const char *const heads[ TEXT_COUNT ] = { "GUI:OnlineHeadPlayer", "GUI:OnlineLadderTier", "GUI:OnlineLadderRating", "GUI:DiplomacyPing" };
 	for (Int each = 0; each < TEXT_COUNT; ++each)
 	{
 		s_text[ each ] = TheDisplayStringManager->newDisplayString();
-		s_text[ each ]->setFont( faces[ each ] );
+		s_text[ each ]->setFont( UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE ) );
+		s_text[ each ]->setText( UIStyle::capitals( TheGameText->fetch( heads[ each ] ) ) );
 	}
-	s_text[ TEXT_GAMES ]->setText( TheGameText->fetch( "GUI:Games" ) );
 	for (Int tab = 0; tab < MAX_ROOM_TABS; ++tab)
-	{
 		s_roomTab[ tab ] = TheDisplayStringManager->newDisplayString();
-		s_roomTab[ tab ]->setFont( body );
-	}
 }
 
 /// Back, or a tab: out of the chat room, Home by popping to the hub under this page, a tab by pushing its
@@ -1068,7 +1145,6 @@ void WOLLobbyMenuInit( WindowLayout *layout, void *userData )
 
 	buttonHostID = TheNameKeyGenerator->nameToKey(AsciiString("WOLCustomLobby.wnd:ButtonHost"));
 	buttonHost = TheWindowManager->winGetWindowFromId(parent, buttonHostID);
-	buttonModsID = TheNameKeyGenerator->nameToKey(AsciiString("WOLCustomLobby.wnd:ButtonMods"));
 
 	buttonRefreshID = TheNameKeyGenerator->nameToKey(AsciiString("WOLCustomLobby.wnd:ButtonRefresh"));
 	buttonRefresh = TheWindowManager->winGetWindowFromId(parent, buttonRefreshID);
@@ -1794,6 +1870,7 @@ void WOLLobbyMenuUpdate( WindowLayout * layout, void *userData)
 #else
 	refreshGameList();
 #endif
+		syncPicked();
 		if (!buttonPushed)
 			onlineLobbyScript();
 	}
@@ -1861,6 +1938,15 @@ WindowMsgHandledType WOLLobbyMenuInput( GameWindow *window, UnsignedInt msg,
 					joinRoom( s_roomTabGroup[ tab ] );
 					return MSG_HANDLED;
 				}
+			}
+			// a column word over the games sorts by it: GAME by name, PING by round trip, again to turn it
+			const UIStyle::BoardFit fit = UIStyle::boardFit( TheDisplay->getWidth(), TheDisplay->getHeight() );
+			if (fit.scale > 0.0f)
+			{
+				const Int boardX = REAL_TO_INT( ( x - fit.x ) / fit.scale );
+				const Int boardY = REAL_TO_INT( ( y - fit.y ) / fit.scale );
+				if (boardY >= 216 && boardY < 244 && LobbySortByColumn( LobbyGameColumnAt( boardX, FALSE ) ))
+					return MSG_HANDLED;
 			}
 			break;
 		}
@@ -2026,15 +2112,8 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 				{
 					if (s_tryingToHostOrJoin)
 						break;
-					hostRoom( HOST_MODE_CLASSIC );
-				}
-				else if ( controlID == buttonModsID )
-				{
-					if (s_tryingToHostOrJoin)
-						break;
-
-					// which mode the room is for; the answer opens the host popup (hostRoom)
-					AskGameMode( hostRoom );
+					// which of the three modes the room is for; the answer opens the host popup (hostRoom)
+					AskGameMode( hostRoom, FALSE );
 				}
 				else if ( controlID == buttonJoinID )
 				{
@@ -2340,6 +2419,11 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 					{
 						TheGameSpyInfo->sendChat( txtInput, false, listboxLobbyPlayers );
 					}
+				}
+				else if (s_joinLit && !s_tryingToHostOrJoin && buttonJoin)
+				{
+					// Enter on an empty line joins the picked game, as the foot's hint says
+					TheWindowManager->winSendSystemMsg( window, GBM_SELECTED, (WindowMsgData)buttonJoin, buttonJoinID );
 				}
 				break;
 			}

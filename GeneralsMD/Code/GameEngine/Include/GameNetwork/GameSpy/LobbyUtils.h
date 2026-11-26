@@ -31,6 +31,8 @@
 #ifndef __LOBBYUTILS_H__
 #define __LOBBYUTILS_H__
 
+#include "GameClient/Color.h"
+
 class GameWindow;
 class DisplayString;
 class Image;
@@ -87,5 +89,102 @@ void LobbySetJoiningGame( Int gameID );
 	 list's names and profile IDs were packed together (GameSpyInfo::setGameOptions) listed an open seat
 	 as a computer. */
 Bool LobbyGameFull( const GameSpyStagingRoom *game );
+
+/* The game lists in the menu language (MENU-REDESIGN.md package 10, screens/game-lists/README-game-lists.md):
+	 the online Custom games page and the LAN lobby draw their lists, the picked game and the heads with these,
+	 every number at 1080 on the board.  The LAN list has no lock and no ping column. */
+enum LobbyGameColumn
+{
+	LOBBY_COL_LOCK, LOBBY_COL_GAME, LOBBY_COL_MODE, LOBBY_COL_MAP, LOBBY_COL_PLAYERS, LOBBY_COL_PING, LOBBY_COL_STATE,
+	LOBBY_COL_COUNT
+};
+/// a column's left and right edge at 1080; FALSE for a column the list does not have
+Bool LobbyGameColumnSpan( Int column, Bool lan, Int &left, Int &right );
+/// the column under a board x, -1 between columns or off the list
+Int LobbyGameColumnAt( Int x1080, Bool lan );
+enum LobbyGameState { LOBBY_STATE_OPEN, LOBBY_STATE_FULL, LOBBY_STATE_PLAYING, LOBBY_STATE_JOINING, LOBBY_STATE_OTHER_BUILD };
+/// how a row reads: a join under way first, then a started game, another build, a full one
+LobbyGameState LobbyGameStateOf( Bool joining, Bool playing, Bool otherBuild, Bool full );
+/// a HostGameMode from a listed map's path: Direct Strike's generated islands, Apocalypse's basins, else Classic
+Int LobbyMapMode( const AsciiString &map );
+/// a mode's name for a row ("Classic", "Direct Strike v1.0") and a mode game's map ("Generated island")
+UnicodeString LobbyModeName( Int mode );
+UnicodeString LobbyMapName( const AsciiString &map );
+
+/// a listed game as its row shows it
+struct LobbyGameRow
+{
+	UnicodeString name;
+	UnicodeString map;
+	Int mode;
+	Int seated;
+	Int seats;
+	Int ping;					///< ms, -1 unknown
+	Bool password;
+	LobbyGameState state;
+};
+/// a row of the list on its screen rectangle (LobbyDrawRows' rect); row is its index, for the text cache
+void LobbyDrawGameRow( Int row, const LobbyGameRow &game, const IRegion2D &rect, Bool lan );
+/** The list's head over its window, top at the board y of the head: GAMES, the count at the column's right
+	 end, the column words with the sorted one green, the lit rule under them.  Under the window, the password
+	 legend when lockShown; in an empty list, empty's line centred in two rows. */
+void LobbyDrawGameHead( Int top1080, Bool lan, const UnicodeString &count, Int sortedColumn );
+void LobbyDrawGameFoot( GameWindow *list, Bool lockShown, const UnicodeString &empty );
+/// the sort a click on a column word asks: GAME by name, PING by round trip, again to turn it; TRUE when it was one
+Bool LobbySortByColumn( Int column );
+/// the column the online list is sorted by
+Int LobbySortedColumn( void );
+
+/// a seat of the picked game
+struct LobbySeat
+{
+	UnicodeString name;
+	UnicodeString army;			///< empty where the listing does not say
+	UnicodeString record;		///< "88-41", empty for none
+	Color color;
+	const Image *portrait;
+	Bool known;							///< the seat's colour and army are known (LAN); online lists names only
+};
+/// the picked game as the right column shows it
+struct LobbyPicked
+{
+	UnicodeString name;
+	UnicodeString map;
+	UnicodeString line;			///< "Classic · Host DesertFox"
+	Bool password;
+	Int seated;
+	Int seats;
+	Int mode;
+	const Image *preview;		///< the map's, NULL for a mode game
+	Int seatCount;
+	enum { SEATS = 32 };		///< MAX_SLOTS, which NetworkDefs.h holds
+	LobbySeat seat[ SEATS ];
+};
+/** The picked game between left and right from top (board): its head, the map, its words and the seats down
+	 to bottom.  lan stands the picture large over the words; online it is a thumbnail beside them, with the
+	 records' legend. */
+void LobbyDrawPicked( const LobbyPicked &game, Int left, Int top, Int right, Int bottom, Bool lan );
+/// a section head at the board's left, top: words in 16 px bold tracked capitals, ACTIVE, and count at right in MUTED
+void LobbyDrawSection( const UnicodeString &words, const UnicodeString &count, Int left, Int top, Int right, Int slot );
+/// UIStyle::setMenuKey, the key's word in capitals as the designs letter them (EA's labels are not)
+void LobbyMenuKey( GameWindow *key, Bool primary );
+/// a text entry in the language: black under a 1 px FRAME line, cyan under the mouse, Arial at px1080
+void LobbyMenuEntry( GameWindow *entry, Int px1080, Color text );
+/// a chat log on a faint lift, no edge, its lines at px1080
+void LobbyMenuChat( GameWindow *list, Int px1080 );
+/// the text cache's 32 slots for a box drawn over a list screen (Host Game, Join Game, Direct Connect)
+enum { LOBBY_TEXT_BOX = 256 };
+/** A box of the message box's pattern on its screen rectangle: UIStyle::boxShell with title, the question after
+	 the title on its line, the foot rule and the hint at the foot's left.  Uses LOBBY_TEXT_BOX to + 2. */
+void LobbyDrawBoxHead( const IRegion2D &box, const UnicodeString &title, const UnicodeString &question, const UnicodeString &hint );
+/// a box's field label, 14 px bold tracked capitals, from x centred on middle (screen)
+void LobbyDrawBoxLabel( const UnicodeString &words, Int x, Int middle );
+/// a screen rectangle for a board rectangle, set on a window inside its parent
+void LobbyPlaceOnBoard( GameWindow *window, Int left, Int top, Int right, Int bottom );
+/// words at a screen point from the lists' text cache (slot 0 to 15 is the screen's, LOBBY_TEXT_BOX on the
+/// box's); right aligns their end there
+void LobbyDrawWords( Int slot, const UnicodeString &text, Int px1080, Bool bold, Int x, Int middle, Color color, Bool right = FALSE );
+/// frees the lists' text cache, from a screen's shutdown
+void LobbyFreeText( void );
 
 #endif // __LOBBYUTILS_H__

@@ -23614,3 +23614,109 @@ END
 OPTIONTIP:Quality
 "Sol en hızlısı, sağ en güzeli; dört hazır ayar sürgünün üstündeki noktalardır. Önce sürgüyü çekin, isterseniz sonra tek tek kutuları değiştirin."
 END
+
+// Menu redesign package 10, game lists: Custom games and the LAN lobby, their rows, the picked game, the
+// Host Game, Join Game and Direct Connect boxes.  GUI:LANLobby is EA's, above.
+GUI:LocalNetwork
+"Yerel ağ"
+END
+
+GUI:LobbyPlayerName
+"Oyuncu adı"
+END
+
+GUI:LobbyModeClassic
+"Klasik"
+END
+
+GUI:LobbyGeneratedIsland
+"Üretilmiş ada"
+END
+
+GUI:LobbyGeneratedBasin
+"Üretilmiş çanak"
+END
+
+GUI:LobbyOtherBuild
+"Başka sürüm"
+END
+
+GUI:LobbyPassword
+"Şifre"
+END
+
+GUI:LobbyEmptyOnline
+"%ls sunucusunda açık oyun yok. Bir tane kur."
+END
+
+GUI:LobbyEmptyLan
+"Bu ağda henüz oyun yok. Bir tane kur."
+END
+
+GUI:LobbyHintJoin
+"Enter seçili oyuna katılır"
+END
+
+GUI:LobbyHintHost
+"Katılacak oyun yok"
+END
+
+GUI:LobbyPickedGame
+"Seçili oyun"
+END
+
+GUI:LobbyHostOf
+"Kurucu %ls"
+END
+
+GUI:LobbyOpenSeats
+"%d boş yer"
+END
+
+GUI:LobbyWinsLosses
+"Galibiyet-mağlubiyet"
+END
+
+GUI:LobbyJoinGame
+"Oyuna katıl"
+END
+
+GUI:LobbyFieldName
+"Oyun adı"
+END
+
+GUI:HostQuestion
+"%ls odası, %ls"
+END
+
+GUI:PasswordHint
+"Boş bırakırsan oyun açık olur"
+END
+
+GUI:LimitArmiesLine
+"Yalnız ABD, Çin ve GLA, general orduları yok"
+END
+
+GUI:JoinPasswordLine
+"Bu oyun şifre istiyor"
+END
+
+GUI:DirectConnectQuestion
+"Bir arkadaşınla adresle oyna"
+END
+
+GUI:YourName
+"Adın"
+END
+
+GUI:YourAddress
+"Senin adresin"
+END
+
+GUI:TheirAddress
+"Onun adresi"
+END
+
+GUI:AddressHint
+"Bunu arkadaşına ver"
+END

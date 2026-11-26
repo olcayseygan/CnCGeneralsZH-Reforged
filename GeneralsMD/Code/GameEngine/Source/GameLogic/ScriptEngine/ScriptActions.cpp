@@ -82,6 +82,7 @@
 #include "GameLogic/Module/CommandButtonHuntUpdate.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/DeliverPayloadAIUpdate.h"
+#include "GameLogic/Module/HordeUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/TransportContain.h"
@@ -6218,7 +6219,11 @@ void ScriptActions::doSetOcclusionMode(Bool setEnabled)
 //-------------------------------------------------------------------------------------------------
 void ScriptActions::doSetDrawIconUIMode(Bool setEnabled)
 {
+	const Bool changed = TheGameLogic->getDrawIconUI() != setEnabled;
 	TheGameLogic->setDrawIconUI(setEnabled);
+	// a vehicle's horde decal follows the icon UI and its HordeUpdate sleeps between refreshes
+	if (changed)
+		HordeUpdate::wakeVehiclesForIconUI();
 }
 
 //-------------------------------------------------------------------------------------------------

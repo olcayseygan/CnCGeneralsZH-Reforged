@@ -171,6 +171,7 @@ HordeUpdate::HordeUpdate( Thing *thing, const ModuleData* moduleData ) : UpdateM
 	// Initializations missing and needed
 	m_trueHordeMember = FALSE;
 	//
+	m_decalSizeSent = 0.0f;
 
 	UnsignedInt delay = getHordeUpdateModuleData()->m_updateRate;
 	setWakeFrame(getObject(), UPDATE_SLEEP(GameLogicRandomValue(1, delay)));
@@ -243,6 +244,8 @@ void HordeUpdate::onDrawableBoundToObject()
 {
 	/////////////showHideFlag(m_hasFlag);
 	showHideFlag(FALSE);//hide the flag
+	// a new Drawable has its draw modules' default decal size: hand ours over again on the next update
+	m_decalSizeSent = 0.0f;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -359,8 +362,13 @@ UpdateSleepTime HordeUpdate::update( void )
 				}
 				else
 				{
+					// once is enough: W3DModelDraw keeps the size and puts it back on every decal it rebuilds
 					Real size = 3.5f * obj->getGeometryInfo().getMajorRadius();
-					draw->setTerrainDecalSize( size, size );
+					if( size != m_decalSizeSent )
+					{
+						draw->setTerrainDecalSize( size, size );
+						m_decalSizeSent = size;
+					}
 
 					if( obj->testWeaponBonusCondition( WEAPONBONUSCONDITION_NATIONALISM ) == TRUE )
           {
@@ -392,8 +400,35 @@ UpdateSleepTime HordeUpdate::update( void )
 	}
 
 
-	return isInfantry ? UPDATE_SLEEP(md->m_updateRate) : UPDATE_SLEEP_NONE;
+	if( isInfantry )
+		return UPDATE_SLEEP(md->m_updateRate);
 
+	/* A vehicle used to run every frame only to hand its decal size to the Drawable again, which the
+		 model state's rebuild of the decal had reset; W3DModelDraw now keeps it.  Everything else here
+		 changes only on a horde refresh or when a script turns the icon UI over (wakeVehiclesForIconUI),
+		 so it sleeps to the first frame the refresh test above passes, the frame it ran on before.  The
+		 sleepy key holds the order of the frame's modules, so the refresh runs where it did: 2000
+		 BattleMasters were 2.2 ms of every tick for nothing. */
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const UnsignedInt nextRefresh = m_lastHordeRefreshFrame + md->m_updateRate + 1;
+	return UPDATE_SLEEP( nextRefresh > now ? nextRefresh - now : 1 );
+
+}
+
+//-------------------------------------------------------------------------------------------------
+void HordeUpdate::wakeVehiclesForIconUI()
+{
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if( obj->isKindOf( KINDOF_INFANTRY ) )
+			continue;
+		for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
+		{
+			HordeUpdateInterface *hui = (*m)->getHordeUpdateInterface();
+			if( hui != NULL )
+				static_cast<HordeUpdate *>( hui )->wakeExactly();
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

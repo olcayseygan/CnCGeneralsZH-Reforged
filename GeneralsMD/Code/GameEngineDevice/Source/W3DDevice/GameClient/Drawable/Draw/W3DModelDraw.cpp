@@ -1854,6 +1854,8 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	m_shadowEnabled = TRUE;
 	m_hasModelShadow = FALSE;
 	m_terrainDecal = NULL;
+	m_terrainDecalSizeX = 0.0f;
+	m_terrainDecalSizeY = 0.0f;
 	m_trackRenderObject = NULL;
 	m_whichAnimInCurState = -1;
 	m_nextState = NULL;
@@ -3664,12 +3666,18 @@ void W3DModelDraw::setTerrainDecal(TerrainDecalType type)
 	if (m_terrainDecal)
 	{	m_terrainDecal->enableShadowInvisible(m_fullyObscuredByShroud);
 		m_terrainDecal->enableShadowRender(m_shadowEnabled);
+		// a model state change rebuilds the decal at the template's size; the size asked for stays.
+		// HordeUpdate used to hand it over again every frame to win that back (its "weak solution")
+		if (m_terrainDecalSizeX > 0.0f)
+			m_terrainDecal->setSize(m_terrainDecalSizeX, m_terrainDecalSizeY);
 	}
 }
 
 //-------------------------------------------------------------------------------------------------
 void W3DModelDraw::setTerrainDecalSize(Real x, Real y)
 {
+	m_terrainDecalSizeX = x;
+	m_terrainDecalSizeY = y;
 	if (m_terrainDecal)
 	{
 		m_terrainDecal->setSize(x,y);

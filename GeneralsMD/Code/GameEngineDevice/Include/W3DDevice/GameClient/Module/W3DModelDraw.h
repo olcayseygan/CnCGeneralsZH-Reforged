@@ -577,6 +577,8 @@ private:
 	Shadow*												m_shadow;													///< Updates/Renders shadows of this object
 	Shadow*												m_contactShadow;									///< the soft patch under a structure's footprint, which is what makes it stand on the ground rather than sit on it
 	Shadow*												m_terrainDecal;
+	Real													m_terrainDecalSizeX;							///< the size setTerrainDecalSize last asked for, 0 for the template's; put back on every rebuilt decal
+	Real													m_terrainDecalSizeY;
 	TerrainTracksRenderObjClass*	m_trackRenderObject;							///< This is rendered under object
 	ParticleSystemIDVec						m_particleSystemIDs;							///< The ID numbers of the particle systems currently running.
 	std::vector<ModelConditionInfo::HideShowSubObjInfo>		m_subObjectVec;

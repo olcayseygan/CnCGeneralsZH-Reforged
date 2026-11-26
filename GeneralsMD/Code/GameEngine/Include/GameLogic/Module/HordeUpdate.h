@@ -123,6 +123,9 @@ public:
 	virtual HordeActionType getHordeActionType() const { return getHordeUpdateModuleData()->m_action; }
 	virtual UpdateSleepTime update();	///< update this object's AI
 
+	/// a script turned the icon UI on or off: every sleeping vehicle redraws its horde decal this frame
+	static void wakeVehiclesForIconUI();
+
 protected:
 
 	void showHideFlag(Bool show);
@@ -133,6 +136,7 @@ private:
 	Bool				m_inHorde;				 //I amy be a trueMember, or I may merely inherit hordehood from a neighbor who is
 	Bool				m_trueHordeMember; //meaning, I have enough hordesman near me to qualify
 	Bool				m_hasFlag;
+	Real				m_decalSizeSent;	 ///< the vehicle decal size last handed to the Drawable, 0 for none; not saved, so a load sends it again
 
 };
 

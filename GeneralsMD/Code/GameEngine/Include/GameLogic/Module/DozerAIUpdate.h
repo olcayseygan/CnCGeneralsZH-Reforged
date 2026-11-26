@@ -163,6 +163,9 @@ public:
 	virtual void startBuildingSound( const AudioEventRTS *sound, ObjectID constructionSiteID ) = 0;
 	virtual void finishBuildingSound() = 0;
 
+	/// the idle state's next look round (an unfinished site, the bored repair and mine search); 0 is now
+	virtual void setIdleWakeFrame( UnsignedInt frame ) = 0;
+
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -265,6 +268,8 @@ public:
 	virtual void startBuildingSound( const AudioEventRTS *sound, ObjectID constructionSiteID );
 	virtual void finishBuildingSound();
 
+	virtual void setIdleWakeFrame( UnsignedInt frame ) { m_idleWakeFrame = frame; }
+
 	//
 	// the following methods must be overridden so that if a player issues a command the dozer
 	// can exit the internal state machine and do whatever the player says
@@ -299,6 +304,8 @@ protected:
 	} m_dockPoint[ DOZER_NUM_TASKS ][ DOZER_NUM_DOCK_POINTS ];
 
 	DozerBuildSubTask m_buildSubTask;		///< for building and actually docking for the build
+
+	UnsignedInt m_idleWakeFrame;				///< set by this frame's idle state; not saved, every update starts it at 0
 
 private:
 

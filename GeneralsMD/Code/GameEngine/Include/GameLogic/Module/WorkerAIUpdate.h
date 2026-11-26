@@ -190,10 +190,11 @@ public:
 	virtual Bool isCurrentlyFerryingSupplies() const;
 	virtual Real getWarehouseScanDistance() const; ///< How far can I look for a warehouse?
 
-	virtual void setForceBusyState(Bool v) { m_forcedBusyPending = v; } 
+	// both are asked by the worker machine's transitions, which an idle worker asleep does not run
+	virtual void setForceBusyState(Bool v) { m_forcedBusyPending = v; wakeUpNow(); }
 	virtual Bool isForcedIntoBusyState() const { return m_forcedBusyPending; }
 
-	virtual void setForceWantingState(Bool v){ m_forcePending = v; }
+	virtual void setForceWantingState(Bool v){ m_forcePending = v; wakeUpNow(); }
 	virtual Bool isForcedIntoWantingState() const { return m_forcePending; }
 	virtual ObjectID getPreferredDockID() const { return m_preferredDock; }
 	virtual UnsignedInt getActionDelayForDock( Object *dock );
@@ -214,7 +215,9 @@ public:
 
 	virtual void startBuildingSound( const AudioEventRTS *sound, ObjectID constructionSiteID );
 	virtual void finishBuildingSound();
-	
+
+	virtual void setIdleWakeFrame( UnsignedInt frame ) { m_idleWakeFrame = frame; }
+
 	virtual Int getUpgradedSupplyBoost() const;
 	virtual Int getMaxBoxes() const { return getWorkerAIUpdateModuleData()->m_maxBoxesData; }
 
@@ -243,6 +246,8 @@ protected:
 	} m_dockPoint[ DOZER_NUM_TASKS ][ DOZER_NUM_DOCK_POINTS ];
 
 	DozerBuildSubTask m_buildSubTask;		///< for building and actually docking for the build
+
+	UnsignedInt m_idleWakeFrame;				///< as DozerAIUpdate's: set by this frame's idle state, not saved
 
 // Supply Truck data
 	Int m_numberBoxes;

@@ -1123,6 +1123,7 @@ public:
 	virtual StateReturnType update( void );
 	virtual StateReturnType onEnter( void );
 	virtual void onExit( StateExitType status );
+	virtual Bool isIdle() const { return TRUE; }
 
 protected:
 	// snapshot interface
@@ -1315,8 +1316,19 @@ StateReturnType DozerPrimaryIdleState::update( void )
 			}
 		}
 
-					
+
 	}  // end if
+
+	//
+	// Nothing to do until the first frame one of the two looks above can come true, so the builder
+	// may sleep till then (DozerAIUpdate::update); anything that gives it work wakes it first.
+	//
+	if( ai->isIdle() && dozerAI->isAnyTaskPending() == FALSE )
+	{
+		const UnsignedInt unfinishedScanFrame = max( m_idleTooLongTimestamp + LOGICFRAMES_PER_GAME_SECOND + 1, m_nextUnfinishedScanFrame );
+		const UnsignedInt boredFrame = m_idleTooLongTimestamp + (UnsignedInt)dozerAI->getBoredTime() + 1;
+		dozerAI->setIdleWakeFrame( min( unfinishedScanFrame, boredFrame ) );
+	}
 
 	return STATE_CONTINUE;
 
@@ -1641,6 +1653,7 @@ DozerAIUpdate::DozerAIUpdate( Thing *thing, const ModuleData* moduleData ) :
 	m_currentTask = DOZER_TASK_INVALID;
 
 	m_buildSubTask = DOZER_SELECT_BUILD_DOCK_LOCATION;  // irrelavant, but I want non-garbage value
+	m_idleWakeFrame = 0;
 
 	//
 	// initialize the dozer machine to NULL, we want to do this and create it during the update
@@ -1809,11 +1822,26 @@ UpdateSleepTime DozerAIUpdate::update( void )
 
 	// run our own state machine, once we are out of the structure that built us: a job taken up on the
 	// exit path walked the builder straight from the door to the site, through the building's walls
+	m_idleWakeFrame = 0;
 	if( !isExitingProducer() )
 		m_dozerMachine->updateStateMachine();
 
+	//
+	// An idle builder with nothing in hand used to run every frame, and with it the AI's idle state,
+	// which looks for crates and mood targets each time it runs and counts on sleeping in between.
+	// It sleeps now as long as both its idle states allow; an order or an AI state change wakes it
+	// (AIUpdateInterface::wakeUpNow), and so does a new job (newTask).
+	//
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if( m_idleWakeFrame > now && getCurrentTask() == DOZER_TASK_INVALID && !isAnyTaskPending() &&
+			m_dozerMachine->isInIdleState() && isIdle() &&
+			getObject()->getContainedBy() == NULL )
+	{
+		const UpdateSleepTime idleSleep = UPDATE_SLEEP( m_idleWakeFrame - now );
+		return min( result, idleSleep );
+	}
 	return UPDATE_SLEEP_NONE;
-		
+
 }  // end update
 
 //-------------------------------------------------------------------------------------------------
@@ -2235,6 +2263,7 @@ void DozerAIUpdate::newTask( DozerTask task, Object *target )
 
 	// reset the dozer behavior so that it can re-evluate which task to continue working on
 	m_dozerMachine->resetToDefaultState();
+	wakeUpNow();
 
 }  // end newTask
 

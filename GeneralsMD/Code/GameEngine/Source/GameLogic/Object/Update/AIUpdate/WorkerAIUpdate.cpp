@@ -112,7 +112,8 @@ WorkerAIUpdate::WorkerAIUpdate( Thing *thing, const ModuleData* moduleData ) :
 	} 
 	m_currentTask = DOZER_TASK_INVALID;
 	m_buildSubTask = DOZER_SELECT_BUILD_DOCK_LOCATION;  // irrelavant, but I want non-garbage value
-	
+	m_idleWakeFrame = 0;
+
 	m_supplyTruckStateMachine = NULL;
 	m_numberBoxes = 0;
 	// deliberately not xfer'd: it is a convenience, and a worker loaded mid-build simply does not
@@ -281,7 +282,7 @@ UpdateSleepTime WorkerAIUpdate::update( void )
 		//getCurLocomotor()->setUltraAccurate( TRUE );
 
 	// extend the normal AI system
-	AIUpdateInterface::update();
+	const UpdateSleepTime result = AIUpdateInterface::update();
 
 	// do nothing if we're dead
 	///@todo shouldn't this be at a higher level?
@@ -289,6 +290,7 @@ UpdateSleepTime WorkerAIUpdate::update( void )
 		return UPDATE_SLEEP_NONE;
 
 	// run our own state machine, and the appropriate sub machine
+	m_idleWakeFrame = 0;
 	m_workerMachine->updateStateMachine();
 
 	if( m_workerMachine->getCurrentStateID() == AS_DOZER )
@@ -335,8 +337,19 @@ UpdateSleepTime WorkerAIUpdate::update( void )
 		if( !getObject()->testWeaponSetFlag(WEAPONSET_MINE_CLEARING_DETAIL) )
 			getObject()->setWeaponSetFlag(WEAPONSET_MINE_CLEARING_DETAIL);//maybe go clear some mines, if I feel like it
 	}
+
+	// an idle worker in its builder's mind sleeps as an idle dozer does (DozerAIUpdate::update)
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if( m_idleWakeFrame > now && m_workerMachine->getCurrentStateID() == AS_DOZER &&
+			getCurrentTask() == DOZER_TASK_INVALID && !isAnyTaskPending() &&
+			m_dozerMachine->isInIdleState() && isIdle() &&
+			getObject()->getContainedBy() == NULL )
+	{
+		const UpdateSleepTime idleSleep = UPDATE_SLEEP( m_idleWakeFrame - now );
+		return min( result, idleSleep );
+	}
 	return UPDATE_SLEEP_NONE;
-} 
+}
 
 
 // ------------------------------------------------------------------------------------------------
@@ -715,6 +728,7 @@ void WorkerAIUpdate::newTask( DozerTask task, Object* target )
 
 	// reset the dozer behavior so that it can re-evluate which task to continue working on
 	m_dozerMachine->resetToDefaultState();
+	wakeUpNow();
 
 	// reset the workermachine, if we've been acting like a supply truck
 	if( m_workerMachine->getCurrentStateID() == AS_SUPPLY_TRUCK )

@@ -10,7 +10,7 @@
 # Passes on one line "HEADLESS DIRECTSTRIKE: frame ... tower B1 down: 500 to each seat of team A, now
 # [ <a>:2500 <b>:2500 ]; team B keeps [ <c>:2000 <d>:2000 ]" and no second line for that tower. Slots 0
 # and 2 are team A, 1 and 3 team B (the numbers in the line are player indices); team B's tower stands
-# at 3876,1805 on this map (rmg_v22_3_6p_642c_lane).
+# at 3876,1805 on this map (rmg_v23_3_6p_642c_lane).
 
 30    spawn   0  ChinaTankGattling   20  3576  1805  40
 60    attack  0  ChinaTankGattling   1  LaneWarWatchTower

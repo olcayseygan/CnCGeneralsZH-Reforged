@@ -11,7 +11,7 @@
 # Pass: the HEADLESS TALLY lines for slot 0 'AmericaVehicleComanche' fall from full health after
 # frame 30 (fewer alive or less health at 300, 600, 900), and a KILLXP line names killer
 # LaneWarFortress with a Comanche as the victim. Fail: full health on every tally, as before.
-# The map is rmg_v22_3_6p_642c_lane, as in fortressattack. Frames are this file's 30 a game second.
+# The map is rmg_v23_3_6p_642c_lane, as in fortressattack. Frames are this file's 30 a game second.
 
 30    spawn      0  AmericaVehicleComanche     2  4620  1805  30
 45    move       0  AmericaVehicleComanche        4470  1805

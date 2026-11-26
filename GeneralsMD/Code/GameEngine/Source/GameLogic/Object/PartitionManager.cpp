@@ -74,6 +74,7 @@
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/CollideModule.h"
 #include "GameLogic/Module/ContainModule.h"
+#include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/RadarCoverageBehavior.h"
 #include "GameLogic/Module/StealthUpdate.h"
 #include "GameLogic/PartitionManager.h"
@@ -2819,6 +2820,35 @@ void PartitionContactList::resetContactList()
 }
 
 //-----------------------------------------------------------------------------
+/** Standing still with nothing that answers a touch but physics: a structure with no collide module,
+	* or a unit whose AI is not moving and whose body has no velocity.  Physics hands such a pair to
+	* the AI, which pushes nobody who is not moving (AIUpdateInterface::processCollision), so touching
+	* again next frame does nothing at all.  A wreck is not at rest: physics bounces it off what it meets. */
+static Bool isRestingAgainstContact( Object *obj )
+{
+	if( !obj->isTouchedOnlyByPhysics() )
+		return FALSE;
+	if( obj->isKindOf( KINDOF_IMMOBILE ) )
+		return TRUE;
+	const AIUpdateInterface *ai = obj->getAI();
+	const PhysicsBehavior *physics = obj->getPhysics();
+	if( ai == NULL || physics == NULL || ai->isMoving() || ai->isWaitingForPath() || obj->isEffectivelyDead() )
+		return FALSE;
+	const Coord3D *velocity = physics->getVelocity();
+	return velocity->x == 0.0f && velocity->y == 0.0f && velocity->z == 0.0f;
+}
+
+//-----------------------------------------------------------------------------
+/** Two units standing on top of each other: processCollision moves one aside, but not while it is
+	* busy or using an ability, so the pair has to keep coming back until it can. */
+static Bool isStackedOn( const Object *obj, const Object *other )
+{
+	const Real dx = obj->getPosition()->x - other->getPosition()->x;
+	const Real dy = obj->getPosition()->y - other->getPosition()->y;
+	return dx*dx + dy*dy < PATHFIND_CELL_SIZE_F*PATHFIND_CELL_SIZE_F*0.25f;
+}
+
+//-----------------------------------------------------------------------------
 void PartitionContactList::processContactList()
 {
 	// newest first, the order EA's linked list was walked in.  Nothing below adds a pair, so the
@@ -2869,6 +2899,13 @@ void PartitionContactList::processContactList()
 		// NOTE also that we re-get partitiondata from the object, since it might have been
 		// removed from the partition system by the onCollide call...
 		//
+		/* Nor two things at rest against each other: re-dirtied, a parked pair came back every tick for
+			 the rest of the match to be told again that neither moves, 0.7 ms of gxcompare's idle tick.
+			 The pair is seen again the moment either is dirtied by anything else, and a unit that bumps
+			 into it is dirty because it moves, so a parked tank is still pushed when something hits it. */
+		if (!obj->isDestroyed() && !other->isDestroyed() && isRestingAgainstContact(obj) && isRestingAgainstContact(other)
+				&& !isStackedOn(obj, other))
+			continue;
 		if (!obj->isDestroyed() && obj->friend_getPartitionData() != NULL && !obj->isKindOf(KINDOF_IMMOBILE))
 		{
 //DEBUG_LOG(("%d: re-dirtying collision of %s %08lx with %s %08lx\n",TheGameLogic->getFrame(),obj->getTemplate()->getName().str(),obj,other->getTemplate()->getName().str(),other));

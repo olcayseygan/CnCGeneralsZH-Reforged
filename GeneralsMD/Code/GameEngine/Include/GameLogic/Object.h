@@ -370,6 +370,8 @@ public:
 
 	inline PhysicsBehavior* getPhysics() { return m_physics; }
 	inline const PhysicsBehavior* getPhysics() const { return m_physics; }
+	/// no collide module but the physics (which is one), or none at all: a touch does only what physics makes of it
+	Bool isTouchedOnlyByPhysics() const { return m_collides[0] == NULL || (m_physics != NULL && m_collides[1] == NULL); }
 	void topple( const Coord3D *toppleDirection, Real toppleSpeed, UnsignedInt options );
 
 	UpdateModule* findUpdateModule(NameKeyType key) const { return (UpdateModule*)findModule(key); }

@@ -97,6 +97,8 @@ enum { RADAR_SHROUD_MAX_SCALE = 2, RADAR_SHROUD_MAX_TEXTURE = 512, RADAR_SHROUD_
 // radar cells are one place, a dock's eight piles one dollar.
 enum { LANDMARK_ICON_RADAR_DIVISOR = 20, LANDMARK_ICON_MIN_SIZE = 9, LANDMARK_MERGE_CELLS = 6 };
 
+extern Bool W3DControlBar_isLocalPlayerActiveForDraw( void );	// W3DControlBar.cpp, the sync point's copy
+
 // Whose the local player is shown an object is, by the rules Radar::addObject picks the radar
 // colour with: a disguise passes for its disguise to anyone not allied with its owner, and a
 // container answers for a stealth garrison.  Asked at the sync point, so it follows a disguise or
@@ -746,8 +748,9 @@ void W3DRadar::drawBoxLines( const ICoord2D *corners, const IRegion2D *picture )
 	{
 		// a watcher looking through a picked player's camera sees that camera's box in the console's gold,
 		// a pixel heavier, so the radar says whose screen is up
-		const Player *local = ThePlayerList->getLocalPlayer();
-		const Bool followed = local != NULL && !local->isPlayerActive() && TheObserverCamera.isShowingPlayerView();
+		// drawn inside the overlap window, so the local player's state comes from the sync point's copy
+		const Bool followed = ThePlayerList->getLocalPlayer() != NULL && !W3DControlBar_isLocalPlayerActiveForDraw()
+			&& TheObserverCamera.isShowingPlayerView();
 		const Int core = max( 1, REAL_TO_INT_FLOOR( max( clipRegion.width(), clipRegion.height() ) / 165.0f ) ) + ( followed ? 1 : 0 );
 		const Int keyline = core + 2;
 		const Color coreColor = followed ? GameMakeColor( 242, 194, 48, 255 ) : GameMakeColor( 255, 236, 90, 255 );

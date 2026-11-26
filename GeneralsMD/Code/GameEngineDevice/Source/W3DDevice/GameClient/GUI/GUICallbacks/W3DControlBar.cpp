@@ -104,6 +104,13 @@ static Bool isActiveForDraw( const Player *player )
 	return LogicThread::isInsideWindow() ? s_hudReads.active : player->isPlayerActive();
 }
 
+/// the local player still in, for the radar's view box, which W3DLeftHUDDraw draws inside the window
+Bool W3DControlBar_isLocalPlayerActiveForDraw( void )
+{
+	const Player *local = ThePlayerList->getLocalPlayer();
+	return local != NULL && isActiveForDraw( local );
+}
+
 static void readPowerForDraw( const Player *player, Int &production, Int &consumption )
 {
 	if( LogicThread::isInsideWindow() )

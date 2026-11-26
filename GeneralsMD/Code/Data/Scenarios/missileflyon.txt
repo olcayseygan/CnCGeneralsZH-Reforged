@@ -10,6 +10,7 @@
 #     -side 0 FactionChina -side 1 FactionGLA -seed 7 -maxframes 1200
 #     -scenario missileflyon -logPrefix missileflyon_
 
+0     statues    1  *
 30    spawn      1  GLAStingerSite                1   2400 3000
 30    spawn      1  GLAStingerSite                1   2650 2750
 30    spawn      1  GLAInfantryTunnelDefender     6   2450 3050  20

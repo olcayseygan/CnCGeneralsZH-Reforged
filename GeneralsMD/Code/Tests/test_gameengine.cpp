@@ -27191,6 +27191,11 @@ TEST(scenario_parses_a_particles_line)
 	CHECK_EQ( action.count, 2000 );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "18000 topup 3 GLATankScorpion", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "18000 topup 3 GLATankScorpion none", &action ), (Int)SCENARIO_PARSE_BAD_COUNT );
+
+	// the statue count is asked for, never on by itself: a seat and one word, like stop
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "0 statues 0 *", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_STATUES );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "0 statues 0", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
 }
 
 // A queued order that is not an order would never end a list when given without shift, and an order

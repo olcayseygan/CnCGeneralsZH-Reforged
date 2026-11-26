@@ -317,6 +317,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_SELL;
 	else if (token == "science")
 		*action = SCENARIO_ACTION_SCIENCE;
+	else if (token == "statues")
+		*action = SCENARIO_ACTION_STATUES;
 	else
 		return FALSE;
 
@@ -446,6 +448,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_GROUPQUEUE:	return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_SELL:				return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_SCIENCE:			return SCENARIO_TOKENS_STOP;
+		case SCENARIO_ACTION_STATUES:			return SCENARIO_TOKENS_STOP;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -750,6 +753,7 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 		case SCENARIO_ACTION_PURCHASE:
 		case SCENARIO_ACTION_SELL:
 		case SCENARIO_ACTION_SCIENCE:
+		case SCENARIO_ACTION_STATUES:
 			break;
 	}
 
@@ -778,6 +782,7 @@ const char *ScenarioDrill_parseResultName( ScenarioParseResult result )
 
 static std::vector<ScenarioAction> theScenarioActions;
 static std::vector<ScenarioAction> theScenarioTopups;
+static Bool theStatuesWanted = FALSE;		///< a statues line ran: updateStatues counts from then on
 static Int theScenarioCursor = 0;
 static Bool theScenarioLoaded = FALSE;
 static Int theScenarioActionsRun = 0;
@@ -871,6 +876,7 @@ static void resetScenario( void )
 	theScenarioLaneMarches.clear();
 	theScenarioActions.clear();
 	theScenarioTopups.clear();
+	theStatuesWanted = FALSE;
 	theScenarioCursor = 0;
 	theScenarioLoaded = FALSE;
 	theScenarioActionsRun = 0;
@@ -1516,7 +1522,8 @@ static void logResponses( void )
 
 /** Statues: a unit with an enemy it could shoot inside its own reach that has neither moved nor fired
 	  for STATUE_FRAMES.  Counted once per stop, by what the unit was doing when it reached the mark,
-	  and per second for as long as it keeps standing there.  Read-only, and only with a scenario. */
+	  and per second for as long as it keeps standing there.  Read-only, and only when the scenario file
+	  has a statues line. */
 struct StatueTrack
 {
 	Coord3D lastSeenAt;
@@ -2805,6 +2812,14 @@ static Bool executeHandover( const ScenarioAction &action, Player *player, const
 
 Bool ScenarioDrill_execute( const ScenarioAction &action )
 {
+	// before the seat test: nobody is seated yet on frame 0, where the files put this line
+	if (action.action == SCENARIO_ACTION_STATUES)
+	{
+		theStatuesWanted = TRUE;
+		DEBUG_LOG(("SCENARIO: frame %d statues: counting units that stand in reach without a shot\n", action.frame));
+		return TRUE;
+	}
+
 	Player *player = findPlayerForSlot( action.slot );
 	if (player == NULL)
 	{
@@ -3012,8 +3027,10 @@ void ScenarioDrill_tick( void )
 	if (!theScenarioLoaded)
 		loadScenario();
 
-	// the gate's crowd is there to measure the frame, and the statue count's walk of every unit would be in it
-	if (theScenarioTopups.empty())
+	/* Only a file that asks for it (statues).  The count walks every unit every frame through a map and
+		 sends a range query a game second for each one standing still: 3.25 ms of gxcompare's 25 ms tick,
+		 7656 units, all of it a measurement of the harness rather than the game. */
+	if (theStatuesWanted)
 		updateStatues( now );
 	runTopups( now );
 

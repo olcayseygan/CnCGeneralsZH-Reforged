@@ -126,7 +126,8 @@ enum ScenarioActionType
 	SCENARIO_ACTION_LANEABILITY,			///< laneability <slot> <template> <buttonSlot> <0|1>; switch the seat's wave units of that template off or on for the button in that command set slot (from 0, the INI's number less one), as DIRECTSTRIKE_ORDER_ABILITY (slot and switch in at)
 	SCENARIO_ACTION_GROUPQUEUE,				///< groupqueue <slot> <template> <count>; a command bar unit tab's click that many times, as MSG_QUEUE_UNIT_FOR_GROUP with squad -1 onto the message stream, the logic picking the factory
 	SCENARIO_ACTION_SELL,							///< sell <slot> <id>; the sell button on that one structure (an id from objects, '#' optional), as MSG_SELL handed to the dispatcher for that seat
-	SCENARIO_ACTION_SCIENCE						///< science <slot> <science>; the general's powers window's purchase with the seat's own rank and points, as MSG_PURCHASE_SCIENCE handed to the dispatcher (purchase grants rank and points first)
+	SCENARIO_ACTION_SCIENCE,					///< science <slot> <science>; the general's powers window's purchase with the seat's own rank and points, as MSG_PURCHASE_SCIENCE handed to the dispatcher (purchase grants rank and points first)
+	SCENARIO_ACTION_STATUES						///< statues <slot> <anything>; turn the statue count (STATUE, HEADLESS STATUE) on from this frame; a file without it runs no count
 };
 
 /// ScenarioAction::atStart when the position is plain numbers

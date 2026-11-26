@@ -11,6 +11,7 @@
 #     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 2700
 #     -scenario statues -logPrefix statues_
 
+0     statues    0  *
 30    spawn      0  AmericaInfantryRanger           50  start0:250:300  16
 30    spawn      0  AmericaInfantryMissileDefender  20  start0:-250:300 16
 30    spawn      0  AmericaTankCrusader             15  start0:0:300    40

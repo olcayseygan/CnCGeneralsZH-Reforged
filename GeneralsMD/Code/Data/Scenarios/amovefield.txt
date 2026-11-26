@@ -10,6 +10,7 @@
 #
 # Read HEADLESS ARRIVE (how many reached seat 1's start and when) and the tallies (what each side lost).
 
+0     statues    0  *
 30    spawn      0  AmericaTankCrusader          10  start0:350:0      45
 
 30    spawn      1  ChinaTankBattleMaster         2  1000 3500         50

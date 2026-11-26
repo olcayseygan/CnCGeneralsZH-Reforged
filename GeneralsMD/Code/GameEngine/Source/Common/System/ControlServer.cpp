@@ -42,8 +42,14 @@
 #include "GameClient/AirliftPanel.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
+#include "GameClient/DisplayString.h"
+#include "GameClient/DisplayStringManager.h"
 #include "GameClient/Drawable.h"
+#include "GameClient/GadgetCheckBox.h"
+#include "GameClient/GadgetComboBox.h"
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/GadgetSlider.h"
+#include "GameClient/GameClient.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GUICallbacks.h"		// ToggleQuitMenu, for quitmenu
 #include "GameClient/InGameUI.h"
@@ -898,6 +904,468 @@ static Bool saveTo( const AsciiString &name )
 	return TheGameState->saveGame( filename, description, SAVE_FILE_TYPE_NORMAL ) == SC_OK;
 }
 
+// ------------------------------------------------------------------------------------------------
+// the shell's windows, for Tools/ui_walk.py: what is on the screen and where a click would go
+// ------------------------------------------------------------------------------------------------
+
+static const Int UI_TREE_MAX = 3000;
+
+static void appendJsonChar( std::string &out, UnsignedInt c )
+{
+	if (c == '"' || c == '\\')
+	{
+		out += '\\';
+		out += (char)c;
+	}
+	else if (c < 0x20 || c >= 0x7F)
+	{
+		char hex[ 8 ];
+		snprintf( hex, sizeof( hex ), "\\u%04x", c > 0xFFFF ? 0xFFFD : c );
+		out += hex;
+	}
+	else
+		out += (char)c;
+}
+
+static void appendJsonString( std::string &out, const char *text )
+{
+	out += '"';
+	for( const unsigned char *at = (const unsigned char *)text; at && *at; ++at )
+		appendJsonChar( out, *at );
+	out += '"';
+}
+
+static void appendJsonString( std::string &out, const UnicodeString &text )
+{
+	out += '"';
+	for( const WideChar *at = text.str(); at && *at; ++at )
+		appendJsonChar( out, (UnsignedInt)*at );
+	out += '"';
+}
+
+static const char *uiWindowName( GameWindow *window )
+{
+	if (window == NULL)
+		return "";
+	if (BitTest( window->winGetStatus(), WIN_STATUS_DESTROYED ))
+		return "DESTROYED";
+	return window->winGetInstanceData()->m_decoratedNameString.str();
+}
+
+static const char *uiGadgetKind( GameWindow *window )
+{
+	const UnsignedInt style = window->winGetStyle();
+	if (style & GWS_COMBO_BOX)				return "combo";
+	if (style & GWS_SCROLL_LISTBOX)		return "list";
+	if (style & GWS_PUSH_BUTTON)			return "button";
+	if (style & GWS_CHECK_BOX)				return "check";
+	if (style & GWS_RADIO_BUTTON)			return "radio";
+	if (style & GWS_HORZ_SLIDER)			return "hslider";
+	if (style & GWS_VERT_SLIDER)			return "vslider";
+	if (style & GWS_ENTRY_FIELD)			return "entry";
+	if (style & GWS_TAB_CONTROL)			return "tab";
+	if (style & GWS_STATIC_TEXT)			return "static";
+	if (style & GWS_PROGRESS_BAR)			return "progress";
+	return "window";
+}
+
+/** The text's size in the window's own font: one line, or wrapped at wrap pixels when wrap is above 0. */
+static void uiMeasureText( GameWindow *window, const UnicodeString &text, Int wrap, Int *width, Int *height )
+{
+	*width = 0;
+	*height = 0;
+	GameFont *font = window->winGetFont();
+	if (text.isEmpty() || font == NULL || TheDisplayStringManager == NULL)
+		return;
+	DisplayString *string = TheDisplayStringManager->newDisplayString();
+	if (string == NULL)
+		return;
+	string->setFont( font );
+	string->setUseHotkey( BitTest( window->winGetStatus(), WIN_STATUS_HOTKEY_TEXT ) );
+	if (wrap > 0)
+		string->setWordWrap( wrap );
+	string->setText( text );
+	string->getSize( width, height );
+	TheDisplayStringManager->freeDisplayString( string );
+}
+
+/** Who holds the pointer and the keyboard, and which screen is up: the WINOWNERS line, as JSON members. */
+static void appendUiState( std::string &out )
+{
+	char piece[ 256 ];
+	WindowLayout *screen = TheShell ? TheShell->top() : NULL;
+	snprintf( piece, sizeof( piece ), "\"frame\":%u,\"display\":[%d,%d],\"anim\":%d,\"screens\":%d,\"screen\":",
+						TheGameClient ? TheGameClient->getFrame() : 0,
+						TheDisplay ? (Int)TheDisplay->getWidth() : 0, TheDisplay ? (Int)TheDisplay->getHeight() : 0,
+						TheShell && !TheShell->isAnimFinished() ? 1 : 0, TheShell ? TheShell->getScreenCount() : 0 );
+	out += piece;
+	appendJsonString( out, screen ? screen->getFilename().str() : "" );
+	out += ",\"modal\":";
+	appendJsonString( out, uiWindowName( TheWindowManager->winGetModalWindow() ) );
+	out += ",\"lone\":";
+	appendJsonString( out, uiWindowName( TheWindowManager->winGetLoneWindow() ) );
+	out += ",\"captor\":";
+	appendJsonString( out, uiWindowName( TheWindowManager->winGetCapture() ) );
+	out += ",\"grab\":";
+	appendJsonString( out, uiWindowName( TheWindowManager->winGetGrabWindow() ) );
+	out += ",\"focus\":";
+	appendJsonString( out, uiWindowName( TheWindowManager->winGetFocus() ) );
+}
+
+/** One visible window and then its visible children, front first as the hit test asks them: index,
+	parent index, depth, screen rect, kind, enabled with its parents, takes no input, has an input
+	callback of its own (a drawn screen's hot spots live behind one), name, text with its
+	one-line size and its height wrapped at the window's width, and the gadget's value. */
+static void describeUiWindow( std::string &out, GameWindow *window, Int parent, Int depth, Int *count, Bool withHidden )
+{
+	if ((!withHidden && window->winIsHidden()) || BitTest( window->winGetStatus(), WIN_STATUS_DESTROYED ) || *count >= UI_TREE_MAX)
+		return;
+	const Int index = (*count)++;
+	Int x = 0, y = 0, w = 0, h = 0;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &w, &h );
+	const char *kind = uiGadgetKind( window );
+
+	char piece[ 256 ];
+	snprintf( piece, sizeof( piece ), "%s{\"i\":%d,\"p\":%d,\"d\":%d,\"r\":[%d,%d,%d,%d],\"t\":\"%s\",\"e\":%d,\"ni\":%d,\"in\":%d,\"n\":",
+						index > 0 ? "," : "", index, parent, depth, x, y, w, h, kind,
+						TheWindowManager->isEnabled( window ) ? 1 : 0,
+						BitTest( window->winGetStatus(), WIN_STATUS_NO_INPUT ) ? 1 : 0,
+						window->winGetInputFunc() != TheWindowManager->getDefaultInput() ? 1 : 0 );
+	out += piece;
+	appendJsonString( out, uiWindowName( window ) );
+
+	const UnicodeString text = window->winGetText();
+	if (!text.isEmpty())
+	{
+		Int lineW = 0, lineH = 0, wrapW = 0, wrapH = 0;
+		uiMeasureText( window, text, 0, &lineW, &lineH );
+		uiMeasureText( window, text, w, &wrapW, &wrapH );
+		out += ",\"tx\":";
+		appendJsonString( out, text );
+		snprintf( piece, sizeof( piece ), ",\"tw\":%d,\"th\":%d,\"wh\":%d", lineW, lineH, wrapH );
+		out += piece;
+	}
+
+	piece[ 0 ] = 0;
+	const UnsignedInt style = window->winGetStyle();
+	if (style & GWS_COMBO_BOX)
+	{
+		Int selected = -1;
+		GadgetComboBoxGetSelectedPos( window, &selected );
+		const ComboBoxData *combo = (const ComboBoxData *)window->winGetUserData();
+		snprintf( piece, sizeof( piece ), ",\"v\":%d,\"rows\":%d", selected, combo ? combo->entryCount : 0 );
+	}
+	else if (style & GWS_SCROLL_LISTBOX)
+	{
+		const ListboxData *list = (const ListboxData *)window->winGetUserData();
+		if (list)
+			snprintf( piece, sizeof( piece ), ",\"v\":%d,\"rows\":%d,\"sc\":%d,\"sh\":%d,\"dh\":%d",
+								list->selectPos, (Int)list->endPos, list->displayPos, list->totalHeight, list->displayHeight );
+	}
+	else if (style & GWS_ALL_SLIDER)
+		snprintf( piece, sizeof( piece ), ",\"v\":%d", GadgetSliderGetPosition( window ) );
+	else if (style & (GWS_CHECK_BOX | GWS_RADIO_BUTTON | GWS_PUSH_BUTTON))
+		snprintf( piece, sizeof( piece ), ",\"v\":%d", BitTest( window->winGetInstanceData()->m_state, WIN_STATE_SELECTED ) ? 1 : 0 );
+	out += piece;
+	if (withHidden && TheWindowManager->isHidden( window ))
+		out += ",\"h\":1";
+	out += '}';
+
+	for( GameWindow *child = window->winGetChild(); child; child = child->winGetNext() )
+		describeUiWindow( out, child, index, depth + 1, count, withHidden );
+}
+
+/** A top-level window holds the point: GameWindowManager.cpp's topWindowHolds. */
+static Bool uiTopWindowHolds( GameWindow *window, Int x, Int y )
+{
+	Int left = 0, top = 0, w = 0, h = 0;
+	window->winGetScreenPosition( &left, &top );
+	window->winGetSize( &w, &h );
+	if (x >= left && x <= left + w && y >= top && y <= top + h)
+		return TRUE;
+	return TheControlBar != NULL && TheControlBar->holdsRaisedRadarPoint( window, x, y );
+}
+
+/** Where a left click at that pixel goes, between presses: GameWindowManager::winProcessMouseEvent's
+	search step for step (captor, open drop-down, modal box, then the window list above, level and
+	below), then its rule that a window taking no input hands the click to the combo box it is part of,
+	or to nobody.  getWindowUnderCursor is not it: it drops a combo box's own edit box. */
+static GameWindow *uiInputTarget( Int x, Int y )
+{
+	GameWindow *window = NULL;
+	GameWindow *captor = TheWindowManager->winGetCapture();
+	if (captor)
+		window = captor->winPointInChild( x, y );
+	else
+	{
+		GameWindow *lone = TheWindowManager->winGetLoneWindow();
+		if (lone && !lone->winIsHidden())
+		{
+			Int left = 0, top = 0, w = 0, h = 0;
+			lone->winGetScreenPosition( &left, &top );
+			lone->winGetSize( &w, &h );
+			if (x >= left && x <= left + w && y >= top && y <= top + h)
+				window = lone->winPointInChild( x, y );
+		}
+		GameWindow *modal = TheWindowManager->winGetModalWindow();
+		if (window == NULL && modal)
+			window = modal->winPointInChild( x, y );
+		else if (window == NULL)
+		{
+			for (Int pass = 0; pass < 3 && window == NULL; ++pass)
+			{
+				for (GameWindow *top = TheWindowManager->winGetWindowList(); top; top = top->winGetNext())
+				{
+					const UnsignedInt status = top->winGetStatus();
+					const Bool level = pass == 0 ? BitTest( status, WIN_STATUS_ABOVE ) != 0
+						: (pass == 1 ? !BitTest( status, WIN_STATUS_ABOVE | WIN_STATUS_BELOW ) : BitTest( status, WIN_STATUS_BELOW ) != 0);
+					if (!level || BitTest( status, WIN_STATUS_HIDDEN ) || !uiTopWindowHolds( top, x, y ))
+						continue;
+					if (BitTest( status, WIN_STATUS_ENABLED ))
+					{
+						window = top->winPointInChild( x, y );
+						break;
+					}
+				}
+			}
+		}
+	}
+	if (window && BitTest( window->winGetStatus(), WIN_STATUS_NO_INPUT ))
+	{
+		GameWindow *parent = window->winGetParent();
+		window = parent && BitTest( parent->winGetStyle(), GWS_COMBO_BOX ) ? parent : NULL;
+	}
+	return window;
+}
+
+/** {"x":..,"y":..,"hit":"<name>","chain":[<names up to the top window>]} */
+static void appendUiHit( std::string &out, Int x, Int y )
+{
+	char piece[ 64 ];
+	snprintf( piece, sizeof( piece ), "{\"x\":%d,\"y\":%d,\"hit\":", x, y );
+	out += piece;
+	GameWindow *window = uiInputTarget( x, y );
+	appendJsonString( out, uiWindowName( window ) );
+	out += ",\"chain\":[";
+	for( GameWindow *at = window; at; at = at->winGetParent() )
+	{
+		if (at != window)
+			out += ',';
+		appendJsonString( out, uiWindowName( at ) );
+	}
+	out += "]}";
+}
+
+/** The window of that layout name (MainMenu.wnd:ButtonOnline) and its centre on screen, or an offset
+	from its top left corner when one is given. */
+static GameWindow *uiFindWindow( const char *name, Int *x, Int *y, Bool offset )
+{
+	GameWindow *window = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( AsciiString( name ) ) );
+	if (window == NULL)
+		return NULL;
+	Int left = 0, top = 0, w = 0, h = 0;
+	window->winGetScreenPosition( &left, &top );
+	window->winGetSize( &w, &h );
+	if (offset)
+	{
+		*x += left;
+		*y += top;
+	}
+	else
+	{
+		*x = left + w / 2;
+		*y = top + h / 2;
+	}
+	return window;
+}
+
+static void appendUiMouseButton( GameMessage::Type type, Int x, Int y )
+{
+	ICoord2D pixel;
+	pixel.x = x;
+	pixel.y = y;
+	GameMessage *msg = TheMessageStream->appendMessage( type );
+	msg->appendPixelArgument( pixel );
+	msg->appendIntegerArgument( KEY_STATE_NONE );
+	msg->appendIntegerArgument( 0 );
+}
+
+/* uitree, uihit, uiclick, uirclick, uihover, uiscroll, uirow and uitype: the shell's windows for a
+	 script that clicks every control and checks what happened (Tools/ui_walk.py).  The clicks, the wheel
+	 and the pointer go down the message stream the way Mouse.cpp sends a real one, so a modal box, a
+	 captured pointer or an open drop-down takes them exactly as it would take the player's; uihit asks
+	 where a click at a pixel would go without sending one.  Client side only: nothing here is a logic
+	 message. */
+static Bool handleUiCommand( const AsciiString &command )
+{
+	const char *line = command.str();
+	if (strncmp( line, "ui", 2 ) != 0 || TheWindowManager == NULL)
+		return FALSE;
+
+	// uitree [all]: all keeps the hidden windows too, marked "h", for a drawn screen that works its hidden boxes
+	if (command == "uitree" || command == "uitree all" || command == "uistate")
+	{
+		const Bool withHidden = command == "uitree all";
+		std::string out( "{\"ok\":true,\"cmd\":\"" );
+		out += command == "uistate" ? "uistate" : "uitree";
+		out += "\",";
+		appendUiState( out );
+		if (command != "uistate")
+		{
+			out += ",\"windows\":[";
+			Int count = 0;
+			for( GameWindow *window = TheWindowManager->winGetWindowList(); window; window = window->winGetNext() )
+				describeUiWindow( out, window, -1, 0, &count, withHidden );
+			out += "]";
+		}
+		out += "}";
+		sendFrame( WS_OPCODE_TEXT, out.c_str(), (Int)out.size() );
+		return TRUE;
+	}
+
+	// uihit <x> <y> [<x> <y> ...]: a grid in one round trip
+	if (strncmp( line, "uihit ", 6 ) == 0)
+	{
+		std::string out( "{\"ok\":true,\"cmd\":\"uihit\",\"hits\":[" );
+		const char *at = line + 6;
+		Int x = 0, y = 0, used = 0, hits = 0;
+		while (sscanf( at, "%d %d%n", &x, &y, &used ) == 2)
+		{
+			if (hits++ > 0)
+				out += ',';
+			appendUiHit( out, x, y );
+			at += used;
+		}
+		out += "]}";
+		if (hits == 0)
+			replyMembers( FALSE, "uihit", "\"error\":\"uihit <x> <y> [<x> <y> ...]\"" );
+		else
+			sendFrame( WS_OPCODE_TEXT, out.c_str(), (Int)out.size() );
+		return TRUE;
+	}
+
+	// uiclick|uirclick|uihover|uiscroll <name> ...: the window's centre, or <dx> <dy> from its corner
+	const Bool isClick = strncmp( line, "uiclick ", 8 ) == 0;
+	const Bool isRightClick = strncmp( line, "uirclick ", 9 ) == 0;
+	const Bool isHover = strncmp( line, "uihover ", 8 ) == 0;
+	const Bool isScroll = strncmp( line, "uiscroll ", 9 ) == 0;
+	if (isClick || isRightClick || isHover || isScroll)
+	{
+		const char *verb = isClick ? "uiclick" : (isRightClick ? "uirclick" : (isHover ? "uihover" : "uiscroll"));
+		char name[ 256 ] = "";
+		Int a = 0, b = 0;
+		const Int read = sscanf( line + strlen( verb ) + 1, "%255s %d %d", name, &a, &b );
+		if (read < 1 || (isScroll && read < 2))
+		{
+			replyMembers( FALSE, verb, isScroll ? "\"error\":\"uiscroll <name> <notches, + up, - down>\""
+				: "\"error\":\"<verb> <name> [<dx> <dy> from its top left]\"" );
+			return TRUE;
+		}
+		Int x = isScroll ? 0 : a, y = isScroll ? 0 : b;
+		GameWindow *window = uiFindWindow( name, &x, &y, !isScroll && read == 3 );
+		if (window == NULL)
+		{
+			replyMembers( FALSE, verb, "\"error\":\"no such window\"" );
+			return TRUE;
+		}
+		// the game's own pointer only: the Windows one stays where the owner left it
+		if (TheMouse)
+			TheMouse->setPosition( x, y );
+		/* the pointer arrives first, as a hand's does: the move lights the gadget up (GWM_MOUSE_ENTERING),
+			 and a check box or a combo takes a release only while it is lit */
+		{
+			ICoord2D pixel;
+			pixel.x = x;
+			pixel.y = y;
+			GameMessage *move = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_POSITION );
+			move->appendPixelArgument( pixel );
+			move->appendIntegerArgument( KEY_STATE_NONE );
+		}
+		if (isClick || isRightClick)
+		{
+			appendUiMouseButton( isClick ? GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN : GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN, x, y );
+			appendUiMouseButton( isClick ? GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP : GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP, x, y );
+		}
+		else if (isScroll)
+		{
+			ICoord2D pixel;
+			pixel.x = x;
+			pixel.y = y;
+			GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_WHEEL );
+			msg->appendPixelArgument( pixel );
+			msg->appendRealArgument( (Real)a );
+			msg->appendIntegerArgument( KEY_STATE_NONE );
+		}
+		// where it went, read before the press lands (the next pass takes it)
+		std::string members( "\"at\":" );
+		appendUiHit( members, x, y );
+		replyMembers( TRUE, verb, members.c_str() );
+		return TRUE;
+	}
+
+	// uirow <list or combo> <row>: the centre of that row's first column on screen, while it shows
+	if (strncmp( line, "uirow ", 6 ) == 0)
+	{
+		char name[ 256 ] = "";
+		Int row = 0;
+		if (sscanf( line + 6, "%255s %d", name, &row ) != 2)
+		{
+			replyMembers( FALSE, "uirow", "\"error\":\"uirow <list or combo> <row>\"" );
+			return TRUE;
+		}
+		Int x = 0, y = 0;
+		GameWindow *window = uiFindWindow( name, &x, &y, FALSE );
+		if (window && BitTest( window->winGetStyle(), GWS_COMBO_BOX ) && window->winGetUserData())
+			window = ((ComboBoxData *)window->winGetUserData())->listBox;
+		const ListboxData *list = window && BitTest( window->winGetStyle(), GWS_SCROLL_LISTBOX ) ? (const ListboxData *)window->winGetUserData() : NULL;
+		if (list == NULL || row < 0 || row >= list->endPos)
+		{
+			replyMembers( FALSE, "uirow", "\"error\":\"not a list or combo box, or no such row\"" );
+			return TRUE;
+		}
+		// getListboxEntryBasedOnCoord, the other way round
+		Int left = 0, top = 0, w = 0, h = 0;
+		window->winGetScreenPosition( &left, &top );
+		window->winGetSize( &w, &h );
+		if (window->winGetInstanceData()->getTextLength())
+			top += TheWindowManager->winFontHeight( window->winGetInstanceData()->getFont() ) + 1;
+		const Int rowTop = list->listData[ row ].listHeight - list->listData[ row ].height - list->displayPos;
+		const Int rowBottom = list->listData[ row ].listHeight - list->displayPos;
+		const Int firstColumn = list->columnWidth && list->columnWidth[ 0 ] > 0 ? list->columnWidth[ 0 ] : w;
+		char piece[ 128 ];
+		snprintf( piece, sizeof( piece ), "\"x\":%d,\"y\":%d,\"shown\":%s,\"tx\":", left + (firstColumn < w ? firstColumn : w) / 2, top + (rowTop + rowBottom) / 2,
+							rowTop >= 0 && rowBottom <= list->displayHeight ? "true" : "false" );
+		std::string members( piece );
+		appendJsonString( members, GadgetListBoxGetText( window, row, 0 ) );
+		replyMembers( TRUE, "uirow", members.c_str() );
+		return TRUE;
+	}
+
+	// uitype <text>: each character to the window holding the keyboard, as IMEManager hands it a WM_CHAR
+	if (strncmp( line, "uitype ", 7 ) == 0)
+	{
+		GameWindow *focus = TheWindowManager->winGetFocus();
+		if (focus == NULL)
+		{
+			replyMembers( FALSE, "uitype", "\"error\":\"no window has the keyboard; uiclick the entry first\"" );
+			return TRUE;
+		}
+		Int typed = 0;
+		for( const unsigned char *at = (const unsigned char *)line + 7; *at; ++at, ++typed )
+			TheWindowManager->winSendInputMsg( focus, GWM_IME_CHAR, (WindowMsgData)*at, 0 );
+		std::string members( "\"to\":" );
+		appendJsonString( members, uiWindowName( focus ) );
+		char piece[ 32 ];
+		snprintf( piece, sizeof( piece ), ",\"typed\":%d", typed );
+		members += piece;
+		replyMembers( TRUE, "uitype", members.c_str() );
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 /** Everything that changes the world is queued; see the header for why. */
 static void handleCommand( const AsciiString &command )
 {
@@ -1090,6 +1558,9 @@ static void handleCommand( const AsciiString &command )
 		replyOk( field.str() );
 		return;
 	}
+
+	if (handleUiCommand( command ))
+		return;
 
 	if (command == "select all")
 	{

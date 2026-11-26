@@ -278,6 +278,8 @@ public:
 	virtual void winSetGrabWindow( GameWindow *window );  ///< set the grab window
 	virtual GameWindow *winGetGrabWindow( void );  ///< who is currently 'held' by mouse
 	virtual void winSetLoneWindow( GameWindow *window );  ///< set the open window
+	GameWindow *winGetLoneWindow( void ) { return m_loneWindow; }  ///< the open combo box's, if any
+	GameWindow *winGetModalWindow( void ) { return m_modalHead ? m_modalHead->window : NULL; }  ///< top of the modal stack
 
 	///< who owns the pointer and the keyboard, since a dead one of these eats every click
 	void logInputOwners( const char *tag );

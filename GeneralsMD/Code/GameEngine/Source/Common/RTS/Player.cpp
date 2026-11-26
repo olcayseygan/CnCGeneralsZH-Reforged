@@ -242,6 +242,7 @@ PlayerRelationMap::~PlayerRelationMap( void )
 // ------------------------------------------------------------------------------------------------
 void PlayerRelationMap::assign( PlayerIndex index, Relationship r )
 {
+	Team::noteRelationsChanged();
 	m_map[ index ] = r;
 	if (index >= 0 && index < MAX_PLAYER_COUNT)
 	{
@@ -253,6 +254,7 @@ void PlayerRelationMap::assign( PlayerIndex index, Relationship r )
 // ------------------------------------------------------------------------------------------------
 Bool PlayerRelationMap::remove( PlayerIndex index )
 {
+	Team::noteRelationsChanged();
 	PlayerRelationMapType::iterator it = m_map.find( index );
 	if (it == m_map.end())
 		return FALSE;
@@ -265,6 +267,7 @@ Bool PlayerRelationMap::remove( PlayerIndex index )
 // ------------------------------------------------------------------------------------------------
 void PlayerRelationMap::removeAll( void )
 {
+	Team::noteRelationsChanged();
 	m_map.clear();
 	for (Int i = 0; i < MAX_PLAYER_COUNT; ++i)
 		m_present[ i ] = FALSE;
@@ -286,6 +289,8 @@ void PlayerRelationMap::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void PlayerRelationMap::xfer( Xfer *xfer )
 {
+
+	Team::noteRelationsChanged();
 
 	// version
 	XferVersion currentVersion = 1;
@@ -694,6 +699,7 @@ Bool Player::removePlayerRelationship(const Player *that)
 //=============================================================================
 void Player::setTeamRelationship(const Team *that, Relationship r)
 {
+	Team::noteRelationsChanged();
 	if (that != NULL)
 	{
 		// note that this creates the entry if it doesn't exist.
@@ -704,6 +710,7 @@ void Player::setTeamRelationship(const Team *that, Relationship r)
 // ------------------------------------------------------------------------
 Bool Player::removeTeamRelationship(const Team *that)
 {
+	Team::noteRelationsChanged();
 	if (!m_teamRelations->m_map.empty())
 	{
 		if (that == NULL)
@@ -1114,6 +1121,7 @@ void Player::initFromDict(const Dict* d)
 	/// @todo Ack!  the todo in PlayerList::reset() mentioning the need for a Player::reset() really needs to get done.
 	m_playerRelations->removeAll(); // For now, it has been decided to just fix this one.  Dear god me must reset.
 	m_teamRelations->m_map.clear(); // For now, it has been decided to just fix this one.  Dear god me must reset.
+	Team::noteRelationsChanged();
 	
 	Int i;
 	for ( i = 0; i < MAX_PLAYER_COUNT; ++i ) // For now, it has been decided to just fix this one.  Dear god me must reset.

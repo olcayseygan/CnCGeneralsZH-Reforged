@@ -32,6 +32,7 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 #include "zhio.h"
+#include <atomic>
 #include "Common/GameState.h"
 #include "Common/Team.h"
 #include "Common/ThingFactory.h"
@@ -98,6 +99,8 @@ void TeamRelationMap::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void TeamRelationMap::xfer( Xfer *xfer )
 {
+
+	Team::noteRelationsChanged();
 
 	// version
 	XferVersion currentVersion = 1;
@@ -906,6 +909,7 @@ void TeamPrototype::setControllingPlayer(Player *newController)
 		m_owningPlayer->removeTeamFromList(this);
 
 	m_owningPlayer = newController;
+	Team::noteRelationsChanged();
 
 	// impossible to get here with a NULL pointer.
 	m_owningPlayer->addTeamToList(this);
@@ -1237,6 +1241,7 @@ void TeamPrototype::xfer( Xfer *xfer )
 		owningPlayerIndex = m_owningPlayer->getPlayerIndex();
 	xfer->xferInt( &owningPlayerIndex );
 	m_owningPlayer = ThePlayerList->getNthPlayer( owningPlayerIndex );
+	Team::noteRelationsChanged();
 
 	if (version>=2) {
 		xfer->xferAsciiString(&m_attackPriorityName);
@@ -1374,6 +1379,8 @@ Team::Team(TeamPrototype *proto, TeamID id ) :
 	// allocate new relation map pools
 	m_playerRelations = newInstance(PlayerRelationMap);
 	m_teamRelations = newInstance(TeamRelationMap);
+	// a team may take the address of one deleted before it
+	noteRelationsChanged();
 
 	if (proto)
 	{
@@ -1428,6 +1435,7 @@ Team::~Team()
 	// delete the relation maps (the destructor clears the actual map if any data is present)
 	m_teamRelations->deleteInstance();
 	m_playerRelations->deleteInstance();
+	noteRelationsChanged();
 
 	// make sure the xfer list is clear
 	m_xferMemberIDList.clear();
@@ -1505,34 +1513,76 @@ Int Team::getTargetableCount() const
 }
 
 // ------------------------------------------------------------------------
+/* Every "is that my enemy" of a fight lands here, and the answer is a pure function of the two teams'
+	 relation maps and controllers, so the last answers for a pair are kept per thread, a mood search's
+	 job included. An answer stamped with an older generation is never used: noteRelationsChanged bumps
+	 it on every write those maps and controllers see, and GameLogic::update on every frame, so a write
+	 that bypassed it could cost at most the rest of that frame. The slot is picked by the two
+	 addresses, which decides only what is asked again, never an answer. */
+namespace
+{
+	struct RelationMemo
+	{
+		const Team		*mine;
+		const Team		*theirs;
+		UnsignedInt		generation;
+		Relationship	answer;
+	};
+
+	enum { RELATION_MEMO_SLOTS = 256 };		///< a power of two: the pairs a big match asks for, with room
+
+	std::atomic<UnsignedInt> theRelationsGeneration( 1 );		///< 0 is never current, so an empty slot never answers
+	thread_local RelationMemo theRelationMemo[ RELATION_MEMO_SLOTS ];
+}
+
+void Team::noteRelationsChanged()
+{
+	theRelationsGeneration.fetch_add( 1, std::memory_order_relaxed );
+}
+
 Relationship Team::getRelationship(const Team *that) const
 {
-	// do we have an override for that particular team? if so, return it.
-	if (!m_teamRelations->m_map.empty() && that != NULL)
-	{
-		TeamRelationMapType::const_iterator it = m_teamRelations->m_map.find(that->getID());
-		if (it != m_teamRelations->m_map.end())
-		{
-			return (*it).second;
-		}
-	}
+	const UnsignedInt generation = theRelationsGeneration.load( std::memory_order_relaxed );
+	const uintptr_t pairKey = ( (uintptr_t)this >> 4 ) * 31u ^ ( (uintptr_t)that >> 4 );
+	RelationMemo &memo = theRelationMemo[ pairKey & ( RELATION_MEMO_SLOTS - 1 ) ];
+	if (memo.generation == generation && memo.mine == this && memo.theirs == that)
+		return memo.answer;
 
-	// hummm... well, do we have an override for that team's player?
-	if (!m_playerRelations->m_map.empty() && that != NULL)
+	const Relationship answer = [this, that]() -> Relationship
 	{
-		Player* thatPlayer = that->getControllingPlayer();
-		if (thatPlayer != NULL)
+		// do we have an override for that particular team? if so, return it.
+		if (!m_teamRelations->m_map.empty() && that != NULL)
 		{
-			Relationship r;
-			if (m_playerRelations->lookup(thatPlayer->getPlayerIndex(), &r))
+			TeamRelationMapType::const_iterator it = m_teamRelations->m_map.find(that->getID());
+			if (it != m_teamRelations->m_map.end())
 			{
-				return r;
+				return (*it).second;
 			}
 		}
-	}
 
-	// nope -- go with our Player's view on the matter.
-	return getControllingPlayer()->getRelationship(that);
+		// hummm... well, do we have an override for that team's player?
+		if (!m_playerRelations->m_map.empty() && that != NULL)
+		{
+			Player* thatPlayer = that->getControllingPlayer();
+			if (thatPlayer != NULL)
+			{
+				Relationship r;
+				if (m_playerRelations->lookup(thatPlayer->getPlayerIndex(), &r))
+				{
+					return r;
+				}
+			}
+		}
+
+		// nope -- go with our Player's view on the matter.
+		return getControllingPlayer()->getRelationship(that);
+	}();
+
+	memo.mine = this;
+	memo.theirs = that;
+	memo.generation = generation;
+	memo.answer = answer;
+	return answer;
 }
 
 // ------------------------------------------------------------------------
@@ -1620,6 +1670,7 @@ Object *Team::getTeamTargetObject(void)
 // ------------------------------------------------------------------------
  void Team::setOverrideTeamRelationship( TeamID teamID, Relationship r)
 {
+	noteRelationsChanged();
 	if (teamID != TEAM_ID_INVALID )
 	{
 		// note that this creates the entry if it doesn't exist.
@@ -1630,6 +1681,7 @@ Object *Team::getTeamTargetObject(void)
 // ------------------------------------------------------------------------
 Bool Team::removeOverrideTeamRelationship( TeamID teamID )
 {
+	noteRelationsChanged();
 	if (!m_teamRelations->m_map.empty())
 	{
 		if (teamID == TEAM_ID_INVALID)

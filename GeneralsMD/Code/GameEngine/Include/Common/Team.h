@@ -361,6 +361,11 @@ public:
 	*/
 	Relationship getRelationship(const Team *that) const;
 
+	/** Every write a getRelationship answer reads calls this: a relation map, a team's controller, a
+		team made or deleted, a load and the start of every logic frame. It retires every answer the
+		per-thread memo in getRelationship holds. */
+	static void noteRelationsChanged();
+
 	/** Every player at least one of whose Objects this team takes for an enemy. Exact while no single
 		team carries a relationship of its own; when one does, all players, which is still a superset. */
 	PlayerMaskType getEnemyPlayerMask() const;

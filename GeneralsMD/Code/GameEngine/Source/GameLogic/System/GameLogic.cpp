@@ -5438,6 +5438,9 @@ void GameLogic::update( void )
 
 	setFPMode();
 
+	// the relationship memo's backstop: a relation written past Team::noteRelationsChanged lives a frame at most
+	Team::noteRelationsChanged();
+
 #if defined(_WIN32)
 	if( !s_loggedDenormalMode )
 	{

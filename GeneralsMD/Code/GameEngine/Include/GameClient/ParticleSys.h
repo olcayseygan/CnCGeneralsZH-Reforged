@@ -780,6 +780,12 @@ public:
 	/// then the dead particles, the ground blob and the lifetime serially in list order again.
 	Bool isUpdateIndependent( void ) const;
 	Bool updateEmission( Int localPlayerIndex, Bool *keepSystem );	///< FALSE when the update ended before the particles; *keepSystem is then the answer
+	/** LOGIC-THREAD.md 7.4.  What updateEmission and the wind read of the drawable or object the system
+		* rides on, taken at the sync point: the update then runs inside the overlap window, beside a tick
+		* that moves the object and writes its drawable's transform. */
+	void takeAttachForUpdate( Int localPlayerIndex );
+	const Coord3D *getWindOriginOffset( void ) const { return m_attachWindOffsetSet ? &m_attachWindOffset : NULL; }
+	ObjectID getAttachedDrawableObjectForDraw( void ) const { return m_attachedDrawableObjectForDraw; }
 	void updateParticlesMark( void );			///< job-safe: integrate every particle and mark the ones that die
 	Bool reapAndFinishUpdate( void );			///< remove the marked particles and finish; return false if the system is done
 	void updateWindMotion( void );							///< update wind motion
@@ -975,6 +981,15 @@ protected:
 	ObjectID					m_attachedToObjectID;						///< if non-zero, system is parented to this Object
 	Bool							m_rodeObject;										///< hasRiddenObject
 	DrawableID				m_attachedObjectDrawableForDraw;	///< that Object's drawable at the last update, for getStealthFade inside the overlap window
+	// takeAttachForUpdate's, client-only and never xfered
+	UnsignedInt				m_attachTakenFrame;							///< the logic frame it was taken on, 0xFFFFFFFF none
+	Bool							m_attachFound;									///< the drawable or object was there
+	Bool							m_attachShrouded;								///< and hidden from the local player
+	Bool							m_attachWindOffsetSet;
+	Matrix3D					m_attachTransform;							///< its transform, the drawable's when it has one
+	Coord3D						m_attachPos;
+	Coord3D						m_attachWindOffset;							///< what Particle::doWindMotion adds to the system's place
+	ObjectID					m_attachedDrawableObjectForDraw;	///< the attached drawable's object, for the frame view's owner
 
 	Matrix3D					m_localTransform;								///< local orientation & position of system
 	Matrix3D					m_transform;										///< composite transform of parent Drawable and local
@@ -1054,6 +1069,10 @@ public:
 	virtual void init( void );									///< initialize the manager
 	virtual void reset( void );									///< reset the manager and all particle systems
 	virtual void update( void );								///< update all particle systems
+	/// LOGIC-THREAD.md 7.4: each system's ParticleSystem::takeAttachForUpdate for the next update.  An
+	/// update outside the overlap window takes it first; for one inside, the device's takeReadsForRender
+	/// takes it at the sync point.
+	void takeReadsForUpdate( void );
 
 	virtual Int getOnScreenParticleCount( void ) = 0;   ///< returns the number of particles on screen
   virtual void setOnScreenParticleCount(int count);

@@ -1077,9 +1077,9 @@ Real BaseHeightMapRenderObjClass::getHeightMapHeight(Real x, Real y, Coord3D* no
 /** getHeightMapHeight for the render: the same sampling over the drawn map, which the tick does not
 	write (LogicHeightMapData). */
 //=============================================================================
-Real BaseHeightMapRenderObjClass::getDrawHeight(Real x, Real y) const
+Real BaseHeightMapRenderObjClass::getDrawHeight(Real x, Real y, Coord3D* normal) const
 {
-	return TerrainHeightSampling::getHeightMapHeight(m_map, m_map, x, y, NULL);
+	return TerrainHeightSampling::getHeightMapHeight(m_map, m_map, x, y, normal);
 }
 
 //=============================================================================

@@ -2340,6 +2340,26 @@ void W3DParticleSystemManager::releaseGpuResources()
 void W3DParticleSystemManager::takeReadsForRender( void )
 {
 	s_fieldRenderFrame = (Int)TheGameLogic->getFrame();
+	// LOGIC-THREAD.md 7.4: an update still to run this frame runs inside the window.  One walk takes what
+	// it will read of the objects and drawables (ParticleSystem::takeAttachForUpdate) and finds the
+	// fields; the frame view waits for the render's refresh after that update.
+	if (m_lastLogicFrameUpdate != TheGameLogic->getFrame())
+	{
+		m_fieldSystems.clear();
+		for (ParticleSystemListIt it = m_allParticleSystemList.begin(); it != m_allParticleSystemList.end(); ++it)
+		{
+			ParticleSystem *sys = *it;
+			if (sys == NULL)
+				continue;
+			if (sys->getAttachedDrawable() != INVALID_DRAWABLE_ID || sys->getAttachedObject() != INVALID_ID)
+				sys->takeAttachForUpdate( m_localPlayerIndex );
+			if (!sys->isUsingDrawables() && isGroundField( sys ))
+				m_fieldSystems.push_back( sys );
+		}
+		m_frameViewValid = FALSE;
+		updateGroundFields( m_fieldSystems );
+		return;
+	}
 	refreshFrameView();
 	updateGroundFields( m_fieldSystems );
 }
@@ -2381,11 +2401,10 @@ void W3DParticleSystemManager::refreshFrameView( void )
 		view.fade = fade;
 #if ZH_MODERN_WATER
 		view.owner = INVALID_ID;
-		if (sys->getAttachedDrawable() != INVALID_DRAWABLE_ID) {
-			const Drawable *drawable = TheGameClient->findDrawableByID(sys->getAttachedDrawable());
-			const Object *object = drawable ? drawable->getObject() : NULL;
-			if (object) view.owner = object->getID();
-		} else view.owner = sys->getAttachedObject();
+		// the drawable's object as the sync point read it: inside the window the tick may be deleting it
+		if (sys->getAttachedDrawable() != INVALID_DRAWABLE_ID)
+			view.owner = sys->getAttachedDrawableObjectForDraw();
+		else view.owner = sys->getAttachedObject();
 #endif
 		m_frameView.push_back( view );
 		if (sys->getTemplate()->isFireLook()

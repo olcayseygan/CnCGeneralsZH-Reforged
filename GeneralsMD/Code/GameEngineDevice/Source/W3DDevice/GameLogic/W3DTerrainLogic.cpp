@@ -286,6 +286,10 @@ Bool W3DTerrainLogic::isClearLineOfSight(const Coord3D& pos, const Coord3D& posO
 //-------------------------------------------------------------------------------------------------
 Real W3DTerrainLogic::getGroundHeight( Real x, Real y, Coord3D* normal ) const
 {
+	// LOGIC-THREAD.md 7.4: the client inside the overlap window (the particle update beside the tick)
+	// asks the drawn map, which the tick does not write; it holds logic's heights as of the sync point
+	if (LogicThread::isInsideWindow() && TheTerrainRenderObject)
+		return TheTerrainRenderObject->getDrawHeight(x, y, normal);
 	LOGIC_WINDOW_READ( WINDOW_TERRAIN );
 #define USE_THE_TERRAIN_OBJECT
 #ifdef USE_THE_TERRAIN_OBJECT

@@ -2967,9 +2967,33 @@ AGAIN:
 //				if(TheGlobalData->m_loadScreenRender != TRUE)
 					updateViews();
 				GameEngine_notePark( PARK_VIEW, tViewStart );
-				Int64 tParticleStart, tParticleEnd;
-				tParticleStart = Clock_Ticks();
-	     		TheParticleSystemManager->update();//LORENZEN AND WILCZYNSKI MOVED THIS FROM ITS NATIVE POSITION, ABOVE
+
+				// a draw from inside a tick (the load screen the map start paints) is the tick's own.  The
+				// tick runs beside a render that reads logic only through the sync point's copies, which
+				// rules out the scripted camera's loop of renders, the debug overlays and displays that walk
+				// the objects live, -cinema's own interface, a blend on the models (the tick reads live
+				// bones; smoothMotionApply below makes one exactly when this holds) and the load screen.
+				const Bool blends = TheSmoothMotionActive && !s_smoothBehind;
+				Bool mayOverlap = !loopForCameraMovement && rendersThisPass() && !blends
+					&& m_debugDisplayCallback == NULL && !TheGlobalData->m_loadScreenRender
+					&& !TheGlobalData->m_breakTheMovie && !TheGlobalData->m_disableRender	// takeReadsForRender took nothing
+					&& !TheGlobalData->m_showLanes && !CinemaDirector_hidesHud()
+					&& !TheObserverCamera.isWindowDrawn();
+#if defined(_DEBUG) || defined(_INTERNAL)
+				mayOverlap = mayOverlap && !TheGlobalData->m_debugAI && !TheGlobalData->m_debugCamera
+					&& !TheGlobalData->m_showAudioLocations;
+#else
+				mayOverlap = mayOverlap && !TheGlobalData->m_debugAI;
+#endif
+				// LOGIC-THREAD.md 7.4: a window that may carry a tick runs the particle update inside it,
+				// beside the tick, on what takeReadsForRender took for it.  Everywhere else it runs here.
+				const Bool opensWindow = !TheGameLogic->isInGameLogicUpdate();
+				const Bool particlesInWindow = opensWindow && mayOverlap;
+				Int64 tParticleStart = 0, tParticleEnd = 0;
+				if( !particlesInWindow )
+				{
+					tParticleStart = Clock_Ticks();
+					TheParticleSystemManager->update();//LORENZEN AND WILCZYNSKI MOVED THIS FROM ITS NATIVE POSITION, ABOVE
 	                                           //FOR THE PURPOSE OF LETTING THE PARTICLE SYSTEM LOOK UP THE RENDER OBJECT"S
 	                                           //TRANSFORM MATRIX, WHILE IT IS STILL VALID (HAVING DONE ITS CLIENT TRANSFORMS
 	                                           //BUT NOT YET RESETTING TOT HE LOGICAL TRANSFORM)
@@ -2977,41 +3001,34 @@ AGAIN:
 	                                           //MOVE WITH THE CLIENT TRANSFORMS, NOW.
 	                                           //REVOLUTIONARY!
 	                                           //-LORENZEN
-
-				tParticleEnd = Clock_Ticks();
-				GameEngine_notePark( PARK_PARTICLES, tParticleStart );
+					tParticleEnd = Clock_Ticks();
+					GameEngine_notePark( PARK_PARTICLES, tParticleStart );
 #ifdef DEBUG_LOGGING
-				TheParticleUpdateMS = w3dElapsedMS( tParticleStart, tParticleEnd );
+					TheParticleUpdateMS = w3dElapsedMS( tParticleStart, tParticleEnd );
 #endif
+				}
+				const Int64 tReadsStart = Clock_Ticks();
 				takeReadsForRender( rendersThisPass() );
 				// R1: after the particles read the logic bones (Lorenzen's note above) and the sync point
 				// flushed the models' conditions, before anything renders and before a tick may start
 				smoothMotionApply();
-				GameEngine_notePark( PARK_READS, tParticleEnd );
-				pictureStart = Clock_Ticks();
+				GameEngine_notePark( PARK_READS, tReadsStart );
 #ifdef DEBUG_LOGGING
 				tOverlapStart = Clock_Ticks();
 #endif
-				// a draw from inside a tick (the load screen the map start paints) is the tick's own.  The
-				// tick runs beside a render that reads logic only through the sync point's copies, which
-				// rules out the scripted camera's loop of renders, the debug overlays and displays that walk
-				// the objects live, -cinema's own interface, a blend on the models (the tick reads live
-				// bones) and the load screen.
-				if( !TheGameLogic->isInGameLogicUpdate() )
-				{
-					Bool mayOverlap = !loopForCameraMovement && rendersThisPass() && !s_smoothApplied
-						&& m_debugDisplayCallback == NULL && !TheGlobalData->m_loadScreenRender
-						&& !TheGlobalData->m_breakTheMovie && !TheGlobalData->m_disableRender	// takeReadsForRender took nothing
-						&& !TheGlobalData->m_showLanes && !CinemaDirector_hidesHud()
-						&& !TheObserverCamera.isWindowDrawn();
-#if defined(_DEBUG) || defined(_INTERNAL)
-					mayOverlap = mayOverlap && !TheGlobalData->m_debugAI && !TheGlobalData->m_debugCamera
-						&& !TheGlobalData->m_showAudioLocations;
-#else
-					mayOverlap = mayOverlap && !TheGlobalData->m_debugAI;
-#endif
+				if( opensWindow )
 					overlapWindow.open( mayOverlap );
+				if( particlesInWindow )
+				{
+					// no model is blended (mayOverlap), so the bones it reads are the logic ones, as above
+					tParticleStart = Clock_Ticks();
+					TheParticleSystemManager->update();
+					tParticleEnd = Clock_Ticks();
+#ifdef DEBUG_LOGGING
+					TheParticleUpdateMS = w3dElapsedMS( tParticleStart, tParticleEnd );
+#endif
 				}
+				pictureStart = Clock_Ticks();
 			}
 
 			// After the smooth motion, so a lamp's light sits where its model is drawn this frame.

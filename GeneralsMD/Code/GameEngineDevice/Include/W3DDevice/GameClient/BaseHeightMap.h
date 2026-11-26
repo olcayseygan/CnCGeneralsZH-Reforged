@@ -271,7 +271,7 @@ public:
 	void setShoreLineDetail(void);	///<update shoreline tiles in case the feature was toggled by user.
 	Bool getMaximumVisibleBox(const FrustumClass &frustum,  AABoxClass *box, Bool ignoreMaxHeight);	///<3d extent of visible terrain.
 	Real getHeightMapHeight(Real x, Real y, Coord3D* normal) const;	///<return height and normal at given point
-	Real getDrawHeight(Real x, Real y) const;	///< getHeightMapHeight from the drawn map, for the render beside a tick
+	Real getDrawHeight(Real x, Real y, Coord3D* normal = NULL) const;	///< getHeightMapHeight from the drawn map, for the render beside a tick
 	void heightsLoaded(void) { s_logicHeights.copyFrom(m_map); staticLightingChanged(); }	///< a save wrote every height at once
 	UnsignedByte getLogicRawHeight(Int x, Int y) { return s_logicHeights.getHeight(x, y); }	///< a cell of logic's heights (LogicHeightMapData)
 	void setLogicRawHeight(Int x, Int y, UnsignedByte height) { s_logicHeights.setRawHeight(x, y, height); }	///< the drawn map takes it with terrainHeightChanged

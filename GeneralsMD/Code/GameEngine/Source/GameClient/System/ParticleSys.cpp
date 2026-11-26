@@ -886,37 +886,17 @@ void Particle::doWindMotion( void )
 	Coord3D systemPos;
 	m_system->getPosition( &systemPos );
 
-	// when we're attached objects and drawables we offset by that position as well
-	if( ObjectID attachedObj = m_system->getAttachedObject() )
+	// when we're attached objects and drawables we offset by that position as well, as the sync point
+	// read it (ParticleSystem::takeAttachForUpdate): this runs on the job pool inside the overlap window
+	if( m_system->getAttachedObject() || m_system->getAttachedDrawable() )
 	{
-		Object *obj = TheGameLogic->findObjectByID( attachedObj );
-
-		if( obj )
+		if( const Coord3D *attachPos = m_system->getWindOriginOffset() )
 		{
-			const Coord3D *objPos = obj->getPosition();
-
-			systemPos.x += objPos->x;
-			systemPos.y += objPos->y;
-			systemPos.z += objPos->z;
-
-		}  // end if
-
-	}  // end if
-	else if( DrawableID attachedDraw = m_system->getAttachedDrawable() )
-	{
-		Drawable *draw = TheGameClient->findDrawableByID( attachedDraw );
-
-		if( draw )
-		{
-			const Coord3D *drawPos = draw->getPosition();
-
-			systemPos.x += drawPos->x;
-			systemPos.y += drawPos->y;
-			systemPos.z += drawPos->z;
-
-		}  // end if
-
-	}  // end else if
+			systemPos.x += attachPos->x;
+			systemPos.y += attachPos->y;
+			systemPos.z += attachPos->z;
+		}
+	}
 
 	//
 	// compute a vector from the system position in the world to the particle ... we will use
@@ -1513,6 +1493,14 @@ ParticleSystem::ParticleSystem( const ParticleSystemTemplate *sysTemplate,
 	m_attachedToObjectID = INVALID_ID;
 	m_rodeObject = FALSE;
 	m_attachedObjectDrawableForDraw = INVALID_DRAWABLE_ID;
+	m_attachTakenFrame = 0xFFFFFFFFu;
+	m_attachFound = FALSE;
+	m_attachShrouded = FALSE;
+	m_attachWindOffsetSet = FALSE;
+	m_attachTransform.Make_Identity();
+	m_attachPos.zero();
+	m_attachWindOffset.zero();
+	m_attachedDrawableObjectForDraw = INVALID_ID;
 
 	m_isLocalIdentity = true;
 	m_localTransform.Make_Identity();
@@ -2423,6 +2411,61 @@ const ParticleInfo *ParticleSystem::generateParticleInfo( Int particleNum, Int p
 // ------------------------------------------------------------------------------------------------
 /** Update this particle system, potentially generating new particles */
 // ------------------------------------------------------------------------------------------------
+void ParticleSystem::takeAttachForUpdate( Int localPlayerIndex )
+{
+	m_attachTakenFrame = TheGameLogic->getFrame();
+	m_attachFound = FALSE;
+	m_attachShrouded = FALSE;
+	m_attachWindOffsetSet = FALSE;
+
+	// Particle::doWindMotion's order: the object first, then the drawable
+	if (m_attachedToObjectID)
+	{
+		if (const Object *obj = TheGameLogic->findObjectByID( m_attachedToObjectID ))
+		{
+			m_attachWindOffset = *obj->getPosition();
+			m_attachWindOffsetSet = TRUE;
+		}
+	}
+	else if (m_attachedToDrawableID)
+	{
+		if (const Drawable *draw = TheGameClient->findDrawableByID( m_attachedToDrawableID ))
+		{
+			m_attachWindOffset = *draw->getPosition();
+			m_attachWindOffsetSet = TRUE;
+		}
+	}
+
+	// updateEmission's: the drawable first, then the object
+	if (m_attachedToDrawableID)
+	{
+		const Drawable *attachedTo = TheGameClient->findDrawableByID( m_attachedToDrawableID );
+		if (attachedTo)
+		{
+			m_attachFound = TRUE;
+			m_attachShrouded = attachedTo->getFullyObscuredByShroud();
+			m_attachTransform = *attachedTo->getTransformMatrix();
+			m_attachPos = *attachedTo->getPosition();
+			const Object *obj = attachedTo->getObject();
+			m_attachedDrawableObjectForDraw = obj ? obj->getID() : INVALID_ID;
+		}
+	}
+	else if (m_attachedToObjectID)
+	{
+		const Object *objectAttachedTo = TheGameLogic->findObjectByID( m_attachedToObjectID );
+		if (objectAttachedTo)
+		{
+			m_attachFound = TRUE;
+			m_attachShrouded = objectAttachedTo->getShroudedStatus(localPlayerIndex) >= OBJECTSHROUD_FOGGED;
+			const Drawable *draw = objectAttachedTo->getDrawable();
+			m_attachedObjectDrawableForDraw = draw ? draw->getID() : INVALID_DRAWABLE_ID;
+			m_attachTransform = draw ? *draw->getTransformMatrix() : *objectAttachedTo->getTransformMatrix();
+			m_attachPos = *objectAttachedTo->getPosition();
+		}
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
 Bool ParticleSystem::updateEmission( Int localPlayerIndex, Bool *keepSystem )
 {
 	if (TheGlobalData->m_useFX == FALSE)
@@ -2456,55 +2499,28 @@ Bool ParticleSystem::updateEmission( Int localPlayerIndex, Bool *keepSystem )
 	const Matrix3D *parentXfrm = NULL;
 	Bool isShrouded = false;
 
-	if (m_attachedToDrawableID)
+	// what the drawable or object read at the sync point (takeAttachForUpdate); outside the window a
+	// system that missed that walk reads it now.  Inside, one that missed it (made by this update) rides
+	// on nothing until the next.
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if ((m_attachedToDrawableID || m_attachedToObjectID) && m_attachTakenFrame != frame && !LogicThread::isInsideWindow())
+		takeAttachForUpdate( localPlayerIndex );
+	if ((m_attachedToDrawableID || m_attachedToObjectID) && m_attachTakenFrame == frame)
 	{
-		Drawable *attachedTo = TheGameClient->findDrawableByID( m_attachedToDrawableID );
-
-		if (attachedTo)
+		if (m_attachFound)
 		{
-			if (attachedTo->getFullyObscuredByShroud())
-				isShrouded = true;
-
-			parentXfrm = attachedTo->getTransformMatrix();
-
+			isShrouded = m_attachShrouded;
+			parentXfrm = &m_attachTransform;
 			m_lastPos = m_pos;
-			m_pos = *attachedTo->getPosition();
+			m_pos = m_attachPos;
 		}
 		else
-		{ 
-			// Drawable has been destroyed - lose our attachment to it
-			m_attachedToDrawableID = INVALID_DRAWABLE_ID;
-
-			// destroy ourselves
-			destroy();
-		}
-	}
-	else if (m_attachedToObjectID)
-	{
-		Object *objectAttachedTo = TheGameLogic->findObjectByID( m_attachedToObjectID );
-
-		if (objectAttachedTo)
 		{
-			if (!isShrouded)
-				isShrouded = (objectAttachedTo->getShroudedStatus(localPlayerIndex) >= OBJECTSHROUD_FOGGED);
- 
-      const Drawable * draw = objectAttachedTo->getDrawable();
-			m_attachedObjectDrawableForDraw = draw ? draw->getID() : INVALID_DRAWABLE_ID;
-      if ( draw )
-  			parentXfrm = draw->getTransformMatrix();
-      else
-  			parentXfrm = objectAttachedTo->getTransformMatrix();
-      
-
-
-
-			m_lastPos = m_pos;
-			m_pos = *objectAttachedTo->getPosition();
-		}
-		else
-		{ 
-			// Drawable has been destroyed - lose our attachment to it
-			m_attachedToObjectID = INVALID_ID;
+			// the drawable or object has been destroyed - lose our attachment to it
+			if (m_attachedToDrawableID)
+				m_attachedToDrawableID = INVALID_DRAWABLE_ID;
+			else
+				m_attachedToObjectID = INVALID_ID;
 
 			// destroy ourselves
 			destroy();
@@ -4113,12 +4129,35 @@ static void markSystemParticles( Int index, void *context )
 	systems[ index ]->updateParticlesMark();
 }
 
+/* LOGIC-THREAD.md 7.4: held by an update inside the overlap window, which deletes systems beside the
+	 tick.  A tick that looks up a filed system (LaserUpdate, the uplink cannon) waits it out, and the
+	 system it gets then lives until the window closes.
+	 ponytail: one lock for the whole update; per-system handles if the tick ever looks systems up often */
+static std::mutex s_windowUpdateLock;
+
+void ParticleSystemManager::takeReadsForUpdate( void )
+{
+	if (m_lastLogicFrameUpdate == TheGameLogic->getFrame())
+		return;
+	for (ParticleSystemListIt it = m_allParticleSystemList.begin(); it != m_allParticleSystemList.end(); ++it)
+	{
+		ParticleSystem *sys = *it;
+		if (sys && (sys->m_attachedToDrawableID || sys->m_attachedToObjectID))
+			sys->takeAttachForUpdate( m_localPlayerIndex );
+	}
+}
+
 DECLARE_PERF_TIMER(ParticleSystemManager)
 void ParticleSystemManager::update( void )
 {
 	if (m_lastLogicFrameUpdate == TheGameLogic->getFrame()) {
 		return;
 	}
+	std::unique_lock<std::mutex> windowLock( s_windowUpdateLock, std::defer_lock );
+	if (LogicThread::isInsideWindow())
+		windowLock.lock();
+	else
+		takeReadsForUpdate();
 
 	// update the last logic frame.
 	m_lastLogicFrameUpdate = TheGameLogic->getFrame();
@@ -4265,6 +4304,9 @@ ParticleSystem *ParticleSystemManager::findParticleSystem( ParticleSystemID id )
 	}
 
 	LOGIC_CENSUS( CENSUS_PARTICLES );
+	std::unique_lock<std::mutex> windowLock( s_windowUpdateLock, std::defer_lock );
+	if (LogicThread::t_isLogicThread)
+		windowLock.lock();
 	ParticleSystemIDMap::const_iterator it = m_allParticleSystemMap.find( id );
 	return (it != m_allParticleSystemMap.end()) ? it->second : NULL;
 

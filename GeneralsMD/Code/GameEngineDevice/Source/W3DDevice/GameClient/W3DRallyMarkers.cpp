@@ -1,7 +1,10 @@
-// The Machined Reticle rally point (docs: the 2026-11-24 rally DESIGN.md).  A production building's
-// rally point is the side's frame round the point with the side's flag planted in it, and a rail runs
-// from the building's door to it with chevrons marching along it; several buildings on one point share
-// one frame, which wears a pip for each.  Every piece comes out of ReforgedRallyMarkers.dds and is laid
+// The rally point (docs: the 2026-11-24 rally DESIGN.md; in the mouse cursors' hand since 2026-11-26, the
+// pennant since that evening, the owner's pick of three in experiments/rally-refined).  A production
+// building's rally point is a hairline pole with the side's slim pennant on it, a fine ring on the ground
+// round its foot, and a dashed rail from the building's door to it, the dashes creeping towards the
+// point; several buildings on one point share one ring.  Every stroke holds its width on the screen: an
+// offset towards the screen's top is drawn 1/foreshortening long on the ground, and anything standing
+// upright on the screen as tall.  Every piece comes out of ReforgedRallyMarkers.dds and is laid
 // on the ground the ground markers' way (W3DGroundMarkers): textured quads in the terrain pass, depth
 // tested with each vertex pulled towards the eye, never depth written, one texture stage times the
 // vertex colour, alpha blended and the ping added, so fixed-function on every device.  The quads that
@@ -13,6 +16,7 @@
 // moved (the click), and the draw runs beside the tick on what the take left and the wall clock.
 // Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
 #include "W3DDevice/GameClient/W3DRallyMarkers.h"
+#include "W3DDevice/GameClient/W3DGroundMarkers.h"		// GROUND_MARKS_ZOOM
 
 #include <math.h>
 #include <vector>
@@ -53,71 +57,49 @@ namespace {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 const Real RALLY_PI = 3.14159265358979f;
-const Real K_BASE = 0.8f;								///< world units a k at zoom 1
-const Real K_ZOOM_MIN = 1.0f;						///< the zoom the size follows, so it keeps its size on the screen
-const Real K_ZOOM_MAX = 3.5f;
+/// world units a k: K_BASE times GROUND_MARKS_ZOOM, the size the rally point drew at the closest zoom while
+/// it followed the camera, now the same in the world at every zoom (owner, 2026-11-26).  Until then it was
+/// 0.8 times the zoom held to 1 to 3.5
+const Real K_BASE = 0.45f;
+const Real K_WORLD = K_BASE * GROUND_MARKS_ZOOM;
 const Real LIFT = 0.35f;								///< world units out of the dirt
-const Real PULL = 3.0f;									///< world units towards the eye
+const Real PULL = 3.0f;									///< world units towards the eye at zoom 1, times the zoom past it (depth only)
 const Real GROUND_STEP = 10.0f;					///< world units: no quad laid on the ground is longer
 const Real SAMPLE_STEP = 5.0f;					///< world units between two heights taken under a rail
 const Real NO_WATER = -1.0e30f;
 const Real SHARE_DISTANCE = 8.0f;				///< world units: rally points closer are one
-const Real BAND = 10.0f;								///< the frame's band across
-const Real RAIL = 6.0f;									///< the rail across
-const Real FRAME_REACH = 20.0f;					///< the frame's radius, about
-const Real RAIL_STOP = 26.0f;						///< the rail stops this short of the point, at the frame
-const Real BEACON_REACH = 60.0f;				///< what a frame, its chevrons and pips cover round the point
-const Real FLAG_REACH = 46.0f;					///< and its flag, up the screen
-const Real CHEV_PITCH = 22.0f;					///< between the rail's chevrons
-const Real CHEV_SPEED = 30.0f;					///< k a second they march
-const Real CHEV_RUSH = 80.0f;						///< k they run extra in the first 0.6 s after a click
-const Real CHEV_RAIL_SCALE = 0.72f;
-const Real CHEV_ANCHOR_U = 0.75f;				///< the chevron's tip (rally_markers.py)
-const Real RUN_IN = 1.4f;								///< s, one frame chevron's run in
-const Real SNAP = 0.25f;								///< s, the frame's snap on a click
+// a k is about 2.24 pixels across the screen at 1080 (the v3 frames: the old frame's 42k were 94 pixels),
+// so the prototype's pixels are these over 2.24.  A stroke's width is its band piece's across, of which the
+// dark line is 0.95 and the fill 0.45 (rally_markers.py bands)
+const Real KEY = 0.45f;									///< the cursors' one pixel dark line
+const Real RING_R = 12.0f;							///< the ring's radius on the ground, to the middle of its stroke
+const Real RING_ACROSS = 1.8f;					///< its stroke: 3.8 pixels of dark, 1.8 of fill
+const Real POLE_ACROSS = 1.7f;
+const Real POLE_H = 25.0f;							///< up the screen from the foot
+const Real FOOT = 4.0f;									///< the foot's dot, round on the screen
+const Real DASH_ACROSS = 1.9f;
+const Real DASH_LEN = 3.1f, DASH_GAP = 2.2f;	///< along the rail, on the ground
+const Real DASH_SPEED = 12.0f;					///< k a second they creep towards the point
+const Real DASH_RUSH = 30.0f;						///< k they run extra in the first 0.6 s after a click
+const Real FRAME_REACH = RING_R + 1.0f;	///< the ring's outer edge, about
+const Real RAIL_STOP = RING_R + 2.5f;		///< the rail stops this short of the point, just off the ring
+const Real FS_MIN = 0.45f;							///< the least foreshortening a stroke is held against
+/// what a ring and its ping (out to 1.9 of the ring) cover round the point, before the snap
+const Real BEACON_REACH = 1.9f * FRAME_REACH + 1.0f;
+/// and the flag: the pole up the screen over the least foreshortening, the pennant beside it (13.5 x 58.9)
+const Real FLAG_REACH = 61.0f;
+const Real SNAP = 0.25f;								///< s, the ring's snap on a click
+const Real SNAP_GROW = 0.5f;						///< and how much larger it starts
 const Real GROW = 0.4f;									///< s, the rail growing from the door
-const Real POLE_W = 12.0f, POLE_H = 44.0f, POLE_ANCHOR_V = 1.0f - 3.0f / 44.0f;
-const Real HOIST_X = 0.85f, HOIST_Y = 36.0f;
-const Real CLOTH_W = 31.0f, CLOTH_H = 20.0f, CLOTH_AU = 2.5f / 31.0f, CLOTH_AV = 2.5f / 20.0f;
+const Real HOIST_X = 0.4f;							///< the pennant's hoist on the pole's fill, right of the middle
+const Real HOIST_Y = POLE_H - KEY;			///< its top edge a dark line under the pole's top
+const Real PENNANT_W = 15.0f, PENNANT_H = 9.0f, PENNANT_AU = 1.0f / 15.0f, PENNANT_AV = 1.0f / 9.0f;	///< rally_markers.py's, whole texels at 4 a k
 const Real FOG_SHADE = 0.8f;
 const Real SHROUD_SHADE = 0.55f;
 const UnsignedInt SEEN_KEEP_MS = 1000;	///< a building not handed over this long is forgotten: selected again it grows again
 
+/// the side's pennant: America swallow-tailed, China stepped, the GLA torn, Turkiye cut at 30 degrees
 enum { FINISH_AMERICA, FINISH_CHINA, FINISH_GLA, FINISH_TURKIYE, FINISH_COUNT };
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// THE FRAMES: centreline polygons, counter-clockwise, x right and y up the screen
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-struct FrameShape
-{
-	Int n;
-	Real x[ 12 ], y[ 12 ];
-	Int chevrons;
-	Real chevronDeg[ 6 ];
-	Real chevronScale;
-	Int studs;
-	Real studDeg[ 4 ];
-	Real studReach;		///< the studs' radius, a share of FRAME_REACH
-};
-
-const FrameShape FRAMES[ FINISH_COUNT ] =
-{
-	// America: an octagon, flats on the axes, studs on the flats, chevrons in on the diagonals
-	{ 8, { 18.478f, 7.654f, -7.654f, -18.478f, -18.478f, -7.654f, 7.654f, 18.478f },
-			 { 7.654f, 18.478f, 18.478f, 7.654f, -7.654f, -18.478f, -18.478f, -7.654f },
-		4, { 45.0f, 135.0f, 225.0f, 315.0f }, 0.9f, 4, { 0.0f, 90.0f, 180.0f, 270.0f }, 1.0f },
-	// China: a stepped square, studs on the step corners, chevrons on the axes
-	{ 12, { 18, 18, 14, 14, -14, -14, -18, -18, -14, -14, 14, 14 },
-				{ -14, 14, 14, 18, 18, 14, 14, -14, -14, -18, -18, -14 },
-		4, { 0.0f, 90.0f, 180.0f, 270.0f }, 1.0f, 4, { 45.0f, 135.0f, 225.0f, 315.0f }, 1.25f },
-	// GLA: a crooked plate of seven sides, two odd bolts, three chevrons at uneven angles
-	{ 7, { 15, 21, 11, -6, -19, -17, 0 }, { 13, -3, -17, -19.5f, -9, 9, 19 },
-		3, { 70.0f, 200.0f, 320.0f }, 1.0f, 2, { 110.0f, 255.0f }, 1.0f },
-	// Turkiye: a hexagon of 30 degree cuts, an LED hairline inside, range ticks outside its corners
-	{ 6, { 21.0f, 10.5f, -10.5f, -21.0f, -10.5f, 10.5f }, { 0.0f, 18.187f, 18.187f, 0.0f, -18.187f, -18.187f },
-		6, { 30.0f, 90.0f, 150.0f, 210.0f, 270.0f, 330.0f }, 0.75f, 0, { 0 }, 1.0f },
-};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // SMALL HELPERS
@@ -172,19 +154,15 @@ Real secondsSince( UnsignedInt now, UnsignedInt then )
 
 enum Piece
 {
-	P_BAND_INLAY, P_BAND_SHELL, P_BAND_STEEL_A, P_BAND_STEEL_B,
-	P_CHEVRON, P_PING, P_RAIL, P_STUD, P_STUD_DOT, P_TICK,
-	P_POLE,
-	P_CLOTH = P_POLE + FINISH_COUNT,
-	P_COUNT = P_CLOTH + FINISH_COUNT
+	P_BAND_INLAY, P_BAND_SHELL, P_PING, P_FOOT,
+	P_PENNANT,
+	P_COUNT = P_PENNANT + FINISH_COUNT
 };
 
 const char *const PIECE_NAMES[ P_COUNT ] =
 {
-	"RallyBandInlay", "RallyBandShell", "RallyBandSteelA", "RallyBandSteelB",
-	"RallyChevron", "RallyPing", "RallyRail", "RallyStud", "RallyStudDot", "RallyTick",
-	"RallyPoleAmerica", "RallyPoleChina", "RallyPoleGla", "RallyPoleTurkiye",
-	"RallyClothAmerica", "RallyClothChina", "RallyClothGla", "RallyClothTurkiye",
+	"RallyBandInlay", "RallyBandShell", "RallyPing", "RallyFoot",
+	"RallyPennantAmerica", "RallyPennantChina", "RallyPennantGla", "RallyPennantTurkiye",
 };
 
 struct Atlas
@@ -198,7 +176,7 @@ Atlas theAtlas;
 
 const char *const ATLAS_FILE = "Art\\Textures\\ReforgedRallyMarkers.dds";
 
-/** Every piece's rect out of the MappedImage blocks and the sheet with its three levels, never
+/** Every piece's rect out of the MappedImage blocks and the sheet with its four levels, never
 	* reduced by Texture Quality, clamped.  Tried once; without any of it the rally point stays EA's. */
 Bool loadAtlasOnce( void )
 {
@@ -226,7 +204,7 @@ Bool loadAtlasOnce( void )
 		if( p == 0 )
 			file = image->getFilename();
 	}
-	theAtlas.texture = WW3DAssetManager::Get_Instance()->Get_Texture( file.str(), MIP_LEVELS_3, WW3D_FORMAT_UNKNOWN,
+	theAtlas.texture = WW3DAssetManager::Get_Instance()->Get_Texture( file.str(), MIP_LEVELS_4, WW3D_FORMAT_UNKNOWN,
 																																		 true, TextureBaseClass::TEX_REGULAR, false );
 	if( theAtlas.texture == NULL )
 		return FALSE;
@@ -367,7 +345,8 @@ struct Patch
 /// a square round (cx, cy) on the world's lattice, so a point taken again samples the same heights
 void fillSquare( Patch &p, Real cx, Real cy, Real reach )
 {
-	const Real step = GROUND_STEP;
+	// coarser steps rather than more of them for a wide reach: at most 161 a side
+	const Real step = MAX( GROUND_STEP, 2.0f * reach / 158.0f );
 	const Real x0 = floorf( ( cx - reach ) / step ) * step;
 	const Real y0 = floorf( ( cy - reach ) / step ) * step;
 	const Int n = (Int)ceilf( ( cx + reach - x0 ) / step ) + 1;
@@ -441,18 +420,16 @@ struct Rail
 	UnsignedInt clickMs;					///< 0, or the click its chevrons rush after
 	Real alpha;
 	Real stop;										///< world units short of the end it stops
-	Bool door;										///< a stud at its start
 	Bool wet;
 };
 
-/// a frame, with its flag unless a ghost
+/// a ring, with its flag unless a ghost
 struct Beacon
 {
 	Real x, y, z;
 	Bool deck;
 	Int finish;
 	Tint tint;
-	Int count;
 	UnsignedInt clickMs;			///< 0, or the click it snapped on
 	Real shade;
 	Real alpha;
@@ -477,7 +454,8 @@ std::vector<Handed> s_handed;
 std::vector<Seen> s_seen;
 std::vector<Rail> s_rails;
 std::vector<Beacon> s_beacons;
-Real s_k = K_BASE;
+const Real s_k = K_WORLD;
+Real s_zoom = 1.0f;			///< the camera's at the take, for the depth pull alone
 Bool s_taken = FALSE;
 Bool s_wet = FALSE;
 
@@ -497,7 +475,7 @@ Seen *findSeen( ObjectID id )
 
 /// a rail along the given points, its ground and its shade along it taken now
 void makeRail( const std::vector<Real> &x, const std::vector<Real> &y, const Tint &tint, UnsignedInt growMs,
-							 UnsignedInt clickMs, Real alpha, Real stop, Bool door )
+							 UnsignedInt clickMs, Real alpha, Real stop )
 {
 	if( x.size() < 2 )
 		return;
@@ -514,13 +492,13 @@ void makeRail( const std::vector<Real> &x, const std::vector<Real> &y, const Tin
 	r.clickMs = clickMs;
 	r.alpha = alpha;
 	r.stop = stop;
-	r.door = door;
 	r.wet = FALSE;
-	const Real half = ( 0.5f * CHEV_RAIL_SCALE * 16.0f + 2.0f ) * s_k;
+	// a dash held to its screen width is at most DASH_ACROSS / FS_MIN across on the ground, its cap a dark line out
+	const Real half = ( 0.5f * DASH_ACROSS / FS_MIN + KEY ) * s_k + 2.0f;
 	for( size_t i = 0; i + 1 < x.size(); ++i )
 	{
 		r.patches.push_back( Patch() );
-		fillAlong( r.patches.back(), x[ i ], y[ i ], x[ i + 1 ], y[ i + 1 ], MAX( half, 0.5f * RAIL * s_k + 2.0f ) );
+		fillAlong( r.patches.back(), x[ i ], y[ i ], x[ i + 1 ], y[ i + 1 ], half );
 		r.wet = r.wet || r.patches.back().wet;
 	}
 	// ponytail: one shroud lookup a terrain cell along the rail each sync point; keep them per building
@@ -547,7 +525,7 @@ void makeRail( const std::vector<Real> &x, const std::vector<Real> &y, const Tin
 	s_rails.push_back( r );
 }
 
-void makeBeacon( Real x, Real y, Real z, Int finish, const Tint &tint, Int count, UnsignedInt clickMs, Real alpha,
+void makeBeacon( Real x, Real y, Real z, Int finish, const Tint &tint, UnsignedInt clickMs, Real alpha,
 								 Real scale, Bool ghost, Bool flag )
 {
 	Beacon b;
@@ -558,15 +536,16 @@ void makeBeacon( Real x, Real y, Real z, Int finish, const Tint &tint, Int count
 	b.z = b.deck ? z : ground;
 	b.finish = MAX( 0, MIN( (Int)FINISH_COUNT - 1, finish ) );
 	b.tint = tint;
-	b.count = count;
 	b.clickMs = clickMs;
 	b.shade = shroudShade( x, y );
 	b.alpha = alpha;
 	b.scale = scale;
 	b.ghost = ghost;
 	b.flag = flag;
+	// the ring grows by up to SNAP_GROW on a click (drawRing); the flag never does
 	if( !b.deck )
-		fillSquare( b.patch, x, y, ( BEACON_REACH + ( flag ? FLAG_REACH : 0.0f ) ) * s_k * MAX( 1.0f, scale ) );
+		fillSquare( b.patch, x, y, MAX( BEACON_REACH * ( 1.0f + SNAP_GROW ), flag ? FLAG_REACH : 0.0f )
+														* s_k * MAX( 1.0f, scale ) );
 	s_wet = s_wet || b.patch.wet;
 	s_beacons.push_back( b );
 }
@@ -704,6 +683,7 @@ struct DrawCtx
 	Real rx, ry;				///< the screen's right on the ground
 	Real ux, uy;				///< and its up
 	Real yaw;
+	Real fs;						///< how much the ground towards the screen's top is foreshortened, FS_MIN to 1
 	Real lgx, lgy;			///< the HUD's light, from the top left of the screen
 	const Patch *patches;
 	Int patchCount;
@@ -823,14 +803,16 @@ void uprightPiece( Int piece, Real cx, Real cy, Real sx, Real sy, const Tint &ti
 
 /** A band along a polyline, row 0 on the right of the way it runs (outside a counter-clockwise
 	* polygon), its corners mitred so it stays one band, each edge cut into quads of GROUND_STEP at most.
-	* colourAt( s, light ) gives a quad's colour from how far along the line its middle is and how much
-	* of the HUD's light its edge's right normal takes. */
+	* `across` is its width on the screen in world units: the part of each offset that runs towards the
+	* screen's top is drawn 1/fs long, so the ground's foreshortening gives it back and a ring's top and
+	* bottom stay as thick as its sides.  colourAt( s, light ) gives a quad's colour from how far along the
+	* line its middle is and how much of the HUD's light its edge's right normal takes. */
 template< class ColourAt >
 void polyStrip( Int piece, const Real *px, const Real *py, Int n, Bool closed, Real across, const ColourAt &colourAt )
 {
 	if( n < 2 )
 		return;
-	enum { MAX_POINTS = 16 };
+	enum { MAX_POINTS = 32 };
 	n = MIN( n, (Int)MAX_POINTS );
 	Real ox[ MAX_POINTS ], oy[ MAX_POINTS ];
 	const Real half = 0.5f * across;
@@ -871,8 +853,11 @@ void polyStrip( Int piece, const Real *px, const Real *py, Int n, Bool closed, R
 			nx /= nl;  ny /= nl;
 		}
 		const Real cosine = MAX( 0.35f, nx * qx + ny * qy );
-		ox[ i ] = nx * half / cosine;
-		oy[ i ] = ny * half / cosine;
+		const Real wx = nx * half / cosine, wy = ny * half / cosine;
+		const Real along = wx * s_ctx.rx + wy * s_ctx.ry;
+		const Real up = ( wx * s_ctx.ux + wy * s_ctx.uy ) / s_ctx.fs;
+		ox[ i ] = along * s_ctx.rx + up * s_ctx.ux;
+		oy[ i ] = along * s_ctx.ry + up * s_ctx.uy;
 	}
 	const Real pv[ 4 ] = { 0.0f, 0.0f, 1.0f, 1.0f };
 	const Real pu[ 4 ] = { 0.5f, 0.5f, 0.5f, 0.5f };
@@ -944,28 +929,40 @@ void pingRing( Real cx, Real cy, Real r, Real across, const Tint &tint, Real alp
 // THE DRAW
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// a point on the rail s world units from its start, and the heading there
-void railPoint( const Rail &r, Real s, Real &px, Real &py, Real &heading )
+/** The rail from a to b world units along it into px, py, the path's corners between kept: one dash.
+	* Either end past the rail's own is held to it. */
+Int railSpan( const Rail &r, Real a, Real b, Real *px, Real *py, Int maxPoints )
 {
+	Int n = 0;
 	Real run = 0.0f;
-	const Int n = (Int)r.x.size();
-	for( Int i = 0; i + 1 < n; ++i )
+	for( size_t i = 0; i + 1 < r.x.size() && n < maxPoints; ++i )
 	{
 		const Real dx = r.x[ i + 1 ] - r.x[ i ], dy = r.y[ i + 1 ] - r.y[ i ];
 		const Real l = (Real)sqrt( dx * dx + dy * dy );
-		if( run + l >= s || i == n - 2 )
-		{
-			const Real f = l > 1.0e-3f ? ( s - run ) / l : 0.0f;
-			px = r.x[ i ] + dx * f;
-			py = r.y[ i ] + dy * f;
-			heading = (Real)atan2( dy, dx );
-			return;
-		}
+		const Real s0 = run;
 		run += l;
+		const Bool last = i + 2 >= r.x.size();
+		if( l < 1.0e-3f || ( run < a && !last ) )
+			continue;
+		if( n == 0 )
+		{
+			const Real f = clamp01( ( a - s0 ) / l );
+			px[ n ] = r.x[ i ] + dx * f;
+			py[ n ] = r.y[ i ] + dy * f;
+			++n;
+		}
+		if( run >= b || last )
+		{
+			const Real f = clamp01( ( b - s0 ) / l );
+			px[ n ] = r.x[ i ] + dx * f;
+			py[ n ] = r.y[ i ] + dy * f;
+			return n + 1;
+		}
+		px[ n ] = r.x[ i + 1 ];
+		py[ n ] = r.y[ i + 1 ];
+		++n;
 	}
-	px = r.x.back();
-	py = r.y.back();
-	heading = 0.0f;
+	return n;
 }
 
 Real railShade( const Rail &r, Real s )
@@ -976,21 +973,8 @@ Real railShade( const Rail &r, Real s )
 	return r.shade[ i ];
 }
 
-/// the rail's colour along it: the tint dimmed by the shroud under it, nothing past `visible`
-struct RailColour
-{
-	const Rail *rail;
-	Tint tint;
-	Real alpha;
-	Real visible;
-	UnsignedInt operator()( Real s, Real ) const
-	{
-		if( s > visible )
-			return 0;
-		return argb( scaled( tint, railShade( *rail, s ) ), alpha );
-	}
-};
-
+/** The rail: dashes of the owner's colour in their dark line, from the door to just off the ring, creeping
+	* towards the point and running on after a click; it grows out of the door when new. */
 void drawRail( const Rail &r )
 {
 	s_ctx.patches = r.patches.empty() ? NULL : &r.patches[ 0 ];
@@ -1002,54 +986,25 @@ void drawRail( const Rail &r )
 	if( visible <= 0.0f )
 		return;
 
-	// the path up to where it shows, cut there, so the band's last quad ends on it
-	enum { MAX_POINTS = 16 };
-	Real px[ MAX_POINTS ], py[ MAX_POINTS ];
-	Int n = 0;
-	Real run = 0.0f;
-	for( Int i = 0; i < (Int)r.x.size() && n < MAX_POINTS; ++i )
-	{
-		if( i > 0 )
-		{
-			const Real dx = r.x[ i ] - r.x[ i - 1 ], dy = r.y[ i ] - r.y[ i - 1 ];
-			const Real l = (Real)sqrt( dx * dx + dy * dy );
-			if( run + l >= visible )
-			{
-				const Real f = l > 1.0e-3f ? ( visible - run ) / l : 0.0f;
-				px[ n ] = r.x[ i - 1 ] + dx * f;
-				py[ n ] = r.y[ i - 1 ] + dy * f;
-				++n;
-				break;
-			}
-			run += l;
-		}
-		px[ n ] = r.x[ i ];
-		py[ n ] = r.y[ i ];
-		++n;
-	}
-	RailColour steel = { &r, TINT_WHITE, 0.85f * r.alpha, visible };
-	polyStrip( P_RAIL, px, py, n, FALSE, RAIL * k, steel );
-	RailColour inlay = { &r, r.tint, 0.75f * r.alpha, visible };
-	polyStrip( P_BAND_INLAY, px, py, n, FALSE, RAIL * k, inlay );
-
-	// chevrons marching to the point, faded in and out over 10k at either end of what shows
 	const Real t = animationSeconds();
 	const Real tl = r.clickMs ? secondsSince( s_ctx.now, r.clickMs ) : 10.0f;
-	const Real pitch = CHEV_PITCH * k;
-	const Real travelled = ( CHEV_SPEED * t + CHEV_RUSH * MIN( 0.6f, MAX( 0.0f, tl ) ) / 0.6f ) * k;
-	const Real fadeLen = 10.0f * k;
-	for( Real s = fmodf( travelled, pitch ); s < visible; s += pitch )
+	const Real pitch = ( DASH_LEN + DASH_GAP ) * k;
+	const Real travelled = ( DASH_SPEED * t + DASH_RUSH * MIN( 0.6f, MAX( 0.0f, tl ) ) / 0.6f ) * k;
+	const FlatColour line( TINT_WHITE, 0.85f * r.alpha, FALSE );
+	enum { MAX_POINTS = 8 };
+	Real px[ MAX_POINTS ], py[ MAX_POINTS ];
+	for( Real s = fmodf( travelled, pitch ) - pitch; s < visible; s += pitch )
 	{
-		const Real fade = MIN( 1.0f, MIN( s / fadeLen, ( visible - s ) / fadeLen ) );
-		if( fade <= 0.0f )
+		const Real a = MAX( 0.0f, s ), b = MIN( visible, s + DASH_LEN * k );
+		if( b - a < 0.25f * k )
 			continue;
-		Real cx, cy, heading;
-		railPoint( r, s, cx, cy, heading );
-		quadPiece( P_CHEVRON, cx, cy, heading, 12.0f * k * CHEV_RAIL_SCALE, 16.0f * k * CHEV_RAIL_SCALE,
-							 scaled( r.tint, railShade( r, s ) ), 0.95f * r.alpha * fade, CHEV_ANCHOR_U, 0.5f );
+		// the dark line runs a line's width past either end, as round any of the cursors' strokes
+		Int n = railSpan( r, a - KEY * k, b + KEY * k, px, py, MAX_POINTS );
+		polyStrip( P_BAND_SHELL, px, py, n, FALSE, DASH_ACROSS * k, line );
+		n = railSpan( r, a, b, px, py, MAX_POINTS );
+		polyStrip( P_BAND_INLAY, px, py, n, FALSE, DASH_ACROSS * k,
+							 FlatColour( scaled( r.tint, railShade( r, 0.5f * ( a + b ) ) ), r.alpha, FALSE ) );
 	}
-	if( r.door )
-		uprightPiece( P_STUD, r.x[ 0 ], r.y[ 0 ], 10.0f * k, 10.0f * k, scaled( TINT_WHITE, railShade( r, 0.0f ) ), r.alpha );
 }
 
 /// local frame coordinates (x right, y up the screen, in world units) to the ground
@@ -1059,126 +1014,70 @@ void toWorld( const Beacon &b, Real lx, Real ly, Real &wx, Real &wy )
 	wy = b.y + lx * s_ctx.ry + ly * s_ctx.uy;
 }
 
-void drawFrame( const Beacon &b, Real t, Real tl )
+/** The ring on the ground round the point, a circle there and so an ellipse on the screen, its stroke held
+	* to one width all round; on a click it snaps in from larger, flashes and sends one faint ping out. */
+void drawRing( const Beacon &b, Real tl )
 {
-	const FrameShape &shape = FRAMES[ b.finish ];
 	const Real k = s_k;
-	const Real snap = ( tl >= 0.0f ) ? 1.0f + 0.8f * ( 1.0f - easeOut( tl / SNAP ) ) : 1.0f;
-	const Real sc = snap * b.scale * k;
+	const Real snap = ( tl >= 0.0f ) ? 1.0f + SNAP_GROW * ( 1.0f - easeOut( tl / SNAP ) ) : 1.0f;
+	const Real radius = RING_R * snap * b.scale * k;
 	const Real a = b.alpha * ( b.ghost ? 0.5f : 1.0f );
-	Real throb = b.ghost ? 1.0f : 0.82f + 0.18f * (Real)sin( 2.0f * RALLY_PI * t / 1.6f );
+	const Real flash = ( tl >= 0.0f && tl < 0.5f ) ? 1.0f + 0.4f * ( 1.0f - tl / 0.5f ) : 1.0f;
+	const Tint tint = scaled( b.tint, b.shade * flash );
+	enum { SIDES = 28 };
+	Real px[ SIDES ], py[ SIDES ];
+	for( Int i = 0; i < SIDES; ++i )
+	{
+		const Real ang = 2.0f * RALLY_PI * (Real)i / (Real)SIDES;
+		px[ i ] = b.x + radius * (Real)cos( ang );
+		py[ i ] = b.y + radius * (Real)sin( ang );
+	}
+	const Real across = RING_ACROSS * b.scale * k;
+	polyStrip( P_BAND_SHELL, px, py, SIDES, TRUE, across, FlatColour( TINT_WHITE, 0.85f * a, FALSE ) );
+	polyStrip( P_BAND_INLAY, px, py, SIDES, TRUE, across, FlatColour( tint, a, FALSE ) );
+
 	if( tl >= 0.0f && tl < 0.5f )
-		throb = 1.0f + 0.4f * ( 1.0f - tl / 0.5f );
-	const Tint steel = scaled( TINT_WHITE, b.shade );
-	const Tint tint = scaled( b.tint, b.shade );
-
-	Real px[ 12 ], py[ 12 ];
-	for( Int i = 0; i < shape.n; ++i )
-		toWorld( b, shape.x[ i ] * sc, shape.y[ i ] * sc, px[ i ], py[ i ] );
-	polyStrip( P_BAND_SHELL, px, py, shape.n, TRUE, BAND * sc, FlatColour( TINT_WHITE, a, FALSE ) );
-	polyStrip( P_BAND_STEEL_B, px, py, shape.n, TRUE, BAND * sc, FlatColour( steel, a, FALSE ) );
-	polyStrip( P_BAND_STEEL_A, px, py, shape.n, TRUE, BAND * sc, FlatColour( steel, a, TRUE ) );
-	polyStrip( P_BAND_INLAY, px, py, shape.n, TRUE, BAND * sc, FlatColour( scaled( tint, throb ), a, FALSE ) );
-
-	if( b.finish == FINISH_TURKIYE )
-	{
-		// the LED hairline inside, and the range ticks outside the corners
-		for( Int i = 0; i < shape.n; ++i )
-			toWorld( b, shape.x[ i ] * sc * 0.66f, shape.y[ i ] * sc * 0.66f, px[ i ], py[ i ] );
-		polyStrip( P_BAND_INLAY, px, py, shape.n, TRUE, 5.0f * sc, FlatColour( tint, 0.8f * a, FALSE ) );
-		for( Int i = 0; i < 6; ++i )
-		{
-			const Real ang = (Real)i * RALLY_PI / 3.0f;
-			Real wx, wy;
-			toWorld( b, 26.5f * sc * (Real)cos( ang ), 26.5f * sc * (Real)sin( ang ), wx, wy );
-			quadPiece( P_TICK, wx, wy, s_ctx.yaw + ang + 0.5f * RALLY_PI, 4.0f * k, 10.0f * k, tint, a );
-		}
-	}
-	if( !b.ghost )
-		for( Int i = 0; i < shape.studs; ++i )
-		{
-			const Real ang = shape.studDeg[ i ] * RALLY_PI / 180.0f;
-			const Real r = FRAME_REACH * sc * shape.studReach;
-			Real wx, wy;
-			toWorld( b, r * (Real)cos( ang ), r * (Real)sin( ang ), wx, wy );
-			uprightPiece( P_STUD, wx, wy, 9.0f * k, 9.0f * k, steel, a );
-		}
-
-	// chevrons running in, two to a direction half a run apart; a frame wearing the count under it lets
-	// the one running in from below go, or it runs through the pips
-	const Real cs = shape.chevronScale;
-	const Bool pips = b.count >= 2 && !b.ghost;
-	for( Int i = 0; i < shape.chevrons; ++i )
-	{
-		if( pips && fabs( shape.chevronDeg[ i ] - 270.0f ) < 30.0f )
-			continue;
-		const Real ang = shape.chevronDeg[ i ] * RALLY_PI / 180.0f;
-		for( Int h = 0; h < 2; ++h )
-		{
-			const Real p = fmodf( t / RUN_IN + 0.5f * (Real)h, 1.0f );
-			const Real r = ( FRAME_REACH + 8.0f + 20.0f * ( 1.0f - easeOut( p ) ) ) * sc;
-			const Real fa = (Real)pow( (Real)sin( RALLY_PI * p ), 0.7f );
-			Real wx, wy;
-			toWorld( b, r * (Real)cos( ang ), r * (Real)sin( ang ), wx, wy );
-			quadPiece( P_CHEVRON, wx, wy, s_ctx.yaw + ang + RALLY_PI, 12.0f * k * cs, 16.0f * k * cs, tint, a * fa,
-								 CHEV_ANCHOR_U, 0.5f );
-		}
-	}
-
-	// the count: a pip for each building that shares the point, under the frame
-	if( pips )
-		for( Int i = 0; i < b.count; ++i )
-		{
-			const Real ang = ( 270.0f + ( (Real)i - 0.5f * (Real)( b.count - 1 ) ) * 13.0f ) * RALLY_PI / 180.0f;
-			const Real r = ( FRAME_REACH + 9.0f ) * sc;
-			Real wx, wy;
-			toWorld( b, r * (Real)cos( ang ), r * (Real)sin( ang ), wx, wy );
-			uprightPiece( P_STUD, wx, wy, 9.0f * k, 9.0f * k, steel, a );
-			uprightPiece( P_STUD_DOT, wx, wy, 5.0f * k, 5.0f * k, scaled( tint, 1.2f ), a );
-		}
-
-	// two pings on a click
-	if( tl >= 0.0f && tl < 0.62f )
 	{
 		const Tint ping = { 0.5f * tint.r + 0.5f, 0.5f * tint.g + 0.5f, 0.5f * tint.b + 0.5f };
-		for( Int i = 0; i < 2; ++i )
-		{
-			const Real age = tl - 0.12f * (Real)i;
-			if( age < 0.0f || age >= 0.5f )
-				continue;
-			const Real e = easeOut( age / 0.5f );
-			pingRing( b.x, b.y, FRAME_REACH * k * ( 1.0f + 0.9f * e ), RAIL * k, ping, 0.9f * ( 1.0f - e ) );
-		}
+		const Real e = easeOut( tl / 0.5f );
+		pingRing( b.x, b.y, FRAME_REACH * k * ( 1.0f + 0.9f * e ), across, ping, 0.6f * ( 1.0f - e ) );
 	}
 }
 
-/** The side's pole planted in the middle and its cloth rippling off it, upright on the screen: on a
-	* click the pole drops in and the cloth unfurls. */
+/** The hairline pole standing on the point and the side's pennant rippling off its top, upright on the
+	* screen and held to their size there: on a click the pole drops in and the pennant unfurls. */
 void drawFlag( const Beacon &b, Real t, Real tl )
 {
 	const Real k = s_k * b.scale;
+	const Real up = k / s_ctx.fs;			// a k up the screen, on the ground
 	const Real grow = tl >= 0.0f ? 0.4f + 0.6f * easeOut( tl / 0.18f ) : 1.0f;
-	const Tint steel = scaled( TINT_WHITE, b.shade );
-	uprightPiece( P_POLE + b.finish, b.x, b.y, POLE_W * k, POLE_H * k * grow, steel, b.alpha, 0.5f, POLE_ANCHOR_V );
+	Real px[ 2 ], py[ 2 ];
+	toWorld( b, 0.0f, -KEY * up, px[ 0 ], py[ 0 ] );
+	toWorld( b, 0.0f, ( POLE_H * grow + KEY ) * up, px[ 1 ], py[ 1 ] );
+	polyStrip( P_BAND_SHELL, px, py, 2, FALSE, POLE_ACROSS * k, FlatColour( TINT_WHITE, 0.85f * b.alpha, FALSE ) );
+	px[ 0 ] = b.x;
+	py[ 0 ] = b.y;
+	toWorld( b, 0.0f, POLE_H * grow * up, px[ 1 ], py[ 1 ] );
+	polyStrip( P_BAND_INLAY, px, py, 2, FALSE, POLE_ACROSS * k, FlatColour( scaled( TINT_WHITE, 0.78f * b.shade ), b.alpha, FALSE ) );
 
-	// the hoist's top on the pole, then a mesh of columns rippling with a wave that runs to the fly
+	// the hoist's top on the pole, then a mesh of columns rippling with a faint wave that runs to the fly
 	Real hx, hy;
-	toWorld( b, HOIST_X * k, HOIST_Y * k * grow, hx, hy );
+	toWorld( b, HOIST_X * k, HOIST_Y * grow * up, hx, hy );
 	const Real unfurl = tl >= 0.0f ? MAX( 0.05f, easeBack( ( tl - 0.08f ) / 0.4f ) ) : 1.0f;
-	enum { COLS = 10 };
-	const Int rows = MAX( 1, MIN( 8, (Int)ceilf( CLOTH_H * k / GROUND_STEP ) ) );
-	const Int piece = P_CLOTH + b.finish;
+	enum { COLS = 8 };
+	const Int rows = MAX( 1, MIN( 8, (Int)ceilf( PENNANT_H * up / GROUND_STEP ) ) );
+	const Int piece = P_PENNANT + b.finish;
 	const Tint tint = scaled( b.tint, b.shade );
 	Real lx[ COLS + 1 ], wave[ COLS + 1 ];
 	UnsignedInt colour[ COLS + 1 ];
 	for( Int i = 0; i <= COLS; ++i )
 	{
 		const Real pu = (Real)i / (Real)COLS;
-		lx[ i ] = ( pu - CLOTH_AU ) * CLOTH_W;
-		const Real f = clamp01( lx[ i ] / ( CLOTH_W * ( 1.0f - CLOTH_AU ) ) );
+		lx[ i ] = ( pu - PENNANT_AU ) * PENNANT_W;
+		const Real f = clamp01( lx[ i ] / ( PENNANT_W * ( 1.0f - PENNANT_AU ) ) );
 		const Real phase = 2.0f * RALLY_PI * ( f * 1.1f - t / 0.85f );
-		wave[ i ] = 1.6f * f * (Real)sin( phase );
-		colour[ i ] = argb( scaled( tint, 0.86f + 0.14f * (Real)cos( phase ) ), b.alpha );
+		wave[ i ] = 0.5f * f * (Real)sin( phase );
+		colour[ i ] = argb( scaled( tint, 0.93f + 0.07f * (Real)cos( phase ) ), b.alpha );
 	}
 	for( Int j = 0; j < rows; ++j )
 	{
@@ -1193,7 +1092,7 @@ void drawFlag( const Beacon &b, Real t, Real tl )
 			for( Int q = 0; q < 4; ++q )
 			{
 				const Real ax = lx[ col[ q ] ] * k * unfurl;
-				const Real ay = ( -( pv[ q ] - CLOTH_AV ) * CLOTH_H + wave[ col[ q ] ] ) * k;
+				const Real ay = ( -( pv[ q ] - PENNANT_AV ) * PENNANT_H + wave[ col[ q ] ] ) * up;
 				x[ q ] = hx + ax * s_ctx.rx + ay * s_ctx.ux;
 				y[ q ] = hy + ax * s_ctx.ry + ay * s_ctx.uy;
 				c[ q ] = colour[ col[ q ] ];
@@ -1209,10 +1108,15 @@ void drawBeacon( const Beacon &b )
 	s_ctx.patchCount = b.deck ? 0 : 1;
 	s_ctx.flatZ = b.z;
 	const Real t = animationSeconds();
-	const Real tl = b.clickMs ? secondsSince( s_ctx.now, b.clickMs ) : -1.0f;
-	drawFrame( b, t, tl < 0.0f || tl > 2.0f ? -1.0f : tl );
+	Real tl = b.clickMs ? secondsSince( s_ctx.now, b.clickMs ) : -1.0f;
+	if( tl > 2.0f )
+		tl = -1.0f;
+	drawRing( b, tl );
 	if( b.flag )
-		drawFlag( b, t, tl < 0.0f || tl > 2.0f ? -1.0f : tl );
+		drawFlag( b, t, tl );
+	// the foot's white dot over the pole's foot, round on the screen; a ghost's marks where it aims
+	const Real foot = FOOT * s_k * b.scale;
+	uprightPiece( P_FOOT, b.x, b.y, foot, foot / s_ctx.fs, scaled( TINT_WHITE, b.shade ), b.alpha * ( b.ghost ? 0.5f : 1.0f ) );
 }
 
 void drawPass( Bool waterPass )
@@ -1246,14 +1150,20 @@ void drawPass( Bool waterPass )
 	s_ctx.ux = -ry;
 	s_ctx.uy = rx;
 	s_ctx.yaw = (Real)atan2( ry, rx );
+	// the view's third row is the camera's axis along its sight: its height is the sine of how steeply the
+	// camera looks down, which is how much the ground towards the screen's top is foreshortened
+	s_ctx.fs = MAX( FS_MIN, MIN( 1.0f, (Real)fabs( view[ 2 ][ 2 ] ) ) );
 	Real lgx = -0.5f * rx + 0.62f * -ry;
 	Real lgy = -0.5f * ry + 0.62f * rx;
 	const Real ll = (Real)sqrt( lgx * lgx + lgy * lgy );
 	s_ctx.lgx = lgx / ll;
 	s_ctx.lgy = lgy / ll;
 	s_ctx.additive = FALSE;
-	theQuads.begin( eye, PULL );
-	theAddQuads.begin( eye, PULL );
+	// the pull grows with the zoom as the order marks' does (W3DInGameUI's ORDER_MARK_PULL): the depth
+	// buffer is coarser that far out, and a fixed pull let the ground bite into the mark's edges
+	const Real pull = PULL * MAX( 1.0f, s_zoom );
+	theQuads.begin( eye, pull );
+	theAddQuads.begin( eye, pull );
 
 	for( size_t i = 0; i < s_rails.size(); ++i )
 		if( !waterPass || s_rails[ i ].wet )
@@ -1367,7 +1277,7 @@ void W3DRallyMarkers_endTake( void )
 		return;
 	}
 	const UnsignedInt now = MAX( 1u, (UnsignedInt)Clock_Milliseconds() );
-	s_k = K_BASE * MAX( K_ZOOM_MIN, MIN( K_ZOOM_MAX, TheTacticalView->getZoom() ) );
+	s_zoom = TheTacticalView->getZoom();
 
 	// each building's point: a new one grows its rail, a moved one is a click
 	struct Point
@@ -1375,7 +1285,6 @@ void W3DRallyMarkers_endTake( void )
 		Real x, y, z;
 		Int finish;
 		Tint tint;
-		Int count;
 		UnsignedInt clickMs;
 	};
 	std::vector<Point> points;
@@ -1398,8 +1307,8 @@ void W3DRallyMarkers_endTake( void )
 			std::vector<Real> px( h.x ), py( h.y );
 			px.back() += dx * push;
 			py.back() += dy * push;
-			makeRail( px, py, h.tint, now - 1000u, 0, 0.6f, scale * RAIL_STOP * s_k, FALSE );
-			makeBeacon( px.back(), py.back(), h.z.back(), h.finish, h.tint, 1, 0, 0.6f, scale, FALSE, FALSE );
+			makeRail( px, py, h.tint, now - 1000u, 0, 0.6f, scale * RAIL_STOP * s_k );
+			makeBeacon( px.back(), py.back(), h.z.back(), h.finish, h.tint, 0, 0.6f, scale, FALSE, FALSE );
 			continue;
 		}
 		Seen *seen = findSeen( h.id );
@@ -1425,27 +1334,27 @@ void W3DRallyMarkers_endTake( void )
 		if( !h.hasRally )
 			continue;
 		const UnsignedInt growMs = MAX( seen->firstMs, seen->clickMs );
-		makeRail( h.x, h.y, h.tint, growMs, seen->clickMs, 1.0f, RAIL_STOP * s_k, TRUE );
+		makeRail( h.x, h.y, h.tint, growMs, seen->clickMs, 1.0f, RAIL_STOP * s_k );
 
+		// buildings sharing a point share its ring: their rails meeting there say how many
 		Bool shared = FALSE;
 		for( size_t p = 0; p < points.size() && !shared; ++p )
 		{
 			const Real dx = points[ p ].x - rx, dy = points[ p ].y - ry;
 			if( dx * dx + dy * dy <= SHARE_DISTANCE * SHARE_DISTANCE )
 			{
-				++points[ p ].count;
 				points[ p ].clickMs = MAX( points[ p ].clickMs, seen->clickMs );
 				shared = TRUE;
 			}
 		}
 		if( !shared )
 		{
-			Point p = { rx, ry, h.z.back(), h.finish, h.tint, 1, seen->clickMs };
+			Point p = { rx, ry, h.z.back(), h.finish, h.tint, seen->clickMs };
 			points.push_back( p );
 		}
 	}
 	for( size_t p = 0; p < points.size(); ++p )
-		makeBeacon( points[ p ].x, points[ p ].y, points[ p ].z, points[ p ].finish, points[ p ].tint, points[ p ].count,
+		makeBeacon( points[ p ].x, points[ p ].y, points[ p ].z, points[ p ].finish, points[ p ].tint,
 								points[ p ].clickMs, 1.0f, 1.0f, FALSE, TRUE );
 
 	// the cursor aiming a rally point: a ghost frame under it, ghost rails from each building's natural point
@@ -1471,7 +1380,7 @@ void W3DRallyMarkers_endTake( void )
 				gy.push_back( h.y[ nat ] );
 				gx.push_back( aim.x );
 				gy.push_back( aim.y );
-				makeRail( gx, gy, h.tint, now - 1000u, 0, 0.4f, RAIL_STOP * s_k, FALSE );
+				makeRail( gx, gy, h.tint, now - 1000u, 0, 0.4f, RAIL_STOP * s_k );
 				if( !any )
 				{
 					finish = h.finish;
@@ -1480,7 +1389,7 @@ void W3DRallyMarkers_endTake( void )
 				}
 			}
 			if( any )
-				makeBeacon( aim.x, aim.y, aim.z, finish, tint, 1, 0, 1.0f, 1.0f, TRUE, FALSE );
+				makeBeacon( aim.x, aim.y, aim.z, finish, tint, 0, 1.0f, 1.0f, TRUE, FALSE );
 		}
 	}
 

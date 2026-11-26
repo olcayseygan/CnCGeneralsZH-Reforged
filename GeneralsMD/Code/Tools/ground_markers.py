@@ -528,18 +528,10 @@ def chevrons_ticks():
     d = np.maximum(np.abs(Y) - 3, np.abs(X) - half)
     d = np.maximum(d, -(np.abs(X) - 9.2))
     flat_keyed("MarkerBracket", d, 3, 0.8, 1.0, [2 * half + 8, 14], [0.5, 0.5], T)
-    # order pieces at 3 texels a k
-    s3 = 3.0
-    w = int(54 * s3)
-    X, Y = grid(w, w, w / 2, w / 2, s3)
-    flat_keyed("MarkerOrderRing", np.abs(sd_oct(X, Y, 22)) - 2, 2.2, 0.8, 1.0, [54, 54], [0.5, 0.5], s3)
-    w = int(14 * T)
+    # the click's pip: the cursors' yellow diamond (cursors.py centre_dot), flat, with their dark line
+    w = int(24 * T)
     X, Y = grid(w, w, w / 2, w / 2, T)
-    flat_keyed("MarkerOrderDot", sd_oct(X, Y, 4), 2, 1.0, 1.0, [14, 14], [0.5, 0.5], T)
-    w = int(28 * T)
-    X, Y = grid(w, w, w / 2, w / 2, T)
-    flat_keyed("MarkerOrderCross", sd_seg(np.abs(X), np.abs(Y), 4, 4, 11, 11) - 1.6, 1.6, 0.8, 1.0, [28, 28],
-               [0.5, 0.5], T)
+    flat_keyed("MarkerOrderDot", (np.abs(X) + np.abs(Y) - 7) * 0.70710678, 2.2, 0.85, 1.0, [24, 24], [0.5, 0.5], T)
     # rail: a steel hairline with its keyline, cross-section 8k, columns all the same
     h = int(8 * T)
     d = (h / 2 - (np.arange(h) + 0.5))[:, None] / T * np.ones((1, 8))
@@ -711,6 +703,8 @@ def shapes():
         "Tile": np.maximum(box(X, Y, 9, 9), (np.abs(X) + np.abs(Y) - 14) * 0.70710678),
         "Disc": r - 9,
         "Tri": sd_poly(X, Y, [(10, 0), (-8, 9), (-8, -9)]),
+        # the move cursor's arrowhead (cursors.py diag_darts: 12 long, 6.5 a side, its back cut in 0.12)
+        "Dart": sd_poly(X, Y, [(10, 0), (-8, 9.75), (-5.84, 0), (-8, -9.75)]),
         "Para": sd_poly(X, Y, [(-8 - 3.5, -6), (8 - 3.5, -6), (8 + 3.5, 6), (-8 + 3.5, 6)]),
         "Plus": np.minimum(box(X, Y, 9, 2.6), box(X, Y, 2.6, 9)),
         "Cross": np.minimum(sd_seg(X, Y, -7, -7, 7, 7), sd_seg(X, Y, -7, 7, 7, -7)) - 2.2,
@@ -725,7 +719,7 @@ def shapes():
         # flat as the cursors draw (2026-11-24): no bevel; the triangle takes cursors.py's lit half and
         # half-bright half, split along its axis, the lit one on the +v side
         face = np.ones((s, s))
-        if name == "Tri":
+        if name in ("Tri", "Dart"):
             face = np.where(Y > 0, 1.0, 0.55)
         L.over(np.ones(3)[None, None] * face[..., None], cov(d, px))
         piece("MarkerShape" + name, L, kind="quad", size_k=[24, 24], anchor=[0.5, 0.5], blend="alpha", tint=True)

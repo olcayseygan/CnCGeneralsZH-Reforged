@@ -12,6 +12,13 @@
 
 class InGameUI;
 
+/** The camera's closest zoom: GameData's MinCameraHeight 120 times View's CLOSEST_ZOOM_FACTOR 1.25 over
+	* CameraHeight 232.  Every Reforged mark on the ground (these, the rally point, the order dots, rings and
+	* lines) is a fixed size in world units, the size it drew at this zoom while it followed the camera, so it
+	* keeps its proportions at every distance and shrinks on the screen with the world (owner, 2026-11-26).
+	* Classic keeps its own zoom bounds. */
+static const Real GROUND_MARKS_ZOOM = 0.65f;
+
 /// recordDraw's start: nothing of the last picture's is drawn until take runs again (-cinema never takes)
 void W3DGroundMarkers_clearDraw( void );
 /// at the sync point, after preDraw: the aimed cursor, the clicks, the planes, missiles and gunships

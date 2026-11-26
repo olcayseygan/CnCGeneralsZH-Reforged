@@ -99,9 +99,11 @@ protected:
 		Real ground[ ORDER_MARKER_GRID * ORDER_MARKER_GRID ];	///< [y][x], at.X - reach to at.X + reach
 		UnsignedInt rgb;						///< InGameUI::orderKindColor
 		UnsignedInt bornMs;
+		Real endRadius;							///< world units it closes to: outside an attacked unit's bounding circle, else the point's ring
 	};
 	std::vector< OrderMarker > m_orderMarkers;
-	Real m_orderMarkScale = 1.0f;									///< the camera's zoom at the sync point, so a marker keeps its size on the screen
+	Real m_orderMarkScale = 1.0f;									///< the marks' sizes: Classic's bounded zoom at the sync point, the Reforged look's GROUND_MARKS_ZOOM
+	Real m_orderMarkZoom = 1.0f;									///< the bounded zoom at the sync point, for the depth pull on both looks
 	std::vector< UnsignedInt > m_orderRingColors;	///< one a ring, the order's rgb; the fade is the draw's own clock
 	std::vector< UnsignedInt > m_orderRingBornMs;	///< one a ring, when it was placed
 	virtual void drawFormationLine( void );				///< the line an armed left drag is spreading the selection along

@@ -145,7 +145,7 @@ private:
 	std::vector<Bool> m_runUsed;							///< already joined into a loop
 	std::vector<Vector3> m_loopPoints;
 	Real m_ringWidthScale;
-	Real m_orderWidthScale;		///< the order lines' and marks': the same zoom, out to the farthest the camera goes
+	Real m_orderWidthScale;		///< the order lines' and marks': under Classic the zoom out to the farthest the camera goes, under Reforged GROUND_MARKS_ZOOM
 
 	std::vector<WaypointDraw> m_draws;		///< this picture's pucks and lines, in the order they render
 	std::vector<Vector3> m_drawPoints;

@@ -1400,24 +1400,30 @@ static const Real ORDER_MARK_MAX_ZOOM = 4.5f;			// a mark keeps about its width 
 
 // Each unit's own destination: a dot on its rim, a point and not a circle. Rings the size of the
 // body drew a grid of ghost selection rings over a group's formation and drowned the click marker
-static const Real ORDER_DOT_RADIUS = 1.1f;
+static const Real ORDER_DOT_RADIUS = 1.1f;				// Classic's; the Reforged look's is finer (2026-11-26)
 static const Real ORDER_DOT_RIM = 0.4f;
+static const Real ORDER_DOT_RADIUS_FINE = 0.9f;		// W3DWaypointBuffer's WATER_DOT_RADIUS_FINE follows these two
+static const Real ORDER_DOT_RIM_FINE = 0.35f;
 static const Real ORDER_RING_ALPHA = 0xD0;
 
 // the marker where an order lands: a ring closing on the point with four arrowheads on it pointing
 // in, there and gone inside InGameUI::MOVE_MARKER_MS. The loudest mark on the ground: twice the
-// destination dot's width of band, solid colour
-static const Real MARKER_START_RADIUS = 14.0f;
-static const Real MARKER_END_RADIUS = 3.2f;
+// destination dot's width of band, solid colour. Drawn only under the Reforged look, for the orders
+// W3DGroundMarkers has no cursor mark for, and for a move or attack too while scripts hide the marks
+// (W3DGroundMarkers_drawsClickMarker's markersShown); sized to the cursor's mark since 2026-11-26 (14 and 3.2
+// world units at zoom 1 before), W3DWaypointBuffer's WATER_MARKER_* in step
+static const Real MARKER_START_RADIUS = 9.0f;
+static const Real MARKER_END_RADIUS = 2.4f;
 static const Real MARKER_CLOSE_MS = 320.0f;				// to close on the point, easing in
 static const Real MARKER_IN_MS = 50.0f;
 static const Real MARKER_FADE_MS = 260.0f;				// the last of it
-static const Real MARKER_WIDTH = 0.95f;
-static const Real MARKER_RIM = 0.4f;
-static const Real MARKER_ARROW_GAP = 0.7f;				// between the ring and an arrowhead's tip
-static const Real MARKER_ARROW_ARM = 2.6f;
+static const Real MARKER_WIDTH = 0.75f;
+static const Real MARKER_RIM = 0.35f;
+static const Real MARKER_ARROW_GAP = 0.5f;				// between the ring and an arrowhead's tip
+static const Real MARKER_ARROW_ARM = 2.0f;
 static const Real MARKER_ARROW_SPREAD = 0.62f;		// radians off the spoke, each arm
-static const Real MARKER_DOT_RADIUS = 1.2f;				// on the point once the ring is there
+static const Real MARKER_DOT_RADIUS = 1.0f;				// on the point once the ring is there
+static const Real MARKER_HULL_MARGIN = 3.0f;			// world units an attack's ring rests outside its target (W3DGroundMarkers' TARGET_HULL_MARGIN)
 static const Real MARKER_ALPHA = 0xFF;
 enum { MARKER_SEGMENTS = 32, MARKER_ARROWS = 4, MARKER_DOT_SEGMENTS = 10 };
 
@@ -1433,9 +1439,14 @@ enum { MARKER_SEGMENTS = 32, MARKER_ARROWS = 4, MARKER_DOT_SEGMENTS = 10 };
 void W3DInGameUI::takeOrderRings( void )
 {
 	const UnsignedInt now = Clock_Milliseconds();
-	m_orderMarkScale = MAX( ORDER_MARK_MIN_ZOOM, MIN( ORDER_MARK_MAX_ZOOM, TheTacticalView->getZoom() ) );
-	const Real dot = ORDER_DOT_RADIUS * m_orderMarkScale;
-	const Real rim = ORDER_DOT_RIM * m_orderMarkScale;
+	// under the Reforged look every mark is a fixed size in the world, the one it drew at the closest zoom
+	// (GROUND_MARKS_ZOOM, owner 2026-11-26); Classic's follow the zoom between its bounds.  The depth pull
+	// follows the bounded zoom on both
+	const Bool classic = TheGlobalData->m_classicGraphics;
+	m_orderMarkZoom = MAX( ORDER_MARK_MIN_ZOOM, MIN( ORDER_MARK_MAX_ZOOM, TheTacticalView->getZoom() ) );
+	m_orderMarkScale = classic ? m_orderMarkZoom : GROUND_MARKS_ZOOM;
+	const Real dot = ( classic ? ORDER_DOT_RADIUS : ORDER_DOT_RADIUS_FINE ) * m_orderMarkScale;
+	const Real rim = ( classic ? ORDER_DOT_RIM : ORDER_DOT_RIM_FINE ) * m_orderMarkScale;
 
 	const std::vector<OrderRing>& rings = getOrderRings();
 	for( std::vector<OrderRing>::const_iterator ring = rings.begin(); ring != rings.end(); ++ring )
@@ -1479,12 +1490,15 @@ void W3DInGameUI::takeOrderRings( void )
 		if( isOrderMarkOnWater( x, y, NULL ) )
 			continue;		// after the water, on the sorted list (W3DWaypointBuffer::takeWaterMarks)
 		if( W3DGroundMarkers_drawsClickMarker( hint.kind ) )
-			continue;		// a move's or an attack's is the Machined Reticle ring (W3DGroundMarkers)
+			continue;		// a move's or an attack's is the cursor's mark on the ground (W3DGroundMarkers)
 		m_orderMarkers.push_back( OrderMarker() );
 		OrderMarker &mark = m_orderMarkers.back();
 		mark.rgb = orderKindColor( hint.kind );
 		mark.bornMs = hint.bornMs;
 		mark.reach = 0.0f;
+		// an attack on a unit closes outside its bounding circle (InGameUI::markAttackTarget), as the
+		// cursor's triangles do when the scripts have not hidden them
+		mark.endRadius = MAX( MARKER_END_RADIUS * m_orderMarkScale, hint.hull > 0.0f ? hint.hull + MARKER_HULL_MARGIN : 0.0f );
 		const Real ground = overlayGround( x, y );
 		// a point well over the ground is a bridge's deck: flat there
 		const Bool deck = hint.pos.z > ground + 2.0f;
@@ -1494,8 +1508,8 @@ void W3DInGameUI::takeOrderRings( void )
 			// the ring as wide as it is now, its arrowheads and rim outside it (drawOrderRings)
 			const Real close = MIN( 1.0f, (Real)( now - hint.bornMs ) / MARKER_CLOSE_MS );
 			const Real left = 1.0f - close;
-			const Real radius = MARKER_END_RADIUS + ( MARKER_START_RADIUS - MARKER_END_RADIUS ) * left * left * left;
-			mark.reach = ( radius + MARKER_ARROW_GAP + MARKER_WIDTH + MARKER_ARROW_ARM + 2.0f * MARKER_RIM ) * m_orderMarkScale + 1.0f;
+			const Real radius = mark.endRadius + ( MARKER_START_RADIUS - MARKER_END_RADIUS ) * m_orderMarkScale * left * left * left;
+			mark.reach = radius + ( MARKER_ARROW_GAP + MARKER_WIDTH + MARKER_ARROW_ARM + 2.0f * MARKER_RIM ) * m_orderMarkScale + 1.0f;
 			const Real step = 2.0f * mark.reach / (Real)( ORDER_MARKER_GRID - 1 );
 			for( Int gy = 0; gy < ORDER_MARKER_GRID; ++gy )
 				for( Int gx = 0; gx < ORDER_MARKER_GRID; ++gx )
@@ -1547,7 +1561,7 @@ void W3DInGameUI::drawOrderRings( Bool shadeByShroud )
 	if( ShaderClass::Is_Backface_Culling_Inverted() )
 		return;
 
-	setGroundOverlayState( ORDER_MARK_PULL * m_orderMarkScale, shadeByShroud );
+	setGroundOverlayState( ORDER_MARK_PULL * m_orderMarkZoom, shadeByShroud );
 
 	// the fade and the marker's closing are worked out here, from this picture's clock: a picture
 	// drawn again beside the tick (phase 4) takes nothing new at the sync point, and anything baked
@@ -1612,7 +1626,7 @@ void W3DInGameUI::drawOrderRings( Bool shadeByShroud )
 			// closing on the point, fast and then slower, and resting there for the rest of its life
 			const Real close = MIN( 1.0f, age / MARKER_CLOSE_MS );
 			const Real left = 1.0f - close;
-			const Real radius = ( MARKER_END_RADIUS + ( MARKER_START_RADIUS - MARKER_END_RADIUS ) * left * left * left ) * scale;
+			const Real radius = mark.endRadius + ( MARKER_START_RADIUS - MARKER_END_RADIUS ) * scale * left * left * left;
 			const Real half = 0.5f * MARKER_WIDTH * scale + grow;
 			for( Int s = 0; s < MARKER_SEGMENTS; ++s )
 			{
@@ -1641,8 +1655,8 @@ void W3DInGameUI::drawOrderRings( Bool shadeByShroud )
 				}
 			}
 
-			// and once it is there, a dot on the point itself
-			if( close >= 1.0f )
+			// and once it is there, a dot on the point itself, unless the point is a unit's middle
+			if( close >= 1.0f && mark.endRadius <= MARKER_END_RADIUS * scale )
 			{
 				const Real dot = ( MARKER_DOT_RADIUS * scale ) + grow;
 				const Vector3 centre = ground( mark.at.X, mark.at.Y );

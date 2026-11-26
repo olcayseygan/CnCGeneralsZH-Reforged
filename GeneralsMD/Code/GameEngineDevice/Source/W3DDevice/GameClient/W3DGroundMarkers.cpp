@@ -76,8 +76,19 @@ static const Real WATER_STEP = 20.0f;					///< the water's, coarser: a shore is 
 static const Real GRID_PAD = 60.0f;						///< a square is taken this much wider, so a moving cursor keeps it a while
 static const Int MAX_GRID_SIDE = 161;
 static const Real NO_WATER = -1.0e30f;
-static const Real CLICK_K = 0.65f;						///< a move or attack click's band unit
-static const Real CLICK_REACH = 60.0f;					///< its ring at its widest, chevrons included
+// A move or attack click is the mouse cursor's own mark laid on the ground (cursors.py Move, Attack),
+// measured in the cursor's 48 unit frame: a unit is CLICK_UNIT times GROUND_MARKS_ZOOM world units at every
+// zoom (owner, 2026-11-26: drawn the same near and far), about 7 world units across at rest
+static const Real CLICK_UNIT = 0.35f;
+static const Real CLICK_SHAPE = 16.0f;					///< a shape's quad: MarkerShapeDart's 18 of 24 is the cursor's 12 unit arrowhead
+static const Real CLICK_TIP_START = 14.0f;			///< the tips' distance from the point as they close in
+static const Real CLICK_TIP_REST = 4.0f;
+static const Real TARGET_TIP_START = 54.0f;			///< an attack on a unit closes on its hull instead, resting 15 world units out
+static const Real TARGET_TIP_REST = 43.0f;			///< at least (times CLICK_UNIT): closed on the point they lay under the model and never showed
+static const Real TARGET_HULL_MARGIN = 3.0f;		///< world units the tips rest outside the target's bounding circle, a building's or a big vehicle's
+static const Real CLICK_PIP = 8.6f;							///< MarkerOrderDot's quad: its diamond is the cursor's 2.5 unit pip
+static const Real SHAPE_REACH = 1.125f * CLICK_SHAPE + 2.0f;	///< a shape's far corner past its tip, 0.42 + 0.71 of its side, and a margin
+static const Real SHAPE_TIP = 10.0f / 24.0f;		///< MarkerShapeTri's and Dart's tip from the quad's middle, of its side
 static const UnsignedInt CLICK_LIFE_MS = 1500;		///< the dot's, the order ring's 1500 ms
 static const UnsignedInt WHEEL_EASE_MS = 400;			///< a guard wheel step, as InGameUI::setRadiusCursor eases it
 static const Real AREA_HOLD = 1.5f;						///< seconds an area power holds the snapped look after the click
@@ -116,6 +127,7 @@ static const Tint TINT_DARK = { 0.05f, 0.05f, 0.06f };
 static const Tint TINT_SCORCH = { 0.10f, 0.08f, 0.06f };
 static const Tint TINT_HEAL = { 0.62f, 0.95f, 0.55f };	///< the repair's crosses and teeth
 static const Tint TINT_RADAR = { 0.75f, 0.95f, 0.75f };
+static const Tint TINT_PIP = { 1.00f, 0.92f, 0.15f };		///< the cursors' yellow pip
 
 /** The side whose finish a power's frame wears: America's satin steel, China's crisp terraced
 	* chamfer, the GLA's rusty uneven bevel, Turkiye's one flat facet with its turquoise LED line. */
@@ -167,10 +179,13 @@ static Real secondsSince( UnsignedInt now, UnsignedInt then )
 	return (Real)(Int)( now - then ) / 1000.0f;
 }
 
-/// k, the band unit, from the radius the marker is drawn for
+/// the camera's zoom at this take, for the depth pull alone: every size is the world's (GROUND_MARKS_ZOOM)
+static Real s_zoom = 1.0f;
+
+/// k, the band unit, from the radius the marker is drawn for: world units, the same at every zoom
 static Real bandUnit( Real radius )
 {
-	return MAX( 0.9f, MIN( 2.0f, 0.0065f * radius ) );
+	return MAX( 0.9f, MIN( 2.0f, 0.0065f * radius ) ) * GROUND_MARKS_ZOOM;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -191,7 +206,7 @@ enum Piece
 	P_GLYPH_NUKE00,
 	P_GLYPH_RETICLE00 = P_GLYPH_NUKE00 + 8,
 	P_GLYPH_STRIKE = P_GLYPH_RETICLE00 + 4,
-	P_ORBIT_DASH, P_ORDER_CROSS, P_ORDER_DOT, P_ORDER_RING, P_PING, P_RAIL,
+	P_ORBIT_DASH, P_ORDER_DOT, P_PING, P_RAIL,
 	P_SEG_INLAY, P_SEG_STEEL_A, P_SEG_STEEL_B,
 	P_STUD, P_STUD_DOT, P_TICK, P_TICK_MAJOR, P_TURN_BAND, P_TURN_DASH,
 	// every power's own glyph, one picture each (Tools/ground_markers.py GLYPHS)
@@ -206,7 +221,7 @@ enum Piece
 	P_STUD_CHINA, P_STUD_GLA, P_STUD_TUR,
 	// the parts every power's frame is built of (Tools/ground_markers.py shapes)
 	P_SHAPE_TILE, P_SHAPE_DISC, P_SHAPE_TRI, P_SHAPE_PARA, P_SHAPE_PLUS, P_SHAPE_CROSS, P_SHAPE_DIAMOND,
-	P_SHAPE_RING, P_SHAPE_TONGUE, P_SHAPE_TANK, P_SHAPE_BLOCK, P_SHAPE_LID,
+	P_SHAPE_RING, P_SHAPE_TONGUE, P_SHAPE_TANK, P_SHAPE_BLOCK, P_SHAPE_LID, P_SHAPE_DART,
 	P_COUNT
 };
 
@@ -226,7 +241,7 @@ static const char *const PIECE_NAMES[ P_COUNT ] =
 	"MarkerGlyphNuke04", "MarkerGlyphNuke05", "MarkerGlyphNuke06", "MarkerGlyphNuke07",
 	"MarkerGlyphReticle00", "MarkerGlyphReticle01", "MarkerGlyphReticle02", "MarkerGlyphReticle03",
 	"MarkerGlyphStrike",
-	"MarkerOrbitDash", "MarkerOrderCross", "MarkerOrderDot", "MarkerOrderRing", "MarkerPing", "MarkerRail",
+	"MarkerOrbitDash", "MarkerOrderDot", "MarkerPing", "MarkerRail",
 	"MarkerSegmentInlay", "MarkerSegmentSteelA", "MarkerSegmentSteelB",
 	"MarkerStud", "MarkerStudDot", "MarkerTick", "MarkerTickMajor", "MarkerTurnBand", "MarkerTurnDash",
 	"MarkerGlyphPara", "MarkerGlyphCrate", "MarkerGlyphLeaflet", "MarkerGlyphVolley", "MarkerGlyphBombs", "MarkerGlyphBlast",
@@ -240,7 +255,7 @@ static const char *const PIECE_NAMES[ P_COUNT ] =
 	"MarkerHair", "MarkerSolid",
 	"MarkerStudChina", "MarkerStudGla", "MarkerStudTur",
 	"MarkerShapeTile", "MarkerShapeDisc", "MarkerShapeTri", "MarkerShapePara", "MarkerShapePlus", "MarkerShapeCross", "MarkerShapeDiamond",
-	"MarkerShapeRing", "MarkerShapeTongue", "MarkerShapeTank", "MarkerShapeBlock", "MarkerShapeLid",
+	"MarkerShapeRing", "MarkerShapeTongue", "MarkerShapeTank", "MarkerShapeBlock", "MarkerShapeLid", "MarkerShapeDart",
 };
 
 static const Real CHEVRON_ANCHOR_U = 0.7777778f;	///< its tip (pieces.json); every other piece is anchored on its middle
@@ -420,6 +435,8 @@ struct HeightGrid
 	* square GRID_PAD gave it; sample only the annuli the zone draws if that ever shows in a frame */
 static Bool fillSquare( HeightGrid &g, Real cx, Real cy, Real reach, Real step, Bool water )
 {
+	// coarser than asked rather than cut short: n is at most 2 reach / step + 3
+	step = MAX( step, 2.0f * reach / (Real)( MAX_GRID_SIDE - 3 ) );
 	const Real x0 = floorf( ( cx - reach ) / step ) * step;
 	const Real y0 = floorf( ( cy - reach ) / step ) * step;
 	const Int nx = MIN( MAX_GRID_SIDE, (Int)ceilf( ( cx + reach - x0 ) / step ) + 1 );
@@ -562,6 +579,7 @@ struct Marker
 	std::vector<Fallen> beamTrail;	///< where it has burned, for the scorch
 	// the ground, and the water over it: the parts on water are drawn after the water
 	HeightGrid grid, water;
+	HeightGrid coarse;				///< past FINE_REACH, the whole reach at the coarser step fillSquare takes there
 	UnsignedInt gridMs;
 	HeightGrid laneGrid, laneWater;
 	Real laneKey[ 5 ];
@@ -591,12 +609,17 @@ struct Marker
 	}
 };
 
-/// a move's or an attack's click: the ring closing, its chevrons, the cross, and the dot that stays
+/// a move's or an attack's click: the cursor's four shapes closing in, and the pip that stays
 struct ClickMark
 {
 	Real x, y, z;
 	Bool deck;							///< on a bridge's deck: flat there
 	Bool attack;
+	Real unit;							///< world units a cursor unit
+	Bool onUnit;						///< an attack on a unit: the triangles close on its hull
+	Real hull;							///< that unit's bounding circle radius, world units
+	Real tipStart, tipRest;	///< cursor units from the point, this take's
+	Tint tint;							///< the order's colour, as its destination dots wear it
 	UnsignedInt bornMs;
 	HeightGrid grid;
 };
@@ -1621,9 +1644,13 @@ static Real zoneReach( const Marker &m )
 			far2 = MAX( far2, ( m.beamTrail[ i ].x - m.x ) * ( m.beamTrail[ i ].x - m.x ) + ( m.beamTrail[ i ].y - m.y ) * ( m.beamTrail[ i ].y - m.y ) );
 		reach = MAX( reach, (Real)sqrt( far2 ) + 20.0f * m.k );
 	}
-	// a square wider than MAX_GRID_SIDE heights would be cut short by fillSquare and refilled every take
-	return MIN( reach + 4.0f, 0.5f * GROUND_STEP * (Real)( MAX_GRID_SIDE - 1 ) - GRID_PAD - 2.0f * GROUND_STEP );
+	// never cut: a zone reaching past FINE_REACH (a wide power, a long beam trail) has the rest laid by
+	// takeGround in a coarser square
+	return reach + 4.0f;
 }
+
+/// the zone's square at GROUND_STEP, a terrain cell: MAX_GRID_SIDE heights with GRID_PAD and a margin
+static const Real FINE_REACH = 0.5f * GROUND_STEP * (Real)( MAX_GRID_SIDE - 1 ) - GRID_PAD - 2.0f * GROUND_STEP;
 
 /// a frame with a line from its caster and no lane to lay it on: the cruise missile's route, the rocket pods' guide
 static Bool designDrawsRoute( const Marker &m )
@@ -1655,14 +1682,23 @@ static Real designHold( const Marker &m )
 }
 
 /** The zone's square of heights and water, taken again when the zone left the square GRID_PAD gave it
-	* or three seconds have gone (a crater moves the ground); the lane's when either end moved.  m.wet
-	* gathers what stands on water, the darts' included, for the pass after the water. */
+	* or three seconds have gone (a crater moves the ground); the lane's when either end moved.  The heights
+	* stay a terrain cell apart out to FINE_REACH, so the middle and its ring never sink or float; a zone
+	* reaching further (a wide power, a long beam trail) has the rest in m.coarse.  m.wet gathers what
+	* stands on water, the darts' included, for the pass after the water. */
 static void takeGround( Marker &m, UnsignedInt now )
 {
 	const Real reach = zoneReach( m );
-	if( !squareCovers( m.grid, m.x, m.y, reach ) || !squareCovers( m.water, m.x, m.y, reach ) || now - m.gridMs > 3000 )
+	const Real fine = MIN( reach, FINE_REACH );
+	const Bool wide = reach > FINE_REACH;
+	if( !squareCovers( m.grid, m.x, m.y, fine ) || ( wide && !squareCovers( m.coarse, m.x, m.y, reach ) )
+			|| !squareCovers( m.water, m.x, m.y, reach ) || now - m.gridMs > 3000 )
 	{
-		fillSquare( m.grid, m.x, m.y, reach + GRID_PAD, GROUND_STEP, FALSE );
+		fillSquare( m.grid, m.x, m.y, fine + GRID_PAD, GROUND_STEP, FALSE );
+		if( wide )
+			fillSquare( m.coarse, m.x, m.y, reach + GRID_PAD, GROUND_STEP, FALSE );
+		else
+			m.coarse = HeightGrid();		// nothing reaches past the fine square: no older one to fall back on
 		m.zoneWet = fillSquare( m.water, m.x, m.y, reach + GRID_PAD, WATER_STEP, TRUE );
 		m.gridMs = now;
 	}
@@ -1863,12 +1899,30 @@ static void takeClicks( InGameUI *ui, UnsignedInt now )
 			c.y = hint.pos.y;
 			c.bornMs = hint.bornMs;
 			c.attack = hint.kind != InGameUI::ORDER_HINT_MOVE;
+			c.onUnit = hint.kind == InGameUI::ORDER_HINT_ATTACK || hint.kind == InGameUI::ORDER_HINT_FORCE_ATTACK;
+			c.hull = hint.hull;
+			const UnsignedInt rgb = InGameUI::orderKindColor( hint.kind );
+			c.tint.r = (Real)( ( rgb >> 16 ) & 0xFF ) / 255.0f;
+			c.tint.g = (Real)( ( rgb >> 8 ) & 0xFF ) / 255.0f;
+			c.tint.b = (Real)( rgb & 0xFF ) / 255.0f;
 			const Real ground = groundHeight( c.x, c.y );
 			c.deck = hint.pos.z > ground + 2.0f;		// a point well over the ground is a bridge's deck
 			c.z = c.deck ? hint.pos.z : ground;
-			if( !c.deck )
-				fillSquare( c.grid, c.x, c.y, CLICK_REACH, GROUND_STEP, FALSE );
+			c.unit = CLICK_UNIT * GROUND_MARKS_ZOOM;
+			c.tipStart = CLICK_TIP_START;
+			c.tipRest = CLICK_TIP_REST;
+			if( c.onUnit )
+			{
+				// on a unit the triangles rest outside its bounding circle, 15 world units out at least, and
+				// they close in over the same cursor units as on bare ground
+				const Real restWorld = MAX( TARGET_TIP_REST * CLICK_UNIT, c.hull + TARGET_HULL_MARGIN );
+				c.tipRest = restWorld / c.unit;
+				c.tipStart = c.tipRest + TARGET_TIP_START - TARGET_TIP_REST;
+			}
 		}
+		const Real reach = ( c.tipStart + SHAPE_REACH ) * c.unit;
+		if( !c.deck && !squareCovers( c.grid, c.x, c.y, reach ) )
+			fillSquare( c.grid, c.x, c.y, reach, GROUND_STEP, FALSE );
 		s_clicks.push_back( c );
 	}
 }
@@ -1906,6 +1960,7 @@ void W3DGroundMarkers_take( InGameUI *ui )
 	s_taken = FALSE;
 	if( ui == NULL )
 		return;
+	s_zoom = TheTacticalView ? MAX( 0.05f, TheTacticalView->getZoom() ) : 1.0f;		// a view not set up yet reads 0
 	std::vector<InGameUI::GroundMarkerShot> clicks;
 	ui->takeGroundMarkerShots( clicks );
 	// once, on the first take under the Reforged look (the shell already, so InGameUI knows before the
@@ -2131,6 +2186,7 @@ struct DrawCtx
 	Real lgx, lgy;				///< the HUD's light, from the top left of the screen
 	const HeightGrid *g1;		///< the ground: the zone's square, or a dart's or a click's
 	const HeightGrid *g2;		///< the lane's
+	const HeightGrid *g3;		///< the zone's coarse square, past g1 (Marker::coarse)
 	const HeightGrid *w1;		///< the water over them
 	const HeightGrid *w2;
 	Real flatZ;
@@ -2147,6 +2203,8 @@ static Vector3 groundPoint( Real x, Real y, Bool &onWater )
 		z = s_ctx.g1->at( x, y );
 	else if( s_ctx.g2 && s_ctx.g2->contains( x, y ) )
 		z = s_ctx.g2->at( x, y );
+	else if( s_ctx.g3 && s_ctx.g3->contains( x, y ) )
+		z = s_ctx.g3->at( x, y );
 	else if( s_ctx.g1 && s_ctx.g1->valid() )
 		z = s_ctx.g1->at( x, y );
 	else if( s_ctx.g2 && s_ctx.g2->valid() )
@@ -2979,7 +3037,7 @@ static void drawManeuver( const Marker &m, Real t, Real est )
 	Real qx, qy, qh;
 	turnPoint( m, m.rnom, lastA, qx, qy, qh );
 	const Real ox = (Real)cos( qh ), oy = (Real)sin( qh );
-	// the exit stops where the zone's square of heights and water does (zoneReach, capped), chevron and
+	// the exit stops where the zone's square of heights and water does (zoneReach), chevron and
 	// all, or past it the dashes take the edge's clamped height and a tail over the sea the seabed's
 	const Real room = zoneReach( m ) - 30.0f * k;
 	const Real dx = qx - m.x, dy = qy - m.y;
@@ -5354,6 +5412,7 @@ static void drawMarker( const Marker &m )
 	const Bool along = m.lane || designDrawsRoute( m );		// the lane's grids, or a route's in them
 	s_ctx.g1 = &m.grid;
 	s_ctx.g2 = along ? &m.laneGrid : NULL;
+	s_ctx.g3 = &m.coarse;
 	s_ctx.w1 = &m.water;
 	s_ctx.w2 = along ? &m.laneWater : NULL;
 	s_ctx.flatZ = m.z;
@@ -5381,6 +5440,7 @@ static void drawMarker( const Marker &m )
 		const Dart &d = m.darts[ i ];
 		s_ctx.g1 = &d.grid;
 		s_ctx.g2 = NULL;
+		s_ctx.g3 = NULL;
 		s_ctx.w1 = &d.water;
 		s_ctx.w2 = NULL;
 		drawDart( d.x, d.y, d.heading, d.scale, m.k, m.tint, 1.0f );
@@ -5389,6 +5449,7 @@ static void drawMarker( const Marker &m )
 	// the pings, additive, drawn after every alpha blended piece
 	s_ctx.g1 = &m.grid;
 	s_ctx.g2 = NULL;
+	s_ctx.g3 = &m.coarse;
 	s_ctx.w1 = &m.water;
 	s_ctx.w2 = NULL;
 	if( !m.guarding )
@@ -5397,37 +5458,36 @@ static void drawMarker( const Marker &m )
 		pingRing( m.x, m.y, m.pingR, m.k, secondsSince( now, m.pingMs ), m.pingTint );
 }
 
-/// a move's or attack's click: the ring closing in 0.32 s with four chevrons on it pointing in, the
-/// attack's cross, and the dot that stays for the order ring's 1.5 s
+/// a move's or attack's click, the cursor's mark on the ground: four arrowheads on the screen's
+/// diagonals for a move, four triangles on its axes for an attack, closing on the point in 0.32 s in
+/// the order's colour, and the cursors' yellow pip, which stays for the order ring's 1.5 s
 static void drawClick( const ClickMark &c )
 {
 	s_ctx.g1 = c.deck ? NULL : &c.grid;
 	s_ctx.g2 = NULL;
+	s_ctx.g3 = NULL;
 	s_ctx.w1 = NULL;		// a click on water keeps the old marker after the water (takeClicks)
 	s_ctx.w2 = NULL;
 	s_ctx.flatZ = c.z;
 	const Real age = secondsSince( s_ctx.now, c.bornMs );
 	if( age < 0.0f || age >= 1.5f )
 		return;
-	const Real k = CLICK_K, yaw = s_ctx.yaw;
-	const Tint &tint = c.attack ? TINT_RED : TINT_WARM;
+	const Real u = c.unit, yaw = s_ctx.yaw;
 	if( age < 0.75f )
 	{
-		const Real rr = 22.0f * k * ( 1.0f + 1.2f * ( 1.0f - easeOut( age / 0.32f ) ) );
+		const Real tip = ( c.tipRest + ( c.tipStart - c.tipRest ) * ( 1.0f - easeOut( age / 0.32f ) ) ) * u;
 		const Real alpha = 1.0f - smoothstep( 0.5f, 0.75f, age );
-		const Real size = 54.0f * k * rr / ( 22.0f * k );
-		quadPiece( P_ORDER_RING, c.x, c.y, yaw, size, size, tint, alpha );
+		const Real side = CLICK_SHAPE * u;
+		const Int piece = c.attack ? P_SHAPE_TRI : P_SHAPE_DART;
+		const Real first = c.attack ? 0.0f : 0.25f * MARKER_PI;
 		for( Int j = 0; j < 4; ++j )
 		{
-			const Real a = yaw + 0.25f * MARKER_PI + (Real)j * 0.5f * MARKER_PI;
-			const Real rt = rr + 14.0f * k;
-			quadPiece( P_CHEVRON, c.x + rt * (Real)cos( a ), c.y + rt * (Real)sin( a ), a + MARKER_PI,
-								 18.0f * k * 0.9f, 28.0f * k * 0.9f, tint, alpha, CHEVRON_ANCHOR_U, 0.5f );
+			const Real a = yaw + first + (Real)j * 0.5f * MARKER_PI;
+			const Real r = tip + SHAPE_TIP * side;
+			quadPiece( piece, c.x + r * (Real)cos( a ), c.y + r * (Real)sin( a ), a + MARKER_PI, side, side, c.tint, alpha );
 		}
-		if( c.attack )
-			quadPiece( P_ORDER_CROSS, c.x, c.y, yaw, 28.0f * k, 28.0f * k, tint, alpha );
 	}
-	quadPiece( P_ORDER_DOT, c.x, c.y, yaw, 14.0f * k, 14.0f * k, tint, 1.0f - smoothstep( 1.1f, 1.5f, age ) );
+	quadPiece( P_ORDER_DOT, c.x, c.y, yaw, CLICK_PIP * u, CLICK_PIP * u, TINT_PIP, 1.0f - smoothstep( 1.1f, 1.5f, age ) );
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -5482,7 +5542,7 @@ static void drawPass( Bool waterPass, Bool shadeByShroud )
 	if( shroudTexture == NULL )
 		shroud = NULL;
 
-	const Real pull = MARKER_PULL;
+	const Real pull = MARKER_PULL * MAX( 1.0f, s_zoom );		// the depth buffer is coarser far out
 	s_ctx.additive = FALSE;
 	theMarkerQuads.begin( eye, pull, shroud );
 	theAddQuads.begin( eye, pull, shroud );
@@ -5511,6 +5571,7 @@ static void drawPass( Bool waterPass, Bool shadeByShroud )
 
 	s_ctx.g1 = NULL;
 	s_ctx.g2 = NULL;
+	s_ctx.g3 = NULL;
 	s_ctx.w1 = NULL;
 	s_ctx.w2 = NULL;
 	s_ctx.waterPass = FALSE;

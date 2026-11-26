@@ -86,6 +86,7 @@
 
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/HeightMap.h"
+#include "W3DDevice/GameClient/W3DGroundMarkers.h"		// GROUND_MARKS_ZOOM
 #include "W3DDevice/GameClient/W3DRallyMarkers.h"
 #include "W3DDevice/GameClient/W3DShroud.h"
 #include "W3DDevice/GameClient/W3DSmoothMotion.h"
@@ -423,6 +424,8 @@ static const Real ORDER_LINE_OPACITY = 0.9f;
 static const Real ORDER_MARK_WIDTH = 0.6f;
 static const Real ORDER_END_RADIUS = 2.2f;		///< on the last bit of ground a unit is sent to
 static const Real ORDER_JOINT_RADIUS = 1.4f;		///< on a target, and between the points of a shift list
+static const Real ORDER_END_RADIUS_FINE = 1.8f;		///< the two under the Reforged look, finer (2026-11-26); Classic keeps the above
+static const Real ORDER_JOINT_RADIUS_FINE = 1.15f;
 static const Real ORDER_MARK_LIFT = 0.3f;
 static const Real ORDER_LINE_SHADE_STEP = 5.0f;		///< world units a piece of an order line takes one shroud light over, half a shroud cell
 static const Real ORDER_LINE_SHADE_MATCH = 1.0f / 32.0f;	///< pieces closer in light than this go as one
@@ -458,8 +461,13 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 	// bunched somewhere else end bare. A unit it is aimed at wears its ring on the ground round its
 	// feet instead, under the model (orderTargetRing), and the line runs to that ring
 	{
-		const Real markScale = MAX( 1.0f, m_orderWidthScale );		// zoomed out the marks keep their size on the screen
+		// Classic's marks keep their size on the screen zoomed out and do not shrink zoomed in; the Reforged
+		// look's are the world's (takeRingView)
+		const Real markScale = TheGlobalData->m_classicGraphics ? MAX( 1.0f, m_orderWidthScale ) : m_orderWidthScale;
 		const Real markHalf = 0.5f * ORDER_MARK_WIDTH * m_orderWidthScale;
+		const Bool classic = TheGlobalData->m_classicGraphics;
+		const Real endRadius = classic ? ORDER_END_RADIUS : ORDER_END_RADIUS_FINE;
+		const Real jointRadius = classic ? ORDER_JOINT_RADIUS : ORDER_JOINT_RADIUS_FINE;
 		auto targetRing = [&]( const InGameUI::OrderHint& hint, SelectionCircle& ring ) -> Bool
 		{
 			return hint.onObject && orderTargetRing( hint.target, ring );
@@ -471,7 +479,7 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 			SelectionCircle ring;
 			if( targetRing( hint, ring ) )
 				return ring.r + markHalf;
-			return ( hint.mark == InGameUI::ORDER_MARK_FLAG ? ORDER_END_RADIUS : ORDER_JOINT_RADIUS ) * markScale + markHalf;
+			return ( hint.mark == InGameUI::ORDER_MARK_FLAG ? endRadius : jointRadius ) * markScale + markHalf;
 		};
 		std::vector< std::pair<ObjectID, UnsignedInt> > ringedTargets;
 		const std::vector<InGameUI::OrderHint>& hints = TheInGameUI->getOrderHints();
@@ -576,7 +584,7 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 			}
 			Vector3 mark = points[ 1 ];
 			mark.Z += ORDER_MARK_LIFT;
-			recordOrderMark( mark, ( it->mark == InGameUI::ORDER_MARK_FLAG ? ORDER_END_RADIUS : ORDER_JOINT_RADIUS ) * markScale, color,
+			recordOrderMark( mark, ( it->mark == InGameUI::ORDER_MARK_FLAG ? endRadius : jointRadius ) * markScale, color,
 											 ORDER_MARK_WIDTH * m_orderWidthScale, 1.0f );
 		}
 		// the lines stay queued: the rally and placement pucks below would flush them into the
@@ -1026,8 +1034,13 @@ static const Real STRUCTURE_MARGIN = 6.0f;
 		glow; both read off the view at the sync point, before the building outlines and the rings. */
 void W3DWaypointBuffer::takeRingView( void )
 {
-	m_ringWidthScale = MAX( RING_MIN_ZOOM_SCALE, MIN( RING_MAX_ZOOM_SCALE, TheTacticalView->getZoom() ) );
-	m_orderWidthScale = MAX( RING_MIN_ZOOM_SCALE, MIN( ORDER_MAX_ZOOM_SCALE, TheTacticalView->getZoom() ) );
+	// under the Reforged look the order lines and marks are a fixed size in the world, the one they drew at
+	// the closest zoom (GROUND_MARKS_ZOOM, owner 2026-11-26); Classic keeps them following the zoom between
+	// its bounds.  The selection rings follow the bounded zoom on both looks, as they always did
+	const Real zoom = TheTacticalView->getZoom();
+	const Bool classic = TheGlobalData->m_classicGraphics;
+	m_ringWidthScale = MAX( RING_MIN_ZOOM_SCALE, MIN( RING_MAX_ZOOM_SCALE, zoom ) );
+	m_orderWidthScale = classic ? MAX( RING_MIN_ZOOM_SCALE, MIN( ORDER_MAX_ZOOM_SCALE, zoom ) ) : GROUND_MARKS_ZOOM;
 	const Coord3D& eye = TheTacticalView->get3DCameraPosition();
 	m_ringCamera.Set( eye.x, eye.y, eye.z );
 }
@@ -1647,19 +1660,19 @@ void W3DWaypointBuffer::recordOrderMark( const Vector3& at, Real radius, const V
 static const Real WATER_MARK_MIN_ZOOM = 0.6f;
 static const Real WATER_MARK_MAX_ZOOM = 4.5f;		///< W3DInGameUI's ORDER_MARK_MAX_ZOOM
 static const Real WATER_MARK_LIFT = 0.35f;
-static const Real WATER_LAND_RIM = 0.4f;							///< W3DInGameUI's MARKER_RIM, ORDER_DOT_RIM
+static const Real WATER_MARK_HULL_MARGIN = 3.0f;					///< world units an attack's ring rests outside its target (W3DGroundMarkers' TARGET_HULL_MARGIN)
 static const Real WATER_DOT_RADIUS = 0.75f;						///< with a ribbon twice as wide, a disc of the land dot's 1.1 and its rim
-static const Real WATER_DOT_WIDTH = 2.0f * WATER_DOT_RADIUS;
-static const Real WATER_MARKER_START_RADIUS = 14.0f;
-static const Real WATER_MARKER_END_RADIUS = 3.2f;
+static const Real WATER_DOT_RADIUS_FINE = 0.625f;				///< the Reforged look's, of its 0.9 and 0.35 (W3DInGameUI's ORDER_DOT_*_FINE)
+static const Real WATER_MARKER_START_RADIUS = 9.0f;			///< the marker is the Reforged look's only, so these follow W3DInGameUI's MARKER_*
+static const Real WATER_MARKER_END_RADIUS = 2.4f;
 static const Real WATER_MARKER_CLOSE_MS = 320.0f;
 static const Real WATER_MARKER_IN_MS = 50.0f;
 static const Real WATER_MARKER_FADE_MS = 260.0f;
-static const Real WATER_MARKER_WIDTH = 0.95f + 2.0f * WATER_LAND_RIM;
-static const Real WATER_MARKER_ARROW_GAP = 0.7f;
-static const Real WATER_MARKER_ARROW_ARM = 2.6f;
+static const Real WATER_MARKER_WIDTH = 0.75f + 2.0f * 0.35f;
+static const Real WATER_MARKER_ARROW_GAP = 0.5f;
+static const Real WATER_MARKER_ARROW_ARM = 2.0f;
 static const Real WATER_MARKER_ARROW_SPREAD = 0.62f;
-static const Real WATER_MARKER_DOT_RADIUS = 0.8f;					///< a ribbon twice this wide closes it to a disc the land centre dot's size with its rim
+static const Real WATER_MARKER_DOT_RADIUS = 0.675f;				///< a ribbon twice this wide closes it to a disc the land centre dot's size with its rim
 
 /** The order marks that stand on water, read at the sync point. Painted in the terrain pass they lay
 		under the water and took its tint; here they go on the sorted list after it, clean. They are
@@ -1670,7 +1683,8 @@ void W3DWaypointBuffer::takeWaterMarks( void )
 	if( CinemaDirector_hidesHud() )
 		return;
 	const UnsignedInt now = Clock_Milliseconds();
-	const Real scale = MAX( WATER_MARK_MIN_ZOOM, MIN( WATER_MARK_MAX_ZOOM, m_orderWidthScale ) );
+	const Real scale = TheGlobalData->m_classicGraphics ? MAX( WATER_MARK_MIN_ZOOM, MIN( WATER_MARK_MAX_ZOOM, m_orderWidthScale ) )
+																											: m_orderWidthScale;		// GROUND_MARKS_ZOOM under Reforged (takeRingView)
 	auto colorOf = []( InGameUI::OrderHintKind kind )
 	{
 		const UnsignedInt rgb = InGameUI::orderKindColor( kind );
@@ -1686,7 +1700,8 @@ void W3DWaypointBuffer::takeWaterMarks( void )
 		if( ring->bornMs == 0 || age >= (UnsignedInt)InGameUI::ORDER_RING_MS || !InGameUI::isOrderMarkOnWater( ring->at.x, ring->at.y, &waterZ ) )
 			continue;
 		const Vector3 at( ring->at.x, ring->at.y, MAX( ring->at.z, waterZ ) + WATER_MARK_LIFT );
-		recordOrderMark( at, WATER_DOT_RADIUS * scale, colorOf( ring->kind ), WATER_DOT_WIDTH * scale, 1.0f - (Real)age / (Real)InGameUI::ORDER_RING_MS );
+		const Real dot = TheGlobalData->m_classicGraphics ? WATER_DOT_RADIUS : WATER_DOT_RADIUS_FINE;
+		recordOrderMark( at, dot * scale, colorOf( ring->kind ), 2.0f * dot * scale, 1.0f - (Real)age / (Real)InGameUI::ORDER_RING_MS );
 	}
 
 	// the click marker; Classic has EA's ring
@@ -1704,7 +1719,10 @@ void W3DWaypointBuffer::takeWaterMarks( void )
 		const Vector3 at( hint.pos.x, hint.pos.y, MAX( hint.pos.z, waterZ ) + WATER_MARK_LIFT );
 		const Real close = MIN( 1.0f, age / WATER_MARKER_CLOSE_MS );
 		const Real left = 1.0f - close;
-		const Real radius = ( WATER_MARKER_END_RADIUS + ( WATER_MARKER_START_RADIUS - WATER_MARKER_END_RADIUS ) * left * left * left ) * scale;
+		// an attack on a unit (an aircraft or a hovercraft over the water) closes outside its bounding circle
+		// (InGameUI::markAttackTarget), as the land's cursor triangles do
+		const Real endRadius = MAX( WATER_MARKER_END_RADIUS * scale, hint.hull > 0.0f ? hint.hull + WATER_MARK_HULL_MARGIN : 0.0f );
+		const Real radius = endRadius + ( WATER_MARKER_START_RADIUS - WATER_MARKER_END_RADIUS ) * scale * left * left * left;
 		const Real width = WATER_MARKER_WIDTH * scale;
 		recordOrderMark( at, radius, color, width, fade );		// shaded by the shroud there itself
 		const Vector3 arrowColor = color * shroudLight( at.X, at.Y );
@@ -1722,7 +1740,7 @@ void W3DWaypointBuffer::takeWaterMarks( void )
 				recordRing( DRAW_ORDER_LINE, 2, points, arrowColor, width, fade );
 			}
 		}
-		if( close >= 1.0f )
+		if( close >= 1.0f && hint.hull <= 0.0f )
 			recordOrderMark( at, WATER_MARKER_DOT_RADIUS * scale, color, 2.0f * WATER_MARKER_DOT_RADIUS * scale, fade );		// closed to a disc
 	}
 }

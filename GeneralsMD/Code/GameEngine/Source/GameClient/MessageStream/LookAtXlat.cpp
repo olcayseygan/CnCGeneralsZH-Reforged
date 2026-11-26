@@ -198,8 +198,22 @@ void LookAtTranslator::stopScrolling( void )
 }
 
 //-----------------------------------------------------------------------------
+void LookAtTranslator::takeRightRelease( void )
+{
+	if (isRightDragPanning())
+	{
+		stopScrolling();
+		return;
+	}
+	m_rightReleaseTaken = true;
+	m_rightReleaseFrame = TheGameClient->getFrame();
+}
+
+//-----------------------------------------------------------------------------
 LookAtTranslator::LookAtTranslator() :
 	m_rightPanArmed(false),
+	m_rightReleaseTaken(false),
+	m_rightReleaseFrame(0),
 	m_isScrolling(false),
 	m_isRotating(false),
 	m_freeRotateAngle(0.0f),
@@ -470,14 +484,18 @@ GameMessageDisposition LookAtTranslator::translateGameMessage(const GameMessage 
 
 			// the Classic mouse is 1.04's scroll, which starts on the press itself, so a click that
 			// wobbles nudges the camera.  Its second press of a quick pair started nothing, as there.
+			// A press whose release SelectionXlat already took this frame starts nothing either
+			// (takeRightRelease).
 			if (TheGlobalData->isClassicMouse())
 			{
-				if (msg->getType() == GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN)
+				if (msg->getType() == GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN
+						&& !( m_rightReleaseTaken && m_rightReleaseFrame == TheGameClient->getFrame() ))
 				{
 					m_currentPos = m_anchor;
 					if (!TheInGameUI->isSelecting() && !m_isScrolling)
 						setScrolling(SCROLL_RMB);
 				}
+				m_rightReleaseTaken = false;
 				break;
 			}
 

@@ -53,6 +53,13 @@ public:
 
 	void resetModes(); //Used when disabling input, so when we reenable it we aren't stuck in a mode.
 
+	/** SelectionXlat ate a right release (the Classic click that takes back a GUI command), so this
+		* translator never sees it.  The translators run one after another over a frame's whole message
+		* list, so when the press came in the same frame (a quick click, the control socket's rclick)
+		* this has not seen the press yet either: the press then starts no scroll, which would otherwise
+		* run on with the pointer captured until the next right release. */
+	void takeRightRelease( void );
+
 private:
 	enum
 	{
@@ -70,6 +77,8 @@ private:
 	ICoord2D m_originalAnchor;
 	ICoord2D m_currentPos;
 	Bool m_rightPanArmed;			// the right button is down and has not yet moved far enough to be a pan
+	Bool m_rightReleaseTaken;		// takeRightRelease came with no pan running, in client frame m_rightReleaseFrame
+	UnsignedInt m_rightReleaseFrame;
 	Bool m_isScrolling;				// set to true if we are in the act of RMB scrolling
 	Bool m_isRotating;					// set to true if we are in the act of MMB rotating
 	Real m_freeRotateAngle;		// heading the drag has asked for, before SnapCameraRotateTo45 quantizes it

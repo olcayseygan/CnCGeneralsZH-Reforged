@@ -1281,6 +1281,8 @@ GameMessageDisposition SelectionTranslator::translateGameMessage(const GameMessa
 					TheInGameUI->setGUICommand( NULL );
 					disp = DESTROY_MESSAGE;
 					TheInGameUI->setScrolling( FALSE );
+					if( TheLookAtTranslator )
+						TheLookAtTranslator->takeRightRelease();		// LookAtXlat never sees the eaten release
 				}
 				else if( TheGlobalData->leftButtonOrders() || TheInGameUI->getPendingPlaceSourceObjectID() != INVALID_ID )
 				{

@@ -587,5 +587,25 @@ TEST(right_drag_pans_past_the_drag_tolerance_and_middle_drag_turns)
 	mouse(GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP, 340, 300);
 	CHECK(!f.camera.isRightDragPanning());
 
+	// A Classic click that takes back a GUI command has its release eaten by SelectionXlat, which runs
+	// over the frame's messages before this translator: a press in that same frame starts no pan, and
+	// the next press does; a taken release from an earlier frame stops nothing
+	f.camera.takeRightRelease();
+	mouse(GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN, 300, 300);
+	CHECK(!f.ui->scrolling);
+	CHECK(!f.camera.isRightDragPanning());
+	mouse(GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN, 300, 300);
+	CHECK(f.camera.isRightDragPanning());
+	mouse(GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP, 300, 300);
+	const UnsignedInt takenFrame = TheGameClient->getFrame();
+	f.camera.takeRightRelease();
+	TheGameClient->setFrame( takenFrame + 1 );
+	mouse(GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN, 300, 300);
+	CHECK(f.camera.isRightDragPanning());
+	TheGameClient->setFrame( takenFrame );
+	// and eaten while a pan runs, the release ends it
+	f.camera.takeRightRelease();
+	CHECK(!f.camera.isRightDragPanning());
+
 	TheGameClient = savedClient;
 }

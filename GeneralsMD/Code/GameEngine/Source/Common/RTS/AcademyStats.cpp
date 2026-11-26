@@ -313,7 +313,14 @@ void AcademyStats::update()
 	if( m_nextUpdateFrame >= now )
 	{
 		m_nextUpdateFrame = now + FRAMES_BETWEEN_UPDATES;
-		m_player->iterateObjects( updateAcademyStats, (void*)this );
+
+		/* The walk only does anything on the first update, when it records what the player already owns
+			 (updateAcademyStats).  The test above passes every frame (EA's ">=" for "<="), so it walked every
+			 object of every player every tick for nothing after that: about 0.5 ms of an eight-seat tick at
+			 7000 units.  The once-a-second sampling below is left as EA had it; it feeds the score screen's
+			 advice only, and AcademyStats::crc is empty. */
+		if( isFirstUpdate() )
+			m_player->iterateObjects( updateAcademyStats, (void*)this );
 
 		//2) Did player run out of money before building a supply center?
 		if( !m_supplyCentersBuilt && !m_spentCashBeforeBuildingSupplyCenter )

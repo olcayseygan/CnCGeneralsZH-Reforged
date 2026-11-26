@@ -4852,6 +4852,7 @@ Tests/test_msvc_float_casts.cpp
 Tests/test_observer_camera.inc
 Tests/test_observerhud.cpp
 Tests/test_online.cpp
+Tests/test_options_menu.inc
 Tests/test_partition_collide.inc
 Tests/test_pathfind_slicing.inc
 Tests/test_pixelcentre.cpp

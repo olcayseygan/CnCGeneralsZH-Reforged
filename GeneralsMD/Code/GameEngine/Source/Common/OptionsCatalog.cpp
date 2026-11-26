@@ -228,6 +228,44 @@ Int msaaLevelForSamples( unsigned samples )
 }
 
 //-----------------------------------------------------------------------------
+// The options screen's merged lists (OptionsCatalog.h).
+Int textureFilteringEntry( Int filter, Int anisotropy )
+{
+	if( filter < TEXTURE_FILTER_ANISOTROPIC )
+		return max( 0, filter );
+	if( anisotropy > 0 && anisotropy <= 4 )
+		return 2;
+	if( anisotropy > 4 && anisotropy <= 8 )
+		return 3;
+	return 4;
+}
+
+void textureFilteringRows( Int entry, Int *filter, Int *anisotropy )
+{
+	entry = max( 0, min( entry, (Int)TEXTURE_FILTERING_ENTRY_COUNT - 1 ) );
+	if( entry < TEXTURE_FILTER_ANISOTROPIC )
+	{
+		*filter = entry;
+		return;
+	}
+	*filter = TEXTURE_FILTER_ANISOTROPIC;
+	*anisotropy = 4 << ( entry - TEXTURE_FILTER_ANISOTROPIC );
+}
+
+Int waterReflectionsEntry( Int enabled, Int mode )
+{
+	return enabled ? 1 + max( 0, min( mode, (Int)WATER_REFLECTION_COUNT - 1 ) ) : 0;
+}
+
+void waterReflectionsRows( Int entry, Int *enabled, Int *mode )
+{
+	entry = max( 0, min( entry, (Int)WATER_REFLECTIONS_ENTRY_COUNT - 1 ) );
+	*enabled = entry > 0 ? 1 : 0;
+	if( entry > 0 )
+		*mode = entry - 1;
+}
+
+//-----------------------------------------------------------------------------
 // Glow, as levels.  GlobalData keeps the percentage the renderer reads and GameData.ini can still
 // set it directly, so nothing downstream of here knows the levels exist; Options.ini and the menu
 // hold the index of one of these entries.  The index kept its meaning when Ultra was added: an
@@ -1177,6 +1215,116 @@ static Int graphicsQualityOptionIndex( const GraphicsQualityRow &row )
 Bool graphicsQualityRowIsReforged( const GraphicsQualityRow &row )
 {
 	return graphicsQualityOptionIndex( row ) >= 0 && strcmp( row.control, "CheckCloudShadows" ) != 0;
+}
+
+//-----------------------------------------------------------------------------
+Int optionCostMark( Real costMs )
+{
+	if( costMs < 0.15f )
+		return 0;	// under the noise the baselines wander by, or never measured
+	if( costMs < 0.3f )
+		return 1;
+	if( costMs <= 1.0f )
+		return 2;
+	return 3;
+}
+
+//-----------------------------------------------------------------------------
+OptionsFlowResult optionsFlow( OptionsFlowItem *items, Int count, const OptionsFlowMetrics &m, Int scroll )
+{
+	OptionsFlowResult out;
+	out.moreTop = m.top;
+	out.contentHeight = 0;
+	out.maxScroll = 0;
+	out.end = m.top;
+
+	// a head stands only over a row that does
+	for( Int i = 0; i < count; ++i )
+	{
+		if( items[ i ].kind != OPTIONS_FLOW_HEAD )
+			continue;
+		Bool any = FALSE;
+		for( Int j = i + 1; j < count && items[ j ].kind != OPTIONS_FLOW_HEAD; ++j )
+			any = any || items[ j ].shown;
+		items[ i ].shown = any;
+	}
+
+	// what the page holds without its faders, then the faders take the rest, never under faderMin
+	Int fixed = m.hasMore ? m.moreGap + m.moreHeight : 0;
+	Bool firstHead = TRUE;
+	Bool anyFader = FALSE;
+	for( Int i = 0; i < count; ++i )
+	{
+		if( !items[ i ].shown )
+			continue;
+		if( items[ i ].kind == OPTIONS_FLOW_HEAD )
+		{
+			if( !firstHead )
+				fixed += m.groupGap;
+			firstHead = FALSE;
+		}
+		if( items[ i ].kind == OPTIONS_FLOW_FADER )
+			anyFader = TRUE;
+		else
+			fixed += items[ i ].height;
+	}
+	const Int body = m.bottom - m.top;
+	const Int faderHeight = anyFader ? max( m.faderMin, body - fixed ) : 0;
+	out.contentHeight = fixed + faderHeight;
+	const Bool scrolls = out.contentHeight > body;
+	const Int pinned = m.bottom - m.pinGap - m.moreHeight;
+	const Int clipBottom = scrolls ? ( m.hasMore ? pinned - m.moreGap : m.bottom ) : m.bottom;
+	// scrolled to its foot, the last item stands on the bar's gap
+	const Int itemsHeight = out.contentHeight - ( m.hasMore ? m.moreGap + m.moreHeight : 0 );
+	out.maxScroll = scrolls ? max( 0, itemsHeight - ( clipBottom - m.top ) ) : 0;
+	scroll = max( 0, min( scroll, out.maxScroll ) );
+
+	Int y = m.top - scroll;
+	Int lastFoot = m.top;
+	firstHead = TRUE;
+	Bool faderRowDone = FALSE;
+	Int faderTop = 0;
+	for( Int i = 0; i < count; ++i )
+	{
+		OptionsFlowItem &item = items[ i ];
+		item.top = -1;
+		item.drawnHeight = item.kind == OPTIONS_FLOW_FADER ? faderHeight : item.height;
+		if( !item.shown )
+			continue;
+		if( item.kind == OPTIONS_FLOW_HEAD )
+		{
+			if( !firstHead )
+				y += m.groupGap;
+			firstHead = FALSE;
+		}
+		Int at = y;
+		if( item.kind == OPTIONS_FLOW_FADER )
+		{
+			// the faders stand side by side in one band
+			if( !faderRowDone )
+			{
+				faderTop = y;
+				y += faderHeight;
+				faderRowDone = TRUE;
+			}
+			at = faderTop;
+		}
+		else
+			y += item.height;
+		if( at >= m.top && at + item.drawnHeight <= clipBottom )
+		{
+			item.top = at;
+			lastFoot = max( lastFoot, at + item.drawnHeight );
+		}
+	}
+	if( m.hasMore )
+	{
+		out.moreTop = scrolls ? pinned : y + m.moreGap;
+		out.end = out.moreTop + m.moreHeight;
+	}
+	else
+		out.end = scrolls ? m.bottom : lastFoot;
+	return out;
 }
 
 //-----------------------------------------------------------------------------

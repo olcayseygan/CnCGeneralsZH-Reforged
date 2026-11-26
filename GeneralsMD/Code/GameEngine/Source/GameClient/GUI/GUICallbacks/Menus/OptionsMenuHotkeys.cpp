@@ -34,7 +34,9 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 #include "zhio.h"
 
+#include <map>
 #include <utility>
+#include <vector>
 
 #include "Common/FileSystem.h"
 #include "Common/file.h"
@@ -45,6 +47,9 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/Display.h"
+#include "GameClient/DisplayString.h"
+#include "GameClient/DisplayStringManager.h"
 #include "GameClient/GadgetComboBox.h"
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GadgetPushButton.h"
@@ -693,6 +698,115 @@ const char *modifierName( Bool ctrl, Bool alt, Bool shift )
 	return NAMES[ ( ctrl ? 1 : 0 ) | ( alt ? 2 : 0 ) | ( shift ? 4 : 0 ) ];
 }
 
+GameWindow *s_picked = NULL;
+std::map< std::pair< GameFont *, KeyText >, DisplayString * > s_pickedTexts;
+
+DisplayString *pickedText( const UnicodeString &text, GameFont *font )
+{
+	const std::pair< GameFont *, KeyText > key( font, KeyText( text.str() ) );
+	DisplayString *&s = s_pickedTexts[ key ];
+	if( s == NULL )
+	{
+		s = TheDisplayStringManager->newDisplayString();
+		s->setFont( font );
+		s->setText( text );
+	}
+	return s;
+}
+
+Int pickedWidth( const UnicodeString &text, GameFont *font )
+{
+	return text.isEmpty() || font == NULL ? 0 : pickedText( text, font )->getWidth( -1 );
+}
+
+Int pickedDraw( const UnicodeString &text, GameFont *font, Int x, Int middle, Color color )
+{
+	if( text.isEmpty() || font == NULL )
+		return 0;
+	DisplayString *s = pickedText( text, font );
+	Int w, h;
+	s->getSize( &w, &h );
+	s->draw( x, middle - h / 2, color, GameMakeColor( 0, 0, 0, 160 ) );
+	return w;
+}
+
+void freePickedTexts( void )
+{
+	for( std::map< std::pair< GameFont *, KeyText >, DisplayString * >::iterator it = s_pickedTexts.begin(); it != s_pickedTexts.end(); ++it )
+		TheDisplayStringManager->freeDisplayString( it->second );
+	s_pickedTexts.clear();
+}
+
+/// What is picked, under the bar's three keys (menu package 8): PICKED, its key large in a box with
+/// a cyan edge, its name, and ALSO ON THIS KEY with every other binding of that key, so a clash shows
+/// before it is played.
+void drawPicked( GameWindow *window, WinInstanceData *instData )
+{
+	Int x, y, w, h;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &w, &h );
+	const Real scale = UIStyle::boardFit( TheDisplay->getWidth(), TheDisplay->getHeight() ).scale;
+	const Int unit = max( 1, REAL_TO_INT_FLOOR( 4.0f * scale + 0.5f ) );	// 4 px at 1080
+	GameFont *label = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	GameFont *figure = UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE, TRUE );
+
+	UnicodeString name, key;
+	std::vector< UnicodeString > others;
+	if( s_active == 0 && s_commandRow >= 0 && s_commandRow < (Int)s_rows.size() )
+	{
+		const HotkeyCommandRow& row = s_rows[ s_commandRow ];
+		name = commandName( row );
+		key = chordOf( bindingOf( row ) );
+		others = sameChord( row );
+	}
+	else if( s_active == 1 && s_button )
+	{
+		const BarObject *object = selectedObject();
+		name = buttonName( s_button );
+		if( object )
+		{
+			const std::map< std::string, WideChar > keys = buttonKeys();
+			for( Int slot = 0; slot < BAR_SLOTS; slot++ )
+				if( object->slots[ slot ] == s_button )
+					key = buttonKeyText( object, slot, keys );
+			const std::map< KeyText, std::vector< UnicodeString > > clashes = barClashes( object );
+			std::map< KeyText, std::vector< UnicodeString > >::const_iterator it = clashes.find( key.str() );
+			if( it != clashes.end() )
+				for( size_t each = 0; each < it->second.size(); each++ )
+					if( it->second[ each ].compare( name ) != 0 )
+						others.push_back( it->second[ each ] );
+		}
+		if( key.isEmpty() )
+			key = TheGameText->fetch( "GUI:HotkeysNone" );
+	}
+	if( name.isEmpty() )
+		return;
+
+	UIStyle::drawTracked( UIStyle::capitals( TheGameText->fetch( "GUI:HotkeysPicked" ) ), label, x, y, UIStyle::MUTED, UIStyle::MENU_LABEL_TRACKING );
+	// the key in its box: 40 high, as wide as its word asks
+	const Int boxTop = y + 6 * unit, boxH = 10 * unit;
+	const Int kw = pickedWidth( key, figure );
+	const Int keyW = max( boxH, kw + 6 * unit );
+	TheDisplay->drawFillRect( x, boxTop, keyW, boxH, GameMakeColor( 0, 0, 0, 200 ) );
+	IRegion2D box;
+	box.lo.x = x;
+	box.lo.y = boxTop;
+	box.hi.x = x + keyW;
+	box.hi.y = boxTop + boxH;
+	UIStyle::litEdge( box, UIStyle::EDGE_LIT );
+	pickedDraw( key, figure, x + ( keyW - kw ) / 2, boxTop + boxH / 2, others.empty() ? UIStyle::INK : CLASH_COLOR );
+	pickedDraw( UIStyle::fitText( name, body, w - keyW - 4 * unit ), body, x + keyW + 4 * unit, boxTop + boxH / 2, UIStyle::INK );
+
+	if( others.empty() )
+		return;
+	const Int listTop = boxTop + boxH + 4 * unit;
+	UIStyle::drawTracked( UIStyle::capitals( TheGameText->fetch( "GUI:HotkeysAlsoOnKey" ) ), label, x, listTop, UIStyle::MUTED, UIStyle::MENU_LABEL_TRACKING );
+	Int line = listTop + 5 * unit + 3 * unit;
+	for( size_t each = 0; each < others.size() && line + 3 * unit <= y + h; each++, line += 6 * unit )
+		pickedDraw( UIStyle::fitText( others[ each ], body, w ), body, x, line, CLASH_COLOR );
+}
+
 }	// namespace
 
 //-------------------------------------------------------------------------------------------------
@@ -708,6 +822,13 @@ void OptionsHotkeysInit( void )
 	s_clear = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ButtonHotkeyClear" ) );
 	s_default = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ButtonHotkeyDefault" ) );
 	s_schemeCombo = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ComboBoxHudLayout" ) );
+	freePickedTexts();
+	s_picked = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:HotkeyPicked" ) );
+	if( s_picked )
+	{
+		s_picked->winClearStatus( WIN_STATUS_SEE_THRU );
+		s_picked->winSetDrawFunc( drawPicked );
+	}
 
 	AsciiString commandMap;
 	commandMap.format( "Data\\%s\\CommandMap.ini", GetRegistryLanguage().str() );
@@ -926,4 +1047,6 @@ void OptionsHotkeysClose( void )
 {
 	s_commandList = NULL;
 	s_capture = CAPTURE_NONE;
+	s_picked = NULL;
+	freePickedTexts();
 }

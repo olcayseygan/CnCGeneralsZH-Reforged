@@ -87,6 +87,7 @@
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/GameText.h"
+#include "GameClient/HotKey.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/MetaEvent.h"
@@ -154,6 +155,32 @@ static UnicodeString metaKeySuffix( GameMessage::Type meta )
 		suffix.translate( text );
 		break;
 	}
+	return suffix;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** " (B)" for the key that presses the button `win`, empty for one with no key.  The label's '&'
+	* letter is only the game's default: the key the player gave it, a fixed order letter, the grid's
+	* letter or none at all is what setControlCommand paints on the cameo, so the card reads it there.
+	* The painted text counts only while the hotkey map binds that letter to this very window, since
+	* a power button's text is its ready count.  A command cell's card is asked for with no window
+	* (showBuildTooltipLayout, repopulateBuildTooltipLayout): the window under the pointer is
+	* prevWindow then, hence the check that it carries `command`. */
+//-------------------------------------------------------------------------------------------------
+static UnicodeString paintedKeySuffix( GameWindow *win, const CommandButton *command )
+{
+	UnicodeString suffix;
+	if( win == NULL || TheHotKeyManager == NULL || !BitTest( win->winGetStyle(), GWS_PUSH_BUTTON )
+			|| (const CommandButton *)GadgetButtonGetData( win ) != command )
+		return suffix;
+	const UnicodeString painted = win->winGetText();
+	Bool pressable = FALSE;
+	if( painted.getLength() != 1
+			|| TheHotKeyManager->findHotKey( HotKeyManager::nameOf( painted.getCharAt( 0 ) ), &pressable ) != win )
+		return suffix;
+	suffix = u" (";
+	suffix.concat( painted );
+	suffix.concat( u")" );
 	return suffix;
 }
 
@@ -991,21 +1018,6 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 
 		name = TheGameText->fetch(commandButton->getTextLabel().str());
 
-		// an open command tab's cells take no keys, so the card marks no hotkey letter either: the '&'
-		// the name's HOTKEY_TEXT line would light goes.  A command cell's card is asked for with no
-		// window (showBuildTooltipLayout, repopulateBuildTooltipLayout): the window under the pointer
-		// is prevWindow then
-		if( commandTabCovers( tooltipWin ? tooltipWin : prevWindow ) )
-		{
-			WideCharString plain = name.str();
-			const size_t marker = plain.find( u'&' );
-			if( marker != WideCharString::npos )
-			{
-				plain.erase( marker, 1 );
-				name = plain.c_str();
-			}
-		}
-
 		if( thingTemplate && commandButton->getCommandType() != GUI_COMMAND_PURCHASE_SCIENCE )
 		{
 			//We are either looking at building a unit or a structure that may or may not have any 
@@ -1316,6 +1328,8 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_ALL ) );
 		else if( commandButton && commandButton->getName() == "NonCommand_Beacon" )
 			name.concat( metaKeySuffix( GameMessage::MSG_META_VIEW_LAST_RADAR_EVENT ) );
+		else if( commandButton )
+			name.concat( paintedKeySuffix( tooltipWin ? tooltipWin : prevWindow, commandButton ) );
 		GadgetStaticTextSetText(win, name);
 	}
 

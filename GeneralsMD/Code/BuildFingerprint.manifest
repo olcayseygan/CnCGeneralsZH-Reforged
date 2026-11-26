@@ -2069,6 +2069,7 @@ GameEngine/Include/Common/simpleplayer.h
 GameEngine/Include/Common/string.h
 GameEngine/Include/Common/urllaunch.h
 GameEngine/Include/Common/version.h
+GameEngine/Include/GameClient/AircraftEffects.h
 GameEngine/Include/GameClient/AirliftPanel.h
 GameEngine/Include/GameClient/Anim2D.h
 GameEngine/Include/GameClient/AnimateWindowManager.h
@@ -2721,6 +2722,7 @@ GameEngine/Source/Common/UserPreferences.cpp
 GameEngine/Source/Common/WellKnownKeys.cpp
 GameEngine/Source/Common/crc.cpp
 GameEngine/Source/Common/version.cpp
+GameEngine/Source/GameClient/AircraftEffects.cpp
 GameEngine/Source/GameClient/AirliftPanel.cpp
 GameEngine/Source/GameClient/ChromaKeyboard.cpp
 GameEngine/Source/GameClient/CinemaDirector.cpp

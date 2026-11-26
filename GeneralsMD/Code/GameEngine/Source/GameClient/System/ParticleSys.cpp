@@ -3654,6 +3654,7 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "PerParticleAttachedSystem",		INI::parseAsciiString,								NULL,		offsetof( ParticleSystemTemplate, m_attachedSystemName ) },
 	{ "ExplosionDebrisTrail",				INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_explosionDebrisTrail ) },
 	{ "FireLook",										INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_fireLook ) },
+	{ "HeatHaze",										INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_heatHaze ) },
 	{ "Emissive",										INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_emissive ) },
 	{ "FlipbookGrid",								parseFlipbookGrid,										NULL,		offsetof( ParticleSystemTemplate, m_flipbookGridLog2 ) },
 	{ "FlipbookRate",								INI::parseReal,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookRate ) },
@@ -3834,6 +3835,7 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	//
 	m_explosionDebrisTrail = FALSE;
 	m_fireLook = FALSE;
+	m_heatHaze = FALSE;
 	m_emissive = FALSE;
 	m_flipbookGridLog2 = 0;
 	m_flipbookRate = 0.0f;

@@ -2419,8 +2419,9 @@ void W3DParticleSystemManager::refreshFrameView( void )
 		// flame (MissileExhaust, the Stinger's, the Raptor's); the smoke trails (Scud, Tomahawk, TOW)
 		// blend, and laser flares are placed rather than attached to an object. hasRiddenObject stays
 		// set once the missile has hit, so the trail's haze fades with it instead of going in a frame.
-		else if (sys->getPriority() == WEAPON_TRAIL && sys->getShaderType() == ParticleSystemInfo::ADDITIVE
-				&& sys->hasRiddenObject())
+		// A template marked HeatHaze (an afterburner, a hot gun barrel) joins them whatever it is.
+		else if ((sys->getPriority() == WEAPON_TRAIL && sys->getShaderType() == ParticleSystemInfo::ADDITIVE
+				&& sys->hasRiddenObject()) || sys->getTemplate()->isHeatHaze())
 		{
 			m_frameExhausts.push_back( sys );
 			m_frameExhaustFades.push_back( fade );

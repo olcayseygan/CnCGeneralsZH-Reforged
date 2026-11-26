@@ -52,6 +52,7 @@
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
 #include "Common/GameLOD.h"
+#include "GameClient/AircraftEffects.h"
 #include "GameClient/Anim2D.h"
 #include "GameClient/CampaignManager.h"
 #include "GameClient/ChallengeGenerals.h"
@@ -1024,6 +1025,9 @@ void GameClient::update( void )
 		}
 	}
 	GameEngine_notePark( PARK_DRAWABLES, parkStart );
+
+	// the aircraft's speed-, turn- and ground-keyed effects, once a logic frame (Reforged look only)
+	AircraftEffects_update();
 
 	// LOGIC-THREAD.md phase 3: what the draw below asks of the shroud, asked here, on every pass and
 	// frozen time included, as the draw asked it.  The walk above has filled the cache for this player,

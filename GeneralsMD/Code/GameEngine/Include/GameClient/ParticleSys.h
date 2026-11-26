@@ -659,6 +659,12 @@ public:
 		* (W3DParticleSys.cpp, FIRE_LOOK_SAMPLING in ffshader.h).  Drawing only. */
 	Bool isFireLook( void ) const { return m_fireLook; }
 
+	/** "HeatHaze = Yes": the system's particles bend the air behind them under the Heat Haze option,
+		* summed like a missile's exhaust (W3DParticleSys.cpp, m_frameExhausts), whatever its shader or
+		* priority: an afterburner, a hot gun barrel.  An alpha system keyed fully transparent still
+		* counts, its colour times its size, so a heat source can be invisible.  Drawing only. */
+	Bool isHeatHaze( void ) const { return m_heatHaze; }
+
 	/** "FlipbookGrid = 8": the card is a square atlas of 8 by 8 frames (2, 4, 8 or 16 a side), row by
 		* row from the top left, and each particle shows one at a time.  "FlipbookRate" is frames a
 		* second, looping; 0 (the default) plays the frames once over the particle's life.
@@ -712,6 +718,7 @@ protected:
 	AsciiString								m_name;													///< the name of this template
 	Bool											m_explosionDebrisTrail;						///< switched off with the DebrisTrails option (client only)
 	Bool											m_fireLook;												///< drawn with the Direct3D 11 fire look (client only)
+	Bool											m_heatHaze;												///< bends the air behind it under the Heat Haze option (client only)
 	Bool											m_emissive;												///< alpha blended but takes no light and casts no smoke shadow (client only)
 	UnsignedByte							m_flipbookGridLog2;								///< log2 of the flipbook's frames a side, 0 for a plain card (client only)
 	Real											m_flipbookRate;										///< flipbook frames a second, looping; 0 plays once over the life (client only)

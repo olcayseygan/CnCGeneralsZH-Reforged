@@ -428,8 +428,9 @@ static void gatherHeatHaze( CameraClass &camera, const std::vector<ParticleSyste
 	for (size_t i = 0; i < ( kind ? exhausts : fires ).size() && count < (Int)DIRECT3D11_HEAT_SPLAT_LIMIT; ++i)
 	{
 		const HeatLook &look = HEAT_LOOKS[ kind ];
+		ParticleSystem *sys = ( kind ? exhausts : fires )[ i ];
 		FireLights::Flames flames;
-		sumFlames( ( kind ? exhausts : fires )[ i ], flames );
+		sumFlames( sys, flames );
 		if (flames.w <= 0.0f)
 			continue;
 		Real strength = flames.w * ( kind ? exhaustFades : fireFades )[ i ] / look.full;
@@ -438,7 +439,9 @@ static void gatherHeatHaze( CameraClass &camera, const std::vector<ParticleSyste
 		const Vector3 centre( flames.x / flames.w, flames.y / flames.w, flames.z / flames.w );
 		const Real spread = flames.sq / flames.w - centre.Length2();
 		Real radius = spread > 0.0f ? WWMath::Sqrt( spread ) : 0.0f;
-		if (look.grown > 0.0f && radius < look.grown)
+		// a HeatHaze source riding a drawable (a hot barrel) sits still and small: it is not a trail
+		// that has to grow away from its launcher first
+		if (look.grown > 0.0f && radius < look.grown && !( sys->getTemplate()->isHeatHaze() && !sys->hasRiddenObject() ))
 			strength *= radius / look.grown;
 		radius = radius < look.minRadius ? look.minRadius : radius > look.maxRadius ? look.maxRadius : radius;
 

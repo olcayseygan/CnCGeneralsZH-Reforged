@@ -13,4 +13,8 @@
 /// once a client pass, after the drawables' own update; does its work once a logic frame
 extern void AircraftEffects_update( void );
 
+/// forget every aircraft without touching a particle system, from GameClient::reset: a load or a new
+/// map restores the system and drawable ids, so the ids held here would name someone else's
+extern void AircraftEffects_reset( void );
+
 #endif

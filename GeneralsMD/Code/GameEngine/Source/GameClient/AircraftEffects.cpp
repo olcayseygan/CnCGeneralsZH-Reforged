@@ -402,6 +402,12 @@ namespace
 	}
 }
 
+void AircraftEffects_reset( void )
+{
+	s_air.clear();
+	s_lastFrame = 0;
+}
+
 void AircraftEffects_update( void )
 {
 	if( TheGlobalData == NULL || TheGlobalData->m_classicGraphics || TheGlobalData->m_headless

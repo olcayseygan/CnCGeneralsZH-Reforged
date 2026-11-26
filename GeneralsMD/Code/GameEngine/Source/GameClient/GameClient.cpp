@@ -553,6 +553,9 @@ void GameClient::reset( void )
 	// last frame's health bars belong to the map we are leaving
 	m_healthBarPickList.clear();
 
+	// and so do the aircraft effects' drawable and particle system ids
+	AircraftEffects_reset();
+
 	// and so does the colour table: it is built out of a roster and a set of alliances that the
 	// next map will not have
 	invalidatePlayerColorScheme();

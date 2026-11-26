@@ -45,6 +45,7 @@
 #include "WWMath/matrix3d.h"		///< @todo Replace with our own matrix library
 #include "Common/STLTypedefs.h"
 #include <functional>
+#include <mutex>
 #include <vector>
 
  
@@ -1073,6 +1074,10 @@ public:
 	/// update outside the overlap window takes it first; for one inside, the device's takeReadsForRender
 	/// takes it at the sync point.
 	void takeReadsForUpdate( void );
+	/// The lock an update inside the overlap window holds against the tick's findParticleSystem.  The
+	/// device takes it before the window opens, so no tick can look a system up between the opening
+	/// and the update, and lets it go once the update is done.
+	std::unique_lock<std::recursive_mutex> holdForWindowUpdate( void );
 
 	virtual Int getOnScreenParticleCount( void ) = 0;   ///< returns the number of particles on screen
   virtual void setOnScreenParticleCount(int count);

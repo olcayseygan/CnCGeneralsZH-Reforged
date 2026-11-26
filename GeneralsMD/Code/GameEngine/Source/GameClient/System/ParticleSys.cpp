@@ -4131,9 +4131,20 @@ static void markSystemParticles( Int index, void *context )
 
 /* LOGIC-THREAD.md 7.4: held by an update inside the overlap window, which deletes systems beside the
 	 tick.  A tick that looks up a filed system (LaserUpdate, the uplink cannon) waits it out, and the
-	 system it gets then lives until the window closes.
+	 system it gets then lives until the window closes.  The device takes it before the window opens
+	 (holdForWindowUpdate), so a tick woken by the opening cannot find a system before the update runs.
+	 Recursive, because the update takes it again under the device's hold.
 	 ponytail: one lock for the whole update; per-system handles if the tick ever looks systems up often */
-static std::mutex s_windowUpdateLock;
+static std::recursive_mutex s_windowUpdateLock;
+/* Set by the update inside the window, on the main thread.  The lock shuts the tick out of the list
+	 and the lookup then, so a system the update makes (a particle's attached system) is filed at once and
+	 updates in this pass, as it did before the update moved into the window. */
+static Bool s_updateFilesDirectly = FALSE;
+
+std::unique_lock<std::recursive_mutex> ParticleSystemManager::holdForWindowUpdate( void )
+{
+	return std::unique_lock<std::recursive_mutex>( s_windowUpdateLock );
+}
 
 void ParticleSystemManager::takeReadsForUpdate( void )
 {
@@ -4153,11 +4164,13 @@ void ParticleSystemManager::update( void )
 	if (m_lastLogicFrameUpdate == TheGameLogic->getFrame()) {
 		return;
 	}
-	std::unique_lock<std::mutex> windowLock( s_windowUpdateLock, std::defer_lock );
-	if (LogicThread::isInsideWindow())
+	std::unique_lock<std::recursive_mutex> windowLock( s_windowUpdateLock, std::defer_lock );
+	const Bool inWindow = LogicThread::isInsideWindow();
+	if (inWindow)
 		windowLock.lock();
 	else
 		takeReadsForUpdate();
+	s_updateFilesDirectly = inWindow;
 
 	// update the last logic frame.
 	m_lastLogicFrameUpdate = TheGameLogic->getFrame();
@@ -4220,6 +4233,7 @@ void ParticleSystemManager::update( void )
 			++m_groundShadowCount;
 	}
 	m_independentUpdates.clear();
+	s_updateFilesDirectly = FALSE;
 
 	// The one number that says what a particle switch actually did, and the only way to compare two
 	// runs at all: two launches of the same seed and the same scenario do not produce the same
@@ -4304,7 +4318,7 @@ ParticleSystem *ParticleSystemManager::findParticleSystem( ParticleSystemID id )
 	}
 
 	LOGIC_CENSUS( CENSUS_PARTICLES );
-	std::unique_lock<std::mutex> windowLock( s_windowUpdateLock, std::defer_lock );
+	std::unique_lock<std::recursive_mutex> windowLock( s_windowUpdateLock, std::defer_lock );
 	if (LogicThread::t_isLogicThread)
 		windowLock.lock();
 	ParticleSystemIDMap::const_iterator it = m_allParticleSystemMap.find( id );
@@ -4508,7 +4522,7 @@ void ParticleSystemManager::removeParticle( Particle *particleToRemove)
 void ParticleSystemManager::friend_addParticleSystem( ParticleSystem *particleSystemToAdd )
 {
 	// the tick beside the render reads the list and the lookup; filed once the window closes
-	if (LogicThread::isInsideWindow())
+	if (LogicThread::isInsideWindow() && !s_updateFilesDirectly)
 	{
 		m_windowSystems.push_back(particleSystemToAdd);
 		return;

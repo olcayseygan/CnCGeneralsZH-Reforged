@@ -2357,6 +2357,7 @@ void W3DParticleSystemManager::takeReadsForRender( void )
 				m_fieldSystems.push_back( sys );
 		}
 		m_frameViewValid = FALSE;
+		// on the systems as the last update left them, so a field lags its particles by one update
 		updateGroundFields( m_fieldSystems );
 		return;
 	}

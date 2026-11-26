@@ -3016,6 +3016,10 @@ AGAIN:
 #ifdef DEBUG_LOGGING
 				tOverlapStart = Clock_Ticks();
 #endif
+				// held from before the opening, so the tick it wakes finds no system until the update is done
+				std::unique_lock<std::recursive_mutex> particleHold;
+				if( particlesInWindow )
+					particleHold = TheParticleSystemManager->holdForWindowUpdate();
 				if( opensWindow )
 					overlapWindow.open( mayOverlap );
 				if( particlesInWindow )
@@ -3023,6 +3027,7 @@ AGAIN:
 					// no model is blended (mayOverlap), so the bones it reads are the logic ones, as above
 					tParticleStart = Clock_Ticks();
 					TheParticleSystemManager->update();
+					particleHold.unlock();
 					tParticleEnd = Clock_Ticks();
 #ifdef DEBUG_LOGGING
 					TheParticleUpdateMS = w3dElapsedMS( tParticleStart, tParticleEnd );

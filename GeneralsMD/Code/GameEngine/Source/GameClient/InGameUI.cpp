@@ -1670,6 +1670,7 @@ InGameUI::InGameUI()
 		m_moveHint[ i ].frame = 0;
 		m_moveHint[ i ].bornMs = 0;
 		m_moveHint[ i ].kind = ORDER_HINT_MOVE;
+		m_moveHint[ i ].hull = 0.0f;
 	}
 	m_nextMoveHint = 0;
 
@@ -3883,6 +3884,7 @@ void InGameUI::reset( void )
 		m_moveHint[ i ].pos.zero();
 		m_moveHint[ i ].frame = 0;
 		m_moveHint[ i ].bornMs = 0;
+		m_moveHint[ i ].hull = 0.0f;
 	}
 	m_nextMoveHint = 0;
 	m_commandedPoints.clear();
@@ -6401,13 +6403,13 @@ void InGameUI::markNextOrderQueued( OrderQueueMode mode )
 	* (W3DInGameUI::drawMoveHints), and only for the moves EA gave it to; otherwise the order's own
 	* coloured marker closes in on the point (W3DInGameUI::drawOrderRings). */
 //-------------------------------------------------------------------------------------------------
-void InGameUI::createMoveHint( const Coord3D& at, OrderHintKind kind )
+void InGameUI::createMoveHint( const Coord3D& at, OrderHintKind kind, Real hull )
 {
 	if( TheGlobalData->m_classicGraphics && kind != ORDER_HINT_MOVE && kind != ORDER_HINT_ATTACK_MOVE && kind != ORDER_HINT_WAYPOINT )
 		return;
 
-	// a lone tower shooting the ground still marks the spot
-	if( kind != ORDER_HINT_ATTACK_GROUND && getSelectCount() == 1 )
+	// a lone tower shooting the ground or a unit still marks the spot
+	if( kind != ORDER_HINT_ATTACK_GROUND && !isAttackOrderHint( kind ) && getSelectCount() == 1 )
 	{
 		Drawable *draw = getFirstSelectedDrawable();
 		Object *obj = draw ? draw->getObject() : NULL;
@@ -6422,6 +6424,7 @@ void InGameUI::createMoveHint( const Coord3D& at, OrderHintKind kind )
 	m_moveHint[ m_nextMoveHint ].bornMs = MAX( 1u, (UnsignedInt)Clock_Milliseconds() );
 	m_moveHint[ m_nextMoveHint ].pos = at;
 	m_moveHint[ m_nextMoveHint ].kind = kind;
+	m_moveHint[ m_nextMoveHint ].hull = hull;
 
 	m_nextMoveHint++;
 	if (m_nextMoveHint == InGameUI::MAX_MOVE_HINTS)
@@ -6608,24 +6611,38 @@ void InGameUI::applyCommandedPoints( void )
 
 //-------------------------------------------------------------------------------------------------
 /** An attack command has occurred: the target flashes on the click, as a building being garrisoned
-	* does, instead of waiting for logic to run the order and the first shot. */
+	* does, instead of waiting for logic to run the order and the first shot, and the order's marker
+	* closes on the ground under it (an aircraft's too, a unit on a bridge on the deck). */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::createAttackHint( const GameMessage *msg )
+{
+	markAttackTarget( msg, ORDER_HINT_ATTACK );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A force attack command has occurred: a unit or building aimed at flashes, as with an attack.
+	* Aimed at the ground the message holds a place, not an object, and the ground's marker is
+	* HintSpy's createMoveHint. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::createForceAttackHint( const GameMessage *msg )
+{
+	markAttackTarget( msg, ORDER_HINT_FORCE_ATTACK );
+}
+
+//-------------------------------------------------------------------------------------------------
+void InGameUI::markAttackTarget( const GameMessage *msg, OrderHintKind kind )
 {
 	if( msg->getArgumentCount() < 1 || msg->getArgumentDataType( 0 ) != ARGUMENTDATATYPE_OBJECTID )
 		return;
 	const Object *target = TheGameLogic->findObjectByID( msg->getArgument( 0 )->objectID );
-	Drawable *draw = target ? target->getDrawable() : NULL;
+	if( target == NULL )
+		return;
+	Drawable *draw = target->getDrawable();
 	if( draw )
 		draw->flashAsSelected();
-}
-
-//-------------------------------------------------------------------------------------------------
-/** A force attack command has occurred: a unit or building aimed at flashes, as with an attack. */
-//-------------------------------------------------------------------------------------------------
-void InGameUI::createForceAttackHint( const GameMessage *msg )
-{
-	createAttackHint( msg );
+	Coord3D under = *target->getPosition();
+	under.z = TheTerrainLogic->getLayerHeight( under.x, under.y, target->getLayer() );
+	createMoveHint( under, kind, target->getGeometryInfo().getBoundingCircleRadius() );
 }
 
 //-------------------------------------------------------------------------------------------------

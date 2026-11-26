@@ -623,10 +623,11 @@ public:  // ********************************************************************
 	/// in front of it.  The logic keeps the list; see OrderQueue.h.
 	void markNextOrderQueued( OrderQueueMode mode );
 
-	void createMoveHint( const Coord3D& at, OrderHintKind kind );	///< the marker where an order lands: EA's animated ring under Classic, the order's coloured ring otherwise
+	void createMoveHint( const Coord3D& at, OrderHintKind kind, Real hull = 0.0f );	///< the marker where an order lands: EA's animated ring under Classic, the order's coloured ring otherwise; hull is an attacked object's radius
 	void createFormationMoveHints( void );											///< one marker on each station of the formation line just sent
 	virtual void createAttackHint( const GameMessage *msg );		///< An attack command has occurred, start graphical "hint"
 	virtual void createForceAttackHint( const GameMessage *msg );		///< A force attack command has occurred, start graphical "hint"
+	void markAttackTarget( const GameMessage *msg, OrderHintKind kind );	///< the aimed-at object flashes and the order's marker goes on the ground under it
 
 	virtual void createMouseoverHint( const GameMessage *msg );	///< An object is mouse hovered over, start hint if any
 	virtual void createCommandHint( const GameMessage *msg );		///< Used by HintSpy. Someone is selected so generate the right Cursor for the potential action
@@ -1533,6 +1534,7 @@ public:
 		UnsignedInt frame;			///< frame the command was issued on
 		UnsignedInt bornMs;			///< and the picture's clock then, for the coloured marker
 		OrderHintKind kind;
+		Real hull;							///< an attacked object's bounding circle radius, nought on bare ground
 	};
 	const MoveHintStruct& getMoveHint( Int i ) const { return m_moveHint[ i ]; }
 	/// An order mark at (x, y) stands on water: the terrain pass paints it under the water, so the

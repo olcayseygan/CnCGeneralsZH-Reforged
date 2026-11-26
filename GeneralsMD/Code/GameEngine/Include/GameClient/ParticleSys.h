@@ -644,6 +644,10 @@ public:
 	}
 	void copyLookOf( const ParticleSystemTemplate *other ) { static_cast<ParticleSystemInfo&>( *this ) = *other; }
 
+	/** "ClassicLook = <EA system>": under Classic Graphics this fork-only system is that EA system instead
+		* of nothing, for a fork mode whose shots would otherwise fly unseen there (INIParticleSys.cpp). */
+	const AsciiString &getClassicLookName( void ) const { return m_classicLookName; }
+
 	ParticleSystemTemplate( const AsciiString &name );
 
 	AsciiString getName( void ) const { return m_name; }
@@ -719,6 +723,7 @@ protected:
 	Bool											m_explosionDebrisTrail;						///< switched off with the DebrisTrails option (client only)
 	Bool											m_fireLook;												///< drawn with the Direct3D 11 fire look (client only)
 	Bool											m_heatHaze;												///< bends the air behind it under the Heat Haze option (client only)
+	AsciiString								m_classicLookName;								///< the EA system it draws as under Classic Graphics (client only)
 	Bool											m_emissive;												///< alpha blended but takes no light and casts no smoke shadow (client only)
 	UnsignedByte							m_flipbookGridLog2;								///< log2 of the flipbook's frames a side, 0 for a plain card (client only)
 	Real											m_flipbookRate;										///< flipbook frames a second, looping; 0 plays once over the life (client only)

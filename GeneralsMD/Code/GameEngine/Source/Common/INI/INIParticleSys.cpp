@@ -67,10 +67,13 @@ void INI::parseParticleSystemDefinition( INI* ini )
 	ini->initFromINI( sysTemplate, sysTemplate->getFieldParse() );
 
 	// a system only the fork has stays a name a weapon or a saved game can hold, and emits nothing, unless
-	// it is a Superweapon General's copy of one of EA's: then it is that system, as he had it
+	// it is a Superweapon General's copy of one of EA's: then it is that system, as he had it.  One that
+	// names a ClassicLook (a fork mode's shot that would fly unseen) is that EA system instead.
 	if (classic && added)
 	{
 		const ParticleSystemTemplate *ea = name.startsWith( "SupW_" ) ? TheParticleSystemManager->findTemplate( name.str() + 5 ) : NULL;
+		if (ea == NULL && !sysTemplate->getClassicLookName().isEmpty())
+			ea = TheParticleSystemManager->findTemplate( sysTemplate->getClassicLookName() );
 		if (ea)
 			sysTemplate->copyLookOf( ea );
 		else

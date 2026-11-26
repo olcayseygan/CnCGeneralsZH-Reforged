@@ -445,8 +445,11 @@ public:
 	void debugIgnoreLeaksForThisBlock(void* pBlockPtr);
 #endif
 
-	/// free the bytes. (assumes allocated by this dma.)
-	void freeBytes(void* pMem);
+	/// free the bytes. (assumes allocated by this dma.)  The global operator delete's exception
+	/// specification (MSVCCompat.h): noexcept off MSVC, where nothing it calls throws and the unwind
+	/// frame goes; none under MSVC, whose /EHa build turns a fault here into a C++ exception for the
+	/// crash dump, and a noexcept frame in its way could end the process before the dump is written.
+	void freeBytes(void* pMem) WW_NOEXCEPT_DELETE;
 
 	/**
 		return the actual number of bytes that would be allocated 

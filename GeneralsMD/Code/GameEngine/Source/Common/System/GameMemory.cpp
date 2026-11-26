@@ -231,6 +231,24 @@ static void doStackDumpOutput(const char* m);
 static void doStackDump(void **stacktrace, int size);
 #endif
 
+/*
+	The allocator's hot paths test for the memory manager inline: one load and a branch, and the call
+	only before it exists (a static constructor's allocation).  preMainInitMemoryManager decides on
+	TheMemoryPoolFactory, which is never NULL while TheDynamicMemoryAllocator is not (both inits set the
+	factory first and shutdown clears it last), so skipping the call here changes nothing.  The slow
+	path stays out of line so the inlined test does not drag its body into every operator.
+*/
+#if defined(_MSC_VER)
+#define GAMEMEMORY_NOINLINE __declspec(noinline)
+#else
+#define GAMEMEMORY_NOINLINE __attribute__((noinline))
+#endif
+static inline void preMainInitMemoryManagerIfNeeded()
+{
+	if (TheDynamicMemoryAllocator == NULL)
+		preMainInitMemoryManager();
+}
+
 // ----------------------------------------------------------------------------
 // PRIVATE FUNCTIONS 
 // ----------------------------------------------------------------------------
@@ -2475,7 +2493,7 @@ void *DynamicMemoryAllocator::allocateBytesImplementation(Int numBytes DECLARE_L
 /**
 	free a chunk-o-bytes allocated by this dma. it's ok to pass null.
 */
-void DynamicMemoryAllocator::freeBytes(void* pBlockPtr)
+void DynamicMemoryAllocator::freeBytes(void* pBlockPtr) WW_NOEXCEPT_DELETE
 {
 	if (!pBlockPtr)
 		return;
@@ -3486,16 +3504,16 @@ static Int dmaRequestSize(size_t size)
 void* STLSpecialAlloc::allocate(size_t __n)
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator new"));
 	return TheDynamicMemoryAllocator->allocateBytes(dmaRequestSize(__n), "STL_");
 }
 
 //-----------------------------------------------------------------------------
-void STLSpecialAlloc::deallocate(void* __p, size_t) 
-{ 
+void STLSpecialAlloc::deallocate(void* __p, size_t)
+{
 	++theLinkTester;
-	preMainInitMemoryManager();
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator new"));
 	TheDynamicMemoryAllocator->freeBytes(__p); 
 }
@@ -3538,7 +3556,7 @@ void STLSpecialAlloc::deallocate(void* __p, size_t)
 void *operator new(size_t size)
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator new"));
 	return TheDynamicMemoryAllocator->allocateBytes(dmaRequestSize(size), "global operator new");
 }
@@ -3550,7 +3568,7 @@ void *operator new(size_t size)
 void *operator new[](size_t size)
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator new"));
 	return TheDynamicMemoryAllocator->allocateBytes(dmaRequestSize(size), "global operator new[]");
 }
@@ -3562,7 +3580,9 @@ void *operator new[](size_t size)
 void operator delete(void *p) WW_NOEXCEPT_DELETE
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	if (p == NULL)
+		return;
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator delete"));
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
@@ -3574,7 +3594,9 @@ void operator delete(void *p) WW_NOEXCEPT_DELETE
 void operator delete[](void *p) WW_NOEXCEPT_DELETE
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	if (p == NULL)
+		return;
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator delete"));
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
@@ -3634,7 +3656,7 @@ void operator delete[](void *p, const std::nothrow_t &) WW_NOEXCEPT_DELETE
 void* operator new(size_t size, const char * fname, int)
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator new"));
 #ifdef MEMORYPOOL_DEBUG
 	return TheDynamicMemoryAllocator->allocateBytesImplementation(dmaRequestSize(size), fname);
@@ -3650,7 +3672,9 @@ void* operator new(size_t size, const char * fname, int)
 void operator delete(void * p, const char *, int)
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	if (p == NULL)
+		return;
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator delete"));
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
@@ -3662,7 +3686,7 @@ void operator delete(void * p, const char *, int)
 void* operator new[](size_t size, const char * fname, int)
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator new"));
 #ifdef MEMORYPOOL_DEBUG
 	return TheDynamicMemoryAllocator->allocateBytesImplementation(dmaRequestSize(size), fname);
@@ -3678,7 +3702,9 @@ void* operator new[](size_t size, const char * fname, int)
 void operator delete[](void * p, const char *, int)
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	if (p == NULL)
+		return;
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator delete"));
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
@@ -3719,7 +3745,7 @@ void operator delete[](void * p, const char *, int) { systemFree(p); }
 void *calloc(size_t a, size_t b)
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager"));
 	return TheDynamicMemoryAllocator->allocateBytes(a * b, "calloc");
 }
@@ -3730,7 +3756,9 @@ void *calloc(size_t a, size_t b)
 void  free(void * p)
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	if (p == NULL)
+		return;
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager"));
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
@@ -3741,7 +3769,7 @@ void  free(void * p)
 void *malloc(size_t a)
 {
 	++theLinkTester;
-	preMainInitMemoryManager();
+	preMainInitMemoryManagerIfNeeded();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager"));
 	return TheDynamicMemoryAllocator->allocateBytesDoNotZero(a, "malloc");
 }
@@ -3837,9 +3865,10 @@ Bool isMemoryManagerOfficiallyInited()
 	Initialize the memory manager, and create TheMemoryPoolFactory and TheDynamicMemoryAllocator.
 	This is only called if memory is allocated prior to the normal call to initMemoryManager
 	(generally via a static C++ ctor): by the global operators new and delete, and by AsciiString and
-	UnicodeString when TheDynamicMemoryAllocator is not there yet.
+	UnicodeString when TheDynamicMemoryAllocator is not there yet.  Out of line: the hot paths reach it
+	through preMainInitMemoryManagerIfNeeded's inlined test.
 */
-void preMainInitMemoryManager()
+GAMEMEMORY_NOINLINE void preMainInitMemoryManager()
 {
 	if (TheMemoryPoolFactory == NULL)
 	{

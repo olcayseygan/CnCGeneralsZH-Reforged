@@ -9538,3 +9538,337 @@ END
 GUI:AddressHint
 "Give this to your friend"
 END
+
+// Menu redesign package 12, single player: Generals' Challenge, the replay list, Load Game, the Save
+// Replay and Save / Load boxes. Army words are drawn in capitals on the cards and the ladder.
+GUI:SPChallengeTitle
+"Generals' Challenge"
+END
+
+GUI:SPChooseGeneral
+"Choose your general"
+END
+
+GUI:SPSideUSA
+"USA"
+END
+
+GUI:SPSideChina
+"China"
+END
+
+GUI:SPSideGLA
+"GLA"
+END
+
+GUI:SPTactics
+"Tactics"
+END
+
+GUI:SPStationed
+"Stationed"
+END
+
+GUI:SPTheChallenge
+"The challenge"
+END
+
+GUI:SPBattles
+"%d battles, %s last"
+END
+
+GUI:SPLocationUnknown
+"Location unknown"
+END
+
+GUI:SPYourGeneral
+"Your general"
+END
+
+GUI:SPThisGeneral
+"This general"
+END
+
+GUI:SPBattleInOrder
+"Battle, in order"
+END
+
+GUI:SPDifficulty
+"Difficulty"
+END
+
+GUI:SPPickedOnMenu
+"picked on the main menu"
+END
+
+GUI:SPPickedOnMenu_Short
+"main menu"
+END
+
+GUI:SPFinalBattle
+"Final battle"
+END
+
+GUI:SPFinalBattle_Short
+"Final"
+END
+
+GUI:SPArmyAirForce
+"Air Force"
+END
+
+GUI:SPArmyAirForce_Short
+"Air"
+END
+
+GUI:SPArmyToxin
+"Toxin"
+END
+
+GUI:SPArmyNuke
+"Nuke"
+END
+
+GUI:SPArmySuperweapon
+"Superweapon"
+END
+
+GUI:SPArmyTank
+"Tank"
+END
+
+GUI:SPArmyLaser
+"Laser"
+END
+
+GUI:SPArmyStealth
+"Stealth"
+END
+
+GUI:SPArmyInfantry
+"Infantry"
+END
+
+GUI:SPArmyDemolition
+"Demolition"
+END
+
+GUI:SPReplays
+"Replays"
+END
+
+GUI:SPReplayCount
+"%d replays"
+END
+
+GUI:SPName
+"Name"
+END
+
+GUI:SPRecorded
+"Recorded"
+END
+
+GUI:SPMap
+"Map"
+END
+
+GUI:SPPlayers
+"Players"
+END
+
+GUI:SPLength
+"Length"
+END
+
+GUI:SPVersion
+"Version"
+END
+
+GUI:SPOlder
+"Older"
+END
+
+GUI:SPOlderLine
+"Older: recorded by another version, it may not play back right"
+END
+
+GUI:SPSpeed
+"Speed"
+END
+
+GUI:SPGame
+"Game"
+END
+
+GUI:SPEnded
+"Ended"
+END
+
+GUI:SPThisBuild
+", this build"
+END
+
+GUI:SPOlderBuild
+", older"
+END
+
+GUI:SPMultiplayer
+"Multiplayer"
+END
+
+GUI:SPSinglePlayer
+"Single player"
+END
+
+GUI:SPPlayedOut
+"Played out"
+END
+
+GUI:SPQuitEarly
+"Left early"
+END
+
+GUI:SPOutOfSync
+"Out of sync"
+END
+
+GUI:SPLeft
+"Left"
+END
+
+GUI:SPTeam
+"Team %d"
+END
+
+GUI:SPCopyToDesktop
+"Copy to desktop"
+END
+
+GUI:SPCopyToDesktop_Short
+"Copy"
+END
+
+GUI:SPDelete
+"Delete"
+END
+
+GUI:SPWatchReplay
+"Watch replay"
+END
+
+GUI:SPWatchReplay_Short
+"Watch"
+END
+
+GUI:SPSaveCount
+"%d saved games"
+END
+
+GUI:SPCampaign
+"Campaign"
+END
+
+GUI:SPMission
+"Mission"
+END
+
+GUI:SPKind
+"Kind"
+END
+
+GUI:SPSaved
+"Saved"
+END
+
+GUI:SPKindSaved
+"Saved"
+END
+
+GUI:SPKindMissionStart
+"Mission start"
+END
+
+GUI:SPLegendMissionStart
+"Mission start: the save the game makes as a mission opens"
+END
+
+GUI:SPLegendOlder
+"Older: written by a build this one cannot read, it won't load"
+END
+
+GUI:SPDone
+"Done"
+END
+
+GUI:SPThisSave
+"This save"
+END
+
+GUI:SPAhead
+"Ahead"
+END
+
+GUI:SPMissionOf
+"Mission %d of %d"
+END
+
+GUI:SPSavedByYou
+"Saved by you"
+END
+
+GUI:SPLoads
+"Loads"
+END
+
+GUI:SPLoadsYes
+"Yes, this build"
+END
+
+GUI:SPLoadsNo
+"No, older build"
+END
+
+GUI:SPPlayedFor
+"Played for"
+END
+
+GUI:SPFile
+"File"
+END
+
+GUI:SPCampaignZH
+"Zero Hour %s"
+END
+
+GUI:SPCampaignGenerals
+"Generals %s"
+END
+
+GUI:SPCampaignChallenge
+"Challenge: %s"
+END
+
+GUI:SPSkirmish
+"Skirmish"
+END
+
+GUI:SPWontLoad
+"Written by an older build. This one cannot read it."
+END
+
+GUI:SPNoPreview
+"No preview"
+END
+
+GUI:SPNewSave
+"New save"
+END
+
+GUI:SPSaveLoad
+"Save / Load"
+END
+
+GUI:SPHintEscEnterSaves
+"Esc cancels, Enter saves"
+END

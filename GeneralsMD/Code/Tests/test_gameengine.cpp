@@ -28678,6 +28678,7 @@ TEST(game_speed_set_to_200_and_back_reads_what_it_read)
 #include "test_room_layout.inc"
 #include "test_game_lists.inc"
 #include "test_options_menu.inc"
+#include "test_single_player.inc"
 
 #include "GameClient/Snow.h"
 

@@ -20,6 +20,9 @@ resolve.
     Victorious, Defeat, LocalDefeat, ObserverQuit
                                     the band over the match, 600,318 to 1320,486, drawn by
                                     MatchBandDraw (QuitMenu.cpp) in place of EA's pictures
+    PopupReplay                     Save Replay, the 1040 box over the end screen (package 12)
+    PopupSaveLoad                   Save / Load, the 1040 box over the match, and the save
+                                    description's question box inside it (package 12)
 
     python bigfile.py extract ../../Run/WindowZH.big "*Menus?QuitMenu.wnd" -o wnd   (and so on for
         every retail-only layout above)
@@ -291,6 +294,92 @@ def build_band(layout):
     place_tree(layout.root, {}, BAND_BOX)
 
 
+def lift(root, names, to):
+    """Move the named windows to be children of `to`, out of EA's button frames (rects in a .wnd are
+    absolute, so nothing moves on screen)."""
+    for name in names:
+        window = root.find(name)
+        parent = root.parent_of(window)
+        if parent is not to:
+            parent.children.remove(window)
+            to.children.append(window)
+
+
+# Package 12's boxes (the single player README, SinglePlayerLayout.h has the same numbers).  The save
+# description: the question box with a text box in it, CANCEL and SAVE GAME 190 wide.
+DESC_HEIGHT = BOX_HEAD + 24 + BOX_LINE + 12 + 48 + BOX_LINE + BOX_FOOT
+DESC_KEY = 190
+
+
+def wide_key(box, slot, width):
+    right = box[2] - BOX_PAD - slot * (width + KEY_GAP)
+    return (right - width, box[3] - 20 - KEY_HEIGHT, right, box[3] - 20)
+
+
+def desc_rects(over_match):
+    box = box_rect(BOX_QUESTION, DESC_HEIGHT, over_match)
+    y = box[1] + BOX_HEAD + 24
+    return box, {"SaveDescParent": box, "EntryDesc": (box[0] + BOX_PAD, y + 40, box[2] - BOX_PAD, y + 88),
+                 "ButtonSaveDescConfirm": wide_key(box, 0, DESC_KEY), "ButtonSaveDescCancel": wide_key(box, 1, DESC_KEY)}
+
+
+# Save Replay over the end screen: NAME and its text box, the saved replays (seven rows of 38), CANCEL
+# and SAVE; "replay saved" is the one-line question box over it
+REPLAY_POPUP = box_rect(BOX_LIST, BOX_HEAD + 24 + 48 + 24 + 34 + 7 * 38 + 16 + BOX_FOOT, False)
+
+
+def popup_replay_rects():
+    box = REPLAY_POPUP
+    x0, x1 = box[0] + BOX_PAD, box[2] - BOX_PAD
+    y = box[1] + BOX_HEAD + 24
+    rows = y + 48 + 24 + 34
+    return {"PopupReplaySubMenu": box, "TextEntryReplayName": (x0 + 100, y, x1, y + 48),
+            "ListboxGames": (x0, rows, x1, rows + 7 * 38), "ButtonSave": key_rect(box, 0),
+            "ButtonBack": key_rect(box, 1), "PopupReplaySaved": QUESTION_BOX}
+
+
+def build_popup_replay(layout):
+    put(layout.root, (0, 0, BOARD[0], BOARD[1]))
+    sub = layout.find("PopupReplaySubMenu")
+    lift(layout.root, ["ButtonBack", "ButtonSave"], sub)
+    place_tree(layout.root, popup_replay_rects(), REPLAY_POPUP)
+    set_text(layout.find("ButtonBack"), "GUI:Cancel")
+    set_text(layout.find("ButtonSave"), "GUI:Save")
+
+
+# Save / Load over a match: the new save and the saves (eight rows of 40), DELETE, LOAD GAME and SAVE
+# GAME 190 wide; the confirms ask through the message box, only the description keeps a box here
+SAVE_POPUP = box_rect(BOX_LIST, BOX_HEAD + 20 + 34 + 8 * 40 + 16 + BOX_FOOT, True)
+
+
+def popup_saveload_rects():
+    box = SAVE_POPUP
+    top = box[1] + BOX_HEAD + 20 + 34
+    rects = {"ListboxGames": (box[0] + BOX_PAD, top, box[2] - BOX_PAD, top + 8 * 40),
+             "ButtonSave": wide_key(box, 0, DESC_KEY), "ButtonLoad": wide_key(box, 1, DESC_KEY),
+             "ButtonDelete": wide_key(box, 2, DESC_KEY)}
+    rects.update(desc_rects(True)[1])
+    return rects
+
+
+def build_popup_saveload(layout):
+    box = SAVE_POPUP
+    put(layout.root, box)
+    lift(layout.root, ["ButtonSave", "ButtonLoad", "ButtonDelete"], layout.root)
+    rects = popup_saveload_rects()
+    for window in list(layout.root.walk())[1:]:
+        if short(window) in rects:
+            put(window, rects[short(window)])
+            if short(window) == "SaveDescParent":
+                status = window.prop("STATUS").split("=", 1)[1].strip().rstrip(";").strip()
+                if "HIDDEN" not in status.split("+"):
+                    window.set_prop("STATUS", status + "+HIDDEN")
+        else:
+            hide(window, box)
+    set_text(layout.find("ButtonDelete"), "GUI:SPDelete")
+    set_text(layout.find("ButtonSaveDescCancel"), "GUI:Cancel")
+
+
 # name: (builder, windows the code looks up, the box's own window and where it stands)
 LAYOUTS = {
     "MessageBox": (build_question, ["MessageBoxParent", "StaticTextTitle", "StaticTextMessage"]
@@ -324,6 +413,16 @@ LAYOUTS = {
     "Defeat": (build_band, [], (None, BAND_BOX)),
     "LocalDefeat": (build_band, [], (None, BAND_BOX)),
     "ObserverQuit": (build_band, [], (None, BAND_BOX)),
+    "PopupReplay": (build_popup_replay, ["PopupReplayMenu", "PopupReplaySubMenu", "MenuButtonFrame", "ButtonBack",
+                                         "ButtonSave", "ListboxGames", "TextEntryReplayName", "PopupReplaySaved",
+                                         "StaticReplaySaved"], ("PopupReplaySubMenu", REPLAY_POPUP)),
+    "PopupSaveLoad": (build_popup_saveload, ["SaveLoadMenu", "MenuButtonFrame", "ButtonBack", "ButtonSave",
+                                             "ButtonLoad", "ButtonDelete", "ListboxGames", "LoadConfirmParent",
+                                             "OverwriteConfirmParent", "SaveDescParent", "DeleteConfirmParent",
+                                             "EntryDesc", "ButtonSaveDescConfirm", "ButtonSaveDescCancel",
+                                             "ButtonLoadConfirm", "ButtonLoadCancel", "ButtonOverwriteConfirm",
+                                             "ButtonOverwriteCancel", "ButtonDeleteConfirm", "ButtonDeleteCancel"],
+                      (None, SAVE_POPUP)),
 }
 for _menu, (_entries, _) in RC_MENUS.items():
     LAYOUTS[_menu] = ((lambda m: lambda l: build_rc(l, m))(_menu), ["ParentRightClick" if _menu != "RCGameDetailsMenu"
@@ -340,7 +439,8 @@ KEYS = ["GUI:HintEscNoEnterYes", "GUI:HintEscEnterNo", "GUI:HintEscCancelEnterYe
         "GUI:HostNotResponding", "GUI:ConnectedCaps", "Network:Vote", "Network:Vote_Short", "GUI:Voted",
         "GUI:Voted_Short", "GUI:Connecting", "GUI:ReadyCount", "GUI:WaitingForResponse",
         "GUI:WaitingForMangledPort", "GUI:ConnectionDone", "GUI:ConnectionFailed", "GUI:Downloading",
-        "GUI:Friends", "GUI:PlayerCard", "GUI:AddFriend", "GUI:RemoveFriend"]
+        "GUI:Friends", "GUI:PlayerCard", "GUI:AddFriend", "GUI:RemoveFriend",
+        "GUI:SPNewSave", "GUI:SPSaveLoad", "GUI:SPHintEscEnterSaves", "GUI:SPDelete"]
 
 
 def build(layout, menu):
@@ -383,7 +483,7 @@ def selfcheck():
         if len(problems) == before and build(wndlayout.parse(text), menu).text() != text:
             problems.append("%s.wnd is not what this script writes from it" % menu)
     # a box over the match never reaches the bar
-    for menu in ("QuitMenu", "QuitNoSave", "DisconnectScreen"):
+    for menu in ("QuitMenu", "QuitNoSave", "DisconnectScreen", "PopupSaveLoad"):
         box = LAYOUTS[menu][2][1]
         if box[3] > BAR_TOP - 44:
             problems.append("%s.wnd reaches the command bar (%d)" % (menu, box[3]))

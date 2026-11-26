@@ -99,6 +99,7 @@ Data/Art/Textures/ReforgedSignalAttack.tga
 Data/Art/Textures/ReforgedSignalDefend.tga
 Data/Art/Textures/ReforgedSignalLook.tga
 Data/Art/Textures/ReforgedSmokeLoop.dds
+Data/Art/Textures/SPPlacesMap.tga
 Data/Art/Textures/TRA400M_Prop.tga
 Data/Art/Textures/TRAirfld_Apron.tga
 Data/Art/Textures/TRAirfld_Conc.tga
@@ -1458,6 +1459,7 @@ Data/INI/MappedImages/HandCreated/ReforgedLobbySpot.ini
 Data/INI/MappedImages/HandCreated/ReforgedMatchClock.ini
 Data/INI/MappedImages/HandCreated/ReforgedRallyMarkers.ini
 Data/INI/MappedImages/HandCreated/ReforgedReconHud.ini
+Data/INI/MappedImages/HandCreated/SPPlacesMap.ini
 Data/INI/MappedImages/HandCreated/TRCameos.ini
 Data/INI/MappedImages/HandCreated/TRUpgrades.ini
 Data/INI/ModernWater.ini
@@ -1867,6 +1869,7 @@ Data/Window/GenPowersShortcutBarGLA.wnd
 Data/Window/GenPowersShortcutBarUS.wnd
 Data/Window/GeneralsExpPoints.wnd
 Data/Window/InGameChat.wnd
+Data/Window/Menus/ChallengeMenu.wnd
 Data/Window/Menus/CreditsMenu.wnd
 Data/Window/Menus/Defeat.wnd
 Data/Window/Menus/DisconnectScreen.wnd
@@ -1886,6 +1889,8 @@ Data/Window/Menus/OptionsMenuClassic.wnd
 Data/Window/Menus/PopupHostGame.wnd
 Data/Window/Menus/PopupJoinGame.wnd
 Data/Window/Menus/PopupPlayerInfo.wnd
+Data/Window/Menus/PopupReplay.wnd
+Data/Window/Menus/PopupSaveLoad.wnd
 Data/Window/Menus/QuitMenu.wnd
 Data/Window/Menus/QuitMessageBox.wnd
 Data/Window/Menus/QuitNoSave.wnd
@@ -1895,6 +1900,8 @@ Data/Window/Menus/RCGameDetailsMenu.wnd
 Data/Window/Menus/RCLocalPlayerMenu.wnd
 Data/Window/Menus/RCNoProfileMenu.wnd
 Data/Window/Menus/RCNonBuddiesMenu.wnd
+Data/Window/Menus/ReplayMenu.wnd
+Data/Window/Menus/SaveLoad.wnd
 Data/Window/Menus/SkirmishGameOptionsMenu.wnd
 Data/Window/Menus/SkirmishMapSelectMenu.wnd
 Data/Window/Menus/Victorious.wnd
@@ -2185,6 +2192,8 @@ GameEngine/Include/GameClient/Shadow.h
 GameEngine/Include/GameClient/Shell.h
 GameEngine/Include/GameClient/ShellHooks.h
 GameEngine/Include/GameClient/ShellMenuScheme.h
+GameEngine/Include/GameClient/SinglePlayerLayout.h
+GameEngine/Include/GameClient/SinglePlayerParts.h
 GameEngine/Include/GameClient/Smudge.h
 GameEngine/Include/GameClient/Snow.h
 GameEngine/Include/GameClient/Statistics.h
@@ -4899,6 +4908,7 @@ Tests/test_sdl_reach.cpp
 Tests/test_sdl_storage.cpp
 Tests/test_selection_priority.inc
 Tests/test_shader_sdl.cpp
+Tests/test_single_player.inc
 Tests/test_smooth_motion.cpp
 Tests/test_sun_shadow_sorting.cpp
 Tests/test_supply_center_save.inc
@@ -5917,6 +5927,7 @@ Tools/rl/mock_game.py
 Tools/rl/train.py
 Tools/root-readonly-check.sh
 Tools/signal_marks.py
+Tools/singleplayer_layout.py
 Tools/sprite_flipbook.py
 Tools/stage-overlay.sh
 Tools/sun-shadow-check.py

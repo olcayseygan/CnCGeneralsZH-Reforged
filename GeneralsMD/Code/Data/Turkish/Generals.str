@@ -23720,3 +23720,337 @@ END
 GUI:AddressHint
 "Bunu arkadaşına ver"
 END
+
+// Menu redesign package 12, single player: Generals' Challenge, the replay list, Load Game, the Save
+// Replay and Save / Load boxes.
+GUI:SPChallengeTitle
+"Generallerin Meydan Okuması"
+END
+
+GUI:SPChooseGeneral
+"Generalini seç"
+END
+
+GUI:SPSideUSA
+"ABD"
+END
+
+GUI:SPSideChina
+"Çin"
+END
+
+GUI:SPSideGLA
+"GLA"
+END
+
+GUI:SPTactics
+"Taktik"
+END
+
+GUI:SPStationed
+"Üssü"
+END
+
+GUI:SPTheChallenge
+"Meydan okuma"
+END
+
+GUI:SPBattles
+"%d savaş, sonuncusu %s"
+END
+
+GUI:SPLocationUnknown
+"Yeri bilinmiyor"
+END
+
+GUI:SPYourGeneral
+"Generalin"
+END
+
+GUI:SPThisGeneral
+"Bu general"
+END
+
+GUI:SPBattleInOrder
+"Savaş, sırayla"
+END
+
+GUI:SPDifficulty
+"Zorluk"
+END
+
+GUI:SPPickedOnMenu
+"ana menüde seçildi"
+END
+
+GUI:SPPickedOnMenu_Short
+"ana menü"
+END
+
+GUI:SPFinalBattle
+"Son savaş"
+END
+
+GUI:SPFinalBattle_Short
+"Son"
+END
+
+GUI:SPArmyAirForce
+"Hava Kuvvetleri"
+END
+
+GUI:SPArmyAirForce_Short
+"Hava K."
+END
+
+GUI:SPArmyToxin
+"Toksin"
+END
+
+GUI:SPArmyNuke
+"Nükleer"
+END
+
+GUI:SPArmySuperweapon
+"Süper Silah"
+END
+
+GUI:SPArmyTank
+"Tank"
+END
+
+GUI:SPArmyLaser
+"Lazer"
+END
+
+GUI:SPArmyStealth
+"Gizlilik"
+END
+
+GUI:SPArmyInfantry
+"Piyade"
+END
+
+GUI:SPArmyDemolition
+"Yıkım"
+END
+
+GUI:SPReplays
+"Tekrarlar"
+END
+
+GUI:SPReplayCount
+"%d tekrar"
+END
+
+GUI:SPName
+"Ad"
+END
+
+GUI:SPRecorded
+"Kayıt"
+END
+
+GUI:SPMap
+"Harita"
+END
+
+GUI:SPPlayers
+"Oyuncu"
+END
+
+GUI:SPLength
+"Süre"
+END
+
+GUI:SPVersion
+"Sürüm"
+END
+
+GUI:SPOlder
+"Eski"
+END
+
+GUI:SPOlderLine
+"Eski: başka sürümle kaydedildi, düzgün oynamayabilir"
+END
+
+GUI:SPSpeed
+"Hız"
+END
+
+GUI:SPGame
+"Oyun"
+END
+
+GUI:SPEnded
+"Bitiş"
+END
+
+GUI:SPThisBuild
+", bu sürüm"
+END
+
+GUI:SPOlderBuild
+", eski"
+END
+
+GUI:SPMultiplayer
+"Çok oyunculu"
+END
+
+GUI:SPSinglePlayer
+"Tek oyunculu"
+END
+
+GUI:SPPlayedOut
+"Sonuna kadar"
+END
+
+GUI:SPQuitEarly
+"Erken ayrıldı"
+END
+
+GUI:SPOutOfSync
+"Eşleşme bozuldu"
+END
+
+GUI:SPLeft
+"Ayrıldı"
+END
+
+GUI:SPTeam
+"Takım %d"
+END
+
+GUI:SPCopyToDesktop
+"Masaüstüne kopyala"
+END
+
+GUI:SPCopyToDesktop_Short
+"Kopyala"
+END
+
+GUI:SPDelete
+"Sil"
+END
+
+GUI:SPWatchReplay
+"Tekrarı izle"
+END
+
+GUI:SPWatchReplay_Short
+"İzle"
+END
+
+GUI:SPSaveCount
+"%d kayıtlı oyun"
+END
+
+GUI:SPCampaign
+"Sefer"
+END
+
+GUI:SPMission
+"Görev"
+END
+
+GUI:SPKind
+"Tür"
+END
+
+GUI:SPSaved
+"Kayıt"
+END
+
+GUI:SPKindSaved
+"Elle kayıt"
+END
+
+GUI:SPKindMissionStart
+"Görev başı"
+END
+
+GUI:SPLegendMissionStart
+"Görev başı: oyunun, görev açılırken aldığı kayıt"
+END
+
+GUI:SPLegendOlder
+"Eski: bu sürümün okuyamadığı bir sürümle yazıldı, yüklenmez"
+END
+
+GUI:SPDone
+"Bitti"
+END
+
+GUI:SPThisSave
+"Bu kayıt"
+END
+
+GUI:SPAhead
+"Sırada"
+END
+
+GUI:SPMissionOf
+"Görev %d / %d"
+END
+
+GUI:SPSavedByYou
+"Elle kaydettin"
+END
+
+GUI:SPLoads
+"Yüklenir"
+END
+
+GUI:SPLoadsYes
+"Evet, bu sürüm"
+END
+
+GUI:SPLoadsNo
+"Hayır, eski sürüm"
+END
+
+GUI:SPPlayedFor
+"Oynanan"
+END
+
+GUI:SPFile
+"Dosya"
+END
+
+GUI:SPCampaignZH
+"Zero Hour %s"
+END
+
+GUI:SPCampaignGenerals
+"Generals %s"
+END
+
+GUI:SPCampaignChallenge
+"Meydan: %s"
+END
+
+GUI:SPSkirmish
+"Çatışma"
+END
+
+GUI:SPWontLoad
+"Eski bir sürümle yazıldı. Bu sürüm okuyamıyor."
+END
+
+GUI:SPNoPreview
+"Önizleme yok"
+END
+
+GUI:SPNewSave
+"Yeni kayıt"
+END
+
+GUI:SPSaveLoad
+"Kaydet / Yükle"
+END
+
+GUI:SPHintEscEnterSaves
+"Esc vazgeçer, Enter kaydeder"
+END

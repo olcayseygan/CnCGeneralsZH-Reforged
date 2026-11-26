@@ -50,6 +50,10 @@
 #include "Common/XferSave.h"
 #include "GameClient/CampaignManager.h"
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/SinglePlayerLayout.h"
+#include "Lib/Clock.h"
+
+#include <map>
 #include "GameClient/GameClient.h"
 #include "GameClient/GameText.h"
 #include "GameClient/MapUtil.h"
@@ -1466,6 +1470,84 @@ static void addGameToAvailableList( AsciiString filename, void *userData )
 }  // end addGameToAvailableList
 
 // ------------------------------------------------------------------------------------------------
+/** The Load Game list's extras, read off the file without touching a subsystem: the campaign
+	* block's first fields (CampaignManager::xfer's order: version, campaign, mission, rank points
+	* from version 2, difficulty from version 3) and the logic block's first two (GameLogic::xfer:
+	* version, frame).  Every other block is skipped by its size. */
+// ------------------------------------------------------------------------------------------------
+static std::map< AsciiString, SaveGameExtras > theSaveExtras;
+
+static Bool readSaveExtras( const AsciiString &path, SaveGameExtras &extras )
+{
+	extras.campaign.clear();
+	extras.difficulty = DIFFICULTY_NORMAL;
+	extras.frames = 0;
+	XferLoad xferLoad;
+	Bool campaign = FALSE;
+	try
+	{
+		xferLoad.open( path );
+		xferLoad.setOptions( XO_NO_POST_PROCESSING );
+		for( ;; )
+		{
+			AsciiString token;
+			xferLoad.xferAsciiString( &token );
+			if( token.compareNoCase( SAVE_FILE_EOF ) == 0 )
+				break;
+			const Int blockSize = xferLoad.beginBlock();
+			if( token.compareNoCase( CAMPAIGN_BLOCK_STRING ) == 0 )
+			{
+				UnsignedByte version = 0;
+				xferLoad.xferUnsignedByte( &version );
+				AsciiString mission;
+				xferLoad.xferAsciiString( &extras.campaign );
+				xferLoad.xferAsciiString( &mission );
+				Int used = 1 + 1 + extras.campaign.getLength() + 1 + mission.getLength();
+				if( version >= 2 )
+				{
+					Int rankPoints;
+					xferLoad.xferInt( &rankPoints );
+					used += 4;
+				}
+				if( version >= 3 )
+				{
+					Int difficulty;
+					xferLoad.xferInt( &difficulty );		// xferUser of a GameDifficulty, an enum's four bytes
+					extras.difficulty = difficulty;
+					used += 4;
+				}
+				campaign = TRUE;
+				xferLoad.skip( blockSize - used );
+			}
+			else if( token.compareNoCase( "CHUNK_GameLogic" ) == 0 )
+			{
+				UnsignedByte version = 0;
+				xferLoad.xferUnsignedByte( &version );
+				xferLoad.xferUnsignedInt( &extras.frames );
+				break;
+			}
+			else
+				xferLoad.skip( blockSize );
+		}
+		xferLoad.close();
+	}
+	catch( ... )
+	{
+		// a broken file: whatever was read stands, and the loader closes it
+	}
+	return campaign;
+}
+
+Bool GameState_saveExtras( const AsciiString &filename, SaveGameExtras &extras )
+{
+	std::map< AsciiString, SaveGameExtras >::const_iterator it = theSaveExtras.find( filename );
+	if( it == theSaveExtras.end() )
+		return FALSE;
+	extras = it->second;
+	return TRUE;
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Populate the listbox passed in with a list of the save games present on the hard drive */
 // ------------------------------------------------------------------------------------------------
 void GameState::populateSaveGameListbox( GameWindow *listbox, SaveLoadLayoutType layoutType )
@@ -1495,6 +1577,25 @@ void GameState::populateSaveGameListbox( GameWindow *listbox, SaveLoadLayoutType
 
 	// iterate all the save files in the directory and populate the listbox
 	iterateSaveFiles( addGameToAvailableList, &m_availableGames );
+
+	// the extras the Load Game details show, dropped whole when the folder reads slower than the budget
+	theSaveExtras.clear();
+	Int saves = 0;
+	for( AvailableGameInfo *each = m_availableGames; each; each = each->next )
+		saves++;
+	const UnsignedInt started = Clock_Milliseconds();
+	for( AvailableGameInfo *each = m_availableGames; each; each = each->next )
+	{
+		SaveGameExtras extras;
+		if( readSaveExtras( getFilePathInSaveDirectory( each->filename ), extras ) )
+			theSaveExtras[ each->filename ] = extras;
+		if( (Int)( Clock_Milliseconds() - started ) > SinglePlayerLayout::saveExtrasBudgetMs( saves ) )
+		{
+			DEBUG_LOG(( "GameState: %d saves read slower than the list's budget, their details go without the extras\n", saves ));
+			theSaveExtras.clear();
+			break;
+		}
+	}
 
 	// add all games found to the list box
 	AvailableGameInfo *info;

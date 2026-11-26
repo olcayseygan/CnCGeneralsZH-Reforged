@@ -59,6 +59,7 @@
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/MessageBox.h"
 #include "GameClient/Shell.h"
+#include "GameClient/SinglePlayerParts.h"
 #include "GameLogic/GameLogic.h"
 
 #ifdef _INTERNAL
@@ -84,6 +85,66 @@ extern void PopulateReplayFileListbox(GameWindow *listbox);
 extern void ScoreScreenEnableControls(Bool enable);
 extern UnicodeString GetReplayFilenameFromListbox(GameWindow *listbox, Int index);
 extern std::string LastReplayFileName;
+
+//-------------------------------------------------------------------------------------------------
+// The box in the menu language (docs/plans/MENU-REDESIGN.md, package 12): Save Replay over the end
+// screen, NAME and its text box, the replays already saved, CANCEL and SAVE lit; "replay saved" is
+// a one-line box over it.  Tools/boxes_layout.py puts the windows on SinglePlayerLayout.h's rects.
+//-------------------------------------------------------------------------------------------------
+namespace SPL = SinglePlayerLayout;
+namespace SPP = SinglePlayerParts;
+
+static MenuBox::TextPool popupReplayText;
+
+static void popupReplayNothingDraw( GameWindow *, WinInstanceData * )
+{
+}
+
+static void popupReplayBoxDraw( GameWindow *window, WinInstanceData * )
+{
+	using namespace UIStyle;
+	popupReplayText.begin();
+	const IRegion2D box = MenuBox::windowRect( window );
+	boxShell( box, popupReplayText.get( capitals( TheGameText->fetch( "GUI:SaveReplay" ) ) ), FALSE );
+	const IRegion2D entry = SPP::on( SPL::REPLAY_BOX_ENTRY );
+	SPP::capitalsKey( "GUI:SPName", SPP::on( SPL::REPLAY_BOX_LIST ).lo.x, ( entry.lo.y + entry.hi.y ) / 2, MUTED, MenuBox::LEFT,
+		entry.lo.x - SPP::on( SPL::REPLAY_BOX_LIST ).lo.x - SPP::px( 12.0f ) );
+	static const char *heads[ SPL::RBOX_COLUMNS ] = { "GUI:SPName", "GUI:SPRecorded", "GUI:SPMap", "GUI:SPLength" };
+	SPL::Column columns[ SPL::RBOX_COLUMNS ];
+	UnicodeString labels[ SPL::RBOX_COLUMNS ];
+	for( Int c = 0; c < SPL::RBOX_COLUMNS; c++ )
+	{
+		columns[ c ] = SPL::replayBoxColumn( c );
+		labels[ c ] = TheGameText->fetch( heads[ c ] );
+	}
+	SPP::heads( columns, labels, SPL::RBOX_COLUMNS, SPL::RBOX_RECORDED, SPL::REPLAY_BOX_HEADS, SPL::REPLAY_BOX_LIST.lo.x,
+		SPL::REPLAY_BOX_LIST.hi.x );
+	boxFootRule( box );
+	const Int keysMiddle = box.hi.y - SPP::px( 44.0f );
+	SPP::wordsKey( popupReplayText, "GUI:SPHintEscEnterSaves", MENU_TEXT_HINT, FALSE, box.lo.x + SPP::px( (Real)BOX_PAD ), keysMiddle,
+		MUTED, SPP::px( 560.0f ) );
+}
+
+/// the saved replays under the name: a click copies a name up to replace that file
+static void popupReplayListDraw( GameWindow *window, WinInstanceData * )
+{
+	static const Int kinds[ SPL::RBOX_COLUMNS ] = { SPL::REPLAY_NAME, SPL::REPLAY_RECORDED, SPL::REPLAY_MAP, SPL::REPLAY_LENGTH };
+	SPL::Column columns[ SPL::RBOX_COLUMNS ];
+	for( Int c = 0; c < SPL::RBOX_COLUMNS; c++ )
+		columns[ c ] = SPL::replayBoxColumn( c );
+	DrawReplayRows( window, popupReplayText, columns, kinds, SPL::RBOX_COLUMNS, SPL::REPLAY_BOX_LIST.hi.x - 8 );
+	SPP::scrollBar( window, SPP::point( (Real)( SPL::REPLAY_BOX_LIST.hi.x - 4 ), 0.0f ).x );
+}
+
+/// "replay saved", the one-line box over the Save Replay box until it closes
+static void popupReplaySavedDraw( GameWindow *window, WinInstanceData * )
+{
+	using namespace UIStyle;
+	const IRegion2D box = MenuBox::windowRect( window );
+	boxShell( box, popupReplayText.get( capitals( TheGameText->fetch( "GUI:SaveReplay" ) ) ), FALSE );
+	SPP::words( popupReplayText, TheGameText->fetch( "GUI:ReplaySaved" ), MENU_TEXT_BODY, FALSE, box.lo.x + SPP::px( (Real)BOX_PAD ),
+		box.lo.y + SPP::px( (Real)( BOX_HEAD + BOX_LINE + BOX_LINE / 2 ) ), INK, box.hi.x - box.lo.x - 2 * SPP::px( (Real)BOX_PAD ) );
+}
 
 //-------------------------------------------------------------------------------------------------
 /** Show or hide the "Replay Saved" popup */
@@ -144,6 +205,21 @@ void PopupReplayInit( WindowLayout *layout, void *userData )
 	GameWindow *listboxGames = TheWindowManager->winGetWindowFromId( NULL, listboxGamesKey );
 	DEBUG_ASSERTCRASH( listboxGames != NULL, ("PopupReplayInit - Unable to find games listbox\n") );
 
+	// the menu language: the box draws itself, its list the rows, its keys outline only
+	if( parent )
+		parent->winSetDrawFunc( popupReplayNothingDraw );
+	GameWindow *box = TheWindowManager->winGetWindowFromId( parent, NAMEKEY( "PopupReplay.wnd:PopupReplaySubMenu" ) );
+	if( box )
+		box->winSetDrawFunc( popupReplayBoxDraw );
+	buttonFrame->winSetDrawFunc( popupReplayNothingDraw );
+	if( replaySavedParent )
+		replaySavedParent->winSetDrawFunc( popupReplaySavedDraw );
+	SPP::takeOver( listboxGames, popupReplayListDraw );
+	GadgetListBoxSetFont( listboxGames, UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL ) );
+	SPP::setEntry( TheWindowManager->winGetWindowFromId( parent, textEntryReplayNameKey ) );
+	SPP::key( TheWindowManager->winGetWindowFromId( parent, buttonBackKey ), "GUI:Cancel", FALSE );
+	SPP::key( TheWindowManager->winGetWindowFromId( parent, buttonSaveKey ), "GUI:Save", TRUE );
+
 	// populate the listbox with the save games on disk
 	PopulateReplayFileListbox(listboxGames);
 
@@ -166,6 +242,7 @@ void PopupReplayInit( WindowLayout *layout, void *userData )
 void PopupReplayShutdown( WindowLayout *layout, void *userData )
 {
 	parent = NULL;
+	popupReplayText.clear();
 
 }  // end SaveLoadMenuShutdown
 

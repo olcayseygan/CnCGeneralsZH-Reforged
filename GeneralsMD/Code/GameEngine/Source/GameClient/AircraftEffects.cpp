@@ -43,18 +43,19 @@ namespace
 	const Real VORTEX_TURN = 1.0f;					///< a turn this hard draws the wingtip ribbons (TurnRate 120 to 180 degrees is 2.1 to 3.1)
 	const Real VORTEX_MIN_SPEED = 90.0f;
 	const UnsignedInt VORTEX_HOLD = 6;			///< logic frames the ribbons stay after the turn eases
-	const Real SHEET_TURN = 1.8f;						///< harder still, or a pull-out, puts vapour over the wing
-	const Real SHEET_PULL = 0.6f;
-	const Real SHEET_MIN_SPEED = 110.0f;
+	// 1.8 and a 0.6 pull-out never fired in the filmed dogfights of 2026-11-27; AIRFX lines log the peaks
+	const Real SHEET_TURN = 1.2f;						///< harder still, or a pull-out, puts vapour over the wing
+	const Real SHEET_PULL = 0.3f;
+	const Real SHEET_MIN_SPEED = 100.0f;
 	const UnsignedInt CONE_FRAMES = 20;			///< the vapour cone wraps the airframe this long after the crossing
-	const Real BOOM_HEIGHT = 160.0f;				///< a supersonic pass lower than this raises the ground's dust
-	const Real SPRAY_HEIGHT = 70.0f;				///< a pass over water lower than this throws spray
+	const Real BOOM_HEIGHT = 220.0f;				///< a supersonic pass lower than this raises the ground's dust
+	const Real SPRAY_HEIGHT = 140.0f;				///< a pass over water lower than this throws spray; jets cruise at 100
 	const Real SPRAY_MIN_SPEED = 120.0f;
 	const Real GROUND_HEIGHT = 4.0f;				///< on the ground, rolling
 	const Real AIRBORNE_HEIGHT = 8.0f;
 	const Real ROLL_MIN_SPEED = 45.0f;			///< a takeoff roll fast enough to blow the tarmac's dust
 	const Real CONTRAIL_HEIGHT = 40.0f;
-	const Real WASH_HEIGHT = 50.0f;					///< a helicopter lower than this over its ground blows it about
+	const Real WASH_HEIGHT = 140.0f;				///< a helicopter lower than this over its ground blows it about; they cruise at 100
 	const Real BARREL_HOT_SECONDS = 2.0f;		///< a burst this long heats the barrels
 	const Real BARREL_COOL_SECONDS = 2.5f;	///< and they shimmer this long after it
 	const UnsignedInt BURST_GAP = 12;				///< logic frames between shots that still count as one burst
@@ -76,6 +77,7 @@ namespace
 		ParticleSystemID vortex[ 2 ], contrail[ 2 ], cone, damaged, fall, heat, trail;
 		Coord3D tip[ 2 ];
 		Bool tipsKnown;
+		Real peakTurn, peakPull, peakSpeed;	///< since the last AIRFX line, for tuning the thresholds above
 	};
 
 	typedef std::map< DrawableID, AirState > AirMap;
@@ -250,8 +252,8 @@ namespace
 			release( s.vortex[ 1 ] );
 		}
 
-		// vapour over the wing in a harder turn or a pull-out, every other frame
-		if( !dead && height > 20.0f && speed > SHEET_MIN_SPEED && ( now & 1 ) == 0
+		// vapour over the wing in a harder turn or a pull-out, every frame
+		if( !dead && height > 20.0f && speed > SHEET_MIN_SPEED
 				&& ( fabs( turnRate ) > SHEET_TURN || pitchRate > SHEET_PULL ) )
 		{
 			for( Int side = 0; side < 2; ++side )
@@ -273,7 +275,7 @@ namespace
 			hold( s.cone, "ReforgedVapourCone", draw, local( 0.15f * r, 0.0f, 0.0f ) );
 		else
 			release( s.cone );
-		if( s.supersonic && height < BOOM_HEIGHT && ( now & 1 ) == 0 )
+		if( s.supersonic && height < BOOM_HEIGHT )
 		{
 			Coord3D under = *pos;
 			under.z = surface + 1.0f;
@@ -499,6 +501,20 @@ void AircraftEffects_update( void )
 		else if( s.known )
 			updateJet( draw, obj, s, now, turnRate, pitchRate, speed, accel, height, water, surface );
 		updateBarrels( draw, obj, s, now );
+
+		// the peaks every five seconds, so the thresholds above are tuned to what play reaches
+		if( s.known )
+		{
+			if( fabs( turnRate ) > s.peakTurn ) s.peakTurn = (Real)fabs( turnRate );
+			if( pitchRate > s.peakPull ) s.peakPull = pitchRate;
+			if( speed > s.peakSpeed ) s.peakSpeed = speed;
+			if( now % ( 5 * LOGICFRAMES_PER_GAME_SECOND ) == 0 && s.peakSpeed > 0.0f )
+			{
+				DEBUG_LOG(( "AIRFX frame %d %s turn %.2f pull %.2f speed %.0f height %.0f\n", now,
+					obj->getTemplate()->getName().str(), s.peakTurn, s.peakPull, s.peakSpeed, height ));
+				s.peakTurn = s.peakPull = s.peakSpeed = 0.0f;
+			}
+		}
 
 		s.pos = *pos;
 		s.heading = heading;

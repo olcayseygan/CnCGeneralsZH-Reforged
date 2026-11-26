@@ -1957,8 +1957,8 @@ void W3DInGameUI::takeMoveHintTransforms( void )
 		m_moveHintShrouded[ i ] = FALSE;
 		if( shroud != NULL && shroud->getShroudTexture() != NULL && shroud->getCellWidth() > 0.0f && shroud->getCellHeight() > 0.0f )
 		{
-			const Int cellX = REAL_TO_INT_FLOOR( ( m_moveHint[ i ].pos.x - shroud->getDrawOriginX() ) / shroud->getCellWidth() );
-			const Int cellY = REAL_TO_INT_FLOOR( ( m_moveHint[ i ].pos.y - shroud->getDrawOriginY() ) / shroud->getCellHeight() );
+			const Int cellX = REAL_TO_INT_FLOOR( m_moveHint[ i ].pos.x / shroud->getCellWidth() );
+			const Int cellY = REAL_TO_INT_FLOOR( m_moveHint[ i ].pos.y / shroud->getCellHeight() );
 			if( cellX >= 0 && cellY >= 0 && cellX < shroud->getNumShroudCellsX() && cellY < shroud->getNumShroudCellsY() )
 				m_moveHintShrouded[ i ] = shroud->getShroudLevel( cellX, cellY ) < 16;
 		}

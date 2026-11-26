@@ -1575,9 +1575,9 @@ static Real shroudLight( Real x, Real y )
 	const Int lastY = shroud->getNumShroudCellsY() - 1;
 	if( lastX < 0 || lastY < 0 || shroud->getCellWidth() <= 0.0f || shroud->getCellHeight() <= 0.0f )
 		return 1.0f;
-	// cell centres at a half, the cell's texel a border texel in (ShroudTextureShader::set)
-	const Real fx = ( x - shroud->getDrawOriginX() ) / shroud->getCellWidth() - 0.5f;
-	const Real fy = ( y - shroud->getDrawOriginY() ) / shroud->getCellHeight() - 0.5f;
+	// cell centres at a half, the cells from the world's origin (W3DShroud::getDrawOriginX)
+	const Real fx = x / shroud->getCellWidth() - 0.5f;
+	const Real fy = y / shroud->getCellHeight() - 0.5f;
 	const Int baseX = REAL_TO_INT_FLOOR( fx ), baseY = REAL_TO_INT_FLOOR( fy );
 	const Real s = fx - (Real)baseX, t = fy - (Real)baseY;
 	Real across[ 4 ], down[ 4 ];

@@ -35,7 +35,10 @@
 
 #include "gamespy/peer/peer.h"
 
+#include <map>
+
 #include "Common/GameEngine.h"
+#include "Common/GameState.h"
 #include "Common/GameSpyMiscPreferences.h"
 #include "Common/CustomMatchPreferences.h"
 #include "Common/GlobalData.h"
@@ -445,51 +448,78 @@ static void pressPlay( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-// The hub's cards (ONLINE-UI-REDESIGN.md "Hub", experiments/online-redesign/hub.html), drawn in code
-// behind the master's buttons on the master's own boxes.  Every length is the mockup's at 1080 through
-// UIStyle::px, the scale the master's boxes were fitted at; the lettering shrinks with them at 4:3
-// (hubPoints), as the master's own does, so a card's words fit the card the master fitted.
+// The hub's cards in the menu language (menu package 9, screens/online-entry/README-online-entry.md
+// "Hub"), drawn in code behind the master's keys on the master's clear boxes.  Every length is the
+// design's at 1080 through UIStyle::px, the scale the master was fitted at; type through
+// UIStyle::menuFont.  The head, frame A and the foot's rule are UIStyle::onlineHeader's.
 //-------------------------------------------------------------------------------------------------
-enum { CARD_FACTS = 3, RECENT_ROWS = 6 };
-static const Real FACT_WIDTH = 190.0f;
-static const Real WIDE_FACT_WIDTH = 250.0f;		///< Custom games' one fact, whose label is long in Turkish
-static const Real LEAD_TOP = 56.0f;					///< the lead, or the status line in its place, from the card's top
-static const Real FACTS_TOP = 106.0f;				///< the facts and the figure's label under it
+enum { CARD_FACTS = 3, RECENT_ROWS = 5, FORM_RESULTS = 5, OPEN_GAME_ROWS = 3, LADDER_ROWS = 5 };
+static const Real FACT_WIDTH = 236.0f;		///< the facts' column, ending 24 in from the card's right
 
 struct HubCard
 {
 	GameWindow *window;
 	Bool portraitColumn;				///< Play vs AI and Quick Match keep the rank portrait's column
-	const Image *portrait;			///< NULL for an unranked player, who shows none
+	const Image *portrait;			///< NULL for an unranked player, who shows a "?" well
 	DisplayString *title, *lead, *label, *figure, *tier, *status;
 	DisplayString *factLabel[ CARD_FACTS ], *factValue[ CARD_FACTS ];
 	Int facts;
-	Real factWidth;							///< the facts' column at 1080
-	Int statusRoom;							///< pixels from the lead's top to the facts
+	/// LAST 5: the label, the two letters, the results newest first and how many there are
+	DisplayString *formLabel, *formWin, *formLoss;
+	Bool formWon[ FORM_RESULTS ];
+	Int formCount;
 };
 enum { CARD_AI, CARD_QUICK_MATCH, CARD_CUSTOM, CARD_COUNT };
 static HubCard s_cards[ CARD_COUNT ];
 
-/// a recent match's cells, left to right as the mockup's row
+/// the Custom games card's second figure and its first open games, from games.watch
+static DisplayString *s_customLabel2 = NULL, *s_customFigure2 = NULL;
+static DisplayString *s_openGame[ OPEN_GAME_ROWS ][ 3 ];		///< name, map, seats
+static Int s_openGameRows = 0;
+struct HubGame
+{
+	UnicodeString name;
+	AsciiString map;
+	Int players, maxPlayers;
+};
+static std::map<Int, HubGame> s_openGames;		///< by the server's game id, the open ones only
+static Bool s_openGamesStale = TRUE;
+
+/// a recent match's cells, left to right as the design's row
 enum RecentCell { CELL_CHIP, CELL_MODE, CELL_OPPONENT, CELL_RATING, CELL_MAP, CELL_CHANGE, CELL_AGE, CELL_COUNT };
-/// the cells' widths at 1080 (the rating shares the opponent's), 1080 in all, each padded CELL_PAD either side
-static const Real CELL_WIDTH[] = { 110.0f, 160.0f, 300.0f, 0.0f, 240.0f, 120.0f, 150.0f };
-static const Real CELL_PAD = 10.0f;
-static Int s_cellWidth[ CELL_COUNT ];		///< on this screen: the chip's as wide as its widest result, taken from the map's
+/// each head's left edge at 1080 from the box's inset; change and when are set from the right (CELL_RIGHT)
+static const Real CELL_LEFT[ CELL_COUNT ] = { 0.0f, 146.0f, 312.0f, 0.0f, 596.0f, 822.0f, 0.0f };
+static const Real CHANGE_RIGHT = 150.0f;	///< the change's right edge, this far in from the box's inner right
 static DisplayString *s_recent[ RECENT_ROWS ][ CELL_COUNT ];
 static Bool s_recentWon[ RECENT_ROWS ];
-static Color s_recentChange[ RECENT_ROWS ];
+static Real s_recentChange[ RECENT_ROWS ];
+static Real s_recentBiggest = 0.0f;		///< the largest change shown, the bars' full length
 static Int s_recentRows = 0;
 static DisplayString *s_recentTitle = NULL;
 static DisplayString *s_recentLine = NULL;		///< no matches, or no answer
+static DisplayString *s_recentHead[ CELL_COUNT ];
 static DisplayString *s_motdTitle = NULL;
+static DisplayString *s_serverHead = NULL;
+static DisplayString *s_serverFact[ 2 ][ 2 ];	///< Online now and In Quick Match: label, value
 static GameWindow *s_cardRecent = NULL;
 static GameWindow *s_cardMOTD = NULL;
 static UnsignedInt s_cardsSerial = 0;
 static Int s_cardsCounts[ 3 ];
 static Int s_cardsLock = 0;					///< the Quick Match lock's seconds the card last showed
-static UnsignedInt s_recentSerial = 0;		///< OnlineGetHistorySerial as the rows were last built
+static UnsignedInt s_recentSerial[ 2 ];	///< OnlineGetHistorySerial for Quick Match and AI as the rows were last built
 static Bool s_recentStale = TRUE;				///< new strings: build the rows whatever the serial says
+
+/* A new player has no history: the recent box shows the ladder's top five instead (the Ladder tab's
+	 ladder answer, asked here when both histories came back empty). */
+static Bool s_ladderShown = FALSE;
+static Bool s_ladderAsked = FALSE;
+static DisplayString *s_ladderHead = NULL;
+static DisplayString *s_ladderColumn[ 4 ];			///< #, PLAYER, ELO, W–L
+static DisplayString *s_ladder[ LADDER_ROWS ][ 4 ];
+static const Image *s_ladderPortrait[ LADDER_ROWS ];
+static Real s_ladderElo[ LADDER_ROWS ];
+static Int s_ladderRows = 0;
+static DisplayString *s_wellMark = NULL;			///< the "?" of every well
 
 /* A match the player dropped out of that the others still play (the sign-in's match.rejoinable): the
 	 recent matches' card shows it instead, its players in two columns, with Rejoin at its foot. */
@@ -510,6 +540,8 @@ static DisplayString *s_rejoinChip[ REJOIN_ROWS ];
 static DisplayString *s_rejoinNick[ REJOIN_ROWS ];
 static DisplayString *s_rejoinSide[ REJOIN_ROWS ];
 static Bool s_rejoinPresent[ REJOIN_ROWS ];
+static Bool s_rejoinLocal[ REJOIN_ROWS ];		///< the seat is the local player's, his nick gold
+static Bool s_playLit = TRUE;								///< PLAY is the lit key; REJOIN is while a match is offered
 static Int s_rejoinRows = 0;
 
 static std::vector<DisplayString *> s_strings;		///< every string the cards made, freed together
@@ -529,8 +561,14 @@ static void freeHubStrings( void )
 	s_strings.clear();
 	memset( s_cards, 0, sizeof( s_cards ) );
 	memset( s_recent, 0, sizeof( s_recent ) );
-	s_recentTitle = s_recentLine = s_motdTitle = NULL;
-	s_recentRows = 0;
+	memset( s_recentHead, 0, sizeof( s_recentHead ) );
+	memset( s_openGame, 0, sizeof( s_openGame ) );
+	memset( s_serverFact, 0, sizeof( s_serverFact ) );
+	memset( s_ladder, 0, sizeof( s_ladder ) );
+	memset( s_ladderColumn, 0, sizeof( s_ladderColumn ) );
+	s_recentTitle = s_recentLine = s_motdTitle = s_serverHead = s_ladderHead = s_wellMark = NULL;
+	s_customLabel2 = s_customFigure2 = NULL;
+	s_recentRows = s_openGameRows = s_ladderRows = 0;
 	memset( s_rejoinChip, 0, sizeof( s_rejoinChip ) );
 	memset( s_rejoinNick, 0, sizeof( s_rejoinNick ) );
 	memset( s_rejoinSide, 0, sizeof( s_rejoinSide ) );
@@ -538,200 +576,334 @@ static void freeHubStrings( void )
 	s_rejoinRows = 0;
 }
 
-/// a layout's points on the cards: UIStyle's size at 16:9 and wider, shrunk with the fitted board at 4:3
-static Int hubPoints( Int points )
-{
-	return max( 1, REAL_TO_INT( points * UIStyle::px( 1080.0f ) / (Real)UIStyle::tallPx( 1080.0f ) + 0.5f ) );
-}
-static GameFont *bodyFont( void )			{ return UIStyle::readableFont( hubPoints( UIStyle::TEXT_BODY ) ); }
-/// a card's heading, two points over the body's size whatever the readable floor grew the body to
-/// (UIStyle::sectionFont's rule on the hub's own body): on hubPoints( TEXT_STRONG ) alone it came out
-/// at 14 pixels over an 18 pixel body at 1280x720
-static GameFont *headingFont( void )
-{
-	const Int bodyHeight = bodyFont()->height;
-	Int bodyPoints = hubPoints( UIStyle::TEXT_BODY );
-	while (UIStyle::font( bodyPoints )->height < bodyHeight)
-		++bodyPoints;
-	return UIStyle::font( bodyPoints + UIStyle::TEXT_STRONG - UIStyle::TEXT_BODY );
-}
-static GameFont *chipFont( void )			{ return UIStyle::readableFont( hubPoints( UIStyle::TEXT_SMALL ), TRUE ); }
+/// the five sizes at 1080 (UIStyle::MENU_TEXT_*): body 18, a box's name and a row's figure 24, a key
+/// figure 40, the 14 px bold capital labels
+static GameFont *bodyFont( void )			{ return UIStyle::menuFont( UIStyle::MENU_TEXT_BODY ); }
+static GameFont *headingFont( void )	{ return UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE ); }
+static GameFont *figureFont( void )		{ return UIStyle::menuFont( UIStyle::MENU_TEXT_TEAM_FIGURE ); }
+static GameFont *labelFont( void )		{ return UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE ); }
+static Int hpx( Real at1080 )					{ return UIStyle::px( at1080 ); }
 
+/// a label in capitals, fitted
+static UnicodeString capsKey( const char *key, Int widest )
+{
+	return UIStyle::fitText( UIStyle::capitals( TheGameText->fetch( key ) ), labelFont(), widest );
+}
+
+/// words with their left edge (or right edge, right) at x, centred on middle; their width
+static Int drawAt( DisplayString *text, Int x, Int middle, Color color, Bool right = FALSE )
+{
+	Int w, h;
+	text->getSize( &w, &h );
+	text->draw( right ? x - w : x, middle - h / 2, color, UIStyle::SHADOW );
+	return w;
+}
+
+/// the box's name, 24, with the capitals after it 16 apart (UNRANKED, RANKED · 1V1); its bottom
+static void drawBoxName( DisplayString *name, DisplayString *lead, Int x, Int y )
+{
+	const Int middle = y + hpx( 33.0f );
+	const Int w = drawAt( name, x, middle, UIStyle::INK );
+	if (lead && lead->getTextLength())
+		drawAt( lead, x + w + hpx( 16.0f ), middle, UIStyle::MUTED );
+}
+
+/// a "?" well where a rank portrait would stand: an unranked player
+static void drawWell( Int x, Int y, Int size )
+{
+	TheDisplay->drawFillRect( x, y, size, size, GameMakeColor( 10, 12, 20, 230 ) );
+	TheDisplay->drawOpenRect( x, y, size, size, 1.0f, UIStyle::withAlpha( UIStyle::FRAME, 200 ) );
+	if (s_wellMark == NULL)
+		return;
+	GameFont *font = size >= hpx( 80.0f ) ? figureFont() : headingFont();
+	if (s_wellMark->getFont() != font)
+		s_wellMark->setFont( font );
+	Int w, h;
+	s_wellMark->getSize( &w, &h );
+	s_wellMark->draw( x + ( size - w ) / 2, y + ( size - h ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
+}
+
+/// a rating's change as the row's figure, white up and MUTED down, a quiet bar of its size before it
+static void drawChange( DisplayString *figure, Real change, Real biggest, Int right, Int middle )
+{
+	const Int w = drawAt( figure, right, middle, change > 0.0f ? UIStyle::INK : UIStyle::MUTED, TRUE );
+	const Int bar = hpx( 110.0f ), barRight = right - w - hpx( 14.0f );
+	TheDisplay->drawFillRect( barRight - bar, middle - 1, bar, max( 1, hpx( 2.0f ) ), UIStyle::withAlpha( UIStyle::FRAME, 70 ) );
+	const Int length = biggest > 0.0f ? REAL_TO_INT( bar * fabs( change ) / biggest + 0.5f ) : 0;
+	if (length > 0)
+		TheDisplay->drawFillRect( barRight - length, middle - hpx( 2.0f ), length, max( 2, hpx( 4.0f ) ),
+			change > 0.0f ? UIStyle::EDGE : UIStyle::FRAME );
+}
+
+/** A card's words.  title is its name (24), lead the capitals after it, label the figure's (14 px capitals
+	* over the 40 px figure); facts are rows of 40 at the right; a mode card has the LAST 5 row. */
 static void makeCard( HubCard &card, const char *window, const char *title, const char *lead,
-	const char *label, Bool portraitColumn, Real factWidth, Int facts, const char *const factKeys[] )
+	const char *label, Bool portraitColumn, Int facts, const char *const factKeys[] )
 {
 	card.window = hubWindow( window );
 	card.portraitColumn = portraitColumn;
 	card.portrait = NULL;
-	card.factWidth = factWidth;
 	Int w = 0, h = 0;
 	if (card.window)
 		card.window->winGetSize( &w, &h );
-	// a status line takes the lead's place and its rule, down to the facts
-	card.statusRoom = UIStyle::px( FACTS_TOP - LEAD_TOP - 6.0f );
 	GameFont *body = bodyFont();
-	const Int inner = w - UIStyle::px( 48.0f );
+	const Int inner = w - hpx( 48.0f );
 	card.title = hubString( headingFont() );
-	card.title->setText( UIStyle::fitKey( title, headingFont(), inner ) );
-	card.lead = hubString( body );
-	card.lead->setText( UIStyle::fitKey( lead, body, inner ) );
-	// the figure's column runs from the portrait's right (or the card's inset) to the facts
-	const Int figureLeft = UIStyle::px( portraitColumn ? 148.0f : 24.0f );
-	const Int figureWidth = w - UIStyle::px( 24.0f + factWidth + 12.0f ) - figureLeft;
-	card.label = hubString( body );
-	card.label->setText( label ? UIStyle::fitKey( label, body, figureWidth ) : UnicodeString::TheEmptyString );
-	card.figure = hubString( UIStyle::titleFont( hubPoints( UIStyle::TEXT_DISPLAY ) ) );
+	card.title->setText( UIStyle::fitKey( title, headingFont(), inner / 2 ) );
+	Int titleWidth, titleHeight;
+	card.title->getSize( &titleWidth, &titleHeight );
+	card.lead = hubString( labelFont() );
+	card.lead->setText( capsKey( lead, inner - titleWidth - hpx( 16.0f ) ) );
+	card.label = hubString( labelFont() );
+	card.label->setText( label ? capsKey( label, hpx( 200.0f ) ) : UnicodeString::TheEmptyString );
+	card.figure = hubString( figureFont() );
 	card.tier = hubString( body );
 	card.status = hubString( body );
-	card.status->setWordWrap( inner );
 	card.facts = facts;
 	for (Int i = 0; i < facts; ++i)
 	{
 		card.factLabel[ i ] = hubString( body );
-		card.factLabel[ i ]->setText( UIStyle::fitKey( factKeys[ i ], body, UIStyle::px( factWidth - 60.0f ) ) );
+		card.factLabel[ i ]->setText( UIStyle::fitKey( factKeys[ i ], body, hpx( FACT_WIDTH / 2.0f ) ) );
 		card.factValue[ i ] = hubString( body );
 	}
+	card.formLabel = hubString( labelFont() );
+	card.formLabel->setText( capsKey( "GUI:OnlineHubLast5", hpx( 90.0f ) ) );
+	card.formWin = hubString( labelFont() );
+	card.formWin->setText( UIStyle::capitals( TheGameText->fetch( "GUI:OnlineWinLetter" ) ) );
+	card.formLoss = hubString( labelFont() );
+	card.formLoss->setText( UIStyle::capitals( TheGameText->fetch( "GUI:OnlineLossLetter" ) ) );
+	card.formCount = 0;
 }
 
-static void drawModeCard( const HubCard &card, Int x, Int y, Int w )
+/** A mode: its name and what it is, the key figure with the tier's portrait before it (a "?" well while
+	* unranked), the facts at the right, the last five results under the figure, the status (a refusal, the
+	* lock) over the key the master stands across its foot. */
+static void drawModeCard( const HubCard &card, Int x, Int y, Int w, Int h )
 {
-	const Int left = x + UIStyle::px( 24.0f );
-	UIStyle::heading( card.title, left, y + UIStyle::px( 22.0f ) );
-	if (card.status->getTextLength() == 0)
-	{
-		card.lead->draw( left, y + UIStyle::px( LEAD_TOP ), UIStyle::MUTED, UIStyle::SHADOW );
-		TheDisplay->drawFillRect( left, y + UIStyle::px( 92.0f ), w - UIStyle::px( 48.0f ), 1, UIStyle::GRID );
-	}
-	else
-		card.status->draw( left, y + UIStyle::px( LEAD_TOP ), UIStyle::INK, UIStyle::SHADOW );
+	const Int left = x + hpx( 24.0f ), right = x + w - hpx( 24.0f );
+	drawBoxName( card.title, card.lead, left, y );
 
 	Int figureX = left;
 	if (card.portraitColumn)
 	{
-		const Int top = y + UIStyle::px( 112.0f );
-		const Int size = UIStyle::px( 104.0f );
+		const Int top = y + hpx( 70.0f ), size = hpx( 112.0f );
 		if (card.portrait)
 			TheDisplay->drawImage( card.portrait, left, top, left + size, top + size );
-		figureX = x + UIStyle::px( 148.0f );
+		else
+			drawWell( left, top, size );
+		figureX = left + hpx( 132.0f );
 	}
-	card.label->draw( figureX, y + UIStyle::px( 112.0f ), UIStyle::MUTED, UIStyle::SHADOW );
-	card.figure->draw( figureX, y + UIStyle::px( 136.0f ), UIStyle::INK, UIStyle::SHADOW );
-	card.tier->draw( figureX, y + UIStyle::px( 204.0f ), UIStyle::INK, UIStyle::SHADOW );
+	card.label->draw( figureX, y + hpx( 70.0f ), UIStyle::MUTED, UIStyle::SHADOW );
+	card.figure->draw( figureX, y + hpx( 92.0f ), UIStyle::INK, UIStyle::SHADOW );
+	drawAt( card.tier, figureX, y + hpx( 158.0f ), UIStyle::INK );
 
-	const Int factsX = x + w - UIStyle::px( 24.0f + card.factWidth );
+	const Int factsX = right - hpx( FACT_WIDTH );
 	for (Int i = 0; i < card.facts; ++i)
-		UIStyle::fact( card.factLabel[ i ], card.factValue[ i ], factsX, y + UIStyle::px( FACTS_TOP + 36.0f * i ),
-			UIStyle::px( card.factWidth ), UIStyle::px( 36.0f ) );
+	{
+		const Int middle = y + hpx( 88.0f + 40.0f * i );
+		drawAt( card.factLabel[ i ], factsX, middle, UIStyle::MUTED );
+		if (card.factValue[ i ]->getTextLength())
+			drawAt( card.factValue[ i ], right, middle, UIStyle::INK, TRUE );
+	}
+
+	if (card.formCount > 0)
+	{
+		const Int middle = y + hpx( 217.0f );
+		Int cx = left + drawAt( card.formLabel, left, middle, UIStyle::MUTED ) + hpx( 16.0f );
+		for (Int i = 0; i < card.formCount; ++i)
+			cx += UIStyle::onlineChip( card.formWon[ i ] ? card.formWin : card.formLoss, cx, middle, card.formWon[ i ] ) + hpx( 6.0f );
+	}
+	if (card.status->getTextLength())
+		drawAt( card.status, left, y + h - hpx( 98.0f ), UIStyle::INK );
 }
 
-/// a cell's words centred on the row, from x, or ending at x when right
-static void drawCell( DisplayString *text, Int x, Int top, Int height, Color color, Bool right = FALSE )
+/// Custom games: the two figures side by side, then the first open games (name, map, seats)
+static void drawCustomCard( const HubCard &card, Int x, Int y, Int w )
 {
-	Int w, h;
-	text->getSize( &w, &h );
-	text->draw( right ? x - w : x, top + ( height - h ) / 2, color, UIStyle::SHADOW );
+	const Int left = x + hpx( 24.0f ), right = x + w - hpx( 24.0f );
+	drawBoxName( card.title, card.lead, left, y );
+	card.label->draw( left, y + hpx( 70.0f ), UIStyle::MUTED, UIStyle::SHADOW );
+	card.figure->draw( left, y + hpx( 92.0f ), UIStyle::INK, UIStyle::SHADOW );
+	s_customLabel2->draw( left + hpx( 192.0f ), y + hpx( 70.0f ), UIStyle::MUTED, UIStyle::SHADOW );
+	s_customFigure2->draw( left + hpx( 192.0f ), y + hpx( 92.0f ), UIStyle::INK, UIStyle::SHADOW );
+	const Int pitch = hpx( 34.0f );
+	for (Int r = 0; r < s_openGameRows; ++r)
+	{
+		const Int top = y + hpx( 160.0f ) + r * pitch, middle = top + pitch / 2;
+		if (r % 2 == 0)
+			TheDisplay->drawFillRect( left - hpx( 8.0f ), top, right - left + hpx( 16.0f ), pitch, GameMakeColor( 255, 255, 255, 7 ) );
+		drawAt( s_openGame[ r ][ 0 ], left, middle, UIStyle::INK );
+		drawAt( s_openGame[ r ][ 1 ], left + hpx( 186.0f ), middle, UIStyle::MUTED );
+		drawAt( s_openGame[ r ][ 2 ], right, middle, UIStyle::INK, TRUE );
+	}
 }
 
+/// a head of the recent table or the ladder: 14 px capitals, MUTED, from its left or to its right edge
+static void drawHead( DisplayString *head, Int x, Int middle, Bool right = FALSE )
+{
+	drawAt( head, x, middle, UIStyle::MUTED, right );
+}
+
+/** The recent matches: heads over one lit rule, five rows 54 high with a faint zebra, the result's chip,
+	* the mode, the opponent and his rating, the map, the change as the row's figure with its bar, when. */
 static void drawRecent( Int x, Int y, Int w )
 {
-	UIStyle::heading( s_recentTitle, x + UIStyle::px( 24.0f ), y + UIStyle::px( 20.0f ) );
-	const Int rowTop = y + UIStyle::px( 60.0f );
-	const Int rowHeight = UIStyle::px( 44.0f );
+	const Int left = x + hpx( 24.0f ), right = x + w - hpx( 24.0f );
+	drawBoxName( s_recentTitle, NULL, left, y );
+	const Int headMiddle = y + hpx( 73.0f );
 	if (s_recentRows == 0)
 	{
-		drawCell( s_recentLine, x + UIStyle::px( 24.0f ), rowTop, rowHeight, UIStyle::MUTED );
+		drawAt( s_recentLine, left, headMiddle, UIStyle::MUTED );
 		return;
 	}
-	const Int rowX = x + UIStyle::px( 14.0f );
-	const Int pad = UIStyle::px( CELL_PAD );
-	Int start[ CELL_COUNT + 1 ];
-	start[ 0 ] = rowX;
+	const Int changeRight = right - hpx( CHANGE_RIGHT );
 	for (Int c = 0; c < CELL_COUNT; ++c)
-		start[ c + 1 ] = start[ c ] + s_cellWidth[ c ];
+	{
+		if (c == CELL_RATING)
+			continue;
+		if (c == CELL_CHANGE)
+			drawHead( s_recentHead[ c ], changeRight, headMiddle, TRUE );
+		else if (c == CELL_AGE)
+			drawHead( s_recentHead[ c ], right, headMiddle, TRUE );
+		else
+			drawHead( s_recentHead[ c ], left + hpx( CELL_LEFT[ c ] ), headMiddle );
+	}
+	UIStyle::litLine( left, y + hpx( 88.0f ), right - left, 1, UIStyle::FRAME );
+	const Int pitch = hpx( 54.0f );
 	for (Int r = 0; r < s_recentRows; ++r)
 	{
 		DisplayString **cell = s_recent[ r ];
-		const Int top = rowTop + r * rowHeight;
-		Int w0, h0;
-		cell[ CELL_CHIP ]->getSize( &w0, &h0 );
-		const Int chipHeight = h0 + UIStyle::tallPx( 5.0f ) + UIStyle::tallPx( 4.0f );
-		UIStyle::chip( cell[ CELL_CHIP ], start[ CELL_CHIP ] + pad, top + ( rowHeight - chipHeight ) / 2,
-			s_recentWon[ r ] ? UIStyle::GOLD : UIStyle::MUTED, s_recentWon[ r ] ? UIStyle::GOLD : UIStyle::FRAME );
-		drawCell( cell[ CELL_MODE ], start[ CELL_MODE ] + pad, top, rowHeight, UIStyle::MUTED );
-		drawCell( cell[ CELL_OPPONENT ], start[ CELL_OPPONENT ] + pad, top, rowHeight, UIStyle::INK );
-		cell[ CELL_OPPONENT ]->getSize( &w0, &h0 );
-		drawCell( cell[ CELL_RATING ], start[ CELL_OPPONENT ] + pad + w0 + UIStyle::px( 6.0f ), top, rowHeight, UIStyle::MUTED );
-		drawCell( cell[ CELL_MAP ], start[ CELL_MAP ] + pad, top, rowHeight, UIStyle::INK );
-		drawCell( cell[ CELL_CHANGE ], start[ CELL_AGE ] - pad, top, rowHeight, s_recentChange[ r ], TRUE );
-		drawCell( cell[ CELL_AGE ], start[ CELL_COUNT ] - pad, top, rowHeight, UIStyle::MUTED, TRUE );
-		TheDisplay->drawFillRect( rowX, top + rowHeight - 1, start[ CELL_COUNT ] - rowX, 1, UIStyle::GRID );
+		const Int top = y + hpx( 94.0f ) + r * pitch, middle = top + pitch / 2;
+		if (r % 2)
+			TheDisplay->drawFillRect( left - hpx( 8.0f ), top, right - left + hpx( 16.0f ), pitch, GameMakeColor( 255, 255, 255, 7 ) );
+		UIStyle::onlineChip( cell[ CELL_CHIP ], left, middle, s_recentWon[ r ] );
+		drawAt( cell[ CELL_MODE ], left + hpx( CELL_LEFT[ CELL_MODE ] ), middle, UIStyle::MUTED );
+		const Int opponent = left + hpx( CELL_LEFT[ CELL_OPPONENT ] );
+		const Int ow = drawAt( cell[ CELL_OPPONENT ], opponent, middle, UIStyle::INK );
+		drawAt( cell[ CELL_RATING ], opponent + ow + hpx( 10.0f ), middle, UIStyle::MUTED );
+		drawAt( cell[ CELL_MAP ], left + hpx( CELL_LEFT[ CELL_MAP ] ), middle, UIStyle::INK );
+		drawChange( cell[ CELL_CHANGE ], s_recentChange[ r ], s_recentBiggest, changeRight, middle );
+		drawAt( cell[ CELL_AGE ], right, middle, UIStyle::MUTED, TRUE );
 	}
 }
 
-/// the left of the card that Rejoin leaves free: the button's 300 and its 24 inset, and 24 more between
-static Int rejoinRoom( Int w )
+/** A new player: one line says there is no history yet, and the ladder's top five take the box under
+	* LADDER · TOP 5: place, rank portrait, name, ELO with its bar, W–L. */
+static void drawLadderTop( Int x, Int y, Int w )
 {
-	return w - UIStyle::px( 24.0f + 300.0f + 24.0f + 24.0f );
+	const Int left = x + hpx( 24.0f ), right = x + w - hpx( 24.0f );
+	Int titleWidth, titleHeight;
+	s_recentTitle->getSize( &titleWidth, &titleHeight );
+	drawBoxName( s_recentTitle, NULL, left, y );
+	drawAt( s_recentLine, left + titleWidth + hpx( 20.0f ), y + hpx( 35.0f ), UIStyle::MUTED );
+	const Int top = UIStyle::onlineSection( s_ladderHead, left, right, y + hpx( 74.0f ) );
+	const Int headMiddle = top + hpx( 17.0f );
+	drawHead( s_ladderColumn[ 0 ], left, headMiddle );
+	drawHead( s_ladderColumn[ 1 ], left + hpx( 104.0f ), headMiddle );
+	drawHead( s_ladderColumn[ 2 ], left + hpx( 900.0f ), headMiddle, TRUE );
+	drawHead( s_ladderColumn[ 3 ], right, headMiddle, TRUE );
+	const Int pitch = hpx( 52.0f );
+	const Real best = s_ladderRows > 0 ? s_ladderElo[ 0 ] : 0.0f;
+	for (Int r = 0; r < s_ladderRows; ++r)
+	{
+		const Int rowTop = top + hpx( 34.0f ) + r * pitch, middle = rowTop + pitch / 2;
+		if (r % 2)
+			TheDisplay->drawFillRect( left - hpx( 8.0f ), rowTop, right - left + hpx( 16.0f ), pitch, GameMakeColor( 255, 255, 255, 7 ) );
+		drawAt( s_ladder[ r ][ 0 ], left, middle, UIStyle::MUTED );
+		const Int size = hpx( 40.0f );
+		if (s_ladderPortrait[ r ])
+			TheDisplay->drawImage( s_ladderPortrait[ r ], left + hpx( 52.0f ), middle - size / 2, left + hpx( 52.0f ) + size,
+				middle - size / 2 + size );
+		drawAt( s_ladder[ r ][ 1 ], left + hpx( 104.0f ), middle, UIStyle::INK );
+		const Int ew = drawAt( s_ladder[ r ][ 2 ], left + hpx( 900.0f ), middle, UIStyle::INK, TRUE );
+		// the bar: the rating's share of the leader's over the site's starting 1000
+		const Int bar = hpx( 200.0f ), barRight = left + hpx( 900.0f ) - ew - hpx( 14.0f );
+		TheDisplay->drawFillRect( barRight - bar, middle - 1, bar, max( 1, hpx( 2.0f ) ), UIStyle::withAlpha( UIStyle::FRAME, 70 ) );
+		const Real share = best > 1000.0f ? ( s_ladderElo[ r ] - 1000.0f ) / ( best - 1000.0f ) : 0.0f;
+		const Int length = REAL_TO_INT( bar * max( 0.0f, min( 1.0f, share ) ) + 0.5f );
+		if (length > 0)
+			TheDisplay->drawFillRect( barRight - length, middle - hpx( 2.0f ), length, max( 2, hpx( 4.0f ) ), UIStyle::EDGE );
+		drawAt( s_ladder[ r ][ 3 ], right, middle, UIStyle::INK, TRUE );
+	}
 }
 
-/// the match still running, on the recent matches' card: heading, mode and map with how long it has run,
-/// then each seat with a chip saying whether it plays on, in two columns of four, and the note at the foot
+/// the left of the card that Rejoin leaves free: the key's 300 and its 24 inset, and 24 more between
+static Int rejoinRoom( Int w )
+{
+	return w - hpx( 24.0f + 300.0f + 24.0f + 24.0f );
+}
+
+/** The match still running, in the recent matches' place: its name, mode and map with how long it has
+	* run, a lit rule, the seats in two columns of four with a chip saying who plays on (the local player
+	* gold), the note over REJOIN at the foot. */
 static void drawRejoin( Int x, Int y, Int w, Int h )
 {
-	const Int left = x + UIStyle::px( 24.0f );
-	UIStyle::heading( s_rejoinTitle, left, y + UIStyle::px( 20.0f ) );
-	s_rejoinLine->draw( left, y + UIStyle::px( 58.0f ), UIStyle::INK, UIStyle::SHADOW );
-	TheDisplay->drawFillRect( left, y + UIStyle::px( 92.0f ), w - UIStyle::px( 48.0f ), 1, UIStyle::GRID );
-	const Int rowTop = y + UIStyle::px( 102.0f );
-	const Int rowHeight = UIStyle::px( 34.0f );
+	const Int left = x + hpx( 24.0f );
+	drawBoxName( s_rejoinTitle, NULL, left, y );
+	drawAt( s_rejoinLine, left, y + hpx( 70.0f ), UIStyle::MUTED );
+	UIStyle::litLine( left, y + hpx( 96.0f ), w - hpx( 48.0f ), 1, UIStyle::FRAME );
+	const Int pitch = hpx( 60.0f );
 	const Int columnWidth = rejoinRoom( w ) / 2;
+	const AsciiString me = TheGameSpyInfo ? TheGameSpyInfo->getLocalName() : AsciiString::TheEmptyString;
 	for (Int r = 0; r < s_rejoinRows; ++r)
 	{
 		const Int cellX = left + ( r / REJOIN_COLUMN_ROWS ) * columnWidth;
-		const Int top = rowTop + ( r % REJOIN_COLUMN_ROWS ) * rowHeight;
-		Int cw, ch;
-		s_rejoinChip[ r ]->getSize( &cw, &ch );
-		const Int chipHeight = ch + UIStyle::tallPx( 5.0f ) + UIStyle::tallPx( 4.0f );
-		const Int chipWidth = UIStyle::chip( s_rejoinChip[ r ], cellX, top + ( rowHeight - chipHeight ) / 2,
-			s_rejoinPresent[ r ] ? UIStyle::ACTIVE : UIStyle::MUTED, UIStyle::FRAME );
-		const Int nickX = cellX + chipWidth + UIStyle::px( 10.0f );
-		drawCell( s_rejoinNick[ r ], nickX, top, rowHeight, s_rejoinPresent[ r ] ? UIStyle::INK : UIStyle::MUTED );
-		Int nw, nh;
-		s_rejoinNick[ r ]->getSize( &nw, &nh );
-		drawCell( s_rejoinSide[ r ], nickX + nw + UIStyle::px( 8.0f ), top, rowHeight, UIStyle::MUTED );
+		const Int middle = y + hpx( 136.0f ) + ( r % REJOIN_COLUMN_ROWS ) * pitch;
+		const Int chipWidth = UIStyle::onlineChip( s_rejoinChip[ r ], cellX, middle, s_rejoinPresent[ r ] );
+		const Int nickX = cellX + chipWidth + hpx( 14.0f );
+		const Color nick = s_rejoinLocal[ r ] ? UIStyle::GOLD : s_rejoinPresent[ r ] ? UIStyle::INK : UIStyle::MUTED;
+		const Int nw = drawAt( s_rejoinNick[ r ], nickX, middle, nick );
+		drawAt( s_rejoinSide[ r ], nickX + nw + hpx( 10.0f ), middle, UIStyle::MUTED );
 	}
-	Int nw, nh;
-	s_rejoinNote->getSize( &nw, &nh );
-	s_rejoinNote->draw( left, y + h - UIStyle::px( 24.0f ) - nh, s_rejoinNoteColor, UIStyle::SHADOW );
+	drawAt( s_rejoinNote, left, y + h - hpx( 50.0f ), s_rejoinNoteColor );
 }
 
-/// every card's draw: the card's box, then what it holds
+/// the server box: its name, the message of the day (the master's InfoListbox), the server's facts
+static void drawServerBox( Int x, Int y, Int w, Int h )
+{
+	const Int left = x + hpx( 24.0f ), right = x + w - hpx( 24.0f );
+	drawBoxName( s_motdTitle, NULL, left, y );
+	s_serverHead->draw( left, y + h - hpx( 150.0f ), UIStyle::MUTED, UIStyle::SHADOW );
+	for (Int i = 0; i < 2; ++i)
+	{
+		const Int middle = y + h - hpx( 108.0f ) + i * hpx( 36.0f );
+		drawAt( s_serverFact[ i ][ 0 ], left, middle, UIStyle::MUTED );
+		drawAt( s_serverFact[ i ][ 1 ], right, middle, UIStyle::INK, TRUE );
+	}
+}
+
+/// every box's draw: the box, then what it holds
 static void drawHubCard( GameWindow *window, WinInstanceData *instData )
 {
 	Int x, y, w, h;
 	window->winGetScreenPosition( &x, &y );
 	window->winGetSize( &w, &h );
-	UIStyle::panel( x, y, w, h, UIStyle::PANEL );
+	IRegion2D box;
+	box.lo.x = x;
+	box.lo.y = y;
+	box.hi.x = x + w;
+	box.hi.y = y + h;
+	UIStyle::onlineBox( box );
 	if (s_strings.empty())
 		return;
-	for (Int c = 0; c < CARD_COUNT; ++c)
-	{
-		if (s_cards[ c ].window == window)
-			drawModeCard( s_cards[ c ], x, y, w );
-	}
-	if (window == s_cardRecent && s_rejoinShown)
+	if (window == s_cards[ CARD_CUSTOM ].window)
+		drawCustomCard( s_cards[ CARD_CUSTOM ], x, y, w );
+	else if (window == s_cards[ CARD_AI ].window || window == s_cards[ CARD_QUICK_MATCH ].window)
+		drawModeCard( s_cards[ window == s_cards[ CARD_AI ].window ? CARD_AI : CARD_QUICK_MATCH ], x, y, w, h );
+	else if (window == s_cardRecent && s_rejoinShown)
 		drawRejoin( x, y, w, h );
+	else if (window == s_cardRecent && s_ladderShown)
+		drawLadderTop( x, y, w );
 	else if (window == s_cardRecent)
 		drawRecent( x, y, w );
-	if (window == s_cardMOTD)
-		UIStyle::heading( s_motdTitle, x + UIStyle::px( 24.0f ), y + UIStyle::px( 20.0f ) );
+	else if (window == s_cardMOTD)
+		drawServerBox( x, y, w, h );
 }
 
-/// the header (wordmark and the player's line) on the see-through ButtonHolder, which draws over the
-/// panel; the master's StaticTextTitle and HeaderRule draw the title and its rule
+/// the page's panel, before everything on it: the online head, frame A and the foot's rule
 static void drawHubHeader( GameWindow *window, WinInstanceData *instData )
 {
-	UIStyle::onlineHeader( UnicodeString::TheEmptyString, UnicodeString::TheEmptyString );
+	UIStyle::onlineHeader( UnicodeString::TheEmptyString );
 }
 
 static void makeCards( void )
@@ -739,15 +911,23 @@ static void makeCards( void )
 	freeHubStrings();
 	static const char *const aiFacts[] = { "GUI:OnlineGamesLabel", "GUI:OnlineWinRateLabel", "GUI:OnlineSpeedLabel" };
 	static const char *const qmFacts[] = { "GUI:OnlinePlaceLabel", "GUI:OnlineHubRecord", "GUI:OnlineHubInQueue" };
-	// the client knows players online and open games, not who sits in a room or plays: one fact
-	static const char *const customFacts[] = { "GUI:OnlineLoginOnlineNow" };
 	makeCard( s_cards[ CARD_AI ], "CardPlayVsAI", "GUI:OnlineHubVsAITitle", "GUI:OnlineHubVsAILead",
-		"GUI:OnlineAIRatingLabel", TRUE, FACT_WIDTH, 3, aiFacts );
+		"GUI:OnlineAIRatingLabel", TRUE, 3, aiFacts );
 	makeCard( s_cards[ CARD_QUICK_MATCH ], "CardQuickMatch", "GUI:OnlineQuickMatchLabel",
-		"GUI:OnlineHubQuickMatchLead", "GUI:OnlineLadderRatingLabel", TRUE, FACT_WIDTH, 3, qmFacts );
-	makeCard( s_cards[ CARD_CUSTOM ], "CardCustom", "GUI:OnlineHubCustomTitle", "GUI:OnlineHubCustomLead",
-		"GUI:OnlineOpenGamesLabel", FALSE, WIDE_FACT_WIDTH, 1, customFacts );
+		"GUI:OnlineHubQuickMatchLead", "GUI:OnlineLadderRatingLabel", TRUE, 3, qmFacts );
 	// the Speed fact's value is the master's ComboBoxGameSpeed, over its place
+	// Custom games: open games and players online as two figures, then the first open games
+	makeCard( s_cards[ CARD_CUSTOM ], "CardCustom", "GUI:OnlineHubCustomTitle", "GUI:OnlineHubCustomLead",
+		"GUI:OnlineOpenGamesLabel", FALSE, 0, NULL );
+	s_customLabel2 = hubString( labelFont() );
+	s_customLabel2->setText( capsKey( "GUI:OnlineLoginOnlineNow", hpx( 180.0f ) ) );
+	s_customFigure2 = hubString( figureFont() );
+	for (Int r = 0; r < OPEN_GAME_ROWS; ++r)
+		for (Int c = 0; c < 3; ++c)
+			s_openGame[ r ][ c ] = hubString( bodyFont() );
+	s_openGamesStale = TRUE;
+	s_wellMark = hubString( figureFont() );
+	s_wellMark->setText( UnicodeString( u"?" ) );
 
 	s_cardRecent = hubWindow( "CardRecent" );
 	s_cardMOTD = hubWindow( "CardMOTD" );
@@ -755,51 +935,57 @@ static void makeCards( void )
 	if (s_cardRecent)
 		s_cardRecent->winGetSize( &w, &h );
 	s_recentTitle = hubString( headingFont() );
-	s_recentTitle->setText( UIStyle::fitKey( "GUI:OnlineHubRecent", headingFont(), w - UIStyle::px( 48.0f ) ) );
+	s_recentTitle->setText( UIStyle::fitKey( "GUI:OnlineHubRecent", headingFont(), w / 3 ) );
 	s_recentLine = hubString( bodyFont() );
+	static const char *const heads[ CELL_COUNT ] = { "GUI:OnlineHeadResult", "GUI:OnlineHeadMode", "GUI:OnlineHeadOpponent", NULL,
+		"GUI:OnlineHeadMap", "GUI:OnlineHeadChange", "GUI:OnlineHeadWhen" };
+	for (Int c = 0; c < CELL_COUNT; ++c)
+	{
+		s_recentHead[ c ] = hubString( labelFont() );
+		if (heads[ c ])
+			s_recentHead[ c ]->setText( capsKey( heads[ c ], hpx( 150.0f ) ) );
+	}
 	for (Int r = 0; r < RECENT_ROWS; ++r)
 		for (Int c = 0; c < CELL_COUNT; ++c)
-			s_recent[ r ][ c ] = hubString( c == CELL_CHIP ? chipFont() : bodyFont() );
+			s_recent[ r ][ c ] = hubString( c == CELL_CHIP ? labelFont() : c == CELL_CHANGE ? headingFont() : bodyFont() );
+	s_ladderHead = hubString( labelFont() );
+	s_ladderHead->setText( capsKey( "GUI:OnlineHubLadderTop", hpx( 400.0f ) ) );
+	static const char *const ladderHeads[ 4 ] = { NULL, "GUI:OnlineHeadPlayer", "GUI:OnlineLadderShort", "GUI:OnlineHubRecord" };
+	for (Int c = 0; c < 4; ++c)
+	{
+		s_ladderColumn[ c ] = hubString( labelFont() );
+		s_ladderColumn[ c ]->setText( ladderHeads[ c ] ? capsKey( ladderHeads[ c ], hpx( 200.0f ) ) : UnicodeString( u"#" ) );
+	}
+	for (Int r = 0; r < LADDER_ROWS; ++r)
+		for (Int c = 0; c < 4; ++c)
+			s_ladder[ r ][ c ] = hubString( c == 2 ? headingFont() : bodyFont() );
+	s_ladderShown = s_ladderAsked = FALSE;
 	s_rejoinTitle = hubString( headingFont() );
-	s_rejoinTitle->setText( UIStyle::fitKey( "GUI:OnlineRejoinTitle", headingFont(), w - UIStyle::px( 48.0f ) ) );
+	s_rejoinTitle->setText( UIStyle::fitKey( "GUI:OnlineRejoinTitle", headingFont(), w - hpx( 48.0f ) ) );
 	s_rejoinLine = hubString( bodyFont() );
 	s_rejoinNote = hubString( bodyFont() );
 	for (Int r = 0; r < REJOIN_ROWS; ++r)
 	{
-		s_rejoinChip[ r ] = hubString( chipFont() );
+		s_rejoinChip[ r ] = hubString( labelFont() );
 		s_rejoinNick[ r ] = hubString( bodyFont() );
 		s_rejoinSide[ r ] = hubString( bodyFont() );
 	}
 	s_rejoinStale = TRUE;
-	// the cells on this screen, each edge rounded once so the row keeps its width; the result column
-	// as wide as its widest chip (Turkish's loss outgrows "Loss"), the extra taken from the map's
-	Real at = 0.0f;
-	for (Int c = 0; c < CELL_COUNT; ++c)
-	{
-		s_cellWidth[ c ] = UIStyle::px( at + CELL_WIDTH[ c ] ) - UIStyle::px( at );
-		at += CELL_WIDTH[ c ];
-	}
-	static const char *const results[] = { "GUI:OnlineWinLabel", "GUI:OnlineLossLabel" };
-	Int widestChip = 0;
-	for (size_t i = 0; i < sizeof( results ) / sizeof( results[ 0 ] ); ++i)
-	{
-		s_recent[ 0 ][ CELL_CHIP ]->setText( TheGameText->fetch( results[ i ] ) );
-		Int chipWidth, chipHeight;
-		s_recent[ 0 ][ CELL_CHIP ]->getSize( &chipWidth, &chipHeight );
-		widestChip = max( widestChip, chipWidth + 2 * UIStyle::tallPx( 8.0f ) );		// UIStyle::chip's sides
-	}
-	const Int grown = UIStyle::px( CELL_PAD ) + widestChip - s_cellWidth[ CELL_CHIP ];
-	if (grown > 0)
-	{
-		s_cellWidth[ CELL_CHIP ] += grown;
-		s_cellWidth[ CELL_MAP ] -= grown;
-	}
 	if (s_cardMOTD)
 		s_cardMOTD->winGetSize( &w, &h );
 	UnicodeString from;
 	from.format( TheGameText->fetch( "GUI:OnlineHubFrom" ), LobbyServerLabel().str() );
 	s_motdTitle = hubString( headingFont() );
-	s_motdTitle->setText( UIStyle::fitText( from, headingFont(), w - UIStyle::px( 48.0f ) ) );
+	s_motdTitle->setText( UIStyle::fitText( from, headingFont(), w - hpx( 48.0f ) ) );
+	s_serverHead = hubString( labelFont() );
+	s_serverHead->setText( capsKey( "GUI:OnlineServerHead", w - hpx( 48.0f ) ) );
+	static const char *const serverFacts[ 2 ] = { "GUI:OnlineLoginOnlineNow", "GUI:OnlineLoginInQuickMatch" };
+	for (Int i = 0; i < 2; ++i)
+	{
+		s_serverFact[ i ][ 0 ] = hubString( bodyFont() );
+		s_serverFact[ i ][ 0 ]->setText( UIStyle::fitKey( serverFacts[ i ], bodyFont(), ( w - hpx( 48.0f ) ) * 7 / 10 ) );
+		s_serverFact[ i ][ 1 ] = hubString( bodyFont() );
+	}
 
 	GameWindow *boxes[] = { s_cards[ CARD_AI ].window, s_cards[ CARD_QUICK_MATCH ].window, s_cards[ CARD_CUSTOM ].window,
 		s_cardRecent, s_cardMOTD };
@@ -810,31 +996,13 @@ static void makeCards( void )
 	s_recentStale = TRUE;
 }
 
-/** A card's status line (a refusal, the Quick Match lock) in the lead's place, empty for none: in the body
-	* face, then in each smaller size down to the layout's own body size, the size the master's fit gives (at
-	* 1280x720 and at 4:3 the readable floor grows the body face past what the room holds). */
+/// a card's status line (a refusal, the Quick Match lock) over its key, empty for none, cut to the card
 static void setCardStatus( HubCard &card, const UnicodeString &text )
 {
-	card.status->setFont( bodyFont() );
-	card.status->setText( text );
-	if (text.isEmpty())
-		return;
-	std::vector<GameFont *> faces( 1, bodyFont() );
-	for (Int points = hubPoints( UIStyle::TEXT_BODY ); ; ++points)
-	{
-		GameFont *face = UIStyle::font( points );
-		if (face == NULL || face->height >= faces[ 0 ]->height)
-			break;
-		faces.insert( faces.begin() + 1, face );		// largest of the smaller sizes first
-	}
-	for (size_t i = 0; i < faces.size(); ++i)
-	{
-		card.status->setFont( faces[ i ] );
-		Int width, height;
-		card.status->getSize( &width, &height );
-		if (height <= card.statusRoom)
-			return;
-	}
+	Int w = 0, h = 0;
+	if (card.window)
+		card.window->winGetSize( &w, &h );
+	card.status->setText( text.isEmpty() ? text : UIStyle::fitText( text, bodyFont(), w - hpx( 48.0f ) ) );
 }
 
 /// the three cards' numbers, laid out again when the player's numbers, the counts or the army change
@@ -900,8 +1068,89 @@ static void refreshCards( void )
 
 	HubCard &custom = s_cards[ CARD_CUSTOM ];
 	custom.figure->setText( counts[ 1 ] >= 0 ? UIStyle::grouped( counts[ 1 ] ) : none );
-	custom.factValue[ 0 ]->setText( counts[ 0 ] >= 0 ? UIStyle::grouped( counts[ 0 ] ) : none );
+	s_customFigure2->setText( counts[ 0 ] >= 0 ? UIStyle::grouped( counts[ 0 ] ) : none );
 	setCardStatus( custom, UnicodeString::TheEmptyString );
+	for (Int i = 0; i < 2; ++i)
+		s_serverFact[ i ][ 1 ]->setText( counts[ i == 0 ? 0 : 2 ] >= 0 ? UIStyle::grouped( counts[ i == 0 ? 0 : 2 ] ) : none );
+}
+
+/** The open games games.watch sends (PEERRESPONSE_STAGINGROOM, as the lobby reads them): the hub keeps the
+	* open ones by id, a started or full one going as it leaves the list.  FALSE for any other response. */
+static Bool takeOpenGame( const PeerResponse &resp )
+{
+	if (resp.peerResponseType == PeerResponse::PEERRESPONSE_STAGINGROOMLISTCOMPLETE)
+		return TRUE;
+	if (resp.peerResponseType != PeerResponse::PEERRESPONSE_STAGINGROOM)
+		return FALSE;
+	s_openGamesStale = TRUE;
+	const Int id = resp.stagingRoom.id;
+	if (resp.stagingRoom.action == PEER_CLEAR)
+		s_openGames.clear();
+	else if (resp.stagingRoom.action == PEER_REMOVE || resp.stagingRoomMapName.empty() || !resp.stagingRoom.isStaging
+		|| resp.stagingRoom.numPlayers >= resp.stagingRoom.maxPlayers)
+		s_openGames.erase( id );
+	else if (resp.stagingRoom.action == PEER_ADD || resp.stagingRoom.action == PEER_UPDATE)
+	{
+		HubGame &game = s_openGames[ id ];
+		game.name = UnicodeString( resp.stagingServerName.c_str() );
+		AsciiString map;
+		for (const char *c = resp.stagingRoomMapName.c_str(); *c; ++c)
+			map.concat( *c == '/' ? '\\' : *c );
+		game.map = TheGameState ? TheGameState->portableMapPathToRealMapPath( map ) : map;
+		game.players = resp.stagingRoom.numPlayers;
+		game.maxPlayers = resp.stagingRoom.maxPlayers;
+	}
+	return TRUE;
+}
+
+/// a map's shown name: the map cache's, "Random" for a generated one, else its file's stem
+static UnicodeString mapShownName( const AsciiString &path )
+{
+	AsciiString stem = path;
+	const char *slash = strrchr( stem.str(), '\\' );
+	stem = slash ? AsciiString( slash + 1 ) : stem;
+	if (stem.startsWithNoCase( "rmg_" ))
+		return TheGameText->fetch( "GUI:Random" );
+	if (const MapMetaData *md = TheMapCache ? TheMapCache->findMap( path ) : NULL)
+		return md->m_displayName;
+	if (stem.endsWithNoCase( ".map" ))
+		for (Int i = 0; i < 4; ++i)
+			stem.removeLastChar();
+	UnicodeString name;
+	name.translate( stem );
+	return name;
+}
+
+/// the Custom games card's rows: the first three open games by the server's order of ids
+static void refreshOpenGames( void )
+{
+	if (s_strings.empty() || !s_openGamesStale)
+		return;
+	s_openGamesStale = FALSE;
+	Int w = 0, h = 0;
+	if (s_cards[ CARD_CUSTOM ].window)
+		s_cards[ CARD_CUSTOM ].window->winGetSize( &w, &h );
+	const Int inner = w - hpx( 48.0f );
+	s_openGameRows = 0;
+	for (std::map<Int, HubGame>::const_iterator it = s_openGames.begin(); it != s_openGames.end() && s_openGameRows < OPEN_GAME_ROWS; ++it)
+	{
+		DisplayString **row = s_openGame[ s_openGameRows++ ];
+		UnicodeString seats;
+		seats.format( u"%d/%d", it->second.players, it->second.maxPlayers );
+		row[ 2 ]->setText( seats );
+		row[ 0 ]->setText( UIStyle::fitName( it->second.name, bodyFont(), hpx( 176.0f ) ) );
+		row[ 1 ]->setText( UIStyle::fitText( mapShownName( it->second.map ), bodyFont(), inner - hpx( 186.0f + 52.0f ) ) );
+	}
+}
+
+/// LAST 5 on a mode card, newest first, from that mode's history
+static void refreshForm( HubCard &card, OnlineHistoryMode mode )
+{
+	OnlineHistory history;
+	OnlineGetHistory( 0, mode, history );
+	card.formCount = history.arrived ? min( (Int)history.rows.size(), (Int)FORM_RESULTS ) : 0;
+	for (Int i = 0; i < card.formCount; ++i)
+		card.formWon[ i ] = history.rows[ i ].won;
 }
 
 /// how long ago, in the coarsest unit that says it
@@ -919,37 +1168,102 @@ static UnicodeString ageText( Int seconds )
 	return text;
 }
 
-/// the recent matches, copied and built again only when the history's serial moves
+/// the ladder's top five for a player with no history yet, asked once a visit; FALSE until it is in
+static Bool refreshLadderTop( void )
+{
+	if (!s_ladderAsked)
+	{
+		s_ladderAsked = TRUE;
+		OnlineRequestLadder( 0 );
+	}
+	Int offset = 0;
+	std::vector<OnlineLadderRow> rows;
+	OnlineLadderRow me;
+	Bool hasMe = FALSE;
+	if (OnlineGetLadder( offset, rows, me, hasMe ) != ONLINE_LADDER_READY || offset != 0)
+		return FALSE;
+	s_ladderRows = min( (Int)rows.size(), (Int)LADDER_ROWS );
+	for (Int r = 0; r < s_ladderRows; ++r)
+	{
+		const OnlineLadderRow &row = rows[ r ];
+		UnicodeString text;
+		text.format( u"%d", row.rank > 0 ? row.rank : r + 1 );
+		s_ladder[ r ][ 0 ]->setText( text );
+		text.translate( row.nick );
+		s_ladder[ r ][ 1 ]->setText( UIStyle::fitName( text, bodyFont(), hpx( 400.0f ) ) );
+		s_ladder[ r ][ 2 ]->setText( row.hasRating ? UIStyle::ladderText( row.shown(), row.hasElo ) : UnicodeString( u"\x2013" ) );
+		text.format( u"%d\x2013%d", row.wins, row.losses );
+		s_ladder[ r ][ 3 ]->setText( text );
+		s_ladderElo[ r ] = row.hasElo ? row.elo : 0.0f;
+		OnlinePlayerInfo info;
+		info.hasRating = row.hasRating;
+		info.hasElo = row.hasElo;
+		info.elo = row.elo;
+		info.exactRating = row.exactRating;
+		info.tier = row.tier;
+		info.games = row.wins + row.losses;
+		s_ladderPortrait[ r ] = UIStyle::tierImage( UIStyle::playerTier( info ), AsciiString( "Random" ) );
+	}
+	return TRUE;
+}
+
+/** The recent matches: each mode's last five (history asked per mode), merged newest first, five rows.
+	* Built again only when either history's serial moves.  With both answered and empty the box shows the
+	* ladder's top five instead. */
 static void refreshRecent( void )
 {
 	if (s_strings.empty())
 		return;
-	const UnsignedInt serial = OnlineGetHistorySerial( 0, ONLINE_HISTORY_ALL );
-	if (!s_recentStale && serial == s_recentSerial)
+	const UnsignedInt serial[ 2 ] = { OnlineGetHistorySerial( 0, ONLINE_HISTORY_QM ), OnlineGetHistorySerial( 0, ONLINE_HISTORY_AI ) };
+	if (s_ladderShown && s_ladderRows == 0)
+		refreshLadderTop();
+	if (!s_recentStale && serial[ 0 ] == s_recentSerial[ 0 ] && serial[ 1 ] == s_recentSerial[ 1 ])
 		return;
 	s_recentStale = FALSE;
-	s_recentSerial = serial;
-	OnlineHistory history;
-	const OnlineLadderState state = OnlineGetHistory( 0, ONLINE_HISTORY_ALL, history );
-	s_recentRows = history.arrived ? min( (Int)history.rows.size(), (Int)RECENT_ROWS ) : 0;
-	if (state == ONLINE_LADDER_READY && s_recentRows == 0)
+	s_recentSerial[ 0 ] = serial[ 0 ];
+	s_recentSerial[ 1 ] = serial[ 1 ];
+	OnlineHistory qm, ai;
+	const OnlineLadderState qmState = OnlineGetHistory( 0, ONLINE_HISTORY_QM, qm );
+	const OnlineLadderState aiState = OnlineGetHistory( 0, ONLINE_HISTORY_AI, ai );
+	refreshForm( s_cards[ CARD_QUICK_MATCH ], ONLINE_HISTORY_QM );
+	refreshForm( s_cards[ CARD_AI ], ONLINE_HISTORY_AI );
+
+	// newest first across both: the smaller age first, each list already newest first
+	std::vector<const OnlineHistoryRow *> rows;
+	size_t a = 0, b = 0;
+	const size_t qmRows = qm.arrived ? qm.rows.size() : 0, aiRows = ai.arrived ? ai.rows.size() : 0;
+	while (rows.size() < (size_t)RECENT_ROWS && (a < qmRows || b < aiRows))
+	{
+		if (b >= aiRows || (a < qmRows && qm.rows[ a ].age <= ai.rows[ b ].age))
+			rows.push_back( &qm.rows[ a++ ] );
+		else
+			rows.push_back( &ai.rows[ b++ ] );
+	}
+	s_recentRows = (Int)rows.size();
+	const Bool answered = qmState == ONLINE_LADDER_READY && aiState == ONLINE_LADDER_READY;
+	s_ladderShown = answered && s_recentRows == 0;
+	if (s_ladderShown)
+	{
 		s_recentLine->setText( TheGameText->fetch( "GUI:OnlineHubRecentNone" ) );
-	else if (state == ONLINE_LADDER_FAILED && s_recentRows == 0)
+		refreshLadderTop();
+	}
+	else if ((qmState == ONLINE_LADDER_FAILED || aiState == ONLINE_LADDER_FAILED) && s_recentRows == 0)
 		s_recentLine->setText( TheGameText->fetch( "GUI:OnlineHubRecentNoAnswer" ) );
 	else
 		s_recentLine->setText( UnicodeString::TheEmptyString );
 
 	GameFont *body = bodyFont();
-	const Int pad = UIStyle::px( 2.0f * CELL_PAD );
+	s_recentBiggest = 0.0f;
 	for (Int r = 0; r < s_recentRows; ++r)
 	{
-		const OnlineHistoryRow &row = history.rows[ r ];
+		const OnlineHistoryRow &row = *rows[ r ];
 		DisplayString **cell = s_recent[ r ];
 		s_recentWon[ r ] = row.won;
-		s_recentChange[ r ] = UIStyle::changeColor( row.change );
-		cell[ CELL_CHIP ]->setText( TheGameText->fetch( row.won ? "GUI:OnlineWinLabel" : "GUI:OnlineLossLabel" ) );
+		s_recentChange[ r ] = row.change;
+		s_recentBiggest = max( s_recentBiggest, (Real)fabs( row.change ) );
+		cell[ CELL_CHIP ]->setText( UIStyle::capitals( TheGameText->fetch( row.won ? "GUI:OnlineWinLabel" : "GUI:OnlineLossLabel" ) ) );
 		cell[ CELL_MODE ]->setText( UIStyle::fitKey( row.ai ? "GUI:OnlineHubMatchAI" : "GUI:OnlineQuickMatchLabel", body,
-			s_cellWidth[ CELL_MODE ] - pad ) );
+			hpx( CELL_LEFT[ CELL_OPPONENT ] - CELL_LEFT[ CELL_MODE ] - 16.0f ) ) );
 		cell[ CELL_RATING ]->setText( UIStyle::ladderText( row.opponentRating, row.ai || row.hasElo ) );
 		Int ratingWidth, h;
 		cell[ CELL_RATING ]->getSize( &ratingWidth, &h );
@@ -959,7 +1273,7 @@ static void refreshRecent( void )
 		else
 			opponent = UnicodeString( MultiByteToWideCharSingleLine( row.opponent.str() ).c_str() );
 		cell[ CELL_OPPONENT ]->setText( UIStyle::fitName( opponent, body,
-			s_cellWidth[ CELL_OPPONENT ] - pad - ratingWidth - UIStyle::px( 6.0f ) ) );
+			hpx( CELL_LEFT[ CELL_MAP ] - CELL_LEFT[ CELL_OPPONENT ] - 26.0f ) - ratingWidth ) );
 		// a ranked map is generated from the match seed and its name only says so ("rmg_v19_..."); an AI
 		// match's map is one of the official ones, by its shown name
 		UnicodeString map;
@@ -967,7 +1281,7 @@ static void refreshRecent( void )
 			map = TheGameText->fetch( "GUI:Random" );
 		else
 			map = UnicodeString( MultiByteToWideCharSingleLine( row.map.str() ).c_str() );
-		cell[ CELL_MAP ]->setText( UIStyle::fitText( map, body, s_cellWidth[ CELL_MAP ] - pad, UnicodeString::TheEmptyString, map ) );
+		cell[ CELL_MAP ]->setText( UIStyle::fitText( map, body, hpx( 210.0f ), UnicodeString::TheEmptyString, map ) );
 		cell[ CELL_CHANGE ]->setText( UIStyle::ladderText( row.change, row.hasElo, TRUE ) );
 		cell[ CELL_AGE ]->setText( ageText( row.age ) );
 	}
@@ -1042,10 +1356,11 @@ static void refreshRejoin( void )
 		{
 			const OnlineRejoinSeat &seat = offer.players[ r ];
 			s_rejoinPresent[ r ] = seat.present;
-			s_rejoinChip[ r ]->setText( TheGameText->fetch( seat.present ? "GUI:OnlineRejoinPlaying" : "GUI:OnlineRejoinAway" ) );
+			s_rejoinLocal[ r ] = TheGameSpyInfo && seat.nick.compareNoCase( TheGameSpyInfo->getLocalName() ) == 0;
+			s_rejoinChip[ r ]->setText( UIStyle::capitals( TheGameText->fetch( seat.present ? "GUI:OnlineRejoinPlaying" : "GUI:OnlineRejoinAway" ) ) );
 			Int chipWidth, chipHeight;
 			s_rejoinChip[ r ]->getSize( &chipWidth, &chipHeight );
-			const Int room = column - chipWidth - 2 * UIStyle::tallPx( 8.0f ) - UIStyle::px( 10.0f + 8.0f + 12.0f );
+			const Int room = column - chipWidth - hpx( 18.0f + 14.0f + 10.0f + 16.0f );
 			const PlayerTemplate *pt = seat.side >= 0 && ThePlayerTemplateStore ? ThePlayerTemplateStore->getNthPlayerTemplate( seat.side ) : NULL;
 			const UnicodeString side = pt ? pt->getDisplayName() : TheGameText->fetch( "GUI:Random" );
 			// the nick has the room the side's words leave, at most two thirds of it
@@ -1233,11 +1548,28 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 	s_rejoinShown = FALSE;
 	s_rejoinAsked = FALSE;
 
-	// the master's frame: the tabs with Home open, the header over the panel, the cards behind the buttons
+	// the master's frame: the tabs with Home open, the head on the panel before the cards, the cards behind
+	// the keys, every key and the speed combo in the language
 	UIStyle::onlinePageInit( parentWOLWelcome, "WOLWelcomeMenu.wnd", UIStyle::ONLINE_TAB_HOME );
 	makeCards();
-	if (GameWindow *holder = hubWindow( "ButtonHolder" ))
-		holder->winSetDrawFunc( drawHubHeader );
+	if (GameWindow *panel = hubWindow( "GadgetParent" ))
+		panel->winSetDrawFunc( drawHubHeader );
+	static const char *const keys[] = { "ButtonBack", "ButtonMyInfo", "ButtonSignOut", "ButtonQuickMatch", "ButtonCustomMatch" };
+	for (size_t i = 0; i < sizeof( keys ) / sizeof( keys[ 0 ] ); ++i)
+	{
+		if (GameWindow *key = hubWindow( keys[ i ] ))
+		{
+			UIStyle::setMenuKey( key, FALSE );
+			GadgetButtonSetText( key, UIStyle::capitals( key->winGetText() ) );
+		}
+	}
+	s_playLit = TRUE;
+	UIStyle::setMenuKey( buttonPlayAI, TRUE );
+	UIStyle::setMenuKey( buttonRejoin, FALSE );
+	if (buttonPlayAI)
+		GadgetButtonSetText( buttonPlayAI, UIStyle::capitals( buttonPlayAI->winGetText() ) );
+	if (buttonRejoin)
+		GadgetButtonSetText( buttonRejoin, UIStyle::capitals( buttonRejoin->winGetText() ) );
 	// the recent matches are drawn on their card: a chip and a coloured change are more than a
 	// one-column listbox's text
 	if (GameWindow *recent = hubWindow( "ListboxRecent" ))
@@ -1253,19 +1585,16 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 		listboxInfo->winSetHiliteColor( 0, none );
 		listboxInfo->winSetHiliteBorderColor( 0, none );
 	}
-	// Play is the card's first action, its label lit as the focused button's; Play vs AI and Sign out
-	// belong to the -online service
+	// Play vs AI and Sign out belong to the -online service
 	if (buttonPlayAI)
-	{
-		buttonPlayAI->winSetEnabledTextColors( UIStyle::ACTIVE, UIStyle::SHADOW );
 		buttonPlayAI->winHide( !OnlineIsEnabled() );
-	}
 	// Play vs AI's speed in the value's place of its card's Speed fact
 	comboBoxAISpeed = hubWindow( "ComboBoxGameSpeed" );
 	if (comboBoxAISpeed)
 	{
 		PopulatePlayerGameSpeedComboBox( comboBoxAISpeed, aiGameSpeed() );
 		comboBoxAISpeed->winHide( !OnlineIsEnabled() );
+		UIStyle::setMenuComboBox( comboBoxAISpeed );
 	}
 	if (buttonSignOut)
 		buttonSignOut->winHide( !OnlineIsEnabled() );
@@ -1291,7 +1620,20 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 		if (signedIn())
 		{
 			OnlineRequestStats(TheGameSpyInfo->getLocalName());
-			OnlineRequestHistory( 0, ONLINE_HISTORY_ALL, RECENT_ROWS );
+			// each mode's last five: the cards' LAST 5 and, merged, the recent matches
+			OnlineRequestHistory( 0, ONLINE_HISTORY_QM, FORM_RESULTS );
+			OnlineRequestHistory( 0, ONLINE_HISTORY_AI, FORM_RESULTS );
+			// the open games for the Custom games card: games.watch, answered as the lobby's list (PEER_CLEAR
+			// first, then a game a line, then each change); the lobby asks again over it
+			s_openGames.clear();
+			s_openGamesStale = TRUE;
+			if (TheGameSpyPeerMessageQueue)
+			{
+				PeerRequest req;
+				req.peerRequestType = PeerRequest::PEERREQUEST_STARTGAMELIST;
+				req.gameList.restrictGameList = FALSE;
+				TheGameSpyPeerMessageQueue->addRequest( req );
+			}
 		}
 	}
 	else
@@ -1484,6 +1826,9 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 					TheShell->pop();
 				}
 				break;
+			default:
+				takeOpenGame( resp );		// games.watch's list, for the Custom games card
+				break;
 			}
 		}
 
@@ -1501,6 +1846,14 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 			refreshCards();
 			refreshRecent();
 			refreshRejoin();
+			refreshOpenGames();
+			// one lit key: PLAY, or REJOIN while a match still running is offered
+			if (s_playLit == s_rejoinShown)
+			{
+				s_playLit = !s_rejoinShown;
+				UIStyle::setMenuKey( buttonPlayAI, s_playLit );
+				UIStyle::setMenuKey( buttonRejoin, !s_playLit );
+			}
 		}
 
 		// -online scripting: once per process, the click a player would make next.  -quickmatch opens Quick

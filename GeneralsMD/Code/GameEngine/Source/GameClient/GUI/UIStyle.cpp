@@ -41,6 +41,8 @@
 #include <map>
 #include <string>
 #include "GameClient/GadgetPushButton.h"
+#include "GameClient/GadgetStaticText.h"
+#include "Common/QuickmatchPreferences.h"
 #include "GameClient/GameFont.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GameWindow.h"
@@ -920,9 +922,9 @@ Int tallPx( Real at1080 )
 
 void onlineColumns( IRegion2D &main, IRegion2D &side )
 {
-	side.hi.x = boardX( ROOM_INSET_RIGHT );
+	side.hi.x = boardX( (Real)ONLINE_RIGHT );
 	side.lo.x = side.hi.x - tallPx( ONLINE_SIDE_WIDTH );
-	main.lo.x = boardX( ROOM_INSET );
+	main.lo.x = boardX( (Real)ONLINE_LEFT );
 	main.hi.x = side.lo.x - tallPx( ONLINE_COLUMN_GAP );
 	main.lo.y = side.lo.y = boardY( ONLINE_CONTENT_TOP );
 	main.hi.y = side.hi.y = boardY( ONLINE_CONTENT_BOTTOM );
@@ -998,21 +1000,39 @@ enum HeaderText
 	HEADER_AI,
 	HEADER_AI_VALUE,
 	HEADER_PING,				///< the server line's "38 ms", after its light
+	HEADER_WELL,				///< the "?" in an unranked player's portrait well
+	HEADER_PLACE,				///< the server line's "EU1 · Nuremberg"
+	HEADER_NOTICE_CHIP,
+	HEADER_NOTICE,
 	HEADER_TEXT_COUNT
 };
 
 static GameWindow *s_pageParent = NULL;
 static GameWindow *s_tabs[ ONLINE_TAB_COUNT ];
-static GameWindow *s_masterTitle = NULL;	///< the master's StaticTextTitle, when it carries the title
+static GameWindow *s_masterTitle = NULL;	///< the master's StaticTextTitle, hidden: its words are the title
 static OnlineTab s_openTab = ONLINE_TAB_NONE;
 static OnlineTab s_askedTab = ONLINE_TAB_NONE;
 static DisplayString *s_header[ HEADER_TEXT_COUNT ];
 static UnicodeString s_titleShown;			///< the title as last asked for
-static UnicodeString s_subtitleShown;		///< the subtitle's words, its ping and its room as last fitted
+static UnicodeString s_subtitleShown;		///< the subtitle as last asked for
 static UnicodeString s_pingShown;
-static Int s_subtitleRoom = -1;
 static UnsignedInt s_lineSerial = 0;		///< the player's card serial the line was last laid out for
 static Bool s_lineLaidOut = FALSE;
+static Int s_lineRoom = -1;							///< the room the nick was fitted to
+static const Image *s_linePortrait = NULL;
+static Int s_placeRoom = -1;						///< the room the server's name was fitted to
+static UnicodeString s_placeShown;
+static Bool s_noticeShown = FALSE;			///< the notice's words are laid out for s_noticeSerial and s_noticeRoom
+static UnsignedInt s_noticeSerial = 0;
+static Int s_noticeRoom = -1;
+
+// the menu language's own, further down
+static IRegion2D windowRegion( GameWindow *window );
+static void fill( const IRegion2D &r, Color color );
+static void outline( const IRegion2D &r, Color color );
+static Color black( Int alpha );
+static Int menuPx( Real at1080 );
+static void drawCentred( DisplayString *words, GameFont *font, const IRegion2D &box, Color color );
 
 /// a word the strings may not have yet: the key's, else the English
 static UnicodeString wordOr( const char *key, const WideChar *english )
@@ -1030,21 +1050,220 @@ static void freeHeader( void )
 	}
 }
 
-/// a tab: the score screen's (UIStyle::tab), the open one's label ACTIVE and never lit by the mouse
+/// a tab in the menu language: the open one green and lit, the hovered one cyan
 static void drawOnlineTab( GameWindow *window, WinInstanceData *instData )
 {
-	Int x, y, width, height;
-	window->winGetScreenPosition( &x, &y );
-	window->winGetSize( &width, &height );
 	const Bool open = s_openTab != ONLINE_TAB_NONE && window == s_tabs[ s_openTab ];
-	const Color color = tab( x, y, width, height, BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ), open,
+	menuTab( windowRegion( window ), instData->getTextDisplayString(), open,
 		!open && BitTest( instData->getState(), WIN_STATE_HILITED ) );
-	DisplayString *text = instData->getTextDisplayString();
-	if( text->getFont() != window->winGetFont() )
-		text->setFont( window->winGetFont() );
-	Int textWidth, textHeight;
-	text->getSize( &textWidth, &textHeight );
-	text->draw( x + ( width - textWidth ) / 2, y + ( height - textHeight ) / 2, color, SHADOW );
+}
+
+static Int textWidth( DisplayString *words )
+{
+	Int w, h;
+	words->getSize( &w, &h );
+	return w;
+}
+
+Bool onlinePageShowing( void )
+{
+	return s_header[ HEADER_TITLE ] != NULL;
+}
+
+IRegion2D onlinePanel( void )
+{
+	if( s_openTab == ONLINE_TAB_NONE )
+		return boardRect( ONLINE_LOGIN_LEFT, ONLINE_LOGIN_TOP, ONLINE_LOGIN_RIGHT, ONLINE_LOGIN_BOTTOM );
+	return boardRect( MENU_PANEL_LEFT, MENU_PANEL_TOP, MENU_PANEL_RIGHT, MENU_PANEL_BOTTOM );
+}
+
+void onlineBox( const IRegion2D &box )
+{
+	fill( box, black( 70 ) );
+	outline( box, FRAME );
+}
+
+Int onlineSection( DisplayString *words, Int left, Int right, Int top )
+{
+	GameFont *font = menuFont( MENU_TEXT_LABEL, TRUE );
+	if( words && words->getFont() != font )
+		words->setFont( font );
+	if( words && words->getTextLength() )
+		words->draw( left, top, ACTIVE, black( 160 ) );
+	litLine( left, top + menuPx( 24.0f ), right - left, 1, FRAME );
+	return top + menuPx( 26.0f );
+}
+
+Int onlineChip( DisplayString *label, Int x, Int middle, Bool lit )
+{
+	GameFont *font = menuFont( MENU_TEXT_LABEL, TRUE );
+	if( label->getFont() != font )
+		label->setFont( font );
+	Int w, h;
+	label->getSize( &w, &h );
+	IRegion2D r;
+	r.lo.x = x;
+	r.hi.x = x + w + menuPx( 18.0f );
+	r.lo.y = middle - menuPx( 11.0f );
+	r.hi.y = middle + menuPx( 11.0f );
+	fill( r, lit ? withAlpha( EDGE, 60 ) : black( 90 ) );
+	outline( r, lit ? EDGE : FRAME );
+	label->draw( x + menuPx( 9.0f ), middle - h / 2, lit ? INK : MUTED, black( 160 ) );
+	return r.hi.x - r.lo.x;
+}
+
+/// the side whose rank portrait the header shows: the army last picked on the Quick Match page, Random (the
+/// Elite portrait) for none
+static AsciiString quickMatchSide( void )
+{
+	QuickMatchPreferences pref;
+	const Int pick = pref.getSide();
+	const PlayerTemplate *army = pick >= 0 && ThePlayerTemplateStore && pick < ThePlayerTemplateStore->getPlayerTemplateCount()
+		? ThePlayerTemplateStore->getNthPlayerTemplate( pick ) : NULL;
+	return army && army->getBaseSide().isNotEmpty() ? army->getBaseSide() : AsciiString( "Random" );
+}
+
+/** The player's line on the title row, right to left from right: the Bot ELO and the ELO, each a label
+	* before its figure, 32 apart; the tier; the nick in gold, cut with an ellipsis where it reaches
+	* leftLimit; the tier's rank portrait, 40 square, or a "?" well while unranked.  Returns its left edge. */
+static Int drawPlayerRow( Int right, Int middle, Int leftLimit )
+{
+	if( !OnlineIsEnabled() || TheGameSpyInfo == NULL )
+		return right;
+	const AsciiString nick = TheGameSpyInfo->getLocalName();
+	if( nick.isEmpty() )
+		return right;
+	OnlinePlayerInfo info;
+	OnlineGetPlayerInfo( nick, info );
+	DisplayString **t = s_header;
+	const Int figureGap = menuPx( 10.0f ), group = menuPx( 32.0f ), tierGap = menuPx( 14.0f ), nickGap = menuPx( 12.0f );
+	const Int portrait = menuPx( 40.0f );
+	const Int room = right - leftLimit;
+	if( !s_lineLaidOut || info.serial != s_lineSerial || room != s_lineRoom )
+	{
+		s_lineLaidOut = TRUE;
+		s_lineSerial = info.serial;
+		s_lineRoom = room;
+		const UnicodeString none( u"\x2013" );		// an en dash for a number nobody sent
+		const RatingTier tier = playerTier( info );
+		s_linePortrait = tierImage( tier, quickMatchSide() );
+		t[ HEADER_TIER ]->setText( OnlineTierName( tierKey( tier ) ) );
+		t[ HEADER_LADDER_VALUE ]->setText( info.hasRating ? ladderText( info.shown(), info.hasElo ) : none );
+		t[ HEADER_AI_VALUE ]->setText( info.hasAIRating ? eloText( info.aiRating ) : none );
+		Int rest = 2 * figureGap + 2 * group + tierGap + nickGap + portrait;
+		for( Int each = HEADER_TIER; each <= HEADER_AI_VALUE; each++ )
+			rest += textWidth( t[ each ] );
+		UnicodeString shown;
+		shown.translate( nick );
+		t[ HEADER_NICK ]->setText( fitName( shown, t[ HEADER_NICK ]->getFont(), max( 0, room - rest ) ) );
+	}
+	const Int order[] = { HEADER_AI_VALUE, HEADER_AI, HEADER_LADDER_VALUE, HEADER_LADDER, HEADER_TIER, HEADER_NICK };
+	const Color colors[] = { INK, MUTED, INK, MUTED, MUTED, GOLD };
+	const Int gaps[] = { figureGap, group, figureGap, group, tierGap, nickGap };
+	Int x = right;
+	for( Int each = 0; each < 6; each++ )
+	{
+		DisplayString *s = t[ order[ each ] ];
+		Int w, h;
+		s->getSize( &w, &h );
+		x -= w;
+		s->draw( x, middle - h / 2, colors[ each ], black( 160 ) );
+		x -= gaps[ each ];
+	}
+	IRegion2D well;
+	well.lo.x = x - portrait;
+	well.lo.y = middle - portrait / 2;
+	well.hi.x = x;
+	well.hi.y = well.lo.y + portrait;
+	if( s_linePortrait )
+		TheDisplay->drawImage( s_linePortrait, well.lo.x, well.lo.y, well.hi.x, well.hi.y );
+	else
+	{
+		fill( well, GameMakeColor( 10, 12, 20, 230 ) );
+		outline( well, withAlpha( FRAME, 200 ) );
+		drawCentred( t[ HEADER_WELL ], menuFont( MENU_TEXT_ROW_FIGURE ), well, MUTED );
+	}
+	return well.lo.x;
+}
+
+/** The server's notice on the title row from left: a lit chip (MAINTENANCE or NOTICE) and its words with
+	* when it ends, cut to end before right; nothing without a notice or the room for one.  It replaces the
+	* plate InGameUI hangs from the screen's top in a match. */
+static void drawNoticeRow( Int left, Int right, Int middle )
+{
+	OnlineNotice notice;
+	if( right - left < menuPx( 240.0f ) || !OnlineGetNotice( notice ) )
+		return;
+	DisplayString **t = s_header;
+	const Int gap = menuPx( 12.0f );
+	if( !s_noticeShown || notice.serial != s_noticeSerial || right - left != s_noticeRoom )
+	{
+		s_noticeShown = TRUE;
+		s_noticeSerial = notice.serial;
+		s_noticeRoom = right - left;
+		t[ HEADER_NOTICE_CHIP ]->setText( TheGameText->fetch( notice.maintenance ? "GUI:OnlineNoticeMaintenance" : "GUI:OnlineNoticeInfo" ) );
+		const AsciiString utf8 = OnlineNoticeWords( notice, TheGlobalData->m_textLanguage );
+		UnicodeString words = utf8.isNotEmpty() ? fromUtf8( utf8 ) : TheGameText->fetch( "GUI:OnlineNoticeMaintenanceWords" );
+		const UnicodeString when = OnlineUntilText( notice.until );
+		if( !when.isEmpty() )
+		{
+			UnicodeString until;
+			until.format( TheGameText->fetch( notice.maintenance ? "GUI:OnlineNoticeBack" : "GUI:OnlineNoticeUntil" ), when.str() );
+			words.concat( HEADER_JOINER );
+			words.concat( until );
+		}
+		GameFont *chipFace = menuFont( MENU_TEXT_LABEL, TRUE );
+		const Int chipWidth = measureInFont( t[ HEADER_NOTICE_CHIP ]->getText(), chipFace ) + menuPx( 18.0f );
+		t[ HEADER_NOTICE ]->setText( fitText( words, t[ HEADER_NOTICE ]->getFont(), max( 0, right - left - chipWidth - gap ) ) );
+	}
+	const Int chipWidth = onlineChip( t[ HEADER_NOTICE_CHIP ], left, middle, TRUE );
+	Int w, h;
+	t[ HEADER_NOTICE ]->getSize( &w, &h );
+	t[ HEADER_NOTICE ]->draw( left + chipWidth + gap, middle - h / 2, INK, black( 160 ) );
+}
+
+/** The server on the tab row, ending at right: its name and city in body type, the ping light 18 square,
+	* the round trip MUTED; the name cut where it reaches left. */
+static void drawServerRow( Int left, Int right, Int middle )
+{
+	UnicodeString place, ping;
+	Int ms;
+	serverLine( place, ping, ms );
+	DisplayString **t = s_header;
+	if( ping.compare( s_pingShown ) != 0 )
+	{
+		s_pingShown = ping;
+		t[ HEADER_PING ]->setText( ping );
+	}
+	Int x = right;
+	if( !ping.isEmpty() )
+	{
+		Int w, h;
+		t[ HEADER_PING ]->getSize( &w, &h );
+		x -= w;
+		t[ HEADER_PING ]->draw( x, middle - h / 2, MUTED, black( 160 ) );
+		x -= menuPx( 8.0f );
+	}
+	const Image *light = ms >= 0 ? pingImage( ms ) : NULL;
+	if( light )
+	{
+		const Int size = menuPx( 18.0f );
+		x -= size;
+		TheDisplay->drawImage( light, x, middle - size / 2, x + size, middle - size / 2 + size );
+		x -= menuPx( 10.0f );
+	}
+	if( x - left != s_placeRoom || place.compare( s_placeShown ) != 0 )
+	{
+		s_placeRoom = x - left;
+		s_placeShown = place;
+		t[ HEADER_PLACE ]->setText( s_placeRoom > 0 ? fitName( place, t[ HEADER_PLACE ]->getFont(), s_placeRoom ) : UnicodeString::TheEmptyString );
+	}
+	if( t[ HEADER_PLACE ]->getTextLength() > 0 )
+	{
+		Int w, h;
+		t[ HEADER_PLACE ]->getSize( &w, &h );
+		t[ HEADER_PLACE ]->draw( x - w, middle - h / 2, INK, black( 160 ) );
+	}
 }
 
 void onlinePageInit( GameWindow *parent, const char *layout, OnlineTab open )
@@ -1056,7 +1275,6 @@ void onlinePageInit( GameWindow *parent, const char *layout, OnlineTab open )
 	s_titleShown.clear();
 	s_subtitleShown.clear();
 	s_pingShown.clear();
-	s_subtitleRoom = -1;
 	s_lineLaidOut = FALSE;
 	s_masterTitle = NULL;
 	if( parent )
@@ -1066,7 +1284,16 @@ void onlinePageInit( GameWindow *parent, const char *layout, OnlineTab open )
 		s_masterTitle = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( name ) );
 	}
 
-	GameFont *body = readableFont( TEXT_BODY );
+	s_lineRoom = -1;
+	s_placeRoom = -1;
+	s_placeShown.clear();
+	s_noticeShown = FALSE;
+
+	// the tabs from the content's left edge on the tab row, each its words in capitals plus 28 a side,
+	// 8 apart (header.py); the master only stands them roughly there
+	GameFont *labelFont = menuFont( MENU_TEXT_LABEL + 2, TRUE );
+	const IRegion2D row = boardRect( ONLINE_LEFT, MENU_TABS_TOP, ONLINE_RIGHT, MENU_TABS_BOTTOM );
+	Int x = row.lo.x;
 	for( Int each = 0; each < ONLINE_TAB_COUNT; each++ )
 	{
 		s_tabs[ each ] = NULL;
@@ -1074,55 +1301,40 @@ void onlinePageInit( GameWindow *parent, const char *layout, OnlineTab open )
 			continue;
 		AsciiString name;
 		name.format( "%s:%s", layout, TAB_WINDOW[ each ] );
-		s_tabs[ each ] = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( name ) );
-	}
-
-	// One face for all five labels, in capitals: the body's, or the largest under it at which every
-	// label reads whole with a pad either side.  The boxes shrink with the fitted board (0.75 at
-	// 1440x1080, 0.667 at 720) and the body does not, so at the body's size they were cut ("QUICK M…").
-	const Int pad = max( 4, px( 10.0f ) );
-	GameFont *labelFont = NULL;
-	for( Int points = readablePoints( TEXT_BODY, FALSE ); points >= 4 && labelFont == NULL; points-- )
-	{
-		GameFont *candidate = font( points );
-		Bool whole = candidate != NULL;
-		for( Int each = 0; each < ONLINE_TAB_COUNT && whole; each++ )
-		{
-			if( s_tabs[ each ] == NULL )
-				continue;
-			Int width, height;
-			s_tabs[ each ]->winGetSize( &width, &height );
-			whole = measureInFont( capitals( s_tabs[ each ]->winGetText() ), candidate ) <= width - 2 * pad
-				&& candidate->height <= height;
-		}
-		if( whole )
-			labelFont = candidate;
-	}
-	if( labelFont == NULL )
-		labelFont = font( 4 );
-	for( Int each = 0; each < ONLINE_TAB_COUNT; each++ )
-	{
-		GameWindow *window = s_tabs[ each ];
+		GameWindow *window = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( name ) );
+		s_tabs[ each ] = window;
 		if( window == NULL )
 			continue;
-		Int width, height;
-		window->winGetSize( &width, &height );
+		const UnicodeString label = capitals( window->winGetText() );
+		GadgetButtonSetText( window, label );
 		window->winSetFont( labelFont );
-		GadgetButtonSetText( window, fitText( capitals( window->winGetText() ), labelFont, width - 2 * pad ) );
+		const Int width = measureInFont( label, labelFont ) + 2 * menuPx( 28.0f );
+		Int parentX = 0, parentY = 0;
+		if( window->winGetParent() )
+			window->winGetParent()->winGetScreenPosition( &parentX, &parentY );
+		window->winSetPosition( x - parentX, row.lo.y - parentY );
+		window->winSetSize( width, row.hi.y - row.lo.y );
 		window->winSetDrawFunc( drawOnlineTab );
+		x += width + menuPx( 8.0f );
 	}
 
-	const Int fonts[ HEADER_TEXT_COUNT ] = { 0, 1, 2, 2, 3, 4, 4, 4, 4, 4, 1 };
-	GameFont *faces[] = { titleFont( TEXT_TITLE ), subtitleFont(), font( TEXT_STRONG, TRUE ), readableFont( TEXT_BODY, TRUE ), body };
+	// in HeaderText's order: the title, the subtitle, the wordmark's two halves, the nick, the tier, the
+	// ELO's label and figure, the Bot ELO's, the ping, the well's "?", the server, the notice's chip and words
+	const Int sizes[ HEADER_TEXT_COUNT ] = { MENU_TEXT_TITLE, MENU_TEXT_BODY, MENU_TEXT_ROW_FIGURE, MENU_TEXT_ROW_FIGURE,
+		MENU_TEXT_ROW_FIGURE, MENU_TEXT_BODY, MENU_TEXT_LABEL, MENU_TEXT_ROW_FIGURE, MENU_TEXT_LABEL, MENU_TEXT_ROW_FIGURE,
+		MENU_TEXT_BODY, MENU_TEXT_ROW_FIGURE, MENU_TEXT_BODY, MENU_TEXT_LABEL, MENU_TEXT_BODY };
+	const Bool bold[ HEADER_TEXT_COUNT ] = { TRUE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE,
+		TRUE, FALSE };
 	for( Int each = 0; each < HEADER_TEXT_COUNT; each++ )
 	{
 		s_header[ each ] = TheDisplayStringManager->newDisplayString();
-		s_header[ each ]->setFont( faces[ fonts[ each ] ] );
+		s_header[ each ]->setFont( menuFont( sizes[ each ], bold[ each ] ) );
 	}
 	s_header[ HEADER_MARK ]->setText( UnicodeString( u"Zero Hour" ) );
 	s_header[ HEADER_MARK_BLUE ]->setText( UnicodeString( u" Reforged" ) );
-	s_header[ HEADER_LADDER ]->setText( wordOr( "GUI:OnlineLadderShort", u"ELO" ) );
-	s_header[ HEADER_AI ]->setText( wordOr( "GUI:OnlineAIShort", u"Bot ELO" ) );
+	s_header[ HEADER_LADDER ]->setText( capitals( wordOr( "GUI:OnlineLadderShort", u"ELO" ) ) );
+	s_header[ HEADER_AI ]->setText( capitals( wordOr( "GUI:OnlineAIShort", u"Bot ELO" ) ) );
+	s_header[ HEADER_WELL ]->setText( UnicodeString( u"?" ) );
 }
 
 void onlinePageShutdown( GameWindow *parent )
@@ -1138,156 +1350,76 @@ void onlinePageShutdown( GameWindow *parent )
 	s_openTab = ONLINE_TAB_NONE;
 }
 
-/** The player's line, right to left from right: the AI rating, the ladder rating, the tier, the nick
-	* in bold, the nick cut with an ellipsis where the tabs leave too little room. */
-static void drawPlayerLine( Int right )
-{
-	Int left = -1;
-	for( Int each = 0; each < ONLINE_TAB_COUNT; each++ )
-	{
-		if( s_tabs[ each ] == NULL )
-			continue;
-		Int x, y, width, height;
-		s_tabs[ each ]->winGetScreenPosition( &x, &y );
-		s_tabs[ each ]->winGetSize( &width, &height );
-		left = max( left, x + width + px( ONLINE_COLUMN_GAP ) );
-	}
-	if( left < 0 || !OnlineIsEnabled() || TheGameSpyInfo == NULL )
-		return;
-	const AsciiString nick = TheGameSpyInfo->getLocalName();
-	if( nick.isEmpty() )
-		return;
-
-	OnlinePlayerInfo info;
-	OnlineGetPlayerInfo( nick, info );
-	const Int gap = px( 12.0f );
-	const Int space = px( 6.0f );
-	DisplayString **t = s_header;
-	if( !s_lineLaidOut || info.serial != s_lineSerial )
-	{
-		s_lineLaidOut = TRUE;
-		s_lineSerial = info.serial;
-		const UnicodeString none( u"\x2013" );		// an en dash for a number nobody sent
-		t[ HEADER_TIER ]->setText( OnlineTierName( tierKey( playerTier( info ) ) ) );
-		t[ HEADER_LADDER_VALUE ]->setText( info.hasRating ? ladderText( info.shown(), info.hasElo ) : none );
-		t[ HEADER_AI_VALUE ]->setText( info.hasAIRating ? eloText( info.aiRating ) : none );
-		Int rest = 3 * gap + 2 * space;
-		for( Int each = HEADER_TIER; each <= HEADER_AI_VALUE; each++ )
-		{
-			Int w, h;
-			t[ each ]->getSize( &w, &h );
-			rest += w;
-		}
-		UnicodeString shown;
-		shown.translate( nick );
-		t[ HEADER_NICK ]->setText( fitName( shown, t[ HEADER_NICK ]->getFont(), right - left - rest ) );
-	}
-
-	const Int top = boardY( ONLINE_TABS_TOP );
-	const Int rowHeight = boardY( ONLINE_TABS_BOTTOM ) - top;
-	const Int order[] = { HEADER_AI_VALUE, HEADER_AI, HEADER_LADDER_VALUE, HEADER_LADDER, HEADER_TIER, HEADER_NICK };
-	const Color colors[] = { INK, MUTED, INK, MUTED, MUTED, INK };
-	Int x = right;
-	for( Int each = 0; each < 6; each++ )
-	{
-		Int w, h;
-		t[ order[ each ] ]->getSize( &w, &h );
-		x -= w;
-		t[ order[ each ] ]->draw( x, top + ( rowHeight - h ) / 2, colors[ each ], SHADOW );
-		x -= ( order[ each ] == HEADER_AI || order[ each ] == HEADER_LADDER || order[ each ] == HEADER_TIER ) ? gap : space;
-	}
-}
-
-/** The subtitle from left, MUTED, centred on middle and kept short of limit: the page's words, or
-	* with none the server line, its ping light between the place and the milliseconds. */
-static void drawSubtitle( const UnicodeString &subtitle, Int left, Int limit, Int middle )
-{
-	DisplayString **t = s_header;
-	UnicodeString words = subtitle, ping;
-	Int ms = -1;
-	if( subtitle.isEmpty() )
-		serverLine( words, ping, ms );
-	const Image *light = ping.isEmpty() ? NULL : pingImage( ms );
-	const Int lightSize = px( 16.0f );
-	const Int gap = px( 10.0f );
-	const Int room = limit - left;
-	if( room != s_subtitleRoom || words.compare( s_subtitleShown ) != 0 || ping.compare( s_pingShown ) != 0 )
-	{
-		s_subtitleRoom = room;
-		s_subtitleShown = words;
-		s_pingShown = ping;
-		t[ HEADER_PING ]->setText( ping );
-		Int pingWidth = 0, pingHeight = 0;
-		if( !ping.isEmpty() )
-			t[ HEADER_PING ]->getSize( &pingWidth, &pingHeight );
-		const Int wordsRoom = room - ( ping.isEmpty() ? 0 : pingWidth + gap + ( light ? lightSize + gap : 0 ) );
-		t[ HEADER_SUBTITLE ]->setText( wordsRoom > 0 ? fitName( words, t[ HEADER_SUBTITLE ]->getFont(), wordsRoom ) : UnicodeString::TheEmptyString );
-	}
-
-	Int x = left;
-	const Int top = middle - t[ HEADER_SUBTITLE ]->getFont()->height / 2;
-	if( t[ HEADER_SUBTITLE ]->getTextLength() > 0 )
-	{
-		Int w, h;
-		t[ HEADER_SUBTITLE ]->getSize( &w, &h );
-		t[ HEADER_SUBTITLE ]->draw( x, top, MUTED, SHADOW );
-		x += w + gap;
-	}
-	if( ping.isEmpty() )
-		return;
-	if( light )
-	{
-		TheDisplay->drawImage( light, x, middle - lightSize / 2, x + lightSize, middle - lightSize / 2 + lightSize );
-		x += lightSize + gap;
-	}
-	t[ HEADER_PING ]->draw( x, top, MUTED, SHADOW );
-}
-
 void onlineHeader( const UnicodeString &title, const UnicodeString &subtitle )
 {
 	DisplayString **t = s_header;
 	if( t[ HEADER_TITLE ] == NULL )
 		return;		// no page, or between a page's shutdown and the next one's init
 
-	// the wordmark as the score screen sets it, its right edge on the content's
-	const Int right = boardX( ROOM_INSET_RIGHT );
-	const Int middle = boardY( ROOM_TITLE_MIDDLE );
-	Int first, second, markHeight;
-	t[ HEADER_MARK ]->getSize( &first, &markHeight );
-	t[ HEADER_MARK_BLUE ]->getSize( &second, &markHeight );
-	wordmark( &t[ HEADER_MARK ], right, middle - markHeight / 2 );
+	const Bool signedOut = s_openTab == ONLINE_TAB_NONE;
+	const IRegion2D panel = onlinePanel();
+	glass( panel );
+	frameA( panel );
 
-	// where the subtitle starts: after our title, or after the master's title's text
-	Int after = -1;
-	if( !title.isEmpty() )
-	{
-		const Int x = boardX( ROOM_TITLE_LEFT );
-		if( title.compare( s_titleShown ) != 0 )
-		{
-			s_titleShown = title;
-			t[ HEADER_TITLE ]->setText( capitals( title ) );
-		}
-		header( t[ HEADER_TITLE ], NULL, x, middle );
-		rule( boardX( ROOM_PANEL_LEFT ), boardY( ROOM_HEADER_LINE ), boardX( ROOM_PANEL_RIGHT ) - boardX( ROOM_PANEL_LEFT ) );
-		Int titleWidth, titleHeight;
-		t[ HEADER_TITLE ]->getSize( &titleWidth, &titleHeight );
-		after = x + titleWidth + headerGap();
-	}
-	else if( s_masterTitle && !s_masterTitle->winIsHidden() && BitTest( s_masterTitle->winGetStyle(), GWS_STATIC_TEXT ) )
-	{
-		// placed as W3DStaticText draws it: centred, or from its left margin
-		const TextData *data = (const TextData *)s_masterTitle->winGetUserData();
-		Int x, y, width, height, textWidth = 0, textHeight = 0;
-		s_masterTitle->winGetScreenPosition( &x, &y );
-		s_masterTitle->winGetSize( &width, &height );
-		if( data && data->text )
-			data->text->getSize( &textWidth, &textHeight );
-		after = ( data && data->centered ? x + width / 2 + textWidth / 2 : x + ( data ? data->leftMargin : 0 ) + textWidth ) + headerGap();
-	}
-	if( after >= 0 )
-		drawSubtitle( subtitle, after, right - first - second - headerGap(), middle );
+	// every row keeps its offset from the panel's top left, so the login's dialog carries the same head
+	const Int dy = signedOut ? ONLINE_LOGIN_TOP - MENU_PANEL_TOP : 0;
+	const Int panelLeft = signedOut ? ONLINE_LOGIN_LEFT : MENU_PANEL_LEFT;
+	const Int panelRight = signedOut ? ONLINE_LOGIN_RIGHT : MENU_PANEL_RIGHT;
+	const IRegion2D row = boardRect( panelLeft + 28, MENU_TITLE_TOP + dy, panelRight - 28, MENU_TITLE_BOTTOM + dy );
+	const Int middle = ( row.lo.y + row.hi.y ) / 2;
 
-	drawPlayerLine( right );
+	// the title, the page's or the words of the master's hidden StaticTextTitle, then the subtitle
+	UnicodeString words = title;
+	if( words.isEmpty() && s_masterTitle && BitTest( s_masterTitle->winGetStyle(), GWS_STATIC_TEXT ) )
+		words = GadgetStaticTextGetText( s_masterTitle );
+	if( words.compare( s_titleShown ) != 0 )
+	{
+		s_titleShown = words;
+		t[ HEADER_TITLE ]->setText( capitals( words ) );
+	}
+	Int w, h;
+	t[ HEADER_TITLE ]->getSize( &w, &h );
+	t[ HEADER_TITLE ]->draw( row.lo.x, middle - h / 2, INK, black( 160 ) );
+	Int after = row.lo.x + w + menuPx( 40.0f );
+	if( subtitle.compare( s_subtitleShown ) != 0 )
+	{
+		s_subtitleShown = subtitle;
+		t[ HEADER_SUBTITLE ]->setText( subtitle );
+	}
+	if( !subtitle.isEmpty() )
+	{
+		t[ HEADER_SUBTITLE ]->getSize( &w, &h );
+		t[ HEADER_SUBTITLE ]->draw( after - menuPx( 20.0f ), middle - h / 2, MUTED, black( 160 ) );
+		after += w + menuPx( 20.0f );
+	}
+
+	const IRegion2D rule = boardRect( panelLeft + 2, MENU_HEADER_RULE + dy, panelRight - 2, MENU_HEADER_RULE + dy + 2 );
+	litLine( rule.lo.x, rule.lo.y, rule.hi.x - rule.lo.x, max( 1, rule.hi.y - rule.lo.y ), FRAME );
+	// the foot's faint rule, 90 over the panel's foot, the keys 14 under it
+	const Int footY = ( signedOut ? ONLINE_LOGIN_BOTTOM : MENU_PANEL_BOTTOM ) - ( MENU_PANEL_BOTTOM - MENU_FOOT_RULE );
+	const IRegion2D foot = boardRect( panelLeft + 28, footY, panelRight - 28, footY + 1 );
+	TheDisplay->drawFillRect( foot.lo.x, foot.lo.y, foot.hi.x - foot.lo.x, 1, withAlpha( FRAME, 110 ) );
+
+	if( signedOut )
+	{
+		// the wordmark in the player's line's place
+		Int markWidth, markHeight;
+		t[ HEADER_MARK ]->getSize( &markWidth, &markHeight );
+		wordmark( &t[ HEADER_MARK ], row.hi.x, middle - markHeight / 2 );
+		return;
+	}
+	const Int lineLeft = drawPlayerRow( row.hi.x, middle, after );
+	drawNoticeRow( after, lineLeft - menuPx( 32.0f ), middle );
+
+	// the tab row's right end: the server, from 40 past the last tab
+	const IRegion2D tabs = boardRect( ONLINE_LEFT, MENU_TABS_TOP, ONLINE_RIGHT, MENU_TABS_BOTTOM );
+	Int tabsRight = tabs.lo.x;
+	for( Int each = 0; each < ONLINE_TAB_COUNT; each++ )
+	{
+		if( s_tabs[ each ] && !s_tabs[ each ]->winIsHidden() )
+			tabsRight = max( tabsRight, windowRegion( s_tabs[ each ] ).hi.x );
+	}
+	drawServerRow( tabsRight + menuPx( 40.0f ), tabs.hi.x, ( tabs.lo.y + tabs.hi.y ) / 2 );
 }
 
 Bool onlineTabClicked( GameWindow *control, OnlineLeave leave )

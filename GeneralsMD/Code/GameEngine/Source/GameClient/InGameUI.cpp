@@ -12251,6 +12251,8 @@ void InGameUI::drawOnlineNotice( void )
 		return;
 
 	const Bool inMatch = TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && !TheGameLogic->isLoadingMap();
+	if( !inMatch && UIStyle::onlinePageShowing() )
+		return;		// the online pages carry it in their head (menu package 9)
 	const Int margin = UIStyle::px( 16.0f );
 	Int left = 0, right = TheDisplay->getWidth(), top = 0;
 	Int limit = right;		// the plate's right edge goes no further

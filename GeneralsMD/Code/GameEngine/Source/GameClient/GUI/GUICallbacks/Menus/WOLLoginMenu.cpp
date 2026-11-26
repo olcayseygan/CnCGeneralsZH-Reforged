@@ -888,14 +888,16 @@ static void onlineAutoLogin( void )
 	pressLogin();
 }
 
-/* -online, on GameSpyLoginProfile.wnd as Tools/online_layout.py writes it (ONLINE-UI-REDESIGN.md "Login"):
-	 the server panel on the left, the sign-in panel on the right, every text in one of the master's static
-	 texts.  The counts and the wordmark are drawn in code over the server panel. */
+/* -online, on GameSpyLoginProfile.wnd as Tools/online_layout.py writes it, in the menu language (menu
+	 package 9, screens/online-entry/README-online-entry.md "Login"): a dialog on the shell map, 340,241 to
+	 1580,839 at 1080, the online head with the wordmark, the server column on the left (the server and its
+	 ping, the three counts, the message of the day, the notice, who picks the server), the sign-in column on
+	 the right.  The heads, the server column and the foot's rule are drawn in code on the dialog's panel;
+	 the message of the day and the status line are the master's static texts. */
 static GameWindow *s_onlineStatus = NULL;		///< under Sign In: a page opened, or fields left empty
 static GameWindow *s_onlineMOTD = NULL;
 static Bool s_onlineAwaitWelcome = FALSE;		///< the screen dialled and waits for the service's welcome
 static Bool s_savedSignIn = FALSE;					///< the password is empty and a token is saved for the login typed
-static GameWinDrawFunc s_serverPanelDraw = NULL;
 static GameWinDrawFunc s_passwordDraw = NULL;
 static DisplayString *s_savedHint = NULL;		///< GUI:OnlineLoginSavedToken, inside the empty password field
 
@@ -905,12 +907,20 @@ static DisplayString *s_countLabel[ONLINE_COUNTS];
 static DisplayString *s_countFigure[ONLINE_COUNTS];
 static Int s_countShown[ONLINE_COUNTS];
 static Bool s_countsShown = FALSE;
-/// the message of the day stands under the counts, or alone in their place under the heading
-static Int s_motdX = 0, s_motdWidth = 0, s_motdBottom = 0, s_motdUnderCounts = 0, s_motdAlone = 0;
-/// the panel's heading: the server's name and city and the host (the header's server line has the ping)
-static GameWindow *s_serverText = NULL;
+/// the dialog's other words: the two heads, the server and its round trip, the notice, the launcher line
+enum LoginWord { WORD_SERVER_HEAD, WORD_SIGN_IN_HEAD, WORD_SERVER, WORD_PING, WORD_NOTICE_CHIP, WORD_NOTICE, WORD_LAUNCHER,
+	LOGIN_WORDS };
+static DisplayString *s_loginWords[LOGIN_WORDS];
 static Bool s_serverLaidOut = FALSE;
 static AsciiString s_serverName, s_serverCity;
+static Int s_pingShown = -2;
+static Bool s_noticeOn = FALSE;
+static UnsignedInt s_noticeSerial = 0;
+
+/// the dialog's columns at 1080 (online_layout.py LOGIN_*): the server from 368 to 928, the sign-in from 976
+/// to 1552, both from 343 (the online head draws the foot's rule at 749)
+static const Int LOGIN_LEFT = 368, LOGIN_SERVER_RIGHT = 928, LOGIN_SIGN_IN_LEFT = 976, LOGIN_RIGHT = 1552;
+static const Int LOGIN_TOP = 343;
 
 static const Color STATUS_ERROR = GameMakeColor( 255, 96, 96, 255 );
 
@@ -975,27 +985,71 @@ static void drawPasswordEntry( GameWindow *window, WinInstanceData *instData )
 	s_savedHint->draw( x + UIStyle::px( 14.0f ), y + ( height - h ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
 }
 
-/// the server panel as the master fills it, the three counts across its top, and the page's header
-/// (wordmark, and the server line with its ping after the master's title)
-static void drawServerPanel( GameWindow *window, WinInstanceData *instData )
+/// words with their left edge at x, centred on middle; their width
+static Int drawWords( DisplayString *words, Int x, Int middle, Color color )
 {
-	if (s_serverPanelDraw)
-		s_serverPanelDraw( window, instData );
-	UIStyle::onlineHeader( UnicodeString::TheEmptyString, UnicodeString::TheEmptyString );
-	if (!s_countsShown)
+	Int w, h;
+	words->getSize( &w, &h );
+	words->draw( x, middle - h / 2, color, UIStyle::SHADOW );
+	return w;
+}
+
+/** The dialog's panel, before the gadgets over it: the online head (glass, frame A, title, wordmark), the
+	* two columns' heads, the server column and the foot's rule.  While Sign In waits (connecting, signing
+	* in, checking files) a lit segment runs along a track under it. */
+static void drawLoginPage( GameWindow *window, WinInstanceData *instData )
+{
+	UIStyle::onlineHeader( UnicodeString::TheEmptyString );
+	if (s_loginWords[WORD_SERVER_HEAD] == NULL)
 		return;
-	// on the board, as login.html sets them: a column every 306 from 148, the label at 270, the figure
-	// 10 under it, a GRID rule at 386 over the message of the day
-	for (Int i = 0; i < ONLINE_COUNTS; ++i)
+	const Int left = UIStyle::boardX( (Real)LOGIN_LEFT ), right = UIStyle::boardX( (Real)LOGIN_SERVER_RIGHT );
+	const Int top = UIStyle::onlineSection( s_loginWords[WORD_SERVER_HEAD], left, right, UIStyle::boardY( (Real)LOGIN_TOP ) );
+	UIStyle::onlineSection( s_loginWords[WORD_SIGN_IN_HEAD], UIStyle::boardX( (Real)LOGIN_SIGN_IN_LEFT ),
+		UIStyle::boardX( (Real)LOGIN_RIGHT ), UIStyle::boardY( (Real)LOGIN_TOP ) );
+
+	// the server, 24, its ping light and its round trip; 29 under the head's rule (header-relative at 1080)
+	const Int nameMiddle = top + UIStyle::px( 29.0f );
+	Int x = left + drawWords( s_loginWords[WORD_SERVER], left, nameMiddle, UIStyle::INK ) + UIStyle::px( 16.0f );
+	if (s_pingShown >= 0)
 	{
-		const Int x = UIStyle::boardX( 148.0f + 306.0f * i );
-		const Int y = UIStyle::boardY( 270.0f );
-		Int w, h;
-		s_countLabel[i]->getSize( &w, &h );
-		s_countLabel[i]->draw( x, y, UIStyle::MUTED, UIStyle::SHADOW );
-		s_countFigure[i]->draw( x, y + h + UIStyle::px( 10.0f ), UIStyle::INK, UIStyle::SHADOW );
+		const Image *light = UIStyle::pingImage( s_pingShown );
+		const Int size = UIStyle::px( 18.0f );
+		if (light)
+			TheDisplay->drawImage( light, x, nameMiddle - size / 2, x + size, nameMiddle - size / 2 + size );
+		drawWords( s_loginWords[WORD_PING], x + size + UIStyle::px( 8.0f ), nameMiddle, UIStyle::MUTED );
 	}
-	TheDisplay->drawFillRect( UIStyle::boardX( 148.0f ), UIStyle::boardY( 386.0f ), UIStyle::px( 904.0f ), 1, UIStyle::GRID );
+
+	// the counts, a 14 px label over a 40 px figure, 190 apart
+	if (s_countsShown)
+	{
+		for (Int i = 0; i < ONLINE_COUNTS; ++i)
+		{
+			const Int cx = left + UIStyle::px( 190.0f * i );
+			s_countLabel[i]->draw( cx, top + UIStyle::px( 66.0f ), UIStyle::MUTED, UIStyle::SHADOW );
+			s_countFigure[i]->draw( cx, top + UIStyle::px( 86.0f ), UIStyle::INK, UIStyle::SHADOW );
+		}
+	}
+
+	// the notice, a chip and its words, under the message of the day; who picks the server at the foot
+	if (s_noticeOn)
+	{
+		const Int middle = top + UIStyle::px( 252.0f );
+		const Int chip = UIStyle::onlineChip( s_loginWords[WORD_NOTICE_CHIP], left, middle, TRUE );
+		drawWords( s_loginWords[WORD_NOTICE], left + chip + UIStyle::px( 14.0f ), middle, UIStyle::INK );
+	}
+	s_loginWords[WORD_LAUNCHER]->draw( left, top + UIStyle::px( 338.0f ), UIStyle::MUTED, UIStyle::SHADOW );
+
+	if (buttonLogin && !buttonLogin->winIsHidden() && !BitTest( buttonLogin->winGetStatus(), WIN_STATUS_ENABLED )
+		&& (s_onlineAwaitWelcome || loginAttemptTime))
+	{
+		Int bx, by, bw, bh;
+		buttonLogin->winGetScreenPosition( &bx, &by );
+		buttonLogin->winGetSize( &bw, &bh );
+		const Int y = by + bh + UIStyle::px( 6.0f ), h = max( 1, UIStyle::px( 2.0f ) );
+		TheDisplay->drawFillRect( bx, y, bw, h, UIStyle::withAlpha( UIStyle::FRAME, 90 ) );
+		const Int run = bw / 4, at = (Int)( Clock_Milliseconds() % 1500 ) * ( bw - run ) / 1500;
+		UIStyle::litLine( bx + at, y, run, h, UIStyle::EDGE );
+	}
 }
 
 static UnicodeString fromUtf8( const AsciiString &bytes )
@@ -1003,40 +1057,75 @@ static UnicodeString fromUtf8( const AsciiString &bytes )
 	return UnicodeString( MultiByteToWideCharSingleLine( bytes.str() ).c_str() );
 }
 
-/// the heading as the server names itself, "EU1 · Somewhere · eu1.example.org" joined as the header joins
-/// its parts; the host alone from a server that sends no name
+/// the server as it names itself, "EU1 · Nuremberg" joined as the header joins its parts; the host alone
+/// from a server that sends no name.  Its round trip as it moves.
 static void onlineServerHeading( void )
 {
 	AsciiString name, city;
-	Int ms;
-	if (!OnlineIsEnabled() || !s_serverText)
+	Int ms = -1;
+	if (!OnlineIsEnabled() || !s_loginWords[WORD_SERVER])
 		return;
 	if (!OnlineGetServerInfo( name, city, ms ))
 		name = city = AsciiString::TheEmptyString;
+	if (ms != s_pingShown)
+	{
+		s_pingShown = ms;
+		UnicodeString ping;
+		if (ms >= 0)
+			ping.format( u"%d ms", ms );
+		s_loginWords[WORD_PING]->setText( ping );
+	}
 	if (s_serverLaidOut && name == s_serverName && city == s_serverCity)
 		return;
 	s_serverLaidOut = TRUE;
 	s_serverName = name;
 	s_serverCity = city;
-	UnicodeString heading = fromUtf8( name ), host;
+	UnicodeString heading = fromUtf8( name );
 	if (city.isNotEmpty())
 	{
 		if (!heading.isEmpty())
 			heading.concat( UIStyle::HEADER_JOINER );
 		heading.concat( fromUtf8( city ) );
 	}
-	host.translate( TheGlobalData->m_onlineHost );
-	if (!heading.isEmpty())
-		heading.concat( UIStyle::HEADER_JOINER );
-	heading.concat( host );
-	GadgetStaticTextSetText( s_serverText, heading );
+	if (heading.isEmpty())
+		heading.translate( TheGlobalData->m_onlineHost );
+	s_loginWords[WORD_SERVER]->setText( UIStyle::fitName( heading, s_loginWords[WORD_SERVER]->getFont(),
+		UIStyle::px( (Real)( LOGIN_SERVER_RIGHT - LOGIN_LEFT - 160 ) ) ) );
 }
 
-/// every update: the server's name, the counts the server sent, and the message of the day under them or
-/// in their place
+/// the notice in the server column: its chip and its words with when it ends, as the online head has it
+static void onlineNoticeLine( void )
+{
+	OnlineNotice notice;
+	const Bool on = OnlineIsEnabled() && s_loginWords[WORD_NOTICE] && OnlineGetNotice( notice );
+	if (on == s_noticeOn && (!on || notice.serial == s_noticeSerial))
+		return;
+	s_noticeOn = on;
+	if (!on)
+		return;
+	s_noticeSerial = notice.serial;
+	s_loginWords[WORD_NOTICE_CHIP]->setText( TheGameText->fetch( notice.maintenance ? "GUI:OnlineNoticeMaintenance" : "GUI:OnlineNoticeInfo" ) );
+	const AsciiString utf8 = OnlineNoticeWords( notice, TheGlobalData->m_textLanguage );
+	UnicodeString words = utf8.isNotEmpty() ? fromUtf8( utf8 ) : TheGameText->fetch( "GUI:OnlineNoticeMaintenanceWords" );
+	const UnicodeString when = OnlineUntilText( notice.until );
+	if (!when.isEmpty())
+	{
+		UnicodeString until;
+		until.format( TheGameText->fetch( notice.maintenance ? "GUI:OnlineNoticeBack" : "GUI:OnlineNoticeUntil" ), when.str() );
+		words.concat( UIStyle::HEADER_JOINER );
+		words.concat( until );
+	}
+	Int chipWidth, chipHeight;
+	s_loginWords[WORD_NOTICE_CHIP]->getSize( &chipWidth, &chipHeight );
+	const Int room = UIStyle::px( (Real)( LOGIN_SERVER_RIGHT - LOGIN_LEFT - 32 ) ) - chipWidth;
+	s_loginWords[WORD_NOTICE]->setText( UIStyle::fitText( words, s_loginWords[WORD_NOTICE]->getFont(), room ) );
+}
+
+/// every update: the server's name and round trip, the counts the server sent, the notice
 static void onlineServerPanel( void )
 {
 	onlineServerHeading();
+	onlineNoticeLine();
 	Int counts[ONLINE_COUNTS];
 	const Bool have = OnlineIsEnabled() && s_countFigure[0] && OnlineGetCounts( counts[0], counts[1], counts[2] );
 	for (Int i = 0; have && i < ONLINE_COUNTS; ++i)
@@ -1046,12 +1135,6 @@ static void onlineServerPanel( void )
 			s_countShown[i] = counts[i];
 			s_countFigure[i]->setText( UIStyle::grouped( counts[i] ) );
 		}
-	}
-	if (s_onlineMOTD && have != s_countsShown)
-	{
-		const Int top = have ? s_motdUnderCounts : s_motdAlone;
-		s_onlineMOTD->winSetPosition( s_motdX, top );
-		s_onlineMOTD->winSetSize( s_motdWidth, s_motdBottom - top );
 	}
 	s_countsShown = have;
 }
@@ -1278,6 +1361,25 @@ static void freeLoginString( DisplayString *&words )
 	words = NULL;
 }
 
+/** A text entry in the language on EA's own colour draw (its caret and its words stay EA's): black under a
+	* 1 px FRAME line, cyan while the mouse is on it, body type.  EA's art would otherwise draw, as the
+	* master gives the entry its images. */
+static void menuEntry( GameWindow *entry )
+{
+	if (entry == NULL)
+		return;
+	entry->winClearStatus( WIN_STATUS_IMAGE );
+	entry->winSetDrawFunc( TheWindowManager->getTextEntryDrawFunc() );
+	const Color well = GameMakeColor( 0, 0, 0, 140 );
+	GadgetTextEntrySetEnabledColor( entry, well );
+	GadgetTextEntrySetEnabledBorderColor( entry, UIStyle::FRAME );
+	GadgetTextEntrySetHiliteColor( entry, well );
+	GadgetTextEntrySetHiliteBorderColor( entry, UIStyle::EDGE_LIT );
+	GadgetTextEntrySetDisabledColor( entry, GameMakeColor( 0, 0, 0, 100 ) );
+	GadgetTextEntrySetDisabledBorderColor( entry, UIStyle::withAlpha( UIStyle::FRAME, 140 ) );
+	entry->winSetFont( UIStyle::menuFont( UIStyle::MENU_TEXT_BODY ) );
+}
+
 /* -online: the game only logs in, the site makes accounts (the owner's call of 2026-11-06).  The master
 	 holds one field for the email or the nick and hides the nick box and the birth date; Create Account and
 	 Forgot Password open the site's pages the server named in its welcome, and go when it named none. */
@@ -1293,70 +1395,78 @@ static void onlineLoginScreen( void )
 		return;
 	UIStyle::onlinePageInit( parentWOLLogin, "GameSpyLoginProfile.wnd", UIStyle::ONLINE_TAB_NONE );
 
-	// the server panel: the server's heading, the counts drawn over it, the message of the day
-	s_serverText = loginText( "StaticTextServer", UIStyle::ACTIVE );
+	// the dialog's panel draws the head, the server column and the heads before the gadgets over it
+	if (GameWindow *panel = loginWindow( "GadgetParent" ))
+		panel->winSetDrawFunc( drawLoginPage );
+	GameFont *label = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	const struct { const char *key; GameFont *font; Bool capitals; } words[LOGIN_WORDS] = {
+		{ "GUI:OnlineServerHead", label, TRUE }, { "GUI:OnlineLoginHeading", label, TRUE },
+		{ NULL, UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE ), FALSE }, { NULL, body, FALSE }, { NULL, label, FALSE },
+		{ NULL, body, FALSE }, { "GUI:OnlineLauncherPicks", label, TRUE } };
+	for (Int i = 0; i < LOGIN_WORDS; ++i)
+	{
+		freeLoginString( s_loginWords[i] );
+		const UnicodeString text = words[i].key ? TheGameText->fetch( words[i].key ) : UnicodeString::TheEmptyString;
+		s_loginWords[i] = newLoginString( words[i].font, words[i].capitals ? UIStyle::capitals( text ) : text );
+	}
 	s_serverLaidOut = FALSE;
-	s_onlineMOTD = loginText( "StaticTextMOTD", UIStyle::INK );
+	s_pingShown = -2;
+	s_noticeOn = FALSE;
 	const char *countKeys[ONLINE_COUNTS] = { "GUI:OnlineLoginOnlineNow", "GUI:OnlineOpenGamesLabel", "GUI:OnlineLoginInQuickMatch" };
 	for (Int i = 0; i < ONLINE_COUNTS; ++i)
 	{
 		freeLoginString( s_countLabel[i] );
 		freeLoginString( s_countFigure[i] );
-		s_countLabel[i] = newLoginString( UIStyle::readableFont( UIStyle::TEXT_BODY ), TheGameText->fetch( countKeys[i] ) );
-		s_countFigure[i] = newLoginString( UIStyle::titleFont( UIStyle::TEXT_DISPLAY ), UnicodeString::TheEmptyString );
+		s_countLabel[i] = newLoginString( label, UIStyle::capitals( TheGameText->fetch( countKeys[i] ) ) );
+		s_countFigure[i] = newLoginString( UIStyle::menuFont( UIStyle::MENU_TEXT_TEAM_FIGURE ), UnicodeString::TheEmptyString );
 		s_countShown[i] = -1;
 	}
-	if (s_onlineMOTD && s_serverText)
+	s_onlineMOTD = loginText( "StaticTextMOTD", UIStyle::INK );
+	if (s_onlineMOTD)
 	{
+		s_onlineMOTD->winSetFont( body );
 		// from its top, as a page reads, where a static text centres its words in the box
 		TextData *motd = (TextData *)s_onlineMOTD->winGetUserData();
 		if (motd)
 			motd->centeredVertically = FALSE;
-		// under the counts as the master has it, or alone under the server's heading where the counts
-		// would stand, as tall as it can be
-		Int x, y, width, height;
-		s_onlineMOTD->winGetPosition( &s_motdX, &s_motdUnderCounts );
-		s_onlineMOTD->winGetSize( &s_motdWidth, &height );
-		s_motdBottom = s_motdUnderCounts + height;
-		s_serverText->winGetPosition( &x, &y );
-		s_serverText->winGetSize( &width, &height );
-		s_motdAlone = y + height + UIStyle::px( 8.0f );
-		s_onlineMOTD->winSetPosition( s_motdX, s_motdAlone );
-		s_onlineMOTD->winSetSize( s_motdWidth, s_motdBottom - s_motdAlone );
-	}
-	GameWindow *serverPanel = loginWindow( "PanelServer" );
-	if (serverPanel)
-	{
-		// a second init on the same layout must not take the hook for the master's draw
-		if (serverPanel->winGetDrawFunc() != drawServerPanel)
-			s_serverPanelDraw = serverPanel->winGetDrawFunc();
-		serverPanel->winSetDrawFunc( drawServerPanel );
 	}
 
-	// the sign-in panel
-	loginText( "StaticTextSignIn", UIStyle::ACTIVE );
+	// the sign-in column: the labels in 14 px capitals, the entries and the keys in the language
 	s_onlineStatus = loginText( "StaticTextStatus", UIStyle::MUTED );
-	// the field labels in the body face, as the status line under them (EA's labels are a size up)
+	if (s_onlineStatus)
+		s_onlineStatus->winSetFont( body );
+	// the email's label has no text in the master: a one-line box of its font counts as a fixed label, and
+	// this one spans the column
 	const char *labels[] = { "StaticTextEmail", "StaticTextPassword" };
-	for (Int i = 0; s_onlineStatus && i < (Int)ARRAY_SIZE(labels); ++i)
+	for (Int i = 0; i < (Int)ARRAY_SIZE(labels); ++i)
 	{
-		GameWindow *label = loginWindow( labels[i] );
-		if (label)
-			label->winSetFont( s_onlineStatus->winGetFont() );
+		if (GameWindow *field = loginText( labels[i], UIStyle::MUTED ))
+		{
+			field->winSetFont( label );
+			const UnicodeString words = i == 0 ? TheGameText->fetch( "GUI:OnlineLoginName" ) : GadgetStaticTextGetText( field );
+			GadgetStaticTextSetText( field, UIStyle::capitals( words ) );
+		}
 	}
-	// Create Account and Forgot Password are small buttons: 21 of a layout button's 28 at 1080, scaled
-	// from their own fitted face so a squarer screen keeps the ratio
-	GameWindow *siteButtons[] = { buttonCreateAccount, buttonTOS };		// not "small": a Windows macro
-	for (Int i = 0; i < (Int)ARRAY_SIZE(siteButtons); ++i)
+	UIStyle::setMenuKey( buttonLogin, TRUE );
+	GameWindow *keys[] = { buttonCreateAccount, buttonTOS, buttonBack };
+	for (Int i = 0; i < (Int)ARRAY_SIZE(keys); ++i)
 	{
-		GameFont *face = siteButtons[i] ? siteButtons[i]->winGetFont() : NULL;
-		if (face)
-			siteButtons[i]->winSetFont( TheFontLibrary->getFont( face->nameString, max( 1, ( face->pointSize * 21 + 14 ) / 28 ), face->bold ) );
+		if (keys[i] == NULL)
+			continue;
+		UIStyle::setMenuKey( keys[i], FALSE );
+		GadgetButtonSetText( keys[i], UIStyle::capitals( keys[i]->winGetText() ) );
+	}
+	UIStyle::setMenuCheckBox( checkBoxRememberPassword );
+	if (comboBoxEmail)
+	{
+		UIStyle::setMenuComboBox( comboBoxEmail );
+		menuEntry( GadgetComboBoxGetEditBox( comboBoxEmail ) );
 	}
 	if (textEntryPassword)
 	{
-		if (textEntryPassword->winGetDrawFunc() != drawPasswordEntry)
-			s_passwordDraw = textEntryPassword->winGetDrawFunc();
+		menuEntry( textEntryPassword );
+		s_passwordDraw = textEntryPassword->winGetDrawFunc();
 		textEntryPassword->winSetDrawFunc( drawPasswordEntry );
 		Int width, height;
 		textEntryPassword->winGetSize( &width, &height );
@@ -1400,11 +1510,13 @@ static void onlineLoginScreenDone( void )
 		freeLoginString( s_countLabel[i] );
 		freeLoginString( s_countFigure[i] );
 	}
+	for (Int i = 0; i < LOGIN_WORDS; ++i)
+		freeLoginString( s_loginWords[i] );
 	freeLoginString( s_savedHint );
 	s_countsShown = FALSE;
+	s_noticeOn = FALSE;
 	s_onlineStatus = NULL;
 	s_onlineMOTD = NULL;
-	s_serverText = NULL;
 }
 
 /* The service's welcome is in: Create Account and Forgot Password show when it named their pages, the

@@ -8245,3 +8245,121 @@ END
 GUI:RemoveFriend
 "Remove friend"
 END
+
+// Menu redesign package 9, online entry: the login's server column, the hub's LAST 5 chips, recent and ladder
+// heads, and Quick Match's search figures, track legend, picks and match box.
+GUI:OnlineServerHead
+"Server"
+END
+
+GUI:OnlineLauncherPicks
+"The launcher picks the server"
+END
+
+GUI:OnlineHubLast5
+"Last 5"
+END
+
+GUI:OnlineWinLetter
+"W"
+END
+
+GUI:OnlineLossLetter
+"L"
+END
+
+GUI:OnlineHeadResult
+"Result"
+END
+
+GUI:OnlineHeadMode
+"Mode"
+END
+
+GUI:OnlineHeadOpponent
+"Opponent"
+END
+
+GUI:OnlineHeadMap
+"Map"
+END
+
+GUI:OnlineHeadChange
+"Change"
+END
+
+GUI:OnlineHeadWhen
+"When"
+END
+
+GUI:OnlineHeadPlayer
+"Player"
+END
+
+GUI:OnlineHubLadderTop
+"Ladder · Top 5"
+END
+
+GUI:OnlineMapsLabel
+"Maps"
+END
+
+GUI:OnlineMapsGenerated
+"Generated"
+END
+
+GUI:OnlineModeLabel
+"Mode"
+END
+
+GUI:OnlineServerLabel
+"Server"
+END
+
+GUI:QMArmyHead
+"Army"
+END
+
+GUI:QMSearchingFor
+"Searching for"
+END
+
+GUI:QMAlsoSearching
+"Also searching on %ls"
+END
+
+GUI:QMChanceNow
+"Win chance now"
+END
+
+GUI:QMBeatLabel
+"Opponents you would beat, times in 100"
+END
+
+GUI:QMLegendNow
+"Searching now"
+END
+
+GUI:QMLegendNext
+"Next step"
+END
+
+GUI:QMLegendWidest
+"Widest"
+END
+
+GUI:QMWidensTo
+"Widens to %d–%d in %d:%02d"
+END
+
+GUI:QMStopsAt
+"Stops widening at %d–%d"
+END
+
+GUI:QMLastMatches
+"Last Quick Matches"
+END
+
+GUI:QMMatchHead
+"Match"
+END

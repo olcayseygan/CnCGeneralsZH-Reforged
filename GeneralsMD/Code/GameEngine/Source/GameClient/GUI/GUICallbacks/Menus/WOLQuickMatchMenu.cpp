@@ -79,6 +79,7 @@
 #include "GameNetwork/GameSpy/PeerThread.h"
 #include "GameNetwork/GameSpy/PersistentStorageDefs.h"
 #include "GameNetwork/GameSpy/PersistentStorageThread.h"
+#include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/RankPointValue.h"
 #include "GameNetwork/GameSpy/LadderDefs.h"
 #include "GameNetwork/GameSpy/LobbyUtils.h"
@@ -433,55 +434,63 @@ static Int put( DisplayString *words, Int x, Int y, Color color, QMAlign align =
 	return width;
 }
 
-static Int widthOf( DisplayString *words )
-{
-	Int width, height;
-	words->getSize( &width, &height );
-	return width;
-}
-
-static Int heightOf( DisplayString *words )
-{
-	Int width, height;
-	words->getSize( &width, &height );
-	return height;
-}
-
 static Int qpx( Real at1080 )
 {
 	return UIStyle::px( at1080 );
 }
 
-static const Int QM_CLOCK_POINTS = 46;		///< the Generals face at the spec's 96 px at 1080: the clock and VS
-static const Int QM_BUTTON_POINTS = 15;		///< the rooms' buttons
 static const WideChar QM_NONE[] = { 0x2013, 0 };	///< an en dash for a number nobody sent
 
-/// the page's faces, found at init: TheFontLibrary walks its whole list on every ask
-enum QMFace { QM_FACE_BODY, QM_FACE_BOLD, QM_FACE_SECTION, QM_FACE_HEADING, QM_FACE_NICK, QM_FACE_CHANCE, QM_FACE_DISPLAY,
-	QM_FACE_CLOCK, QM_FACE_BUTTON, QM_FACE_COUNT };
+/// the page's faces, the menu language's five sizes, found at init: TheFontLibrary walks its whole list
+/// on every ask.  SECTION is the 14 px capitals, NICK and FIGURE a row's 24, DISPLAY the key figure's 40,
+/// BUTTON a key's 20.
+enum QMFace { QM_FACE_BODY, QM_FACE_BOLD, QM_FACE_SECTION, QM_FACE_NICK, QM_FACE_DISPLAY, QM_FACE_DISPLAY_BOLD, QM_FACE_BUTTON,
+	QM_FACE_COUNT };
 static GameFont *s_face[QM_FACE_COUNT];
-
-/** A layout size for this page's boxes.  The page lays out in qpx, the smaller axis, which is 0.75 at
-	* 1440x1080, while adjustFontSize measures off 800x600 and keeps the type at 1080's size there, so the
-	* tiles' words came out a third too big for them.  Scaled by px over the height's scale they shrink with
-	* the boxes; 1 on any screen 16:9 or wider, where nothing changes. */
-static Int qmPoints( Int points )
-{
-	const Real fit = (Real)qpx( 1080 ) / (Real)max( 1, UIStyle::tallPx( 1080 ) );
-	return max( 1, REAL_TO_INT( points * fit + 0.5f ) );
-}
 
 static void findFaces( void )
 {
-	s_face[QM_FACE_BODY] = UIStyle::font( qmPoints( UIStyle::TEXT_BODY ) );
-	s_face[QM_FACE_BOLD] = UIStyle::font( qmPoints( UIStyle::TEXT_BODY ), TRUE );
-	s_face[QM_FACE_SECTION] = UIStyle::sectionFont();
-	s_face[QM_FACE_HEADING] = UIStyle::font( qmPoints( UIStyle::TEXT_HEADING ) );
-	s_face[QM_FACE_NICK] = UIStyle::font( qmPoints( UIStyle::TEXT_HEADING ), TRUE );
-	s_face[QM_FACE_CHANCE] = UIStyle::font( qmPoints( UIStyle::TEXT_STRONG ), TRUE );
-	s_face[QM_FACE_DISPLAY] = UIStyle::titleFont( qmPoints( UIStyle::TEXT_DISPLAY ) );
-	s_face[QM_FACE_CLOCK] = UIStyle::titleFont( qmPoints( QM_CLOCK_POINTS ) );
-	s_face[QM_FACE_BUTTON] = UIStyle::titleFont( qmPoints( QM_BUTTON_POINTS ) );
+	s_face[QM_FACE_BODY] = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	s_face[QM_FACE_BOLD] = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY, TRUE );
+	s_face[QM_FACE_SECTION] = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	s_face[QM_FACE_NICK] = UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE );
+	s_face[QM_FACE_DISPLAY] = UIStyle::menuFont( UIStyle::MENU_TEXT_TEAM_FIGURE );
+	s_face[QM_FACE_DISPLAY_BOLD] = UIStyle::menuFont( UIStyle::MENU_TEXT_TITLE, TRUE );
+	s_face[QM_FACE_BUTTON] = UIStyle::menuFont( UIStyle::MENU_TEXT_KEY, TRUE );
+}
+
+/// a 14 px capital label's words
+static UnicodeString capsWord( const UnicodeString &words )
+{
+	return UIStyle::capitals( words );
+}
+
+/// words centred on middle at x (left edge, middle or right edge by align); their width
+static Int putAt( DisplayString *words, Int x, Int middle, Color color, Int align = 0 )
+{
+	Int width, height;
+	words->getSize( &width, &height );
+	words->draw( x - (align == 1 ? width / 2 : align == 2 ? width : 0), middle - height / 2, color, UIStyle::SHADOW );
+	return width;
+}
+
+/// a "?" well where a picture would stand: a random army, an unseen map
+static void well( QMWords &words, Int x, Int y, Int width, Int height )
+{
+	TheDisplay->drawFillRect( x, y, width, height, GameMakeColor( 10, 12, 20, 230 ) );
+	TheDisplay->drawOpenRect( x, y, width, height, 1.0f, UIStyle::withAlpha( UIStyle::FRAME, 200 ) );
+	GameFont *font = min( width, height ) >= qpx( 80 ) ? s_face[QM_FACE_DISPLAY] : s_face[QM_FACE_BODY];
+	putAt( words.get( font, UnicodeString( u"?" ) ), x + width / 2, y + height / 2, UIStyle::MUTED, 1 );
+}
+
+/// a box's lit 2 px edge in a colour, inside its rectangle
+static void litBox( Int x, Int y, Int width, Int height, Color color )
+{
+	const Int line = max( 1, qpx( 2 ) );
+	UIStyle::litLine( x, y, width, line, color );
+	UIStyle::litLine( x, y + height - line, width, line, color );
+	UIStyle::litLine( x, y, line, height, color );
+	UIStyle::litLine( x + width - line, y, line, height, color );
 }
 
 static GameFont *bodyFont( Bool bold = FALSE )
@@ -504,6 +513,25 @@ static const UnicodeString &word( const char *label )
 
 /// the server's name for the search page's queue line, read at init (the welcome has come by then)
 static UnicodeString s_serverLabel;
+
+/// the last Quick Matches under the search, asked at init, copied when their serial moves
+static OnlineHistory s_qmHistory;
+static UnsignedInt s_qmHistorySerial = 0;
+
+/// how long ago, in the coarsest unit that says it (the hub's words)
+static UnicodeString ageText( Int seconds )
+{
+	UnicodeString text;
+	if (seconds < 3600)
+		text.format( word( "GUI:OnlineHubAgoMinutes" ), max( 1, seconds / 60 ) );
+	else if (seconds < 86400)
+		text.format( word( "GUI:OnlineHubAgoHours" ), seconds / 3600 );
+	else if (seconds < 2 * 86400)
+		text = word( "GUI:OnlineHubYday" );
+	else
+		text.format( word( "GUI:OnlineHubAgoDays" ), seconds / 86400 );
+	return text;
+}
 
 // the server's window of win chances (OnlineQueues.h): 45 to 55 at join, 5 points wider each side
 // every 30 s, 30 to 70 at the widest
@@ -571,17 +599,6 @@ static const Image *findArmyImage( Int templateIndex )
 	return pt->getGeneralImage() ? pt->getGeneralImage() : pt->getSideIconImage();
 }
 
-/// findArmyImage from the card pictures found at init, searched again only for an army no card has
-static const Image *armyImage( Int templateIndex )
-{
-	for (Int card = 0; card < QM_ARMY_CARDS; ++card)
-	{
-		if (s_cardTemplate[card] == templateIndex)
-			return s_cardImage[card];
-	}
-	return findArmyImage( templateIndex );
-}
-
 /// the side a rank portrait is drawn for: the army's base side, Random (the Elite portrait) for none
 static AsciiString portraitSide( Int templateIndex )
 {
@@ -643,15 +660,6 @@ static void colorBox( Int x, Int y, Int width, Int height, Int color, Int inset 
 	const Int tall = wide * 22 / 24;
 	const Int left = x + (width - wide) / 2, top = y + (height - tall) / 2;
 	TheDisplay->drawImage( s_randomImage, left, top, left + wide, top + tall );
-}
-
-/// a rank portrait in its FRAME edge, size square
-static void portrait( const Image *image, Int x, Int y, Int size )
-{
-	if (image == NULL)
-		return;
-	TheDisplay->drawImage( image, x, y, x + size, y + size );
-	TheDisplay->drawOpenRect( x, y, size, size, 1.0f, UIStyle::FRAME );
 }
 
 static UnicodeString ratingOf( const OnlinePlayerInfo &info )
@@ -723,31 +731,34 @@ static Bool armyCardRect( GameWindow *panel, Int card, IRegion2D &r )
 {
 	if (s_cardTemplate[card] == QM_NO_ARMY)
 		return FALSE;
-	Int x, y;
+	// README-online-entry.md "Quick Match": Random across the box 52 high under the head, then three rows of
+	// four cards 270 by 120, 16 apart
+	Int x, y, width, height;
 	panel->winGetScreenPosition( &x, &y );
+	panel->winGetSize( &width, &height );
 	if (card == 0)
 	{
-		r.lo.x = x + qpx( 20 );
-		r.lo.y = y + qpx( 56 );
-		r.hi.x = x + qpx( 1088 );
-		r.hi.y = y + qpx( 108 );
+		r.lo.x = x + qpx( 24 );
+		r.lo.y = y + qpx( 62 );
+		r.hi.x = x + width - qpx( 24 );
+		r.hi.y = y + qpx( 114 );
 		return TRUE;
 	}
 	const Int column = (card - 1) % QM_ARMY_COLUMNS, row = (card - 1) / QM_ARMY_COLUMNS;
-	r.lo.x = x + qpx( 20.0f + column * 271.0f );
-	r.lo.y = y + qpx( 124.0f + row * 120.0f );
-	r.hi.x = r.lo.x + qpx( 255 );
-	r.hi.y = r.lo.y + qpx( 108 );
+	r.lo.x = x + qpx( 24.0f + column * 286.0f );
+	r.lo.y = y + qpx( 130.0f + row * 136.0f );
+	r.hi.x = r.lo.x + qpx( 270 );
+	r.hi.y = r.lo.y + qpx( 120 );
 	return TRUE;
 }
 
-/// a colour box, in the colour combo's order: Random, then the Quick Match colours
+/// a colour box, in the colour combo's order: Random, then the Quick Match colours, 64 by 84 and 80 apart
 static void colorBoxRect( GameWindow *panel, Int box, IRegion2D &r )
 {
 	Int x, y;
 	panel->winGetScreenPosition( &x, &y );
-	r.lo.x = x + qpx( 20.0f + box * 76.0f );
-	r.lo.y = y + qpx( 64 );
+	r.lo.x = x + qpx( 24.0f + box * 80.0f );
+	r.lo.y = y + qpx( 66 );
 	r.hi.x = r.lo.x + qpx( 64 );
 	r.hi.y = r.lo.y + qpx( 84 );
 }
@@ -798,14 +809,26 @@ static WindowMsgHandledType qmPickInput( GameWindow *window, UnsignedInt msg, Wi
 	return MSG_HANDLED;
 }
 
-/// a box of the master as its own draw had it, PANEL in a FRAME edge, and the box's words from the start
+/// a box of the master in the language, black at 70 in a FRAME edge, and the box's words from the start
 static QMWords &panelBox( GameWindow *window, QMPanel panel, Int &x, Int &y, Int &width, Int &height )
 {
 	window->winGetScreenPosition( &x, &y );
 	window->winGetSize( &width, &height );
-	UIStyle::panel( x, y, width, height, UIStyle::PANEL );
+	IRegion2D box;
+	box.lo.x = x;
+	box.lo.y = y;
+	box.hi.x = x + width;
+	box.hi.y = y + height;
+	UIStyle::onlineBox( box );
 	s_words[panel].begin();
 	return s_words[panel];
+}
+
+/// a box's section head, green capitals over a lit rule, 20 under its top; where its content starts
+static Int section( QMWords &words, const UnicodeString &head, Int x, Int y, Int width )
+{
+	return UIStyle::onlineSection( words.get( s_face[QM_FACE_SECTION], capsWord( head ), width - qpx( 48 ) ),
+		x + qpx( 24 ), x + width - qpx( 24 ), y + qpx( 20 ) );
 }
 
 /// picking: Random, then each side and its generals, the picked card in the three-line edge
@@ -813,10 +836,8 @@ static void drawArmyPanel( GameWindow *window, WinInstanceData * )
 {
 	Int x, y, width, height;
 	QMWords &words = panelBox( window, QM_PANEL_ARMY, x, y, width, height );
-	UIStyle::heading( words.get( s_face[QM_FACE_SECTION], word( "GUI:Faction" ), width - qpx( 48 ) ), x + qpx( 24 ),
-		y + qpx( 20 ) );
+	section( words, word( "GUI:QMArmyHead" ), x, y, width );
 	const Int picked = pickedTemplate();
-	GameFont *name = bodyFont( TRUE );
 	GameFont *body = bodyFont();
 	for (Int card = 0; card < QM_ARMY_CARDS; ++card)
 	{
@@ -824,19 +845,24 @@ static void drawArmyPanel( GameWindow *window, WinInstanceData * )
 		if (!armyCardRect( window, card, r ))
 			continue;
 		const Int cardWidth = r.hi.x - r.lo.x, cardHeight = r.hi.y - r.lo.y;
-		UIStyle::panel( r.lo.x, r.lo.y, cardWidth, cardHeight, UIStyle::PANEL );
+		TheDisplay->drawFillRect( r.lo.x, r.lo.y, cardWidth, cardHeight, GameMakeColor( 0, 0, 0, 90 ) );
+		// the picked card lit: an EDGE wash and the cyan edge; the rest a FRAME line
 		if (s_cardTemplate[card] == picked)
-			UIStyle::edge( r.lo.x, r.lo.y, cardWidth, cardHeight );
+		{
+			TheDisplay->drawFillRect( r.lo.x, r.lo.y, cardWidth, cardHeight, UIStyle::withAlpha( UIStyle::EDGE, 40 ) );
+			litBox( r.lo.x, r.lo.y, cardWidth, cardHeight, UIStyle::EDGE_LIT );
+		}
+		else
+			TheDisplay->drawOpenRect( r.lo.x, r.lo.y, cardWidth, cardHeight, 1.0f, UIStyle::FRAME );
 		if (card == 0)
 		{
-			if (s_randomImage)
-				TheDisplay->drawImage( s_randomImage, r.lo.x + qpx( 16 ), r.lo.y + qpx( 15 ), r.lo.x + qpx( 40 ), r.lo.y + qpx( 37 ) );
-			DisplayString *title = words.get( name, word( "GUI:QMRandomArmy" ), qpx( 260 ) );
-			put( title, r.lo.x + qpx( 54 ), r.lo.y + (cardHeight - heightOf( title )) / 2, UIStyle::INK );
+			well( words, r.lo.x + qpx( 14 ), r.lo.y + qpx( 10 ), qpx( 32 ), cardHeight - qpx( 20 ) );
+			putAt( words.get( body, word( "GUI:QMRandomArmy" ), cardWidth - qpx( 80 ) ), r.lo.x + qpx( 60 ),
+				r.lo.y + cardHeight / 2, UIStyle::INK );
 			continue;
 		}
 		// the general's portrait, or the side's Command Center, at the Command Center portrait's 5:4 in a FRAME
-		// edge down the card's left, inside the picked card's three-line edge
+		// edge down the card's left
 		const Int inset = qpx( 6 );
 		const Int pictureHeight = cardHeight - 2 * inset, pictureWidth = pictureHeight * 5 / 4;
 		if (s_cardPortrait[card])
@@ -850,25 +876,24 @@ static void drawArmyPanel( GameWindow *window, WinInstanceData * )
 		const char *general = QM_ARMY[entry].general;
 		const Int textX = r.lo.x + inset + pictureWidth + qpx( 12 );
 		const Int textWidth = r.hi.x - qpx( 8 ) - textX;
-		DisplayString *top = words.get( name, general ? word( general ) : side, textWidth );
-		DisplayString *under = words.get( body, general ? side : word( "GUI:QMNoGeneral" ), textWidth );
-		const Int gap = qpx( 6 );
-		const Int textY = r.lo.y + (cardHeight - heightOf( top ) - gap - heightOf( under )) / 2;
-		put( top, textX, textY, UIStyle::INK );
-		put( under, textX, textY + heightOf( top ) + gap, UIStyle::MUTED );
+		const Int middle = r.lo.y + cardHeight / 2;
+		putAt( words.get( body, general ? word( general ) : side, textWidth ), textX, middle - qpx( 15 ), UIStyle::INK );
+		putAt( words.get( body, general ? side : word( "GUI:QMNoGeneral" ), textWidth ), textX, middle + qpx( 16 ), UIStyle::MUTED );
 	}
 }
 
-/// picking: Random and the Quick Match colours as the rooms' colour boxes, the picked one ringed
+/// picking: Random and the Quick Match colours as the rooms' colour boxes, the picked one ringed in cyan,
+/// its name after the head
 static void drawColorPanel( GameWindow *window, WinInstanceData * )
 {
 	Int x, y, width, height;
 	QMWords &words = panelBox( window, QM_PANEL_COLOR, x, y, width, height );
 	const Int picked = pickedColorPos();
-	DisplayString *heading = words.get( s_face[QM_FACE_SECTION], word( "GUI:Color" ), qpx( 300 ) );
-	UIStyle::heading( heading, x + qpx( 24 ), y + qpx( 20 ) );
-	put( words.get( s_face[QM_FACE_SECTION], colorName( colorAt( picked ) ), qpx( 400 ) ), x + qpx( 38 ) + widthOf( heading ),
-		y + qpx( 20 ), UIStyle::INK );
+	DisplayString *heading = words.get( s_face[QM_FACE_SECTION], capsWord( word( "GUI:Color" ) ), qpx( 200 ) );
+	const Int headMiddle = y + qpx( 29 );
+	const Int headWidth = putAt( heading, x + qpx( 24 ), headMiddle, UIStyle::ACTIVE );
+	putAt( words.get( bodyFont(), colorName( colorAt( picked ) ), qpx( 400 ) ), x + qpx( 40 ) + headWidth, headMiddle, UIStyle::INK );
+	UIStyle::litLine( x + qpx( 24 ), y + qpx( 46 ), width - qpx( 48 ), 1, UIStyle::FRAME );
 	const Int boxes = comboBoxColor ? GadgetComboBoxGetLength( comboBoxColor ) : 0;
 	const Int ring = qpx( 6 );
 	for (Int box = 0; box < boxes; ++box)
@@ -878,48 +903,113 @@ static void drawColorPanel( GameWindow *window, WinInstanceData * )
 		const Int boxWidth = r.hi.x - r.lo.x, boxHeight = r.hi.y - r.lo.y;
 		colorBox( r.lo.x, r.lo.y, boxWidth, boxHeight, colorAt( box ), qpx( 6 ) );
 		if (box == picked)
-			UIStyle::edge( r.lo.x - ring, r.lo.y - ring, boxWidth + 2 * ring, boxHeight + 2 * ring );
+			litBox( r.lo.x - ring, r.lo.y - ring, boxWidth + 2 * ring, boxHeight + 2 * ring, UIStyle::EDGE_LIT );
 	}
 }
 
-/// picking, the side box: the ladder standing and the players searching here
-static void drawLadderPanel( GameWindow *window, WinInstanceData * )
+/// a fact row of the picks box: the label MUTED at the left, the value at the right edge, 52 high
+static Int pickRow( QMWords &words, const UnicodeString &label, const UnicodeString &value, Int left, Int right, Int top,
+	Color valueColor = UIStyle::INK )
+{
+	const Int middle = top + qpx( 26 ), half = (right - left) / 2;
+	putAt( words.get( bodyFont(), label, half ), left, middle, UIStyle::MUTED );
+	if (value.isEmpty())
+		return 0;
+	return putAt( words.get( bodyFont(), value, half ), right, middle, valueColor, 2 );
+}
+
+/** The picks, the same box on the pick page and while searching (locked): the army's portrait 300 square
+	* with the colour along its foot, the army and its side, the ladder rating as the box's figure with the
+	* tier's rank portrait, then Place, W–L, In queue, Maps, Colour and Speed (the master's combo while picking,
+	* its value while searching). */
+static void drawPicksBox( GameWindow *window, QMPanel panel, Bool locked )
 {
 	Int x, y, width, height;
-	QMWords &words = panelBox( window, QM_PANEL_LADDER, x, y, width, height );
+	QMWords &words = panelBox( window, panel, x, y, width, height );
 	GameFont *body = bodyFont();
-	const Int left = x + qpx( 24 ), inner = width - qpx( 48 );
-	UIStyle::heading( words.get( s_face[QM_FACE_SECTION], word( "GUI:Ladder" ), inner ), left, y + qpx( 20 ) );
+	const Int left = x + qpx( 24 ), right = x + width - qpx( 24 );
+	const Int top = section( words, word( "GUI:QMYourPicks" ), x, y, width );
 
-	// the rank portrait for the picked army, the rating as a display figure over its tier
-	const QMPlayer &me = playerAt( 0, TheGameSpyInfo->getLocalName(), pickedTemplate(), NULL );
+	const Int army = locked ? s_joinedArmy : pickedTemplate();
+	const Int color = colorAt( pickedColorPos() );
+	const Int size = qpx( 300 );
+	const Int pictureY = top + qpx( 18 );
+	const Image *picture = NULL;
+	for (Int card = 0; card < QM_ARMY_CARDS; ++card)
+	{
+		if (s_cardTemplate[card] == army && army >= 0)
+			picture = s_cardPortrait[card];
+	}
+	if (picture)
+	{
+		UIStyle::coverImage( picture, left, pictureY, size, size );
+		TheDisplay->drawOpenRect( left, pictureY, size, size, 1.0f, UIStyle::FRAME );
+	}
+	else
+		well( words, left, pictureY, size, size );
+	TheDisplay->drawFillRect( left, pictureY + size - qpx( 4 ), size, qpx( 4 ), seatColor( color ) );
+
+	// the army, its side, the ladder figure and the tier beside the portrait
+	const Int textX = left + size + qpx( 24 ), textWidth = right - textX;
+	putAt( words.get( s_face[QM_FACE_SECTION], capsWord( word( "GUI:QMArmyHead" ) ), textWidth ), textX, pictureY + qpx( 9 ), UIStyle::MUTED );
+	const Int entry = armyEntry( army );
+	const UnicodeString armyWords = entry >= 0 && QM_ARMY[entry].general ? word( QM_ARMY[entry].general ) : armyName( army, FALSE );
+	putAt( words.get( s_face[QM_FACE_NICK], armyWords, textWidth ), textX, pictureY + qpx( 39 ), UIStyle::INK );
+	if (entry >= 0)
+		putAt( words.get( body, word( QM_SIDE_NAME[entry / QM_ARMY_COLUMNS] ), textWidth ), textX, pictureY + qpx( 69 ), UIStyle::MUTED );
+	const QMPlayer &me = playerAt( 0, TheGameSpyInfo->getLocalName(), army, NULL );
+	putAt( words.get( s_face[QM_FACE_SECTION], capsWord( word( "GUI:Ladder" ) ), textWidth ), textX, pictureY + qpx( 141 ), UIStyle::MUTED );
+	put( words.get( s_face[QM_FACE_DISPLAY], me.rating ), textX, pictureY + qpx( 154 ), UIStyle::INK );
+	const Int rank = qpx( 40 );
+	Int tierX = textX;
+	if (me.portrait)
+	{
+		TheDisplay->drawImage( me.portrait, textX, pictureY + qpx( 212 ), textX + rank, pictureY + qpx( 212 ) + rank );
+		tierX += rank + qpx( 12 );
+	}
+	putAt( words.get( body, me.tierName, right - tierX ), tierX, pictureY + qpx( 232 ), UIStyle::INK );
+
+	// the facts, rows of 52 under the portrait
 	const OnlinePlayerInfo &info = me.info;
-	const Int size = qpx( 144 );
-	portrait( me.portrait, left, y + qpx( 64 ), size );
-	const Int textX = me.portrait ? left + size + qpx( 24 ) : left;
-	put( words.get( s_face[QM_FACE_DISPLAY], me.rating ), textX, y + qpx( 76 ), UIStyle::INK );
-	put( words.get( body, me.tierName, left + inner - textX ), textX, y + qpx( 160 ), UIStyle::INK );
-
-	// the ladder place, the rated games, the players searching on this server
 	Int players, games, queue;
 	const Bool counted = OnlineGetCounts( players, games, queue );
-	static const char *const LABEL[] = { "GUI:OnlinePlaceLabel", "GUI:OnlineGamesLabel", "GUI:OnlineHubInQueue" };
-	for (Int fact = 0; fact < 3; ++fact)
-	{
-		UnicodeString value( QM_NONE );
-		if (fact == 0 && info.rank > 0)
-			value.format( word( "GUI:OnlinePlaceValue" ), info.rank );
-		else if (fact == 1 && info.games >= 0)
-			value.format( u"%d", info.games );
-		else if (fact == 2 && counted)
-			value.format( u"%d", queue );
-		UIStyle::fact( words.get( body, word( LABEL[fact] ), inner / 2 ), words.get( body, value, inner / 2 ),
-			left, y + qpx( 240.0f + fact * 52.0f ), inner, qpx( 52 ) );
-	}
-	// the speed qm.join prefers, its combo in the value's place (the master's ComboBoxGameSpeed)
-	if (comboBoxGameSpeed)
-		UIStyle::fact( words.get( body, word( "GUI:OnlineSpeedLabel" ), inner / 2 ), words.get( body, UnicodeString::TheEmptyString ),
-			left, y + qpx( 240.0f + 3 * 52.0f ), inner, qpx( 52 ) );
+	UnicodeString value( QM_NONE );
+	if (info.hasRating && info.games >= 0 && info.games < UIStyle::RANKED_GAMES)
+		value.format( word( "GUI:OnlineHubRankedGames" ), info.games, (Int)UIStyle::RANKED_GAMES );
+	else if (info.rank > 0)
+		value.format( word( "GUI:OnlinePlaceValue" ), info.rank );
+	const Int row = qpx( 52 );
+	Int rowTop = pictureY + size + qpx( 20 );
+	pickRow( words, word( "GUI:OnlinePlaceLabel" ), value, left, right, rowTop );
+	rowTop += row;
+	value = UnicodeString( QM_NONE );
+	if (info.hasStats)
+		value.format( u"%d\x2013%d", info.wins, info.losses );
+	pickRow( words, word( "GUI:OnlineHubRecord" ), value, left, right, rowTop );
+	rowTop += row;
+	value = UnicodeString( QM_NONE );
+	if (s_poolSize >= 0 || counted)
+		value.format( u"%d", s_poolSize >= 0 ? s_poolSize : queue );
+	pickRow( words, word( "GUI:OnlineHubInQueue" ), value, left, right, rowTop );
+	rowTop += row;
+	pickRow( words, word( "GUI:OnlineMapsLabel" ), word( "GUI:OnlineMapsGenerated" ), left, right, rowTop );
+	rowTop += row;
+	const Int nameWidth = pickRow( words, word( "GUI:Color" ), colorName( color ), left, right, rowTop );
+	const Int swatch = qpx( 22 );
+	colorBox( right - nameWidth - qpx( 12 ) - swatch, rowTop + (row - swatch) / 2, swatch, swatch, color, qpx( 3 ) );
+	rowTop += row;
+	// the speed qm.join prefers: the master's ComboBoxGameSpeed in the value's place while picking
+	if (locked || comboBoxGameSpeed == NULL)
+		pickRow( words, word( "GUI:OnlineSpeedLabel" ), comboBoxGameSpeed ? GameSpeedText( PlayerGameSpeedFromComboBox( comboBoxGameSpeed,
+			RETAIL_GAME_SPEED_PERCENT ) ) : UnicodeString( QM_NONE ), left, right, rowTop );
+	else
+		pickRow( words, word( "GUI:OnlineSpeedLabel" ), UnicodeString::TheEmptyString, left, right, rowTop );
+}
+
+/// picking, the side box
+static void drawLadderPanel( GameWindow *window, WinInstanceData * )
+{
+	drawPicksBox( window, QM_PANEL_LADDER, FALSE );
 }
 
 /// searching: the clock, the players searching here, and the window of win chances on a 0 to 100 scale
@@ -928,105 +1018,139 @@ static void drawSearchPanel( GameWindow *window, WinInstanceData * )
 	Int x, y, width, height;
 	QMWords &words = panelBox( window, QM_PANEL_SEARCH, x, y, width, height );
 	GameFont *body = bodyFont();
-	UIStyle::heading( words.get( s_face[QM_FACE_SECTION], word( "GUI:QMSearching" ), width - qpx( 48 ) ), x + qpx( 24 ),
-		y + qpx( 20 ) );
+	const Int left = x + qpx( 24 ), right = x + width - qpx( 24 );
+	const Int top = section( words, word( "GUI:QMSearching" ), x, y, width );
 
-	// the others searching: the last qm.status's pool, which counts us, else the server's counts
-	const Int middle = x + width / 2;
+	// three figures, 376 apart: how long, the others searching here (the last qm.status's pool, which
+	// counts us, else the server's counts), the band of win chances taken now
+	Real chanceLo = 0.0f, chanceHi = 0.0f;
+	Int nextMs = -1;
+	const Bool window_ = OnlineGetQuickMatchChanceWindow( chanceLo, chanceHi, nextMs );		// an older server sends none
+	const Int lo = REAL_TO_INT( chanceLo + 0.5f ), hi = REAL_TO_INT( chanceHi + 0.5f );
 	const Int elapsed = s_searchSince ? (Int)((Clock_Milliseconds() - s_searchSince) / 1000) : 0;
-	UnicodeString text;
-	text.format( u"%d:%02d", elapsed / 60, elapsed % 60 );
-	put( words.get( s_face[QM_FACE_CLOCK], text ), middle, y + qpx( 130 ), UIStyle::INK, QM_MIDDLE );
 	Int players, games, queue;
 	const Int searching = s_poolSize >= 0 ? s_poolSize : (OnlineGetCounts( players, games, queue ) ? queue : -1);
-	if (searching >= 0)
+	UnicodeString label[3], figure[3];
+	label[0] = word( "GUI:QMSearchingFor" );
+	figure[0].format( u"%d:%02d", elapsed / 60, elapsed % 60 );
+	label[1].format( word( "GUI:QMAlsoSearching" ), s_serverLabel.str() );
+	figure[1] = searching >= 0 ? UIStyle::grouped( max( 0, searching - 1 ) ) : UnicodeString( QM_NONE );
+	label[2] = word( "GUI:QMChanceNow" );
+	if (window_)
 	{
-		// the count, then the server's name, for words that name it ("on this server" leaves it unread)
-		text.format( word( "GUI:QMQueueHere" ), max( 0, searching - 1 ), s_serverLabel.str() );
-		put( words.get( body, text, width - qpx( 48 ) ), middle, y + qpx( 250 ), UIStyle::MUTED, QM_MIDDLE );
+		figure[2].format( u"%d\x2013", lo );
+		figure[2].concat( UIStyle::percentText( hi ) );
 	}
+	else
+		figure[2] = UnicodeString( QM_NONE );
+	for (Int each = 0; each < 3; ++each)
+	{
+		const Int fx = left + qpx( 376.0f * each );
+		putAt( words.get( s_face[QM_FACE_SECTION], capsWord( label[each] ), qpx( 360 ) ), fx, top + qpx( 31 ), UIStyle::MUTED );
+		put( words.get( s_face[QM_FACE_DISPLAY], figure[each] ), fx, top + qpx( 44 ), UIStyle::INK );
+	}
+	if (!window_)
+		return;
 
-	Real chanceLo, chanceHi;
-	Int nextMs;
-	if (!OnlineGetQuickMatchChanceWindow( chanceLo, chanceHi, nextMs ))
-		return;		// an older server sends no window
-	const Int left = x + qpx( 120 ), scale = width - qpx( 240 );
-	TheDisplay->drawFillRect( left, y + qpx( 320 ), scale, 1, UIStyle::GRID );
-	const Int lo = REAL_TO_INT( chanceLo + 0.5f ), hi = REAL_TO_INT( chanceHi + 0.5f );
-	text.format( word( "GUI:QMWindowValue" ), lo, hi );
-	put( words.get( body, text, scale ), left, y + qpx( 358 ), UIStyle::INK );
-
-	// the band taken now in EDGE over the next step's, FRAME marks where widening stops
-	const Int top = y + qpx( 436 ), tall = qpx( 24 );
+	// the 0..100 track: its label, the legend at the label's right (no mark without a word), the band taken
+	// now lit over the next step's, the widest marked in cyan, the scale's numbers under it
+	const Int ty = top + qpx( 132 );
+	putAt( words.get( s_face[QM_FACE_SECTION], capsWord( word( "GUI:QMBeatLabel" ) ), qpx( 560 ) ), left, ty + qpx( 9 ), UIStyle::MUTED );
+	const char *const legend[3] = { "GUI:QMLegendWidest", "GUI:QMLegendNext", "GUI:QMLegendNow" };
+	const Color legendColor[3] = { UIStyle::withAlpha( UIStyle::EDGE_LIT, 200 ), UIStyle::withAlpha( UIStyle::EDGE, 110 ), UIStyle::EDGE };
+	Int lx = right;
+	for (Int each = 0; each < 3; ++each)
+	{
+		const Int lw = putAt( words.get( body, word( legend[each] ), qpx( 200 ) ), lx, ty + qpx( 9 ), UIStyle::MUTED, 2 );
+		TheDisplay->drawFillRect( lx - lw - qpx( 38 ), ty + qpx( 2 ), qpx( 26 ), qpx( 14 ), legendColor[each] );
+		lx -= lw + qpx( 70 );
+	}
+	const Int t0 = ty + qpx( 34 ), tall = qpx( 32 ), scale = right - left;
 	const Int nextLo = max( QM_WINDOW_WIDEST_LOW, lo - QM_WINDOW_STEP ), nextHi = min( QM_WINDOW_WIDEST_HIGH, hi + QM_WINDOW_STEP );
-	TheDisplay->drawFillRect( left, top, scale, tall, UIStyle::GRID );
+	TheDisplay->drawFillRect( left, t0, scale, tall, UIStyle::withAlpha( UIStyle::FRAME, 80 ) );
 	if (nextMs >= 0)
-		TheDisplay->drawFillRect( left + scale * nextLo / 100, top, scale * (nextHi - nextLo) / 100, tall,
+		TheDisplay->drawFillRect( left + scale * nextLo / 100, t0, scale * (nextHi - nextLo) / 100, tall,
 			UIStyle::withAlpha( UIStyle::EDGE, 110 ) );
-	TheDisplay->drawFillRect( left + scale * lo / 100, top, scale * (hi - lo) / 100, tall, UIStyle::EDGE );
+	UIStyle::litLine( left + scale * lo / 100, t0, max( 1, scale * (hi - lo) / 100 ), tall, UIStyle::EDGE );
 	const Int mark = max( 1, qpx( 2 ) );
-	TheDisplay->drawFillRect( left + scale * QM_WINDOW_WIDEST_LOW / 100 - mark / 2, y + qpx( 428 ), mark, qpx( 40 ), UIStyle::FRAME );
-	TheDisplay->drawFillRect( left + scale * QM_WINDOW_WIDEST_HIGH / 100 - mark / 2, y + qpx( 428 ), mark, qpx( 40 ), UIStyle::FRAME );
-	// the scale's numbers: the ends and the widest MUTED, the window's own edges INK in their place
+	for (Int each = 0; each < 2; ++each)
+	{
+		const Int at = left + scale * (each ? QM_WINDOW_WIDEST_HIGH : QM_WINDOW_WIDEST_LOW) / 100 - mark / 2;
+		TheDisplay->drawFillRect( at, t0 - qpx( 8 ), mark, tall + qpx( 16 ), UIStyle::withAlpha( UIStyle::EDGE_LIT, 200 ) );
+	}
+	// the scale's numbers: the ends and the widest MUTED, the band's own edges INK in their place
 	const Int number[] = { 0, QM_WINDOW_WIDEST_LOW, lo, hi, QM_WINDOW_WIDEST_HIGH, 100 };
+	UnicodeString text;
 	for (Int each = 0; each < 6; ++each)
 	{
 		const Bool edge = each == 2 || each == 3;
 		if (!edge && (number[each] == lo || number[each] == hi))
 			continue;
 		text.format( u"%d", number[each] );
-		put( words.get( body, text ), left + scale * number[each] / 100, y + qpx( 466 ), edge ? UIStyle::INK : UIStyle::MUTED,
-			QM_MIDDLE );
+		putAt( words.get( body, text ), left + scale * number[each] / 100, t0 + tall + qpx( 25 ), edge ? UIStyle::INK : UIStyle::MUTED,
+			number[each] == 0 ? 0 : number[each] == 100 ? 2 : 1 );
 	}
 
-	// the next widening and its track
-	const Int half = qpx( 420 );
+	// the next widening and its track; where widening stops
+	const Int wy = t0 + tall + qpx( 56 );
 	if (nextMs >= 0)
 	{
 		const Int seconds = (nextMs + 999) / 1000;
-		text.format( word( "GUI:QMWidens" ), seconds / 60, seconds % 60 );
-		put( words.get( body, text, half ), left, y + qpx( 548 ), UIStyle::MUTED );
-		UIStyle::track( left, y + qpx( 586 ), half, qpx( 10 ), 1.0f - nextMs / (Real)QM_WINDOW_STEP_MS );
+		text.format( word( "GUI:QMWidensTo" ), nextLo, nextHi, seconds / 60, seconds % 60 );
+		putAt( words.get( body, text, qpx( 520 ) ), left, wy + qpx( 14 ), UIStyle::INK );
+		const Int trackWidth = qpx( 420 ), filled = REAL_TO_INT( trackWidth * max( 0.0f, min( 1.0f, 1.0f - nextMs / (Real)QM_WINDOW_STEP_MS ) ) );
+		TheDisplay->drawFillRect( left, wy + qpx( 36 ), trackWidth, qpx( 8 ), UIStyle::withAlpha( UIStyle::FRAME, 90 ) );
+		if (filled > 0)
+			UIStyle::litLine( left, wy + qpx( 36 ), filled, qpx( 8 ), UIStyle::EDGE );
+	}
+	text.format( word( "GUI:QMStopsAt" ), QM_WINDOW_WIDEST_LOW, QM_WINDOW_WIDEST_HIGH );
+	putAt( words.get( body, text, qpx( 520 ) ), right, wy + qpx( 14 ), UIStyle::MUTED, 2 );
+
+	// the last Quick Matches: result, opponent and his rating, map, change, when
+	const Int tableTop = UIStyle::onlineSection( words.get( s_face[QM_FACE_SECTION], capsWord( word( "GUI:QMLastMatches" ) ), scale ),
+		left, right, wy + qpx( 76 ) );
+	const UnsignedInt serial = OnlineGetHistorySerial( 0, ONLINE_HISTORY_QM );
+	if (serial != s_qmHistorySerial)
+	{
+		s_qmHistorySerial = serial;
+		OnlineGetHistory( 0, ONLINE_HISTORY_QM, s_qmHistory );
+	}
+	const Int rows = s_qmHistory.arrived ? min( (Int)s_qmHistory.rows.size(), 5 ) : 0;
+	Real biggest = 0.0f;
+	for (Int r = 0; r < rows; ++r)
+		biggest = max( biggest, (Real)fabs( s_qmHistory.rows[r].change ) );
+	const Int pitch = qpx( 62 );
+	for (Int r = 0; r < rows; ++r)
+	{
+		const OnlineHistoryRow &row = s_qmHistory.rows[r];
+		const Int rowTop = tableTop + qpx( 6 ) + r * pitch, middle = rowTop + pitch / 2;
+		if (r % 2)
+			TheDisplay->drawFillRect( left - qpx( 8 ), rowTop, scale + qpx( 16 ), pitch, GameMakeColor( 255, 255, 255, 7 ) );
+		UIStyle::onlineChip( words.get( s_face[QM_FACE_SECTION], capsWord( word( row.won ? "GUI:OnlineWinLabel" : "GUI:OnlineLossLabel" ) ) ),
+			left, middle, row.won );
+		UnicodeString opponent( MultiByteToWideCharSingleLine( row.opponent.str() ).c_str() );
+		const Int ow = putAt( words.get( body, opponent, qpx( 260 ), 0, TRUE ), left + qpx( 150 ), middle, UIStyle::INK );
+		putAt( words.get( body, UIStyle::ladderText( row.opponentRating, row.hasElo ) ), left + qpx( 160 ) + ow, middle, UIStyle::MUTED );
+		const UnicodeString map = row.map.startsWithNoCase( "rmg_" ) ? word( "GUI:Random" )
+			: UnicodeString( MultiByteToWideCharSingleLine( row.map.str() ).c_str() );
+		putAt( words.get( body, map, qpx( 220 ) ), left + qpx( 500 ), middle, UIStyle::INK );
+		const Int changeRight = right - qpx( 160 );
+		const Int cw = putAt( words.get( s_face[QM_FACE_NICK], UIStyle::ladderText( row.change, row.hasElo, TRUE ) ), changeRight, middle,
+			row.change > 0.0f ? UIStyle::INK : UIStyle::MUTED, 2 );
+		const Int bar = qpx( 110 ), barRight = changeRight - cw - qpx( 14 );
+		TheDisplay->drawFillRect( barRight - bar, middle - 1, bar, max( 1, qpx( 2 ) ), UIStyle::withAlpha( UIStyle::FRAME, 70 ) );
+		const Int length = biggest > 0.0f ? REAL_TO_INT( bar * fabs( row.change ) / biggest + 0.5f ) : 0;
+		if (length > 0)
+			TheDisplay->drawFillRect( barRight - length, middle - qpx( 2 ), length, max( 2, qpx( 4 ) ),
+				row.change > 0.0f ? UIStyle::EDGE : UIStyle::FRAME );
+		putAt( words.get( body, ageText( row.age ), qpx( 140 ) ), right, middle, UIStyle::MUTED, 2 );
 	}
 }
 
-/// searching, the side box: the picks, locked, and the ladder rating
+/// searching, the side box: the picks, locked
 static void drawPicksPanel( GameWindow *window, WinInstanceData * )
 {
-	Int x, y, width, height;
-	QMWords &words = panelBox( window, QM_PANEL_PICKS, x, y, width, height );
-	GameFont *body = bodyFont();
-	const Int left = x + qpx( 24 ), inner = width - qpx( 48 ), row = qpx( 52 ), gap = qpx( 12 );
-	UIStyle::heading( words.get( s_face[QM_FACE_SECTION], word( "GUI:QMYourPicks" ), inner ), left, y + qpx( 20 ) );
-
-	Int top = y + qpx( 60 );
-	const Int army = pickedTemplate();
-	DisplayString *value = words.get( body, armyName( army, TRUE ), inner / 2 );
-	UIStyle::fact( words.get( body, word( "GUI:Faction" ), inner / 3 ), value, left, top, inner, row );
-	// a general's logo at the size it reads at; Random as the colour row's Random box, the same size and art
-	const Image *logo = armyImage( army );
-	const Int icon = qpx( 36 ), swatch = qpx( 24 );
-	if (army < 0)
-		colorBox( left + inner - widthOf( value ) - gap - swatch, top + (row - swatch) / 2, swatch, swatch, -1, qpx( 4 ) );
-	else if (logo)
-	{
-		const Int iconX = left + inner - widthOf( value ) - gap - icon;
-		TheDisplay->drawImage( logo, iconX, top + (row - icon) / 2, iconX + icon, top + (row - icon) / 2 + icon );
-	}
-
-	top += row;
-	const Int color = colorAt( pickedColorPos() );
-	value = words.get( body, colorName( color ), inner / 2 );
-	UIStyle::fact( words.get( body, word( "GUI:Color" ), inner / 3 ), value, left, top, inner, row );
-	colorBox( left + inner - widthOf( value ) - gap - swatch, top + (row - swatch) / 2, swatch, swatch, color, qpx( 4 ) );
-
-	top += row;
-	const QMPlayer &me = playerAt( 0, TheGameSpyInfo->getLocalName(), army, NULL );
-	UnicodeString standing = me.rating;
-	standing.concat( u"  " );
-	standing.concat( me.tierName );
-	UIStyle::fact( words.get( body, word( "GUI:Ladder" ), inner / 3 ), words.get( body, standing, inner / 2 ), left, top,
-		inner, row );
+	drawPicksBox( window, QM_PANEL_PICKS, TRUE );
 }
 
 /// a seat on the found page
@@ -1085,31 +1209,56 @@ static void gatherSeats( QMSeat seat[QM_SEATS] )
 	}
 }
 
-/// a seat's card: the stripe on its outer edge, the rank portrait, nick and army, the ladder rating as a
-/// display figure over its tier, the colour
-static void drawSeat( QMWords &words, const QMSeat &seat, Int x, Int y, Int width, Int height, Bool stripeRight )
+/** A seat on the reveal: the colour's stripe on its outer edge, the general's portrait 200 square, the
+	* label, the nick (gold for the local player), army · side, the tier's rank portrait and the tier; under
+	* a lit rule the ladder rating as the key figure and the colour. */
+static void drawSeat( QMWords &words, const QMSeat &seat, Int x, Int y, Int width, Int height, Bool stripeRight, Bool you )
 {
-	UIStyle::panel( x, y, width, height, UIStyle::PANEL );
-	UIStyle::stripe( stripeRight ? x + width - 1 - UIStyle::stripeWidth() : x + 1, y + 1, height - 2, seatColor( seat.color ) );
-	const Int inset = qpx( 30 );
-	portrait( seat.player->portrait, x + inset, y + inset, qpx( 144 ) );
+	IRegion2D box;
+	box.lo.x = x;
+	box.lo.y = y;
+	box.hi.x = x + width;
+	box.hi.y = y + height;
+	UIStyle::onlineBox( box );
+	const Int stripe = qpx( 6 );
+	TheDisplay->drawFillRect( stripeRight ? x + width - 1 - stripe : x + 1, y + 1, stripe, height - 2, seatColor( seat.color ) );
+	const Int left = x + qpx( 30 ), right = x + width - qpx( 30 );
+	const Int size = qpx( 200 ), pictureY = y + qpx( 28 );
+	const Image *picture = NULL;
+	for (Int card = 0; card < QM_ARMY_CARDS; ++card)
+	{
+		if (s_cardTemplate[card] == seat.army && seat.army >= 0)
+			picture = s_cardPortrait[card];
+	}
+	if (picture)
+	{
+		UIStyle::coverImage( picture, left, pictureY, size, size );
+		TheDisplay->drawOpenRect( left, pictureY, size, size, 1.0f, UIStyle::FRAME );
+	}
+	else
+		well( words, left, pictureY, size, size );
 	GameFont *body = bodyFont();
-	const Int textX = x + qpx( 200 ), textWidth = width - qpx( 230 );
-	put( words.get( body, seat.label, textWidth ), textX, y + qpx( 34 ), UIStyle::MUTED );
-	put( words.get( s_face[QM_FACE_NICK], seat.nick, textWidth, 0, TRUE ), textX, y + qpx( 64 ), UIStyle::INK );
-	put( words.get( body, armyName( seat.army, TRUE ), textWidth ), textX, y + qpx( 108 ), UIStyle::MUTED );
-	TheDisplay->drawFillRect( x + inset, y + qpx( 204 ), width - 2 * inset, 1, UIStyle::GRID );
+	const Int textX = left + qpx( 224 ), textWidth = right - textX;
+	putAt( words.get( s_face[QM_FACE_SECTION], capsWord( seat.label ), textWidth ), textX, y + qpx( 39 ), UIStyle::MUTED );
+	putAt( words.get( s_face[QM_FACE_NICK], seat.nick, textWidth, 0, TRUE ), textX, y + qpx( 70 ), you ? UIStyle::GOLD : UIStyle::INK );
+	putAt( words.get( body, armyName( seat.army, TRUE ), textWidth ), textX, y + qpx( 103 ), UIStyle::MUTED );
+	const Int rank = qpx( 48 );
+	Int tierX = textX;
+	if (seat.player->portrait)
+	{
+		TheDisplay->drawImage( seat.player->portrait, textX, y + qpx( 140 ), textX + rank, y + qpx( 140 ) + rank );
+		tierX += rank + qpx( 12 );
+	}
+	putAt( words.get( body, seat.player->tierName, right - tierX ), tierX, y + qpx( 164 ), UIStyle::INK );
+	UIStyle::litLine( left, y + qpx( 252 ), right - left, 1, UIStyle::FRAME );
 
-	const Int right = x + width - inset, half = width / 2 - inset;
-	put( words.get( body, word( "GUI:Ladder" ), half ), x + inset, y + qpx( 226 ), UIStyle::MUTED );
-	put( words.get( s_face[QM_FACE_DISPLAY], seat.player->rating ), x + inset, y + qpx( 256 ), UIStyle::INK );
-	put( words.get( body, seat.player->tierName, half ), x + inset, y + qpx( 328 ), UIStyle::INK );
-	put( words.get( body, word( "GUI:Color" ), half ), right, y + qpx( 226 ), UIStyle::MUTED, QM_RIGHT );
-	const Int swatch = qpx( 24 );
-	DisplayString *name = words.get( body, colorName( seat.color ), half - swatch - qpx( 10 ) );
-	const Int nameWidth = put( name, right, y + qpx( 262 ), UIStyle::INK, QM_RIGHT );
-	colorBox( right - nameWidth - qpx( 10 ) - swatch, y + qpx( 262 ) + (heightOf( name ) - swatch) / 2, swatch, swatch,
-		seat.color, qpx( 4 ) );
+	const Int half = (right - left) / 2;
+	putAt( words.get( s_face[QM_FACE_SECTION], capsWord( word( "GUI:Ladder" ) ), half ), left, y + qpx( 281 ), UIStyle::MUTED );
+	put( words.get( s_face[QM_FACE_DISPLAY], seat.player->rating ), left, y + qpx( 294 ), UIStyle::INK );
+	putAt( words.get( s_face[QM_FACE_SECTION], capsWord( word( "GUI:Color" ) ), half ), right, y + qpx( 281 ), UIStyle::MUTED, 2 );
+	const Int swatch = qpx( 22 );
+	const Int nameWidth = putAt( words.get( body, colorName( seat.color ), half - swatch - qpx( 12 ) ), right, y + qpx( 318 ), UIStyle::INK, 2 );
+	colorBox( right - nameWidth - qpx( 12 ) - swatch, y + qpx( 318 ) - swatch / 2, swatch, swatch, seat.color, qpx( 3 ) );
 }
 
 /// the opponent found: two cards facing with VS and the win chance between them, the map under them,
@@ -1118,36 +1267,47 @@ static void drawFound( QMWords &words )
 {
 	QMSeat seat[QM_SEATS];
 	gatherSeats( seat );
-	const Int cardTop = UIStyle::boardY( 214 ), cardWidth = qpx( 700 ), cardHeight = qpx( 384 );
-	drawSeat( words, seat[0], UIStyle::boardX( 124 ), cardTop, cardWidth, cardHeight, FALSE );
-	drawSeat( words, seat[1], UIStyle::boardX( 1096 ), cardTop, cardWidth, cardHeight, TRUE );
+	// README-online-entry.md "Quick Match reveal": the seats 700 wide at both content edges, 182 to 554
+	const Int cardTop = UIStyle::boardY( 182 ), cardWidth = qpx( 700 ), cardHeight = qpx( 372 );
+	drawSeat( words, seat[0], UIStyle::boardX( 60 ), cardTop, cardWidth, cardHeight, FALSE, TRUE );
+	drawSeat( words, seat[1], UIStyle::boardX( 1160 ), cardTop, cardWidth, cardHeight, TRUE, FALSE );
 
-	// the player's own chance first, his card being the left one
-	const Int middle = UIStyle::boardX( 960 ), between = qpx( 272 );
-	put( words.get( s_face[QM_FACE_SECTION], word( "GUI:QMFound" ), between ), middle, UIStyle::boardY( 298 ),
-		UIStyle::ACTIVE, QM_MIDDLE );
-	put( words.get( s_face[QM_FACE_CLOCK], word( "GUI:QMVs" ) ), middle, UIStyle::boardY( 334 ), UIStyle::INK, QM_MIDDLE );
+	// between them, top to bottom: found, VS, the player's chance as the figure, the bar in both colours
+	// split at it with both shares at its ends.  What the match moves on the ELO is not drawn: qm.matched
+	// carries the chance and no stakes.
+	const Int middle = UIStyle::boardX( 960 ), between = qpx( 352 );
+	putAt( words.get( s_face[QM_FACE_SECTION], capsWord( word( "GUI:QMFound" ) ), between ), middle, cardTop + qpx( 30 ),
+		UIStyle::ACTIVE, 1 );
+	putAt( words.get( s_face[QM_FACE_DISPLAY_BOLD], word( "GUI:QMVs" ) ), middle, cardTop + qpx( 74 ), UIStyle::INK, 1 );
 	if (s_reveal.hasChance)
 	{
 		const Int own = max( 0, min( 100, REAL_TO_INT( s_reveal.chance * 100.0f + 0.5f ) ) );
-		UnicodeString chance = UIStyle::percentText( own );
-		chance.concat( UIStyle::HEADER_JOINER );
-		chance.concat( UIStyle::percentText( 100 - own ) );
-		put( words.get( bodyFont(), word( "GUI:QMChance" ), between ), middle, UIStyle::boardY( 452 ), UIStyle::MUTED,
-			QM_MIDDLE );
-		put( words.get( s_face[QM_FACE_CHANCE], chance, between ), middle, UIStyle::boardY( 488 ), UIStyle::INK, QM_MIDDLE );
+		putAt( words.get( s_face[QM_FACE_SECTION], capsWord( word( "GUI:QMChance" ) ), between ), middle, cardTop + qpx( 132 ),
+			UIStyle::MUTED, 1 );
+		putAt( words.get( s_face[QM_FACE_DISPLAY], UIStyle::percentText( own ) ), middle, cardTop + qpx( 170 ), UIStyle::INK, 1 );
+		const Int barLeft = UIStyle::boardX( 808 ), barWidth = qpx( 304 ), barTop = cardTop + qpx( 206 );
+		TheDisplay->drawFillRect( barLeft, barTop, barWidth, qpx( 4 ), seatColor( seat[1].color ) );
+		TheDisplay->drawFillRect( barLeft, barTop, barWidth * own / 100, qpx( 4 ), seatColor( seat[0].color ) );
+		putAt( words.get( bodyFont(), UIStyle::percentText( own ) ), barLeft, cardTop + qpx( 226 ), UIStyle::INK );
+		putAt( words.get( bodyFont(), UIStyle::percentText( 100 - own ) ), barLeft + barWidth, cardTop + qpx( 226 ), UIStyle::MUTED, 2 );
 	}
 
-	/* The map, generated from the seed at game.start, stays unseen until the match: the load screen
-		 shows neither it nor a start spot (setStartShrouded), so this box gives a "?" and no name either. */
-	const Int mapX = UIStyle::boardX( 600 ), mapY = UIStyle::boardY( 622 ), mapWidth = qpx( 720 ), mapHeight = qpx( 294 );
-	UIStyle::panel( mapX, mapY, mapWidth, mapHeight, UIStyle::PANEL );
-	const Int picture = qpx( 246 ), pictureX = mapX + qpx( 24 ), pictureY = mapY + qpx( 24 );
-	colorBox( pictureX, pictureY, picture, picture, -1, 0 );
-	UIStyle::edge( pictureX - 3, pictureY - 3, picture + 6, picture + 6 );
-	const Int textX = mapX + qpx( 300 ), textWidth = mapWidth - qpx( 324 );
-	UIStyle::heading( words.get( s_face[QM_FACE_SECTION], word( "GUI:OnlineMapLabel" ), textWidth ), textX, mapY + qpx( 34 ) );
-	put( words.get( s_face[QM_FACE_HEADING], word( "GUI:QMNewMap" ), textWidth ), textX, mapY + qpx( 74 ), UIStyle::INK );
+	/* The match box across the content.  The map, generated from the seed at game.start, stays unseen until
+		 the match: the load screen shows neither it nor a start spot (setStartShrouded), so the box gives a "?"
+		 well and no name.  The match's facts at its right. */
+	const Int mapX = UIStyle::boardX( 60 ), mapY = UIStyle::boardY( 578 ), mapWidth = qpx( 1800 ), mapHeight = qpx( 368 );
+	IRegion2D matchBox;
+	matchBox.lo.x = mapX;
+	matchBox.lo.y = mapY;
+	matchBox.hi.x = mapX + mapWidth;
+	matchBox.hi.y = mapY + mapHeight;
+	UIStyle::onlineBox( matchBox );
+	const Int picture = mapHeight - qpx( 48 ), pictureX = mapX + qpx( 24 ), pictureY = mapY + qpx( 24 );
+	well( words, pictureX, pictureY, picture, picture );
+	const Int textX = pictureX + picture + qpx( 32 ), textWidth = UIStyle::boardX( 1236 ) - textX;
+	UIStyle::onlineSection( words.get( s_face[QM_FACE_SECTION], capsWord( word( "GUI:OnlineMapLabel" ) ), textWidth ), textX,
+		textX + textWidth, mapY + qpx( 24 ) );
+	putAt( words.get( s_face[QM_FACE_NICK], word( "GUI:QMNewMap" ), textWidth ), textX, mapY + qpx( 82 ), UIStyle::INK );
 
 	/* The speed: the match's as a fact; while the slower pick is asked, the faster one's waiting line (the
 		 asked one has the box); once qm.speed settles an ask, whether the faster pick was taken. */
@@ -1164,17 +1324,35 @@ static void drawFound( QMWords &words )
 	}
 	else if (proposed && !asking)
 		speedLine.format( word( speed == proposed ? "GUI:QMSpeedAccepted" : "GUI:QMSpeedDeclined" ), GameSpeedText( speed ).str() );
-	if (!asking)
-		UIStyle::fact( words.get( bodyFont(), word( "GUI:OnlineSpeedLabel" ), textWidth / 2 ),
-			words.get( bodyFont(), GameSpeedText( speed ), textWidth / 2 ), textX, mapY + qpx( 122 ), textWidth, qpx( 44 ) );
 	if (!speedLine.isEmpty())
-		put( words.get( bodyFont(), speedLine, 0, textWidth ), textX, mapY + qpx( asking ? 122 : 182 ),
-			asking ? UIStyle::MUTED : UIStyle::INK );
+		putAt( words.get( bodyFont(), speedLine, textWidth ), textX, mapY + qpx( 134 ), asking ? UIStyle::MUTED : UIStyle::INK );
 
-	// one wide button filling with EDGE as the load screen's bar fills
-	const Int barX = UIStyle::boardX( UIStyle::ROOM_INSET ), barY = UIStyle::boardY( UIStyle::ROOM_BUTTON_TOP );
-	const Int barWidth = UIStyle::boardX( UIStyle::ROOM_INSET_RIGHT ) - barX;
-	const Int barHeight = UIStyle::boardY( UIStyle::ROOM_BUTTON_BOTTOM ) - barY;
+	// MATCH: the mode, the server, the speed (both picks MUTED while one is asked)
+	const Int factsX = UIStyle::boardX( 1284 ), factsRight = UIStyle::boardX( 1836 );
+	UIStyle::onlineSection( words.get( s_face[QM_FACE_SECTION], capsWord( word( "GUI:QMMatchHead" ) ), factsRight - factsX ), factsX,
+		factsRight, mapY + qpx( 24 ) );
+	UnicodeString speedValue = GameSpeedText( speed );
+	if (asking)
+	{
+		speedValue = GameSpeedText( min( speed, proposed ) );
+		speedValue.concat( u" / " );
+		speedValue.concat( GameSpeedText( max( speed, proposed ) ) );
+	}
+	const UnicodeString labels[3] = { word( "GUI:OnlineModeLabel" ), word( "GUI:OnlineServerLabel" ), word( "GUI:OnlineSpeedLabel" ) };
+	const UnicodeString values[3] = { word( "GUI:OnlineHubQuickMatchLead" ), UIStyle::onlineServerLine(), speedValue };
+	const Int half = (factsRight - factsX) / 2;
+	for (Int each = 0; each < 3; ++each)
+	{
+		const Int rowMiddle = mapY + qpx( 88.0f + 44.0f * each );
+		putAt( words.get( bodyFont(), labels[each], half ), factsX, rowMiddle, UIStyle::MUTED );
+		putAt( words.get( bodyFont(), values[each], half + qpx( 60 ) ), factsRight, rowMiddle,
+			each == 2 && asking ? UIStyle::MUTED : UIStyle::INK, 2 );
+	}
+
+	// the key row as one wide outline filling with EDGE as the load screen's bar fills
+	const Int barX = UIStyle::boardX( (Real)UIStyle::ONLINE_LEFT ), barY = UIStyle::boardY( (Real)UIStyle::MENU_KEYS_TOP );
+	const Int barWidth = UIStyle::boardX( (Real)UIStyle::ONLINE_RIGHT ) - barX;
+	const Int barHeight = UIStyle::boardY( (Real)UIStyle::MENU_KEYS_BOTTOM ) - barY;
 	const UnsignedInt now = Clock_Milliseconds();
 	Real done;
 	UnicodeString label;
@@ -1196,12 +1374,13 @@ static void drawFound( QMWords &words )
 		label.format( word( "GUI:QMStartsBanner" ), left > 0 ? (left + 999) / 1000 : 0 );
 		done = length > 0 ? 1.0f - left / (Real)length : 1.0f;
 	}
-	UIStyle::button( barX, barY, barWidth, barHeight );
+	TheDisplay->drawFillRect( barX, barY, barWidth, barHeight, GameMakeColor( 0, 0, 0, 170 ) );
+	TheDisplay->drawOpenRect( barX, barY, barWidth, barHeight, 1.0f, UIStyle::EDGE );
 	const Int fill = REAL_TO_INT( (barWidth - 6) * max( 0.0f, min( 1.0f, done ) ) + 0.5f );
 	if (fill > 0)
 		TheDisplay->drawFillRect( barX + 3, barY + 3, fill, barHeight - 6, UIStyle::withAlpha( UIStyle::EDGE, 110 ) );
-	DisplayString *banner = words.get( s_face[QM_FACE_BUTTON], label, barWidth - qpx( 48 ) );
-	put( banner, barX + barWidth / 2, barY + (barHeight - heightOf( banner )) / 2, UIStyle::INK, QM_MIDDLE );
+	putAt( words.get( s_face[QM_FACE_BUTTON], UIStyle::capitals( label ), barWidth - qpx( 48 ) ), barX + barWidth / 2,
+		barY + barHeight / 2, UIStyle::INK, 1 );
 }
 
 /// the abandon lock counting down on the button row, between Back and the Search it keeps disabled
@@ -1218,19 +1397,15 @@ static void drawLockLine( QMWords &words )
 	const Int gap = qpx( 24 );
 	UnicodeString text;
 	text.format( word( "GUI:QMLocked" ), seconds / 60, seconds % 60 );
-	DisplayString *line = words.get( bodyFont( TRUE ), text, startX - backX - backWidth - 2 * gap );
-	put( line, startX - gap, startY + (startHeight - heightOf( line )) / 2, UIStyle::INK, QM_RIGHT );
+	DisplayString *line = words.get( bodyFont(), text, startX - backX - backWidth - 2 * gap );
+	putAt( line, startX - gap, startY + startHeight / 2, UIStyle::INK, 2 );
 }
 
-/// the room panel, the header's wordmark and player line (the master has the title and its rule), the
-/// found page, which has no box of its own, and the abandon lock while picking
+/// the panel, before everything on it: the online head, frame A and the foot's rule; then the found page,
+/// which has no box of its own, and the abandon lock while picking
 static void drawQMPage( GameWindow *window, WinInstanceData * )
 {
-	Int x, y, width, height;
-	window->winGetScreenPosition( &x, &y );
-	window->winGetSize( &width, &height );
-	UIStyle::panel( x, y, width, height, UIStyle::PANEL );
-	UIStyle::onlineHeader( UnicodeString::TheEmptyString, UnicodeString::TheEmptyString );
+	UIStyle::onlineHeader( UnicodeString::TheEmptyString );
 	s_words[QM_PANEL_COUNT].begin();
 	if (s_pageShown == QM_PAGE_FOUND)
 		drawFound( s_words[QM_PANEL_COUNT] );
@@ -1841,11 +2016,11 @@ void WOLQuickMatchMenuInit( WindowLayout *layout, void *userData )
 	if (buttonBuddies)
 		buttonBuddies->winEnable(TRUE);
 
-	/* The buttons in the rooms' "Generals" 15 capitals (the master sets them in Arial 10), with the
-		 master's labels. */
-	const struct { const char *name; const char *label; } buttons[] = {
-		{ "WOLQuickMatchMenu.wnd:ButtonBack", "GUI:Back" }, { "WOLQuickMatchMenu.wnd:ButtonWiden", "GUI:WidenSearch" },
-		{ "WOLQuickMatchMenu.wnd:ButtonStop", "GUI:QMStop" }, { "WOLQuickMatchMenu.wnd:ButtonStart", "GUI:QMSearch" } };
+	/* The keys in the language, their labels in capitals: SEARCH and STOP the lit key of their page (only
+		 one of them shows at a time). */
+	const struct { const char *name; const char *label; Bool primary; } buttons[] = {
+		{ "WOLQuickMatchMenu.wnd:ButtonBack", "GUI:Back", FALSE }, { "WOLQuickMatchMenu.wnd:ButtonWiden", "GUI:WidenSearch", FALSE },
+		{ "WOLQuickMatchMenu.wnd:ButtonStop", "GUI:QMStop", TRUE }, { "WOLQuickMatchMenu.wnd:ButtonStart", "GUI:QMSearch", TRUE } };
 	findFaces();
 	GameFont *buttonFont = s_face[QM_FACE_BUTTON];
 	for (size_t i = 0; i < sizeof(buttons) / sizeof(buttons[0]); ++i)
@@ -1855,7 +2030,7 @@ void WOLQuickMatchMenuInit( WindowLayout *layout, void *userData )
 			continue;
 		Int width, height;
 		button->winGetSize( &width, &height );
-		button->winSetFont( buttonFont );
+		UIStyle::setMenuKey( button, buttons[i].primary );
 		GadgetButtonSetText( button, UIStyle::fitText( UIStyle::capitals( TheGameText->fetch( buttons[i].label ) ), buttonFont,
 			width - qpx( 24 ) ) );
 	}
@@ -1922,13 +2097,21 @@ void WOLQuickMatchMenuInit( WindowLayout *layout, void *userData )
 	minPoints = pref.getMinPoints();
 	// a ranked match's speed is the server's to settle from both picks; only the service has it
 	if (comboBoxGameSpeed && OnlineIsEnabled())
+	{
 		PopulatePlayerGameSpeedComboBox( comboBoxGameSpeed,
 			OnlineMatchSpeed( pref.getInt( "GameSpeed", RETAIL_GAME_SPEED_PERCENT ) ) );
+		UIStyle::setMenuComboBox( comboBoxGameSpeed );
+	}
 	else if (comboBoxGameSpeed)
 	{
 		comboBoxGameSpeed->winHide( TRUE );
 		comboBoxGameSpeed = NULL;
 	}
+	// the last Quick Matches under the search
+	s_qmHistorySerial = 0;
+	s_qmHistory = OnlineHistory();
+	if (OnlineIsEnabled())
+		OnlineRequestHistory( 0, ONLINE_HISTORY_QM, 5 );
 
 	Color c = GameSpyColor[GSCOLOR_DEFAULT];
 	GadgetComboBoxReset( comboBoxNumPlayers );

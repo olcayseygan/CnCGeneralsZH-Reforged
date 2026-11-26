@@ -262,18 +262,26 @@ namespace UIStyle
 	Color changeColor( Real change );
 
 	//-----------------------------------------------------------------------------------------------
-	// The online pages: the hub, Quick Match, Custom games, Ladder and Skins stand in one frame, the
-	// room's panel, header and button row, with five tabs on the score screen's tab row and the
-	// player's line at its right end.  Their masters (Tools/online_layout.py) are authored at
-	// 1920x1080 and fitted, so the header is drawn on the same fitted board (boardX, boardY, px).
+	// The online pages in the menu language (MENU-REDESIGN.md packages 9 to 11, the design in
+	// screens/online-entry/README-online-entry.md and header.py): the hub, Quick Match, Custom games,
+	// Ladder and Skins stand in frame A on the board with five tabs on its tab row; the login is a
+	// dialog with the same head.  Their masters (Tools/online_layout.py) are authored at 1920x1080 and
+	// fitted at one scale, centred, the board's own fit.
 	//-----------------------------------------------------------------------------------------------
-	const Real ROOM_INSET_RIGHT = 1796.0f;				///< ROOM_INSET mirrored: the content's right edge
-	const Real ONLINE_TABS_TOP = 158.0f;					///< the score screen's tab row
-	const Real ONLINE_TABS_BOTTOM = 190.0f;
-	const Real ONLINE_CONTENT_TOP = 206.0f;
-	const Real ONLINE_CONTENT_BOTTOM = 916.0f;
-	const Real ONLINE_SIDE_WIDTH = 540.0f;				///< the side column; the main column takes the rest
+	const Int ONLINE_LEFT = 60;										///< the content's edges, 28 in from the panel
+	const Int ONLINE_RIGHT = 1860;
+	const Real ONLINE_CONTENT_TOP = 182.0f;				///< MENU_CONTENT_TOP
+	const Real ONLINE_CONTENT_BOTTOM = 946.0f;		///< 16 over the foot rule
+	const Real ONLINE_SIDE_WIDTH = 600.0f;				///< the side column; the main column takes the rest
 	const Real ONLINE_COLUMN_GAP = 24.0f;
+	/// the login's dialog: the head keeps its offsets from the corner, content from 102 under its top
+	const Int ONLINE_LOGIN_LEFT = 340;
+	const Int ONLINE_LOGIN_TOP = 241;
+	const Int ONLINE_LOGIN_RIGHT = 1580;
+	const Int ONLINE_LOGIN_BOTTOM = 839;
+	const Real ROOM_INSET_RIGHT = 1796.0f;				///< TEMP package 9: goes once its callers convert
+	const Real ONLINE_TABS_TOP = 158.0f;
+	const Real ONLINE_TABS_BOTTOM = 190.0f;
 
 	/// a length that holds text on a code-drawn online page, by the height's scale.  px takes the
 	/// smaller axis, 0.75 at 1440x1080, while adjustFontSize keeps the type at 1080's size there, so
@@ -281,10 +289,21 @@ namespace UIStyle
 	/// main column narrows instead.  The same as px on any screen 16:9 or wider.
 	Int tallPx( Real at1080 );
 	/// the online pages' content band, ONLINE_CONTENT_TOP to ONLINE_CONTENT_BOTTOM on the board: a
-	/// side column ONLINE_SIDE_WIDTH wide (tallPx) ending at ROOM_INSET_RIGHT, and the main column
-	/// from ROOM_INSET to ONLINE_COLUMN_GAP before it.  1108 and 540 at 16:9; at 4:3 the side keeps
-	/// its width and the main column narrows.
+	/// side column ONLINE_SIDE_WIDTH wide (tallPx) ending at ONLINE_RIGHT, and the main column from
+	/// ONLINE_LEFT to ONLINE_COLUMN_GAP before it.  1176 and 600 at 16:9; at 4:3 the side keeps its
+	/// width and the main column narrows.
 	void onlineColumns( IRegion2D &main, IRegion2D &side );
+	/// the page's panel on the screen: frame A's, or the login's dialog on a page with no tabs
+	IRegion2D onlinePanel( void );
+	/// a box inside a page: black at 70 in a 1 px FRAME edge
+	void onlineBox( const IRegion2D &box );
+	/** A box's section head: words in 14 px bold capitals, ACTIVE, with their top at top, and a lit
+		* 1 px FRAME rule from left to right 24 under it.  Returns the y 26 under top, where the section's
+		* content starts.  This sets the words' font. */
+	Int onlineSection( DisplayString *words, Int left, Int right, Int top );
+	/// a chip: 14 px bold capitals in a 1 px box 22 high, centred on middle from x; lit is an EDGE
+	/// wash and edge with INK words (a win, Playing, the notice), else FRAME and MUTED.  Its width.
+	Int onlineChip( DisplayString *label, Int x, Int middle, Bool lit );
 	/// a ping light for a round trip in milliseconds, the lobby's rule (LobbyPingImage) on
 	/// TheGameSpyConfig's cut-offs: Ping03 good, Ping02 middling, Ping01 bad; NULL for an unknown (< 0)
 	const Image *pingImage( Int ms );
@@ -305,20 +324,24 @@ namespace UIStyle
 		ONLINE_TAB_COUNT
 	};
 	/** An online page's init: finds the tab buttons of layout ("WOLLadderScreen.wnd") under parent by
-		* name, gives them the score screen's tab art with open's label ACTIVE, puts their labels in
-		* capitals fitted to their boxes, and makes the header's words.  A page with no tabs (the login)
-		* passes ONLINE_TAB_NONE and gets the header without the player's line.  Pair it with
-		* onlinePageShutdown, from the page's shutdown. */
+		* name, puts their labels in capitals, sizes each to its words (16 px bold plus 28 a side) and
+		* stands them 8 apart from ONLINE_LEFT on the tab row, drawn as menuTab with open's tab open, and
+		* makes the header's words.  A page with no tabs (the login) passes ONLINE_TAB_NONE and gets the
+		* dialog's head with the wordmark.  Pair it with onlinePageShutdown, from the page's shutdown. */
 	void onlinePageInit( GameWindow *parent, const char *layout, OnlineTab open );
 	/// frees what onlinePageInit made, unless a later page's init (pushed in the same step) owns it now
 	void onlinePageShutdown( GameWindow *parent );
-	/** The header, from the page's draw callback: the wordmark at the right of the title line and the
-		* player's line at the right end of the tab row (nick, tier, ladder rating, AI rating, from what
-		* the server said about the local player); with a title, also the title in capitals from x 120
-		* in the Generals face and the two-pixel FRAME rule at 147.  An empty title is for a master that
-		* carries its own title and rule (StaticTextTitle).  The subtitle follows the title's text, ours
-		* or the master's, MUTED and cut with an ellipsis before the wordmark; an empty one is the
-		* server line, its ping light before the milliseconds as the mockups have it. */
+	/// an online page with this head is up: it carries the server's notice itself (InGameUI's plate stands down)
+	Bool onlinePageShowing( void );
+	/** The head, from the draw callback of the page's panel window (before its children draw): the glass
+		* and frame A round onlinePanel, the title in 40 px bold capitals at the content's left (title, or
+		* with none the words of the master's hidden StaticTextTitle), a MUTED subtitle after it, the lit
+		* header rule at 110.  Signed in, the title row's right end is the player's line, right to left:
+		* the Bot ELO and the ELO as a label and a figure, the tier, the nick in gold, the tier's rank
+		* portrait (a "?" well while unranked); the server's notice stands between it and the title as
+		* a chip and its words; the tab row's right end is the server, its ping light (pingImage) and
+		* round trip.  The friends package's FRIENDS key goes left of that server line, its invite toast
+		* under the head's right end.  Signed out (the login) the wordmark takes the player's line's place. */
 	void onlineHeader( const UnicodeString &title, const UnicodeString &subtitle = UnicodeString::TheEmptyString );
 	/// a page's way out to a tab: its Back with the tab as the argument (see onlineTabClicked)
 	typedef void (*OnlineLeave)( OnlineTab to );

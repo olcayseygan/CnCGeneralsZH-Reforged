@@ -22433,3 +22433,121 @@ END
 GUI:RemoveFriend
 "Arkadaşı sil"
 END
+
+// Menu redesign package 9, online entry: the login's server column, the hub's LAST 5 chips, recent and ladder
+// heads, and Quick Match's search figures, track legend, picks and match box.
+GUI:OnlineServerHead
+"Sunucu"
+END
+
+GUI:OnlineLauncherPicks
+"Sunucuyu başlatıcı seçer"
+END
+
+GUI:OnlineHubLast5
+"Son 5"
+END
+
+GUI:OnlineWinLetter
+"G"
+END
+
+GUI:OnlineLossLetter
+"M"
+END
+
+GUI:OnlineHeadResult
+"Sonuç"
+END
+
+GUI:OnlineHeadMode
+"Mod"
+END
+
+GUI:OnlineHeadOpponent
+"Rakip"
+END
+
+GUI:OnlineHeadMap
+"Harita"
+END
+
+GUI:OnlineHeadChange
+"Değişim"
+END
+
+GUI:OnlineHeadWhen
+"Ne zaman"
+END
+
+GUI:OnlineHeadPlayer
+"Oyuncu"
+END
+
+GUI:OnlineHubLadderTop
+"Lig · İlk 5"
+END
+
+GUI:OnlineMapsLabel
+"Haritalar"
+END
+
+GUI:OnlineMapsGenerated
+"Üretilen"
+END
+
+GUI:OnlineModeLabel
+"Mod"
+END
+
+GUI:OnlineServerLabel
+"Sunucu"
+END
+
+GUI:QMArmyHead
+"Ordu"
+END
+
+GUI:QMSearchingFor
+"Arama süresi"
+END
+
+GUI:QMAlsoSearching
+"%ls sunucusunda arayan"
+END
+
+GUI:QMChanceNow
+"Şu anki kazanma şansı"
+END
+
+GUI:QMBeatLabel
+"Yeneceğin rakipler, 100 maçta"
+END
+
+GUI:QMLegendNow
+"Şu an aranan"
+END
+
+GUI:QMLegendNext
+"Sonraki adım"
+END
+
+GUI:QMLegendWidest
+"En geniş"
+END
+
+GUI:QMWidensTo
+"%d–%d aralığına %d:%02d sonra genişler"
+END
+
+GUI:QMStopsAt
+"Genişleme %d–%d'te durur"
+END
+
+GUI:QMLastMatches
+"Son hızlı maçlar"
+END
+
+GUI:QMMatchHead
+"Maç"
+END

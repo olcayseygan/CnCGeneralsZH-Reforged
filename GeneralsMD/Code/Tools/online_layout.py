@@ -1,38 +1,47 @@
 #!/usr/bin/env python3
-"""Lay the online screens out on the staging room's grid, authored at 1920x1080.
+"""Lay the online screens out on frame A's board, authored at 1920x1080.
 
 EA's online screens (the login, the hub, Quick Match, the custom game lobby, the ladder and the two
-popups) were drawn at 800x600 and stretched to the screen, and their callbacks moved and refonted
-gadgets at init to make them fit. docs/plans/ONLINE-UI-REDESIGN.md in the wrapper puts every one
-of them in the room's chrome instead, and this script writes the layouts that design stands on, the
-way lobbyroom_layout.py writes the rooms: the MainMenuRuler art as a fitted RulerFrame window, the
-room panel on the ruler's bright line at 96,72 to 1824,1008, the title at x 120 and the two pixel
-header rule under it, the buttons on the room's row at 932 to 988, and on the four pages (hub,
-Quick Match, lobby, ladder) five push buttons on the score screen's tab row, 158 to 190: TabHome,
-TabQuickMatch, TabCustom, TabLadder and TabSkins. The two popups are cards of their own, solid
-GROUND under a FRAME edge, centred on the board.
+popups) were drawn at 800x600 and stretched to the screen. This script writes the masters the menu
+language stands on (docs/plans/MENU-REDESIGN.md, packages 9 to 11; the online family's design is
+experiments/proofs/2026-11-24/screens/online-entry/README-online-entry.md and header.py in the
+wrapper): the panel on frame A at 32,28 to 1888,1052, content from x 60 to 1860, the title row 46 to
+94 and the header rule at 110 (both hidden here, UIStyle::onlineHeader draws them from the master's
+title), five tabs on the row 126 to 162 (TabHome, TabQuickMatch, TabCustom, TabLadder, TabSkins,
+which the code sizes to their words), content from 182, the foot rule at 962 and the keys at 976 to
+1028, 300 wide and 16 apart. The login is a dialog on 340,241 to 1580,839 with the same head offset
+from its corner and no tabs. The two popups are cards of their own, solid GROUND under a FRAME
+edge, centred on the board.
+
+Package 9 (login, hub, Quick Match) authored the board for all seven and its own three screens; the
+lobby, the ladder and the two popups keep their windows where they were, moved onto the board's
+columns (main 60 to 1236, side 1260 to 1860) until packages 10 and 11 lay them out.
 
 Nothing EA named goes. A window the design drops is kept HIDDEN, so every lookup the callbacks make
 still finds it; the windows this script adds are boxes the code draws in (Panel*, Card*), static
 texts the code writes into, and the buttons and lists the design names (ButtonPlayVsAI,
 ButtonSignOut, ListboxRecent, ButtonSelectAllMaps, ButtonSelectNoMaps, the player card's TabQuickMatch
-and TabAI, the two ComboBoxGameSpeed of Play vs AI and Quick Match). Every gadget keeps EA's
-art: new ones are clones of a gadget in the same file (the hub's combo, on a screen with none, of
-Quick Match's ComboBoxSide), only rectangles, names, labels and the panels' colours change. The callbacks still carry their own placements from before; they are
-rewritten on top of these layouts.
+and TabAI, the two ComboBoxGameSpeed of Play vs AI and Quick Match). New gadgets are clones of a
+gadget in the same file (the hub's combo, on a screen with none, of Quick Match's ComboBoxSide); the
+code draws every line and frame (UIStyle's menu language), so the panels and the hub's and Quick
+Match's boxes are clear here.
 
     python online_layout.py <retail Menus dir> <Menus dir out>
 
 reads the seven layouts as WindowZH.big ships them (bigfile.py extract) and writes the masters
-under Code/Data/Window/Menus/. Running it on its own output changes nothing.
+under Code/Data/Window/Menus/. Running it on its own output changes nothing, and
+
+    python online_layout.py rebuild
+
+does exactly that to the tracked masters, for a change to this script.
 
     python online_layout.py selfcheck
 
 reads the tracked masters back and checks that every window the menu code looks up is there, that
 the script reproduces each file byte for byte, that every window is authored at 1920x1080, that no
-two visible gadgets overlap or leave the panel, and that every GUI:Online and GUI:QM label the
-script puts on a window is in Patch.str. Run by CTest as online_layout_selfcheck. Layouts are not in
-the multiplayer INI checksum.
+two visible gadgets overlap or leave the panel, that the online pages' keys stand on the foot row and
+inside the content edges, and that every GUI:Online and GUI:QM label the script puts on a window is in
+Patch.str. Run by CTest as online_layout_selfcheck. Layouts are not in the multiplayer INI checksum.
 """
 
 import os
@@ -47,28 +56,41 @@ MENUS = os.path.join(HERE, "..", "Data", "Window", "Menus")
 PATCH_STR = os.path.join(HERE, "..", "Data", "Patch.str")
 
 WIDE, OLD = room.WIDE, room.OLD
-FRAME = room.FRAME                     # the room panel, 96,72 to 1824,1008
-INSET = room.INNER_LEFT                # content from 124 to 1796
 
-# the board (UIStyle.h ROOM_*): a main column of 1108 from 124 and a side column of 540 from 1256
-MAIN, SIDE = (124, 1108), (1256, 540)
-TOP, BOTTOM = 206, 916
+# Frame A's board (UIStyle.h MENU_* and ONLINE_*), every number at 1080: the panel as (left, top,
+# width, height), the content edges 28 in from its sides
+FRAME = (32, 28, 1856, 1024)
+INSET, INSET_RIGHT = 60, 1860
+TITLE_TOP, TITLE_HEIGHT = 46, 48       # the title row, from the panel's top 18 down
+RULE_TOP = 110                         # the header rule, 82 under the panel's top
+TOP, BOTTOM = 182, 946                 # content: 20 under the tabs, 16 over the foot rule
+# the columns: main 1176 from 60, side 600 ending at 1860, 24 apart
+MAIN, SIDE = (INSET, 1176), (1260, 600)
 
-# the button row: Back from the left, the wide button ending at 1796 as Play Game does
-ROW_TOP, ROW_HEIGHT = room.BUTTON_TOP, room.BUTTON_HEIGHT
-BACK = (INSET, ROW_TOP, 300, ROW_HEIGHT)
-WIDE_BUTTON = (1308, ROW_TOP, 488, ROW_HEIGHT)
-BESIDE_WIDE = (992, ROW_TOP, 300, ROW_HEIGHT)
-RIGHT = (1496, ROW_TOP, 300, ROW_HEIGHT)
-SECOND_RIGHT = (1180, ROW_TOP, 300, ROW_HEIGHT)
+# the foot: keys 300 wide and 16 apart, leaving keys from the left, the rest ending at 1860
+ROW_TOP, ROW_HEIGHT = 976, 52
+KEY, KEY_GAP = 300, 16
+BACK = (INSET, ROW_TOP, KEY, ROW_HEIGHT)
+RIGHT = (INSET_RIGHT - KEY, ROW_TOP, KEY, ROW_HEIGHT)
+SECOND_RIGHT = (INSET_RIGHT - 2 * KEY - KEY_GAP, ROW_TOP, KEY, ROW_HEIGHT)
+THIRD_RIGHT = (INSET_RIGHT - 3 * KEY - 2 * KEY_GAP, ROW_TOP, KEY, ROW_HEIGHT)
 
-# The page tabs. A width is the wider of the English and Turkish label in Arial at 21 px plus 22
-# each side, as the mockups draw a tab: HOME 63 / ANA SAYFA 118, QUICK MATCH 147 / HIZLI MAC 105,
-# CUSTOM GAMES 173 / OZEL OYUNLAR 162, LADDER 85 / LIG 34, SKINS 63 / SKINLER 90 (PIL, arial.ttf).
-TAB_TOP, TAB_HEIGHT, TAB_GAP = room.HEADER_TOP, room.HEADER_HEIGHT, 8
-TABS = [("TabHome", "GUI:OnlineTabHome", 162), ("TabQuickMatch", "GUI:OnlineTabQuickMatch", 192),
-        ("TabCustom", "GUI:OnlineTabCustom", 218), ("TabLadder", "GUI:OnlineLadderButton", 130),
-        ("TabSkins", "GUI:OnlineSkinsButton", 134)]
+# The login's dialog (README-online-entry.md, "Login"): the head keeps its offsets from the corner,
+# content from 102 under its top (no tabs), the foot rule 90 over its foot
+LOGIN = (340, 241, 1240, 598)
+LOGIN_X0, LOGIN_X1 = LOGIN[0] + 28, LOGIN[0] + LOGIN[2] - 28        # 368 to 1552
+LOGIN_TOP = LOGIN[1] + 102                                         # 343
+LOGIN_ROW_TOP = LOGIN[1] + LOGIN[3] - 90 + 14                      # 763
+
+# The page tabs, from x 60, 8 apart. The code sizes each to its words in 16 px bold capitals plus 28
+# a side (UIStyle::onlinePageInit); these widths only stand them roughly where they will be.
+TAB_TOP, TAB_HEIGHT, TAB_GAP = 126, 36, 8
+TABS = [("TabHome", "GUI:OnlineTabHome", 108), ("TabQuickMatch", "GUI:OnlineTabQuickMatch", 176),
+        ("TabCustom", "GUI:OnlineTabCustom", 196), ("TabLadder", "GUI:OnlineLadderButton", 124),
+        ("TabSkins", "GUI:OnlineSkinsButton", 112)]
+
+# the popups keep the old row's height until package 10 and 11 lay them out
+POPUP_ROW_HEIGHT, POPUP_TAB_HEIGHT = 56, 32
 # the open tab is the disabled button, its label ACTIVE as the options screen's (optionsmenu_layout.py)
 TAB_CAPTION_COLOR = ("ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255, "
                      "DISABLED: 186 255 12 255, DISABLEDBORDER: 0 2 0 255, "
@@ -79,6 +101,9 @@ BODY_FONT = 'NAME: "Arial", SIZE: 10, BOLD: 0'
 PANEL, FRAME_COLOR = room.PANEL, room.FRAME_COLOR
 GROUND = (5, 7, 12, 255)
 CLEAR = (0, 0, 0, 0)
+# the boxes the code draws in: clear on the converted screens, the old look's on the lobby until package 10
+BOX_DRAWN = (CLEAR, CLEAR)
+BOX_OLD = (PANEL, FRAME_COLOR)
 
 # the popups: the player card as mocked (card.html), the host popup sized to its two fields
 CARD = (360, 96, 1200, 896)
@@ -123,8 +148,11 @@ def inset(box, top=56, side=14):
 # Per screen, in the order build() applies them:
 #   names     an unnamed window EA left, named so it can be found again: (name, (how, what))
 #   reparent  a window moved under another, keeping its name: (name, new parent)
-#   panel     the window drawn as the room panel; home, where added windows go (None: the root)
-#   boxes     plain windows at the front of home, PANEL with a FRAME edge, the code draws inside them
+#   frame     the panel's rect, FRAME unless given (the login's dialog)
+#   panel     the window drawn as the panel (clear: the code draws frame A); home, where added windows
+#             go (None: the root)
+#   boxes     plain windows at the front of home, painted box_fill (clear by default), the code draws
+#             inside them
 #   framed    existing windows given a fill and an edge: (name, rect, fill, edge)
 #   adds      gadgets cloned from one in the same file: a button or list appended beside it, a text
 #             to home
@@ -133,41 +161,52 @@ def inset(box, top=56, side=14):
 #   place     every visible window's rectangle, (left, top, width, height) at 1080
 #   labels    a kept gadget's new label: (name, string key)
 #   hide      what the design drops, kept for the lookups
-# the login's two panels end under Create Account and Forgot Password, the hub's cards under their buttons
-LOGIN_HEIGHT = 500
-LOGIN_SIGN_IN = (1100, TOP, 696, LOGIN_HEIGHT)
-LOGIN_SERVER = (MAIN[0], TOP, 952, LOGIN_HEIGHT)
-HUB_CARD_HEIGHT, HUB_CARD_BUTTON = 320, 240
-HUB_CARDS = [(124, TOP, 544, HUB_CARD_HEIGHT), (692, TOP, 540, HUB_CARD_HEIGHT), (1256, TOP, 540, HUB_CARD_HEIGHT)]
-HUB_LOWER = TOP + HUB_CARD_HEIGHT + 24
-HUB_RECENT = (MAIN[0], HUB_LOWER, MAIN[1], BOTTOM - HUB_LOWER)
-HUB_MOTD = (SIDE[0], HUB_LOWER, SIDE[1], BOTTOM - HUB_LOWER)
-QM_MAPS = (SIDE[0], TOP, SIDE[1], BOTTOM - TOP)
-LOBBY_GAMES = (MAIN[0], TOP, MAIN[1], 404)
+#   keys      the push buttons that stand on the foot row, checked by selfcheck
+
+# The login (README-online-entry.md): the server column 368 to 928, the sign-in column 976 to 1552, both
+# from 343; the section head over a lit rule, then a label 16 under it and its entry 48 high
+LOGIN_SERVER = (LOGIN_X0, LOGIN_TOP, 560, 400)
+LOGIN_SIGN_X, LOGIN_SIGN_W = 976, LOGIN_X1 - 976
+LOGIN_SIGN_IN = (LOGIN_SIGN_X, LOGIN_TOP, LOGIN_SIGN_W, 400)
+LOGIN_FIELDS = LOGIN_TOP + 26          # under the section head and its rule
+LOGIN_HALF = (LOGIN_SIGN_W - 16) // 2
+
+# The hub: Play vs AI and Quick Match 660 wide, Custom games 432, 24 apart, 182 to 530; the recent
+# matches 1256 wide and the server box from 1340, 554 to 946; a card's key 52 high, 24 in, 24 over its foot
+HUB_CARDS = [(60, TOP, 660, 348), (744, TOP, 660, 348), (1428, TOP, 432, 348)]
+HUB_RECENT = (MAIN[0], 554, 1256, BOTTOM - 554)
+HUB_MOTD = (1340, 554, INSET_RIGHT - 1340, BOTTOM - 554)
+# Quick Match: the army box to 744, the colour box from 768, the picks box at the side, all to 946
+QM_ARMY = (MAIN[0], TOP, MAIN[1], 744 - TOP)
+QM_COLOUR = (MAIN[0], 768, MAIN[1], BOTTOM - 768)
+QM_PICKS = (SIDE[0], TOP, SIDE[1], BOTTOM - TOP)
+QM_SEARCH = (MAIN[0], TOP, MAIN[1], BOTTOM - TOP)
+# the lobby until package 10: the games over the chat in the main column, the players at the side
+LOBBY_GAMES = (MAIN[0], TOP, MAIN[1], 420)
 LOBBY_PLAYERS = (SIDE[0], TOP, SIDE[1], BOTTOM - TOP)
 
 
 def card_button(box):
-    """A hub card's button across its foot, 24 in from its edges as the mockup's."""
+    """A hub card's key across its foot: 24 in from its sides, its foot 24 over the card's."""
     left, top, width, height = box
-    return (left + 24, top + HUB_CARD_BUTTON, width - 48, ROW_HEIGHT)
+    return (left + 24, top + height - 76, width - 48, ROW_HEIGHT)
 
 
-# The match speed picked before a server-made match, in the value's place of a fact: Play vs AI's third
-# (WOLWelcomeMenu.cpp: facts 190 wide, 24 in from the card's right, rows of 36 from 106), and a fourth
-# under Quick Match's ladder box (WOLQuickMatchMenu.cpp drawLadderPanel: rows of 52 from 240, 24 in)
-HUB_AI_SPEED = (HUB_CARDS[0][0] + HUB_CARDS[0][2] - 24 - 110, HUB_CARDS[0][1] + 106 + 2 * 36 + 2, 110, 32)
-QM_SPEED = (SIDE[0] + SIDE[1] - 24 - 160, TOP + 240 + 3 * 52 + 6, 160, 40)
+# The match speed picked before a server-made match, a combo in a fact's value: Play vs AI's third fact
+# (rows of 40 from 70 under the card's top, 236 wide ending 24 in), and the picks box's last row
+# (README-online-entry.md "Your picks": the portrait 300 from 246, six rows of 52 from 566)
+HUB_AI_SPEED = (HUB_CARDS[0][0] + HUB_CARDS[0][2] - 24 - 110, HUB_CARDS[0][1] + 70 + 2 * 40 + 2, 110, 32)
+QM_SPEED = (SIDE[0] + SIDE[1] - 24 - 120, 566 + 5 * 52 + 10, 120, 32)
 
 
 # Rejoin, at the recent matches' foot on the right: the card is the match still running while the server
-# offers one (WOLWelcomeMenu.cpp), and the button shows only then
-HUB_REJOIN = (HUB_RECENT[0] + HUB_RECENT[2] - 24 - 300, HUB_RECENT[1] + HUB_RECENT[3] - 24 - ROW_HEIGHT, 300, ROW_HEIGHT)
+# offers one (WOLWelcomeMenu.cpp), and the key shows only then
+HUB_REJOIN = (HUB_RECENT[0] + HUB_RECENT[2] - 24 - KEY, HUB_RECENT[1] + HUB_RECENT[3] - 76, KEY, ROW_HEIGHT)
 
 
 # The player card's two tabs under its head, a page tab's look: QUICK MATCH 147 / HIZLI MAC 105 and
 # VS AI 54 / BILGISAYARA KARSI 208 in Arial at 21 px, plus 22 each side
-CARD_TABS = [(CARD[0] + 24, CARD[1] + 158, 192, TAB_HEIGHT), (CARD[0] + 224, CARD[1] + 158, 252, TAB_HEIGHT)]
+CARD_TABS = [(CARD[0] + 24, CARD[1] + 158, 192, POPUP_TAB_HEIGHT), (CARD[0] + 224, CARD[1] + 158, 252, POPUP_TAB_HEIGHT)]
 
 
 def card_tab(name, label, rect):
@@ -179,10 +218,13 @@ def card_tab(name, label, rect):
 
 SCREENS = {
     "GameSpyLoginProfile": dict(
+        frame=LOGIN,
         panel="GadgetParent", home="GadgetParent", title="StaticTextTitle", title_text="GUI:OnlineLabel", rule="Line",
         tabs=False,
-        labels={"StaticTextEmail": "GUI:OnlineLoginName", "ButtonLogin": "GUI:OnlineSignIn",
-                "ButtonTOS": "GUI:OnlineForgotPassword"},
+        labels={"ButtonLogin": "GUI:OnlineSignIn", "ButtonTOS": "GUI:OnlineForgotPassword"},
+        # the field's label is written by the code (WOLLoginMenu.cpp, GUI:OnlineLoginName in 14 px capitals
+        # across the 576 wide column), not a one-line box of the master's font
+        untext=["StaticTextEmail"],
         names=[("PanelSignIn", ("parent", "ButtonLogin"))],
         # EA's sign-in box is a box here, and the gadgets it held stand in the panel beside it: a gadget
         # placed outside its parent takes no click
@@ -193,20 +235,27 @@ SCREENS = {
         # the account field's list drops over the fields under it, and EA's terms popup over all of them
         above=[("ComboBoxEmail", "StaticTextStatus"), ("ParentTOS", "ComboBoxEmail")],
         boxes=[("PanelServer", LOGIN_SERVER, False)],
-        framed=[("PanelSignIn", LOGIN_SIGN_IN, PANEL, FRAME_COLOR)],
-        # the server's counts are drawn in code between its heading and the message of the day
-        adds=[text("StaticTextServer", "StaticTextPassword", (138, 226, 900, 32), body=False),
-              text("StaticTextMOTD", "StaticTextPassword", (138, 412, 900, 270)),
-              text("StaticTextSignIn", "StaticTextPassword", (1114, 226, 668, 32), body=False,
+        framed=[("PanelSignIn", LOGIN_SIGN_IN, CLEAR, CLEAR)],
+        # the server column (heads, the server and its ping, the counts, the notice, the launcher line) and
+        # the sign-in head are drawn in code; the message of the day is a text under the counts
+        adds=[text("StaticTextServer", "StaticTextPassword", (LOGIN_X0, LOGIN_FIELDS + 12, 560, 34), body=False),
+              text("StaticTextMOTD", "StaticTextPassword", (LOGIN_X0, LOGIN_FIELDS + 162, 560, 70)),
+              text("StaticTextSignIn", "StaticTextPassword", (LOGIN_SIGN_X, LOGIN_TOP, LOGIN_SIGN_W, 20), body=False,
                    label="GUI:OnlineLoginHeading"),
-              text("StaticTextStatus", "StaticTextPassword", (1114, 584, 668, 28))],
-        place={"StaticTextEmail": (1114, 266, 668, 28), "ComboBoxEmail": (1124, 296, 648, 44),
-               "StaticTextPassword": (1114, 366, 668, 28), "TextEntryPassword": (1124, 396, 648, 44),
-               "CheckBoxRememberInfo": (1124, 466, 648, 32), "ButtonLogin": (1124, 522, 648, ROW_HEIGHT),
-               "ButtonCreateAccount": (1124, 642, 316, 40), "ButtonTOS": (1456, 642, 316, 40),
-               "ButtonBack": BACK},
+              text("StaticTextStatus", "StaticTextPassword", (LOGIN_SIGN_X, LOGIN_FIELDS + 358, LOGIN_SIGN_W, 22))],
+        place={"StaticTextEmail": (LOGIN_SIGN_X, LOGIN_FIELDS + 16, LOGIN_SIGN_W, 18),
+               "ComboBoxEmail": (LOGIN_SIGN_X, LOGIN_FIELDS + 40, LOGIN_SIGN_W, 48),
+               "StaticTextPassword": (LOGIN_SIGN_X, LOGIN_FIELDS + 108, LOGIN_SIGN_W, 18),
+               "TextEntryPassword": (LOGIN_SIGN_X, LOGIN_FIELDS + 132, LOGIN_SIGN_W, 48),
+               "CheckBoxRememberInfo": (LOGIN_SIGN_X, LOGIN_FIELDS + 196, LOGIN_SIGN_W, 32),
+               "ButtonLogin": (LOGIN_SIGN_X, LOGIN_FIELDS + 244, LOGIN_SIGN_W, ROW_HEIGHT),
+               "ButtonCreateAccount": (LOGIN_SIGN_X, LOGIN_FIELDS + 312, LOGIN_HALF, 44),
+               "ButtonTOS": (LOGIN_X1 - LOGIN_HALF, LOGIN_FIELDS + 312, LOGIN_HALF, 44),
+               "ButtonBack": (LOGIN_X0, LOGIN_ROW_TOP, KEY, ROW_HEIGHT)},
         aligned=["StaticTextEmail", "StaticTextPassword"],
-        hide=["ParentESRB", "ComboBoxLoginName", "StaticTextLoginName", "WinAge"]),
+        keys=["ButtonBack"],
+        hide=["ParentESRB", "ComboBoxLoginName", "StaticTextLoginName", "WinAge", "StaticTextServer",
+              "StaticTextSignIn"]),
 
     "WOLWelcomeMenu": dict(
         panel="GadgetParent", home="GadgetParent", title="StaticTextTitle", title_text="GUI:OnlineLabel",
@@ -224,10 +273,13 @@ SCREENS = {
               listbox("ListboxRecent", "InfoListbox", inset(HUB_RECENT)),
               button("ButtonRejoin", "ButtonQuickMatch", HUB_REJOIN, "GUI:OnlineRejoin"),
               combo("ComboBoxGameSpeed", HUB_AI_SPEED, donor="WOLQuickMatchMenu")],
+        # the message of the day in the server box, under its name and over its facts
         place={"ButtonQuickMatch": card_button(HUB_CARDS[1]), "ButtonCustomMatch": card_button(HUB_CARDS[2]),
-               "InfoListbox": inset(HUB_MOTD), "ButtonBack": BACK, "ButtonMyInfo": SECOND_RIGHT},
+               "InfoListbox": (HUB_MOTD[0] + 24, HUB_MOTD[1] + 62, HUB_MOTD[2] - 48, 172),
+               "ButtonBack": BACK, "ButtonMyInfo": SECOND_RIGHT},
         aligned=[],
-        hide=["ButtonOptions", "ButtonBuddies", "PlayerInfoParent", "ButtonRejoin"]),
+        keys=["ButtonBack", "ButtonMyInfo", "ButtonSignOut"],
+        hide=["ButtonOptions", "ButtonBuddies", "PlayerInfoParent", "ButtonRejoin", "ListboxRecent"]),
 
     "WOLQuickMatchMenu": dict(
         panel="SubParent", home="SubParent", title="StaticTextTitle", title_text="GUI:OnlineTabQuickMatch",
@@ -235,40 +287,42 @@ SCREENS = {
         labels={"ButtonStart": "GUI:QMSearch", "ButtonStop": "GUI:QMStop"},
         names=[],
         reparent=[("ListBoxMapSelect", "SubParent")],
-        boxes=[("PanelArmy", (MAIN[0], TOP, MAIN[1], 494), False), ("PanelColor", (MAIN[0], 716, MAIN[1], 200), False),
-               ("PanelMaps", QM_MAPS, False),
-               ("PanelSearch", (MAIN[0], TOP, MAIN[1], BOTTOM - TOP), True), ("PanelPicks", QM_MAPS, True)],
+        boxes=[("PanelArmy", QM_ARMY, False), ("PanelColor", QM_COLOUR, False), ("PanelMaps", QM_PICKS, False),
+               ("PanelSearch", QM_SEARCH, True), ("PanelPicks", QM_PICKS, True)],
         framed=[],
-        # EA's own tooltips for these two, which its ZH layout had dropped with the buttons
-        adds=[button("ButtonSelectAllMaps", "ButtonBack", (1280, 846, 238, 40), "GUI:QMAll", "TOOLTIP:SelectAll"),
-              button("ButtonSelectNoMaps", "ButtonBack", (1534, 846, 238, 40), "GUI:QMNone", "TOOLTIP:SelectNone"),
+        # EA's own tooltips for these two, which its ZH layout had dropped with the buttons; ranked maps are
+        # generated, so they and the map list stay hidden
+        adds=[button("ButtonSelectAllMaps", "ButtonBack", (1284, 880, 238, 40), "GUI:QMAll", "TOOLTIP:SelectAll"),
+              button("ButtonSelectNoMaps", "ButtonBack", (1534, 880, 238, 40), "GUI:QMNone", "TOOLTIP:SelectNone"),
               combo("ComboBoxGameSpeed", QM_SPEED)],
-        place={"ListBoxMapSelect": (1280, 334, 492, 480), "ButtonBack": BACK, "ButtonWiden": BESIDE_WIDE,
-               "ButtonStart": WIDE_BUTTON, "ButtonStop": WIDE_BUTTON},
+        place={"ListBoxMapSelect": (1284, 334, 552, 480), "ButtonBack": BACK, "ButtonWiden": SECOND_RIGHT,
+               "ButtonStart": RIGHT, "ButtonStop": RIGHT},
         aligned=[],
-        # Stop shares Search's place and shows while a search runs; the map list, hidden at init since ranked
-        # maps are generated, leaves the ladder box to the speed
-        hide=["ButtonStop", "ListBoxMapSelect", "ButtonOptions", "ButtonBuddies", "ListboxQuickMatch", "StaticTextMatchingProgress",
-              "ParentOptions", "ParentStats", "ComboBoxLadder", "ComboBoxMaxDisconnects", "ComboBoxMaxPing",
-              "ComboBoxNumPlayers", "ComboBoxSide", "ComboBoxColor"]),
+        keys=["ButtonBack", "ButtonWiden", "ButtonStart", "ButtonStop"],
+        # Stop shares Search's place and shows while a search runs
+        hide=["ButtonStop", "ListBoxMapSelect", "ButtonSelectAllMaps", "ButtonSelectNoMaps", "ButtonOptions",
+              "ButtonBuddies", "ListboxQuickMatch", "StaticTextMatchingProgress", "ParentOptions", "ParentStats",
+              "ComboBoxLadder", "ComboBoxMaxDisconnects", "ComboBoxMaxPing", "ComboBoxNumPlayers", "ComboBoxSide",
+              "ComboBoxColor"]),
 
     "WOLCustomLobby": dict(
         panel="GadgetParent", home="GadgetParent", title="StaticTextTitle", title_text="GUI:OnlineTabCustom",
-        rule="HeaderRule", tabs=True,
+        rule="HeaderRule", tabs=True, box_fill=BOX_OLD,
         labels={"ButtonJoin": "GUI:OnlineLobbyJoin", "ButtonHost": "GUI:OnlineLobbyHost"},
         names=[],
         reparent=[],
         boxes=[("PanelGames", LOBBY_GAMES, False), ("PanelPlayers", LOBBY_PLAYERS, False)],
         framed=[],
         # Host makes a classic room; Mods asks Direct Strike or Apocalypse first (the owner, 2026-11-24)
-        adds=[button("ButtonMods", "ButtonHost", (676, ROW_TOP, 300, ROW_HEIGHT), "GUI:Mods", "TOOLTIP:Mods")],
+        adds=[button("ButtonMods", "ButtonHost", THIRD_RIGHT, "GUI:Mods", "TOOLTIP:Mods")],
         # ListboxGamesLarge is the game list: ZH dropped the small one (LobbyUtils.cpp GrabWindowInfo)
         place={"ParentGameListLarge": LOBBY_GAMES, "ListboxGamesLarge": inset(LOBBY_GAMES),
-               "ComboBoxGroupRooms": (MAIN[0], 626, MAIN[1], 34),
-               "ListboxChat": (MAIN[0], 668, MAIN[1], 198), "TextEntryChat": (MAIN[0], 874, MAIN[1], 42),
+               "ComboBoxGroupRooms": (MAIN[0], 610, MAIN[1], 34),
+               "ListboxChat": (MAIN[0], 618, MAIN[1], 270), "TextEntryChat": (MAIN[0], 896, MAIN[1], 44),
                "ListboxPlayers": inset(LOBBY_PLAYERS),
-               "ButtonBack": BACK, "ButtonJoin": BESIDE_WIDE, "ButtonHost": WIDE_BUTTON},
+               "ButtonBack": BACK, "ButtonJoin": SECOND_RIGHT, "ButtonHost": RIGHT},
         aligned=[],
+        keys=["ButtonBack", "ButtonMods", "ButtonJoin", "ButtonHost"],
         hide=["ButtonGameListToggle", "SliderChatAdjust", "ButtonBuddy", "ButtonEmote", "ParentSortButtons",
               "ComboBoxGroupRooms"]),
 
@@ -281,6 +335,7 @@ SCREENS = {
         above=[("ButtonBack", "WindowLadder")],
         place={"ButtonBack": BACK},
         aligned=[],
+        keys=["ButtonBack"],
         hide=[]),
 
     # the card's head, figures, boxes and last matches are drawn in code over PopupParentOld
@@ -294,7 +349,7 @@ SCREENS = {
         adds=[card_tab("TabQuickMatch", "GUI:OnlineTabQuickMatch", CARD_TABS[0]),
               card_tab("TabAI", "GUI:OnlineCardTabAI", CARD_TABS[1])],
         place={"PopupParent": CARD,
-               "ButtonClose": (384, 912, 300, ROW_HEIGHT), "ButtonCommunicator": (1096, 912, 440, ROW_HEIGHT)},
+               "ButtonClose": (384, 912, 300, POPUP_ROW_HEIGHT), "ButtonCommunicator": (1096, 912, 440, POPUP_ROW_HEIGHT)},
         aligned=[],
         hide=["PlayerInfoParent", "ListboxInfo", "StaticTextBattleHonors", "CheckBoxAsianText",
               "CheckBoxNonAsianText", "ButtonDeleteAccount", "ButtonSetLocale", "StaticTextPlayerStatisticsLabel",
@@ -309,7 +364,7 @@ SCREENS = {
         place={"StaticTextGameName": (614, 354, 682, 28), "TextEntryGameName": (624, 386, 672, 44),
                "StaticTextPassword": (614, 446, 682, 28), "TextEntryGamePassword": (624, 478, 672, 44),
                "CheckBoxLimitArmies": (624, 542, 672, 32), "CheckBoxUseStats": (624, 586, 672, 32),
-               "ButtonCancel": (624, 670, 300, ROW_HEIGHT), "ButtonCreateGame": (996, 670, 300, ROW_HEIGHT)},
+               "ButtonCancel": (624, 670, 300, POPUP_ROW_HEIGHT), "ButtonCreateGame": (996, 670, 300, POPUP_ROW_HEIGHT)},
         aligned=["StaticTextGameName", "StaticTextPassword"],
         hide=[]),
 }
@@ -440,22 +495,32 @@ def add_tabs(layout, menu, home):
         left += width + TAB_GAP
 
 
+def frame_of(spec):
+    return spec.get("frame", FRAME)
+
+
 def add_header(layout, menu, spec, home, kit):
+    """The title and its rule, at their offsets from the panel's top left, hidden: UIStyle::onlineHeader
+    draws both and reads the title's words from here."""
+    left, top, width, _height = frame_of(spec)
+    dy = top - FRAME[1]
     title = layout.find(spec["title"])
     if title is None:
         title = clone(room.need(kit, "StaticTextTitle"), named(menu, spec["title"]))
         title.rect = title.rect[:4] + WIDE   # the kit can be the retail file, still at 800x600
         home.children.append(title)
-    title.place(*room.TITLE)
+    title.place(left + 28, TITLE_TOP + dy, 640, TITLE_HEIGHT)
     room.left_align(title)
     if spec["title_text"]:
         title.put_prop("TEXT", '"%s"' % spec["title_text"])
+    hide(title)
     rule = layout.find(spec["rule"])
     if rule is None:
         rule = room.plain_window(room.need(layout, spec["panel"]), named(menu, spec["rule"]), False, CLEAR, FRAME_COLOR)
         home.children.append(rule)
-    rule.place(FRAME[0], room.RULE_TOP, FRAME[2], 0)
-    paint(rule, CLEAR, FRAME_COLOR)
+    rule.place(left, RULE_TOP + dy, width, 0)
+    paint(rule, CLEAR, CLEAR)
+    hide(rule)
 
 
 def build(layout, menu, kit):
@@ -479,8 +544,8 @@ def build(layout, menu, kit):
     if screen:
         panel = room.need(layout, spec["panel"])
         room.add_ruler(layout, menu, panel)
-        panel.place(*FRAME)
-        paint(panel, PANEL, FRAME_COLOR)
+        panel.place(*frame_of(spec))
+        paint(panel, CLEAR, CLEAR)		# glass and frame A are the code's (UIStyle::onlineHeader)
         add_header(layout, menu, spec, home, kit)
         if spec["tabs"]:
             add_tabs(layout, menu, home)
@@ -491,13 +556,14 @@ def build(layout, menu, kit):
                 back.put_prop(key, model.prop(key).split("=", 1)[1].strip().rstrip(";"))
 
     fresh = []
+    fill, edge = spec.get("box_fill", BOX_DRAWN)
     for name, rect, starts_hidden in spec["boxes"]:
         box = layout.find(name)
         if box is None:
-            box = room.plain_window(room.need(layout, spec["panel"]), named(menu, name), False, PANEL, FRAME_COLOR)
+            box = room.plain_window(room.need(layout, spec["panel"]), named(menu, name), False, fill, edge)
             fresh.append(box)
         box.place(*rect)
-        paint(box, PANEL, FRAME_COLOR)
+        paint(box, fill, edge)
         if starts_hidden:
             hide(box)
     home.children[0:0] = fresh
@@ -534,6 +600,8 @@ def build(layout, menu, kit):
         room.left_align(room.need(layout, name))
     for name, label in sorted(spec.get("labels", {}).items()):
         room.need(layout, name).put_prop("TEXT", '"%s"' % label)
+    for name in spec.get("untext", []):
+        drop_prop(room.need(layout, name), "TEXT")
     if "Line" in spec["place"]:
         paint(room.need(layout, "Line"), CLEAR, FRAME_COLOR)
     for name in spec["hide"]:
@@ -621,13 +689,15 @@ def selfcheck():
         gadgets = list(visible_gadgets(layout.root))
         problems.extend("%s.wnd: %s" % (menu, problem) for problem in overlaps(gadgets))
         if spec["panel"] is not None:
-            left, top, right, bottom = FRAME[0], FRAME[1], FRAME[0] + FRAME[2], FRAME[1] + FRAME[3]
+            frame = frame_of(spec)
+            left, top, right, bottom = frame[0], frame[1], frame[0] + frame[2], frame[1] + frame[3]
         else:
             left, top, right, bottom = layout.root.rect[:4]
         for node in gadgets:
             l, t, r, b = node.rect[:4]
             if l < left or t < top or r > right or b > bottom:
                 problems.append("%s.wnd: %s runs out of the panel" % (menu, room.short(node) or "(unnamed)"))
+        problems.extend("%s.wnd: %s" % (menu, problem) for problem in key_row(layout, spec))
         for key in labels(spec):
             if key.split(":")[1].startswith(("Online", "QM")) and key not in known:
                 problems.append("%s.wnd: %s is not in Patch.str" % (menu, key))
@@ -636,13 +706,36 @@ def selfcheck():
         print("online: %s" % problem)
     if problems:
         return 1
-    print("online: %d layouts on the room's grid" % len(SCREENS))
+    print("online: %d layouts on frame A's board" % len(SCREENS))
     return 0
+
+
+def key_row(layout, spec):
+    """The foot's keys: 300 by 52 on the row 14 under the foot rule, inside the content edges, on the
+    16 px pitch from the left or from the right edge."""
+    left, top, width, height = frame_of(spec)
+    x0, x1, row = left + 28, left + width - 28, top + height - 90 + 14
+    found = []
+    for name in spec.get("keys", []):
+        l, t, r, b = room.need(layout, name).rect[:4]
+        pitch = KEY + KEY_GAP
+        if (r - l, b - t) != (KEY, ROW_HEIGHT) or t != row:
+            found.append("%s is not a key on the foot row" % name)
+        elif l < x0 or r > x1 or ((l - x0) % pitch and (x1 - r) % pitch):
+            found.append("%s is off the keys' pitch" % name)
+    return found
 
 
 def main(argv):
     if len(argv) == 2 and argv[1] == "selfcheck":
         return selfcheck()
+    if len(argv) == 2 and argv[1] == "rebuild":
+        kit = wndlayout.load(os.path.join(MENUS, KIT + ".wnd"))
+        for menu in sorted(SCREENS):
+            path = os.path.join(MENUS, menu + ".wnd")
+            wndlayout.save(build(wndlayout.load(path), menu, kit), path)
+            print("%s rebuilt" % path)
+        return 0
     if len(argv) != 3:
         print(__doc__)
         return 2

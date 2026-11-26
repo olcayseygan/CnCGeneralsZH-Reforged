@@ -2727,6 +2727,11 @@ Int parseOnlineUser(char *args[], int num)
 Int parseOnlinePass(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlinePass ); }
 Int parseOnlineHostGame(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlineHostGame ); }
 Int parseOnlineJoin(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlineJoinGame ); }
+/* -onlineparty <nick> and -onlinepartyjoin <nick>: a Team vs AI party scripted between two copies (OnlinePeer.cpp,
+	 onlinePartyScript): the first invites that friend once it is online and presses Play vs AI once it is in, the
+	 second takes that friend's invite.  Test switches like -onlinehost: what a player clicks, nothing more. */
+Int parseOnlineParty(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlineParty ); }
+Int parseOnlinePartyJoin(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlinePartyJoin ); }
 /* -onlinesay is chat, kept as UTF-8 like every line the service carries.  Windows hands the switch over in
 	 the ANSI code page, which on a Turkish machine made "ı" a lone 0xFD byte. */
 Int parseOnlineSay(char *args[], int num)
@@ -3182,6 +3187,8 @@ static CommandLineParam params[] =
 	{ "-onlinehost", parseOnlineHostGame },
 	{ "-onlinejoin", parseOnlineJoin },
 	{ "-onlinesay", parseOnlineSay },
+	{ "-onlineparty", parseOnlineParty },
+	{ "-onlinepartyjoin", parseOnlinePartyJoin },
 	{ "-onlinemap", parseOnlineMap },
 	{ "-onlineoptions", parseOnlineOptions },
 	{ "-onlinestart", parseOnlineStart },

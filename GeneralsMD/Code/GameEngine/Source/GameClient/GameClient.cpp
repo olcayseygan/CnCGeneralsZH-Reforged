@@ -634,7 +634,8 @@ void GameClient::registerDrawable( Drawable *draw )
 }  // end registerDrawable
 
 /* A Play vs AI match as this pass sees it, for its ai.result: the armies after random was resolved, and
-	 the player's numbers as the score screen shows them. */
+	 the player's numbers as the score screen shows them.  The AI army is the first computer seat's, never a
+	 human's: a match with a second human seat (Team vs AI) has its partner before the bots. */
 static void readAIMatch( Player *me, OnlineAIResult &out )
 {
 	out.endFrame = (Int)TheGameLogic->getFrame();

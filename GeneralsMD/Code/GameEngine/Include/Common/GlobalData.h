@@ -595,6 +595,8 @@ public:
 	AsciiString m_onlineHostGame;			///< -onlinehost <name>: host a custom game of this name once in the lobby
 	AsciiString m_onlineJoinGame;			///< -onlinejoin <name>: join the custom game of this name once it is listed
 	AsciiString m_onlineSay;					///< -onlinesay <text>: say this in the lobby and again in the staging room
+	AsciiString m_onlineParty;				///< -onlineparty <nick>: invite this friend to a Team vs AI party, then press Play vs AI once it is in
+	AsciiString m_onlinePartyJoin;		///< -onlinepartyjoin <nick>: take this friend's party invite
 	AsciiString m_onlineMap;					///< -onlinemap <map>: the map -onlinehost sets
 	AsciiString m_onlineOptions;			///< -onlineoptions <list>: the staging room controls the -onlinehost host works (prorules,turbo,unitlimit,randommap)
 	Int m_onlineStart;								///< -onlinestart [N]: the -onlinehost host starts the game at N players (0 = never, bare = 2)

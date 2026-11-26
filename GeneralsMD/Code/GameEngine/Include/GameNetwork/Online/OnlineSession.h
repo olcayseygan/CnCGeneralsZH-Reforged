@@ -328,6 +328,17 @@ struct OnlineSession
 	std::string friendErrorFor, friendErrorCode;	///< the last error{for} of a friend or invite request, until taken
 	std::map<long long, std::string> nicksById;	///< every id and nick a room or game told us: ADDBUDDY names an id, friend.add a nick
 
+	// Team vs AI (TEAM-VS-AI.md), only once the welcome said teamai:1: the party and the ask of a member's ai.start
+	Bool teamOn;						///< welcome.teamai
+	long long partyLeader;	///< 0 out of a party
+	std::vector< std::pair<long long, std::string> > party;	///< id and nick, the leader first
+	UnsignedInt partySerial;
+	std::string teamAsk;		///< ai.team.ask's matchId, until the hub answers it
+	std::string teamAskNick;
+	Bool teamReady;					///< the ai.ready of a team match waits for the hub, asked for or not
+	Int teamQueueSize;			///< ai.team.queued's size, 0 out of the queue
+	Bool partyScriptInvited, partyScriptStarted;	///< -onlineparty's steps, once each
+
 	OnlinePeerQueue *peer;
 	OnlineBuddyQueue *buddy;
 	OnlinePSQueue *ps;

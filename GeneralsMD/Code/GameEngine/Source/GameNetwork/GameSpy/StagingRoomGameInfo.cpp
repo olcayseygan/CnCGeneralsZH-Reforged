@@ -598,7 +598,7 @@ void GameSpyStagingRoom::startGame(Int gameID)
 					m_GameSpySlot[i].setSlotRankPoints(it->second.m_rankPoints);
 					m_GameSpySlot[i].setFavoriteSide(it->second.m_side);
 				}
-				else
+				else if (!OnlineIsEnabled())		// -online: a Team vs AI party member sits in no lobby room, so it has no row
 				{
 					DEBUG_CRASH(("No player info for %s", gsName.str()));
 				}

@@ -315,6 +315,8 @@ static Bool signedIn( void )
 	 in this game. */
 static Bool startAIMatch( const OnlineAIMatch &ai )
 {
+	if (ai.humans > 1)
+		return OnlineStartTeamAIMatch( ai );		// Team vs AI: the party's network match on the relay
 	const MapMetaData *md = TheMapCache ? TheMapCache->findMap( ai.map ) : NULL;
 	if (md == NULL || !md->m_isMultiplayer || md->m_numPlayers < 2)
 		return FALSE;
@@ -386,7 +388,16 @@ void WOLPlayVsAI( void )
 /// the answer to Play: the match starts, or the reason it did not goes on the Play vs AI card
 Bool WOLPlayVsAIUpdate( void )
 {
-	if (!s_aiAsked)
+	// Team vs AI: a party member pressed Play, and this hub answers with the army it would play; the match's
+	// ai.ready then comes here unasked
+	AsciiString teamAsk, teamFrom;
+	if (OnlineTakeTeamAsk( teamAsk, teamFrom ))
+	{
+		const Int pick = quickMatchArmy();
+		const PlayerTemplate *mine = pick >= 0 ? ThePlayerTemplateStore->getNthPlayerTemplate( pick ) : NULL;
+		OnlineAnswerTeamAsk( teamAsk, mine ? mine->getName() : AsciiString( "Random" ) );
+	}
+	if (!s_aiAsked && !OnlineIsTeamAIMatchReady())
 		return FALSE;
 	OnlineAIMatch ai;
 	const OnlineAIMatchState state = OnlineGetAIMatch( ai );

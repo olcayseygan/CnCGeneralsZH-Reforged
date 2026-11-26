@@ -304,7 +304,9 @@ Bool OnlineSession::friendLine( const OnlineMessage &m )
 		e.mode = m.getString( "mode" );
 		e.map = m.getString( "map" );
 		e.atMs = OnlineNowMs();
-		if (e.from <= 0 || e.game <= 0)
+		// game 0 is a Team vs AI party's (mode teamai), answered by OnlineAnswerInvite as a room's
+		const Bool party = e.game == 0 && e.mode == "teamai" && teamOn;
+		if (e.from <= 0 || (e.game <= 0 && !party))
 			return TRUE;
 		for (std::deque<OnlineInviteEntry>::iterator it = invites.begin(); it != invites.end(); ++it)
 			if (it->from == e.from && it->game == e.game)
@@ -358,6 +360,13 @@ void OnlineSession::forgetFriends()
 	friendErrorFor.clear();
 	friendErrorCode.clear();
 	nicksById.clear();
+	// the server ends a party with the line
+	if (partyLeader || !party.empty())
+		++partySerial;
+	partyLeader = 0;
+	party.clear();
+	teamAsk.clear();
+	teamAskNick.clear();
 }
 
 void OnlineSession::sendFriend( const OnlineMessage &m )
@@ -504,11 +513,14 @@ UnsignedInt OnlineGetInvites( std::vector<OnlineInvite> &out )
 void OnlineInviteFriend( Int to )
 {
 	OnlineSession &s = OnlineSession::get();
-	if (!s.gameId)
-		return;
 	OnlineMessage m;
-	m.setString( "t", "invite" ).setInt( "to", to ).setInt( "game", s.gameId );
+	m.setString( "t", "invite" ).setInt( "to", to );
+	if (s.gameId)
+		m.setInt( "game", s.gameId );
+	else if (!s.teamOn)
+		return;		// outside a room only a server with Team vs AI takes it: into our party
 	s.sendFriend( m );
+	DEBUG_LOG(("ONLINE INVITE to=%d game=%lld\n", to, s.gameId));
 }
 
 void OnlineAnswerInvite( Int from, Int game, Bool ok )
@@ -525,7 +537,7 @@ void OnlineAnswerInvite( Int from, Int game, Bool ok )
 		}
 	OnlineMessage m;
 	m.setString( "t", "invite.answer" ).setInt( "from", from ).setInt( "game", game ).setBool( "ok", ok != FALSE );
-	if (ok)
+	if (ok && game != 0)		// game 0: a party's, answered with party{...}
 	{
 		// the server answers as it answers a game.join
 		s.quickMatch.clear();

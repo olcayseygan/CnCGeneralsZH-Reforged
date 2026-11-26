@@ -5213,6 +5213,18 @@ GUI:OnlineAIRefused_build
 "Your game files differ from the release. Update the game from the launcher, then try again."
 END
 
+GUI:OnlineAIRefused_partner
+"Your party partner did not answer. Both of you need to be on the online home screen."
+END
+
+GUI:OnlineAIRefused_partnerbuild
+"Your party partner's game files differ from the release. They need to update from the launcher."
+END
+
+GUI:OnlineAIRefused_partnerbusy
+"Your party partner is in another match or search."
+END
+
 GUI:OnlineAIRefused_pending
 "Your last match against the AI is still being rated. Try again in a moment."
 END
@@ -5360,6 +5372,10 @@ END
 
 GUI:OnlineUnrated_custom
 "Custom games are not rated."
+END
+
+GUI:OnlineUnrated_teamai
+"Team vs AI matches are not rated yet."
 END
 
 GUI:OnlineUnrated_desync

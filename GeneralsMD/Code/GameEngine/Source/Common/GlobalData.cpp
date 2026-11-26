@@ -832,6 +832,8 @@ GlobalData::GlobalData()
 	m_onlineHostGame.clear();
 	m_onlineJoinGame.clear();
 	m_onlineSay.clear();
+	m_onlineParty.clear();
+	m_onlinePartyJoin.clear();
 	m_onlineMap.clear();
 	m_onlineOptions.clear();
 	m_onlineStart = 0;

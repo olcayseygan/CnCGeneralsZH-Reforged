@@ -19487,6 +19487,18 @@ GUI:OnlineAIRefused_build
 "Oyun dosyaların yayımlanan sürümden farklı. Oyunu başlatıcıdan güncelle, sonra yeniden dene."
 END
 
+GUI:OnlineAIRefused_partner
+"Takım arkadaşın cevap vermedi. İkinizin de çevrim içi ana ekranda olması gerekiyor."
+END
+
+GUI:OnlineAIRefused_partnerbuild
+"Takım arkadaşının oyun dosyaları yayımlanan sürümden farklı. Başlatıcıdan güncellemesi gerekiyor."
+END
+
+GUI:OnlineAIRefused_partnerbusy
+"Takım arkadaşın başka bir maçta ya da aramada."
+END
+
 GUI:OnlineAIRefused_pending
 "Yapay zekâya karşı son maçın hâlâ puanlanıyor. Birazdan yeniden dene."
 END
@@ -19633,6 +19645,10 @@ END
 
 GUI:OnlineUnrated_custom
 "Özel oyunlar puana sayılmıyor."
+END
+
+GUI:OnlineUnrated_teamai
+"Yapay zekaya karşı takım maçları henüz puana sayılmıyor."
 END
 
 GUI:OnlineUnrated_desync

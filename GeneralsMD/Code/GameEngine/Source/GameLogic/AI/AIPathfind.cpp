@@ -13482,7 +13482,15 @@ Path *Pathfinder::getMoveAwayFromPath(Object* obj, Object *otherObj,
 	boxHalfWidth += otherRadius*PATHFIND_CELL_SIZE_F;
 	if (otherCenter) boxHalfWidth+=PATHFIND_CELL_SIZE_F/2;
 
-	while( m_openList != NULL )
+	/* A step aside is wanted near at hand or not at all. EA's search had no limit, and in a packed
+		 crowd the nearest cell off the other unit's route can be a long way out: on gxcompare's tank
+		 fight 27% of these searches took over 400 cells, most of the searches' time, and one in six
+		 sent the unit more than 24 cells away for ten seconds, where it asked others to move in turn.
+		 Past the limit the search fails as if walled in, and the unit stays put; the one that asked
+		 has the rest of its rescue ladder. 400 is the count adjustToLandingDestination tries. */
+	enum { MOVE_AWAY_MAX_CELLS = 400 };
+	Int cellsExpanded = 0;
+	while( m_openList != NULL && cellsExpanded++ < MOVE_AWAY_MAX_CELLS )
 	{
 		// take head cell off of open list - it has lowest estimated total path cost
 		parentCell = m_openList;
@@ -13551,7 +13559,7 @@ Path *Pathfinder::getMoveAwayFromPath(Object* obj, Object *otherObj,
 			cleanOpenAndClosedLists();
 			parentCell->releaseInfo();
 			return newPath;
-		}	
+		}
 		// put parent cell onto closed list - its evaluation is finished
 		m_closedList = parentCell->putOnClosedList( m_closedList );
 

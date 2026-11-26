@@ -2268,6 +2268,25 @@ static UnsignedInt theShadowNotedDraws = 0;
 static Int64 thePassStart = 0;			///< execute's pass start, moved on by every extra picture
 static Int thePassPictures = 0;			///< the extra pictures this pass presented before its last
 
+/* Phase 7.0's split of the sync point (GameEngine.h, ParkPart): this picture's parts, taken and zeroed
+	 by GameEngine_noteFrameTime, and their sums over the pictures with a tick and those without. */
+static Real theParkMS[ PARK_COUNT ];
+static double theParkTickSum[ PARK_COUNT ];
+static double theParkNoTickSum[ PARK_COUNT ];
+static Int theSerialTicks = 0;
+static double theSerialTickSum = 0.0, theSerialFlushSum = 0.0;
+
+void GameEngine_noteParkMS( ParkPart part, Real ms )
+{
+	theParkMS[ part ] += ms;
+}
+
+void GameEngine_notePark( ParkPart part, Int64 start )
+{
+	const Int64 now = Clock_Ticks();
+	theParkMS[ part ] += engineElapsedMS( start, now );
+}
+
 void GameEngine_noteFrameTime( Real ms, UnsignedInt logicFrame );
 
 void GameEngine_noteExtraPicture( void )
@@ -2314,9 +2333,20 @@ void GameEngine_noteFrameTime( Real ms, UnsignedInt logicFrame )
 			++s_slowPassSkipped;
 	}
 
+	// this picture's sync point parts, its own whether or not anything counts them
+	Real park[ PARK_COUNT ];
+	for( Int i = 0; i < PARK_COUNT; ++i )
+	{
+		park[ i ] = theParkMS[ i ];
+		theParkMS[ i ] = 0.0f;
+	}
+
 	if( !theFrameTimesStarted )
 		return;
 	theFrameTimes.note( ms, logicFrame );
+	double *parkSum = thePassLogicTicks > 0 ? theParkTickSum : theParkNoTickSum;
+	for( Int i = 0; i < PARK_COUNT; ++i )
+		parkSum[ i ] += park[ i ];
 #ifdef DEBUG_LOGGING
 	// the sun's depth pass of this picture alone: an extra picture noted its share of the pass already
 	theShadowPassTimes.note( TheShadowMapMS - theShadowNotedMS, logicFrame );
@@ -2354,6 +2384,15 @@ static UnsignedInt theObjectPeakFrame = 0;
 static double theObjectSum = 0.0;
 static Int theObjectTicks = 0;
 
+void GameEngine_noteSerialTick( Real tickMS, Real flushMS )
+{
+	if( !theFrameTimesStarted )
+		return;
+	++theSerialTicks;
+	theSerialTickSum += tickMS;
+	theSerialFlushSum += flushMS;
+}
+
 void GameEngine_noteLogicTime( Real ms, UnsignedInt logicFrame )
 {
 	if( !theFrameTimesStarted )
@@ -2383,6 +2422,10 @@ static void startFrameTimeStats( void )
 	theObjectPeakFrame = 0;
 	theObjectSum = 0.0;
 	theObjectTicks = 0;
+	for( Int i = 0; i < PARK_COUNT; ++i )
+		theParkTickSum[ i ] = theParkNoTickSum[ i ] = 0.0;
+	theSerialTicks = 0;
+	theSerialTickSum = theSerialFlushSum = 0.0;
 	theFrameTimesStarted = TRUE;
 #ifdef DEBUG_LOGGING
 	memset( &theParticleCost, 0, sizeof(theParticleCost) );
@@ -2423,6 +2466,30 @@ static void reportFrameTimeStats( void )
 	DEBUG_LOG(("HEADLESS PASSES OVERLAPPED: %d | %.2f/%.2f/%.2f/%.2f ms mean/p50/p99/p99.9, every pass with the tick beside the render\n",
 						 theOverlapped.count(), PASS_SPLIT( theOverlapped )));
 	#undef PASS_SPLIT
+	// phase 7.0: the sync above, part by part, means over the same pictures; "other" is what no part names
+	for( Int withTick = 1; withTick >= 0; --withTick )
+	{
+		const FrameTimeHistogram &sync = withTick ? theTickSync : theRenderSync;
+		const double *sum = withTick ? theParkTickSum : theParkNoTickSum;
+		if( sync.count() <= 0 )
+			continue;
+		Real part[ PARK_COUNT ];
+		Real named = 0.0f;
+		for( Int i = 0; i < PARK_COUNT; ++i )
+		{
+			part[ i ] = (Real)( sum[ i ] / sync.count() );
+			named += part[ i ];
+		}
+		DEBUG_LOG(("HEADLESS PARK %s: %d | radar %.2f audio %.2f input %.2f gui %.2f drawables %.2f drawreads %.2f display %.2f messages %.2f view %.2f particles %.2f reads %.2f flush %.2f ui %.2f other %.2f | sync %.2f ms mean\n",
+							 withTick ? "TICK" : "NOTICK", sync.count(),
+							 part[ PARK_RADAR ], part[ PARK_AUDIO ], part[ PARK_INPUT ], part[ PARK_GUI ],
+							 part[ PARK_DRAWABLES ], part[ PARK_DRAWREADS ], part[ PARK_DISPLAY ], part[ PARK_MESSAGES ],
+							 part[ PARK_VIEW ], part[ PARK_PARTICLES ], part[ PARK_READS ], part[ PARK_FLUSH ], part[ PARK_UI ],
+							 sync.meanMS() - named, sync.meanMS()));
+	}
+	if( theSerialTicks > 0 )
+		DEBUG_LOG(("HEADLESS SERIAL TICKS: %d | tick %.2f flush %.2f ms mean, the tick as the logic thread timed it and the flush after it, both in the pass's logic time\n",
+							 theSerialTicks, (Real)( theSerialTickSum / theSerialTicks ), (Real)( theSerialFlushSum / theSerialTicks )));
 	if (TheGlobalData)
 	{
 		const char *lodName = "off";
@@ -3493,6 +3560,7 @@ void GameEngine::update( void )
 			TheRadar->UPDATE();
 #ifdef DEBUG_LOGGING
 			tRadarEnd = Clock_Ticks();
+			GameEngine_noteParkMS( PARK_RADAR, engineElapsedMS( tClientStart, tRadarEnd ) );
 #endif
 
 			/// @todo Move audio init, update, etc, into GameClient update
@@ -3500,6 +3568,7 @@ void GameEngine::update( void )
 			TheAudio->UPDATE();
 #ifdef DEBUG_LOGGING
 			tAudioEnd = Clock_Ticks();
+			GameEngine_noteParkMS( PARK_AUDIO, engineElapsedMS( tRadarEnd, tAudioEnd ) );
 #endif
 			TheGameClient->UPDATE();
 			if (TheGlobalData->m_drawDelayMS > 0)

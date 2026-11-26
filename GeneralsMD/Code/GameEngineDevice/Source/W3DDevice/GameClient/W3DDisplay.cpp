@@ -2962,13 +2962,13 @@ AGAIN:
 			}
 			else
 			{
+				const Int64 tViewStart = Clock_Ticks();
 				smoothMotionBegin();
 //				if(TheGlobalData->m_loadScreenRender != TRUE)
 					updateViews();
-#ifdef DEBUG_LOGGING
+				GameEngine_notePark( PARK_VIEW, tViewStart );
 				Int64 tParticleStart, tParticleEnd;
 				tParticleStart = Clock_Ticks();
-#endif
 	     		TheParticleSystemManager->update();//LORENZEN AND WILCZYNSKI MOVED THIS FROM ITS NATIVE POSITION, ABOVE
 	                                           //FOR THE PURPOSE OF LETTING THE PARTICLE SYSTEM LOOK UP THE RENDER OBJECT"S
 	                                           //TRANSFORM MATRIX, WHILE IT IS STILL VALID (HAVING DONE ITS CLIENT TRANSFORMS
@@ -2978,14 +2978,16 @@ AGAIN:
 	                                           //REVOLUTIONARY!
 	                                           //-LORENZEN
 
-#ifdef DEBUG_LOGGING
 				tParticleEnd = Clock_Ticks();
+				GameEngine_notePark( PARK_PARTICLES, tParticleStart );
+#ifdef DEBUG_LOGGING
 				TheParticleUpdateMS = w3dElapsedMS( tParticleStart, tParticleEnd );
 #endif
 				takeReadsForRender( rendersThisPass() );
 				// R1: after the particles read the logic bones (Lorenzen's note above) and the sync point
 				// flushed the models' conditions, before anything renders and before a tick may start
 				smoothMotionApply();
+				GameEngine_notePark( PARK_READS, tParticleEnd );
 				pictureStart = Clock_Ticks();
 #ifdef DEBUG_LOGGING
 				tOverlapStart = Clock_Ticks();
@@ -3317,7 +3319,9 @@ AGAIN:
 
 	// LOGIC-THREAD.md phase 3, step 3b: the tick that ran beside the render hands the client its work here,
 	// after the restore, so the transforms it gives the models are the ones they keep
+	const Int64 tFlushStart = Clock_Ticks();
 	LogicThread::flushOverlap();
+	GameEngine_notePark( PARK_FLUSH, tFlushStart );
 
 #ifdef EXTENDED_STATS
 	if (DX8Wrapper::stats.m_disableOverhead) {

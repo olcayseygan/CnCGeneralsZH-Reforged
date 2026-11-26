@@ -487,7 +487,9 @@ void LogicThread::OverlapWindow::close( void )
 	if( s_overlapRunning )
 		waitOverlap();
 	// the tick no longer reads the manager's list and lookup
+	const LogicClock::time_point fileStart = LogicClock::now();
 	TheParticleSystemManager->friend_fileWindowSystems();
+	GameEngine_noteParkMS( PARK_PARTICLES, elapsedMS( fileStart, LogicClock::now() ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -628,7 +630,9 @@ void LogicThread::runTick( void )
 
 	// What the tick deferred on the drawables (phase 2, M1), the effects (M5) and the control bar (M2),
 	// here on the main thread, as after an inline tick.
+	const LogicClock::time_point flushStart = LogicClock::now();
 	flushAfterTick();
+	GameEngine_noteSerialTick( tickMS, elapsedMS( flushStart, LogicClock::now() ) );
 }
 
 //-------------------------------------------------------------------------------------------------

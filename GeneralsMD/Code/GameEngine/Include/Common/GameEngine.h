@@ -162,6 +162,35 @@ Bool GameEngine_catchupTickFitsPicture( Real passSoFarMS, Real lastTickMS );
 /** Milliseconds since this pass, or its last extra picture, began. */
 Real GameEngine_msSincePassStart( void );
 
+/** LOGIC-THREAD.md phase 7.0: where a pass's sync point goes, with the logic thread parked.  A part
+	adds its time with GameEngine_notePark( part, the Clock_Ticks() it started on ), and the frame-time
+	report averages each over the pictures with a tick and those without, as HEADLESS PARK.  What no part
+	names is the line's "other".  Two reads of the clock a part, no allocation, Release included. */
+enum ParkPart
+{
+	PARK_RADAR,				///< TheRadar->UPDATE
+	PARK_AUDIO,				///< TheAudio->UPDATE
+	PARK_INPUT,				///< the keyboard and the mouse, read and turned into messages
+	PARK_GUI,					///< the window manager's update
+	PARK_DRAWABLES,		///< the ghosts and the drawable walk, updateDrawable on each
+	PARK_DRAWREADS,		///< the second walk, what the draw asks of each drawable's object copied
+	PARK_DISPLAY,			///< the terrain visual's and the display's update
+	PARK_MESSAGES,		///< prepareOverlap: the message stream's translators, the network, the pacer
+	PARK_VIEW,				///< smooth motion's start and the views' update
+	PARK_PARTICLES,		///< the particle manager's update, and filing the window's new systems at its close
+	PARK_READS,				///< takeReadsForRender and smooth motion's apply
+	PARK_FLUSH,				///< flushOverlap: the tick beside the render handing the client its work
+	PARK_UI,					///< after the draw: the display strings, the shell, the in-game interface
+	PARK_COUNT
+};
+void GameEngine_notePark( ParkPart part, Int64 start );
+void GameEngine_noteParkMS( ParkPart part, Real ms );
+
+/** A tick runTick ran on the logic thread with the main thread waiting (headless, a catch-up tick): its
+	length as the logic thread timed it and the flush after it.  The pass charges both, with the capture
+	and the handoff, to its logic time, so HEADLESS LOGICTIME is more than the tick there. */
+void GameEngine_noteSerialTick( Real tickMS, Real flushMS );
+
 /** A rate sampled every half second, averaged, and the whole number written on screen for it. */
 struct RateReading
 {

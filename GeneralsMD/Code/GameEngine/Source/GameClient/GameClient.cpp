@@ -815,23 +815,27 @@ void GameClient::update( void )
 	TheAnim2DCollection->UPDATE();
 
 	// update the keyboard
+	Int64 parkStart = Clock_Ticks();
 	if( TheKeyboard )
 	{
 		TheKeyboard->UPDATE();
 		TheKeyboard->createStreamMessages();
 
 	}  // end if
+	GameEngine_notePark( PARK_INPUT, parkStart );
 
 	// Update the Eva stuff
 	TheEva->UPDATE();
 
 	// update the mouse
+	parkStart = Clock_Ticks();
 	if( TheMouse )
 	{
 		TheMouse->UPDATE();
 		TheMouse->createStreamMessages();
 
 	}  // end if
+	GameEngine_notePark( PARK_INPUT, parkStart );
 	
 
   if (TheInGameUI->isCameraTrackingDrawable())
@@ -879,7 +883,9 @@ void GameClient::update( void )
 
 	// update the window system itself
 	{
+		parkStart = Clock_Ticks();
 		TheWindowManager->UPDATE();
+		GameEngine_notePark( PARK_GUI, parkStart );
 	}
 
 	// update the video player
@@ -917,6 +923,7 @@ void GameClient::update( void )
 	freezeTime = freezeTime || (lastFrame == m_frame);
 	lastFrame = m_frame;
 
+	parkStart = Clock_Ticks();
 	if (!freezeTime)
 	{
 		Int numNonLocalPlayers=0;
@@ -1016,10 +1023,12 @@ void GameClient::update( void )
 			draw = next;
 		}
 	}
+	GameEngine_notePark( PARK_DRAWABLES, parkStart );
 
 	// LOGIC-THREAD.md phase 3: what the draw below asks of the shroud, asked here, on every pass and
 	// frozen time included, as the draw asked it.  The walk above has filled the cache for this player,
 	// so this reads it; the draw no longer calls into the partition beside a tick.
+	parkStart = Clock_Ticks();
 	for( Drawable *draw = m_drawableList; draw; draw = draw->getNextDrawable() )
 	{
 		Object *object = draw->getObject();
@@ -1074,6 +1083,7 @@ void GameClient::update( void )
 		}
 		draw->setShroudForDraw( status, FALSE );
 	}
+	GameEngine_notePark( PARK_DRAWREADS, parkStart );
 
 	// what a Turkiye radar paints in the fog, laid for the draw below from the walk above: from
 	// InGameUI::update, after the draw, a ring stayed one picture under a unit that walked into sight
@@ -1089,6 +1099,7 @@ void GameClient::update( void )
 	}  // end if
 
 	// update the terrain visuals
+	parkStart = Clock_Ticks();
 	{
 		TheTerrainVisual->UPDATE();
 	}
@@ -1097,6 +1108,7 @@ void GameClient::update( void )
 	{
 		TheDisplay->UPDATE();
 	}
+	GameEngine_notePark( PARK_DISPLAY, parkStart );
 
 	{
 		USE_PERF_TIMER(GameClient_draw)
@@ -1118,7 +1130,9 @@ void GameClient::update( void )
 #endif
 			// LOGIC-THREAD.md phase 3, step 3b: the message stream and the pacer run here, so a
 			// due tick can go to the logic thread when the draw's sync point is done
+			parkStart = Clock_Ticks();
 			LogicThread::prepareOverlap();
+			GameEngine_notePark( PARK_MESSAGES, parkStart );
 			/* -directorrecord's corner window at the lower right, a second action off the picture, is
 				 drawn first, for the recording only and never presented, then the frame everybody sees.
 				 W3D's clock stands still for every draw after the first on one client frame, so nothing
@@ -1152,14 +1166,17 @@ void GameClient::update( void )
 			// the same bookkeeping a rendered run does, on a run that has no picture.  The same seed
 			// ends with 138 systems instead of 26,811, and the run takes 19.1s against 18.8 and 19.0.
 			//
+			parkStart = Clock_Ticks();
 			if( TheParticleSystemManager )
 				TheParticleSystemManager->update();
+			GameEngine_notePark( PARK_PARTICLES, parkStart );
 			// The light pulses are the same story: only the render faded and parked them, so a headless
 			// match kept every muzzle flash of the match switched on, and each new one walked them all.
 			TheDisplay->stepDynamicLights();
 		}
 	}
 
+	parkStart = Clock_Ticks();
 	{
 		// let display string factory handle its update
 		TheDisplayStringManager->update();
@@ -1171,9 +1188,10 @@ void GameClient::update( void )
 	}
 
 	{
-		// update the in game UI 
+		// update the in game UI
 		TheInGameUI->UPDATE();
 	}
+	GameEngine_notePark( PARK_UI, parkStart );
 }  // end update
 
 /** -----------------------------------------------------------------------------------------------

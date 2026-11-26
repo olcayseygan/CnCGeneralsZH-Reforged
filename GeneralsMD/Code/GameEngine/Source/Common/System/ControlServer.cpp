@@ -49,6 +49,7 @@
 #include "GameClient/GadgetComboBox.h"
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GadgetSlider.h"
+#include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GUICallbacks.h"		// ToggleQuitMenu, for quitmenu
@@ -1035,7 +1036,8 @@ static void describeUiWindow( std::string &out, GameWindow *window, Int parent, 
 	out += piece;
 	appendJsonString( out, uiWindowName( window ) );
 
-	const UnicodeString text = window->winGetText();
+	// an entry keeps what was typed in its own string, not in the window's text
+	const UnicodeString text = BitTest( window->winGetStyle(), GWS_ENTRY_FIELD ) ? GadgetTextEntryGetText( window ) : window->winGetText();
 	if (!text.isEmpty())
 	{
 		Int lineW = 0, lineH = 0, wrapW = 0, wrapH = 0;
@@ -1180,7 +1182,9 @@ static GameWindow *uiFindWindow( const char *name, Int *x, Int *y, Bool offset )
 	return window;
 }
 
-static void appendUiMouseButton( GameMessage::Type type, Int x, Int y )
+/** A mouse message the way Mouse::createStreamMessages builds one: the pixel and the modifiers, and for a
+	button the time too (0, which every click-or-drag test reads as a quick click). */
+static void appendUiMouseButton( GameMessage::Type type, Int x, Int y, Bool button = TRUE )
 {
 	ICoord2D pixel;
 	pixel.x = x;
@@ -1188,10 +1192,11 @@ static void appendUiMouseButton( GameMessage::Type type, Int x, Int y )
 	GameMessage *msg = TheMessageStream->appendMessage( type );
 	msg->appendPixelArgument( pixel );
 	msg->appendIntegerArgument( KEY_STATE_NONE );
-	msg->appendIntegerArgument( 0 );
+	if (button)
+		msg->appendIntegerArgument( 0 );
 }
 
-/* uitree, uihit, uiclick, uirclick, uihover, uiscroll, uirow and uitype: the shell's windows for a
+/* uitree, uihit, uiclick, uiclickat, uirclick, uihover, uiscroll, uirow and uitype: the shell's windows for a
 	 script that clicks every control and checks what happened (Tools/ui_walk.py).  The clicks, the wheel
 	 and the pointer go down the message stream the way Mouse.cpp sends a real one, so a modal box, a
 	 captured pointer or an open drop-down takes them exactly as it would take the player's; uihit asks
@@ -1245,6 +1250,26 @@ static Bool handleUiCommand( const AsciiString &command )
 		return TRUE;
 	}
 
+	// uiclickat <x> <y>: uiclick at a screen pixel, for a list's row (uirow says where) or a drawn screen's part
+	if (strncmp( line, "uiclickat ", 10 ) == 0)
+	{
+		Int x = 0, y = 0;
+		if (sscanf( line + 10, "%d %d", &x, &y ) != 2)
+		{
+			replyMembers( FALSE, "uiclickat", "\"error\":\"uiclickat <x> <y>\"" );
+			return TRUE;
+		}
+		if (TheMouse)
+			TheMouse->setPosition( x, y );
+		std::string members( "\"at\":" );
+		appendUiHit( members, x, y );
+		appendUiMouseButton( GameMessage::MSG_RAW_MOUSE_POSITION, x, y, FALSE );
+		appendUiMouseButton( GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN, x, y, TRUE );
+		appendUiMouseButton( GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP, x, y, TRUE );
+		replyMembers( TRUE, "uiclickat", members.c_str() );
+		return TRUE;
+	}
+
 	// uiclick|uirclick|uihover|uiscroll <name> ...: the window's centre, or <dx> <dy> from its corner
 	const Bool isClick = strncmp( line, "uiclick ", 8 ) == 0;
 	const Bool isRightClick = strncmp( line, "uirclick ", 9 ) == 0;
@@ -1274,14 +1299,7 @@ static Bool handleUiCommand( const AsciiString &command )
 			TheMouse->setPosition( x, y );
 		/* the pointer arrives first, as a hand's does: the move lights the gadget up (GWM_MOUSE_ENTERING),
 			 and a check box or a combo takes a release only while it is lit */
-		{
-			ICoord2D pixel;
-			pixel.x = x;
-			pixel.y = y;
-			GameMessage *move = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_POSITION );
-			move->appendPixelArgument( pixel );
-			move->appendIntegerArgument( KEY_STATE_NONE );
-		}
+		appendUiMouseButton( GameMessage::MSG_RAW_MOUSE_POSITION, x, y, FALSE );
 		if (isClick || isRightClick)
 		{
 			appendUiMouseButton( isClick ? GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN : GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN, x, y );

@@ -266,6 +266,8 @@ public:
 	virtual void setFreeCameraPose( const Coord3D *eye, Real heading, Real tilt, Real roll = 0.0f );
 	virtual void setFreeCameraScripted( Bool scripted ) { m_freeCameraScripted = scripted; }
 	virtual void getFreeCameraPose( Coord3D *eye, Real *heading, Real *tilt ) const;
+	virtual void setFreeCameraFov( Real angle );
+	virtual Real getFreeCameraFov( void ) const;
 	virtual void setFreeCameraKeys( UnsignedInt keys ) { m_freeCameraKeys = keys; }
 
 
@@ -293,6 +295,7 @@ private:
 	Real m_freeCameraHeading;												///< radians, 0 looks along +x
 	Real m_freeCameraTilt;													///< radians, 0 is level, up positive
 	Real m_freeCameraRoll;													///< radians, positive drops the right side of the picture
+	Real m_freeCameraFov;														///< radians, horizontal; 0 is the player's lens
 	Bool m_freeCameraScripted;											///< a shot list flies it; keys and mouse do nothing
 	UnsignedInt m_freeCameraKeys;										///< View::FreeCameraKeys held
 	UnsignedInt m_freeCameraLastStep;								///< Clock_Milliseconds of the last flight step
@@ -367,6 +370,7 @@ private:
 	
 	Region2D m_cameraConstraint;										///< m_pos should be constrained to be within this area
 	Bool m_cameraConstraintValid;										///< if f, recalc cam constraints
+	IRegion2D m_cameraConstraintOpen;								///< the open view (screen less interface) the constraint was built for
 	Bool m_recalcCamera;														///< if t, rebuild the camera transform in the next render update
 	Bool m_isometricApplied;												///< the camera was last built isometric; the option differing rebuilds it
 

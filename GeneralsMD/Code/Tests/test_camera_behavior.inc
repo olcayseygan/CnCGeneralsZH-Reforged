@@ -182,6 +182,27 @@ TEST(camera_margin_allows_map_corners_but_bounds_large_pans)
 	}
 }
 
+TEST(camera_reach_stops_each_side_where_the_open_view_meets_the_map_edge)
+{
+	const Region3D map = {{0, 0, 0}, {3000, 2000, 100}};
+	// a bar over the bottom: the view sees 60 towards -y from the look point, 170 towards +y
+	Region2D reach;
+	reach.lo.x = 101; reach.hi.x = 101; reach.lo.y = 60; reach.hi.y = 170;
+	Region2D b = cameraBoundaryFromReach(map, reach);
+	CHECK_NEAR(b.lo.x, 101.0f, 0.0001f);
+	CHECK_NEAR(b.hi.x, 2899.0f, 0.0001f);
+	CHECK_NEAR(b.lo.y, 60.0f, 0.0001f);	// the bottom row comes up to the bar's edge
+	CHECK_NEAR(b.hi.y, 1830.0f, 0.0001f);
+
+	// a map narrower than the view on an axis centres the look point on it
+	const Region3D narrow = {{-500, 700, 0}, {-450, 730, 0}};
+	b = cameraBoundaryFromReach(narrow, reach);
+	CHECK_NEAR(b.lo.x, -475.0f, 0.0001f);
+	CHECK_NEAR(b.hi.x, -475.0f, 0.0001f);
+	CHECK_NEAR(b.lo.y, 715.0f, 0.0001f);
+	CHECK_NEAR(b.hi.y, 715.0f, 0.0001f);
+}
+
 TEST(camera_margin_preferences_load_and_rebuild_constraints)
 {
 	CHECK(bootOnce());

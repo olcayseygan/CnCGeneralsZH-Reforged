@@ -95,6 +95,8 @@
 #include "GameClient/ScoreScreenLayout.h"
 #include "GameClient/UIStyle.h"
 #include "GameLogic/AI.h"	// aiPersonalityName, for a computer seat's card
+#include "GameLogic/ApocalypseDirector.h"	// the nights' phases, for its board
+#include "GameLogic/DirectStrikeDirector.h"	// the wave's tick, income and life, for its board
 #include "GameLogic/FPUControl.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/GUIUtil.h"
@@ -194,95 +196,173 @@ void LoadScreen::update( Int percent )
 
 // LoadScreenBoard ////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
-/* A match's load, skirmish, LAN, online or replay, as one board drawn in code: a card per player with
-	 the general's portrait or the side's crest, the name in the player's colour, the army and, for a
-	 computer seat, its level and personality; the teams in two columns facing each other across the
-	 map, or the players shared between the columns in a free-for-all; the map's name, its preview
-	 with the start spots, a tip and the load's progress along the bottom.  In a network game every
-	 human's card carries his own bar.
+/* A match's load, skirmish, LAN, online or replay, as one board in the menu language
+	 (README-loading.md beside loading.py, the wrapper's experiments/proofs/2026-11-24/screens/loading):
+	 frame A's panel on glass over the map's preview; the teams as two wings facing each other across the
+	 map, a head a team with its ready count and a row a player (a poster for one alone, a card while the
+	 wing has room, a line past that); the map with its start spots, the rules and the watchers between
+	 them; a tip and the load bar along the foot.  A campaign mission and a saved campaign game load on the
+	 same frame over the mission's picture, and a map transfer on the board's rows.
 
-	 Everything is laid out once, when the board is made, against a 1920x1080 picture scaled to the
-	 screen; a pass draws flat fills, the images the lobby and the challenge menu already load (the
-	 portraits share one 512 page, the crests another) and display strings made up front.  The
-	 colours, the type and the boxes are the front end's (UIStyle.h), so the board reads as the
-	 staging room it came from. */
+	 Everything is laid out once on the 1920x1080 board (LoadScreenLayout.h) and scaled to the screen by
+	 its smaller axis; a pass draws fills, the portraits and display strings made up front. */
 
-/// the picture the boxes below are given for; another screen scales them by its smaller axis
-static const Real BOARD_WIDTH = 1920.0f;
-static const Real BOARD_HEIGHT = 1080.0f;
 static const UnsignedInt BOARD_TIP_MILLISECONDS = 8000;
-/// a middle dot between spaces, spelled out (the source is read in the machine's code page), between a
-/// computer seat's level and personality; the header joins its parts with UIStyle::HEADER_JOINER
-static const WideChar BOARD_SEPARATOR[] = { ' ', ' ', ' ', 0x00B7, ' ', ' ', ' ', 0 };
-/// the same dot between a one-line card's name and general
-static const WideChar BOARD_LINE_SEPARATOR[] = { ' ', 0x00B7, ' ', 0 };
-/// a column of cards, and the gap between a column and the middle's map and facts
-static const Real BOARD_COLUMN_WIDTH = 600.0f;
-static const Real BOARD_MIDDLE_GAP = 32.0f;
-/// a card's room between its portrait and its words
-static const Real BOARD_CARD_TEXT_GAP = 24.0f;
-/// the rooms' start spot button against their map preview (SkirmishGameOptionsMenu.wnd), so the spots
-/// keep the room's size on a preview of another size
-static const Int LOBBY_START_SPOT = 28;
-static const Int LOBBY_MAP_PREVIEW = 410;
+/// "  ·  ", the middle dot spelled out (the source is read in the machine's code page), between a
+/// general's persona and his strategy, and a computer seat's level and personality
+static const WideChar BOARD_DOT[] = { ' ', ' ', 0x00B7, ' ', ' ', 0 };
+/// the type at 1080 (README-loading.md); nothing is under BOARD_CAPS, 9.3 pixels at 720
+enum
+{
+	BOARD_TITLE = 40,				///< the title, VS, a card head's ready figure
+	BOARD_HEAD = 22,				///< TEAM n over cards
+	BOARD_NAME = 24,				///< a card's name and figure, the wordmark, the load bar's words
+	BOARD_SUBTITLE = 20,
+	BOARD_BODY = 18,
+	BOARD_SMALL = 15,				///< a line row's general, personality and the night clocks
+	BOARD_CAPS = 14,				///< the tracked capitals: READY, RULES, TIP, a phase
+	BOARD_UNKNOWN = 72			///< the "?" in a hidden map's well
+};
+static const Real BOARD_TITLE_TRACKING = 4.8f;
+static const Real BOARD_BAR_TRACKING = 2.0f;
+static const Color BOARD_SHADOW = GameMakeColor( 0, 0, 0, 160 );
 
-/// one player's card
+static Int boardStringWidth( DisplayString *string )
+{
+	Int width, height;
+	string->getSize( &width, &height );
+	return width;
+}
+
+static Int boardStringHeight( DisplayString *string )
+{
+	Int width, height;
+	string->getSize( &width, &height );
+	return height;
+}
+
+/** The load bar: a dark well with the three-line edge, an EDGE fill and its lit leading edge while it
+	* moves, the words tracked in its middle.  The board's foot and the Challenge load share it. */
+static void boardDrawLoadBar( const IRegion2D &bar, Int percent, const UnicodeString &words, GameFont *font, Real tracking )
+{
+	const Int width = bar.hi.x - bar.lo.x;
+	const Int height = bar.hi.y - bar.lo.y;
+	TheDisplay->drawFillRect( bar.lo.x, bar.lo.y, width, height, GameMakeColor( 0, 0, 0, 150 ) );
+	const Int inset = 3;
+	const Int track = width - 2 * inset;
+	const Int filled = track * min( max( percent, 0 ), 100 ) / 100;
+	if( filled > 0 )
+		TheDisplay->drawFillRect( bar.lo.x + inset, bar.lo.y + inset, filled, height - 2 * inset, UIStyle::withAlpha( UIStyle::EDGE, 90 ) );
+	if( filled > 2 && filled < track )
+		UIStyle::litLine( bar.lo.x + inset + filled - 2, bar.lo.y + inset, 2, height - 2 * inset, UIStyle::EDGE_LIT );
+	UIStyle::litLine( bar.lo.x, bar.lo.y, width, 1, UIStyle::EDGE );
+	UIStyle::litLine( bar.lo.x, bar.hi.y - 1, width, 1, UIStyle::EDGE );
+	UIStyle::edge( bar.lo.x, bar.lo.y, width, height );
+	if( words.isEmpty() )
+		return;
+	const Int wordsWidth = UIStyle::trackedWidth( words, font, tracking );
+	UIStyle::drawTracked( words, font, ( bar.lo.x + bar.hi.x - wordsWidth ) / 2, ( bar.lo.y + bar.hi.y - font->height ) / 2, UIStyle::INK, tracking );
+}
+
+/// a start spot as the room marks it, the player's colour and his seat over it
+static void boardDrawDisc( Int middleX, Int middleY, Int radius, Color color, DisplayString *number )
+{
+	const Int size = 2 * radius;
+	LobbyStartSpotFill( middleX - radius, middleY - radius, size, size, color );
+	if( number == NULL )
+		return;
+	Int width, height;
+	number->getSize( &width, &height );
+	number->draw( middleX - width / 2, middleY - height / 2, LobbyTextColorOn( color ), BOARD_SHADOW );
+}
+
+/// m:ss
+static UnicodeString boardClock( Int seconds )
+{
+	UnicodeString words;
+	words.format( u"%d:%02d", max( seconds, 0 ) / 60, max( seconds, 0 ) % 60 );
+	return words;
+}
+
+/// a Direct Strike span on the wall clock at the match's speed, whole seconds (the mode tunes them in
+/// wall seconds at the native speed, DirectStrike_gameFrames)
+static Int boardDirectStrikeSeconds( UnsignedInt frames )
+{
+	return (Int)( ( frames + LOGICFRAMES_PER_SECOND / 2 ) / LOGICFRAMES_PER_SECOND );
+}
+
+/// a key's words with a trailing colon taken off, for a head ("Observers:" is a label elsewhere)
+static UnicodeString boardHeadWords( const char *key )
+{
+	UnicodeString words = TheGameText->fetch( key );
+	words.trim();
+	while( words.getLength() > 0 && words.getCharAt( words.getLength() - 1 ) == u':' )
+		words.removeLastChar();
+	return UIStyle::capitals( words );
+}
+
+/// one player's row
 struct BoardCard
 {
 	Int slot;
 	Color color;
-	Color nameColor;					///< the colour, lifted toward white where it is too dark to read on the panel
-	Int team;									///< the board's team, ScoreScreen_teamsFromAllies over the lobby's teams
-	Int column;								///< 0 left, 1 right
+	Int team;									///< an index into the board's teams
 	Int startSpot;						///< the start position the others may see, -1 when hidden
-	Int percent;							///< this player's own load, -1 on a card without a bar
-	Bool mirrored;						///< the right column's cards face left
-	const Image *emblem;			///< the general's portrait or the side's crest, NULL for a hidden or random side
-	const Image *crest;				///< the side's crest, a one-line card's emblem
+	Int percent;							///< his own load, -1 for a row without a channel
+	Bool ai;
+	Bool local;
+	Bool plainSide;						///< a side with no general, whose picture is small art
+	const Image *portrait;		///< NULL for a random or hidden side: a "?"
 	const Image *badge;				///< an online player's rank
-	UnicodeString nameWords;	///< the words whole; the strings below hold them fitted to the card
+	UnicodeString nameWords;
 	UnicodeString armyWords;
+	UnicodeString personaWords;
 	UnicodeString detailWords;
 	DisplayString *name;
 	DisplayString *army;
-	DisplayString *detail;		///< a computer seat's level and personality
-	DisplayString *percentText;
-	DisplayString *disc;			///< the seat number on the start spot disc, NULL where the map shows no spot of his
-	IRegion2D box;
+	DisplayString *persona;		///< "General Townes  ·  Laser Weaponry", NULL on a line row or a plain side
+	DisplayString *detail;		///< a computer's level and personality, NULL for a human or a plain computer
+	DisplayString *figure;		///< "81%"
+	DisplayString *disc;			///< his seat on his start spot, NULL where the map shows none of his
+	IRegion2D box;						///< on the 1080 board
+	LoadRowKind kind;
+	Bool zebra;
 };
 
-/// a team's band over its cards in a column, or the rule in its colour a crowded column keeps
-struct BoardBand
+/// a team's head over its rows in a wing
+struct BoardHead
 {
-	IRegion2D box;
+	IRegion2D box;						///< on the 1080 board
+	LoadHeadKind kind;
 	Color color;
-	Bool mirrored;
-	DisplayString *label;			///< "Team N", NULL for a rule
+	Int toward;								///< chevrons toward the middle: 1 right, -1 left, 0 none
+	UnicodeString words;			///< TEAM n, or SURVIVORS
+	std::vector< Int > counted;	///< the cards whose readiness it counts; empty for no count
 };
 
-/// a row of the facts box: the lobby's label, what it was set to
+/// a row of the rules, or of the nights panel
 struct BoardFact
 {
+	UnicodeString labelWords;	///< tracked capitals when capsLabel
 	DisplayString *label;
 	DisplayString *value;
+	Color labelColor;
+	Bool capsLabel;
+	Bool blood;								///< the Blood Moon's red rule at its left
 };
 
-/// where a card's parts stand across it, from its plan and its words
-struct BoardCardSpan
+/// a map transfer's row
+struct BoardTransfer
 {
-	Int emblemX;
-	Int textLeft;
-	Int textRight;
-	Int innerLeft;						///< the inner column: the disc, the percentage
-	Int innerRight;
-};
-
-/// one of the map's start spots, drawn as the room draws it
-struct BoardSpot
-{
-	ICoord2D pos;
-	Color color;							///< the player's on it, 0 for a spot open or hidden
-	DisplayString *number;		///< the player's seat, NULL with the colour
+	Int slot;
+	Color color;
+	Bool local;
+	Int percent;							///< -1 without a channel: the host, or a player who had the map
+	DisplayString *name;
+	DisplayString *state;
+	DisplayString *figure;
+	IRegion2D box;						///< on the 1080 board
+	Bool zebra;
 };
 
 class LoadScreenBoard
@@ -293,111 +373,155 @@ public:
 
 	/// lays the board out for this game and makes the window that draws it
 	GameWindow *create( GameInfo *game, const char *modeLabel, Bool cardBars );
-	/// a campaign mission's: the header, the briefing and the foot over the mission's own picture
+	/** A campaign mission's load, or a saved campaign game's: the header with the mission count, the
+		* briefing and the foot over the mission's own picture.  backdrop is that picture when the board
+		* stands on no window that shows it (parent NULL, a saved game's); without one it stands on the
+		* shell's dark. */
 	GameWindow *createMission( GameWindow *parent, const UnicodeString &title, const UnicodeString &subtitle,
-		const UnicodeString *briefing, Int briefingLines );
+		const UnicodeString *briefing, Int briefingLines, Int missionNumber, Int missionCount, const Image *backdrop );
+	/// a map transfer: every human on the board's rows with the state the network reports
+	GameWindow *createTransfer( GameInfo *game, const char *modeLabel );
 	void setBadge( Int slot, const Image *badge );
 	void setProgress( Int slot, Int percent );
 	void setLocalProgress( Int percent );
 	void setRejoinProgress( Int percent, Bool waitingForLog );
+	void setTransfer( Int slot, Int percent, const UnicodeString &state );
+	void setTransferFoot( const UnicodeString *file, const UnicodeString *timeout );
 
 private:
+	enum Kind { BOARD_MATCH, BOARD_MISSION, BOARD_TRANSFER };
+
 	static void drawWindow( GameWindow *window, WinInstanceData *instData );
-	void prepare( const UnicodeString &titleInCapitals, const UnicodeString &subtitle, Bool titleIsName );
+	void prepare( const UnicodeString &titleInCapitals, const UnicodeString &subtitle, Bool titleIsName, const char *tipKey );
 	GameWindow *makeWindow( GameWindow *parent );
 	void draw( void );
+	void drawHeader( void );
+	void drawFoot( void );
 	void drawMatch( void );
-	void drawBriefing( void );
-	void drawCard( const BoardCard &card );
-	void drawTip( void );
-	Int scaled( Real pixels ) const { return REAL_TO_INT( pixels * m_scale + 0.5f ); }
+	void drawMission( void );
+	void drawTransfer( void );
+	void drawHead( const BoardHead &head );
+	void drawRow( const BoardCard &card );
+	void drawLines( const BoardCard &card, Int left, Int right, Int middle );
+	void drawPortrait( const BoardCard &card, const IRegion2D &box, Bool lineRow );
+	void drawChannel( Int left, Int right, Int middle, Int height, Int percent, Color color );
+	void drawSection( const UnicodeString &words, Int left, Int right, Int top );
+	void drawMiddle( void );
+	void drawNights( Int top );
+	void drawFacts( const std::vector< BoardFact > &facts, Int top, Int pitch );
+	void cardFrame( const BoardCard &card, IRegion2D &portrait, Int &textLeft, Int &textRight, Int &textMiddle ) const;
+	void fitCard( BoardCard &card );
+	Int cardLast( const BoardCard &card ) const;
+	void addFact( std::vector< BoardFact > &facts, const UnicodeString &label, const UnicodeString &value, Color labelColor = UIStyle::MUTED, Bool caps = FALSE );
+	void refreshLabel( void );
+	Int scaled( Real at1080 ) const { return REAL_TO_INT( at1080 * m_fit.scale + 0.5f ); }
+	Int X( Real at1080 ) const { return m_fit.x + scaled( at1080 ); }
+	Int Y( Real at1080 ) const { return m_fit.y + scaled( at1080 ); }
+	IRegion2D onScreen( const IRegion2D &at1080 ) const;
+	IRegion2D onScreen( Int left, Int top, Int right, Int bottom ) const;
+	GameFont *font( Int px1080, Bool bold = FALSE ) const { return UIStyle::menuFont( px1080, bold ); }
 	DisplayString *text( const UnicodeString &words, GameFont *font );
 	BoardCard *cardFor( Int slot );
-	void cardSpan( const BoardCard &card, BoardCardSpan &span );
-	void fitCard( BoardCard &card );
-	void addFact( const char *label, const UnicodeString &value, Int width );
-	void setPercentLabel( Int percent );
+	UnicodeString tipText( Int number, Bool *exists = NULL ) const;
 
-	Real m_scale;
-	Int m_left;								///< the 16:9 picture's corner, inset on a squarer screen
-	Int m_top;
+	Kind m_kind;
+	UIStyle::BoardFit m_fit;
 	Int m_width;							///< the screen
 	Int m_height;
 	std::vector< BoardCard > m_cards;
-	std::vector< BoardBand > m_bands;
-	std::vector< BoardSpot > m_spots;
+	std::vector< BoardHead > m_heads;
 	std::vector< BoardFact > m_facts;
+	std::vector< BoardFact > m_nights;
+	std::vector< BoardTransfer > m_transfers;
 	std::vector< DisplayString * > m_strings;
-	LoadCardPlan m_plan[ 2 ];	///< each column's cards
-	GameFont *m_nameFont;
-	GameFont *m_lineNameFont;	///< a name on a small one-line card
-	GameFont *m_armyFont;
-	GameFont *m_detailFont;
-	GameFont *m_smallFont;		///< the percentage, the facts, a band's label
-	Bool m_mission;
-	DisplayString *m_briefingHead;
-	std::vector< DisplayString * > m_briefing;
-	IRegion2D m_briefingBox;
-	DisplayString *m_title;
-	DisplayString *m_subtitle;
-	DisplayString *m_wordmark[ 2 ];
-	DisplayString *m_centerLabel;
-	ICoord2D m_centerLabelPos;
-	DisplayString *m_observers;
-	ICoord2D m_observersPos;
+	std::vector< ICoord2D > m_spotAt;		///< a start spot on the 1080 board, the card's index beside it
+	std::vector< Int > m_spotCard;
+	LoadMiddlePlan m_middle;
+	Bool m_middleShown;
+	Bool m_wellShown;						///< a hidden or generated map: the well, not the preview
+	const Image *m_mapImage;
+	const Image *m_backdrop;				///< behind the panel: the map's preview, a saved game's mission picture
+	Bool m_ground;								///< nothing of a window's shows behind: the shell's dark under the backdrop
+	DisplayString *m_vs;
 	DisplayString *m_unknown;
 	DisplayString *m_unknownSmall;
-	DisplayString *m_lineSeparator;
-	DisplayString *m_fullPercent;		///< "100%", the room a card keeps for its percentage
-	const Image *m_mapImage;
-	IRegion2D m_mapBox;
-	IRegion2D m_mapDrawn;
-	IRegion2D m_factsBox;
-	Int m_factPitch;
-	Int m_spotSize;						///< a start spot on the map and on a card
-	DisplayString *m_tipLabel;
+	DisplayString *m_wellWords;
+	DisplayString *m_observers;
+	UnicodeString m_rulesHead;
+	UnicodeString m_observersHead;
+	UnicodeString m_nightsHead;
+	Int m_nightSeconds[ 4 ];
+	UnicodeString m_nightWords[ 4 ];
+	DisplayString *m_nightClocks[ 4 ];
+	UnicodeString m_titleWords;
+	DisplayString *m_subtitle;
+	DisplayString *m_wordmark[ 2 ];
+	Bool m_showWordmark;
+	UnicodeString m_readyWords;
+	DisplayString *m_lineFigure;		///< "100%" in a line row's figure type, the room a figure keeps
+	DisplayString *m_cardFigure;
+	// the mission's
+	UnicodeString m_missionOf;
+	Int m_missionNumber;
+	Int m_missionCount;
+	UnicodeString m_briefingHead;
+	std::vector< DisplayString * > m_briefing;
+	Int m_briefingBottom;					///< on the 1080 board
+	// the transfer's
+	UnicodeString m_playersHead;
+	UnicodeString m_statusHead;
+	DisplayString *m_transferFile;
+	DisplayString *m_transferTimeout;
+	// the foot
+	const char *m_tipKey;					///< GUI:LoadTip, or a mode's own tips; NULL for none
+	UnicodeString m_tipLabel;
 	DisplayString *m_tip;
-	IRegion2D m_tipBox;
-	Int m_tipTextLeft;
-	std::vector< Int > m_tips;	///< the GUI:LoadTip numbers that fit in two lines here
+	std::vector< Int > m_tips;		///< the tips that fit on one line
 	Int m_tipAt;
 	UnsignedInt m_tipSince;
 	UnicodeString m_progressFormat;
-	DisplayString *m_percent;
-	DisplayString *m_waiting;
+	UnicodeString m_label;
 	Int m_localPercent;
-	Int m_rejoinShown;				///< the rejoin bar's last value, -1 for the log wait, -2 before the first
+	Int m_rejoinShown;						///< the rejoin bar's last value, -1 for the log wait, -2 before the first
 	Bool m_network;
+	Bool m_rejoining;
 };
 
 LoadScreenBoard::LoadScreenBoard( void )
 {
+	m_kind = BOARD_MATCH;
 	m_width = TheDisplay->getWidth();
 	m_height = TheDisplay->getHeight();
-	m_scale = min( m_width / BOARD_WIDTH, m_height / BOARD_HEIGHT );
-	m_left = ( m_width - scaled( BOARD_WIDTH ) ) / 2;
-	m_top = ( m_height - scaled( BOARD_HEIGHT ) ) / 2;
-	m_mission = FALSE;
-	m_briefingHead = NULL;
-	m_title = m_subtitle = m_centerLabel = m_observers = m_unknown = m_unknownSmall = NULL;
-	m_lineSeparator = m_fullPercent = NULL;
-	m_wordmark[ 0 ] = m_wordmark[ 1 ] = NULL;
-	m_nameFont = UIStyle::font( UIStyle::TEXT_STRONG, TRUE );
-	m_lineNameFont = UIStyle::readableFont( UIStyle::TEXT_BODY, TRUE );
-	m_armyFont = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	// the small type grows on a small screen until its capitals reach the floor
-	m_detailFont = UIStyle::readableFont( UIStyle::TEXT_SMALL );
-	m_smallFont = UIStyle::readableFont( UIStyle::TEXT_SMALL, TRUE );
-	m_spotSize = 1;
+	m_fit = UIStyle::boardFit( m_width, m_height );
+	m_middleShown = FALSE;
+	m_wellShown = FALSE;
 	m_mapImage = NULL;
-	m_factPitch = 0;
-	m_tipLabel = m_tip = m_percent = m_waiting = NULL;
-	m_tipTextLeft = 0;
+	m_backdrop = NULL;
+	m_ground = TRUE;
+	m_vs = m_unknown = m_unknownSmall = m_wellWords = m_observers = NULL;
+	for( Int each = 0; each < 4; each++ )
+	{
+		m_nightSeconds[ each ] = 0;
+		m_nightClocks[ each ] = NULL;
+	}
+	m_subtitle = NULL;
+	m_wordmark[ 0 ] = m_wordmark[ 1 ] = NULL;
+	m_showWordmark = TRUE;
+	m_lineFigure = m_cardFigure = NULL;
+	m_missionNumber = m_missionCount = 0;
+	m_briefingBottom = 0;
+	m_transferFile = m_transferTimeout = NULL;
+	m_tipKey = "GUI:LoadTip";
+	m_tip = NULL;
 	m_tipAt = 0;
 	m_tipSince = 0;
 	m_localPercent = 0;
 	m_rejoinShown = -2;
 	m_network = FALSE;
+	m_rejoining = FALSE;
+	m_middle.vsTop = m_middle.nightsTop = m_middle.rulesTop = m_middle.observersTop = -1;
+	m_middle.rulePitch = m_middle.bottom = 0;
+	m_middle.map.lo.x = m_middle.map.lo.y = m_middle.map.hi.x = m_middle.map.hi.y = 0;
 }
 
 LoadScreenBoard::~LoadScreenBoard( void )
@@ -425,45 +549,67 @@ BoardCard *LoadScreenBoard::cardFor( Int slot )
 	return NULL;
 }
 
-static Int stringWidth( DisplayString *string )
+IRegion2D LoadScreenBoard::onScreen( Int left, Int top, Int right, Int bottom ) const
 {
-	Int width, height;
-	string->getSize( &width, &height );
-	return width;
+	IRegion2D box;
+	box.lo.x = X( (Real)left );
+	box.lo.y = Y( (Real)top );
+	box.hi.x = X( (Real)right );
+	box.hi.y = Y( (Real)bottom );
+	return box;
 }
 
-static Int stringHeight( DisplayString *string )
+IRegion2D LoadScreenBoard::onScreen( const IRegion2D &at1080 ) const
 {
-	Int width, height;
-	string->getSize( &width, &height );
-	return height;
+	return onScreen( at1080.lo.x, at1080.lo.y, at1080.hi.x, at1080.hi.y );
 }
 
-/** A start spot as the room draws it: EA's ring (missing art draws no ring), and on a spot the
-	* others may see, the player's colour in its middle and his seat number over it.  The map's spots
-	* and a card's disc are the same mark. */
-static void drawStartSpot( Int x, Int y, Int size, Color color, DisplayString *number )
+/** Tip n of the board's tips (GUI:LoadTip1, GUI:LoadTip2, ..., or a mode's own); exists says whether
+	* there is one.  A mode's tip that names a span takes it on the wall clock at the match's speed, so
+	* it says what the player will see at any speed. */
+UnicodeString LoadScreenBoard::tipText( Int number, Bool *exists ) const
 {
-	const Image *ring = TheMappedImageCollection->findImageByName( "PlayerStart" );
-	if( ring )
-		TheDisplay->drawImage( ring, x, y, x + size, y + size );
-	if( number == NULL )
-		return;
-	LobbyStartSpotFill( x, y, size, size, color );
-	number->draw( x + ( size - stringWidth( number ) ) / 2, y + ( size - stringHeight( number ) ) / 2,
-		LobbyTextColorOn( color ), 0 );
-}
-
-/** A player's own load on his card, "81%", in the language's own order ("%81"). */
-static UnicodeString playerPercent( Int percent )
-{
-	UnicodeString words;
-	words.format( TheGameText->fetch( "GUI:LoadPlayerPercent" ), percent );
+	if( m_tipKey == NULL )
+	{
+		if( exists )
+			*exists = FALSE;
+		return UnicodeString::TheEmptyString;
+	}
+	AsciiString label;
+	label.format( "%s%d", m_tipKey, number );
+	// probed first: the count runs one past the last tip, and fetching that one logs it as missing text
+	const Bool there = UIStyle::hasText( label.str() );
+	if( exists )
+		*exists = there;
+	if( !there )
+		return UnicodeString::TheEmptyString;
+	UnicodeString words = TheGameText->fetch( label );
+	Int seconds = -1;
+	if( strcmp( m_tipKey, "GUI:LoadTipDirectStrike" ) == 0 )
+	{
+		if( number == 1 )
+			seconds = boardDirectStrikeSeconds( DIRECTSTRIKE_TICK_FRAMES );
+		else if( number == 2 )
+			seconds = boardDirectStrikeSeconds( DIRECTSTRIKE_LIFESPAN_FRAMES );
+	}
+	else if( strcmp( m_tipKey, "GUI:LoadTipApocalypse" ) == 0 )
+	{
+		if( number == 2 )
+			seconds = LoadScreen_wallSeconds( APOCALYPSE_TELEGRAPH_SECONDS, GAME_SPEED_PERCENT );
+		else if( number == 3 )
+			seconds = LoadScreen_wallSeconds( APOCALYPSE_FIRST_WAVE_SECONDS, GAME_SPEED_PERCENT );
+	}
+	if( seconds >= 0 )
+	{
+		UnicodeString formatted;
+		formatted.format( words, seconds );
+		words = formatted;
+	}
 	return words;
 }
 
-/** The starting money as the header and the facts say it. */
-static UnicodeString cashText( const GameInfo *game )
+/** The starting money as the header and the rules say it. */
+static UnicodeString boardCash( const GameInfo *game )
 {
 	const Money &cash = game->getStartingCash();
 	if( cash.isUnlimited() )
@@ -473,46 +619,26 @@ static UnicodeString cashText( const GameInfo *game )
 	return words;
 }
 
-/** The side's crest from the lobby: the three 144 pixel logos on one page.  A side on none of the
-	* three brings its own lobby glyph or nothing. */
-static const Image *sideCrest( const PlayerTemplate *side )
+/** The game speed as the lobby words it. */
+static UnicodeString boardSpeed( void )
 {
-	const AsciiString base = side->getBaseSide();
-	if( base.compareNoCase( "USA" ) == 0 )
-		return TheMappedImageCollection->findImageByName( "SAFactionLogo144_US" );
-	if( base.compareNoCase( "China" ) == 0 )
-		return TheMappedImageCollection->findImageByName( "SNFactionLogo144_China" );
-	if( base.compareNoCase( "GLA" ) == 0 )
-		return TheMappedImageCollection->findImageByName( "SUFactionLogo144_GLA" );
-	return side->getGeneralImage();
-}
-
-/** A general's face from the challenge menu, all ten on one page; a plain side shows its crest. */
-static const Image *sideEmblem( const PlayerTemplate *side )
-{
-	const GeneralPersona *general = TheChallengeGenerals->getGeneralByTemplateName( side->getName() );
-	if( general && general->getBioPortraitSmall() )
-		return general->getBioPortraitSmall();
-	return sideCrest( side );
-}
-
-/** Tip number n of the string files' GUI:LoadTip1, GUI:LoadTip2, ...; exists says whether there is one. */
-static UnicodeString tipText( Int number, Bool *exists = NULL )
-{
+	Int speed = 0;
+	for( Int each = 0; each < PLAYER_GAME_SPEED_COUNT; each++ )
+	{
+		if( PLAYER_GAME_SPEED_PERCENTS[ each ] == GAME_SPEED_PERCENT )
+			speed = each;
+	}
 	AsciiString label;
-	label.format( "GUI:LoadTip%d", number );
-	// probed first: the count runs one past the last tip, and fetching that one logs it as missing text
-	const Bool there = UIStyle::hasText( label.str() );
-	if( exists )
-		*exists = there;
-	return there ? TheGameText->fetch( label ) : UnicodeString::TheEmptyString;
+	label.format( "GUI:GameSpeedMissions%d", speed );
+	return TheGameText->fetch( label );
 }
 
 GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool cardBars )
 {
+	m_kind = BOARD_MATCH;
 	m_network = cardBars;
-	GameFont *centerFont = UIStyle::titleFont( UIStyle::TEXT_DISPLAY );
-	GameFont *observerFont = UIStyle::readableFont( UIStyle::TEXT_SMALL );
+	const Bool directStrike = IsDirectStrikeMap( game->getMap() );
+	const Bool apocalypse = !directStrike && IsApocalypseMap( game->getMap() );
 
 	// a watcher, a replay's viewer among them, sees every side as it is; a player sees what the
 	// lobby let him see of his enemies
@@ -521,13 +647,15 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 		|| game->getConstSlot( game->getLocalSlotNum() )->getOriginalPlayerTemplate() == PLAYERTEMPLATE_OBSERVER;
 	// a ranked Quick Match, and any match on a generated map, gives a player neither the map nor any
 	// start spot, his own included, so the board never tells where the game put anyone
-	const Bool mapHidden = ( game->getStartShrouded() || isGeneratedMapPath( game->getMap() ) ) && !seeAll;
+	const Bool generated = isGeneratedMapPath( game->getMap() );
+	const Bool mapHidden = ( game->getStartShrouded() || generated ) && !seeAll;
 	// a seat coming back to a match under way sees the sides and colours the match is played with, and no
-	// bar on a card: the others are not loading, they are in the match (the wide button carries the catch-up)
-	const Bool rejoining = TheNetwork && TheNetwork->isRejoining();
-	const Bool realSides = seeAll || rejoining;
+	// channel on a row: the others are not loading, they are in the match (the bar carries the catch-up)
+	m_rejoining = TheNetwork && TheNetwork->isRejoining();
+	const Bool realSides = seeAll || m_rejoining;
+	const Int localSlot = TheGameLogic->isInReplayGame() ? -1 : game->getLocalSlotNum();
 
-	// a card a player, in the order the lobby lists them.  Someone watching from this screen without a
+	// a row a player, in the order the lobby lists them.  Someone watching from this screen without a
 	// seat (an -observer match) is a watcher too, under the name the skirmish room would have given
 	// him; a replay's viewer is not one of the match's
 	std::vector< UnicodeString > observerNames;
@@ -552,49 +680,53 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 		card.slot = i;
 		const Int colorIndex = realSides ? slot->getColor() : slot->getApparentColor();
 		card.color = TheMultiplayerSettings->getColor( colorIndex )->getColor();
-		card.nameColor = UIStyle::readable( card.color );
 		card.team = 0;
-		card.column = 0;
 		card.startSpot = mapHidden ? -1 : seeAll ? slot->getStartPos() : slot->getApparentStartPos();
-		card.percent = cardBars && slot->isHuman() && !rejoining ? 0 : -1;
-		card.mirrored = FALSE;
+		card.percent = cardBars && slot->isHuman() && !m_rejoining ? 0 : -1;
+		card.ai = slot->isAI();
+		card.local = i == localSlot;
+		card.plainSide = FALSE;
+		card.portrait = NULL;
 		card.badge = NULL;
-		card.emblem = NULL;
-		card.crest = NULL;
-		card.disc = NULL;
+		card.name = card.army = card.persona = card.detail = card.figure = card.disc = NULL;
+		card.kind = LOAD_ROW_CARD;
+		card.zebra = FALSE;
+		card.box.lo.x = card.box.lo.y = card.box.hi.x = card.box.hi.y = 0;
 		const Int sideIndex = realSides ? slot->getPlayerTemplate() : slot->getApparentPlayerTemplate();
-		UnicodeString army = TheGameText->fetch( "GUI:Random" );
+		card.armyWords = TheGameText->fetch( "GUI:Random" );
 		if( sideIndex >= 0 )
 		{
 			const PlayerTemplate *side = ThePlayerTemplateStore->getNthPlayerTemplate( sideIndex );
-			card.emblem = sideEmblem( side );
-			card.crest = sideCrest( side );
-			army = side->getDisplayName();
+			card.portrait = UIStyle::armyPortrait( side );
+			card.armyWords = side->getDisplayName();
+			// the general's Challenge persona, the one the portrait is: his name and his strategy
+			const GeneralPersona *general = TheChallengeGenerals ? TheChallengeGenerals->getGeneralByTemplateName( side->getName() ) : NULL;
+			card.plainSide = general == NULL;
+			if( general && general->getBioName().isNotEmpty() && general->getBioStrategy().isNotEmpty() )
+			{
+				card.personaWords = TheGameText->fetch( general->getBioName() );
+				card.personaWords.concat( BOARD_DOT );
+				card.personaWords.concat( TheGameText->fetch( general->getBioStrategy() ) );
+			}
 		}
 		card.nameWords = slot->getName();
-		card.armyWords = army;
-		card.name = text( card.nameWords, m_nameFont );
-		card.army = text( card.armyWords, m_armyFont );
 		lobbyTeam.push_back( slot->getTeamNumber() );
 
-		UnicodeString detail;
+		// a computer's level, where its name is not already that, and a personality other than Normal
 		if( slot->isAI() )
 		{
 			const UnicodeString level = SlotStateName( slot->getState(), slot->getAIRating() );
 			if( slot->getName().compare( level ) != 0 )
-				detail = level;
+				card.detailWords = level;
 			if( slot->getAIPersonality() != AIPERSONA_NORMAL )
 			{
 				AsciiString label;
 				label.format( "GUI:AIPersona%s", aiPersonalityName( (AIPersonality)slot->getAIPersonality() ) );
-				if( !detail.isEmpty() )
-					detail.concat( BOARD_SEPARATOR );
-				detail.concat( TheGameText->fetch( label ) );
+				if( !card.detailWords.isEmpty() )
+					card.detailWords.concat( BOARD_DOT );
+				card.detailWords.concat( TheGameText->fetch( label ) );
 			}
 		}
-		card.detailWords = detail;
-		card.detail = text( detail, m_detailFont );
-		card.percentText = text( playerPercent( 0 ), m_smallFont );
 		m_cards.push_back( card );
 	}
 
@@ -621,17 +753,15 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 	}
 	Bool freeForAll = FALSE;
 	const std::string format = teams.empty() ? std::string() : ScoreScreen_format( teams, &freeForAll );
-	const Bool banded = ScoreScreen_banded( teams );
 	const Bool versus = teams.size() == 2;
 
 	// a team is called by its lobby number and wears its lobby colour; a player alone takes the
 	// lowest number no lobby team has, on the room's no-team slate, as the score screen calls him
-	// (a team here is one lobby team, or one player with none)
 	std::vector< Int > sharedLobbyTeam( teams.size(), -1 );
 	std::vector< Int > firstSlot( teams.size(), 0 );
 	for( size_t t = 0; t < teams.size(); t++ )
 	{
-		// the cards run in seat order, so a team's first member has its lowest seat
+		// the rows run in seat order, so a team's first member has its lowest seat
 		sharedLobbyTeam[ t ] = lobbyTeam[ teams[ t ].members[ 0 ] ];
 		firstSlot[ t ] = m_cards[ teams[ t ].members[ 0 ] ].slot;
 	}
@@ -643,37 +773,14 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 			teamColor[ t ] = LobbyTeamColor( sharedLobbyTeam[ t ] );
 	}
 
-	// two teams face each other across the map; more share the two columns, whole teams, the largest
-	// first, each to the column with fewer rows, so a team is never split across the map
-	std::vector< Int > bySize( teams.size() );
-	for( size_t t = 0; t < teams.size(); t++ )
-		bySize[ t ] = (Int)t;
-	if( !versus )
-	{
-		std::stable_sort( bySize.begin(), bySize.end(),
-			[ &teams ]( Int a, Int b ) { return teams[ a ].members.size() > teams[ b ].members.size(); } );
-	}
-	std::vector< Int > columnTeams[ 2 ];
-	Int columnRows[ 2 ] = { 0, 0 };
-	for( size_t each = 0; each < bySize.size(); each++ )
-	{
-		const Int t = bySize[ each ];
-		const Int side = versus ? (Int)each : ( columnRows[ 1 ] < columnRows[ 0 ] ? 1 : 0 );
-		columnTeams[ side ].push_back( t );
-		columnRows[ side ] += (Int)teams[ t ].members.size() + ( banded ? 1 : 0 );
-	}
-	// a column keeps its teams in seat order
-	for( Int side = 0; side < 2; side++ )
-		std::sort( columnTeams[ side ].begin(), columnTeams[ side ].end() );
-
-	// the header: the map, then what kind of game, its format as the score screen words it, the cash
+	// the header: the map, then what kind of game, its format as the score screen words it, the cash; a
+	// mode's board is titled by the mode, as its room is
 	const MapMetaData *map = TheMapCache->findMap( game->getMap() );
 	UnicodeString mapName;
 	if( map )
 		mapName = map->m_displayName;
 	else
 		mapName.translate( TheGameState->getMapLeafName( game->getMap() ) );
-	UnicodeString subtitle = TheGameText->fetch( modeLabel );
 	UnicodeString makeup;
 	if( freeForAll )
 	{
@@ -682,180 +789,144 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 		makeup = TheGameText->fetch( "GUI:LoadFreeForAll" );
 		makeup.concat( players );
 	}
-	else
+	else if( teams.size() > 1 )
 		makeup.translate( AsciiString( format.c_str() ) );
+	UnicodeString subtitle = TheGameText->fetch( modeLabel );
+	if( directStrike )
+	{
+		subtitle.concat( UIStyle::HEADER_JOINER );
+		subtitle.concat( TheGameText->fetch( "GUI:DirectStrikeMap" ) );
+	}
 	if( !makeup.isEmpty() )
 	{
 		subtitle.concat( UIStyle::HEADER_JOINER );
 		subtitle.concat( makeup );
 	}
-	subtitle.concat( UIStyle::HEADER_JOINER );
-	subtitle.concat( cashText( game ) );
-	prepare( UIStyle::nameCapitals( mapName ), subtitle, TRUE );
-
-	m_unknown = text( UnicodeString( u"?" ), centerFont );
-	m_unknownSmall = text( UnicodeString( u"?" ), m_smallFont );
-	m_lineSeparator = text( UnicodeString( BOARD_LINE_SEPARATOR ), m_armyFont );
-	m_fullPercent = text( playerPercent( 100 ), m_smallFont );
-
-	const Int columnWidth = scaled( BOARD_COLUMN_WIDTH );
-	const Int bandTop = m_top + scaled( LOAD_BAND_TOP );
-	const Int bandBottom = m_tipBox.lo.y - scaled( LOAD_FOOT_GAP );
-	const Int leftX = m_left + scaled( UIStyle::ROOM_INSET );
-	const Int rightX = m_left + scaled( UIStyle::ROOM_PANEL_RIGHT + UIStyle::ROOM_PANEL_LEFT - UIStyle::ROOM_INSET ) - columnWidth;
-
-	// the middle, between the columns with a gap to the cards: VS over the map in a versus, the map
-	// as large as the room leaves, the facts box under it and the watchers under that
-	const Int middleLeft = leftX + columnWidth + scaled( BOARD_MIDDLE_GAP );
-	const Int middleWidth = rightX - scaled( BOARD_MIDDLE_GAP ) - middleLeft;
-	const Int gap = scaled( 16 );
-	m_centerLabel = versus ? text( UnicodeString( u"VS" ), centerFont ) : NULL;
-
-	// the lobby's rules with the lobby's words for them
+	if( !directStrike && !apocalypse )
 	{
-		Int speed = 0;
-		for( Int each = 0; each < PLAYER_GAME_SPEED_COUNT; each++ )
-		{
-			if( PLAYER_GAME_SPEED_PERCENTS[ each ] == GAME_SPEED_PERCENT )
-				speed = each;
-		}
-		AsciiString speedLabel;
-		speedLabel.format( "GUI:GameSpeedMissions%d", speed );
-		addFact( "GUI:GameSpeed", TheGameText->fetch( speedLabel ), middleWidth );
-		addFact( "GUI:StartingMoney", cashText( game ), middleWidth );
-		addFact( "GUI:Superweapons", TheGameText->fetch( SuperweaponCaption( game->getSuperweaponRestriction() ) ), middleWidth );
-		addFact( "GUI:IncomeSharing", TheGameText->fetch( IncomeSharingCaption( game->getIncomeSharing() ) ), middleWidth );
+		subtitle.concat( UIStyle::HEADER_JOINER );
+		subtitle.concat( boardCash( game ) );
+	}
+	if( directStrike )
+		prepare( UIStyle::capitals( TheGameText->fetch( "GUI:DirectStrikeLower" ) ), subtitle, FALSE, "GUI:LoadTipDirectStrike" );
+	else if( apocalypse )
+		prepare( UIStyle::capitals( TheGameText->fetch( "GUI:ApocalypseLower" ) ), subtitle, FALSE, "GUI:LoadTipApocalypse" );
+	else
+		prepare( UIStyle::nameCapitals( mapName ), subtitle, TRUE, "GUI:LoadTip" );
+
+	// the rules: a mode's own, else the lobby's with the lobby's words
+	m_rulesHead = UIStyle::capitals( TheGameText->fetch( "GUI:LoadRules" ) );
+	addFact( m_facts, TheGameText->fetch( "GUI:GameSpeed" ), boardSpeed() );
+	if( directStrike )
+	{
+		addFact( m_facts, TheGameText->fetch( "GUI:LoadWaveEvery" ), boardClock( boardDirectStrikeSeconds( DIRECTSTRIKE_TICK_FRAMES ) ) );
+		UnicodeString income( u"$" );
+		income.concat( UIStyle::grouped( DIRECTSTRIKE_INCOME ) );
+		addFact( m_facts, TheGameText->fetch( "GUI:LoadIncomeWave" ), income );
+		addFact( m_facts, TheGameText->fetch( "GUI:LoadWaveLife" ), boardClock( boardDirectStrikeSeconds( DIRECTSTRIKE_LIFESPAN_FRAMES ) ) );
+	}
+	else
+	{
+		addFact( m_facts, TheGameText->fetch( "GUI:StartingMoney" ), boardCash( game ) );
+		addFact( m_facts, TheGameText->fetch( "GUI:Superweapons" ), TheGameText->fetch( SuperweaponCaption( game->getSuperweaponRestriction() ) ) );
+		addFact( m_facts, TheGameText->fetch( "GUI:IncomeSharing" ), TheGameText->fetch( IncomeSharingCaption( game->getIncomeSharing() ) ) );
+	}
+	if( !directStrike && !apocalypse )
+	{
 		UnicodeString words;
 		if( game->getSupplyPileLimit() > 0 )
 			words.format( TheGameText->fetch( "GUI:SupplyPileLimitFormat" ), game->getSupplyPileLimit() );
 		else
 			words = TheGameText->fetch( "GUI:SupplyPileLimitOff" );
-		addFact( "GUI:SupplyPileLimit", words, middleWidth );
+		addFact( m_facts, TheGameText->fetch( "GUI:SupplyPileLimit" ), words );
 		if( game->getTechRespawn() > 0 )
 			words.format( TheGameText->fetch( "GUI:TechRespawnFormat" ), game->getTechRespawn() );
 		else
 			words = TheGameText->fetch( "GUI:TechRespawnOff" );
-		addFact( "GUI:TechRespawn", words, middleWidth );
-		addFact( "GUI:UnitLimit", TheGameText->fetch( game->getUnitLimit() ? "GUI:LoadRuleOn" : "GUI:LoadRuleOff" ), middleWidth );
+		addFact( m_facts, TheGameText->fetch( "GUI:TechRespawn" ), words );
+		addFact( m_facts, TheGameText->fetch( "GUI:UnitLimit" ), TheGameText->fetch( game->getUnitLimit() ? "GUI:LoadRuleOn" : "GUI:LoadRuleOff" ) );
 		if( game->getDayNight() )	// only when on, so every other match's list is as long as it was
-			addFact( "GUI:DayNight", TheGameText->fetch( "GUI:LoadRuleOn" ), middleWidth );
+			addFact( m_facts, TheGameText->fetch( "GUI:DayNight" ), TheGameText->fetch( "GUI:LoadRuleOn" ) );
+		// Hidden Map is no room's option any more; only a ranked Quick Match plays it, and says so here
+		if( game->getStartShrouded() )
+			addFact( m_facts, TheGameText->fetch( "GUI:LoadHiddenMap" ), TheGameText->fetch( "GUI:LoadRuleOn" ) );
 	}
-	const Int factPad = scaled( 10 );
-	const Int factLeast = m_factPitch;
 
-	// the watchers, the one at this screen among them: as many names as the lines hold, then how
-	// many more; two lines, more where the map leaves the room
-	m_observers = NULL;
-	Int observerLines = 2;
-	if( !observerNames.empty() )
-		m_observers = text( TheGameText->fetch( "GUI:LoadObservers" ), observerFont );
-	Int observerLine = m_observers ? stringHeight( m_observers ) : 0;
-	if( m_observers )
+	// Apocalypse's nights: the cycle's four phases and its warnings, as wall clocks at the match's speed
+	if( apocalypse )
 	{
-		m_observers->setWordWrap( middleWidth );
-		m_observers->setWordWrapCentered( TRUE );
+		m_nightsHead = UIStyle::capitals( TheGameText->fetch( "GUI:LoadNights" ) );
+		const Int seconds[ 4 ] = { APOCALYPSE_DAY_SECONDS, APOCALYPSE_DUSK_SECONDS, APOCALYPSE_NIGHT_SECONDS, APOCALYPSE_DAWN_SECONDS };
+		const char *const phaseKeys[ 4 ] = { "GUI:LoadDay", "GUI:LoadDusk", "GUI:LoadNight", "GUI:LoadDawn" };
+		for( Int each = 0; each < 4; each++ )
+		{
+			m_nightSeconds[ each ] = seconds[ each ];
+			m_nightWords[ each ] = UIStyle::capitals( TheGameText->fetch( phaseKeys[ each ] ) );
+			m_nightClocks[ each ] = text( boardClock( LoadScreen_wallSeconds( seconds[ each ], GAME_SPEED_PERCENT ) ), font( BOARD_SMALL ) );
+		}
+		addFact( m_nights, UIStyle::capitals( TheGameText->fetch( "GUI:LoadFirstWave" ) ),
+			boardClock( LoadScreen_wallSeconds( APOCALYPSE_FIRST_WAVE_SECONDS, GAME_SPEED_PERCENT ) ), UIStyle::INK, TRUE );
+		addFact( m_nights, TheGameText->fetch( "GUI:LoadGatesGlow" ),
+			boardClock( LoadScreen_wallSeconds( APOCALYPSE_TELEGRAPH_SECONDS, GAME_SPEED_PERCENT ) ) );
+		addFact( m_nights, UIStyle::capitals( TheGameText->fetch( "GUI:LoadBloodMoon" ) ),
+			TheGameText->fetch( "GUI:LoadEveryThirdNight" ), GameMakeColor( 236, 104, 92, 255 ), TRUE );
+		m_nights.back().blood = TRUE;
 	}
 
-	// the map's own shape inside the room left, the frame hugging it as the score screen's does
+	// the middle: VS, the map or its well, the nights, the rules, the watchers
 	Real aspect = 1.0f;
 	if( map && map->m_extent.width() > 0.0f && map->m_extent.height() > 0.0f )
 		aspect = map->m_extent.width() / map->m_extent.height();
-	Int mapWidth = 0, mapHeight = 0, factsHeight = 0;
-	for( Int pass = 0; pass < 2; pass++ )
+	m_wellShown = mapHidden || generated;
+	m_middle = LoadScreen_planMiddle( versus, aspect, m_wellShown, (Int)m_facts.size(), !observerNames.empty(), apocalypse );
+	m_middleShown = TRUE;
+	m_vs = versus ? text( UnicodeString( u"VS" ), font( BOARD_TITLE, TRUE ) ) : NULL;
+	m_unknown = text( UnicodeString( u"?" ), font( BOARD_UNKNOWN, TRUE ) );
+	m_unknownSmall = text( UnicodeString( u"?" ), font( BOARD_SMALL, TRUE ) );
+	if( m_wellShown )
 	{
-		if( m_observers )
+		const char *wellKey = directStrike ? "GUI:DirectStrikeIslandNote" : generated ? "GUI:LoadRandomMap" : NULL;
+		if( wellKey )
+			m_wellWords = text( UIStyle::fitText( TheGameText->fetch( wellKey ), font( BOARD_BODY ), scaled( (Real)( LOAD_MIDDLE_RIGHT - LOAD_MIDDLE_LEFT - 32 ) ) ), font( BOARD_BODY ) );
+	}
+	else
+		m_mapImage = getMapPreviewImage( game->getMap() );
+	// the map's preview is the backdrop too, under the glass
+	m_backdrop = m_mapImage;
+	m_observersHead = boardHeadWords( "GUI:LoadObservers" );
+	if( !observerNames.empty() )
+	{
+		// as many names as the line holds, then how many more
+		GameFont *bodyFont = font( BOARD_BODY );
+		const Int room = scaled( (Real)( LOAD_MIDDLE_RIGHT - LOAD_MIDDLE_LEFT - 16 ) );
+		m_observers = text( UnicodeString::TheEmptyString, bodyFont );
+		const Int total = (Int)observerNames.size();
+		for( Int shown = total; shown >= 1; shown-- )
 		{
-			const Int total = (Int)observerNames.size();
-			const Int most = observerLines * observerLine + observerLine / 2;
-			for( Int shown = total; shown >= 0; shown-- )
+			UnicodeString line;
+			for( Int each = 0; each < shown; each++ )
 			{
-				UnicodeString line = TheGameText->fetch( "GUI:LoadObservers" );
-				line.concat( u"  " );
-				for( Int each = 0; each < shown; each++ )
-				{
-					if( each > 0 )
-						line.concat( u", " );
-					line.concat( UIStyle::fitName( observerNames[ each ], observerFont, middleWidth / 2 ) );
-				}
-				if( shown < total )
-				{
-					UnicodeString more;
-					more.format( u"  +%d", total - shown );
-					line.concat( more );
-				}
-				m_observers->setText( line );
-				if( stringHeight( m_observers ) < most )
-					break;
+				if( each > 0 )
+					line.concat( u", " );
+				line.concat( UIStyle::fitName( observerNames[ each ], bodyFont, room / 2 ) );
 			}
+			if( shown < total )
+			{
+				UnicodeString more;
+				more.format( u"  +%d", total - shown );
+				line.concat( more );
+			}
+			m_observers->setText( line );
+			if( boardStringWidth( m_observers ) <= room )
+				break;
 		}
-		factsHeight = (Int)m_facts.size() * m_factPitch + 2 * factPad;
-		Int stack = gap + factsHeight;
-		if( m_centerLabel )
-			stack += stringHeight( m_centerLabel ) + gap;
-		if( m_observers )
-			stack += gap + stringHeight( m_observers );
-		const Int roomHigh = max( scaled( 120 ), bandBottom - bandTop - stack );
-		mapWidth = middleWidth;
-		mapHeight = REAL_TO_INT( mapWidth / aspect );
-		if( mapHeight > roomHigh )
-		{
-			mapHeight = roomHigh;
-			mapWidth = REAL_TO_INT( mapHeight * aspect );
-		}
-		mapWidth = max( mapWidth, 1 );
-		mapHeight = max( mapHeight, 1 );
-		if( pass == 1 )
-			break;
-		// what a wide map leaves goes to the facts' rows, up to the lobby's pitch, then to the watchers
-		Int spare = roomHigh - mapHeight;
-		if( !m_facts.empty() && spare > 0 )
-		{
-			const Int grow = min( spare / (Int)m_facts.size(), max( 0, scaled( 38 ) - factLeast ) );
-			m_factPitch = factLeast + grow;
-			spare -= grow * (Int)m_facts.size();
-		}
-		if( m_observers && observerLine > 0 && spare > observerLine )
-			observerLines = min( 2 + spare / observerLine, 6 );
-	}
-	Int stack = gap + factsHeight + mapHeight;
-	if( m_centerLabel )
-		stack += stringHeight( m_centerLabel ) + gap;
-	if( m_observers )
-		stack += gap + stringHeight( m_observers );
-	const Int middle = middleLeft + middleWidth / 2;
-	Int y = bandTop + max( 0, bandBottom - bandTop - stack ) / 2;
-	if( m_centerLabel )
-	{
-		m_centerLabelPos.x = middle - stringWidth( m_centerLabel ) / 2;
-		m_centerLabelPos.y = y;
-		y += stringHeight( m_centerLabel ) + gap;
-	}
-	m_mapBox.lo.x = middle - mapWidth / 2;
-	m_mapBox.lo.y = y;
-	m_mapBox.hi.x = m_mapBox.lo.x + mapWidth;
-	m_mapBox.hi.y = y + mapHeight;
-	m_mapDrawn = m_mapBox;
-	y += mapHeight + gap;
-	m_factsBox.lo.x = middleLeft;
-	m_factsBox.lo.y = y;
-	m_factsBox.hi.x = middleLeft + middleWidth;
-	m_factsBox.hi.y = y + factsHeight;
-	y += factsHeight + gap;
-	if( m_observers )
-	{
-		m_observersPos.x = middleLeft;
-		m_observersPos.y = y;
 	}
 
-	// the preview the lobby showed and the start spots the others may see, the player's colour and
-	// seat on each, as the room shows them; an open or hidden spot is not drawn, as on the score
-	// screen.  A card whose spot shows wears the same disc at the same size, never under 18 pixels
-	// at 720 and never too small for its number
-	m_mapImage = mapHidden ? TheMappedImageCollection->findImageByName( "UnknownMap" ) : getMapPreviewImage( game->getMap() );
-	GameFont *numberFont = m_smallFont;
-	m_spotSize = max( max( mapWidth, mapHeight ) * LOBBY_START_SPOT / LOBBY_MAP_PREVIEW, max( scaled( 27 ), numberFont->height + 2 ) );
-	if( map )
+	// the start spots the others may see on the map's own shape, the player's colour and seat on each
+	if( map && !m_wellShown )
 	{
+		const Int mapWidth = m_middle.map.hi.x - m_middle.map.lo.x;
+		const Int mapHeight = m_middle.map.hi.y - m_middle.map.lo.y;
 		for( Int start = 0; start < map->m_numPlayers && map->m_isMultiplayer; start++ )
 		{
 			AsciiString waypoint;
@@ -869,247 +940,297 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 			{
 				if( m_cards[ each ].startSpot != start )
 					continue;
-				// the seat as a number, so seat 9 and past read as 9 and not as a missing string
-				UnicodeString seat;
-				seat.format( u"%d", m_cards[ each ].slot + 1 );
-				BoardSpot spot;
-				spot.pos.x = m_mapDrawn.lo.x + REAL_TO_INT( across * ( m_mapDrawn.hi.x - m_mapDrawn.lo.x ) );
-				spot.pos.y = m_mapDrawn.lo.y + REAL_TO_INT( down * ( m_mapDrawn.hi.y - m_mapDrawn.lo.y ) );
-				spot.color = m_cards[ each ].color;
-				spot.number = text( seat, numberFont );
-				m_cards[ each ].disc = text( seat, numberFont );
-				m_spots.push_back( spot );
+				ICoord2D at;
+				at.x = m_middle.map.lo.x + REAL_TO_INT( across * mapWidth );
+				at.y = m_middle.map.lo.y + REAL_TO_INT( down * mapHeight );
+				m_spotAt.push_back( at );
+				m_spotCard.push_back( (Int)each );
 			}
 		}
 	}
-
-	// each column's cards, under their teams' bands, as tall as the column lets them be;
-	// LoadScreen_planCards says what a crowded column gives up
-	LoadCardLines lines;
-	lines.scale = m_scale;
-	lines.name = m_nameFont->height;
-	lines.army = max( m_armyFont->height, m_lineNameFont->height );
-	lines.percent = m_smallFont->height;
-	lines.band = m_smallFont->height;
-	lines.disc = m_spotSize;
-	lines.bars = cardBars;
-	const Int columnHeight = bandBottom - bandTop;
-	for( Int side = 0; side < 2; side++ )
+	GameFont *numberFont = font( BOARD_CAPS, TRUE );
+	for( size_t each = 0; each < m_spotCard.size(); each++ )
 	{
-		// the column's cards in its teams' order, each with its team
-		std::vector< Int > order, orderTeam;
-		lines.detail = 0;
-		for( size_t t = 0; t < columnTeams[ side ].size(); t++ )
+		BoardCard &card = m_cards[ m_spotCard[ each ] ];
+		if( card.disc == NULL )
 		{
-			const ScoreTeam &team = teams[ columnTeams[ side ][ t ] ];
-			for( size_t m = 0; m < team.members.size(); m++ )
-			{
-				order.push_back( team.members[ m ] );
-				orderTeam.push_back( columnTeams[ side ][ t ] );
-				if( !m_cards[ team.members[ m ] ].detailWords.isEmpty() )
-					lines.detail = m_detailFont->height;
-			}
-		}
-		const Int cards = (Int)order.size();
-		const Int columnBands = banded ? (Int)columnTeams[ side ].size() : 0;
-		const Int subColumns = LoadScreen_subColumns( cards, columnBands, columnHeight, lines );
-
-		// more than one sub-column splits the cards by count, a team running on into the second keeps
-		// a band over it there too
-		const Int firstCount = ( cards + subColumns - 1 ) / subColumns;
-		Int subCards[ 2 ] = { 0, 0 };
-		Int subBands[ 2 ] = { 0, 0 };
-		for( Int each = 0; each < cards; each++ )
-		{
-			const Int sub = each < firstCount ? 0 : 1;
-			const Bool teamStarts = each == 0 || each == firstCount || orderTeam[ each ] != orderTeam[ each - 1 ];
-			subCards[ sub ]++;
-			if( banded && teamStarts )
-				subBands[ sub ]++;
-		}
-		m_plan[ side ] = subColumns == 1 ? LoadScreen_planCards( cards, columnBands, columnHeight, lines )
-			: LoadScreen_planCards( max( subCards[ 0 ], subCards[ 1 ] ), max( subBands[ 0 ], subBands[ 1 ] ), columnHeight, lines, LOAD_CARD_LINE );
-		const LoadCardPlan &plan = m_plan[ side ];
-		const Int subGap = scaled( 8 );
-		const Int subWidth = subColumns == 1 ? columnWidth : ( columnWidth - subGap ) / 2;
-		Int y = 0;
-		for( Int each = 0; each < cards; each++ )
-		{
-			const Int sub = each < firstCount ? 0 : 1;
-			const Int x = ( side == 0 ? leftX : rightX ) + sub * ( subWidth + subGap );
-			if( each == 0 || each == firstCount )
-			{
-				const Int used = subCards[ sub ] * plan.cardHeight + ( plan.bandHeight > 0 ? subBands[ sub ] : 0 ) * plan.bandHeight
-					+ ( subCards[ sub ] + ( plan.bandHeight > 0 ? subBands[ sub ] : 0 ) - 1 ) * plan.gap;
-				y = bandTop + max( 0, columnHeight - used ) / 2;
-			}
-			const Int which = orderTeam[ each ];
-			const Bool teamStarts = each == 0 || each == firstCount || which != orderTeam[ each - 1 ];
-			if( banded && teamStarts && plan.bandHeight > 0 )
-			{
-				BoardBand band;
-				band.box.lo.x = x;
-				band.box.lo.y = y;
-				band.box.hi.x = x + subWidth;
-				band.box.hi.y = y + plan.bandHeight;
-				band.color = teamColor[ which ];
-				band.mirrored = side == 1;
-				band.label = NULL;
-				if( plan.bandLabels )
-				{
-					UnicodeString label;
-					label.format( TheGameText->fetch( "GUI:LoadTeam" ), teamNumber[ which ] );
-					band.label = text( UIStyle::fitText( label, m_smallFont, subWidth / 2 ), m_smallFont );
-				}
-				m_bands.push_back( band );
-				y += plan.bandHeight + plan.gap;
-			}
-			BoardCard &card = m_cards[ order[ each ] ];
-			card.column = side;
-			card.mirrored = side == 1;
-			card.box.lo.x = x;
-			card.box.lo.y = y;
-			card.box.hi.x = x + subWidth;
-			card.box.hi.y = y + plan.cardHeight;
-			y += plan.cardHeight + plan.gap;
+			// the seat as a number, so seat 9 and past read as 9 and not as a missing string
+			UnicodeString seat;
+			seat.format( u"%d", card.slot + 1 );
+			card.disc = text( seat, numberFont );
 		}
 	}
-	for( size_t each = 0; each < m_cards.size(); each++ )
-		fitCard( m_cards[ each ] );
 
-	return makeWindow( NULL );
-}
-
-/** A row for the facts box, the label shortened by its language's rule before it would touch the
-	* value, the value kept to three fifths of the row. */
-void LoadScreenBoard::addFact( const char *label, const UnicodeString &value, Int width )
-{
-	GameFont *font = UIStyle::readableFont( UIStyle::TEXT_SMALL );
-	const Int pad = scaled( 10 );
-	const Int room = width - 3 * pad;
-	BoardFact fact;
-	fact.value = text( value, font );
-	if( stringWidth( fact.value ) > room * 3 / 5 )
-		fact.value->setText( UIStyle::fitText( value, font, room * 3 / 5 ) );
-	fact.label = text( UIStyle::fitKey( label, font, room - stringWidth( fact.value ) ), font );
-	m_factPitch = font->height + scaled( 6 );
-	m_facts.push_back( fact );
-}
-
-/** Where a card's parts stand across it: the portrait or crest at the outer edge by the stripe, the
-	* words beside it, and at the inner edge a column for the start spot disc and the percentage,
-	* stacked on a tall card and side by side on a one-line card. */
-void LoadScreenBoard::cardSpan( const BoardCard &card, BoardCardSpan &span )
-{
-	const LoadCardPlan &plan = m_plan[ card.column ];
-	const Int x0 = card.box.lo.x;
-	const Int width = card.box.hi.x - x0;
-	const Int stripe = UIStyle::stripeWidth();
-	const Int pad = scaled( LOAD_CARD_PAD );
-	const Bool tall = plan.mode <= LOAD_CARD_SHORT;
-	const Int textGap = scaled( tall ? BOARD_CARD_TEXT_GAP : 12.0f );
-	const Int percentRoom = card.percent >= 0 ? stringWidth( m_fullPercent ) : 0;
-	const Int discRoom = card.disc ? plan.disc : 0;
-	Int inner = tall ? max( percentRoom, discRoom ) : percentRoom + discRoom + ( percentRoom > 0 && discRoom > 0 ? scaled( 8 ) : 0 );
-	const Int innerGap = inner > 0 ? scaled( 12 ) : 0;
-	if( !card.mirrored )
+	// the wings: two teams face each other; more go whole to the wing with fewer rows; one team (the
+	// Apocalypse's survivors) runs on from the left wing into the right
+	struct WingGroup
 	{
-		span.emblemX = x0 + stripe + pad;
-		span.textLeft = span.emblemX + plan.emblem + textGap;
-		span.innerRight = x0 + width - pad;
-		span.innerLeft = span.innerRight - inner;
-		span.textRight = span.innerLeft - innerGap;
+		Int team;
+		std::vector< Int > members;
+		Bool counts;
+	};
+	std::vector< WingGroup > wings[ 2 ];
+	if( teams.size() == 1 )
+	{
+		const std::vector< Int > &members = teams[ 0 ].members;
+		const Int half = ( (Int)members.size() + 1 ) / 2;
+		WingGroup left, right;
+		left.team = right.team = 0;
+		left.counts = TRUE;
+		right.counts = FALSE;
+		left.members.assign( members.begin(), members.begin() + half );
+		right.members.assign( members.begin() + half, members.end() );
+		wings[ 0 ].push_back( left );
+		if( !right.members.empty() )
+			wings[ 1 ].push_back( right );
 	}
 	else
 	{
-		span.emblemX = x0 + width - stripe - pad - plan.emblem;
-		span.textRight = span.emblemX - textGap;
-		span.innerLeft = x0 + pad;
-		span.innerRight = span.innerLeft + inner;
-		span.textLeft = span.innerRight + innerGap;
+		std::vector< Int > sizes( teams.size() );
+		for( size_t t = 0; t < teams.size(); t++ )
+			sizes[ t ] = (Int)teams[ t ].members.size();
+		const std::vector< Int > wingOf = LoadScreen_wingOfTeams( sizes );
+		for( size_t t = 0; t < teams.size(); t++ )
+		{
+			WingGroup group;
+			group.team = (Int)t;
+			group.members = teams[ t ].members;
+			group.counts = TRUE;
+			wings[ wingOf[ t ] ].push_back( group );
+		}
 	}
+	m_readyWords = UIStyle::capitals( TheGameText->fetch( "GUI:LoadReady" ) );
+	for( Int side = 0; side < 2; side++ )
+	{
+		Int rows = 0;
+		Bool alone = TRUE;
+		for( size_t g = 0; g < wings[ side ].size(); g++ )
+		{
+			rows += (Int)wings[ side ][ g ].members.size();
+			alone = alone && wings[ side ][ g ].members.size() == 1;
+		}
+		if( rows == 0 )
+			continue;
+		const LoadWingPlan plan = LoadScreen_planWing( (Int)wings[ side ].size(), rows, alone );
+		const Int left = side == 0 ? LOAD_LEFT : LOAD_RIGHT - LOAD_WING_WIDTH;
+		const Int right = left + LOAD_WING_WIDTH;
+		Int y = LOAD_BODY_TOP;
+		for( size_t g = 0; g < wings[ side ].size(); g++ )
+		{
+			const WingGroup &group = wings[ side ][ g ];
+			if( plan.head != LOAD_HEAD_NONE )
+			{
+				BoardHead head;
+				head.kind = plan.head;
+				head.box.lo.x = left;
+				head.box.lo.y = y;
+				head.box.hi.x = right;
+				head.box.hi.y = y + plan.headHeight;
+				head.color = teamColor[ group.team ];
+				head.toward = versus ? ( side == 0 ? 1 : -1 ) : 0;
+				if( apocalypse )
+					head.words = UIStyle::capitals( TheGameText->fetch( "GUI:LoadSurvivors" ) );
+				else
+				{
+					UnicodeString label;
+					label.format( TheGameText->fetch( "GUI:LoadTeam" ), teamNumber[ group.team ] );
+					head.words = UIStyle::capitals( label );
+				}
+				// a rejoining seat sees no counts: nobody is loading but itself
+				if( group.counts && !m_rejoining )
+					head.counted = teams[ group.team ].members;
+				m_heads.push_back( head );
+				y += plan.headHeight;
+			}
+			for( size_t m = 0; m < group.members.size(); m++ )
+			{
+				BoardCard &card = m_cards[ group.members[ m ] ];
+				card.kind = plan.row;
+				card.zebra = plan.row == LOAD_ROW_LINE && ( m % 2 ) == 1;
+				card.box.lo.x = left;
+				card.box.lo.y = y;
+				card.box.hi.x = right;
+				card.box.hi.y = y + plan.rowHeight;
+				y += plan.rowPitch;
+			}
+			y += plan.gap;
+		}
+	}
+
+	// each row's words in its kind's type, fitted to it
+	m_cardFigure = text( UIStyle::percentText( 100 ), font( BOARD_NAME ) );
+	m_lineFigure = text( UIStyle::percentText( 100 ), font( BOARD_BODY ) );
+	for( size_t each = 0; each < m_cards.size(); each++ )
+	{
+		BoardCard &card = m_cards[ each ];
+		const Bool line = card.kind == LOAD_ROW_LINE;
+		card.name = text( card.nameWords, font( line ? BOARD_BODY : BOARD_NAME ) );
+		card.army = text( card.armyWords, font( line ? BOARD_SMALL : BOARD_BODY ) );
+		if( !line && !card.personaWords.isEmpty() )
+			card.persona = text( card.personaWords, font( BOARD_BODY ) );
+		if( card.ai && !card.detailWords.isEmpty() )
+			card.detail = text( card.detailWords, font( line ? BOARD_SMALL : BOARD_BODY ) );
+		card.figure = text( UIStyle::percentText( max( card.percent, 0 ) ), font( line ? BOARD_BODY : BOARD_NAME ) );
+		fitCard( card );
+	}
+
+	refreshLabel();
+	return makeWindow( NULL );
 }
 
-/** The card's words fitted to its plan: a tall card's name cut with an ellipsis only, its general
-	* and its third line shortened by their language's rule; a one-line card's general gives way
-	* first, down to two fifths of the line, and the name then takes what is left. */
+/** A row of the rules or the nights: the value kept to three fifths of the row, the label shortened by
+	* its language's rule before it would touch the value. */
+void LoadScreenBoard::addFact( std::vector< BoardFact > &facts, const UnicodeString &label, const UnicodeString &value, Color labelColor, Bool caps )
+{
+	GameFont *bodyFont = font( BOARD_BODY );
+	const Int room = scaled( (Real)( LOAD_MIDDLE_RIGHT - LOAD_MIDDLE_LEFT - 32 ) );
+	BoardFact fact;
+	fact.value = text( value, bodyFont );
+	if( boardStringWidth( fact.value ) > room * 3 / 5 )
+		fact.value->setText( UIStyle::fitText( value, bodyFont, room * 3 / 5 ) );
+	const Int labelRoom = room - boardStringWidth( fact.value );
+	fact.labelWords = label;
+	fact.label = NULL;
+	if( !caps )
+		fact.label = text( UIStyle::fitText( label, bodyFont, labelRoom ), bodyFont );
+	fact.labelColor = labelColor;
+	fact.capsLabel = caps;
+	fact.blood = FALSE;
+	facts.push_back( fact );
+}
+
+/// the pitch of a card's last line: a computer's level or personality, a human's channel, or none
+Int LoadScreenBoard::cardLast( const BoardCard &card ) const
+{
+	if( card.detail )
+		return LOAD_PITCH_LINE;
+	return card.percent >= 0 ? LOAD_PITCH_BAR : 0;
+}
+
+/** Where a card's portrait and lines stand, on the 1080 board: a card's portrait as tall as its row
+	* at its left with the lines centred beside it; a poster's as large as the wing allows with the lines
+	* under it; a line row's small, the words along the line. */
+void LoadScreenBoard::cardFrame( const BoardCard &card, IRegion2D &portrait, Int &textLeft, Int &textRight, Int &textMiddle ) const
+{
+	const IRegion2D &r = card.box;
+	const Int width = r.hi.x - r.lo.x;
+	const Int height = r.hi.y - r.lo.y;
+	const Int lines = LoadScreen_cardText( card.persona != NULL, cardLast( card ) );
+	Int side;
+	switch( card.kind )
+	{
+		case LOAD_ROW_POSTER:
+		{
+			side = LoadScreen_posterPortrait( width, height, lines, card.plainSide );
+			const Int top = r.lo.y + max( 8, ( height - side - ( lines + 20 ) ) / 2 );
+			portrait.lo.x = r.lo.x + 18 + ( width - 36 - side ) / 2;
+			portrait.lo.y = top;
+			textLeft = r.lo.x + 18;
+			textRight = r.hi.x - 12;
+			textMiddle = top + side + 20 + lines / 2;
+			break;
+		}
+		case LOAD_ROW_CARD:
+			side = LoadScreen_cardPortrait( height );
+			portrait.lo.x = r.lo.x + 18;
+			portrait.lo.y = r.lo.y + ( height - side ) / 2;
+			textLeft = portrait.lo.x + side + 20;
+			textRight = r.hi.x - 12;
+			textMiddle = ( r.lo.y + r.hi.y ) / 2;
+			break;
+		default:
+			side = max( 1, height - 8 );
+			portrait.lo.x = r.lo.x + 16;
+			portrait.lo.y = r.lo.y + 4;
+			textLeft = portrait.lo.x + side + 10;
+			textRight = r.hi.x - 8;
+			textMiddle = ( r.lo.y + r.hi.y ) / 2;
+			break;
+	}
+	portrait.hi.x = portrait.lo.x + side;
+	portrait.hi.y = portrait.lo.y + side;
+}
+
+/** A row's words fitted to it: a name cut with an ellipsis only, the rest shortened by its language's
+	* rule; a line row's name to 168, its general to 150, as the design sets them. */
 void LoadScreenBoard::fitCard( BoardCard &card )
 {
-	const LoadCardPlan &plan = m_plan[ card.column ];
-	BoardCardSpan span;
-	cardSpan( card, span );
-	const Int room = max( 0, span.textRight - span.textLeft );
-	GameFont *nameFont = plan.mode == LOAD_CARD_SMALL_LINE ? m_lineNameFont : m_nameFont;
-	card.name->setFont( nameFont );
-	card.name->setText( card.nameWords );
-	const Int badgeRoom = card.badge ? stringHeight( card.name ) * 3 / 4 + scaled( 10 ) : 0;
-	if( plan.mode <= LOAD_CARD_SHORT )
+	IRegion2D portrait;
+	Int textLeft, textRight, textMiddle;
+	cardFrame( card, portrait, textLeft, textRight, textMiddle );
+	GameFont *nameFont = card.name->getFont();
+	const Int badgeRoom = card.badge ? nameFont->height * 3 / 4 + scaled( 10 ) : 0;
+	if( card.kind == LOAD_ROW_LINE )
 	{
-		card.name->setText( UIStyle::fitName( card.nameWords, nameFont, room - badgeRoom ) );
-		card.army->setText( UIStyle::fitText( card.armyWords, m_armyFont, room ) );
-		card.detail->setText( UIStyle::fitText( card.detailWords, m_detailFont, room ) );
+		card.name->setText( UIStyle::fitName( card.nameWords, nameFont, scaled( 168 ) - badgeRoom ) );
+		card.army->setText( UIStyle::fitText( card.armyWords, card.army->getFont(), scaled( 150 ) ) );
+		if( card.detail )
+		{
+			const Int detailLeft = textLeft + 176 + 160;
+			const Int detailRight = textRight - ( card.disc ? 30 : 0 );
+			card.detail->setText( UIStyle::fitText( card.detailWords, card.detail->getFont(), scaled( (Real)max( 0, detailRight - detailLeft ) ) ) );
+		}
 		return;
 	}
-	card.army->setText( card.armyWords );
-	const Int avail = room - badgeRoom - stringWidth( m_lineSeparator );
-	if( stringWidth( card.name ) + stringWidth( card.army ) <= avail )
-		return;
-	card.army->setText( UIStyle::fitText( card.armyWords, m_armyFont, max( avail - stringWidth( card.name ), avail * 2 / 5 ) ) );
-	card.name->setText( UIStyle::fitName( card.nameWords, nameFont, avail - stringWidth( card.army ) ) );
+	const Int room = scaled( (Real)( textRight - textLeft ) );
+	const Int nameRoom = room - ( card.disc ? scaled( 40 ) : 0 ) - badgeRoom;
+	card.name->setText( UIStyle::fitName( card.nameWords, nameFont, nameRoom ) );
+	card.army->setText( UIStyle::fitText( card.armyWords, card.army->getFont(), room ) );
+	if( card.persona )
+		card.persona->setText( UIStyle::fitText( card.personaWords, card.persona->getFont(), room ) );
+	if( card.detail )
+		card.detail->setText( UIStyle::fitText( card.detailWords, card.detail->getFont(), room ) );
 }
 
-/** The header's and the foot's words, the same on every board: the title cut before it would reach
-	* the subtitle, the subtitle shortened before it would reach the wordmark; a tip panel over the
-	* button row with the tips that fit it in two lines. */
-void LoadScreenBoard::prepare( const UnicodeString &titleInCapitals, const UnicodeString &subtitle, Bool titleIsName )
+/** The header's and the foot's words, the same on every board: the title cut before it would crowd the
+	* subtitle out, the subtitle shortened before it would reach the wordmark; the tips that fit the foot's
+	* one line. */
+void LoadScreenBoard::prepare( const UnicodeString &titleInCapitals, const UnicodeString &subtitle, Bool titleIsName, const char *tipKey )
 {
-	GameFont *wordmarkFont = UIStyle::font( UIStyle::TEXT_STRONG, TRUE );
-	GameFont *tipFont = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	GameFont *titleFont = UIStyle::titleFont( UIStyle::TEXT_TITLE );
-	GameFont *subtitleFont = UIStyle::subtitleFont();
-	m_title = text( titleInCapitals, titleFont );
-	m_subtitle = text( subtitle, subtitleFont );
+	GameFont *titleFont = font( BOARD_TITLE, TRUE );
+	GameFont *subtitleFont = font( BOARD_SUBTITLE );
+	GameFont *wordmarkFont = font( BOARD_NAME, TRUE );
+	m_showWordmark = m_kind != BOARD_MISSION;	// a mission's picture is the game's own logo art
 	m_wordmark[ 0 ] = text( UnicodeString( u"Zero Hour" ), wordmarkFont );
 	m_wordmark[ 1 ] = text( UnicodeString( u" Reforged" ), wordmarkFont );
+	m_subtitle = text( subtitle, subtitleFont );
 
-	const Int left = m_left + scaled( UIStyle::ROOM_INSET );
-	const Int right = m_left + scaled( UIStyle::ROOM_PANEL_RIGHT + UIStyle::ROOM_PANEL_LEFT - UIStyle::ROOM_INSET );
-	const Int between = UIStyle::headerGap();
-	Int room = right - ( m_left + scaled( UIStyle::ROOM_TITLE_LEFT ) );
-	if( !m_mission )
-		room -= stringWidth( m_wordmark[ 0 ] ) + stringWidth( m_wordmark[ 1 ] ) + scaled( 32 );
-	if( stringWidth( m_title ) + between + stringWidth( m_subtitle ) > room )
+	Int right = X( (Real)LOAD_RIGHT );
+	if( m_showWordmark )
+		right -= boardStringWidth( m_wordmark[ 0 ] ) + boardStringWidth( m_wordmark[ 1 ] ) + scaled( 48 );
+	// the right edge of a mission's title row is its count and pips, which stand in the last 420
+	if( m_kind == BOARD_MISSION )
+		right -= scaled( 420 );
+	const Int room = right - X( (Real)LOAD_LEFT );
+	m_titleWords = titleInCapitals;
+	const Int titleMost = room * 3 / 5;
+	if( UIStyle::trackedWidth( m_titleWords, titleFont, BOARD_TITLE_TRACKING ) > titleMost )
 	{
-		const Int titleRoom = max( room - between - min( stringWidth( m_subtitle ), room * 2 / 5 ), room / 2 );
-		if( stringWidth( m_title ) > titleRoom )
-			m_title->setText( titleIsName ? UIStyle::fitName( titleInCapitals, titleFont, titleRoom )
-				: UIStyle::fitText( titleInCapitals, titleFont, titleRoom ) );
-		m_subtitle->setText( UIStyle::fitText( subtitle, subtitleFont, room - between - stringWidth( m_title ) ) );
+		const Int untracked = titleMost - scaled( BOARD_TITLE_TRACKING ) * titleInCapitals.getLength();
+		m_titleWords = titleIsName ? UIStyle::fitName( titleInCapitals, titleFont, untracked ) : UIStyle::fitText( titleInCapitals, titleFont, untracked );
 	}
+	const Int titleWidth = UIStyle::trackedWidth( m_titleWords, titleFont, BOARD_TITLE_TRACKING );
+	m_subtitle->setText( UIStyle::fitText( subtitle, subtitleFont, room - titleWidth - scaled( 24 ) ) );
 
-	// the foot: a panel of two lines over the button row, the TIP chip in it and a tip beside the
-	// chip; a tip needs no shortening, so one that wants a third line here is never shown
-	m_tipLabel = text( TheGameText->fetch( "GUI:LoadTip" ), m_smallFont );
-	m_tip = text( UnicodeString( u"X" ), tipFont );
-	const Int tipLine = stringHeight( m_tip );
-	const Int panelHeight = LoadScreen_tipPanelHeight( tipLine, m_scale );
-	m_tipBox.lo.x = left;
-	m_tipBox.hi.x = right;
-	m_tipBox.hi.y = m_top + scaled( UIStyle::ROOM_BUTTON_TOP ) - scaled( LOAD_FOOT_GAP );
-	m_tipBox.lo.y = m_tipBox.hi.y - panelHeight;
-	const Int pad = scaled( LOAD_TIP_PAD );
-	m_tipTextLeft = left + pad + stringWidth( m_tipLabel ) + 2 * scaled( 8 ) + scaled( 16 );
-	m_tip->setWordWrap( right - pad - m_tipTextLeft );
+	// the foot: the TIP chip and a tip on one line beside it; one that wants a second line never shows
+	m_tipKey = tipKey;
+	m_tipLabel = UIStyle::capitals( TheGameText->fetch( "GUI:LoadTip" ) );
+	m_tip = text( UnicodeString::TheEmptyString, font( BOARD_BODY ) );
 	m_tips.clear();
-	for( Int number = 1; ; number++ )
+	if( m_tipKey )
 	{
-		Bool exists = FALSE;
-		const UnicodeString words = tipText( number, &exists );
-		if( !exists )
-			break;
-		m_tip->setText( words );
-		if( stringHeight( m_tip ) < 2 * tipLine + tipLine / 2 )
-			m_tips.push_back( number );
+		const Int chip = UIStyle::trackedWidth( m_tipLabel, font( BOARD_CAPS, TRUE ), UIStyle::MENU_LABEL_TRACKING ) + scaled( 20 );
+		const Int tipRoom = X( (Real)LOAD_RIGHT ) - ( X( (Real)LOAD_LEFT ) + chip + scaled( 18 ) );
+		for( Int number = 1; ; number++ )
+		{
+			Bool exists = FALSE;
+			const UnicodeString words = tipText( number, &exists );
+			if( !exists )
+				break;
+			m_tip->setText( words );
+			if( boardStringWidth( m_tip ) <= tipRoom )
+				m_tips.push_back( number );
+		}
 	}
 	// one at random to start, the next every eight seconds; the clock is the wall's, never the
 	// logic's dice
@@ -1117,20 +1238,38 @@ void LoadScreenBoard::prepare( const UnicodeString &titleInCapitals, const Unico
 	m_tipSince = Clock_Milliseconds();
 	m_tip->setText( m_tips.empty() ? UnicodeString::TheEmptyString : tipText( m_tips[ m_tipAt ] ) );
 
-	// lettered as a lobby button's label
 	m_progressFormat = TheGameText->fetch( "GUI:LoadProgress" );
-	m_percent = text( UnicodeString::TheEmptyString, UIStyle::titleFont( UIStyle::TEXT_HEADING ) );
-	m_waiting = text( UIStyle::capitals( TheGameText->fetch( "GUI:LoadWaiting" ) ), UIStyle::titleFont( UIStyle::TEXT_HEADING ) );
 	m_localPercent = 0;
-	setPercentLabel( 0 );
+	refreshLabel();
 }
 
-/** "LOADING 81%", in the language's own order: the string file's format says where the number goes. */
-void LoadScreenBoard::setPercentLabel( Int percent )
+/** The load bar's words: "LOADING 81%"; a network seat done with its own load names the slowest of
+	* the others, "WAITING FOR KARA MURAT · 23%"; a rejoining seat's and a transfer's are set by them. */
+void LoadScreenBoard::refreshLabel( void )
 {
+	if( m_rejoinShown != -2 || m_kind == BOARD_TRANSFER )
+		return;
 	UnicodeString words;
-	words.format( m_progressFormat, min( max( percent, 0 ), 100 ) );
-	m_percent->setText( UIStyle::capitals( words ) );
+	if( m_network && m_localPercent > 100 )
+	{
+		const BoardCard *slowest = NULL;
+		for( size_t each = 0; each < m_cards.size(); each++ )
+		{
+			const BoardCard &card = m_cards[ each ];
+			if( card.percent >= 0 && card.percent < 100 && ( slowest == NULL || card.percent < slowest->percent ) )
+				slowest = &card;
+		}
+		if( slowest )
+			words.format( TheGameText->fetch( "GUI:LoadWaitingFor" ), UIStyle::nameCapitals( slowest->nameWords ).str(), slowest->percent );
+		else
+			words = UIStyle::capitals( TheGameText->fetch( "GUI:LoadWaiting" ) );
+	}
+	else
+	{
+		words.format( m_progressFormat, min( max( m_localPercent, 0 ), 100 ) );
+		words = UIStyle::capitals( words );
+	}
+	m_label = words;
 }
 
 GameWindow *LoadScreenBoard::makeWindow( GameWindow *parent )
@@ -1142,40 +1281,136 @@ GameWindow *LoadScreenBoard::makeWindow( GameWindow *parent )
 	return window;
 }
 
-/** A mission keeps its own picture behind; the header names it, a panel on the left carries the
-	* briefing the mission's load always had and never showed, and the foot is a match's. */
 GameWindow *LoadScreenBoard::createMission( GameWindow *parent, const UnicodeString &title, const UnicodeString &subtitle,
-	const UnicodeString *briefing, Int briefingLines )
+	const UnicodeString *briefing, Int briefingLines, Int missionNumber, Int missionCount, const Image *backdrop )
 {
-	m_mission = TRUE;
-	prepare( UIStyle::capitals( title ), subtitle, FALSE );
+	m_kind = BOARD_MISSION;
+	m_backdrop = backdrop;
+	m_ground = parent == NULL;
+	m_missionNumber = missionNumber;
+	m_missionCount = missionNumber > 0 ? missionCount : 0;
+	if( m_missionCount > 0 )
+		m_missionOf.format( TheGameText->fetch( "GUI:LoadMissionOf" ), missionNumber, missionCount );
+	m_missionOf = UIStyle::capitals( m_missionOf );
+	prepare( UIStyle::capitals( title ), subtitle, FALSE, "GUI:LoadTip" );
 
-	const Int pad = scaled( 28 );
-	const Int width = scaled( BOARD_COLUMN_WIDTH );
-	m_briefingBox.lo.x = m_left + scaled( UIStyle::ROOM_INSET );
-	m_briefingBox.lo.y = m_top + scaled( LOAD_BAND_TOP );
-	m_briefingBox.hi.x = m_briefingBox.lo.x + width;
-	m_briefingHead = text( UIStyle::fitKey( "GUI:LoadBriefing", m_smallFont, width - 2 * pad ), m_smallFont );
-	Int bottom = m_briefingBox.lo.y + pad + stringHeight( m_briefingHead ) + scaled( 8 );
-	GameFont *lineFont = UIStyle::font( UIStyle::TEXT_STRONG );
+	// the briefing the mission's load always had and never showed, on glass over the left of the
+	// picture, a line every 44 and the box grown to hold them
+	m_briefingHead = UIStyle::capitals( TheGameText->fetch( "GUI:LoadBriefing" ) );
+	GameFont *lineFont = font( BOARD_NAME );
+	Int y = LOAD_BRIEFING_TOP + 20 + LOAD_SECTION_HEAD + 4;
 	for( Int line = 0; line < briefingLines; line++ )
 	{
 		if( briefing[ line ].isEmpty() )
 			continue;
 		DisplayString *words = text( briefing[ line ], lineFont );
-		words->setWordWrap( width - 2 * pad );
+		words->setWordWrap( scaled( (Real)( LOAD_BRIEFING_RIGHT - LOAD_LEFT - 48 ) ) );
 		m_briefing.push_back( words );
-		bottom += scaled( 10 ) + stringHeight( words );
+		const Int lines = max( 1, ( boardStringHeight( words ) + lineFont->height / 2 ) / max( 1, lineFont->height ) );
+		y += LOAD_BRIEFING_PITCH * lines;
 	}
-	m_briefingBox.hi.y = bottom + pad;
+	m_briefingBottom = max( LOAD_BRIEFING_LEAST, y + 8 );
 	return makeWindow( parent );
+}
+
+GameWindow *LoadScreenBoard::createTransfer( GameInfo *game, const char *modeLabel )
+{
+	m_kind = BOARD_TRANSFER;
+	const MapMetaData *map = TheMapCache->findMap( game->getMap() );
+	UnicodeString mapName;
+	if( map )
+		mapName = map->m_displayName;
+	else
+		mapName.translate( TheGameState->getMapLeafName( game->getMap() ) );
+	UnicodeString subtitle = TheGameText->fetch( modeLabel );
+	subtitle.concat( UIStyle::HEADER_JOINER );
+	subtitle.concat( TheGameText->fetch( "GUI:LoadMapTransfer" ) );
+	prepare( UIStyle::nameCapitals( mapName ), subtitle, TRUE, NULL );
+	m_playersHead = UIStyle::capitals( TheGameText->fetch( "GUI:LoadPlayers" ) );
+	m_statusHead = UIStyle::capitals( TheGameText->fetch( "GUI:LoadStatus" ) );
+
+	// every human in seat order, half in each column; the host and a player who has the map show their
+	// state without a channel, as EA's screen hid their bars
+	for( Int i = 0; i < MAX_SLOTS; ++i )
+	{
+		const GameSlot *slot = game->getConstSlot( i );
+		if( slot == NULL || !slot->isHuman() )
+			continue;
+		BoardTransfer row;
+		row.slot = i;
+		row.color = TheMultiplayerSettings->getColor( slot->getApparentColor() )->getColor();
+		row.local = i == game->getLocalSlotNum();
+		row.percent = i == 0 || slot->hasMap() ? -1 : 0;
+		row.name = text( UIStyle::fitName( slot->getName(), font( BOARD_NAME ), scaled( 290 - 22 ) ), font( BOARD_NAME ) );
+		row.state = text( UnicodeString::TheEmptyString, font( BOARD_BODY ) );
+		row.figure = text( UIStyle::percentText( 0 ), font( BOARD_NAME ) );
+		row.zebra = FALSE;
+		m_transfers.push_back( row );
+	}
+	const Int count = (Int)m_transfers.size();
+	const Int half = ( count + 1 ) / 2;
+	for( Int each = 0; each < count; each++ )
+	{
+		const Int column = each < half ? 0 : 1;
+		const Int index = column == 0 ? each : each - half;
+		const Int rows = column == 0 ? half : count - half;
+		const Int pitch = LoadScreen_transferRow( rows );
+		BoardTransfer &row = m_transfers[ each ];
+		row.box.lo.x = column == 0 ? LOAD_LEFT : LOAD_RIGHT - LOAD_TRANSFER_WIDTH;
+		row.box.hi.x = row.box.lo.x + LOAD_TRANSFER_WIDTH;
+		row.box.lo.y = LOAD_BODY_TOP + 4 + LOAD_SECTION_HEAD + index * pitch;
+		row.box.hi.y = row.box.lo.y + pitch - 2;
+		row.zebra = ( index % 2 ) == 1;
+	}
+	m_transferFile = text( UnicodeString::TheEmptyString, font( BOARD_BODY ) );
+	m_transferTimeout = text( UnicodeString::TheEmptyString, font( BOARD_NAME ) );
+	m_cardFigure = text( UIStyle::percentText( 100 ), font( BOARD_NAME ) );
+	m_localPercent = 0;
+	return makeWindow( NULL );
+}
+
+/** A player's transfer as the network reports it: his state in words and how far his copy has come.
+	* The local seat's bar carries his own: the host's sending, a joiner's receiving. */
+void LoadScreenBoard::setTransfer( Int slot, Int percent, const UnicodeString &state )
+{
+	percent = min( max( percent, 0 ), 100 );
+	for( size_t each = 0; each < m_transfers.size(); each++ )
+	{
+		BoardTransfer &row = m_transfers[ each ];
+		if( row.slot != slot )
+			continue;
+		row.state->setText( UIStyle::fitText( state, row.state->getFont(), scaled( 470 - 300 ) ) );
+		if( row.percent >= 0 )
+		{
+			row.percent = percent;
+			row.figure->setText( UIStyle::percentText( row.percent ) );
+		}
+		if( row.local )
+		{
+			m_localPercent = percent;
+			m_label = UIStyle::capitals( state );
+			if( percent < 100 )
+			{
+				m_label.concat( u"  " );
+				m_label.concat( UIStyle::percentText( percent ) );
+			}
+		}
+	}
+}
+
+void LoadScreenBoard::setTransferFoot( const UnicodeString *file, const UnicodeString *timeout )
+{
+	if( file && m_transferFile )
+		m_transferFile->setText( UIStyle::fitText( *file, m_transferFile->getFont(), scaled( (Real)LOAD_TRANSFER_WIDTH ) ) );
+	if( timeout && m_transferTimeout )
+		m_transferTimeout->setText( *timeout );
 }
 
 /** An online player's rank beside his name, which gives the badge its room. */
 void LoadScreenBoard::setBadge( Int slot, const Image *badge )
 {
 	BoardCard *card = cardFor( slot );
-	if( card == NULL )
+	if( card == NULL || card->name == NULL )
 		return;
 	card->badge = badge;
 	fitCard( *card );
@@ -1187,7 +1422,8 @@ void LoadScreenBoard::setProgress( Int slot, Int percent )
 	if( card == NULL || card->percent < 0 || card->percent == percent )
 		return;
 	card->percent = percent;
-	card->percentText->setText( playerPercent( percent ) );
+	card->figure->setText( UIStyle::percentText( percent ) );
+	refreshLabel();
 }
 
 void LoadScreenBoard::setLocalProgress( Int percent )
@@ -1195,11 +1431,11 @@ void LoadScreenBoard::setLocalProgress( Int percent )
 	if( percent == m_localPercent )
 		return;
 	m_localPercent = percent;
-	setPercentLabel( percent );
+	refreshLabel();
 }
 
-/** A seat coming back plays the match up to the room's frame behind the board: the wide button fills with
-	* the frames played against the frames to play, or reads that the match's log is still on its way. */
+/** A seat coming back plays the match up to the room's frame behind the board: the bar fills with the
+	* frames played against the frames to play, or reads that the match's log is still on its way. */
 void LoadScreenBoard::setRejoinProgress( Int percent, Bool waitingForLog )
 {
 	percent = waitingForLog ? 0 : min( max( percent, 0 ), 100 );
@@ -1213,131 +1449,12 @@ void LoadScreenBoard::setRejoinProgress( Int percent, Bool waitingForLog )
 		words = TheGameText->fetch( "GUI:RejoinWaitingForLog" );
 	else
 		words.format( TheGameText->fetch( "GUI:RejoinCatchingUp" ), percent );
-	m_percent->setText( UIStyle::capitals( words ) );
+	m_label = UIStyle::capitals( words );
 }
 
 void LoadScreenBoard::drawWindow( GameWindow *window, WinInstanceData *instData )
 {
 	( (LoadScreenBoard *)window->winGetUserData() )->draw();
-}
-
-void LoadScreenBoard::drawCard( const BoardCard &card )
-{
-	const Int x0 = card.box.lo.x;
-	const Int y0 = card.box.lo.y;
-	const Int width = card.box.hi.x - x0;
-	const Int height = card.box.hi.y - y0;
-	// a lobby seat's row: the panel's black, its blue line, the player's colour down the outer edge
-	UIStyle::panel( x0, y0, width, height, UIStyle::PANEL );
-	const Int stripe = UIStyle::stripeWidth();
-	UIStyle::stripe( card.mirrored ? x0 + width - stripe : x0, y0, height, card.color );
-
-	const LoadCardPlan &plan = m_plan[ card.column ];
-	const Bool tall = plan.mode <= LOAD_CARD_SHORT;
-	BoardCardSpan span;
-	cardSpan( card, span );
-
-	// the portrait in a frame of the player's colour; a one-line card has the side's crest at the
-	// line's height instead
-	const Int emblem = plan.emblem;
-	const Int emblemX = span.emblemX;
-	const Int emblemY = y0 + plan.emblemTop;
-	if( tall )
-	{
-		TheDisplay->drawFillRect( emblemX, emblemY, emblem, emblem, UIStyle::GROUND );
-		if( card.emblem )
-			TheDisplay->drawImage( card.emblem, emblemX + 2, emblemY + 2, emblemX + emblem - 2, emblemY + emblem - 2 );
-		else
-			m_unknown->draw( emblemX + ( emblem - stringWidth( m_unknown ) ) / 2, emblemY + ( emblem - stringHeight( m_unknown ) ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
-		TheDisplay->drawOpenRect( emblemX, emblemY, emblem, emblem, 1.0f, UIStyle::withAlpha( card.color, 200 ) );
-	}
-	else if( card.crest )
-		TheDisplay->drawImage( card.crest, emblemX, emblemY, emblemX + emblem, emblemY + emblem );
-	else
-		m_unknownSmall->draw( emblemX + ( emblem - stringWidth( m_unknownSmall ) ) / 2, emblemY + ( emblem - stringHeight( m_unknownSmall ) ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
-
-	// the words, on the portrait's far side, aligned toward it; the rank badge after the name
-	const Int nameWidth = stringWidth( card.name );
-	const Int badgeSize = stringHeight( card.name ) * 3 / 4;
-	const Int badgeRoom = card.badge ? scaled( 10 ) + badgeSize : 0;
-	if( tall )
-	{
-		const Int nameX = card.mirrored ? span.textRight - nameWidth : span.textLeft;
-		card.name->draw( nameX, y0 + plan.nameTop, card.nameColor, UIStyle::SHADOW );
-		if( card.badge )
-		{
-			const Int bx = card.mirrored ? nameX - scaled( 10 ) - badgeSize : nameX + nameWidth + scaled( 10 );
-			const Int by = y0 + plan.nameTop + ( stringHeight( card.name ) - badgeSize ) / 2;
-			TheDisplay->drawImage( card.badge, bx, by, bx + badgeSize, by + badgeSize );
-		}
-		const Int armyWidth = stringWidth( card.army );
-		card.army->draw( card.mirrored ? span.textRight - armyWidth : span.textLeft, y0 + plan.armyTop, UIStyle::INK, UIStyle::SHADOW );
-		if( plan.detailTop >= 0 && card.detail->getTextLength() > 0 )
-		{
-			const Int detailWidth = stringWidth( card.detail );
-			card.detail->draw( card.mirrored ? span.textRight - detailWidth : span.textLeft, y0 + plan.detailTop, UIStyle::MUTED, UIStyle::SHADOW );
-		}
-	}
-	else
-	{
-		// "name · general", read left to right in either column, against the crest
-		const Int total = nameWidth + badgeRoom + stringWidth( m_lineSeparator ) + stringWidth( card.army );
-		Int x = card.mirrored ? span.textRight - total : span.textLeft;
-		card.name->draw( x, y0 + plan.nameTop, card.nameColor, UIStyle::SHADOW );
-		x += nameWidth;
-		if( card.badge )
-		{
-			const Int by = y0 + plan.nameTop + ( stringHeight( card.name ) - badgeSize ) / 2;
-			TheDisplay->drawImage( card.badge, x + scaled( 10 ), by, x + scaled( 10 ) + badgeSize, by + badgeSize );
-			x += badgeRoom;
-		}
-		m_lineSeparator->draw( x, y0 + plan.armyTop, UIStyle::MUTED, UIStyle::SHADOW );
-		x += stringWidth( m_lineSeparator );
-		card.army->draw( x, y0 + plan.armyTop, UIStyle::INK, UIStyle::SHADOW );
-	}
-
-	// the start spot the map shows for him, in the inner top corner, or at the line's inner end
-	const Int discRoom = card.disc ? plan.disc + scaled( 8 ) : 0;
-	if( card.disc )
-		drawStartSpot( card.mirrored ? span.innerLeft : span.innerRight - plan.disc, y0 + plan.discTop, plan.disc, card.color, card.disc );
-
-	// a network player's own load: a bar under the words, the percentage in the inner column beside
-	// it, or on a one-line card beside the disc; a column too full for bars keeps the percentage
-	if( card.percent >= 0 )
-	{
-		if( plan.barTop >= 0 )
-		{
-			const Int barLeft = span.textLeft;
-			const Int barRight = span.textRight;
-			const Int barY = y0 + plan.barTop;
-			TheDisplay->drawFillRect( barLeft, barY, barRight - barLeft, plan.barHeight, UIStyle::GRID );
-			const Int filled = ( barRight - barLeft ) * min( card.percent, 100 ) / 100;
-			TheDisplay->drawFillRect( card.mirrored ? barRight - filled : barLeft, barY, filled, plan.barHeight, card.color );
-		}
-		const Int percentWidth = stringWidth( card.percentText );
-		Int percentX;
-		if( tall )
-			percentX = card.mirrored ? span.innerLeft : span.innerRight - percentWidth;
-		else
-			percentX = card.mirrored ? span.innerLeft + discRoom : span.innerRight - discRoom - percentWidth;
-		card.percentText->draw( percentX, y0 + plan.percentTop, card.percent >= 100 ? UIStyle::INK : UIStyle::MUTED, UIStyle::SHADOW );
-	}
-}
-
-/** The foot's panel: the TIP chip, the tip beside it on up to two lines. */
-void LoadScreenBoard::drawTip( void )
-{
-	const Int width = m_tipBox.hi.x - m_tipBox.lo.x;
-	const Int height = m_tipBox.hi.y - m_tipBox.lo.y;
-	UIStyle::panel( m_tipBox.lo.x, m_tipBox.lo.y, width, height, UIStyle::PANEL );
-	const Int chipPad = scaled( 8 );
-	const Int chipHeight = stringHeight( m_tipLabel ) + scaled( 4 );
-	const Int chipX = m_tipBox.lo.x + scaled( LOAD_TIP_PAD );
-	const Int chipY = m_tipBox.lo.y + ( height - chipHeight ) / 2;
-	TheDisplay->drawOpenRect( chipX, chipY, stringWidth( m_tipLabel ) + 2 * chipPad, chipHeight, 1.0f, UIStyle::FRAME );
-	m_tipLabel->draw( chipX + chipPad, chipY + scaled( 2 ), UIStyle::ACTIVE, UIStyle::SHADOW );
-	if( m_tip->getTextLength() > 0 )
-		m_tip->draw( m_tipTextLeft, m_tipBox.lo.y + ( height - stringHeight( m_tip ) ) / 2, UIStyle::INK, UIStyle::SHADOW );
 }
 
 void LoadScreenBoard::draw( void )
@@ -1348,129 +1465,538 @@ void LoadScreenBoard::draw( void )
 		m_tipSince = Clock_Milliseconds();
 		m_tip->setText( tipText( m_tips[ m_tipAt ] ) );
 	}
-
-	const Int panelLeft = m_left + scaled( UIStyle::ROOM_PANEL_LEFT );
-	const Int panelTop = m_top + scaled( UIStyle::ROOM_PANEL_TOP );
-	const Int panelWidth = scaled( UIStyle::ROOM_PANEL_RIGHT - UIStyle::ROOM_PANEL_LEFT );
-	const Int panelBottom = m_top + scaled( UIStyle::ROOM_PANEL_BOTTOM );
-	const Int headerLine = m_top + scaled( UIStyle::ROOM_HEADER_LINE );
-	const Int left = m_left + scaled( UIStyle::ROOM_INSET );
-	const Int right = m_left + scaled( UIStyle::ROOM_PANEL_RIGHT + UIStyle::ROOM_PANEL_LEFT - UIStyle::ROOM_INSET );
-	const Int buttonTop = m_top + scaled( UIStyle::ROOM_BUTTON_TOP );
-	const Int buttonHeight = scaled( UIStyle::ROOM_BUTTON_BOTTOM - UIStyle::ROOM_BUTTON_TOP );
-	if( m_mission )
+	// behind: a match's map preview or a saved game's mission picture; the shell's dark where the map is
+	// hidden or made, or where no window's picture shows
+	if( m_ground )
+		TheDisplay->drawFillRect( 0, 0, m_width, m_height, UIStyle::GROUND );
+	if( m_backdrop )
+		UIStyle::coverImage( m_backdrop, 0, 0, m_width, m_height );
+	if( m_kind == BOARD_MISSION )
+		drawMission();
+	else
 	{
-		// the mission's own picture stays; the lobby's panel frames only its header and its foot
-		const Int footTop = m_tipBox.lo.y - scaled( LOAD_FOOT_GAP );
-		UIStyle::panel( panelLeft, panelTop, panelWidth, headerLine - panelTop, UIStyle::PANEL );
-		UIStyle::panel( panelLeft, footTop, panelWidth, panelBottom - footTop, UIStyle::PANEL );
-		drawBriefing();
+		const IRegion2D panel = onScreen( UIStyle::MENU_PANEL_LEFT, UIStyle::MENU_PANEL_TOP, UIStyle::MENU_PANEL_RIGHT, UIStyle::MENU_PANEL_BOTTOM );
+		UIStyle::glass( panel, 168 );
+		UIStyle::frameA( panel );
+		if( m_kind == BOARD_TRANSFER )
+			drawTransfer();
+		else
+			drawMatch();
+	}
+	drawHeader();
+	drawFoot();
+}
+
+/** The title tracked in its bold capitals, the subtitle after it, the wordmark at the right, the lit
+	* header rule. */
+void LoadScreenBoard::drawHeader( void )
+{
+	GameFont *titleFont = font( BOARD_TITLE, TRUE );
+	const Int middle = ( Y( (Real)LOAD_TITLE_TOP ) + Y( (Real)LOAD_TITLE_BOTTOM ) ) / 2;
+	const Int titleWidth = UIStyle::drawTracked( m_titleWords, titleFont, X( (Real)LOAD_LEFT ), middle - titleFont->height / 2, UIStyle::INK, BOARD_TITLE_TRACKING );
+	if( m_subtitle && m_subtitle->getTextLength() > 0 )
+		m_subtitle->draw( X( (Real)LOAD_LEFT ) + titleWidth + scaled( 24 ), middle - boardStringHeight( m_subtitle ) / 2, UIStyle::MUTED, BOARD_SHADOW );
+	if( m_showWordmark )
+		UIStyle::wordmark( m_wordmark, X( (Real)LOAD_RIGHT ), middle - boardStringHeight( m_wordmark[ 0 ] ) / 2 );
+	const IRegion2D rule = onScreen( UIStyle::MENU_PANEL_LEFT + 2, LOAD_HEADER_RULE, UIStyle::MENU_PANEL_RIGHT - 2, LOAD_HEADER_RULE + 2 );
+	UIStyle::litLine( rule.lo.x, rule.lo.y, rule.hi.x - rule.lo.x, max( 1, rule.hi.y - rule.lo.y ), UIStyle::FRAME );
+}
+
+/** The foot: a faint rule, the TIP chip with a tip on one line (a transfer's file and its time left in
+	* that place), and the load bar, the screen's one lit line, filling. */
+void LoadScreenBoard::drawFoot( void )
+{
+	const Int left = X( (Real)LOAD_LEFT );
+	const Int right = X( (Real)LOAD_RIGHT );
+	TheDisplay->drawFillRect( left, Y( (Real)LOAD_FOOT_RULE ), right - left, 1, UIStyle::withAlpha( UIStyle::FRAME, 110 ) );
+	const Int tipTop = Y( (Real)LOAD_TIP_TOP );
+	const Int tipBottom = Y( (Real)LOAD_TIP_BOTTOM );
+	const Int tipMiddle = ( tipTop + tipBottom ) / 2;
+	if( m_kind == BOARD_TRANSFER )
+	{
+		if( m_transferFile )
+			m_transferFile->draw( left, tipMiddle - boardStringHeight( m_transferFile ) / 2, UIStyle::MUTED, BOARD_SHADOW );
+		if( m_transferTimeout )
+			m_transferTimeout->draw( right - boardStringWidth( m_transferTimeout ), tipMiddle - boardStringHeight( m_transferTimeout ) / 2, UIStyle::INK, BOARD_SHADOW );
+	}
+	else if( m_tip && m_tip->getTextLength() > 0 )
+	{
+		GameFont *capsFont = font( BOARD_CAPS, TRUE );
+		const Int chip = UIStyle::trackedWidth( m_tipLabel, capsFont, UIStyle::MENU_LABEL_TRACKING ) + scaled( 20 );
+		TheDisplay->drawOpenRect( left, tipTop + scaled( 8 ), chip, tipBottom - tipTop - 2 * scaled( 8 ), 1.0f, UIStyle::FRAME );
+		UIStyle::drawTracked( m_tipLabel, capsFont, left + scaled( 10 ), tipMiddle - capsFont->height / 2, UIStyle::ACTIVE, UIStyle::MENU_LABEL_TRACKING );
+		m_tip->draw( left + chip + scaled( 18 ), tipMiddle - boardStringHeight( m_tip ) / 2, UIStyle::INK, BOARD_SHADOW );
+	}
+	boardDrawLoadBar( onScreen( LOAD_LEFT, LOAD_BAR_TOP, LOAD_RIGHT, LOAD_BAR_BOTTOM ), m_localPercent, m_label,
+		font( BOARD_NAME, TRUE ), BOARD_BAR_TRACKING );
+}
+
+/** A section's head (RULES, OBSERVERS, THE NIGHTS): green tracked capitals and a lit FRAME rule. */
+void LoadScreenBoard::drawSection( const UnicodeString &words, Int left, Int right, Int top )
+{
+	GameFont *capsFont = font( BOARD_CAPS, TRUE );
+	UIStyle::drawTracked( words, capsFont, left, top + ( scaled( 22 ) - capsFont->height ) / 2, UIStyle::ACTIVE, UIStyle::MENU_LABEL_TRACKING );
+	UIStyle::litLine( left, top + scaled( 26 ), right - left, 1, UIStyle::FRAME );
+}
+
+/** Two chevrons pointing toward (1 right, -1 left), size tall, from x. */
+static void boardDrawChevrons( Int x, Int middle, Int size, Int toward, Color color )
+{
+	const Int half = max( 2, size / 2 );
+	const Int thick = max( 2, size / 5 );
+	for( Int which = 0; which < 2; which++ )
+	{
+		const Int x0 = x + which * ( half + thick + 1 );
+		for( Int row = -half; row <= half; row++ )
+		{
+			const Int depth = half - ( row < 0 ? -row : row );
+			const Int at = toward > 0 ? x0 + depth : x0 + half - depth;
+			TheDisplay->drawFillRect( at, middle + row, thick, 1, color );
+		}
+	}
+}
+
+void LoadScreenBoard::drawHead( const BoardHead &head )
+{
+	const IRegion2D box = onScreen( head.box );
+	const Color lit = UIStyle::readable( head.color );
+	if( head.kind == LOAD_HEAD_RULE )
+	{
+		TheDisplay->drawFillRect( box.lo.x, box.lo.y + scaled( 4 ), box.hi.x - box.lo.x, max( 2, scaled( 3 ) ), lit );
+		return;
+	}
+	const Bool big = head.kind == LOAD_HEAD_CARD;
+	const Int height = scaled( big ? 44 : 34 );
+	const Int middle = box.lo.y + height / 2;
+	UIStyle::litLine( box.lo.x, box.lo.y + scaled( 4 ), max( 2, scaled( 4 ) ), height - 2 * scaled( 4 ), lit );
+	GameFont *labelFont = font( big ? BOARD_HEAD : BOARD_BODY, TRUE );
+	const Int labelWidth = UIStyle::drawTracked( head.words, labelFont, box.lo.x + scaled( 16 ), middle - labelFont->height / 2,
+		UIStyle::INK, big ? 2.4f : 2.0f );
+	if( head.toward != 0 )
+		boardDrawChevrons( box.lo.x + scaled( 16 ) + labelWidth + scaled( 14 ), middle, scaled( big ? 12 : 10 ), head.toward, lit );
+	if( !head.counted.empty() )
+	{
+		Int ready = 0;
+		for( size_t each = 0; each < head.counted.size(); each++ )
+		{
+			const BoardCard &card = m_cards[ head.counted[ each ] ];
+			if( card.ai || card.percent < 0 || card.percent >= 100 )
+				ready++;
+		}
+		UnicodeString figureWords;
+		figureWords.format( u"%d/%d", ready, (Int)head.counted.size() );
+		GameFont *figureFont = font( big ? BOARD_TITLE : BOARD_NAME );
+		const Int figureWidth = UIStyle::trackedWidth( figureWords, figureFont, 0.0f );
+		UIStyle::drawTracked( figureWords, figureFont, box.hi.x - figureWidth, middle - figureFont->height / 2 - scaled( big ? 3 : 1 ), UIStyle::INK, 0.0f );
+		GameFont *capsFont = font( BOARD_CAPS, TRUE );
+		const Int readyWidth = UIStyle::trackedWidth( m_readyWords, capsFont, 1.4f );
+		UIStyle::drawTracked( m_readyWords, capsFont, box.hi.x - figureWidth - scaled( 12 ) - readyWidth, middle - capsFont->height / 2 + scaled( 2 ),
+			ready == (Int)head.counted.size() ? UIStyle::ACTIVE : UIStyle::MUTED, 1.4f );
+	}
+	UIStyle::litLine( box.lo.x, box.lo.y + height + scaled( 6 ), box.hi.x - box.lo.x, 1, UIStyle::FRAME );
+}
+
+/** A portrait in its box, cut to cover it, a "?" well for a random side, the player's colour along its
+	* foot. */
+void LoadScreenBoard::drawPortrait( const BoardCard &card, const IRegion2D &box, Bool lineRow )
+{
+	const Int width = box.hi.x - box.lo.x;
+	const Int height = box.hi.y - box.lo.y;
+	if( card.portrait )
+		UIStyle::coverImage( card.portrait, box.lo.x, box.lo.y, width, height );
+	else
+	{
+		TheDisplay->drawFillRect( box.lo.x, box.lo.y, width, height, GameMakeColor( 10, 12, 20, 230 ) );
+		TheDisplay->drawOpenRect( box.lo.x, box.lo.y, width, height, 1.0f, UIStyle::withAlpha( UIStyle::FRAME, 200 ) );
+		DisplayString *mark = lineRow ? m_unknownSmall : m_unknown;
+		if( mark )
+			mark->draw( box.lo.x + ( width - boardStringWidth( mark ) ) / 2, box.lo.y + ( height - boardStringHeight( mark ) ) / 2, UIStyle::MUTED, BOARD_SHADOW );
+	}
+	const Int foot = max( 2, scaled( lineRow ? 3.0f : 4.0f ) );
+	TheDisplay->drawFillRect( box.lo.x, box.hi.y - foot, width, foot, card.color );
+	const Color lit = UIStyle::readable( card.color );
+	if( lit != card.color )		// a colour too dark to read keeps a light keyline over it
+		TheDisplay->drawFillRect( box.lo.x, box.hi.y - foot - 1, width, 1, lit );
+}
+
+/** A player's load: a dark channel filled in his colour, lifted where it is dark, the leading edge lit
+	* while it moves; a finished one dims. */
+void LoadScreenBoard::drawChannel( Int left, Int right, Int middle, Int height, Int percent, Color color )
+{
+	const Int top = middle - height / 2;
+	if( right <= left )
+		return;
+	TheDisplay->drawFillRect( left, top, right - left, height, UIStyle::withAlpha( UIStyle::FRAME, 70 ) );
+	const Int filled = ( right - left ) * min( max( percent, 0 ), 100 ) / 100;
+	if( filled <= 0 )
+		return;
+	const Color lit = UIStyle::readable( color );
+	if( percent >= 100 )
+	{
+		TheDisplay->drawFillRect( left, top, filled, height, UIStyle::withAlpha( lit, 150 ) );
+		return;
+	}
+	UIStyle::litLine( left, top, filled, height, lit );
+	TheDisplay->drawFillRect( left + filled - 2, top - 2, 2, height + 4, UIStyle::withAlpha( UIStyle::INK, 230 ) );
+}
+
+/** A card's and a poster's lines, one block centred on middle: the name (gold for the local player)
+	* with his start spot at the right, the army, the general's persona, then a computer's personality or
+	* a human's load channel and figure. */
+void LoadScreenBoard::drawLines( const BoardCard &card, Int left, Int right, Int middle )
+{
+	const Int total = scaled( (Real)LoadScreen_cardText( card.persona != NULL, cardLast( card ) ) );
+	Int y = middle - total / 2;
+	Int pitch = scaled( (Real)LOAD_PITCH_NAME );
+	if( card.disc )
+		boardDrawDisc( right - scaled( 14 ), y + pitch / 2, scaled( 14 ), card.color, card.disc );
+	card.name->draw( left, y + ( pitch - boardStringHeight( card.name ) ) / 2, card.local ? UIStyle::GOLD : UIStyle::INK, BOARD_SHADOW );
+	if( card.badge )
+	{
+		const Int badge = card.name->getFont()->height * 3 / 4;
+		const Int bx = left + boardStringWidth( card.name ) + scaled( 10 );
+		const Int by = y + ( pitch - badge ) / 2;
+		TheDisplay->drawImage( card.badge, bx, by, bx + badge, by + badge );
+	}
+	y += pitch;
+	pitch = scaled( (Real)LOAD_PITCH_LINE );
+	card.army->draw( left, y + ( pitch - boardStringHeight( card.army ) ) / 2, UIStyle::INK, BOARD_SHADOW );
+	y += pitch;
+	if( card.persona )
+	{
+		card.persona->draw( left, y + ( pitch - boardStringHeight( card.persona ) ) / 2, UIStyle::MUTED, BOARD_SHADOW );
+		y += pitch;
+	}
+	if( card.detail )
+		card.detail->draw( left, y + ( pitch - boardStringHeight( card.detail ) ) / 2, UIStyle::MUTED, BOARD_SHADOW );
+	else if( card.percent >= 0 )
+	{
+		pitch = scaled( (Real)LOAD_PITCH_BAR );
+		const Int figureRoom = boardStringWidth( m_cardFigure ) + scaled( 4 );
+		drawChannel( left, right - figureRoom - scaled( 16 ), y + pitch / 2 + scaled( 2 ), max( 2, scaled( 10 ) ), card.percent, card.color );
+		card.figure->draw( right - boardStringWidth( card.figure ), y + ( pitch - boardStringHeight( card.figure ) ) / 2 + scaled( 2 ),
+			card.percent >= 100 ? UIStyle::MUTED : UIStyle::INK, BOARD_SHADOW );
+	}
+}
+
+void LoadScreenBoard::drawRow( const BoardCard &card )
+{
+	const IRegion2D box = onScreen( card.box );
+	UIStyle::menuRow( box, card.local ? UIStyle::ROW_LOCAL : UIStyle::ROW_PLAIN, card.zebra );
+	IRegion2D portrait;
+	Int textLeft, textRight, textMiddle;
+	cardFrame( card, portrait, textLeft, textRight, textMiddle );
+	const Bool line = card.kind == LOAD_ROW_LINE;
+	// the player's colour down the row's outer edge
+	const Int stripeX = card.box.lo.x + ( line ? 6 : 7 );
+	const Int stripeInset = line ? 7 : 8;
+	TheDisplay->drawFillRect( X( (Real)stripeX ), Y( (Real)( card.box.lo.y + stripeInset ) ), max( 2, scaled( line ? 3.0f : 4.0f ) ),
+		max( 1, scaled( (Real)( card.box.hi.y - card.box.lo.y - 2 * stripeInset ) ) ), card.color );
+	drawPortrait( card, onScreen( portrait ), line );
+	if( !line )
+	{
+		drawLines( card, X( (Real)textLeft ), X( (Real)textRight ), Y( (Real)textMiddle ) );
+		return;
+	}
+
+	// a line: name, general, then a computer's personality or the load, the start spot at the end
+	const Int middle = ( box.lo.y + box.hi.y ) / 2;
+	const Int nameX = X( (Real)textLeft );
+	card.name->draw( nameX, middle - boardStringHeight( card.name ) / 2, card.local ? UIStyle::GOLD : UIStyle::INK, BOARD_SHADOW );
+	if( card.badge )
+	{
+		const Int badge = card.name->getFont()->height * 3 / 4;
+		const Int bx = nameX + boardStringWidth( card.name ) + scaled( 6 );
+		TheDisplay->drawImage( card.badge, bx, middle - badge / 2, bx + badge, middle - badge / 2 + badge );
+	}
+	card.army->draw( X( (Real)( textLeft + 176 ) ), middle - boardStringHeight( card.army ) / 2, UIStyle::MUTED, BOARD_SHADOW );
+	Int right = X( (Real)textRight );
+	if( card.disc )
+	{
+		boardDrawDisc( right - scaled( 11 ), middle, scaled( 11 ), card.color, card.disc );
+		right -= scaled( 30 );
+	}
+	const Int after = X( (Real)( textLeft + 176 + 160 ) );
+	if( card.detail )
+		card.detail->draw( after, middle - boardStringHeight( card.detail ) / 2, UIStyle::MUTED, BOARD_SHADOW );
+	else if( card.percent >= 0 )
+	{
+		const Int figureRoom = boardStringWidth( m_lineFigure ) + scaled( 2 );
+		drawChannel( after, right - figureRoom - scaled( 12 ), middle, max( 2, scaled( 6 ) ), card.percent, card.color );
+		card.figure->draw( right - boardStringWidth( card.figure ), middle - boardStringHeight( card.figure ) / 2,
+			card.percent >= 100 ? UIStyle::MUTED : UIStyle::INK, BOARD_SHADOW );
+	}
+}
+
+/** Rows of label and value, the odd ones a faint wash: the rules, the nights' warnings. */
+void LoadScreenBoard::drawFacts( const std::vector< BoardFact > &facts, Int top, Int pitch )
+{
+	const Int left = X( (Real)LOAD_MIDDLE_LEFT );
+	const Int right = X( (Real)LOAD_MIDDLE_RIGHT );
+	GameFont *capsFont = font( BOARD_CAPS, TRUE );
+	for( size_t each = 0; each < facts.size(); each++ )
+	{
+		const BoardFact &fact = facts[ each ];
+		const Int rowTop = Y( (Real)( top + (Int)each * pitch ) );
+		const Int rowBottom = Y( (Real)( top + (Int)( each + 1 ) * pitch ) );
+		const Int middle = ( rowTop + rowBottom ) / 2;
+		if( each % 2 )
+			TheDisplay->drawFillRect( left, rowTop, right - left, rowBottom - rowTop, GameMakeColor( 255, 255, 255, 6 ) );
+		fact.value->draw( right - scaled( 8 ) - boardStringWidth( fact.value ), middle - boardStringHeight( fact.value ) / 2, UIStyle::INK, BOARD_SHADOW );
+		if( fact.capsLabel )
+			UIStyle::drawTracked( fact.labelWords, capsFont, left + scaled( 8 ), middle - capsFont->height / 2, fact.labelColor, UIStyle::MENU_LABEL_TRACKING );
+		else if( fact.label )
+			fact.label->draw( left + scaled( 8 ), middle - boardStringHeight( fact.label ) / 2, fact.labelColor, BOARD_SHADOW );
+		if( fact.blood )
+			UIStyle::litLine( left, rowTop + scaled( 6 ), max( 2, scaled( 2 ) ), rowBottom - rowTop - 2 * scaled( 6 ), GameMakeColor( 184, 38, 31, 255 ) );
+	}
+}
+
+/** Apocalypse's own panel: THE NIGHTS, the cycle as one band in the room's four colours with each
+	* phase's capitals and wall clock, then the first wave, the gates' warning and the Blood Moon. */
+void LoadScreenBoard::drawNights( Int top )
+{
+	const Int left = LOAD_MIDDLE_LEFT;
+	const Int right = LOAD_MIDDLE_RIGHT;
+	drawSection( m_nightsHead, X( (Real)left ), X( (Real)right ), Y( (Real)top ) );
+	static const UnsignedByte PHASE[ 4 ][ 3 ] = { { 150, 128, 70 }, { 150, 70, 40 }, { 20, 26, 70 }, { 70, 80, 110 } };
+	Int widths[ 4 ];
+	LoadScreen_nightWidths( right - left, m_nightSeconds, LOAD_NIGHT_LEAST, widths );
+	const Int band = top + LOAD_SECTION_HEAD + 6;
+	GameFont *capsFont = font( BOARD_CAPS, TRUE );
+	Int x = left;
+	for( Int each = 0; each < 4; each++ )
+	{
+		const Color color = GameMakeColor( PHASE[ each ][ 0 ], PHASE[ each ][ 1 ], PHASE[ each ][ 2 ], 255 );
+		const IRegion2D segment = onScreen( x, band, x + widths[ each ] - 2, band + 46 );
+		TheDisplay->drawFillRect( segment.lo.x, segment.lo.y, segment.hi.x - segment.lo.x, segment.hi.y - segment.lo.y, UIStyle::withAlpha( color, 120 ) );
+		TheDisplay->drawFillRect( segment.lo.x, segment.lo.y, segment.hi.x - segment.lo.x, max( 1, scaled( 2 ) ), color );
+		UIStyle::drawTracked( m_nightWords[ each ], capsFont, X( (Real)( x + 8 ) ), Y( (Real)( band + 13 ) ) - capsFont->height / 2, UIStyle::INK, UIStyle::MENU_LABEL_TRACKING );
+		if( m_nightClocks[ each ] )
+			m_nightClocks[ each ]->draw( X( (Real)( x + 8 ) ), Y( (Real)( band + 33 ) ) - boardStringHeight( m_nightClocks[ each ] ) / 2, UIStyle::INK, BOARD_SHADOW );
+		x += widths[ each ];
+	}
+	drawFacts( m_nights, band + 62, 38 );
+}
+
+/** The middle: VS, the map with the start spots or its well, the nights, the rules, the watchers. */
+void LoadScreenBoard::drawMiddle( void )
+{
+	const Int left = X( (Real)LOAD_MIDDLE_LEFT );
+	const Int right = X( (Real)LOAD_MIDDLE_RIGHT );
+	if( m_vs && m_middle.vsTop >= 0 )
+	{
+		const Int top = Y( (Real)m_middle.vsTop );
+		const Int bottom = Y( (Real)( m_middle.vsTop + 50 ) );
+		m_vs->draw( ( left + right - boardStringWidth( m_vs ) ) / 2, ( top + bottom - boardStringHeight( m_vs ) ) / 2, UIStyle::INK, BOARD_SHADOW );
+	}
+	const IRegion2D map = onScreen( m_middle.map );
+	const Int mapWidth = map.hi.x - map.lo.x;
+	const Int mapHeight = map.hi.y - map.lo.y;
+	if( m_wellShown || m_mapImage == NULL )
+	{
+		TheDisplay->drawFillRect( map.lo.x, map.lo.y, mapWidth, mapHeight, GameMakeColor( 6, 8, 18, 200 ) );
+		TheDisplay->drawOpenRect( map.lo.x, map.lo.y, mapWidth, mapHeight, 1.0f, UIStyle::FRAME );
+		const Int middle = ( map.lo.y + map.hi.y ) / 2;
+		if( m_unknown )
+			m_unknown->draw( ( map.lo.x + map.hi.x - boardStringWidth( m_unknown ) ) / 2, middle - scaled( 25 ) - boardStringHeight( m_unknown ) / 2, UIStyle::MUTED, BOARD_SHADOW );
+		if( m_wellWords )
+			m_wellWords->draw( ( map.lo.x + map.hi.x - boardStringWidth( m_wellWords ) ) / 2, middle + scaled( 39 ) - boardStringHeight( m_wellWords ) / 2, UIStyle::INK, BOARD_SHADOW );
 	}
 	else
 	{
-		// the shell's still, dimmed as the lobby dims its map, under the lobby's panel
-		UIStyle::shell();
-		UIStyle::panel( panelLeft, panelTop, panelWidth, panelBottom - panelTop, UIStyle::PANEL );
-		drawMatch();
+		TheDisplay->drawImage( m_mapImage, map.lo.x, map.lo.y, map.hi.x, map.hi.y );
+		TheDisplay->drawOpenRect( map.lo.x - 1, map.lo.y - 1, mapWidth + 2, mapHeight + 2, 1.0f, UIStyle::FRAME );
+		for( size_t each = 0; each < m_spotAt.size(); each++ )
+		{
+			const BoardCard &card = m_cards[ m_spotCard[ each ] ];
+			boardDrawDisc( X( (Real)m_spotAt[ each ].x ), Y( (Real)m_spotAt[ each ].y ), scaled( 13 ), card.color, card.disc );
+		}
 	}
-
-	// the header: the title where the lobby's stands, what kind of game after it, the wordmark across
-	// (the score screen's header, drawn by the same call)
-	const Int titleMiddle = m_top + scaled( UIStyle::ROOM_TITLE_MIDDLE );
-	UIStyle::header( m_title, m_subtitle, m_left + scaled( UIStyle::ROOM_TITLE_LEFT ), titleMiddle );
-	// a mission's picture is the game's own logo art, and the wordmark never stands beside EA's logo
-	if( !m_mission )
-		UIStyle::wordmark( m_wordmark, right, titleMiddle - stringHeight( m_wordmark[ 0 ] ) / 2 );
-	UIStyle::rule( panelLeft, headerLine, panelWidth );
-
-	// the foot: the tip's panel over the lobby's button row, whose one wide button fills as the game
-	// loads
-	drawTip();
-	UIStyle::button( left, buttonTop, right - left, buttonHeight );
-	const Int edge = 3;
-	const Int filled = ( right - left - 2 * edge ) * min( m_localPercent, 100 ) / 100;
-	TheDisplay->drawFillRect( left + edge, buttonTop + edge, filled, buttonHeight - 2 * edge, UIStyle::withAlpha( UIStyle::EDGE, 110 ) );
-	DisplayString *label = m_network && m_localPercent > 100 ? m_waiting : m_percent;
-	label->draw( ( left + right - stringWidth( label ) ) / 2, buttonTop + ( buttonHeight - stringHeight( label ) ) / 2,
-		UIStyle::INK, UIStyle::SHADOW );
-}
-
-void LoadScreenBoard::drawBriefing( void )
-{
-	if( m_briefing.empty() )
-		return;
-	const IRegion2D &box = m_briefingBox;
-	const Int width = box.hi.x - box.lo.x;
-	const Int height = box.hi.y - box.lo.y;
-	const Int pad = scaled( 28 );
-	UIStyle::panel( box.lo.x, box.lo.y, width, height, UIStyle::PANEL );
-	Int y = box.lo.y + pad;
-	m_briefingHead->draw( box.lo.x + pad, y, UIStyle::ACTIVE, UIStyle::SHADOW );
-	y += stringHeight( m_briefingHead ) + scaled( 8 );
-	for( size_t each = 0; each < m_briefing.size(); each++ )
+	if( m_middle.nightsTop >= 0 )
+		drawNights( m_middle.nightsTop );
+	if( m_middle.rulesTop >= 0 )
 	{
-		y += scaled( 10 );
-		m_briefing[ each ]->draw( box.lo.x + pad, y, UIStyle::INK, UIStyle::SHADOW );
-		y += stringHeight( m_briefing[ each ] );
+		drawSection( m_rulesHead, left, right, Y( (Real)m_middle.rulesTop ) );
+		drawFacts( m_facts, m_middle.rulesTop + LOAD_SECTION_HEAD, m_middle.rulePitch );
+	}
+	if( m_middle.observersTop >= 0 && m_observers )
+	{
+		drawSection( m_observersHead, left, right, Y( (Real)m_middle.observersTop ) );
+		const Int top = Y( (Real)( m_middle.observersTop + LOAD_SECTION_HEAD ) );
+		m_observers->draw( left + scaled( 8 ), top + ( scaled( 30 ) - boardStringHeight( m_observers ) ) / 2, UIStyle::INK, BOARD_SHADOW );
 	}
 }
 
 void LoadScreenBoard::drawMatch( void )
 {
-	// a team's band over its cards: the room's team swatch at the outer edge and its name, or where the
-	// column is crowded a rule in the team's colour
-	for( size_t each = 0; each < m_bands.size(); each++ )
-	{
-		const BoardBand &band = m_bands[ each ];
-		const Int width = band.box.hi.x - band.box.lo.x;
-		const Int height = band.box.hi.y - band.box.lo.y;
-		if( band.label == NULL )
-		{
-			const Int rule = max( 2, scaled( 3 ) );
-			TheDisplay->drawFillRect( band.box.lo.x, band.box.lo.y + ( height - rule ) / 2, width, rule, band.color );
-			continue;
-		}
-		const Int swatch = stringHeight( band.label ) + 2;
-		const Int middle = band.box.lo.y + height / 2;
-		const Int swatchX = band.mirrored ? band.box.hi.x - swatch : band.box.lo.x;
-		LobbySwatchFill( swatchX, middle - swatch / 2, swatch, swatch, band.color );
-		const Int labelX = band.mirrored ? swatchX - scaled( 10 ) - stringWidth( band.label ) : swatchX + swatch + scaled( 10 );
-		band.label->draw( labelX, middle - stringHeight( band.label ) / 2, UIStyle::ACTIVE, UIStyle::SHADOW );
-	}
-
+	for( size_t each = 0; each < m_heads.size(); each++ )
+		drawHead( m_heads[ each ] );
 	for( size_t each = 0; each < m_cards.size(); each++ )
-		drawCard( m_cards[ each ] );
+		drawRow( m_cards[ each ] );
+	if( m_middleShown )
+		drawMiddle();
+}
 
-	// the middle
-	if( m_centerLabel )
-		m_centerLabel->draw( m_centerLabelPos.x, m_centerLabelPos.y, UIStyle::INK, UIStyle::SHADOW );
-	const Int mapWidth = m_mapBox.hi.x - m_mapBox.lo.x;
-	const Int mapHeight = m_mapBox.hi.y - m_mapBox.lo.y;
-	TheDisplay->drawFillRect( m_mapBox.lo.x, m_mapBox.lo.y, mapWidth, mapHeight, UIStyle::GROUND );
-	if( m_mapImage )
-		TheDisplay->drawImage( m_mapImage, m_mapDrawn.lo.x, m_mapDrawn.lo.y, m_mapDrawn.hi.x, m_mapDrawn.hi.y );
-	// the lobby's map preview wears a button's edge, here round the map's own shape
-	UIStyle::edge( m_mapBox.lo.x - 3, m_mapBox.lo.y - 3, mapWidth + 6, mapHeight + 6 );
-	const Int spot = m_spotSize;
-	for( size_t each = 0; each < m_spots.size(); each++ )
+/** The mission's own picture stays the screen: frame A closes it, glass only under the header, the
+	* briefing and the foot; the mission count and its pips at the title row's right. */
+void LoadScreenBoard::drawMission( void )
+{
+	UIStyle::glass( onScreen( UIStyle::MENU_PANEL_LEFT, UIStyle::MENU_PANEL_TOP, UIStyle::MENU_PANEL_RIGHT, LOAD_MISSION_HEADER_BOTTOM ), 168 );
+	UIStyle::glass( onScreen( UIStyle::MENU_PANEL_LEFT, LOAD_MISSION_FOOT_TOP, UIStyle::MENU_PANEL_RIGHT, UIStyle::MENU_PANEL_BOTTOM ), 168 );
+	UIStyle::frameA( onScreen( UIStyle::MENU_PANEL_LEFT, UIStyle::MENU_PANEL_TOP, UIStyle::MENU_PANEL_RIGHT, UIStyle::MENU_PANEL_BOTTOM ) );
+
+	if( m_missionCount > 0 )
 	{
-		const BoardSpot &mark = m_spots[ each ];
-		drawStartSpot( mark.pos.x - spot / 2, mark.pos.y - spot / 2, spot, mark.color, mark.number );
+		const Int pip = LOAD_PIP_WIDTH, gap = LOAD_PIP_GAP;
+		const Int pipsLeft = LOAD_RIGHT - m_missionCount * pip - ( m_missionCount - 1 ) * gap;
+		for( Int each = 0; each < m_missionCount; each++ )
+		{
+			const IRegion2D box = onScreen( pipsLeft + each * ( pip + gap ), 64, pipsLeft + each * ( pip + gap ) + pip, 76 );
+			const Int width = box.hi.x - box.lo.x;
+			const Int height = box.hi.y - box.lo.y;
+			if( each < m_missionNumber - 1 )
+				TheDisplay->drawFillRect( box.lo.x, box.lo.y, width, height, UIStyle::FRAME );
+			else if( each == m_missionNumber - 1 )
+				UIStyle::litLine( box.lo.x, box.lo.y, width, height, UIStyle::EDGE_LIT );
+			else
+				TheDisplay->drawOpenRect( box.lo.x, box.lo.y, width, height, 1.0f, UIStyle::withAlpha( UIStyle::FRAME, 200 ) );
+		}
+		if( !m_missionOf.isEmpty() )
+		{
+			GameFont *capsFont = font( BOARD_CAPS, TRUE );
+			const Int width = UIStyle::trackedWidth( m_missionOf, capsFont, UIStyle::MENU_LABEL_TRACKING );
+			UIStyle::drawTracked( m_missionOf, capsFont, X( (Real)( pipsLeft - 18 ) ) - width, Y( 70.0f ) - capsFont->height / 2, UIStyle::MUTED, UIStyle::MENU_LABEL_TRACKING );
+		}
 	}
 
-	// the facts in the lobby's rules box: the label on the left, what it was set to on the right
-	const Int factsWidth = m_factsBox.hi.x - m_factsBox.lo.x;
-	UIStyle::panel( m_factsBox.lo.x, m_factsBox.lo.y, factsWidth, m_factsBox.hi.y - m_factsBox.lo.y, UIStyle::PANEL );
-	const Int factPad = scaled( 10 );
-	for( size_t each = 0; each < m_facts.size(); each++ )
+	if( m_briefing.empty() )
+		return;
+	const IRegion2D box = onScreen( LOAD_LEFT, LOAD_BRIEFING_TOP, LOAD_BRIEFING_RIGHT, m_briefingBottom );
+	UIStyle::glass( box, 168 );
+	TheDisplay->drawOpenRect( box.lo.x, box.lo.y, box.hi.x - box.lo.x, box.hi.y - box.lo.y, 1.0f, UIStyle::FRAME );
+	drawSection( m_briefingHead, X( (Real)( LOAD_LEFT + 24 ) ), X( (Real)( LOAD_BRIEFING_RIGHT - 24 ) ), Y( (Real)( LOAD_BRIEFING_TOP + 20 ) ) );
+	Int y = Y( (Real)( LOAD_BRIEFING_TOP + 20 + LOAD_SECTION_HEAD + 4 ) );
+	for( size_t each = 0; each < m_briefing.size(); each++ )
 	{
-		const BoardFact &fact = m_facts[ each ];
-		const Int rowMiddle = m_factsBox.lo.y + factPad + (Int)each * m_factPitch + m_factPitch / 2;
-		fact.label->draw( m_factsBox.lo.x + factPad, rowMiddle - stringHeight( fact.label ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
-		fact.value->draw( m_factsBox.hi.x - factPad - stringWidth( fact.value ), rowMiddle - stringHeight( fact.value ) / 2, UIStyle::INK, UIStyle::SHADOW );
+		DisplayString *words = m_briefing[ each ];
+		words->draw( X( (Real)( LOAD_LEFT + 24 ) ), y + ( scaled( 36 ) - min( boardStringHeight( words ), scaled( 36 ) ) ) / 2, UIStyle::INK, BOARD_SHADOW );
+		const Int lineHeight = max( 1, words->getFont()->height );
+		const Int lines = max( 1, ( boardStringHeight( words ) + lineHeight / 2 ) / lineHeight );
+		y += scaled( (Real)LOAD_BRIEFING_PITCH ) * lines;
 	}
-	if( m_observers )
-		m_observers->draw( m_observersPos.x, m_observersPos.y, UIStyle::MUTED, UIStyle::SHADOW );
+}
+
+/** A map transfer on the board's rows: PLAYERS and STATUS over two columns, a row a human with his
+	* colour as a stripe, the state the network reports and his channel. */
+void LoadScreenBoard::drawTransfer( void )
+{
+	GameFont *capsFont = font( BOARD_CAPS, TRUE );
+	const Int count = (Int)m_transfers.size();
+	const Int half = ( count + 1 ) / 2;
+	for( Int column = 0; column < 2 && ( column == 0 || count > half ); column++ )
+	{
+		const Int left = column == 0 ? LOAD_LEFT : LOAD_RIGHT - LOAD_TRANSFER_WIDTH;
+		drawSection( m_playersHead, X( (Real)left ), X( (Real)( left + LOAD_TRANSFER_WIDTH ) ), Y( (Real)( LOAD_BODY_TOP + 4 ) ) );
+		UIStyle::drawTracked( m_statusHead, capsFont, X( (Real)( left + 300 ) ), Y( (Real)( LOAD_BODY_TOP + 4 ) ) + ( scaled( 22 ) - capsFont->height ) / 2,
+			UIStyle::ACTIVE, UIStyle::MENU_LABEL_TRACKING );
+	}
+	for( size_t each = 0; each < m_transfers.size(); each++ )
+	{
+		const BoardTransfer &row = m_transfers[ each ];
+		const IRegion2D box = onScreen( row.box );
+		const Int middle = ( box.lo.y + box.hi.y ) / 2;
+		UIStyle::menuRow( box, row.local ? UIStyle::ROW_LOCAL : UIStyle::ROW_PLAIN, row.zebra );
+		TheDisplay->drawFillRect( X( (Real)( row.box.lo.x + 6 ) ), box.lo.y + scaled( 10 ), max( 2, scaled( 4 ) ), max( 1, box.hi.y - box.lo.y - 2 * scaled( 10 ) ), row.color );
+		row.name->draw( X( (Real)( row.box.lo.x + 22 ) ), middle - boardStringHeight( row.name ) / 2, row.local ? UIStyle::GOLD : UIStyle::INK, BOARD_SHADOW );
+		const Bool done = row.percent >= 100 || ( row.percent < 0 && row.slot != 0 );
+		row.state->draw( X( (Real)( row.box.lo.x + 300 ) ), middle - boardStringHeight( row.state ) / 2, done ? UIStyle::MUTED : UIStyle::INK, BOARD_SHADOW );
+		const Int right = X( (Real)( row.box.hi.x - 8 ) );
+		const Int figureRoom = boardStringWidth( m_cardFigure ) + scaled( 4 );
+		const Int channelLeft = X( (Real)( row.box.lo.x + 480 ) );
+		if( row.percent >= 0 )
+		{
+			drawChannel( channelLeft, right - figureRoom - scaled( 12 ), middle, max( 2, scaled( 10 ) ), row.percent, row.color );
+			row.figure->draw( right - boardStringWidth( row.figure ), middle - boardStringHeight( row.figure ) / 2, UIStyle::INK, BOARD_SHADOW );
+		}
+		else if( done )	// had the map: the channel full and dim
+			drawChannel( channelLeft, right - figureRoom - scaled( 12 ), middle, max( 2, scaled( 10 ) ), 100, row.color );
+	}
+}
+
+/** The Challenge load keeps EA's screen; only its loading bar is the board's, drawn over the bar's
+	* holder with the gauge's own progress (GadgetProgressBarSetProgress keeps it as user data). */
+static GameWindow *s_challengeGauge = NULL;
+
+static void boardDrawChallengeBar( GameWindow *window, WinInstanceData *instData )
+{
+	const Int percent = s_challengeGauge ? (Int)(intptr_t)s_challengeGauge->winGetUserData() : 0;
+	Int x, y, width, height;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &width, &height );
+	IRegion2D bar;
+	bar.lo.x = x;
+	bar.lo.y = y;
+	bar.hi.x = x + width;
+	bar.hi.y = y + height;
+	UnicodeString words;
+	words.format( TheGameText->fetch( "GUI:LoadProgress" ), min( max( percent, 0 ), 100 ) );
+	boardDrawLoadBar( bar, percent, UIStyle::capitals( words ), UIStyle::menuFont( BOARD_BODY, TRUE ), BOARD_BAR_TRACKING );
+}
+
+/** A campaign's chain from FirstMission through each NextMission, and the current mission's place on
+	* it; both 0 off a campaign or off the chain. */
+static void boardMissionPlace( Int *number, Int *count )
+{
+	*number = *count = 0;
+	Campaign *campaign = TheCampaignManager ? TheCampaignManager->getCurrentCampaign() : NULL;
+	const Mission *current = TheCampaignManager ? TheCampaignManager->getCurrentMission() : NULL;
+	if( campaign == NULL || current == NULL )
+		return;
+	std::vector< const char * > chain;
+	for( Mission *mission = campaign->getNextMission( NULL ); mission && chain.size() < 64; mission = campaign->getNextMission( mission ) )
+		chain.push_back( mission->m_name.str() );
+	if( chain.empty() )
+		return;
+	*number = LoadScreen_missionPlace( &chain[ 0 ], (Int)chain.size(), current->m_name.str() );
+	*count = *number > 0 ? (Int)chain.size() : 0;
+}
+
+/** The side's mission picture, as SinglePlayerLoadScreen sets it on its window. */
+static const Image *boardMissionPicture( void )
+{
+	const Campaign *campaign = TheCampaignManager ? TheCampaignManager->getCurrentCampaign() : NULL;
+	if( campaign == NULL )
+		return NULL;
+	const AsciiString side = campaign->getSide();
+	if( side.compareNoCase( "USA" ) == 0 )
+		return TheMappedImageCollection->findImageByName( "MissionLoad_USA" );
+	if( side.compareNoCase( "GLA" ) == 0 )
+		return TheMappedImageCollection->findImageByName( "MissionLoad_GLA" );
+	if( side.compareNoCase( "China" ) == 0 )
+		return TheMappedImageCollection->findImageByName( "MissionLoad_China" );
+	return NULL;
+}
+
+/** A mission's header words: its place as the title (its number where the mission names none), the
+	* campaign and the difficulty after it; extra joins the subtitle (a saved game's words and date). */
+static void boardMissionWords( UnicodeString &title, UnicodeString &subtitle, const UnicodeString &extra )
+{
+	static const char *const difficultyLabels[ DIFFICULTY_COUNT ] = { "GUI:Easy", "GUI:Medium", "GUI:Hard" };
+	const Mission *mission = TheCampaignManager->getCurrentMission();
+	UnicodeString number;
+	number.format( TheGameText->fetch( "GUI:LoadMission" ), TheCampaignManager->getCurrentMissionNumber() + 1 );
+	title = number;
+	subtitle = TheGameText->fetch( TheCampaignManager->getCurrentCampaign()->m_campaignNameLabel );
+	if( mission && !mission->m_locationNameLabel.isEmpty() )
+		title = TheGameText->fetch( mission->m_locationNameLabel );
+	if( !extra.isEmpty() )
+	{
+		subtitle.concat( UIStyle::HEADER_JOINER );
+		subtitle.concat( extra );
+	}
+	subtitle.concat( UIStyle::HEADER_JOINER );
+	subtitle.concat( TheGameText->fetch( difficultyLabels[ TheCampaignManager->getGameDifficulty() ] ) );
 }
 
 
@@ -1959,23 +2485,14 @@ void SinglePlayerLoadScreen::update( Int percent )
 	// the briefing movie has the whole screen; the board comes with the load after it
 	if( m_board == NULL )
 	{
-		// Zero Hour's missions name no place, so the number is the title there
-		static const char *const difficultyLabels[ DIFFICULTY_COUNT ] = { "GUI:Easy", "GUI:Medium", "GUI:Hard" };
-		const Mission *mission = TheCampaignManager->getCurrentMission();
-		UnicodeString number;
-		number.format( TheGameText->fetch( "GUI:LoadMission" ), TheCampaignManager->getCurrentMissionNumber() + 1 );
-		UnicodeString title = number;
-		UnicodeString subtitle = TheGameText->fetch( TheCampaignManager->getCurrentCampaign()->m_campaignNameLabel );
-		if( !mission->m_locationNameLabel.isEmpty() )
-		{
-			title = TheGameText->fetch( mission->m_locationNameLabel );
-			subtitle.concat( UIStyle::HEADER_JOINER );
-			subtitle.concat( number );
-		}
-		subtitle.concat( UIStyle::HEADER_JOINER );
-		subtitle.concat( TheGameText->fetch( difficultyLabels[ TheCampaignManager->getGameDifficulty() ] ) );
+		// Zero Hour's missions name no place, so the number is the title there; the mission's place in
+		// its campaign is the count and pips at the title row's end
+		UnicodeString title, subtitle;
+		boardMissionWords( title, subtitle, UnicodeString::TheEmptyString );
+		Int number, count;
+		boardMissionPlace( &number, &count );
 		m_board = NEW LoadScreenBoard;
-		m_board->createMission( m_loadScreen, title, subtitle, m_unicodeObjectiveLines, MAX_OBJECTIVE_LINES );
+		m_board->createMission( m_loadScreen, title, subtitle, m_unicodeObjectiveLines, MAX_OBJECTIVE_LINES, number, count, NULL );
 		m_progressBar->winHide( TRUE );
 		m_percent->winHide( TRUE );
 	}
@@ -2037,6 +2554,7 @@ ChallengeLoadScreen::ChallengeLoadScreen( void )
 ChallengeLoadScreen::~ChallengeLoadScreen( void )
 {
 	m_progressBar = NULL;
+	s_challengeGauge = NULL;
 	if(m_videoBuffer)
 		delete m_videoBuffer;
 	m_videoBuffer = NULL;
@@ -2312,7 +2830,20 @@ void ChallengeLoadScreen::init( GameInfo *game )
 	// Store the pointer to the progress bar on the loadscreen
 	m_progressBar = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( AsciiString( "ChallengeLoadScreen.wnd:ProgressLoad" ) ));
 	DEBUG_ASSERTCRASH(m_progressBar, ("Can't initialize the progressbar for the single player loadscreen"));
-	GadgetProgressBarSetProgress(m_progressBar, 0 );	
+	GadgetProgressBarSetProgress(m_progressBar, 0 );
+
+	// EA's screen stays; its loading bar is the board's, drawn over the bar's holder (ParentLoadingBar)
+	// with everything EA put in it hidden, the gauge still taking the progress
+	if( m_progressBar )
+	{
+		GameWindow *holder = TheWindowManager->winGetWindowFromId( m_loadScreen, TheNameKeyGenerator->nameToKey( AsciiString( "ChallengeLoadScreen.wnd:ParentLoadingBar" ) ) );
+		if( holder == NULL )
+			holder = m_progressBar;
+		for( GameWindow *child = holder->winGetChild(); child; child = child->winGetNext() )
+			child->winHide( TRUE );
+		s_challengeGauge = m_progressBar;
+		holder->winSetDrawFunc( boardDrawChallengeBar );
+	}
 
 	m_ambientLoop.setEventName("LoadScreenAmbient");
 
@@ -2511,6 +3042,7 @@ void ChallengeLoadScreen::reset( void )
 {
  setLoadScreen(NULL);
  m_progressBar = NULL;
+ s_challengeGauge = NULL;
 }
 
 void ChallengeLoadScreen::update( Int percent )
@@ -2554,6 +3086,45 @@ void ShellGameLoadScreen::init( GameInfo *game )
 	{
 		m_board = NEW LoadScreenBoard;
 		m_loadScreen = m_board->create( game, "GUI:LoadModeReplay", FALSE );
+		return;
+	}
+
+	// a saved campaign game loads on its mission's frame: the mission's picture, the save's date and
+	// the mission's briefing (a skirmish save names no players, and keeps EA's screen)
+	const Mission *mission = TheCampaignManager ? TheCampaignManager->getCurrentMission() : NULL;
+	if( TheGameState->isInLoadGame() && TheGameLogic->getGameMode() == GAME_SINGLE_PLAYER
+		&& mission && TheCampaignManager->getCurrentCampaign() )
+	{
+		const SaveDate &date = TheGameState->getSaveGameInfo()->date;
+		WallClockTime when;
+		when.wYear = date.year;
+		when.wMonth = date.month;
+		when.wDayOfWeek = date.dayOfWeek;
+		when.wDay = date.day;
+		when.wHour = date.hour;
+		when.wMinute = date.minute;
+		when.wSecond = date.second;
+		when.wMilliseconds = date.milliseconds;
+		UnicodeString saved = TheGameText->fetch( "GUI:LoadSavedGame" );
+		if( date.year > 0 )
+		{
+			saved.concat( UIStyle::HEADER_JOINER );
+			saved.concat( getUnicodeDateBuffer( when ) );
+			saved.concat( u" " );
+			saved.concat( getUnicodeTimeBuffer( when ) );
+		}
+		UnicodeString title, subtitle;
+		boardMissionWords( title, subtitle, saved );
+		UnicodeString briefing[ MAX_OBJECTIVE_LINES ];
+		for( Int line = 0; line < MAX_OBJECTIVE_LINES; ++line )
+		{
+			if( mission->m_missionObjectivesLabel[ line ].isNotEmpty() )
+				briefing[ line ] = TheGameText->fetch( mission->m_missionObjectivesLabel[ line ] );
+		}
+		Int number, count;
+		boardMissionPlace( &number, &count );
+		m_board = NEW LoadScreenBoard;
+		m_loadScreen = m_board->createMission( NULL, title, subtitle, briefing, MAX_OBJECTIVE_LINES, number, count, boardMissionPicture() );
 		return;
 	}
 
@@ -2843,131 +3414,34 @@ void GameSpyLoadScreen::showRejoin( Int percent, Bool waitingForLog )
 //-----------------------------------------------------------------------------
 MapTransferLoadScreen::MapTransferLoadScreen( void )
 {
-	//Added By Sadullah Nader
-	//Initializations missing and needed
+	m_board = NULL;
 	m_oldTimeout = 0;
-	//
 	for(Int i = 0; i < MAX_SLOTS; ++i)
-	{
-		m_progressBars[i] = NULL;
-		m_playerNames[i] = NULL;
-		m_progressText[i]= NULL;
-		m_playerLookup[i] = -1;
 		m_oldProgress[i] = -1;
-	}
-	m_fileNameText = NULL;
-	m_timeoutText = NULL;
 }
-	
+
 MapTransferLoadScreen::~MapTransferLoadScreen( void )
 {
-	for(Int i = 0; i < MAX_SLOTS; ++i)
-	{
-		m_progressBars[i] = NULL;
-		m_playerNames[i] = NULL;
-		m_progressText[i]= NULL;
-		m_playerLookup[i] = -1;
-		m_oldProgress[i] = -1;
-	}
-	m_fileNameText = NULL;
-	m_timeoutText = NULL;
+	// the board's window goes with the load screen's in ~LoadScreen
+	delete m_board;
+	m_board = NULL;
 }
 
+/* Every human on the board's rows, any count, with the state the network reports; EA's
+	 MapTransferScreen.wnd had eight rows and is not used. */
 void MapTransferLoadScreen::init( GameInfo *game )
 {
-	// create the layout of the load screen
-	m_loadScreen = TheWindowManager->winCreateFromScript( AsciiString( "Menus/MapTransferScreen.wnd" ) );
-	DEBUG_ASSERTCRASH(m_loadScreen, ("Can't initialize the map transfer loadscreen"));
-	if (!m_loadScreen)
-		return;
-
-	m_loadScreen->winHide(FALSE);
-	m_loadScreen->winBringToTop();
-
 	DEBUG_ASSERTCRASH(TheNetwork, ("Where the Heck is the Network?!!!!"));
-	DEBUG_LOG(("NumPlayers %d\n", TheNetwork->getNumPlayers()));
-
-	AsciiString winName;
-	Int i;
-
-	// Load the Filename Text
-	winName.format( "MapTransferScreen.wnd:StaticTextCurrentFile");
-	m_fileNameText = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-	DEBUG_ASSERTCRASH(m_fileNameText, ("Can't initialize the filename for the map transfer loadscreen"));
-
-	// Load the Timeout Text
-	winName.format( "MapTransferScreen.wnd:StaticTextTimeout");
-	m_timeoutText = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-	DEBUG_ASSERTCRASH(m_timeoutText, ("Can't initialize the timeout for the map transfer loadscreen"));
-
-	Int netSlot = 0;
-	// Loop through and make the loadscreen look all good.
-	for (i = 0; i < MAX_SLOTS; ++i)
-	{
-		// Load the Progress Bar
-		winName.format( "MapTransferScreen.wnd:ProgressLoad%d",i);
-		m_progressBars[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_progressBars[i], ("Can't initialize the progressbars for the map transfer loadscreen"));
-		// set the progressbar to zero
-		GadgetProgressBarSetProgress(m_progressBars[i], 0 );
-
-		// Load the Player's name
-		winName.format( "MapTransferScreen.wnd:StaticTextPlayer%d",i);
-		m_playerNames[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_playerNames[i], ("Can't initialize the Names for the map transfer loadscreen"));
-
-		// Load the Progress Text
-		winName.format( "MapTransferScreen.wnd:StaticTextProgress%d",i);
-		m_progressText[i] = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( winName ));
-		DEBUG_ASSERTCRASH(m_progressText[i], ("Can't initialize the progress text for the map transfer loadscreen"));
-
-		// get the slot man!
-		GameSlot *slot = game->getSlot(i);
-		if (!slot || !slot->isHuman())
-			continue;
-		if (!m_progressBars[netSlot] || !m_playerNames[netSlot] || !m_progressText[netSlot])
-			continue;	// the layout's rows are used up; this player's transfer is not shown
-		Color houseColor = TheMultiplayerSettings->getColor(slot->getApparentColor())->getColor();
-		GadgetProgressBarSetEnabledBarColor(m_progressBars[netSlot], houseColor );
-
-		UnicodeString name = slot->getName();
-		GadgetStaticTextSetText(m_playerNames[netSlot], name );
-		m_playerNames[netSlot]->winSetEnabledTextColors(houseColor, m_playerNames[netSlot]->winGetEnabledTextBorderColor());
-
-		GadgetStaticTextSetText(m_progressText[netSlot], UnicodeString::TheEmptyString );
-		m_progressText[netSlot]->winSetEnabledTextColors(houseColor, m_progressText[netSlot]->winGetEnabledTextBorderColor());
-
-		if ((i == 0 || (TheGameInfo->getConstSlot(i)->isHuman() && TheGameInfo->getConstSlot(i)->hasMap())) && m_progressBars[netSlot])
-			m_progressBars[netSlot]->winHide(TRUE);
-
-		m_playerLookup[i] = netSlot; // save our mapping so we can update progress correctly
-
-		netSlot++;
-	}
-	
-	for(i = netSlot; i < MAX_SLOTS; ++i)
-	{
-		if (!m_progressBars[i] || !m_playerNames[i] || !m_progressText[i])
-			continue;
-		m_progressBars[i]->winHide(TRUE);
-		m_playerNames[i]->winHide(TRUE);
-		m_progressText[i]->winHide(TRUE);
-	}
+	const Bool online = TheGameSpyGame && game == static_cast< GameInfo * >( TheGameSpyGame );
+	m_board = NEW LoadScreenBoard;
+	m_loadScreen = m_board->createTransfer( game, online ? "GUI:LoadModeOnline" : "GUI:LoadModeLAN" );
 }
 
 void MapTransferLoadScreen::reset( void )
 {
 	setLoadScreen(NULL);
 	for(Int i = 0; i < MAX_SLOTS; ++i)
-	{
-		m_progressBars[i] = NULL;
-		m_playerNames[i] = NULL;
-		m_progressText[i]= NULL;
-		m_playerLookup[i] = -1;
 		m_oldProgress[i] = -1;
-	}
-	m_fileNameText = NULL;
-	m_timeoutText = NULL;
 }
 
 void MapTransferLoadScreen::update( Int percent )
@@ -2993,18 +3467,14 @@ void MapTransferLoadScreen::processProgress(Int playerId, Int percentage, AsciiS
 		DEBUG_ASSERTCRASH(FALSE, ("Percentage %d was passed in for Player %d\n", percentage, playerId));
 		return;
 	}
-	if( m_playerLookup[playerId] == -1)
+	if( m_board == NULL )
 		return;
 
 	if (m_oldProgress[playerId] == percentage)
 		return;
 	m_oldProgress[playerId] = percentage;
 
-	Int translatedSlot = m_playerLookup[playerId];
-	if(m_progressBars[translatedSlot])
-		GadgetProgressBarSetProgress(m_progressBars[translatedSlot], percentage );	
-	if (m_progressText[translatedSlot])
-		GadgetStaticTextSetText(m_progressText[translatedSlot], TheGameText->fetch(stateStr));
+	m_board->setTransfer( playerId, percentage, TheGameText->fetch(stateStr) );
 }
 
 void MapTransferLoadScreen::processTimeout(Int secondsLeft)
@@ -3013,22 +3483,23 @@ void MapTransferLoadScreen::processTimeout(Int secondsLeft)
 		return;
 	m_oldTimeout = secondsLeft;
 
-	if (m_timeoutText)
+	if (m_board)
 	{
 		UnicodeString txt;
 		txt.format(TheGameText->fetch("MapTransfer:Timeout"), (secondsLeft/60), (secondsLeft%60));
-		GadgetStaticTextSetText(m_timeoutText, txt);
+		m_board->setTransferFoot( NULL, &txt );
 	}
 }
 
 void MapTransferLoadScreen::setCurrentFilename(AsciiString filename)
 {
-	if (m_fileNameText)
+	if (m_board)
 	{
+		UnicodeString name;
+		name.translate(TheGameState->getMapLeafName(filename));
 		UnicodeString txt;
-		txt.translate(TheGameState->getMapLeafName(filename));
-		txt.format(TheGameText->fetch("MapTransfer:CurrentFile"), txt.str());
-		GadgetStaticTextSetText(m_fileNameText, txt);
+		txt.format(TheGameText->fetch("MapTransfer:CurrentFile"), name.str());
+		m_board->setTransferFoot( &txt, NULL );
 	}
 }
 

@@ -1,88 +1,12 @@
-// The load board's cards: one to thirty-two to a column at 1080 and 720, with and without load bars,
-// with no team bands, a band per two cards and a band per card; and the team numbers the load board
-// and the score screen share.  Included into test_gameengine.cpp.
+// The load board's layout in the menu language (README-loading.md beside loading.py under the
+// wrapper's experiments/proofs/2026-11-24/screens/loading): the wings from one player to thirty-two,
+// the middle's stack for every mix of versus, map shape, rules and watchers, the nights' band, the
+// clocks at the match's speed, the transfer's rows; and the team numbers the load board and the score
+// screen share.  Included into test_gameengine.cpp.
 
 #include "GameClient/LoadScreenLayout.h"
 #include "GameClient/ScoreScreenLayout.h"
 #include "GameClient/UIStyle.h"
-
-/** The line heights the board measures, as Arial's cell is about 1.15 of the em UI-STYLE.md gives
-	* for each size: names 25 and 18 px of em at 1080 and 720, the general 21 at 1080.  The general's
-	* line at 720 and the small type (a computer's third line, the percentage, a band's label, a disc's
-	* number) grow until their capitals stand 12 px tall, a cell of about 20.  The disc is the map's start spot, never under
-	* 27 board pixels (18 at 720) and two over its number's cell. */
-static LoadCardLines loadLines( Bool at720, Bool bars )
-{
-	LoadCardLines lines;
-	lines.scale = at720 ? 2.0f / 3.0f : 1.0f;
-	lines.name = at720 ? 21 : 29;
-	lines.army = at720 ? 20 : 24;
-	lines.detail = at720 ? 20 : 21;
-	lines.percent = at720 ? 20 : 21;
-	lines.band = lines.percent;
-	lines.disc = at720 ? 22 : 27;
-	lines.bars = bars;
-	return lines;
-}
-
-/** A column's height on the board: from the band's top to a gap over the two-line tip panel. */
-static Int loadColumnHeight( const LoadCardLines &lines, Int tipLine )
-{
-	const Real s = lines.scale;
-	const Int bottom = LoadScreen_px( UIStyle::ROOM_BUTTON_TOP, s ) - LoadScreen_px( LOAD_FOOT_GAP, s )
-		- LoadScreen_tipPanelHeight( tipLine, s ) - LoadScreen_px( LOAD_FOOT_GAP, s );
-	return bottom - LoadScreen_px( LOAD_BAND_TOP, s );
-}
-
-/** Nothing inside one card runs over its edge or into another thing in it. */
-static void loadCheckInside( const LoadCardPlan &plan, const LoadCardLines &lines )
-{
-	const Int h = plan.cardHeight;
-	CHECK( plan.emblem > 0 );
-	CHECK( plan.emblemTop >= 0 && plan.emblemTop + plan.emblem <= h );
-	CHECK( plan.disc > 0 );
-	CHECK( plan.disc >= lines.disc );
-	CHECK( plan.discTop >= 0 && plan.discTop + plan.disc <= h );
-	if( plan.mode <= LOAD_CARD_SHORT )
-	{
-		CHECK( plan.nameTop >= 0 );
-		CHECK( plan.nameTop + lines.name <= plan.armyTop );
-		Int last = plan.armyTop + lines.army;
-		if( plan.mode == LOAD_CARD_FULL )
-		{
-			CHECK( last <= plan.detailTop );
-			last = plan.detailTop + lines.detail;
-		}
-		else
-			CHECK_EQ( plan.detailTop, -1 );
-		CHECK( last <= h );
-		if( lines.bars )
-		{
-			CHECK( plan.barTop >= last );
-			CHECK( plan.barTop + plan.barHeight <= h );
-			// the disc and the percentage share the inner column: the disc above
-			CHECK( plan.discTop + plan.disc <= plan.percentTop );
-			CHECK( plan.percentTop + lines.percent <= h );
-		}
-		else
-			CHECK_EQ( plan.barTop, -1 );
-	}
-	else
-	{
-		const Int line = LoadScreen_lineHeight( plan.mode, lines );
-		CHECK( plan.disc <= line );
-		CHECK_EQ( plan.detailTop, -1 );
-		CHECK( plan.nameTop >= 0 && plan.armyTop >= 0 && plan.percentTop >= 0 );
-		CHECK( plan.emblemTop + line <= h );
-		CHECK( plan.percentTop + lines.percent <= h );
-		if( plan.barTop >= 0 )
-		{
-			CHECK( lines.bars );
-			CHECK( plan.barTop >= plan.emblemTop + line );
-			CHECK( plan.barTop + plan.barHeight <= h );
-		}
-	}
-}
 
 TEST(load_screen_and_score_screen_call_teams_by_one_number)
 {
@@ -132,71 +56,288 @@ TEST(load_screen_and_score_screen_call_teams_by_one_number)
 	CHECK_EQ( onLoad[ 2 ], 3 );
 }
 
-/** One column as the board lays it: one sub-column, or two of one-line cards. */
-static LoadCardPlan loadPlanColumn( Int cards, Int bands, Int column, const LoadCardLines &lines, Int *subColumns )
+TEST(load_screen_wing_rows_match_the_design_table)
 {
-	*subColumns = LoadScreen_subColumns( cards, bands, column, lines );
-	if( *subColumns == 1 )
-		return LoadScreen_planCards( cards, bands, column, lines );
-	const Int per = ( cards + 1 ) / 2;
-	return LoadScreen_planCards( per, min( bands, per ), column, lines, LOAD_CARD_LINE );
+	// README-loading.md's "Row sizes by player count", row by row
+	LoadWingPlan plan = LoadScreen_planWing( 1, 1, TRUE );		// 1 v 1
+	CHECK_EQ( (Int)plan.row, (Int)LOAD_ROW_POSTER );
+	CHECK_EQ( plan.rowPitch, 692 );
+	plan = LoadScreen_planWing( 1, 2, FALSE );
+	CHECK_EQ( (Int)plan.row, (Int)LOAD_ROW_CARD );
+	CHECK_EQ( plan.rowPitch, 346 );
+	plan = LoadScreen_planWing( 2, 2, TRUE );								// a 2 v 1 v 1's right wing
+	CHECK_EQ( plan.rowPitch, 312 );
+	plan = LoadScreen_planWing( 1, 3, FALSE );
+	CHECK_EQ( plan.rowPitch, 230 );
+	plan = LoadScreen_planWing( 1, 4, FALSE );							// a 4 v 4
+	CHECK_EQ( (Int)plan.head, (Int)LOAD_HEAD_CARD );
+	CHECK_EQ( (Int)plan.row, (Int)LOAD_ROW_CARD );
+	CHECK_EQ( plan.rowPitch, 173 );
+	plan = LoadScreen_planWing( 2, 4, FALSE );
+	CHECK_EQ( plan.rowPitch, 156 );
+	plan = LoadScreen_planWing( 1, 5, FALSE );							// five a team: lines
+	CHECK_EQ( (Int)plan.head, (Int)LOAD_HEAD_LINE );
+	CHECK_EQ( (Int)plan.row, (Int)LOAD_ROW_LINE );
+	CHECK_EQ( plan.rowPitch, 88 );
+	plan = LoadScreen_planWing( 1, 8, FALSE );
+	CHECK_EQ( plan.rowPitch, 87 );
+	plan = LoadScreen_planWing( 2, 8, FALSE );
+	CHECK_EQ( plan.rowPitch, 80 );
+	plan = LoadScreen_planWing( 2, 16, FALSE );							// 8 v 8 v 8 v 8
+	CHECK_EQ( plan.rowPitch, 40 );
+	plan = LoadScreen_planWing( 8, 16, FALSE );							// sixteen teams of two
+	CHECK_EQ( (Int)plan.head, (Int)LOAD_HEAD_RULE );
+	CHECK_EQ( plan.rowPitch, 40 );
+	plan = LoadScreen_planWing( 16, 16, TRUE );							// a free-for-all of 32
+	CHECK_EQ( (Int)plan.head, (Int)LOAD_HEAD_NONE );
+	CHECK_EQ( plan.rowPitch, 46 );
 }
 
-TEST(load_screen_cards_one_to_thirty_two_a_column_fit_at_1080_and_720)
+TEST(load_screen_wings_fit_the_body_from_one_to_thirty_two)
 {
-	for( Int res = 0; res < 2; res++ )
+	const Int body = LOAD_BODY_BOTTOM - LOAD_BODY_TOP;
+	for( Int rows = 1; rows <= 32; rows++ )
 	{
-		for( Int withBars = 0; withBars < 2; withBars++ )
+		for( Int teams = 1; teams <= rows; teams++ )
 		{
-			const LoadCardLines lines = loadLines( res == 1, withBars == 1 );
-			const Int column = loadColumnHeight( lines, lines.army );
-			LoadCardMode last = LOAD_CARD_FULL;
-			for( Int cards = 1; cards <= 32; cards++ )
+			// every team one player is what the board calls alone, and nothing else is
+			for( Int alone = 0; alone < 2; alone++ )
 			{
-				for( Int bandKind = 0; bandKind < 3; bandKind++ )
+				if( ( alone == 1 ) != ( teams == rows ) )
+					continue;
+				const LoadWingPlan plan = LoadScreen_planWing( teams, rows, alone == 1 );
+				// nothing leaves the body, and the plan's own sum is what it says
+				CHECK( plan.used <= body );
+				CHECK_EQ( plan.used, plan.headHeight * teams + plan.rowPitch * rows + plan.gap * ( teams - 1 ) );
+				CHECK( plan.rowHeight > 0 && plan.rowHeight < plan.rowPitch );
+				// a card holds a human's four lines; a poster its portrait over them
+				if( plan.row != LOAD_ROW_LINE )
 				{
-					const Int bands = bandKind == 0 ? 0 : bandKind == 1 ? ( cards + 1 ) / 2 : cards;
-					Int subColumns = 0;
-					const LoadCardPlan plan = loadPlanColumn( cards, bands, column, lines, &subColumns );
-					const Int perColumn = subColumns == 1 ? cards : ( cards + 1 ) / 2;
-					const Int perBands = subColumns == 1 ? bands : min( bands, perColumn );
-					CHECK( subColumns == 1 || subColumns == 2 );
-					// past sixteen a column always splits; a split column is one-line cards
-					if( cards > LOAD_COLUMN_MOST )
-						CHECK_EQ( subColumns, 2 );
-					if( subColumns == 2 )
-						CHECK( plan.mode >= LOAD_CARD_LINE );
-					// a column with no bands always fits, and nothing ever leaves the column
-					if( bands == 0 )
-						CHECK( plan.fits );
-					CHECK( plan.used <= column );
-					const Int rows = perColumn + ( plan.bandHeight > 0 ? perBands : 0 );
-					CHECK( plan.used == plan.cardHeight * perColumn + plan.bandHeight * ( plan.bandHeight > 0 ? perBands : 0 )
-						+ plan.gap * ( rows - 1 ) );
-					if( plan.fits )
-						loadCheckInside( plan, lines );
-					if( plan.bandLabels )
-						CHECK( plan.bandHeight >= lines.band );
-					if( bandKind == 0 && subColumns == 1 )
+					CHECK( plan.rowPitch >= LOAD_CARD_LEAST );
+					CHECK( plan.rowHeight >= LoadScreen_cardText( TRUE, LOAD_PITCH_BAR ) );
+				}
+				else
+					CHECK( plan.rowPitch <= LOAD_LINE_MOST );
+				if( plan.row == LOAD_ROW_POSTER )
+				{
+					const Int text = LoadScreen_cardText( TRUE, LOAD_PITCH_BAR );
+					const Int side = LoadScreen_posterPortrait( LOAD_WING_WIDTH, plan.rowHeight, text, FALSE );
+					CHECK( side > 0 && 8 + side + 20 + text <= plan.rowHeight );
+					CHECK( side <= LOAD_WING_WIDTH - 36 );
+				}
+				// sixteen rows to a wing still read, however their teams split: an 18 px name on a row
+				// of 32 or more (40 in the design's two cases, 8 v 8 v 8 v 8 and sixteen pairs)
+				if( rows <= 16 )
+					CHECK( plan.rowPitch >= 32 );
+				// the heads: none for a free-for-all, a rule past four teams, else a card's or a line's
+				if( alone && teams > 2 )
+					CHECK_EQ( (Int)plan.head, (Int)LOAD_HEAD_NONE );
+				else if( teams > 4 )
+					CHECK_EQ( (Int)plan.head, (Int)LOAD_HEAD_RULE );
+				else
+					CHECK_EQ( (Int)plan.head, plan.row == LOAD_ROW_LINE ? (Int)LOAD_HEAD_LINE : (Int)LOAD_HEAD_CARD );
+			}
+		}
+	}
+	// a card's portrait stands inside its row and never past 300
+	for( Int height = 1; height < 800; height += 7 )
+	{
+		const Int side = LoadScreen_cardPortrait( height );
+		CHECK( side >= 1 && side <= LOAD_PORTRAIT_MOST );
+		if( height > 17 )
+			CHECK( side <= height - 16 );
+	}
+	// a plain side's picture is small art and stops at 360 on a poster
+	CHECK_EQ( LoadScreen_posterPortrait( LOAD_WING_WIDTH, 692 - 8, LoadScreen_cardText( FALSE, 0 ), TRUE ), LOAD_PLAIN_PORTRAIT_MOST );
+}
+
+TEST(load_screen_teams_go_whole_to_the_lighter_wing)
+{
+	// two teams face each other, whatever their sizes
+	std::vector< Int > sizes;
+	sizes.push_back( 1 );
+	sizes.push_back( 7 );
+	std::vector< Int > wing = LoadScreen_wingOfTeams( sizes );
+	CHECK_EQ( wing[ 0 ], 0 );
+	CHECK_EQ( wing[ 1 ], 1 );
+	// 2 v 1 v 1: the pair left, the two alone right
+	sizes.clear();
+	sizes.push_back( 2 );
+	sizes.push_back( 1 );
+	sizes.push_back( 1 );
+	wing = LoadScreen_wingOfTeams( sizes );
+	CHECK_EQ( wing[ 0 ], 0 );
+	CHECK_EQ( wing[ 1 ], 1 );
+	CHECK_EQ( wing[ 2 ], 1 );
+	// 8 v 8 v 8 v 8: two teams a wing, sixteen rows each
+	sizes.assign( 4, 8 );
+	wing = LoadScreen_wingOfTeams( sizes );
+	Int rows[ 2 ] = { 0, 0 };
+	for( Int t = 0; t < 4; t++ )
+		rows[ wing[ t ] ] += sizes[ t ];
+	CHECK_EQ( rows[ 0 ], 16 );
+	CHECK_EQ( rows[ 1 ], 16 );
+	// a free-for-all of 32 splits sixteen and sixteen
+	sizes.assign( 32, 1 );
+	wing = LoadScreen_wingOfTeams( sizes );
+	rows[ 0 ] = rows[ 1 ] = 0;
+	for( Int t = 0; t < 32; t++ )
+		rows[ wing[ t ] ]++;
+	CHECK_EQ( rows[ 0 ], 16 );
+	CHECK_EQ( rows[ 1 ], 16 );
+}
+
+TEST(load_screen_middle_stack_stays_in_the_body)
+{
+	const Real aspects[ 6 ] = { 0.4f, 0.75f, 1.0f, 370.0f / 190.0f, 2.5f, 4.0f };
+	for( Int versus = 0; versus < 2; versus++ )
+	{
+		for( Int a = 0; a < 6; a++ )
+		{
+			for( Int well = 0; well < 2; well++ )
+			{
+				for( Int rules = 0; rules <= 9; rules++ )
+				{
+					for( Int observers = 0; observers < 2; observers++ )
 					{
-						// more cards in one sub-column never bring a line back
-						CHECK( plan.mode >= last );
-						last = plan.mode;
+						for( Int nights = 0; nights < 2; nights++ )
+						{
+							const LoadMiddlePlan plan = LoadScreen_planMiddle( versus == 1, aspects[ a ], well == 1, rules, observers == 1, nights == 1 );
+							CHECK( plan.bottom <= LOAD_BODY_BOTTOM );
+							CHECK( plan.map.lo.x >= LOAD_MIDDLE_LEFT && plan.map.hi.x <= LOAD_MIDDLE_RIGHT );
+							CHECK( plan.map.hi.x - plan.map.lo.x <= LOAD_MAP_LARGEST );
+							CHECK( plan.map.hi.y - plan.map.lo.y <= LOAD_MAP_LARGEST );
+							CHECK( plan.map.hi.y > plan.map.lo.y );
+							// VS stands over the map, never on it
+							if( versus )
+								CHECK( plan.vsTop >= 0 && plan.vsTop + 50 <= plan.map.lo.y );
+							else
+								CHECK_EQ( plan.vsTop, -1 );
+							// a well is the column's width; a preview keeps its shape within a pixel
+							if( well )
+								CHECK_EQ( plan.map.hi.x - plan.map.lo.x, LOAD_MIDDLE_RIGHT - LOAD_MIDDLE_LEFT );
+							else
+							{
+								const Real drawn = (Real)( plan.map.hi.x - plan.map.lo.x ) / (Real)( plan.map.hi.y - plan.map.lo.y );
+								CHECK( drawn / aspects[ a ] > 0.97f && drawn / aspects[ a ] < 1.03f );
+							}
+							Int y = plan.map.hi.y;
+							if( nights )
+							{
+								CHECK( plan.nightsTop >= y );
+								y = plan.nightsTop + LOAD_NIGHTS_HEIGHT;
+							}
+							if( rules > 0 )
+							{
+								// nine rules and the watchers under a tall map keep a row of 30; under the
+								// nights, Apocalypse's four keep one of 30 too
+								CHECK( plan.rulesTop >= y );
+								CHECK( plan.rulePitch <= LOAD_RULE_PITCH );
+								if( !nights || rules <= 4 )
+									CHECK( plan.rulePitch >= 30 );
+								y = plan.rulesTop + LOAD_SECTION_HEAD + rules * plan.rulePitch;
+							}
+							else
+								CHECK_EQ( plan.rulesTop, -1 );
+							if( observers )
+							{
+								CHECK( plan.observersTop >= y );
+								y = plan.observersTop + LOAD_SECTION_HEAD + 30;
+							}
+							CHECK_EQ( plan.bottom, y );
+						}
 					}
 				}
 			}
 		}
 	}
+	// Iron Dragon's 4 v 4 with eight rules and two watchers: the map the column's width
+	const LoadMiddlePlan iron = LoadScreen_planMiddle( TRUE, 370.0f / 190.0f, FALSE, 8, TRUE, FALSE );
+	CHECK_EQ( iron.map.hi.x - iron.map.lo.x, LOAD_MAP_LARGEST );
+	CHECK_EQ( iron.map.lo.y, 192 );
+	CHECK_EQ( iron.rulePitch, LOAD_RULE_PITCH );
+}
 
-	// a 4v4 keeps the computer's third line at 1080, a 1v1 its full card, and a 32-player match
-	// still fits at 720 with every card's bar, sixteen to a side in two sub-columns
-	const LoadCardLines at1080 = loadLines( FALSE, TRUE );
-	const LoadCardLines at720 = loadLines( TRUE, TRUE );
-	Int subColumns = 0;
-	CHECK_EQ( (Int)loadPlanColumn( 4, 1, loadColumnHeight( at1080, at1080.army ), at1080, &subColumns ).mode, (Int)LOAD_CARD_FULL );
-	CHECK_EQ( loadPlanColumn( 1, 0, loadColumnHeight( at1080, at1080.army ), at1080, &subColumns ).cardHeight, 220 );
-	CHECK( loadPlanColumn( 16, 1, loadColumnHeight( at720, at720.army ), at720, &subColumns ).fits );
-	CHECK( loadPlanColumn( 32, 0, loadColumnHeight( at720, at720.army ), at720, &subColumns ).fits );
-	// two teams of four to a column keep their labelled bands at 720
-	CHECK( loadPlanColumn( 8, 2, loadColumnHeight( at720, at720.army ), at720, &subColumns ).bandLabels );
+TEST(load_screen_apocalypse_nights_and_clocks)
+{
+	// the band: every phase at least its floor, the four filling the column exactly
+	const Int seconds[ 4 ] = { 240, 45, 120, 30 };
+	Int widths[ 4 ];
+	LoadScreen_nightWidths( LOAD_MIDDLE_RIGHT - LOAD_MIDDLE_LEFT, seconds, LOAD_NIGHT_LEAST, widths );
+	Int sum = 0;
+	for( Int each = 0; each < 4; each++ )
+	{
+		CHECK( widths[ each ] >= LOAD_NIGHT_LEAST );
+		sum += widths[ each ];
+	}
+	CHECK_EQ( sum, LOAD_MIDDLE_RIGHT - LOAD_MIDDLE_LEFT );
+	CHECK( widths[ 2 ] > widths[ 1 ] && widths[ 0 ] > widths[ 2 ] );
+
+	// game seconds on the wall clock at the match's speed: the design's 1.5x figures, and retail's own
+	CHECK_EQ( LoadScreen_wallSeconds( 240, 150 ), 160 );
+	CHECK_EQ( LoadScreen_wallSeconds( 45, 150 ), 30 );
+	CHECK_EQ( LoadScreen_wallSeconds( 120, 150 ), 80 );
+	CHECK_EQ( LoadScreen_wallSeconds( 30, 150 ), 20 );
+	CHECK_EQ( LoadScreen_wallSeconds( 60, 150 ), 40 );
+	CHECK_EQ( LoadScreen_wallSeconds( 20, 150 ), 13 );
+	CHECK_EQ( LoadScreen_wallSeconds( 240, 100 ), 240 );
+	CHECK_EQ( LoadScreen_wallSeconds( 240, 200 ), 120 );
+	CHECK_EQ( LoadScreen_wallSeconds( 45, 0 ), 45 );
+}
+
+TEST(load_screen_mission_count_follows_the_chain)
+{
+	// GEN_USA: Mission01 to Mission07 in order; GEN_GLA skips Mission03, seven missions numbered to 08
+	const char *const usa[ 7 ] = { "mission01", "mission02", "mission03", "mission04", "mission05", "mission06", "mission07" };
+	const char *const gla[ 7 ] = { "mission01", "mission02", "mission04", "mission05", "mission06", "mission07", "mission08" };
+	CHECK_EQ( LoadScreen_missionPlace( usa, 7, "mission01" ), 1 );
+	CHECK_EQ( LoadScreen_missionPlace( usa, 7, "mission07" ), 7 );
+	CHECK_EQ( LoadScreen_missionPlace( gla, 7, "mission04" ), 3 );
+	CHECK_EQ( LoadScreen_missionPlace( gla, 7, "mission08" ), 7 );
+	// a mission off the chain has no place, so the count and its pips are not drawn
+	CHECK_EQ( LoadScreen_missionPlace( gla, 7, "mission03" ), 0 );
+	CHECK_EQ( LoadScreen_missionPlace( usa, 0, "mission01" ), 0 );
+}
+
+TEST(load_screen_transfer_rows_fit_the_body)
+{
+	// two columns of up to sixteen humans each, at most 76 a row, never past the body
+	const Int top = LOAD_BODY_TOP + 4 + LOAD_SECTION_HEAD;
+	for( Int rows = 1; rows <= 16; rows++ )
+	{
+		const Int pitch = LoadScreen_transferRow( rows );
+		CHECK( pitch <= LOAD_TRANSFER_ROW_MOST );
+		CHECK( top + rows * pitch <= LOAD_BODY_BOTTOM );
+		CHECK( pitch >= 40 );
+	}
+	CHECK_EQ( LoadScreen_transferRow( 9 ), LOAD_TRANSFER_ROW_MOST );
+}
+
+TEST(load_screen_board_sits_on_frame_a)
+{
+	// the board's content inside frame A's panel at every shape, the wings and the middle apart
+	CHECK( LOAD_LEFT > UIStyle::MENU_PANEL_LEFT && LOAD_RIGHT < UIStyle::MENU_PANEL_RIGHT );
+	CHECK( LOAD_HEADER_RULE > UIStyle::MENU_PANEL_TOP && LOAD_BAR_BOTTOM < UIStyle::MENU_PANEL_BOTTOM );
+	CHECK( LOAD_LEFT + LOAD_WING_WIDTH < LOAD_MIDDLE_LEFT );
+	CHECK( LOAD_MIDDLE_RIGHT < LOAD_RIGHT - LOAD_WING_WIDTH );
+	CHECK( LOAD_BODY_BOTTOM < LOAD_FOOT_RULE && LOAD_TIP_BOTTOM < LOAD_BAR_TOP );
+	// the header and the content's edges are every converted screen's, so nothing jumps between them
+	CHECK_EQ( LOAD_LEFT, UIStyle::MENU_INSET );
+	CHECK_EQ( LOAD_RIGHT, UIStyle::MENU_PANEL_RIGHT - 32 );
+	CHECK_EQ( LOAD_TITLE_TOP, UIStyle::MENU_TITLE_TOP );
+	CHECK_EQ( LOAD_TITLE_BOTTOM, UIStyle::MENU_TITLE_BOTTOM );
+	CHECK_EQ( LOAD_HEADER_RULE, UIStyle::MENU_HEADER_RULE );
+	// the middle sits the same distance from either wing
+	CHECK_EQ( LOAD_MIDDLE_LEFT - ( LOAD_LEFT + LOAD_WING_WIDTH ), ( LOAD_RIGHT - LOAD_WING_WIDTH ) - LOAD_MIDDLE_RIGHT );
+	// the transfer's two columns stand flush with the content's edges
+	CHECK( LOAD_LEFT + LOAD_TRANSFER_WIDTH < LOAD_RIGHT - LOAD_TRANSFER_WIDTH );
+	const Int shapes[ 4 ][ 2 ] = { { 1920, 1080 }, { 1280, 720 }, { 2560, 1080 }, { 1024, 768 } };
+	for( Int each = 0; each < 4; each++ )
+	{
+		const Int w = shapes[ each ][ 0 ], h = shapes[ each ][ 1 ];
+		const IRegion2D bar = UIStyle::boardRectOn( LOAD_LEFT, LOAD_BAR_TOP, LOAD_RIGHT, LOAD_BAR_BOTTOM, w, h );
+		CHECK( bar.lo.x >= 0 && bar.hi.x <= w && bar.lo.y >= 0 && bar.hi.y <= h );
+		// the smallest words, 14 at 1080, never under the floor
+		CHECK( UIStyle::menuTextPixels( 14, w, h ) >= UIStyle::MENU_TEXT_FLOOR );
+	}
 }

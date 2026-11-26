@@ -238,7 +238,7 @@ public:
 
 private:
 	GameWindow *m_progressBar	;				///< Pointer to the Progress Bar on the window
-	LoadScreenBoard *m_board;					///< a replay's players, map and tip; NULL for a boot or a saved game
+	LoadScreenBoard *m_board;					///< a replay's players, map and tip, or a saved campaign game's mission; NULL for a boot
 
 };
 
@@ -315,13 +315,8 @@ public:
 	void processTimeout(Int secondsLeft);
 	void setCurrentFilename(AsciiString filename);
 private:
-	GameWindow *m_progressBars[MAX_SLOTS];	///< pointer array to all the progress bars on the window
-	GameWindow *m_playerNames[MAX_SLOTS];		///< pointer array to all the static text player names on the window
-	GameWindow *m_progressText[MAX_SLOTS];	///< pointer array to all the static text player sides
-	Int m_playerLookup[MAX_SLOTS];					///< lookup table to translate network slot info screen slot (to account for holes in the slot list)
+	LoadScreenBoard *m_board;								///< every human on the board's rows, as many as the room seats
 	Int m_oldProgress[MAX_SLOTS];						///< old vals, so we can call processProgress() every frame and not touch the GUI
-	GameWindow *m_fileNameText;
-	GameWindow *m_timeoutText;
 	Int m_oldTimeout;												///< old val, so we can call processTimeout() every frame and not touch the GUI
 };
 

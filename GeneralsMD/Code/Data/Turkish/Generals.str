@@ -17560,10 +17560,6 @@ GUI:LoadProgress
 "Yükleniyor %%%d"
 END
 
-GUI:LoadPlayerPercent
-"%%%d"
-END
-
 GUI:LoadRuleOn
 "Açık"
 END
@@ -22619,4 +22615,122 @@ END
 
 GUI:LaneEndWaveSent
 "Dalga gönderildi"
+END
+
+// Menu redesign package 6, the load screens: the board's heads and rules, the Direct Strike and Apocalypse
+// facts and tips, the mission count, a saved game and the map transfer.
+GUI:LoadReady
+"HAZIR"
+END
+
+GUI:LoadRules
+"KURALLAR"
+END
+
+GUI:LoadWaitingFor
+"%s BEKLENİYOR · %%%d"
+END
+
+GUI:LoadMissionOf
+"GÖREV %d / %d"
+END
+
+GUI:LoadSavedGame
+"Kayıtlı oyun"
+END
+
+GUI:LoadMapTransfer
+"Harita aktarımı"
+END
+
+GUI:LoadPlayers
+"OYUNCULAR"
+END
+
+GUI:LoadStatus
+"DURUM"
+END
+
+GUI:LoadSurvivors
+"SAĞ KALANLAR"
+END
+
+GUI:LoadNights
+"GECELER"
+END
+
+GUI:LoadDay
+"GÜNDÜZ"
+END
+
+GUI:LoadDusk
+"AKŞAM"
+END
+
+GUI:LoadNight
+"GECE"
+END
+
+GUI:LoadDawn
+"ŞAFAK"
+END
+
+GUI:LoadFirstWave
+"İLK DALGA"
+END
+
+GUI:LoadGatesGlow
+"Dalgadan önce kapılar parlar"
+END
+
+GUI:LoadBloodMoon
+"KAN AYI"
+END
+
+GUI:LoadEveryThirdNight
+"her üç gecede bir, boss"
+END
+
+GUI:LoadRandomMap
+"Rastgele harita"
+END
+
+GUI:LoadHiddenMap
+"Gizli harita"
+END
+
+GUI:LoadWaveEvery
+"Dalga aralığı"
+END
+
+GUI:LoadIncomeWave
+"Dalga başı gelir"
+END
+
+GUI:LoadWaveLife
+"Dalga ömrü"
+END
+
+GUI:LoadTipDirectStrike1
+"Arsanda ne duruyorsa her %d saniyede bir kopyası koridordan yürür."
+END
+
+GUI:LoadTipDirectStrike2
+"Bir dalga %d saniye yaşar. O sürede düşman kalesine varacak birlikler kur."
+END
+
+GUI:LoadTipDirectStrike3
+"Her gelir seviyesi 1.000 $ tutar, her dalgada 100 $ fazla öder, on dalgada kendini çıkarır."
+END
+
+GUI:LoadTipApocalypse1
+"Her üçüncü gece Kan Ayı doğar, ölülerin arasında daha beteri yürür."
+END
+
+GUI:LoadTipApocalypse2
+"Bir dalga gelmeden %d saniye önce kapıları parlar."
+END
+
+GUI:LoadTipApocalypse3
+"İlk dalga %d saniye sonra gelir. Savaşmadan önce kur."
 END

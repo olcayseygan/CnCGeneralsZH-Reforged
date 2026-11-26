@@ -2921,10 +2921,6 @@ GUI:LoadProgress
 "Loading %d%%"
 END
 
-GUI:LoadPlayerPercent
-"%d%%"
-END
-
 GUI:LoadRuleOn
 "On"
 END
@@ -8432,4 +8428,123 @@ END
 
 GUI:LaneEndWaveSent
 "Wave sent"
+END
+
+// Menu redesign package 6, the load screens: the board's heads and rules, the Direct Strike and Apocalypse
+// facts and tips, the mission count, a saved game and the map transfer.  A tip's %d is a span on the wall
+// clock at the match's speed; if the constant behind it changes, the words around it still hold.
+GUI:LoadReady
+"READY"
+END
+
+GUI:LoadRules
+"RULES"
+END
+
+GUI:LoadWaitingFor
+"WAITING FOR %s · %d%%"
+END
+
+GUI:LoadMissionOf
+"MISSION %d OF %d"
+END
+
+GUI:LoadSavedGame
+"Saved game"
+END
+
+GUI:LoadMapTransfer
+"Map transfer"
+END
+
+GUI:LoadPlayers
+"PLAYERS"
+END
+
+GUI:LoadStatus
+"STATUS"
+END
+
+GUI:LoadSurvivors
+"SURVIVORS"
+END
+
+GUI:LoadNights
+"THE NIGHTS"
+END
+
+GUI:LoadDay
+"DAY"
+END
+
+GUI:LoadDusk
+"DUSK"
+END
+
+GUI:LoadNight
+"NIGHT"
+END
+
+GUI:LoadDawn
+"DAWN"
+END
+
+GUI:LoadFirstWave
+"FIRST WAVE"
+END
+
+GUI:LoadGatesGlow
+"Gates glow before a wave"
+END
+
+GUI:LoadBloodMoon
+"BLOOD MOON"
+END
+
+GUI:LoadEveryThirdNight
+"every third night, a boss"
+END
+
+GUI:LoadRandomMap
+"Random map"
+END
+
+GUI:LoadHiddenMap
+"Hidden map"
+END
+
+GUI:LoadWaveEvery
+"Wave every"
+END
+
+GUI:LoadIncomeWave
+"Income a wave"
+END
+
+GUI:LoadWaveLife
+"Wave lifetime"
+END
+
+GUI:LoadTipDirectStrike1
+"Whatever stands on your plot marches down the lane as a copy every %d seconds."
+END
+
+GUI:LoadTipDirectStrike2
+"A wave lives %d seconds. Build what reaches the enemy fortress in that time."
+END
+
+GUI:LoadTipDirectStrike3
+"Each income level costs $1,000 and pays $100 more on every wave, back in ten waves."
+END
+
+GUI:LoadTipApocalypse1
+"Every third night is a Blood Moon, and something worse walks with the dead."
+END
+
+GUI:LoadTipApocalypse2
+"A wave's gates glow %d seconds before it comes."
+END
+
+GUI:LoadTipApocalypse3
+"The first wave comes %d seconds in. Build before you fight."
 END

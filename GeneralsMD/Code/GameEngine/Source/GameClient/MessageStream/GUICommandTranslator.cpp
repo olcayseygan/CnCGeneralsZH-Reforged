@@ -163,7 +163,7 @@ static CommandStatus doFireWeaponCommand( const CommandButton *command, const IC
 		msg->appendObjectIDArgument( targetID );
 
 		// the weapon's aimed area (rocket pods, clear mines, a Beret's drones) snaps down on the clicked
-		// point and plays its after-click (W3DGroundMarkers); client side only, nothing more is sent
+		// point and fades (W3DGroundMarkers); client side only, nothing more is sent
 		TheInGameUI->noteGroundMarkerClick( world, NULL );
 
 	}  // end if

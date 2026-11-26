@@ -7,9 +7,9 @@
 // is a per-piece transform, colour or alpha worked out here from Clock_Milliseconds.
 //
 // What is drawn is read at the sync point (W3DGroundMarkers_take, from W3DInGameUI::recordDraw):
-// the aimed cursor and the clicks InGameUI kept, the planes, missiles and gunships those clicks sent,
-// the selected guards, the move and attack clicks, and the ground under every one of them as a grid
-// of heights.  Logic state is read there and never written, and no logic decision looks at any of it.
+// the aimed cursor and the clicks InGameUI kept (a power's click is only its 0.4 s release: nothing
+// follows what it sent), the selected guards, the move and attack clicks, and the ground under every
+// one of them as a grid of heights.  Logic state is read there and never written, and no logic decision looks at any of it.
 // The draw (W3DGroundMarkers_draw) runs beside the tick and reads only what the take left.
 // Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
 #include "W3DDevice/GameClient/W3DGroundMarkers.h"
@@ -43,13 +43,9 @@
 #include "GameLogic/ObjectCreationList.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Module/AIUpdate.h"
-#include "GameLogic/Module/BodyModule.h"
-#include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/DeliverPayloadAIUpdate.h"
 #include "GameLogic/Module/OCLSpecialPower.h"
-#include "GameLogic/Module/ParticleUplinkCannonUpdate.h"
 #include "GameLogic/Module/SwarmStrikeSpecialPower.h"
-#include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/SpectreGunshipDeploymentUpdate.h"
 #include "GameLogic/Module/SpectreGunshipUpdate.h"
@@ -91,13 +87,13 @@ static const Real SHAPE_REACH = 1.125f * CLICK_SHAPE + 2.0f;	///< a shape's far 
 static const Real SHAPE_TIP = 10.0f / 24.0f;		///< MarkerShapeTri's and Dart's tip from the quad's middle, of its side
 static const UnsignedInt CLICK_LIFE_MS = 1500;		///< the dot's, the order ring's 1500 ms
 static const UnsignedInt WHEEL_EASE_MS = 400;			///< a guard wheel step, as InGameUI::setRadiusCursor eases it
-static const Real AREA_HOLD = 1.5f;						///< seconds an area power holds the snapped look after the click
-static const Real AREA_FADE = 0.3f;
-static const Real END_FADE = 0.5f;						///< a delivery's, a gunship's and a superweapon's last fade
-static const Real PLANE_WAIT = 10.0f;					///< seconds a click waits for what it sent before it gives up
+// a power's marker ends at the click (owner, 2026-11-26: what follows the planes and missiles clutters
+// the field): it snaps shut on the point for RELEASE_SNAP, then holds that still while it fades
+static const Real RELEASE_SNAP = 0.22f;				///< seconds of the click's own motion, the designs' snap (d.snap); what a design starts later never shows
+static const UnsignedInt RELEASE_FADE_AT_MS = 100;	///< the fade starts this long after the click
+static const Real RELEASE_FADE = 0.3f;				///< and is gone this long after that: 0.4 s in all
+static const Real AREA_FADE = 0.3f;						///< a guard click's
 static const Real MANEUVER_EXIT = 260.0f;			///< how much of a turning drop's straight exit off its circle is drawn
-static const Real MISSILE_WAIT = 60.0f;
-static const Real CANNON_BEAM_WAIT = 4.0f;				///< seconds past the beam's travel a cannon's marker waits for the beam
 static const Real GUARD_LIFE = 5.0f;
 static const Int MAX_SHOTS = 24;
 static const Int MAX_GUARDS = 16;
@@ -124,8 +120,6 @@ static const Tint TINT_LED = { 0.22f, 0.88f, 0.80f };		///< Turkiye's LED line, 
 static const Tint TINT_LACQ = { 0.80f, 0.14f, 0.11f };	///< China's red lacquer
 static const Tint TINT_STEEL = { 0.60f, 0.61f, 0.64f };	///< a hairline in plain steel
 static const Tint TINT_DARK = { 0.05f, 0.05f, 0.06f };
-static const Tint TINT_SCORCH = { 0.10f, 0.08f, 0.06f };
-static const Tint TINT_HEAL = { 0.62f, 0.95f, 0.55f };	///< the repair's crosses and teeth
 static const Tint TINT_RADAR = { 0.75f, 0.95f, 0.75f };
 static const Tint TINT_PIP = { 1.00f, 0.92f, 0.15f };		///< the cursors' yellow pip
 
@@ -466,8 +460,6 @@ enum Glyph
 	GLYPH_WRENCH, GLYPH_SATELLITE, GLYPH_UAV, GLYPH_EYE, GLYPH_RADAR, GLYPH_SCRAMBLE,
 	GLYPH_AMBUSH, GLYPH_TOXIN, GLYPH_CLEAN, GLYPH_DEMINE
 };
-enum SuperKind { SUPER_NONE, SUPER_MISSILES, SUPER_CANNON };
-
 /** Every ground-aimed power's own marker (the 2026-11-23 decals' unique/DESIGNS.md): its frame, its
 	* aim, click and after-click motion.  DESIGN_NONE keeps the zone and glyph (the guard). */
 enum Design
@@ -484,27 +476,8 @@ enum Design
 /// a general's or a caster's variant of a design
 enum Variant { VARIANT_NONE, VARIANT_MOAB, VARIANT_NUKE, VARIANT_CHEM, VARIANT_DEMO, VARIANT_BERET };
 
-struct Dart
-{
-	Real x, y, heading, scale;
-	HeightGrid grid;
-	HeightGrid water;
-};
-
-struct Fallen
-{
-	Real x, y;
-};
-
-struct Missile
-{
-	ObjectID id;
-	Real d0;			///< how far from the target it was first seen
-	Real ratio;		///< the least share of that it has had left
-};
-
-/** One zone with whatever goes with it: the aimed cursor (rebuilt every sync point), a click on its
-	* way to the end of what it sent, or a selected guard's quiet circle. */
+/** One zone with whatever goes with it: the aimed cursor (rebuilt every sync point), a click in its
+	* short release, or a selected guard's quiet circle. */
 struct Marker
 {
 	RadiusCursorType type;
@@ -518,25 +491,12 @@ struct Marker
 	Real k;
 	UnsignedInt pressMs;			///< t's zero
 	UnsignedInt clickMs;			///< tl's zero, 0 while aiming
-	UnsignedInt clickFrame;
 	ObjectID caster;
-	ObjectID firstNewID;
 	Bool guarding;
 	// the end
 	UnsignedInt fadeMs;
 	Real fadeSeconds;
 	Bool dead;
-	// a second ping: the lead plane over the target, a superweapon's impact
-	UnsignedInt pingMs;
-	Real pingR;
-	Tint pingTint;
-	// superweapon countdown
-	SuperKind super;
-	UnsignedInt cannonFrames;
-	std::vector<Missile> missiles;
-	Bool missileSeen;
-	Real frac;
-	UnsignedInt impactMs;
 	// the lane from the map's edge
 	Bool lane, gap, arrow, exitStub;
 	Bool fromCaster;					///< the lane starts at the caster (a swarm), and no delivery plane flies it
@@ -550,33 +510,17 @@ struct Marker
 	std::vector<Real> drops;	///< d_i, positive before the target
 	Bool turn;
 	Real rmin, rmax, rnom, side, lastPast;
-	// what the click sent
-	std::vector<ObjectID> planes;
-	ObjectID lead;
-	Bool planesSeen;
-	Int initialCarried, carried;
-	Bool pastT;
-	UnsignedInt pastTMs;
-	Bool hook;
-	Bool inTurn;
-	Real circleX, circleY, circleR, planeAngle, dropSpacing;
-	std::vector<Fallen> fallen;
-	std::vector<Dart> darts;
 	// Spectre
 	Bool orbit;
 	Real Ro;
-	ObjectID gunship;
 	// the power's own frame (drawDesign): which, in whose finish, a general's variant, a heading where
-	// the frame has one and no lane gives it, the caster, and what stands for a drop and a fallen item
+	// the frame has one and no lane gives it, the caster, and what stands for a drop
 	Int design, finish, variant;
 	Real hx, hy;
 	Real cx0, cy0;
-	Int dropPiece, fallenPiece;
+	Int dropPiece;
 	Int swarmCount;
 	Real planeSpeed;					///< the delivery plane's cruise speed, nought when the preview had none
-	Bool beamSeen;						///< a cannon's beam is on the ground at (beamX, beamY)
-	Real beamX, beamY;
-	std::vector<Fallen> beamTrail;	///< where it has burned, for the scorch
 	// the ground, and the water over it: the parts on water are drawn after the water
 	HeightGrid grid, water;
 	HeightGrid coarse;				///< past FINE_REACH, the whole reach at the coarser step fillSquare takes there
@@ -590,20 +534,16 @@ struct Marker
 	Marker() :
 		type( RADIUSCURSOR_NONE ), family( FAMILY_AREA ), glyph( GLYPH_NONE ), glyphS( 0.0f ),
 		x( 0.0f ), y( 0.0f ), z( 0.0f ), R( 0.0f ), rFrom( 0.0f ), rMs( 0 ), k( 1.0f ),
-		pressMs( 0 ), clickMs( 0 ), clickFrame( 0 ), caster( INVALID_ID ), firstNewID( INVALID_ID ), guarding( FALSE ),
-		fadeMs( 0 ), fadeSeconds( 0.5f ), dead( FALSE ), pingMs( 0 ), pingR( 0.0f ),
-		super( SUPER_NONE ), cannonFrames( 0 ), missileSeen( FALSE ), frac( 1.0f ), impactMs( 0 ),
+		pressMs( 0 ), clickMs( 0 ), caster( INVALID_ID ), guarding( FALSE ),
+		fadeMs( 0 ), fadeSeconds( 0.5f ), dead( FALSE ),
 		lane( FALSE ), gap( FALSE ), arrow( FALSE ), exitStub( FALSE ), fromCaster( FALSE ), ex( 0.0f ), ey( 0.0f ), endX( 0.0f ), endY( 0.0f ),
 		ux( 1.0f ), uy( 0.0f ), L( 0.0f ), half( 0.0f ), chevUntil( 0.0f ),
 		turn( FALSE ), rmin( 0.0f ), rmax( 0.0f ), rnom( 0.0f ), side( 1.0f ), lastPast( 0.0f ),
-		lead( INVALID_ID ), planesSeen( FALSE ), initialCarried( 0 ), carried( 0 ), pastT( FALSE ), pastTMs( 0 ),
-		hook( FALSE ), inTurn( FALSE ), circleX( 0.0f ), circleY( 0.0f ), circleR( 0.0f ), planeAngle( 0.0f ), dropSpacing( 0.0f ),
-		orbit( FALSE ), Ro( 0.0f ), gunship( INVALID_ID ), design( 0 ), finish( 0 ), variant( 0 ), hx( 0.0f ), hy( 0.0f ),
-		cx0( 0.0f ), cy0( 0.0f ), dropPiece( P_DROP ), fallenPiece( P_DROP ), swarmCount( 3 ), planeSpeed( 0.0f ), beamSeen( FALSE ), beamX( 0.0f ), beamY( 0.0f ),
+		orbit( FALSE ), Ro( 0.0f ), design( 0 ), finish( 0 ), variant( 0 ), hx( 0.0f ), hy( 0.0f ),
+		cx0( 0.0f ), cy0( 0.0f ), dropPiece( P_DROP ), swarmCount( 3 ), planeSpeed( 0.0f ),
 		gridMs( 0 ), laneMs( 0 ), zoneWet( FALSE ), laneWet( FALSE ), wet( FALSE )
 	{
 		tint = TINT_WARM;
-		pingTint = TINT_WARM;
 		for( Int i = 0; i < 5; ++i )
 			laneKey[ i ] = 0.0f;
 	}
@@ -702,12 +642,6 @@ static Int swarmTargetCount( const Object *caster, const SpecialPowerTemplate *p
 		return up != NULL ? up->m_count : data->m_targetCount;
 	}
 	return 3;
-}
-
-static DeliverPayloadAIUpdate *findDeliverPayload( Object *obj )
-{
-	static const NameKeyType key_DeliverPayloadAIUpdate = NAMEKEY( "DeliverPayloadAIUpdate" );
-	return (DeliverPayloadAIUpdate *)obj->findUpdateModule( key_DeliverPayloadAIUpdate );
 }
 
 /** Every power's own glyph, by a piece of its template's name, first match wins: the cursor type is
@@ -847,7 +781,6 @@ static void pickDesign( Marker &m, const SpecialPowerTemplate *power, const Obje
 /// the family, tint and glyph a cursor type draws; describe() then gives the power its own glyph
 static void classify( Marker &m )
 {
-	m.super = SUPER_NONE;
 	Real share = 0.235f;
 	switch( m.type )
 	{
@@ -878,15 +811,10 @@ static void classify( Marker &m )
 			break;
 		case RADIUSCURSOR_NUCLEARMISSILE:
 			m.family = FAMILY_SUPER;	m.tint = TINT_RED;		m.glyph = GLYPH_NUKE;			share = 0.2f;
-			m.super = SUPER_MISSILES;
 			break;
 		case RADIUSCURSOR_SCUDSTORM:
-			m.family = FAMILY_SUPER;	m.tint = TINT_RED;		m.glyph = GLYPH_BARRAGE;	share = 0.2f;
-			m.super = SUPER_MISSILES;
-			break;
 		case RADIUSCURSOR_PARTICLECANNON:
 			m.family = FAMILY_SUPER;	m.tint = TINT_RED;		m.glyph = GLYPH_BARRAGE;	share = 0.2f;
-			m.super = SUPER_CANNON;
 			break;
 		case RADIUSCURSOR_SUPERWEAPON_SCATTER_AREA:
 			m.family = FAMILY_AREA;		m.tint = TINT_RED;		m.glyph = GLYPH_BARRAGE;	share = 0.2f;
@@ -1092,14 +1020,13 @@ static void setHeading( Marker &m, Real fx, Real fy, Real tx, Real ty )
 }
 
 /** What a design changes in the marker: its tint where it is not its family's, what stands for a drop
-	* and an item that fell, the arrow at the rim (a frame that is no circle has none), and a heading:
+	* on the run, the arrow at the rim (a frame that is no circle has none), and a heading:
 	* the shells' flight from the far corner, the airlift's from the nearest edge, a line from the caster. */
 static void describeDesign( Marker &m, const Object *caster, const SpecialPowerTemplate *power )
 {
 	m.hx = 0.0f;
 	m.hy = 0.0f;
 	m.dropPiece = P_DROP;
-	m.fallenPiece = P_DROP;
 	if( caster )
 	{
 		m.cx0 = caster->getPosition()->x;
@@ -1118,21 +1045,18 @@ static void describeDesign( Marker &m, const Object *caster, const SpecialPowerT
 	target.x = m.x;  target.y = m.y;  target.z = m.z;
 	switch( m.design )
 	{
-		case DESIGN_PARADROP:	m.fallenPiece = P_SHAPE_RING;	break;
-		case DESIGN_CRATE:		m.dropPiece = P_SHAPE_DISC;	m.fallenPiece = P_SHAPE_PLUS;	m.arrow = FALSE;	break;
-		case DESIGN_LEAFLET:	m.fallenPiece = P_SHAPE_DISC;	break;
+		case DESIGN_CRATE:		m.dropPiece = P_SHAPE_DISC;	m.arrow = FALSE;	break;
 		case DESIGN_A10:			m.arrow = FALSE;	break;
-		case DESIGN_B3:				m.dropPiece = -1;	m.fallenPiece = P_SHAPE_CROSS;	m.arrow = FALSE;	m.tint = TINT_ORANGE;	break;
+		case DESIGN_B3:				m.dropPiece = -1;	m.arrow = FALSE;	m.tint = TINT_ORANGE;	break;
 		case DESIGN_CCARPET:
 			m.dropPiece = P_SHAPE_DIAMOND;
-			m.fallenPiece = P_SHAPE_CROSS;
 			m.arrow = FALSE;
 			m.tint = m.variant == VARIANT_NUKE ? TINT_RED : TINT_ORANGE;
 			break;
 		case DESIGN_NAPALM:		m.arrow = FALSE;	break;
-		case DESIGN_TANKDROP:	m.dropPiece = P_SHAPE_DISC;	m.fallenPiece = P_SHAPE_TANK;	m.arrow = FALSE;	break;
-		case DESIGN_RAPID:		m.dropPiece = P_SHAPE_PARA;	m.fallenPiece = P_SHAPE_PARA;	m.arrow = FALSE;	m.tint = TINT_GOLD;	break;
-		case DESIGN_COMMANDO:	m.dropPiece = P_SHAPE_PARA;	m.fallenPiece = P_SHAPE_DISC;	m.arrow = FALSE;	m.tint = TINT_GOLD;	break;
+		case DESIGN_TANKDROP:	m.dropPiece = P_SHAPE_DISC;	m.arrow = FALSE;	break;
+		case DESIGN_RAPID:		m.dropPiece = P_SHAPE_PARA;	m.arrow = FALSE;	m.tint = TINT_GOLD;	break;
+		case DESIGN_COMMANDO:	m.dropPiece = P_SHAPE_PARA;	m.arrow = FALSE;	m.tint = TINT_GOLD;	break;
 		case DESIGN_ALLYAID:
 			m.tint = TINT_GOLD;
 			if( caster )
@@ -1217,36 +1141,11 @@ static void describe( Marker &m, const InGameUI::GroundMarkerAim &aim )
 
 	pickDesign( m, aim.power, caster );
 	describeDesign( m, caster, aim.power );
-
-	m.cannonFrames = 0;
-	if( m.super == SUPER_CANNON && caster )
-	{
-		const ParticleUplinkCannonUpdateModuleData *data =
-			(const ParticleUplinkCannonUpdateModuleData *)findTemplateModule( caster->getTemplate(), "ParticleUplinkCannonUpdate" );
-		m.cannonFrames = data ? (UnsignedInt)data->m_beamTravelFrames.get() : 0;
-	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// FOLLOWING WHAT A CLICK SENT (sync point, read only)
+// AFTER THE CLICK (sync point, read only)
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-static Bool isClaimed( ObjectID id )
-{
-	for( size_t i = 0; i < s_shots.size(); ++i )
-	{
-		const Marker &m = s_shots[ i ];
-		if( m.gunship == id )
-			return TRUE;
-		for( size_t p = 0; p < m.planes.size(); ++p )
-			if( m.planes[ p ] == id )
-				return TRUE;
-		for( size_t p = 0; p < m.missiles.size(); ++p )
-			if( m.missiles[ p ].id == id )
-				return TRUE;
-	}
-	return FALSE;
-}
 
 static void startFade( Marker &m, UnsignedInt at, Real seconds )
 {
@@ -1269,298 +1168,6 @@ static Real fadeOf( const Marker &m, UnsignedInt now )
 static Bool fadedOut( const Marker &m, UnsignedInt now )
 {
 	return m.fadeMs != 0 && secondsSince( now, m.fadeMs ) >= m.fadeSeconds;
-}
-
-/// a dart on a plane, at its drawable (the smoothed picture's position) and its heading over the ground
-static void addDart( Marker &m, const Object *obj, Real scale )
-{
-	Dart d;
-	const Drawable *draw = obj->getDrawable();
-	const Coord3D *pos = draw ? draw->getPosition() : obj->getPosition();
-	d.x = pos->x;
-	d.y = pos->y;
-	d.heading = obj->getOrientation();
-	const PhysicsBehavior *physics = obj->getPhysics();
-	if( physics )
-	{
-		const Coord3D *v = physics->getVelocity();
-		if( v->x * v->x + v->y * v->y > 0.01f )
-			d.heading = (Real)atan2( v->y, v->x );
-	}
-	d.scale = scale;
-	const Real reach = 21.0f * m.k * scale + 2.0f;
-	fillSquare( d.grid, d.x, d.y, reach, GROUND_STEP, FALSE );
-	if( fillSquare( d.water, d.x, d.y, reach, WATER_STEP, TRUE ) )
-		m.wet = TRUE;		// a plane over the sea: its dart goes after the water
-	m.darts.push_back( d );
-}
-
-/** A delivery: the planes it sent (claimed by the ids the click's tick handed out), a dart on each,
-	* and the lead plane's state, payload and circle. */
-static void followPlanes( Marker &m, UnsignedInt now, Real tl )
-{
-	if( !m.planesSeen )
-	{
-		// as long as a slow plane would take to come in from its edge over the whole run, never less
-		// than PLANE_WAIT: a far target is not given up while its planes are still on their way in
-		// planeSpeed is the locomotor's, per logic frame; a tick is a wall 1/LOGICFRAMES_PER_SECOND
-		const Real speed = m.planeSpeed > 0.01f ? m.planeSpeed * (Real)LOGICFRAMES_PER_SECOND : 60.0f;
-		const Real wait = MAX( PLANE_WAIT, 1.5f * ( m.L + 600.0f ) / speed + 3.0f );
-		if( tl > wait )
-		{
-			startFade( m, now, END_FADE );
-			return;
-		}
-		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
-		{
-			if( obj->getID() < m.firstNewID || !obj->isLocallyControlled() )
-				continue;
-			if( m.caster != INVALID_ID && obj->getProducerID() != m.caster )
-				continue;
-			DeliverPayloadAIUpdate *ai = findDeliverPayload( obj );
-			if( ai == NULL || !ai->isDeliveringPayload() || isClaimed( obj->getID() ) )
-				continue;
-			m.planes.push_back( obj->getID() );
-		}
-		if( m.planes.empty() )
-			return;
-		m.planesSeen = TRUE;
-		// the lead flies at the target itself; a wingman's is offset
-		Real best = 1.0e30f;
-		for( size_t i = 0; i < m.planes.size(); ++i )
-		{
-			Object *obj = TheGameLogic->findObjectByID( m.planes[ i ] );
-			DeliverPayloadAIUpdate *ai = obj ? findDeliverPayload( obj ) : NULL;
-			if( ai == NULL )
-				continue;
-			const Coord3D *t = ai->getTargetPos();
-			const Real d = ( t->x - m.x ) * ( t->x - m.x ) + ( t->y - m.y ) * ( t->y - m.y );
-			if( d < best )
-			{
-				best = d;
-				m.lead = m.planes[ i ];
-			}
-		}
-		Object *lead = TheGameLogic->findObjectByID( m.lead );
-		m.initialCarried = ( lead && lead->getContain() ) ? (Int)lead->getContain()->getContainCount() : 0;
-		m.carried = m.initialCarried;
-	}
-
-	for( size_t i = 0; i < m.planes.size(); ++i )
-	{
-		const Object *obj = TheGameLogic->findObjectByID( m.planes[ i ] );
-		if( obj && !obj->isEffectivelyDead() )
-			addDart( m, obj, 1.0f );
-	}
-	if( m.darts.empty() )
-	{
-		startFade( m, now, END_FADE );
-		return;
-	}
-
-	Object *lead = TheGameLogic->findObjectByID( m.lead );
-	DeliverPayloadAIUpdate *ai = lead ? findDeliverPayload( lead ) : NULL;
-	if( ai == NULL || lead->isEffectivelyDead() )
-	{
-		m.inTurn = FALSE;
-		startFade( m, now, END_FADE );
-		return;
-	}
-
-	const Int state = ai->getDeliverPayloadStateID();
-	const Coord3D *p = lead->getPosition();
-	const Int carried = lead->getContain() ? (Int)lead->getContain()->getContainCount() : 0;
-	// each item that left fell where the plane was; DropVariance is the rails' width already
-	while( m.carried > carried )
-	{
-		Fallen f;
-		f.x = p->x;
-		f.y = p->y;
-		m.fallen.push_back( f );
-		--m.carried;
-	}
-	m.carried = carried;
-
-	if( !m.pastT && ( p->x - m.ex ) * m.ux + ( p->y - m.ey ) * m.uy >= m.L )
-	{
-		m.pastT = TRUE;
-		m.pastTMs = now;
-		m.pingMs = now;
-		m.pingR = m.R;
-		m.pingTint = m.tint;
-	}
-
-	m.hook = ( state == CONSIDER_NEW_APPROACH || state == RECOVER_FROM_OFF_MAP );
-	m.inTurn = FALSE;
-	if( m.pastT && state == DELIVERING && carried > 0 && !m.drops.empty() )
-	{
-		// the circle it really flies: r = |v| / turn rate, the centre on the side it turns to
-		const PhysicsBehavior *physics = lead->getPhysics();
-		const Locomotor *loco = ai->getCurLocomotor();
-		if( physics && loco && lead->getBodyModule() )
-		{
-			const Coord3D *v = physics->getVelocity();
-			const Real speed = (Real)sqrt( v->x * v->x + v->y * v->y );
-			const Real turnRate = loco->getMaxTurnRate( lead->getBodyModule()->getDamageState() );
-			if( speed > 0.01f && turnRate > 0.0f )
-			{
-				const Real r = speed / turnRate;
-				const Real lx = -v->y / speed, ly = v->x / speed;
-				m.circleR = r;
-				m.circleX = p->x + m.side * lx * r;
-				m.circleY = p->y + m.side * ly * r;
-				m.planeAngle = (Real)atan2( p->y - m.circleY, p->x - m.circleX );
-				m.dropSpacing = (Real)ai->getDropDelay() * speed;
-				m.inTurn = TRUE;
-			}
-		}
-	}
-
-	const Bool emptied = !m.drops.empty() && carried == 0;
-	if( state == HEAD_OFF_MAP || state == CLEAN_UP || emptied )
-		startFade( m, now, END_FADE );
-}
-
-/// the Spectre: its gunship, a dart on it until it leaves, the marker fading once it departs
-static void followGunship( Marker &m, UnsignedInt now, Real tl )
-{
-	static const NameKeyType key_SpectreGunshipUpdate = NAMEKEY( "SpectreGunshipUpdate" );
-	if( m.gunship == INVALID_ID )
-	{
-		if( tl > PLANE_WAIT )
-		{
-			startFade( m, now, END_FADE );
-			return;
-		}
-		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
-		{
-			if( obj->getID() < m.firstNewID || !obj->isLocallyControlled() )
-				continue;
-			if( m.caster != INVALID_ID && obj->getProducerID() != m.caster )
-				continue;
-			if( obj->findUpdateModule( key_SpectreGunshipUpdate ) == NULL || isClaimed( obj->getID() ) )
-				continue;
-			m.gunship = obj->getID();
-			break;
-		}
-		if( m.gunship == INVALID_ID )
-			return;
-	}
-	const Object *obj = TheGameLogic->findObjectByID( m.gunship );
-	if( obj == NULL || obj->isEffectivelyDead() )
-	{
-		startFade( m, now, END_FADE );
-		return;
-	}
-	addDart( m, obj, 1.15f );
-	const SpectreGunshipUpdate *update = (const SpectreGunshipUpdate *)obj->findUpdateModule( key_SpectreGunshipUpdate );
-	if( update == NULL || !update->isActive() )
-		startFade( m, now, END_FADE );
-}
-
-/// a superweapon's countdown: the share of the flight its missiles still have, or of the beam's travel
-static void followSuperweapon( Marker &m, UnsignedInt now, Real tl )
-{
-	if( m.super == SUPER_CANNON )
-	{
-		// the beam itself, while its cannon says it burns (ParticleUplinkCannonUpdate::getBurningSpot,
-		// const): the marker's head and scorch follow it, and it stays until the beam is gone
-		static const NameKeyType key_ParticleUplinkCannonUpdate = NAMEKEY( "ParticleUplinkCannonUpdate" );
-		const Object *caster = TheGameLogic->findObjectByID( m.caster );
-		const ParticleUplinkCannonUpdate *cannon = caster ? (const ParticleUplinkCannonUpdate *)caster->findUpdateModule( key_ParticleUplinkCannonUpdate ) : NULL;
-		Coord3D spot;
-		Real radius = 0.0f;
-		if( cannon != NULL && cannon->getBurningSpot( &spot, &radius ) )
-		{
-			m.beamSeen = TRUE;
-			m.beamX = spot.x;
-			m.beamY = spot.y;
-			const Fallen *last = m.beamTrail.empty() ? NULL : &m.beamTrail.back();
-			if( ( last == NULL || ( last->x - spot.x ) * ( last->x - spot.x ) + ( last->y - spot.y ) * ( last->y - spot.y ) > 16.0f )
-					&& m.beamTrail.size() < 400 )
-			{
-				Fallen f;
-				f.x = spot.x;
-				f.y = spot.y;
-				m.beamTrail.push_back( f );
-			}
-			m.fadeMs = 0;		// burning: no fade yet, whatever the impact said
-		}
-		else if( m.beamSeen && m.fadeMs == 0 )
-			startFade( m, now, END_FADE );
-		else if( !m.beamSeen && m.impactMs != 0 && secondsSince( now, m.impactMs ) > CANNON_BEAM_WAIT )
-			startFade( m, now, END_FADE );		// the beam never came: a cannon that lost its power
-	}
-	if( m.impactMs != 0 )
-		return;
-	Bool impact = FALSE;
-	if( m.super == SUPER_CANNON )
-	{
-		const UnsignedInt frames = MAX( 1u, m.cannonFrames );
-		const UnsignedInt elapsed = TheGameLogic->getFrame() - m.clickFrame;
-		m.frac = 1.0f - clamp01( (Real)elapsed / (Real)frames );
-		impact = elapsed >= frames;
-	}
-	else
-	{
-		static const NameKeyType key_NeutronMissileUpdate = NAMEKEY( "NeutronMissileUpdate" );
-		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
-		{
-			if( obj->getID() < m.firstNewID )
-				continue;
-			// a nuke's, a Scud's or the cruise missile's (NeutronMissileUpdate, fired by the silo's OCL as a
-			// temporary weapon, so it may stand on no team of the player's: the silo as producer says whose),
-			// or any other projectile the silo fired
-			const Bool fromSilo = m.caster != INVALID_ID && obj->getProducerID() == m.caster;
-			if( !fromSilo && !obj->isLocallyControlled() )
-				continue;
-			const Bool missileUpdate = obj->findUpdateModule( key_NeutronMissileUpdate ) != NULL;
-			if( ( !missileUpdate && !( fromSilo && obj->isKindOf( KINDOF_PROJECTILE ) ) ) || isClaimed( obj->getID() ) )
-				continue;
-			const Coord3D *p = obj->getPosition();
-			Missile missile;
-			missile.id = obj->getID();
-			missile.d0 = MAX( 1.0f, (Real)sqrt( ( p->x - m.x ) * ( p->x - m.x ) + ( p->y - m.y ) * ( p->y - m.y ) + ( p->z - m.z ) * ( p->z - m.z ) ) );
-			missile.ratio = 1.0f;
-			m.missiles.push_back( missile );
-			m.missileSeen = TRUE;
-		}
-		Int live = 0;
-		Real left = 0.0f;
-		for( size_t i = 0; i < m.missiles.size(); ++i )
-		{
-			Missile &missile = m.missiles[ i ];
-			const Object *obj = TheGameLogic->findObjectByID( missile.id );
-			// a missile that has gone off may linger a while dead (its death modules) before it is removed
-			if( obj == NULL || obj->isEffectivelyDead() )
-				continue;
-			++live;
-			const Coord3D *p = obj->getPosition();
-			const Real d = (Real)sqrt( ( p->x - m.x ) * ( p->x - m.x ) + ( p->y - m.y ) * ( p->y - m.y ) + ( p->z - m.z ) * ( p->z - m.z ) );
-			missile.ratio = MIN( missile.ratio, d / missile.d0 );		// the climb out of the silo never lights a segment again
-			left = MAX( left, missile.ratio );
-		}
-		if( m.missileSeen )
-		{
-			m.frac = live > 0 ? left : 0.0f;
-			impact = live == 0;
-		}
-		else if( tl > MISSILE_WAIT )
-			startFade( m, now, END_FADE );
-	}
-
-	if( impact )
-	{
-		m.frac = 0.0f;
-		m.impactMs = now;
-		m.pingMs = now;
-		m.pingR = 0.9f * m.R;
-		m.pingTint = TINT_GOLD;
-		// gone between 0.1 and 0.5 s after it lands; a cannon waits for its beam (above), which in a
-		// network game the run-ahead can show after the travel frames are counted
-		if( m.super != SUPER_CANNON || m.beamSeen )
-			startFade( m, now + 100, 0.4f );
-	}
 }
 
 /// a guard click: snapped, quiet at 1.4 s, gone once a selected unit holds that post
@@ -1637,14 +1244,7 @@ static Real zoneReach( const Marker &m )
 		if( m.design == DESIGN_ARTILLERY )		// the incoming chevrons march in from 0.9R + 106k behind the frame
 			reach = MAX( reach, 0.9f * R + 120.0f * m.k );
 	}
-	if( m.beamSeen )		// a driven beam goes where the player steers it: its head and every scorch it left
-	{
-		Real far2 = ( m.beamX - m.x ) * ( m.beamX - m.x ) + ( m.beamY - m.y ) * ( m.beamY - m.y );
-		for( size_t i = 0; i < m.beamTrail.size(); ++i )
-			far2 = MAX( far2, ( m.beamTrail[ i ].x - m.x ) * ( m.beamTrail[ i ].x - m.x ) + ( m.beamTrail[ i ].y - m.y ) * ( m.beamTrail[ i ].y - m.y ) );
-		reach = MAX( reach, (Real)sqrt( far2 ) + 20.0f * m.k );
-	}
-	// never cut: a zone reaching past FINE_REACH (a wide power, a long beam trail) has the rest laid by
+	// never cut: a zone reaching past FINE_REACH (a wide power) has the rest laid by
 	// takeGround in a coarser square
 	return reach + 4.0f;
 }
@@ -1658,34 +1258,11 @@ static Bool designDrawsRoute( const Marker &m )
 	return !m.lane && ( m.design == DESIGN_CRUISE || m.design == DESIGN_COMANCHE );
 }
 
-/// seconds an area power's own marker holds after the click before its fade: as long as its after-click runs
-static Real designHold( const Marker &m )
-{
-	switch( m.design )
-	{
-		case DESIGN_NONE:			return AREA_HOLD;
-		case DESIGN_EMP:
-		case DESIGN_SPYDRONE:
-		case DESIGN_COMANCHE:
-		case DESIGN_AMBUSH:
-		case DESIGN_KARGU:
-		case DESIGN_HNAPALM:
-		case DESIGN_HNUKE:		return 2.0f;
-		case DESIGN_ARTILLERY:
-		case DESIGN_MINES:
-		case DESIGN_REPAIR:
-		case DESIGN_AMBULANCE:
-		case DESIGN_UAV:
-		case DESIGN_SWARM:		return 3.0f;
-		default:							return 2.5f;
-	}
-}
-
 /** The zone's square of heights and water, taken again when the zone left the square GRID_PAD gave it
 	* or three seconds have gone (a crater moves the ground); the lane's when either end moved.  The heights
 	* stay a terrain cell apart out to FINE_REACH, so the middle and its ring never sink or float; a zone
-	* reaching further (a wide power, a long beam trail) has the rest in m.coarse.  m.wet gathers what
-	* stands on water, the darts' included, for the pass after the water. */
+	* reaching further (a wide power) has the rest in m.coarse.  m.wet gathers what stands on water,
+	* for the pass after the water. */
 static void takeGround( Marker &m, UnsignedInt now )
 {
 	const Real reach = zoneReach( m );
@@ -1752,64 +1329,16 @@ static void takeGround( Marker &m, UnsignedInt now )
 	m.wet = m.wet || m.laneWet;
 }
 
-/** A barrage from the far corner: the shells' carriers its OCL sent (DeliverPayload objects with the
-	* caster as producer, gone once they drop, SelfDestructObject).  The marker holds while any is on its
-	* way, which is about ten seconds, and the impacts start when the last has dropped (impactMs). */
-static void followCarriers( Marker &m, UnsignedInt now, Real tl )
-{
-	if( !m.planesSeen )
-	{
-		if( tl > PLANE_WAIT )
-		{
-			startFade( m, now, AREA_FADE );		// no carrier seen: the power's own ten seconds are up
-			return;
-		}
-		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
-		{
-			if( obj->getID() < m.firstNewID || !obj->isLocallyControlled() )
-				continue;
-			if( m.caster != INVALID_ID && obj->getProducerID() != m.caster )
-				continue;
-			DeliverPayloadAIUpdate *ai = findDeliverPayload( obj );
-			if( ai == NULL || isClaimed( obj->getID() ) )
-				continue;
-			m.planes.push_back( obj->getID() );
-		}
-		if( m.planes.empty() )
-			return;
-		m.planesSeen = TRUE;
-	}
-	if( m.impactMs != 0 )
-		return;
-	for( size_t i = 0; i < m.planes.size(); ++i )
-	{
-		const Object *obj = TheGameLogic->findObjectByID( m.planes[ i ] );
-		if( obj != NULL && !obj->isEffectivelyDead() )
-			return;
-	}
-	m.impactMs = now;		// the last shell is falling: the impacts run, then the fade
-	startFade( m, now + 2400, AREA_FADE );
-}
-
+/// a click: a guard's holds until its post is taken; a power's is its short release and nothing after,
+/// never the planes, missiles or gunship it sent
 static void updateShot( Marker &m, UnsignedInt now, InGameUI *ui )
 {
-	const Real tl = secondsSince( now, m.clickMs );
-	m.darts.clear();
-	m.wet = FALSE;		// the darts and takeGround say it again
-	if( m.lane && m.family != FAMILY_SPECTRE && !m.fromCaster )
-		followPlanes( m, now, tl );
-	else if( m.family == FAMILY_SPECTRE )
-		followGunship( m, now, tl );
-	else if( m.super != SUPER_NONE )
-		followSuperweapon( m, now, tl );
-	else if( m.family == FAMILY_GUARD )
-		followGuard( m, now, ui, tl );
-	else if( m.design == DESIGN_ARTILLERY )
-		followCarriers( m, now, tl );
+	m.wet = FALSE;		// takeGround says it again
+	if( m.family == FAMILY_GUARD )
+		followGuard( m, now, ui, secondsSince( now, m.clickMs ) );
 	else
-		startFade( m, m.clickMs + (UnsignedInt)( designHold( m ) * 1000.0f ), AREA_FADE );
-
-	if( fadedOut( m, now ) && m.darts.empty() )
+		startFade( m, m.clickMs + RELEASE_FADE_AT_MS, RELEASE_FADE );
+	if( fadedOut( m, now ) )
 		m.dead = TRUE;
 }
 
@@ -1981,8 +1510,6 @@ void W3DGroundMarkers_take( InGameUI *ui )
 		Marker m;
 		describe( m, click.aim );
 		m.clickMs = click.clickMs;
-		m.clickFrame = click.clickFrame;
-		m.firstNewID = click.firstNewID;
 		s_shots.push_back( m );
 	}
 	while( (Int)s_shots.size() > MAX_SHOTS )
@@ -2184,7 +1711,7 @@ struct DrawCtx
 	Real rx, ry;					///< the screen's right on the ground
 	Real yaw;							///< its angle
 	Real lgx, lgy;				///< the HUD's light, from the top left of the screen
-	const HeightGrid *g1;		///< the ground: the zone's square, or a dart's or a click's
+	const HeightGrid *g1;		///< the ground: the zone's square, or a click's
 	const HeightGrid *g2;		///< the lane's
 	const HeightGrid *g3;		///< the zone's coarse square, past g1 (Marker::coarse)
 	const HeightGrid *w1;		///< the water over them
@@ -2258,6 +1785,17 @@ static void emit( Int piece, const Real *x, const Real *y, const Real *pu, const
 	( s_ctx.additive ? theAddQuads : theMarkerQuads ).add( p, u, v, col );
 }
 
+/** As fine as the mouse cursors (owner, 2026-11-26: the markers read crude and heavy beside them):
+	* every hairline strip, MarkerHair (so every band's flat stroke too) and the lane's rails, is laid
+	* HAIR_THIN of the width its caller names, on the same middle line, and HAIR_ALPHA of its alpha. */
+static const Real HAIR_THIN = 0.7f;
+static const Real HAIR_ALPHA = 0.85f;
+
+static Bool isHair( Int piece )
+{
+	return piece == P_HAIR || piece == P_RAIL;
+}
+
 /** A band round (cx, cy) at radius r, `across` wide, the piece's row 0 on the outer edge, from angle
 	* a0 counter-clockwise to a1: a strip samples the middle column, an arc (stretchU) lays u along it.
 	* One quad per six degrees or GROUND_STEP world units at most, so the cross-section never stretches
@@ -2265,6 +1803,11 @@ static void emit( Int piece, const Real *x, const Real *y, const Real *pu, const
 static void arcStrip( Int piece, Real cx, Real cy, Real r, Real across, Real a0, Real a1, Bool stretchU,
 											const Tint &tint, Real alpha, Bool lit )
 {
+	if( isHair( piece ) )
+	{
+		across *= HAIR_THIN;
+		alpha *= HAIR_ALPHA;
+	}
 	const Real span = a1 - a0;
 	if( alpha <= 0.002f || r <= 0.0f || span <= 0.0f )
 		return;
@@ -2344,6 +1887,13 @@ static void lineStrip( Int piece, Real ox, Real oy, Real dx, Real dy, Real s0, R
 {
 	if( s1 <= s0 )
 		return;
+	Real alphaScale = 1.0f;
+	if( isHair( piece ) )
+	{
+		qOuter -= 0.5f * ( 1.0f - HAIR_THIN ) * across;		// the same middle line
+		across *= HAIR_THIN;
+		alphaScale = HAIR_ALPHA;
+	}
 	const Real lx = -dy, ly = dx;
 	// never longer than a terrain cell along the ground, whatever the caller asked
 	const Int n = MAX( 1, MIN( 1200, (Int)ceilf( ( s1 - s0 ) / MIN( step, GROUND_STEP ) ) ) );
@@ -2353,7 +1903,7 @@ static void lineStrip( Int piece, Real ox, Real oy, Real dx, Real dy, Real s0, R
 	{
 		const Real sa = s0 + ( s1 - s0 ) * (Real)i / (Real)n;
 		const Real sb = s0 + ( s1 - s0 ) * (Real)( i + 1 ) / (Real)n;
-		const Real aa = alphaAt( sa ), ab = alphaAt( sb );
+		const Real aa = alphaScale * alphaAt( sa ), ab = alphaScale * alphaAt( sb );
 		if( aa <= 0.002f && ab <= 0.002f )
 			continue;
 		const Real x[ 4 ] = { ox + dx * sa + lx * qOuter, ox + dx * sb + lx * qOuter, ox + dx * sb + lx * qi, ox + dx * sa + lx * qi };
@@ -2381,6 +1931,11 @@ template< class RadiusAt >
 static void radialStrip( Int piece, Real cx, Real cy, const RadiusAt &radiusAt, Real across, Real a0, Real a1,
 												 const Tint &tint, Real alpha, Bool lit, Real maxStepDeg = 2.0f )
 {
+	if( isHair( piece ) )
+	{
+		across *= HAIR_THIN;
+		alpha *= HAIR_ALPHA;
+	}
 	const Real span = a1 - a0;
 	if( alpha <= 0.002f || span <= 0.0f )
 		return;
@@ -2415,6 +1970,11 @@ static void radialStrip( Int piece, Real cx, Real cy, const RadiusAt &radiusAt, 
 static void polyStrip( Int piece, const Real *px, const Real *py, Int n, Bool closed, Real across,
 											 const Tint &tint, Real alpha, Bool lit, Real shift = 0.0f )
 {
+	if( isHair( piece ) )
+	{
+		across *= HAIR_THIN;
+		alpha *= HAIR_ALPHA;
+	}
 	if( alpha <= 0.002f || n < 2 )
 		return;
 	enum { MAX_POINTS = 96 };
@@ -2563,7 +2123,7 @@ static void glowDisc( Real cx, Real cy, Real r, const Tint &tint, Real alpha )
 }
 
 /// a ping: a thin additive ring growing a little and fading, `age` seconds into its `life`
-static void pingRing( Real cx, Real cy, Real r, Real k, Real age, const Tint &tint, Real life = 0.45f, Real grow = 0.14f, Real width = 6.0f )
+static void pingRing( Real cx, Real cy, Real r, Real k, Real age, const Tint &tint, Real life = 0.45f, Real grow = 0.14f, Real width = 4.0f )
 {
 	if( age < 0.0f || age >= life )
 		return;
@@ -2674,8 +2234,10 @@ static const Real LED_WIDTH = 0.06f;
 /** The cursor look (the owner's pick, 2026-11-24, over cursor_vs_marker.png): a band is one flat stroke
 	* in the power's colour with the cursors' dark line round it (MarkerHair, FLAT_WIDE times the steel's
 	* width), no steel gradient; a band drawn without its inlay is the same stroke dimmed to FLAT_DIM, for
-	* the countdowns lit on top of it.  The side shows only in its trim: studs, Turkiye's LED line. */
-static const Real FLAT_WIDE = 1.3f;
+	* the countdowns lit on top of it.  The side shows only in its trim: studs, Turkiye's LED line.
+	* 2026-11-26, the cursors' fineness: FLAT_WIDE 1.3 to 0.6, and HAIR_THIN on top, so a band's stroke
+	* is 0.21 of the width its design names where it was 0.65. */
+static const Real FLAT_WIDE = 0.6f;
 static const Real FLAT_DIM = 0.3f;
 
 /// a flat stroke round a circle from a0 to a1, as wide as a band of `across` (a countdown's lit piece)
@@ -2860,25 +2422,6 @@ static void drawGlyph( const Marker &m, Real t, Real tl, Real app )
 	quadPiece( piece, m.x, m.y, s_ctx.yaw + turn, side, side, m.tint, app );
 }
 
-/// twelve segments clockwise from the top, the lit ones the share of the flight still to come
-static void drawCountdown( const Marker &m, Real R, Real t, Real alpha )
-{
-	const Real k = m.k, rc = R + 42.0f * k;
-	ring( P_BAND_SHELL, m.x, m.y, rc, 22.2f * k, TINT_WHITE, alpha, FALSE );
-	const Int lit = (Int)ceilf( m.frac * 12.0f );
-	const Bool blinkOff = sin( 18.0f * t ) < 0.0f;
-	const Real halfAngle = ( MARKER_PI / 12.0f - 0.03f ) * ( 50.0f / 48.0f );
-	const Tint dim = scaled( m.tint, 0.25f );
-	for( Int j = 0; j < 12; ++j )
-	{
-		const Real a = s_ctx.yaw + 0.5f * MARKER_PI - (Real)j * MARKER_PI / 6.0f;
-		arcPiece( P_SEG_STEEL_B, m.x, m.y, rc, a, halfAngle, 14.0f * k, TINT_WHITE, alpha, FALSE );
-		arcPiece( P_SEG_STEEL_A, m.x, m.y, rc, a, halfAngle, 14.0f * k, TINT_WHITE, alpha, TRUE );
-		const Bool on = j < lit && !( j == lit - 1 && blinkOff );
-		arcPiece( P_SEG_INLAY, m.x, m.y, rc, a, halfAngle, 14.0f * k, on ? m.tint : dim, alpha, FALSE );
-	}
-}
-
 /** The Spectre's orbit, all of it turning the way the gunship flies: counter-clockwise seen from above.
 	* SpectreGunshipUpdate steers at m_satellitePosition = target + Ro (n1 p + n2 apogee), p the unit
 	* vector from the target to the ship and apogee = (-p.y, p.x), p turned a quarter counter-clockwise,
@@ -2889,10 +2432,10 @@ static void drawCountdown( const Marker &m, Real R, Real t, Real alpha )
 static void drawOrbit( const Marker &m, Real t, Real alpha )
 {
 	const Real k = m.k, Ro = m.Ro, yaw = s_ctx.yaw;
-	ring( P_BAND_SHELL, m.x, m.y, Ro, 20.0f * k, TINT_WHITE, 0.84f * alpha, FALSE );
+	ring( P_BAND_SHELL, m.x, m.y, Ro, 10.0f * k, TINT_WHITE, 0.7f * alpha, FALSE );		// the cursors' fineness: 20k and 7k before
 	const Real step = 2.0f * MARKER_PI / 18.0f;
 	for( Int j = 0; j < 18; ++j )
-		arcPiece( P_ORBIT_DASH, m.x, m.y, Ro, yaw + 0.9f * t + (Real)j * step, step * 0.31f * 18.0f / 17.0f, 7.0f * k, TINT_WHITE, alpha, FALSE );
+		arcPiece( P_ORBIT_DASH, m.x, m.y, Ro, yaw + 0.9f * t + (Real)j * step, step * 0.31f * 18.0f / 17.0f, 4.0f * k, TINT_WHITE, alpha, FALSE );
 	for( Int j = 0; j < 9; ++j )
 	{
 		const Real a = yaw + 0.9f * t + (Real)j * 2.0f * MARKER_PI / 9.0f;
@@ -2969,7 +2512,7 @@ static void drawLane( const Marker &m, Real R, Real t, Real tl, Real app )
 		return;
 	// two arms from the tip at the rim back to the rails, each a band with its cap: every shell, then
 	// every steel, then every inlay, so the overlap at the tip stays clean
-	const Real W = 14.0f * k;
+	const Real W = 8.0f * k;		// the cursors' fineness: 14k before
 	const Real tip = L - gap - 16.0f * k;
 	const Real back = 0.42f * m.half + 8.0f * k;
 	const Real La = (Real)sqrt( back * back + m.half * m.half );
@@ -3026,7 +2569,7 @@ static void dashLine( Real ax, Real ay, Real bx, Real by, Real width, Real perio
 /** The flight round a turning drop as DeliverPayloadAIUpdate flies it: in along the lane, round the
 	* circle it holds over the target (turnPoint at rnom) while the late drops fall, then HeadOffMapState's
 	* straight line off the map from wherever the last drop left it.  A dashed exit with a chevron, the
-	* drop span's two ends ticked across the track, and, while no real plane is seen, a ghost dart flying
+	* drop span's two ends ticked across the track, and a ghost dart flying
 	* it at the plane's own speed (sped up only so one pass takes at most four seconds). */
 static void drawManeuver( const Marker &m, Real t, Real est )
 {
@@ -3067,8 +2610,6 @@ static void drawManeuver( const Marker &m, Real t, Real est )
 		hairLine( px - nx * 18.0f * k, py - ny * 18.0f * k, px + nx * 18.0f * k, py + ny * 18.0f * k, 3.0f * k, m.tint, est );
 	}
 
-	if( !m.darts.empty() )
-		return;
 	const Real lead = MIN( L, 600.0f );
 	const Real total = lead + lastA + exitLen;
 	const Real real = m.planeSpeed > 0.01f ? m.planeSpeed * (Real)LOGICFRAMES_PER_SECOND : 150.0f;
@@ -3098,19 +2639,17 @@ static void drawManeuver( const Marker &m, Real t, Real est )
 	drawDart( gx, gy, gh, 0.8f, k, m.tint, 0.7f * est * edge );
 }
 
-/// the drops on the track, the turn's estimate while aiming, the plane's own circle once it is in it
-static void drawDrops( const Marker &m, Real R, Real t, Real app, Real fade )
+/// the drops on the track, and the turn's estimate
+static void drawDrops( const Marker &m, Real R, Real t, Real app )
 {
 	if( !m.lane || m.drops.empty() )
 		return;
 	const Real k = m.k, L = m.L, yaw = s_ctx.yaw;
 	const Real grow = smoothstep( 0.05f, 0.7f, t );
 
-	if( m.turn && !m.hook )
+	if( m.turn )
 	{
-		Real est = app * smoothstep( 0.6f, 0.9f, grow );
-		if( m.pastT )
-			est *= 1.0f - smoothstep( 0.0f, 0.3f, secondsSince( s_ctx.now, m.pastTMs ) );
+		const Real est = app * smoothstep( 0.6f, 0.9f, grow );
 		if( est > 0.01f )
 		{
 			const Real lastA = m.lastPast, smax = lastA + 30.0f;
@@ -3165,19 +2704,7 @@ static void drawDrops( const Marker &m, Real R, Real t, Real app, Real fade )
 		}
 	}
 
-	const Int released = m.planesSeen ? MAX( 0, m.initialCarried - m.carried ) : 0;
-	if( m.hook )
-	{
-		// another pass: what is left goes back to hollow on the lane before the target
-		for( Int i = 0; i < m.carried && i < (Int)m.drops.size(); ++i )
-		{
-			const Real d = m.drops[ i ];
-			if( d < 0.0f )
-				continue;
-			quadPiece( P_DROP_ESTIMATE, m.x - m.ux * d, m.y - m.uy * d, yaw, 24.0f * k, 24.0f * k, m.tint, app );
-		}
-	}
-	else if( m.dropPiece >= 0 )
+	if( m.dropPiece >= 0 )
 	{
 		// what stands for a drop is the power's own: a crate tile, a trooper, a stepped plate
 		const Real ang = m.dropPiece == P_DROP ? yaw : (Real)atan2( m.uy, m.ux );
@@ -3185,35 +2712,11 @@ static void drawDrops( const Marker &m, Real R, Real t, Real app, Real fade )
 		for( size_t i = 0; i < m.drops.size(); ++i )
 		{
 			const Real d = m.drops[ i ];
-			if( d < 0.0f || (Int)i < released || L - d > grow * ( L + R ) )
+			if( d < 0.0f || L - d > grow * ( L + R ) )
 				continue;
 			quadPiece( m.dropPiece, m.x - m.ux * d, m.y - m.uy * d, ang, side, side, m.tint, app );
 		}
 	}
-
-	const Int circlePiece = m.dropPiece >= 0 ? m.dropPiece : P_DROP;
-	if( m.inTurn && !m.hook && m.circleR > 0.0f && m.carried > 0 )
-	{
-		const Real length = ( (Real)m.carried - 0.5f ) * m.dropSpacing;
-		const Real sweep = length / m.circleR;
-		const Real from = m.side > 0.0f ? m.planeAngle : m.planeAngle - sweep;
-		const Real to = m.side > 0.0f ? m.planeAngle + sweep : m.planeAngle;
-		arcStrip( P_RAIL, m.circleX, m.circleY, m.circleR, 8.0f * k, from, to, FALSE, TINT_WHITE, app, FALSE );
-		for( Int j = 0; j < m.carried; ++j )
-		{
-			const Real a = m.planeAngle + m.side * ( (Real)j + 0.5f ) * m.dropSpacing / m.circleR;
-			const Real side = ( circlePiece == P_DROP ? 24.0f : 15.0f ) * k;
-			quadPiece( circlePiece, m.circleX + m.circleR * (Real)cos( a ), m.circleY + m.circleR * (Real)sin( a ), yaw,
-								 side, side, m.tint, app );
-		}
-	}
-
-	// where each item really fell, as the power's own piece: a canopy, a plus on a crate, a tank
-	const Tint fallenTint = scaled( m.tint, 0.6f );
-	const Bool ownFallen = m.fallenPiece != P_DROP;
-	for( size_t i = 0; i < m.fallen.size(); ++i )
-		quadPiece( m.fallenPiece, m.fallen[ i ].x, m.fallen[ i ].y, yaw, ( ownFallen ? 14.0f : 18.0f ) * k, ( ownFallen ? 14.0f : 18.0f ) * k,
-							 ownFallen ? m.tint : fallenTint, ( ownFallen ? 0.8f : 0.5f ) * fade );
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3249,10 +2752,8 @@ static const Real BLOCK_V = 2.0f;
 struct DesignDraw
 {
 	const Marker *m;
-	Real x, y, R, k, t, tl, tc, app, snap, yaw, fade;
+	Real x, y, R, k, t, tl, tc, app, snap, yaw;
 	Real hx, hy;					///< the frame's heading: the run's, the shells', the caster's, or the screen's right
-	Real frac;						///< a countdown's share still to come
-	Real impact;					///< seconds since a superweapon landed, below nought before
 	Bool aim;
 	Int fin;
 	Tint tint;
@@ -3347,16 +2848,6 @@ static void dashLine( Real ax, Real ay, Real bx, Real by, Real width, Real perio
 	}
 }
 
-static void softRing( Real cx, Real cy, Real r, Real width, const Tint &tint, Real alpha )
-{
-	if( alpha <= 0.002f || r <= 0.0f )
-		return;
-	const Bool was = s_ctx.additive;
-	s_ctx.additive = TRUE;
-	ring( P_PING, cx, cy, r, width, tint, alpha, FALSE );
-	s_ctx.additive = was;
-}
-
 static const Real STUD_SMALL = 0.62f;		///< the refined look's fasteners, against the guard's
 static const Real PART_SMALL = 0.68f;		///< and its parts (part()), against the sizes the designs name
 
@@ -3388,15 +2879,6 @@ static void part( Int piece, Real x, Real y, Real ang, Real sx, Real sy, const T
 static void dataPart( Int piece, Real x, Real y, Real ang, Real sx, Real sy, const Tint &tint, Real alpha )
 {
 	quadPiece( piece, x, y, ang, PART_SMALL * sx, PART_SMALL * sy, tint, alpha );
-}
-
-/// the run's position of a delivery plane (its first dart) along the heading from the target, or a big negative
-static Real planeAlong( const DesignDraw &d )
-{
-	if( d.m->darts.empty() )
-		return -1.0e9f;
-	const Dart &dart = d.m->darts.front();
-	return ( dart.x - d.x ) * d.hx + ( dart.y - d.y ) * d.hy;
 }
 
 // ---------------------------------------------------------------- America
@@ -3467,7 +2949,7 @@ static void drawCrate( const DesignDraw &d )
 	}
 }
 
-/// sheets fluttering round the zone; on the click they burst out and settle inside, then fade
+/// sheets fluttering round the zone; on the click they burst out
 static void drawLeaflet( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
@@ -3485,23 +2967,16 @@ static void drawLeaflet( const DesignDraw &d )
 		const Real rad = R * ( 0.97f + 0.03f * (Real)sin( 2.3f * d.t + (Real)i ) );
 		Real px, py;
 		d.at( a0, rad, px, py );
-		Real ang = d.yaw + a0 + 0.5f * MARKER_PI + fl, sc = 1.0f, alpha = 1.0f;
 		if( !d.aim )
 		{
 			const Real out = easeOut( d.tl / 0.3f );
-			const Real fall = smoothstep( 0.3f + 0.03f * i, 1.6f + 0.03f * i, d.tl );
-			Real bx, by, lx, ly;
+			Real bx, by;
 			d.at( a0, 1.18f * R, bx, by );
-			d.at( 2.0f * MARKER_PI * hashOf( i + 11 ), 0.75f * R * (Real)sqrt( hashOf( i + 3 ) ), lx, ly );
-			const Real ox = px + ( bx - px ) * out, oy = py + ( by - py ) * out;
-			px = ox + ( lx - ox ) * fall;
-			py = oy + ( ly - oy ) * fall;
-			ang += 2.5f * fall * ( hashOf( i ) - 0.5f ) - fl * fall;
-			sc = 1.0f - 0.25f * fall;
-			alpha = 1.0f - smoothstep( 2.0f + 0.02f * i, 2.4f + 0.02f * i, d.tl );
+			px += ( bx - px ) * out;
+			py += ( by - py ) * out;
 		}
 		// sheets in flight drift past the triangles, under them, rather than hop round them (not part())
-		quadPiece( P_SHAPE_TILE, px, py, ang, PART_SMALL * 16.0f * k * sc, PART_SMALL * 11.0f * k * sc, paper, alpha * d.app );
+		quadPiece( P_SHAPE_TILE, px, py, d.yaw + a0 + 0.5f * MARKER_PI + fl, PART_SMALL * 16.0f * k, PART_SMALL * 11.0f * k, paper, d.app );
 	}
 }
 
@@ -3510,8 +2985,7 @@ static void drawA10( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R, h = d.heading();
 	const Real rr = R * ( 1.0f + 0.08f * ( 1.0f - d.snap ) );
-	const Real ph = d.aim ? 110.0f * d.t : 110.0f * d.tc + 520.0f * MAX( 0.0f, MIN( d.tl, 1.9f ) - 0.5f );
-	const Bool burst = !d.aim && d.tl > 0.5f && d.tl < 1.9f;
+	const Real ph = 110.0f * ( d.aim ? d.t : d.tc );
 	const Real pitch = 16.0f * k;
 	for( Int row = -1; row <= 1; row += 2 )
 	{
@@ -3522,7 +2996,7 @@ static void drawA10( const DesignDraw &d )
 			Real ax, ay, bx, by;
 			d.along( s, q, ax, ay );
 			d.along( s + 8.0f * k, q, bx, by );
-			hairLine( ax, ay, bx, by, 2.4f * k, scaled( d.tint, burst ? 1.3f : 0.8f ), d.app );
+			hairLine( ax, ay, bx, by, 2.4f * k, scaled( d.tint, 0.8f ), d.app );
 		}
 	}
 	bandCircle( d.fin, d.x, d.y, rr, 16.0f * k, d.tint, d.app );
@@ -3539,24 +3013,9 @@ static void drawA10( const DesignDraw &d )
 		quadPiece( P_CHEVRON, d.x + rc * (Real)cos( a ), d.y + rc * (Real)sin( a ), a + MARKER_PI, 10.0f * k, 15.0f * k, d.tint, d.app,
 							 CHEVRON_ANCHOR_U, 0.5f );
 	}
-	if( d.aim )
-		return;
-	for( Int p = 0; p < 3; ++p )
-	{
-		const Real t0 = 0.5f + 0.5f * (Real)p;
-		const Real fr = ( d.tl - t0 ) / 0.5f;
-		if( fr >= 0.0f && fr < 1.0f )
-			for( Int side = -1; side <= 1; side += 2 )
-			{
-				Real px, py;
-				d.along( -520.0f * ( 1.0f - fr ), (Real)side * ( 26.0f + 8.0f * p ) * ( 1.0f - fr ), px, py );
-				drawDart( px, py, h - (Real)side * 0.05f, 0.55f, k, d.tint, d.app );
-			}
-		pingRing( d.x, d.y, 0.2f * R, k, d.tl - t0 - 0.5f, d.tint, 0.4f, 1.2f, 4.0f );
-	}
 }
 
-/// overpressure: rings ripple out of the detonator while aiming, collapse on the click, one shock
+/// overpressure: rings ripple out of the detonator while aiming and collapse on the click
 static void drawFuelAir( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
@@ -3571,30 +3030,19 @@ static void drawFuelAir( const DesignDraw &d )
 		d.at( 0.25f * MARKER_PI + (Real)j * 0.5f * MARKER_PI, R, px, py );
 		studAt( d, px, py, 1.4f );
 	}
-	if( d.aim || d.tl < 0.25f )
-		for( Int i = 0; i < n; ++i )
-		{
-			const Real fr = wrap( 0.42f * d.tc + (Real)i / (Real)n, 1.0f );
-			Real rad = R * ( 0.12f + 0.78f * fr );
-			if( !d.aim )
-				rad *= 1.0f - 0.92f * d.snap;
-			ring( P_HAIR, d.x, d.y, rad, 3.5f * k, d.tint, (Real)sin( MARKER_PI * fr ) * 0.95f * d.app, FALSE );
-		}
+	for( Int i = 0; i < n; ++i )
+	{
+		const Real fr = wrap( 0.42f * d.tc + (Real)i / (Real)n, 1.0f );
+		Real rad = R * ( 0.12f + 0.78f * fr );
+		if( !d.aim )
+			rad *= 1.0f - 0.92f * d.snap;
+		ring( P_HAIR, d.x, d.y, rad, 3.5f * k, d.tint, (Real)sin( MARKER_PI * fr ) * 0.95f * d.app, FALSE );
+	}
 	const Real det = d.aim ? 14.0f * k * ( 1.0f + 0.1f * (Real)sin( 6.0f * d.t ) ) : 15.0f * k;
 	quadPiece( P_STUD, d.x, d.y, d.yaw, det, det, TINT_WHITE, d.app );
 	quadPiece( P_SHAPE_DISC, d.x, d.y, d.yaw, 0.45f * det, 0.45f * det, TINT_RED, d.app );
-	if( d.aim )
-		return;
-	for( Int j = 0; j < ( moab ? 2 : 1 ); ++j )
-	{
-		const Real e = easeOut( ( d.tl - 0.3f - 0.3f * j ) / 0.75f );
-		if( d.tl > 0.3f + 0.3f * j && e < 1.0f )
-			softRing( d.x, d.y, 1.15f * R * e, ( 14.0f - 6.0f * e ) * k, pingTintOf( d.tint ), (Real)pow( 1.0f - e, 0.7f ) * d.app );
-	}
-	const Real hold = smoothstep( 1.0f, 1.4f, d.tl );
-	for( Int i = 0; i < n; ++i )
-		ring( P_HAIR, d.x, d.y, R * ( 0.3f + 0.54f * (Real)( i + 1 ) / (Real)n ), 3.0f * k, d.tint, 0.6f * hold * d.app, FALSE );
-	glowDisc( d.x, d.y, 0.9f * R, d.tint, 0.12f * ( 1.0f - smoothstep( 0.4f, 1.6f, d.tl ) ) * d.app );
+	if( !d.aim )
+		glowDisc( d.x, d.y, 0.9f * R, d.tint, 0.12f * d.app );
 }
 
 /// an imaging footprint: a round frame with its panels and a scan bar that resolves the ground
@@ -3629,7 +3077,7 @@ static void drawSpySat( const DesignDraw &d )
 		if( d.aim )
 			a = 0.25f + 0.55f * (Real)exp( -fabs( v - yb ) / ( 0.25f * R ) );		// a grid that never vanishes
 		else if( v > yb )
-			a = 0.65f * ( 1.0f - 0.6f * smoothstep( 1.0f + 0.15f * i, 1.4f + 0.15f * i, d.tl ) );
+			a = 0.65f;
 		Real p0x, p0y, p1x, p1y;
 		d.screen( -chord, v, p0x, p0y );
 		d.screen( chord, v, p1x, p1y );
@@ -3641,11 +3089,11 @@ static void drawSpySat( const DesignDraw &d )
 			{
 				d.screen( v, lo, p0x, p0y );
 				d.screen( v, chord, p1x, p1y );
-				hairLine( p0x, p0y, p1x, p1y, 2.0f * k, d.tint, 0.65f * ( 1.0f - 0.6f * smoothstep( 1.2f + 0.15f * i, 1.6f + 0.15f * i, d.tl ) ) * d.app );
+				hairLine( p0x, p0y, p1x, p1y, 2.0f * k, d.tint, 0.65f * d.app );
 			}
 		}
 	}
-	if( ( d.aim || d.tl < 0.9f ) && fabs( yb ) < in )
+	if( fabs( yb ) < in )
 	{
 		const Real chord = (Real)sqrt( in * in - yb * yb );
 		Real p0x, p0y, p1x, p1y;
@@ -3734,7 +3182,7 @@ static void drawSpyDrone( const DesignDraw &d )
 	}
 }
 
-/// a gear that ratchets while aiming; on the click one tooth round, then the teeth light green
+/// a gear that ratchets while aiming; on the click one tooth round
 static void drawRepair( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
@@ -3749,13 +3197,11 @@ static void drawRepair( const DesignDraw &d )
 		}
 	};
 	const Real ang = d.aim ? Ratchet::at( d.t, half ) : Ratchet::at( d.tc, half ) + pitch * easeOut( d.tl / 0.35f );
-	const Real prog = d.aim ? -1.0f : (Real)n * smoothstep( 0.3f, 3.0f, d.tl );
+	const Tint tooth = TINT_WHITE;
 	for( Int j = 0; j < n; ++j )
 	{
 		const Real a = d.yaw + ang + (Real)j * pitch;
 		const Real hv = hashOf( j + 4 );
-		const Bool lit = (Real)j < prog;
-		const Tint tooth = lit ? TINT_HEAL : TINT_WHITE;
 		Real px, py;
 		if( d.fin == FINISH_CHINA )
 		{
@@ -3784,20 +3230,6 @@ static void drawRepair( const DesignDraw &d )
 		d.at( 0.25f * MARKER_PI + ang + (Real)j * 0.5f * MARKER_PI, R - 28.0f * k, px, py );
 		studAt( d, px, py );
 	}
-	if( d.aim )
-		return;
-	for( Int i = 0; i < 8; ++i )
-	{
-		const Real age = d.tl - 0.25f - 0.3f * (Real)i;
-		if( age < 0.0f || age >= 1.0f )
-			continue;
-		const Real s = easeBack( age / 0.25f ) * ( 1.0f - smoothstep( 0.6f, 1.0f, age ) );
-		Real px, py;
-		d.at( 2.0f * MARKER_PI * hashOf( i + 9 ), 0.62f * R * (Real)sqrt( hashOf( i + 5 ) ), px, py );
-		px += -s_ctx.ry * 18.0f * age;
-		py += s_ctx.rx * 18.0f * age;
-		part( P_SHAPE_PLUS, px, py, d.yaw, 20.0f * k * s, 20.0f * k * s, TINT_HEAL, d.app );
-	}
 }
 
 /// the gunship's circle: the orbit (drawOrbit) it rides, a round reticle and the fire line between
@@ -3806,22 +3238,9 @@ static void drawSpectre( const DesignDraw &d )
 	const Marker &m = *d.m;
 	const Real k = d.k, R = d.R;
 	const Real Ro = m.orbit ? m.Ro : 250.0f;
-	Real gx, gy, gh;
-	const Bool real = !m.darts.empty();
-	if( real )
-	{
-		gx = m.darts.front().x;
-		gy = m.darts.front().y;
-		gh = m.darts.front().heading;
-	}
-	else
-	{
-		const Real phi = d.yaw + 0.9f * d.t + 1.2f;
-		gx = d.x + Ro * (Real)cos( phi );
-		gy = d.y + Ro * (Real)sin( phi );
-		gh = phi + 0.5f * MARKER_PI;
-		drawDart( gx, gy, gh, 1.0f, k, d.tint, 0.85f * d.app );
-	}
+	const Real phi = d.yaw + 0.9f * d.t + 1.2f;
+	const Real gx = d.x + Ro * (Real)cos( phi ), gy = d.y + Ro * (Real)sin( phi );
+	drawDart( gx, gy, phi + 0.5f * MARKER_PI, 1.0f, k, d.tint, 0.85f * d.app );
 	if( d.aim )
 		dashLine( gx, gy, d.x, d.y, 3.0f * k, 24.0f * k, 0.35f, 0.0f, d.tint, 0.75f * d.app );
 	else
@@ -3830,12 +3249,6 @@ static void drawSpectre( const DesignDraw &d )
 		s_ctx.additive = TRUE;
 		dashLine( gx, gy, d.x, d.y, 3.0f * k, 34.0f * k, 0.4f, 900.0f * d.tl, pingTintOf( d.tint ), 0.9f * d.app );
 		s_ctx.additive = was;
-		for( Int i = 0; i < 14; ++i )
-		{
-			Real px, py;
-			d.at( 2.0f * MARKER_PI * hashOf( i + 13 ), 0.8f * R * (Real)sqrt( hashOf( i + 2 ) ), px, py );
-			pingRing( px, py, 6.0f * k, k, d.tl - 0.3f - 0.2f * (Real)i, d.tint, 0.35f, 1.5f, 3.0f );
-		}
 	}
 	bandCircle( d.fin, d.x, d.y, R, 14.0f * k, d.tint, d.app );
 	const Real spin = 0.5f * d.tc + MARKER_PI / 8.0f * d.snap;
@@ -3850,7 +3263,7 @@ static void drawSpectre( const DesignDraw &d )
 	part( P_SHAPE_DISC, d.x, d.y, d.yaw, 8.0f * k, 8.0f * k, d.tint, d.app );
 }
 
-/// a bomb ladder: rails as wide as the drop variance, a rung for every drop, each burning as the plane passes
+/// a bomb ladder: rails as wide as the drop variance, a rung for every drop
 static void drawB3( const DesignDraw &d )
 {
 	const Marker &m = *d.m;
@@ -3866,33 +3279,23 @@ static void drawB3( const DesignDraw &d )
 		d.along( -( last - 30.0f ), (Real)side * hw, bx, by );
 		bandSegment( d, ax, ay, ax + ( bx - ax ) * grow, ay + ( by - ay ) * grow, 9.0f * k, d.tint, 1.0f );
 	}
-	const Real plane = planeAlong( d );
 	const Real wave = wrap( d.t * 7.0f, (Real)m.drops.size() + 4.0f );
 	for( Int i = 0; i < (Int)m.drops.size(); ++i )
 	{
 		const Real dd = m.drops[ i ];
 		Real px, py;
 		d.along( -dd, 0.0f, px, py );
-		const Bool passed = plane > -dd;
-		Tint rung = scaled( d.tint, 0.5f );
-		if( passed )
-			rung = TINT_SCORCH;
-		else if( !d.aim || fabs( (Real)i - wave ) < 1.5f )
-			rung = scaled( d.tint, 1.2f );
+		const Tint rung = scaled( d.tint, ( !d.aim || fabs( (Real)i - wave ) < 1.5f ) ? 1.2f : 0.5f );
 		// a thin see-through rung still spans the corridor
 		quadPiece( P_SHAPE_TILE, px, py, h, 4.0f * k, 2.0f * hw - 8.0f * k, rung, 0.7f * d.app );
-		if( passed )
-			pingRing( px, py, 30.0f, k, ( plane + dd ) / 320.0f, d.tint, 0.5f, 0.8f, 5.0f );
-		else
-			dataPart( P_SHAPE_DISC, px, py, h, 9.0f * k, 9.0f * k, scaled( d.tint, 0.9f ), d.app );
+		dataPart( P_SHAPE_DISC, px, py, h, 9.0f * k, 9.0f * k, scaled( d.tint, 0.9f ), d.app );
 	}
 	quadPiece( P_CHEVRON, d.x, d.y, h, 15.0f * k, 26.0f * k, d.tint, d.app, CHEVRON_ANCHOR_U, 0.5f );
 }
 
-/// a gyroscope charging: rings of arcs spinning both ways round a core; the beam's head wanders after
+/// a gyroscope charging: rings of arcs spinning both ways round a core, closing on the click
 static void drawParticle( const DesignDraw &d )
 {
-	const Marker &m = *d.m;
 	const Real k = d.k, R = d.R;
 	bandCircle( d.fin, d.x, d.y, R, 10.0f * k, d.tint, d.app );
 	ring( P_HAIR, d.x, d.y, R - 9.0f * k, 3.0f * k, TINT_STEEL, d.app, FALSE );
@@ -3919,41 +3322,11 @@ static void drawParticle( const DesignDraw &d )
 	}
 	quadPiece( P_STUD, d.x, d.y, d.yaw, 13.0f * k, 13.0f * k, TINT_WHITE, d.app );
 	part( P_SHAPE_DISC, d.x, d.y, d.yaw, 9.0f * k, 9.0f * k, scaled( d.tint, 0.85f + 0.3f * (Real)sin( 9.0f * d.t ) ), d.app );
-	if( d.aim || d.tl < 0.25f )
-		return;
-	const Real tb = d.tl - 0.25f;
-	// the head: the real beam where the click's cannon is seen firing (followSuperweapon), else a
-	// wander that never leaves the zone
-	Real bx = 0.0f, by = 0.0f;
-	if( m.beamSeen )
-	{
-		for( size_t i = 0; i < m.beamTrail.size(); ++i )
-			dataPart( P_SHAPE_DISC, m.beamTrail[ i ].x, m.beamTrail[ i ].y, d.yaw, 12.0f * k, 12.0f * k, TINT_SCORCH, 0.6f * d.app );
-		bx = m.beamX;
-		by = m.beamY;
-	}
-	else
-		for( Int i = 0; i <= 30; ++i )
-		{
-			const Real s = tb * (Real)i / 30.0f;
-			const Real u = 0.28f * R * (Real)sin( 1.1f * s ) + 0.08f * R * (Real)sin( 5.0f * s );
-			const Real v = 0.34f * R * (Real)sin( 0.8f * s + 0.3f ) - 0.34f * R * (Real)sin( 0.3f );
-			d.screen( u, v, bx, by );
-			if( i < 30 )
-				part( P_SHAPE_DISC, bx, by, d.yaw, 12.0f * k, 12.0f * k, TINT_SCORCH, 0.6f * d.app );
-		}
-	const Real flick = 0.8f + 0.2f * (Real)sin( 40.0f * d.t );
-	const Tint hot = { 1.0f, 0.95f, 0.9f };
-	glowDisc( bx, by, 16.0f * k, pingTintOf( d.tint ), 0.9f * flick * d.app );
-	glowDisc( bx, by, 7.0f * k, hot, d.app );
-	for( Int j = 0; j < 4; ++j )
-		pingRing( bx, by, 8.0f * k, k, wrap( tb - 0.35f * (Real)j, 1.4f ), d.tint, 0.7f, 3.0f, 3.0f );
 }
 
 /// a crosshair with no ring: long hairlines with calibration ticks, a small ring collapsing to a point
 static void drawLaser( const DesignDraw &d )
 {
-	const Marker &m = *d.m;
 	const Real k = d.k, R = d.R;
 	const Real g = d.aim ? ( 0.3f + 0.1f * (Real)sin( 3.0f * d.t ) ) * R : ( 0.3f + 0.1f * (Real)sin( 3.0f * d.tc ) ) * R * ( 1.0f - 0.8f * d.snap );
 	for( Int j = 0; j < 4; ++j )
@@ -3979,32 +3352,6 @@ static void drawLaser( const DesignDraw &d )
 	}
 	const Real hd = d.aim ? ( 0.2f + 0.02f * (Real)sin( 6.0f * d.t ) ) * R : 0.2f * R * ( 1.0f - 0.8f * d.snap );
 	bandCircle( d.fin, d.x, d.y, hd, 6.0f * k, d.tint, d.app );
-	if( d.aim || d.tl < 0.25f )
-		return;
-	const Real tb = clamp01( ( d.tl - 0.25f ) / 2.2f );
-	Real ax, ay, ex, ey;
-	d.at( 0.35f + MARKER_PI, 0.7f * R, ax, ay );
-	d.at( 0.35f, 0.7f * R, ex, ey );
-	Real bx = ax + ( ex - ax ) * tb, by = ay + ( ey - ay ) * tb;
-	if( m.beamSeen && !m.beamTrail.empty() )
-	{
-		// the trench the real beam cut, segment by segment
-		bx = m.beamX;
-		by = m.beamY;
-		for( size_t i = 1; i < m.beamTrail.size(); ++i )
-			hairLine( m.beamTrail[ i - 1 ].x, m.beamTrail[ i - 1 ].y, m.beamTrail[ i ].x, m.beamTrail[ i ].y, 9.0f * k, TINT_SCORCH, 0.75f * d.app );
-	}
-	else
-	{
-		hairLine( ax, ay, bx, by, 9.0f * k, TINT_SCORCH, 0.75f * d.app );
-		const Bool was = s_ctx.additive;
-		s_ctx.additive = TRUE;
-		hairLine( ax, ay, bx, by, 3.0f * k, d.tint, 0.5f * d.app );
-		s_ctx.additive = was;
-	}
-	const Tint hot = { 1.0f, 0.96f, 0.92f };
-	glowDisc( bx, by, 12.0f * k, pingTintOf( d.tint ), 0.9f * d.app );
-	glowDisc( bx, by, 5.0f * k, hot, d.app );
 }
 
 /// a routed missile: dashes from the launcher through two waypoints to a ring whose quarters count down
@@ -4026,27 +3373,26 @@ static void drawCruise( const DesignDraw &d )
 		lens[ i ] = (Real)sqrt( ( route.x[ i + 1 ] - route.x[ i ] ) * ( route.x[ i + 1 ] - route.x[ i ] ) + ( route.y[ i + 1 ] - route.y[ i ] ) * ( route.y[ i + 1 ] - route.y[ i ] ) );
 		tot += lens[ i ];
 	}
-	const Real progress = d.aim ? 0.0f : clamp01( 1.0f - d.frac ) * tot;
 	const Real stop = MIN( tot - 0.85f * R, smoothstep( 0.05f, 0.7f, d.t ) * tot );
 	const Real phase = 60.0f * k * ( d.aim ? d.t : d.tc );
 	Real acc = 0.0f;
 	for( Int i = 0; i < 3; ++i )
 	{
-		const Real s0 = MAX( acc, progress ), s1 = MIN( acc + lens[ i ], stop );
-		if( s1 > s0 && lens[ i ] > 1.0f )
+		const Real s1 = MIN( acc + lens[ i ], stop );
+		if( s1 > acc && lens[ i ] > 1.0f )
 		{
 			const Real ux = ( route.x[ i + 1 ] - route.x[ i ] ) / lens[ i ], uy = ( route.y[ i + 1 ] - route.y[ i ] ) / lens[ i ];
-			dashLine( route.x[ i ] + ux * ( s0 - acc ), route.y[ i ] + uy * ( s0 - acc ), route.x[ i ] + ux * ( s1 - acc ), route.y[ i ] + uy * ( s1 - acc ),
-								3.0f * k, 22.0f * k, 0.5f, phase - ( s0 - acc ) - acc, d.tint, 0.85f * d.app );
+			dashLine( route.x[ i ], route.y[ i ], route.x[ i ] + ux * ( s1 - acc ), route.y[ i ] + uy * ( s1 - acc ),
+								3.0f * k, 22.0f * k, 0.5f, phase - acc, d.tint, 0.85f * d.app );
 		}
 		if( i > 0 )
 			dataPart( P_SHAPE_DISC, route.x[ i ], route.y[ i ], d.yaw, 11.0f * k, 11.0f * k, d.tint, d.app );
 		acc += lens[ i ];
 	}
-	// the blast is round: four quarter arcs, clockwise from the top, the lit ones the flight still to come
+	// the blast is round: four quarter arcs, clockwise from the top, the last blinking once it is sent
 	const Real rc = 0.62f * R * 1.2f;
 	bandArc( d.fin, d.x, d.y, rc, 12.0f * k, 0.0f, 2.0f * MARKER_PI, d.tint, d.app, 1.0f, FALSE );
-	const Int lit = d.aim ? 4 : (Int)ceilf( 4.0f * d.frac );
+	const Int lit = 4;
 	const Bool blinkOff = !d.aim && sin( 18.0f * d.t ) < 0.0f;
 	const Real gap = 0.06f;
 	for( Int e = 0; e < 4; ++e )
@@ -4072,24 +3418,9 @@ static void drawCruise( const DesignDraw &d )
 	if( d.aim )
 		return;
 	bandCircle( d.fin, d.x, d.y, 0.22f * R * d.snap + 0.1f, 5.0f * k, d.tint, d.app );
-	if( progress > 0.0f && progress < tot && m.darts.empty() )
-	{
-		acc = 0.0f;
-		for( Int i = 0; i < 3; ++i )
-		{
-			if( progress <= acc + lens[ i ] )
-			{
-				const Real f = ( progress - acc ) / MAX( 1.0f, lens[ i ] );
-				drawDart( route.x[ i ] + ( route.x[ i + 1 ] - route.x[ i ] ) * f, route.y[ i ] + ( route.y[ i + 1 ] - route.y[ i ] ) * f,
-									(Real)atan2( route.y[ i + 1 ] - route.y[ i ], route.x[ i + 1 ] - route.x[ i ] ), 1.0f, k, d.tint, d.app );
-				break;
-			}
-			acc += lens[ i ];
-		}
-	}
 }
 
-/// a decontamination spray: nozzles round the rim, a spiral drawn in, wash rings going out after
+/// a decontamination spray: nozzles round the rim, a spiral drawn in, a medic's cross popping on the click
 static void drawAmbulance( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
@@ -4117,19 +3448,12 @@ static void drawAmbulance( const DesignDraw &d )
 		}
 	if( d.aim )
 		return;
-	const Tint water = { 0.7f, 0.92f, 1.0f };
-	for( Int j = 0; j < 6; ++j )
-	{
-		const Real age = d.tl - 0.2f - 0.45f * (Real)j;
-		if( age >= 0.0f && age < 1.1f )
-			softRing( d.x, d.y, 0.95f * R * age / 1.1f, 5.0f * k, water, 0.7f * ( 1.0f - age / 1.1f ) * d.app );
-	}
 	const Real s = easeBack( d.tl / 0.3f );
 	const Tint medic = { 0.95f, 0.3f, 0.25f };
 	part( P_SHAPE_PLUS, d.x, d.y, d.yaw, 30.0f * k * s, 30.0f * k * s, medic, d.app );
 }
 
-/// a rocket salvo's spread: the scatter circle, the line of fire from the unit, pips landing near to far
+/// a rocket salvo's spread: the scatter circle, the line of fire from the unit, the pips where rockets fall
 static void drawComanche( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R, h = d.heading();
@@ -4145,38 +3469,16 @@ static void drawComanche( const DesignDraw &d )
 	studAt( d, px, py, 0.9f );
 	d.at( 1.25f * MARKER_PI, a, px, py );
 	studAt( d, px, py, 0.9f );
-	Real ps[ 24 ], qs[ 24 ];
 	for( Int i = 0; i < 24; ++i )
 	{
 		const Real rr = (Real)sqrt( hashOf( i + 1 ) ), aa = 2.0f * MARKER_PI * hashOf( i + 31 );
-		ps[ i ] = rr * (Real)cos( aa ) * a * 0.92f;
-		qs[ i ] = rr * (Real)sin( aa ) * b * 0.92f;
-	}
-	for( Int i = 0; i < 24; ++i )
-	{
-		Int rank = 0;
-		for( Int j = 0; j < 24; ++j )
-			if( ps[ j ] < ps[ i ] || ( ps[ j ] == ps[ i ] && j < i ) )
-				++rank;
-		d.along( ps[ i ], qs[ i ], px, py );
-		if( d.aim )
-		{
-			const Bool lit = sin( 7.0f * d.t + 5.1f * (Real)i ) > 0.4f;
-			part( P_SHAPE_DISC, px, py, h, 7.0f * k, 7.0f * k, scaled( d.tint, lit ? 1.2f : 0.45f ), d.app );
-			continue;
-		}
-		const Real t0 = 0.35f + 0.05f * (Real)rank;
-		if( d.tl > t0 )
-		{
-			pingRing( px, py, 5.0f * k, k, d.tl - t0, d.tint, 0.35f, 2.2f, 2.6f );
-			part( P_SHAPE_DISC, px, py, h, 8.0f * k, 8.0f * k, TINT_SCORCH, 0.8f * d.app );
-		}
-		else
-			part( P_SHAPE_DISC, px, py, h, 7.0f * k, 7.0f * k, scaled( d.tint, 1.2f ), d.app );
+		d.along( rr * (Real)cos( aa ) * a * 0.92f, rr * (Real)sin( aa ) * b * 0.92f, px, py );
+		const Bool lit = !d.aim || sin( 7.0f * d.t + 5.1f * (Real)i ) > 0.4f;		// all lit on the click
+		part( P_SHAPE_DISC, px, py, h, 7.0f * k, 7.0f * k, scaled( d.tint, lit ? 1.2f : 0.45f ), d.app );
 	}
 }
 
-/// minesweeping: a hazard-tape ring, a detector arm swinging like a pendulum, the finds struck out
+/// minesweeping: a hazard-tape ring, a detector arm swinging like a pendulum, sweeping round on the click
 static void drawDemine( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
@@ -4216,20 +3518,6 @@ static void drawDemine( const DesignDraw &d )
 	d.at( phi, 0.78f * R, hx, hy );
 	bandCircle( d.fin, hx, hy, 0.13f * R, 8.0f * k, d.tint, d.app );
 	studAt( d, d.x, d.y, 1.1f );
-	if( d.aim )
-		return;
-	for( Int i = 0; i < 5; ++i )
-	{
-		const Real age = d.tl - 0.3f - 0.32f * (Real)i;
-		if( age < 0.0f )
-			continue;
-		Real px, py;
-		d.at( 2.0f * MARKER_PI * hashOf( i + 23 ), 0.65f * R * (Real)sqrt( hashOf( i + 17 ) ), px, py );
-		if( age < 0.7f )
-			part( P_SHAPE_DISC, px, py, d.yaw, 10.0f * k, 10.0f * k, scaled( TINT_AMBER, sin( 30.0f * age ) > 0.0f ? 1.3f : 0.6f ), d.app );
-		else
-			part( P_SHAPE_CROSS, px, py, d.yaw, 15.0f * k, 15.0f * k, d.tint, ( 1.0f - smoothstep( 1.4f, 1.9f, age ) ) * d.app );
-	}
 }
 
 // ---------------------------------------------------------------- China
@@ -4260,30 +3548,15 @@ static void drawArtillery( const DesignDraw &d )
 		}
 	for( Int j = 0; j < 3; ++j )
 	{
-		// the shells' arrival marches in while aiming and while they are on their way
-		const Bool incoming = d.aim || d.impact < 0.0f;
-		const Real s = -rr - 40.0f * k - wrap( (Real)j * 22.0f * k + ( incoming ? 50.0f * k * d.t : 0.0f ), 66.0f * k );		// behind the cursor triangle
+		// the shells' arrival marches in
+		const Real s = -rr - 40.0f * k - wrap( (Real)j * 22.0f * k + 50.0f * k * d.t, 66.0f * k );		// behind the cursor triangle
 		Real px, py;
 		d.along( s, 0.0f, px, py );
 		quadPiece( P_CHEVRON, px, py, h, 13.0f * k, 20.0f * k, d.tint, d.app, CHEVRON_ANCHOR_U, 0.5f );
 	}
-	// the impacts from when the last carrier dropped (followCarriers), or from the click when none was seen
-	const Real te = d.impact >= 0.0f ? d.impact : ( d.m->planesSeen ? -1.0f : d.tl );
-	if( d.aim || te < 0.0f )
-		return;
-	for( Int i = 0; i < 15; ++i )
-	{
-		const Real t0 = 0.75f * (Real)( i / 5 ) + 0.09f * (Real)( i % 5 );
-		if( te <= t0 )
-			continue;
-		Real px, py;
-		d.at( 2.0f * MARKER_PI * hashOf( i + 43 ), 0.7f * R * (Real)sqrt( hashOf( i + 41 ) ), px, py );
-		part( P_SHAPE_DISC, px, py, d.yaw, 13.0f * k, 13.0f * k, TINT_SCORCH, 0.6f * d.app );
-		pingRing( px, py, 8.0f * k, k, te - t0, d.tint, 0.4f, 1.6f, 3.6f );
-	}
 }
 
-/// a minefield: the round field it seeds with a ring per mine; the mines blink armed after the click
+/// a minefield: the round field it seeds with a ring per mine, lit out from the middle on the click
 static void drawMines( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
@@ -4312,32 +3585,24 @@ static void drawMines( const DesignDraw &d )
 			else
 				lit = d.tl > 0.08f * dist + 0.01f * (Real)i;
 			part( P_SHAPE_RING, px, py, d.yaw, 0.3f * R, 0.3f * R, scaled( d.tint, lit ? 1.15f : 0.4f ), ( lit ? 1.0f : 0.8f ) * d.app );
-			if( !d.aim && d.tl > 0.08f * dist + 0.2f )
-			{
-				const Bool blink = sin( 4.0f * d.t + 1.3f * (Real)i ) > 0.55f;
-				part( P_SHAPE_DISC, px, py, d.yaw, 10.0f * k, 10.0f * k, scaled( TINT_LACQ, blink ? 1.25f : 0.7f ), d.app );
-			}
 		}
 }
 
-/// a lightning ring: a zigzag strobing between four capacitors; on the click a knot, then one pulse
+/// a lightning ring: a zigzag strobing between four capacitors; on the click it knots in
 static void drawEmp( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R, yaw = d.yaw;
 	const Real n = 24.0f;
 	const Real ph = d.aim ? 0.5f * (Real)( (Int)floor( d.t * 8.0f ) % 2 ) : 0.0f;
-	Real sc = 1.0f;
-	if( !d.aim )
-		sc = d.tl < 0.8f ? 1.0f - 0.85f * d.snap : smoothstep( 0.8f, 1.2f, d.tl );
+	const Real sc = d.aim ? 1.0f : 1.0f - 0.85f * d.snap;
 	auto zig = [=]( Real a ) -> Real
 	{
 		const Real g = wrap( ( a - yaw ) * n / ( 2.0f * MARKER_PI ) + ph, 1.0f );
 		const Real tri = (Real)fabs( 2.0f * g - 1.0f );
 		return R * sc + 6.0f * k * ( 2.0f * tri - 1.0f ) * MAX( sc, 0.2f );
 	};
-	const Real za = ( d.aim || d.tl < 0.25f || d.tl > 0.8f ) ? 1.0f : 0.4f;
 	if( R * sc > 4.0f * k )
-		bandRadial( d.fin, d.x, d.y, zig, 8.0f * k, d.tint, za * d.app, 1.0f, 1.5f );
+		bandRadial( d.fin, d.x, d.y, zig, 8.0f * k, d.tint, d.app, 1.0f, 1.5f );
 	for( Int j = 0; j < 4; ++j )
 	{
 		const Real a = 0.25f * MARKER_PI + (Real)j * 0.5f * MARKER_PI;
@@ -4346,45 +3611,21 @@ static void drawEmp( const DesignDraw &d )
 		part( P_SHAPE_RING, px, py, yaw, 20.0f * k, 20.0f * k, TINT_STEEL, d.app );		// round capacitors on a round pulse
 		part( P_SHAPE_DISC, px, py, yaw, 8.0f * k, 8.0f * k, d.tint, d.app );
 	}
+	if( !d.aim )
+		return;
 	const Bool was = s_ctx.additive;
 	s_ctx.additive = TRUE;
-	if( d.aim )
+	const Real t = d.t;
+	for( Int j = 0; j < 4; ++j )
 	{
-		const Real t = d.t;
-		for( Int j = 0; j < 4; ++j )
+		if( hashOf( j, (Real)floor( d.t * 7.0f ) ) <= 0.45f )
+			continue;
+		const Real a0 = yaw + 0.25f * MARKER_PI + (Real)j * 0.5f * MARKER_PI + 0.15f;
+		auto jag = [=]( Real a ) -> Real
 		{
-			if( hashOf( j, (Real)floor( d.t * 7.0f ) ) <= 0.45f )
-				continue;
-			const Real a0 = yaw + 0.25f * MARKER_PI + (Real)j * 0.5f * MARKER_PI + 0.15f;
-			auto jag = [=]( Real a ) -> Real
-			{
-				return R + 18.0f * k + 5.0f * k * (Real)sin( a * 41.0f + t * 50.0f ) * (Real)sin( a * 17.0f - t * 31.0f );
-			};
-			radialStrip( P_HAIR, d.x, d.y, jag, 3.0f * k, a0, a0 + 0.5f * MARKER_PI - 0.3f, pingTintOf( d.tint ), 0.9f * d.app, FALSE, 1.5f );
-		}
-	}
-	else
-	{
-		const Real e = easeOut( ( d.tl - 0.25f ) / 0.5f );
-		if( d.tl > 0.25f && e < 1.0f )
-		{
-			auto shock = [=]( Real a ) -> Real
-			{
-				const Real g = wrap( ( a - yaw ) * n / ( 2.0f * MARKER_PI ), 1.0f );
-				return 1.15f * R * e + 7.0f * k * ( 2.0f * (Real)fabs( 2.0f * g - 1.0f ) - 1.0f );
-			};
-			radialStrip( P_PING, d.x, d.y, shock, 8.0f * k, 0.0f, 2.0f * MARKER_PI, pingTintOf( d.tint ), (Real)pow( 1.0f - e, 0.6f ) * d.app, FALSE, 1.5f );
-		}
-		if( d.tl > 0.6f )
-		{
-			const Real tick = (Real)floor( d.t * 20.0f );
-			for( Int i = 0; i < 20; ++i )
-			{
-				Real px, py;
-				d.at( 2.0f * MARKER_PI * hashOf( i, tick ), 0.92f * R * (Real)sqrt( hashOf( i + 40, tick ) ), px, py );
-				part( P_SHAPE_TILE, px, py, yaw, ( 4.0f + 6.0f * hashOf( i + 7, tick ) ) * k, 2.5f * k, d.tint, 0.35f * d.app );
-			}
-		}
+			return R + 18.0f * k + 5.0f * k * (Real)sin( a * 41.0f + t * 50.0f ) * (Real)sin( a * 17.0f - t * 31.0f );
+		};
+		radialStrip( P_HAIR, d.x, d.y, jag, 3.0f * k, a0, a0 + 0.5f * MARKER_PI - 0.3f, pingTintOf( d.tint ), 0.9f * d.app, FALSE, 1.5f );
 	}
 	s_ctx.additive = was;
 }
@@ -4406,7 +3647,6 @@ static void drawChinaCarpet( const DesignDraw &d )
 			bandSegment( d, ax, ay, ax + ( bx - ax ) * grow, ay + ( by - ay ) * grow, 8.0f * k, TINT_LACQ, 1.0f );
 		}
 	}
-	const Real plane = planeAlong( d );
 	const Real wave = wrap( 6.0f * d.t, (Real)m.drops.size() + 3.0f );
 	for( Int i = 0; i < (Int)m.drops.size(); ++i )
 	{
@@ -4415,14 +3655,6 @@ static void drawChinaCarpet( const DesignDraw &d )
 			continue;
 		Real px, py;
 		d.along( -dd, 0.0f, px, py );
-		if( plane > -dd )
-		{
-			pingRing( px, py, nuke ? 34.0f : 22.0f, k, ( plane + dd ) / 300.0f, d.tint, 0.5f, 0.9f, 5.0f );
-			if( nuke )
-				pingRing( px, py, 12.0f, k, ( plane + dd ) / 300.0f - 0.15f, d.tint, 0.5f, 2.5f, 4.0f );
-			dataPart( P_SHAPE_DIAMOND, px, py, h, 24.0f * k, 24.0f * k, TINT_SCORCH, d.app );
-			continue;
-		}
 		if( d.aim && fabs( (Real)i - wave ) < 1.2f )
 			dataPart( P_SHAPE_DIAMOND, px, py, h, 28.0f * k, 28.0f * k, scaled( d.tint, 1.3f ), d.app );
 		if( nuke )
@@ -4431,29 +3663,12 @@ static void drawChinaCarpet( const DesignDraw &d )
 	part( P_SHAPE_PLUS, d.x, d.y, h + 0.25f * MARKER_PI, 30.0f * k, 30.0f * k, d.tint, d.app );
 }
 
-/// a fire carpet: a wide terraced box across the run, a wavy flame front that sweeps through it
+/// a fire carpet: a wide terraced box across the run, a wavy flame front at its near edge
 static void drawNapalm( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R, h = d.heading();
 	const Real hd = 0.55f * R, hw = 1.15f * R;
-	Real pos = -0.45f * R;
-	if( !d.aim )
-	{
-		pos = -0.45f * R + 0.9f * R * smoothstep( 0.2f, 1.3f, d.tl );
-		const Real cell = 0.17f * R;
-		for( Int gi = -4; gi <= 4; ++gi )
-			for( Int gj = -7; gj <= 7; ++gj )
-			{
-				const Real cs = ( (Real)gi + 0.5f ) * cell, cq = ( (Real)gj + 0.5f ) * cell;
-				if( cs > pos || fabs( cs ) > hd - 8.0f * k || fabs( cq ) > hw - 8.0f * k )
-					continue;
-				const Real hv = hashOf( gi * 31 + gj );
-				const Real fl = 0.7f + 0.3f * (Real)sin( 13.0f * d.t + 6.28f * hv );
-				Real px, py;
-				d.along( cs, cq, px, py );
-				dataPart( P_SHAPE_TONGUE, px, py, h, 15.0f * k * fl, 12.0f * k * fl, scaled( d.tint, 1.1f ), d.app );
-			}
-	}
+	const Real pos = -0.45f * R;		// the front waits at the box's near edge
 	Poly front;
 	for( Int i = 0; i <= 40; ++i )
 	{
@@ -4492,9 +3707,8 @@ static void drawFrenzy( const DesignDraw &d )
 	const Real per = d.aim ? 0.9f : 0.55f;
 	const Real tt = wrap( d.t, per );
 	const Real p = (Real)exp( -( tt / 0.06f ) * ( tt / 0.06f ) ) + 0.6f * (Real)exp( -( ( tt - 0.2f ) / 0.06f ) * ( ( tt - 0.2f ) / 0.06f ) );
-	const Real fade = d.aim ? 1.0f : 1.0f - 0.5f * smoothstep( 1.5f, 3.4f, d.tl );
 	const Real Rs = R * ( 1.0f + 0.035f * p + ( d.aim ? 0.0f : 0.15f * ( 1.0f - d.snap ) ) );
-	bandCircle( d.fin, d.x, d.y, Rs, 18.0f * k, d.tint, fade * d.app, 0.75f + 0.35f * p );
+	bandCircle( d.fin, d.x, d.y, Rs, 18.0f * k, d.tint, d.app, 0.75f + 0.35f * p );
 	for( Int j = 0; j < 20; ++j )
 	{
 		const Real a = (Real)j * 2.0f * MARKER_PI / 20.0f;
@@ -4503,19 +3717,19 @@ static void drawFrenzy( const DesignDraw &d )
 		const Real s = ( 16.0f + 5.0f * p ) * PART_SMALL * k;
 		// even rays: the triangles stand half a ray step (9 degrees) between them, clear by their own size,
 		// so these skip keepOffTris's 15 degree wedge, which would bunch the two rays beside each triangle
-		quadPiece( P_SHAPE_TRI, px, py, d.yaw + a, s, s, scaled( d.tint, 0.8f + 0.5f * p ), fade * d.app );
+		quadPiece( P_SHAPE_TRI, px, py, d.yaw + a, s, s, scaled( d.tint, 0.8f + 0.5f * p ), d.app );
 	}
-	ring( P_HAIR, d.x, d.y, 0.72f * Rs, 5.0f * k, TINT_LACQ, fade * d.app, FALSE );
+	ring( P_HAIR, d.x, d.y, 0.72f * Rs, 5.0f * k, TINT_LACQ, d.app, FALSE );
 	for( Int j = 0; j < 8; ++j )
 	{
 		Real px, py;
 		d.at( MARKER_PI / 8.0f + (Real)j * 0.25f * MARKER_PI, 0.84f * Rs, px, py );
-		studAt( d, px, py, 1.2f, fade );
+		studAt( d, px, py, 1.2f );
 	}
-	glowDisc( d.x, d.y, Rs, d.tint, 0.12f * p * fade * d.app );
+	glowDisc( d.x, d.y, Rs, d.tint, 0.12f * p * d.app );
 }
 
-/// nuclear: the trefoil turns, slams upright on the click; twelve arc segments count the flight down
+/// nuclear: the trefoil turns, slams upright on the click; twelve arc segments round it, the last blinking once sent
 static void drawNeutron( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
@@ -4533,7 +3747,7 @@ static void drawNeutron( const DesignDraw &d )
 	quadPiece( piece, d.x, d.y, d.yaw + ( rot - (Real)r * step ), 1.15f * R * sc, 1.15f * R * sc, d.tint, 0.45f * d.app );
 	bandCircle( d.fin, d.x, d.y, R, 24.0f * k, d.tint, d.app );
 	ring( P_HAIR, d.x, d.y, R, 3.0f * k, TINT_LACQ, d.app, FALSE );
-	const Int lit = (Int)ceilf( 12.0f * d.frac );
+	const Int lit = 12;
 	const Bool blinkOff = !d.aim && sin( 18.0f * d.t ) < 0.0f;
 	const Real rc = R + 26.0f * k;
 	for( Int j = 0; j < 12; ++j )
@@ -4559,26 +3773,12 @@ static void helixSway( const DesignDraw &d, Real phase, Real &cx, Real &cy )
 	d.screen( 9.0f * d.k * (Real)sin( 1.3f * t + phase ) * hold, 6.0f * d.k * (Real)sin( 1.9f * t ) * hold, cx, cy );
 }
 
-/// a hovering drop: the ring sways with the Helix, a ring falls on a loop, flame tongues burst out
+/// a hovering drop: the ring sways with the Helix, a ring falls on a loop and once on the click
 static void drawHelixNapalm( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
 	Real cx, cy;
 	helixSway( d, 0.0f, cx, cy );
-	if( !d.aim && d.tl >= 0.5f )
-	{
-		const Real e = easeOut( ( d.tl - 0.5f ) / 0.4f );
-		fillDisc( cx, cy, 0.3f * R, TINT_SCORCH, 0.5f * d.app, 0.0f );
-		glowDisc( cx, cy, R, d.tint, 0.4f * d.app );
-		for( Int j = 0; j < 8; ++j )
-		{
-			const Real a = (Real)j * 0.25f * MARKER_PI + 0.2f;
-			const Real len = ( 0.3f + 0.75f * e ) * R * ( 0.85f + 0.15f * (Real)sin( 11.0f * d.t + (Real)j ) );
-			const Real px = cx + ( 0.1f * R + 0.5f * len ) * (Real)cos( d.yaw + a ), py = cy + ( 0.1f * R + 0.5f * len ) * (Real)sin( d.yaw + a );
-			// flames burst out even all round and pass under the triangles (not part(), which would bunch them)
-			quadPiece( P_SHAPE_TONGUE, px, py, d.yaw + a, PART_SMALL * len * 1.6f, PART_SMALL * len * 0.55f, scaled( d.tint, 1.15f ), d.app );
-		}
-	}
 	bandCircle( d.fin, cx, cy, R, 10.0f * k, d.tint, d.app );
 	for( Int j = 0; j < 6; ++j )
 	{
@@ -4592,12 +3792,12 @@ static void drawHelixNapalm( const DesignDraw &d )
 		const Real fr = wrap( 0.7f * d.t, 1.0f );
 		ring( P_HAIR, cx, cy, R * ( 1.0f - fr ), 3.0f * k, TINT_WARM, 0.6f * (Real)sin( MARKER_PI * fr ) * d.app, FALSE );
 	}
-	else if( d.tl < 0.5f )
+	else
 		ring( P_HAIR, cx, cy, 0.8f * R * ( 1.0f - d.tl / 0.5f ), 3.5f * k, TINT_WARM, 0.9f * d.app, FALSE );
 	part( P_SHAPE_DISC, cx, cy, d.yaw, 11.0f * k, 11.0f * k, d.tint, d.app );
 }
 
-/// a small round warning plate under the hovering Helix; a ring drops and three shocks go out
+/// a small round warning plate under the hovering Helix; a ring drops on it
 static void drawHelixNuke( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
@@ -4610,25 +3810,10 @@ static void drawHelixNuke( const DesignDraw &d )
 		const Real a = d.yaw + MARKER_PI / 12.0f + (Real)i * MARKER_PI / 3.0f;		// off N, E, S and W
 		studAt( d, cx + R * (Real)cos( a ), cy + R * (Real)sin( a ), 0.9f );
 	}
-	const Real flash = d.aim ? 0.0f : MAX( 0.0f, 1.0f - (Real)fabs( d.tl - 0.55f ) / 0.3f );
-	const Tint hot = { 1.0f, 0.95f, 0.85f };
-	const Tint tre = { d.tint.r + ( hot.r - d.tint.r ) * flash, d.tint.g + ( hot.g - d.tint.g ) * flash, d.tint.b + ( hot.b - d.tint.b ) * flash };
-	quadPiece( P_GLYPH_NUKE00, cx, cy, d.yaw, 0.55f * R, 0.55f * R, tre, 0.7f * d.app );
-	if( d.aim || d.tl < 0.5f )
-	{
-		const Real fr = d.aim ? wrap( 0.6f * d.t, 1.0f ) : d.tl / 0.5f;
-		const Real s = d.aim ? 1.9f - 1.6f * fr : 1.6f - 1.4f * fr;
-		ring( P_HAIR, cx, cy, R * s, 3.0f * k, d.tint, ( d.aim ? 0.7f * (Real)sin( MARKER_PI * fr ) : 0.9f ) * d.app, FALSE );
-	}
-	if( d.aim )
-		return;
-	for( Int j = 0; j < 3; ++j )
-	{
-		const Real t0 = 0.5f + 0.17f * (Real)j;
-		const Real e = easeOut( ( d.tl - t0 ) / 0.8f );
-		if( d.tl > t0 && e < 1.0f )
-			softRing( cx, cy, 1.5f * R * e, ( 10.0f - 4.0f * j ) * k, pingTintOf( d.tint ), (Real)pow( 1.0f - e, 0.7f ) * d.app );
-	}
+	quadPiece( P_GLYPH_NUKE00, cx, cy, d.yaw, 0.55f * R, 0.55f * R, d.tint, 0.7f * d.app );
+	const Real fr = d.aim ? wrap( 0.6f * d.t, 1.0f ) : d.tl / 0.5f;
+	const Real s = d.aim ? 1.9f - 1.6f * fr : 1.6f - 1.4f * fr;
+	ring( P_HAIR, cx, cy, R * s, 3.0f * k, d.tint, ( d.aim ? 0.7f * (Real)sin( MARKER_PI * fr ) : 0.9f ) * d.app, FALSE );
 }
 
 /// a round landing ring on a four-point harness: it swings while aiming and slams down on the click
@@ -4636,7 +3821,7 @@ static void drawTankDrop( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
 	const Real sway = d.aim ? 0.14f * (Real)sin( 1.7f * d.t ) : 0.14f * (Real)sin( 1.7f * d.tc ) * ( 1.0f - d.snap );
-	const Real sc = d.aim ? 1.0f : 1.0f + 0.25f * ( 1.0f - d.snap ) - 0.05f * (Real)sin( MARKER_PI * clamp01( ( d.tl - 0.22f ) / 0.2f ) );
+	const Real sc = d.aim ? 1.0f : 1.0f + 0.25f * ( 1.0f - d.snap );
 	const Real h = d.heading() + sway, hs = 0.8f * R * sc;
 	for( Int i = 0; i < 4; ++i )
 	{
@@ -4651,16 +3836,11 @@ static void drawTankDrop( const DesignDraw &d )
 		const Real a = d.yaw + 0.25f * MARKER_PI + 0.5f * MARKER_PI * (Real)i;		// the screen's diagonals: neither the run nor the sway moves them under a triangle
 		studAt( d, d.x + hs * (Real)cos( a ), d.y + hs * (Real)sin( a ), 0.8f );
 	}
-	if( d.aim )
-		return;
-	const Real e = easeOut( ( d.tl - 0.2f ) / 0.5f );
-	if( d.tl > 0.2f && e < 1.0f )
-		softRing( d.x, d.y, hs * ( 1.0f + 0.35f * e ), 6.0f * k, pingTintOf( d.tint ), 0.9f * ( 1.0f - e ) * d.app );
 }
 
 // ---------------------------------------------------------------- GLA
 
-/// nine missiles: round impact marks inside a welded ragged ring, a round lamp per missile counting down
+/// nine missiles: round impact marks inside a welded ragged ring, a round lamp per missile
 static void drawScud( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R, yaw = d.yaw;
@@ -4686,7 +3866,7 @@ static void drawScud( const DesignDraw &d )
 		d.at( a, ragged( yaw + a ) + 13.0f * k, px, py );
 		part( P_SHAPE_PARA, px, py, yaw + a + 0.5f * MARKER_PI, 9.0f * k, 7.0f * k, ( i & 1 ) ? TINT_DARK : TINT_AMBER, d.app );
 	}
-	const Int nl = d.aim ? 9 : (Int)ceilf( 9.0f * d.frac );
+	const Int nl = 9;
 	const Bool blinkOff = !d.aim && sin( 18.0f * d.t ) < 0.0f;
 	for( Int i = 0; i < 9; ++i )
 	{
@@ -4704,8 +3884,6 @@ static void drawScud( const DesignDraw &d )
 		const Real rot = 2.0f * MARKER_PI * hashOf( i + 85 ) + ( d.aim ? 0.0f : 0.5f * ( 1.0f - d.snap ) );
 		const Bool lit = !d.aim || hashOf( i, (Real)floor( d.t * 7.0f ) ) > 0.5f;
 		part( P_SHAPE_RING, px, py, yaw + rot, 20.0f * k, 20.0f * k, scaled( d.tint, lit ? 1.1f : 0.4f ), 0.75f * d.app );
-		if( d.impact >= 0.0f )
-			pingRing( px, py, 16.0f * k, k, d.impact - 0.08f * (Real)( ( i * 5 ) % 9 ), d.tint, 0.5f, 1.4f, 5.0f );
 	}
 }
 
@@ -4758,7 +3936,7 @@ static void drawAnthrax( const DesignDraw &d )
 	}
 }
 
-/// tunnel hatches: lids jiggle while aiming, pop off one after another, rebels run out of the holes
+/// tunnel hatches: lids jiggle while aiming and start popping off on the click
 static void drawAmbush( const DesignDraw &d )
 {
 	const Marker &m = *d.m;
@@ -4778,7 +3956,7 @@ static void drawAmbush( const DesignDraw &d )
 		d.at( holeA[ i ], 0.55f * R * ( 0.7f + 0.5f * hashOf( i + 101 ) ), hx, hy );
 		fillDisc( hx, hy, 6.5f * k, TINT_DARK, 0.55f * d.app, 0.55f * d.app, 12 );		// a small see-through pit
 		bandCircle( d.fin, hx, hy, 7.0f * k, 6.0f * k, m.variant == VARIANT_CHEM ? TINT_TOXIN : TINT_STEEL, d.app );
-		Real ox = 0.0f, oy = 0.0f, la = 1.0f;
+		Real ox, oy;
 		if( d.aim )
 		{
 			ox = 1.4f * k * (Real)sin( 9.0f * d.t + 2.1f * (Real)i );
@@ -4791,31 +3969,14 @@ static void drawAmbush( const DesignDraw &d )
 			const Real a = 2.0f * MARKER_PI * hashOf( i + 111 );
 			ox = 16.0f * k * e * (Real)cos( a );
 			oy = 16.0f * k * e * (Real)sin( a );
-			la = 1.0f - smoothstep( 0.25f, 0.6f, d.tl - t0 );
-			const Real toward = (Real)atan2( d.y - hy, d.x - hx );
-			for( Int r = 0; r < 3; ++r )
-			{
-				const Real age = d.tl - t0 - 0.15f - 0.12f * (Real)r;
-				if( age <= 0.0f || age >= 1.0f )
-					continue;
-				const Real e2 = easeOut( age ) * 0.7f;
-				const Real side = 10.0f * k * (Real)( r - 1 ) * e2;
-				const Real px = hx + ( d.x - hx ) * e2 - (Real)sin( toward ) * side;
-				const Real py = hy + ( d.y - hy ) * e2 + (Real)cos( toward ) * side;
-				quadPiece( P_CHEVRON, px, py, toward, 11.0f * k, 17.0f * k, d.tint, ( 1.0f - smoothstep( 0.6f, 1.0f, age ) ) * d.app,
-									 CHEVRON_ANCHOR_U, 0.5f );
-			}
 		}
-		if( la > 0.02f )
-		{
-			part( P_SHAPE_LID, hx + ox, hy + oy, d.yaw + 0.6f + (Real)i, 23.0f * k, 23.0f * k, TINT_WHITE, la * d.app );
-			if( m.variant == VARIANT_DEMO && sin( 8.0f * d.t + (Real)i ) > 0.3f )
-				part( P_SHAPE_DISC, hx + ox, hy + oy, d.yaw, 6.0f * k, 6.0f * k, TINT_RED, la * d.app );
-		}
+		part( P_SHAPE_LID, hx + ox, hy + oy, d.yaw + 0.6f + (Real)i, 23.0f * k, 23.0f * k, TINT_WHITE, d.app );
+		if( m.variant == VARIANT_DEMO && sin( 8.0f * d.t + (Real)i ) > 0.3f )
+			part( P_SHAPE_DISC, hx + ox, hy + oy, d.yaw, 6.0f * k, 6.0f * k, TINT_RED, d.app );
 	}
 }
 
-/// a glitching ring: segments jitter off their radius, static blocks pop; after the click it hides
+/// a glitching ring: segments jitter off their radius, static blocks pop; the click jolts it
 static void drawGps( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
@@ -4825,16 +3986,9 @@ static void drawGps( const DesignDraw &d )
 	{
 		amp = 1.0f;  a = 1.0f;  tick = (Int)floor( d.t * 10.0f );
 	}
-	else if( d.tl < 0.35f )
-	{
-		amp = 3.0f;  a = 1.0f;  tick = (Int)floor( d.t * 20.0f );
-	}
 	else
 	{
-		tick = (Int)floor( d.tl * 12.0f );
-		const Bool glitch = hashOf( tick, 7.0f ) > 0.82f;
-		amp = glitch ? 2.0f : 0.4f;
-		a = glitch ? 0.8f : 0.25f;
+		amp = 3.0f;  a = 1.0f;  tick = (Int)floor( d.t * 20.0f );
 	}
 	const Real step = 2.0f * MARKER_PI / 20.0f;
 	for( Int i = 0; i < 20; ++i )
@@ -4863,7 +4017,7 @@ static void drawGps( const DesignDraw &d )
 	}
 }
 
-/// a radar scope of welded plates: a sweep with afterglow, one fast turn on the click, blips
+/// a radar scope of welded plates: a sweep with afterglow, sped up on the click, blips
 static void drawRadar( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
@@ -4883,7 +4037,7 @@ static void drawRadar( const DesignDraw &d )
 	}
 	ring( P_HAIR, d.x, d.y, 0.34f * R, 3.0f * k, TINT_STEEL, 0.7f * d.app, FALSE );
 	ring( P_HAIR, d.x, d.y, 0.67f * R, 3.0f * k, TINT_STEEL, 0.7f * d.app, FALSE );
-	const Real phi = d.aim ? 0.9f * d.t : 0.9f * d.tc + 2.0f * MARKER_PI * easeOut( d.tl / 1.1f ) + 0.9f * MAX( 0.0f, d.tl - 1.1f );
+	const Real phi = d.aim ? 0.9f * d.t : 0.9f * d.tc + 2.0f * MARKER_PI * easeOut( d.tl / 1.1f );
 	for( Int i = 0; i < 10; ++i )
 	{
 		const Real a0 = phi - 0.11f * (Real)( i + 1 ), a1 = phi - 0.11f * (Real)i;
@@ -4918,13 +4072,12 @@ static void drawRadar( const DesignDraw &d )
 
 // ---------------------------------------------------------------- Turkiye
 
-/// a swarm: small drones circling in two rings inside a broken circle; on the click they dive in
+/// a swarm: small drones circling in two rings inside a broken circle; on the click they start their dive
 static void drawKargu( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
 	const Int nd = d.m->variant == VARIANT_BERET ? 3 : 12;
-	const Real shrink = d.aim ? 1.0f : 1.0f - 0.06f * smoothstep( 0.2f, 1.5f, d.tl );
-	const Real rr = R * shrink;
+	const Real rr = R;
 	const Real gap = 0.12f * R / MAX( 1.0f, rr );
 	for( Int j = 0; j < 6; ++j )
 	{
@@ -4947,7 +4100,7 @@ static void drawKargu( const DesignDraw &d )
 			d.at( a, rad0 + 4.0f * k * (Real)sin( 3.1f * d.t + 1.9f * (Real)i ), px, py );
 			h = d.yaw + a + ( w > 0.0f ? 0.5f : -0.5f ) * MARKER_PI;
 		}
-		else if( dive < 1.0f )
+		else		// the release shows a dive's first third at most
 		{
 			const Real a1 = a0 + w * ( d.tc + 0.08f * (Real)i );
 			const Real a = a1 + ( w > 0.0f ? 1.8f : -1.8f ) * dive;
@@ -4959,12 +4112,6 @@ static void drawKargu( const DesignDraw &d )
 			py += ( ly - py ) * dive * dive * dive;
 			h = d.yaw + a + ( w > 0.0f ? 0.5f : -0.5f ) * MARKER_PI - ( w > 0.0f ? 0.9f : -0.9f ) * dive;
 			sz = 1.0f - 0.35f * dive;
-		}
-		else
-		{
-			d.at( la, lr, px, py );
-			pingRing( px, py, 7.0f * k, k, d.tl - 0.08f * (Real)i - 0.6f, d.tint, 0.4f, 1.6f, 3.6f );
-			continue;
 		}
 		// drones keep their presence; they fly past the triangles rather than hop round them (not part())
 		quadPiece( P_SHAPE_TRI, px, py, h, PART_SMALL * 26.0f * k * sz, PART_SMALL * 26.0f * k * sz, scaled( d.tint, 1.15f ), d.app );
@@ -5052,12 +4199,12 @@ static void drawUav( const DesignDraw &d )
 	}
 }
 
-/// a ballistic descent: rings falling onto a round target, six arcs of it counting down
+/// a ballistic descent: rings falling onto a round target of six arcs, the last blinking once sent
 static void drawTayfun( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R;
 	bandArc( d.fin, d.x, d.y, R, 18.0f * k, 0.0f, 2.0f * MARKER_PI, d.tint, d.app, 1.0f, FALSE );
-	const Int lit = d.aim ? 6 : (Int)ceilf( 6.0f * d.frac );
+	const Int lit = 6;
 	const Bool blinkOff = !d.aim && sin( 18.0f * d.t ) < 0.0f;
 	for( Int m = 0; m < 6; ++m )
 	{
@@ -5066,20 +4213,16 @@ static void drawTayfun( const DesignDraw &d )
 		const Real a0 = d.yaw + (Real)m * MARKER_PI / 3.0f;
 		flatArc( d.x, d.y, R, 18.0f * k, a0 + 0.05f, a0 + MARKER_PI / 3.0f - 0.05f, on ? d.tint : scaled( d.tint, 0.22f ), d.app );
 	}
-	const Bool landed = !d.aim && d.frac <= 0.0f;
-	if( !landed )
+	const Real spd = d.aim ? 0.5f : 1.1f;
+	for( Int i = 0; i < 3; ++i )
 	{
-		const Real spd = d.aim ? 0.5f : 1.1f;
-		for( Int i = 0; i < 3; ++i )
-		{
-			const Real fr = wrap( d.t * spd + (Real)i / 3.0f, 1.0f );
-			ring( P_HAIR, d.x, d.y, R * ( 2.2f - 2.0f * fr ), 3.0f * k, d.tint, 0.75f * (Real)sin( MARKER_PI * fr ) * d.app, FALSE );
-		}
+		const Real fr = wrap( d.t * spd + (Real)i / 3.0f, 1.0f );
+		ring( P_HAIR, d.x, d.y, R * ( 2.2f - 2.0f * fr ), 3.0f * k, d.tint, 0.75f * (Real)sin( MARKER_PI * fr ) * d.app, FALSE );
 	}
 	part( P_SHAPE_DISC, d.x, d.y, d.yaw, 11.0f * k, 11.0f * k, d.tint, d.app );
 }
 
-/// loitering munitions: lock rings roam the zone, snap onto targets on the click, then the dives
+/// loitering munitions: lock rings roam the zone and snap onto targets on the click
 static void drawSwarm( const DesignDraw &d )
 {
 	const Marker &m = *d.m;
@@ -5101,32 +4244,15 @@ static void drawSwarm( const DesignDraw &d )
 		const Real t = d.aim ? d.t : d.tc;
 		const Real ru = 0.6f * R * (Real)sin( 0.7f * t * ( 1.0f + 0.2f * fi ) + fi ), rv = 0.55f * R * (Real)sin( 0.9f * t * ( 1.0f + 0.13f * fi ) + 2.0f * fi );
 		Real u = ru, v = rv;
-		Bool solid = FALSE;
 		if( !d.aim )
 		{
 			const Real e = easeOut( d.tl / 0.3f );
 			u = ru + ( targetU[ i ] * R - ru ) * e;
 			v = rv + ( targetV[ i ] * R - rv ) * e;
-			solid = e >= 1.0f;
 		}
 		Real cx, cy;
 		d.screen( u, v, cx, cy );
 		ring( P_HAIR, cx, cy, 10.0f * k, 3.0f * k, d.tint, d.app, FALSE );		// a round lock on a round strike
-		if( !solid )
-			continue;
-		for( Int j = 0; j < 3; ++j )
-		{
-			const Real a = 0.5f * MARKER_PI + (Real)j * 2.0f * MARKER_PI / 3.0f;
-			part( P_SHAPE_TRI, cx + 17.0f * k * (Real)cos( d.yaw + a ), cy + 17.0f * k * (Real)sin( d.yaw + a ), d.yaw + a + MARKER_PI,
-						11.0f * k, 11.0f * k, d.tint, d.app );
-		}
-		const Real t0 = 0.55f + 0.4f * fi;
-		const Real fr = ( d.tl - t0 ) / 0.45f;
-		if( fr >= 0.0f && fr < 1.0f )
-			ring( P_HAIR, cx, cy, ( 40.0f - 34.0f * fr ) * k, 3.0f * k, d.tint, 0.9f * d.app, FALSE );
-		pingRing( cx, cy, 10.0f * k, k, d.tl - t0 - 0.45f, d.tint, 0.4f, 1.4f, 4.0f );
-		if( d.tl > t0 + 0.45f )
-			part( P_SHAPE_DISC, cx, cy, d.yaw, 11.0f * k, 11.0f * k, TINT_SCORCH, 0.6f * d.app );
 	}
 }
 
@@ -5135,8 +4261,7 @@ static void drawBlind( const DesignDraw &d )
 {
 	const Real k = d.k, R = d.R, yaw = d.yaw;
 	const Real hy = 0.92f * R;
-	const Real ys = d.aim ? 1.0f : ( d.tl < 0.25f ? 1.0f - 0.9f * d.snap : easeBack( ( d.tl - 0.25f ) / 0.4f, 2.2f ) );
-	const Int tick = (Int)floor( d.t * 12.0f );
+	const Real ys = d.aim ? 1.0f : 1.0f - 0.9f * d.snap;
 	const Real inset = 8.0f * k;
 	for( Int j = 0; j < 12; ++j )
 	{
@@ -5151,12 +4276,9 @@ static void drawBlind( const DesignDraw &d )
 		d.screen( -ext, v, ax, ay );
 		d.screen( ext, v, bx, by );
 		const Real w = ( 2.4f + 5.2f * hashOf( j + 151 ) ) * k;
-		if( d.aim || d.tl <= 0.6f )
-			hairLine( ax, ay, bx, by, w, d.tint, ( d.aim ? 0.75f : 0.9f ) * d.app );
-		else
-			dashLine( ax, ay, bx, by, w, 0.3f * R, 0.4f + 0.5f * hashOf( j + 3, (Real)tick ), 40.0f * k * hashOf( j, (Real)tick ), d.tint, 0.9f * d.app );
+		hairLine( ax, ay, bx, by, w, d.tint, ( d.aim ? 0.75f : 0.9f ) * d.app );
 	}
-	const Real amp = d.aim ? 3.0f * k : 3.0f * k + 4.0f * k * smoothstep( 0.3f, 1.2f, d.tl );
+	const Real amp = 3.0f * k;
 	const Real t = d.t;
 	auto wave = [=]( Real a ) -> Real { return 0.62f * R + amp * (Real)sin( 10.0f * ( a - yaw ) - 3.0f * t ); };
 	radialStrip( P_HAIR, d.x, d.y, wave, 3.0f * k, 0.0f, 2.0f * MARKER_PI, d.tint, 0.9f * d.app, FALSE, 2.0f );
@@ -5202,7 +4324,6 @@ static void drawAllyAid( const DesignDraw &d )
 	const Real k = d.k, h = d.heading();
 	static const Real offs[ 4 ] = { -105.0f, -35.0f, 35.0f, 105.0f };
 	const Real grow = smoothstep( 0.05f, 0.7f, d.t );
-	const Real sp = d.aim ? -1.0e9f : -800.0f + 1200.0f * ( d.tl - 0.3f ) / 2.3f;
 	for( Int i = 0; i < 4; ++i )
 	{
 		const Real o = offs[ i ];
@@ -5221,13 +4342,6 @@ static void drawAllyAid( const DesignDraw &d )
 		Real px, py;
 		d.along( 0.0f, o, px, py );
 		dataPart( P_SHAPE_PARA, px, py, h + 0.5f * MARKER_PI, 30.0f * k * bob, 30.0f * k * bob, d.tint, d.app );
-		if( sp > 0.0f )
-			dataPart( P_SHAPE_PLUS, px, py, d.yaw, 16.0f * k, 16.0f * k, TINT_WHITE, d.app );
-		if( sp > -800.0f && sp < 400.0f )
-		{
-			d.along( sp, o, px, py );
-			drawDart( px, py, h, 1.1f, k, d.tint, d.app );
-		}
 	}
 	const Real bw = 140.0f;
 	for( Int side = -1; side <= 1; side += 2 )
@@ -5270,20 +4384,11 @@ static void drawCommando( const DesignDraw &d )
 		const Bool lit = d.aim && (Int)floor( d.t * 3.0f ) % 3 == i;
 		part( P_SHAPE_DISC, px, py, h, ( i == 0 ? 20.0f : 14.0f ) * k, ( i == 0 ? 20.0f : 14.0f ) * k,
 					scaled( d.tint, lit ? 1.3f : 0.9f ), d.app );
-		if( i == 0 || d.aim )
-			continue;
-		const Real e = easeOut( ( d.tl - 0.8f ) / 1.2f );
-		if( d.tl > 0.8f )
-			for( Int s = 0; s < 24; ++s )
-			{
-				const Real a0 = 2.0f * MARKER_PI * (Real)s / 24.0f;
-				arcStrip( P_HAIR, px, py, 0.85f * R * e, 3.0f * k, a0, a0 + 0.6f * 2.0f * MARKER_PI / 24.0f, TRUE, d.tint, 0.75f * d.app, FALSE );
-			}
 	}
 }
 
 /// one marker's frame, by its design
-static void drawDesign( const Marker &m, Real R, Real t, Real tl, Real app, Real fade )
+static void drawDesign( const Marker &m, Real R, Real t, Real tl, Real app )
 {
 	DesignDraw d;
 	d.m = &m;
@@ -5296,7 +4401,6 @@ static void drawDesign( const Marker &m, Real R, Real t, Real tl, Real app, Real
 	d.aim = tl < 0.0f;
 	d.tc = d.aim ? t : t - tl;
 	d.app = app;
-	d.fade = fade;
 	d.snap = d.aim ? 0.0f : easeOut( tl / 0.22f );
 	d.yaw = s_ctx.yaw;
 	d.fin = m.finish;
@@ -5316,12 +4420,6 @@ static void drawDesign( const Marker &m, Real R, Real t, Real tl, Real app, Real
 		d.hx = s_ctx.rx;
 		d.hy = s_ctx.ry;
 	}
-	// a countdown: the flight followSuperweapon reads, or the cannon's frames; else three seconds
-	if( m.missileSeen || m.super == SUPER_CANNON || m.impactMs != 0 )
-		d.frac = m.frac;
-	else
-		d.frac = d.aim ? 1.0f : MAX( 0.0f, 1.0f - tl / 3.0f );
-	d.impact = m.impactMs != 0 ? secondsSince( s_ctx.now, m.impactMs ) : -1.0f;
 
 	// the cursors' four triangles on the frame: a round frame on the screen's axes at its own radius,
 	// a strip on the run's axis at its reach along and its half width across.  Known before the design
@@ -5402,8 +4500,15 @@ static void drawMarker( const Marker &m )
 	if( s_ctx.waterPass && !m.wet )
 		return;
 	const UnsignedInt now = s_ctx.now;
-	const Real t = m.guarding ? 100.0f : secondsSince( now, m.pressMs );
-	const Real tl = m.guarding ? 100.0f : ( m.clickMs != 0 ? secondsSince( now, m.clickMs ) : -1.0f );
+	Real t = m.guarding ? 100.0f : secondsSince( now, m.pressMs );
+	Real tl = m.guarding ? 100.0f : ( m.clickMs != 0 ? secondsSince( now, m.clickMs ) : -1.0f );
+	const Real age = tl;		// the click's ping runs on
+	if( m.family != FAMILY_GUARD && tl > RELEASE_SNAP )
+	{
+		// a power's release: the snap, then held still while it fades; no design's after-click runs on
+		t -= tl - RELEASE_SNAP;
+		tl = RELEASE_SNAP;
+	}
 	const Real fade = fadeOf( m, now );
 	const Real app = ( m.guarding ? 1.0f : smoothstep( 0.0f, 0.35f, t ) ) * fade;
 	const Real R = currentRadius( m, now );
@@ -5424,26 +4529,13 @@ static void drawMarker( const Marker &m )
 		if( m.orbit )
 			drawOrbit( m, t, ( tl >= 0.0f ? 1.0f : 0.6f ) * app );
 		if( m.design != DESIGN_NONE && !m.guarding )
-			drawDesign( m, R, t, tl, app, fade );
+			drawDesign( m, R, t, tl, app );
 		else
 		{
 			drawZone( m, R, t, tl, quiet, app );
-			if( m.super != SUPER_NONE && tl >= 0.0f )
-				drawCountdown( m, R, t, fade );
 			drawGlyph( m, t, tl, app );
 		}
-		drawDrops( m, R, t, app, fade );
-	}
-
-	for( size_t i = 0; i < m.darts.size(); ++i )
-	{
-		const Dart &d = m.darts[ i ];
-		s_ctx.g1 = &d.grid;
-		s_ctx.g2 = NULL;
-		s_ctx.g3 = NULL;
-		s_ctx.w1 = &d.water;
-		s_ctx.w2 = NULL;
-		drawDart( d.x, d.y, d.heading, d.scale, m.k, m.tint, 1.0f );
+		drawDrops( m, R, t, app );
 	}
 
 	// the pings, additive, drawn after every alpha blended piece
@@ -5453,9 +4545,7 @@ static void drawMarker( const Marker &m )
 	s_ctx.w1 = &m.water;
 	s_ctx.w2 = NULL;
 	if( !m.guarding )
-		pingRing( m.x, m.y, R, m.k, tl, m.tint );
-	if( m.pingMs != 0 )
-		pingRing( m.x, m.y, m.pingR, m.k, secondsSince( now, m.pingMs ), m.pingTint );
+		pingRing( m.x, m.y, R, m.k, age, m.tint, 0.001f * (Real)RELEASE_FADE_AT_MS + RELEASE_FADE );		// the whole release
 }
 
 /// a move's or attack's click, the cursor's mark on the ground: four arrowheads on the screen's

@@ -1142,8 +1142,6 @@ public:  // ********************************************************************
 	{
 		GroundMarkerAim aim;										///< as it stood at the click, pos the clicked point
 		UnsignedInt clickMs;
-		UnsignedInt clickFrame;									///< the logic frame then
-		ObjectID firstNewID;										///< anything the order makes carries this id or a later one
 	};
 	const GroundMarkerAim &getGroundMarkerAim( void ) const { return m_markerAim; }
 	/// a ground order (power NULL: the guard's) or a power at a location was just sent: the cursor

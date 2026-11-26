@@ -269,9 +269,9 @@ Bool SpectreGunshipUpdate::initiateIntentToDoSpecialPower(const SpecialPowerTemp
   }
 
 
-	// the client's target ring and orbit stand round the target instead (W3DGroundMarkers); the decal
-	// is the client's alone, no CRC and no save carries it.  The reticle stays: it follows where the
-	// player moves the guns to, which the ground marker does not draw
+	// the client's ground marker stands for the attack area instead, and ends at the click
+	// (W3DGroundMarkers); the decal is the client's alone, no CRC and no save carries it.  The reticle
+	// stays: it follows where the player moves the guns to, which the ground marker does not draw
 	if( !InGameUI::groundMarkersOn() )
 		data->m_attackAreaDecalTemplate.createRadiusDecal( *getObject()->getPosition(), data->m_attackAreaRadius, getObject()->getControllingPlayer(), m_attackAreaDecal);
 	data->m_targetingReticleDecalTemplate.createRadiusDecal( *getObject()->getPosition(), data->m_targetingReticleRadius, getObject()->getControllingPlayer(), m_targetingReticleDecal);

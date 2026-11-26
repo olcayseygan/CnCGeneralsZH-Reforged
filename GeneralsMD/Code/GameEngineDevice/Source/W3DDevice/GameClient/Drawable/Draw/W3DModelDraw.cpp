@@ -1874,7 +1874,8 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	memset(&m_quad, 0, sizeof(m_quad));
 	m_ragdoll = NULL;
 	m_ragdollRefused = FALSE;
-	m_ragdollWanted = getDrawable() != NULL && W3DRagdoll::wants(getDrawable()->getTemplate());
+	m_ragdollSaved = NULL;
+	m_ragdollWanted =getDrawable() != NULL && W3DRagdoll::wants(getDrawable()->getTemplate());
 	if (m_ragdollWanted)
 		getDrawable()->setTakesImpacts();
 
@@ -1971,6 +1972,8 @@ W3DModelDraw::~W3DModelDraw(void)
 
 	delete m_ragdoll;
 	m_ragdoll = NULL;
+	delete m_ragdollSaved;
+	m_ragdollSaved = NULL;
 	nukeCurrentRender(NULL);
 }
 
@@ -2673,6 +2676,11 @@ void W3DModelDraw::updateRagdoll()
 		if (!W3DRagdoll::enabled() || (!stateIsDying(m_curState) && !stateIsDying(m_nextState)))
 			return;
 		m_ragdoll = W3DRagdoll::create(m_renderObject, m_ragdollImpact, getDrawable()->getTemplate());
+		// a loaded save's body lies where it lay, not where the death clip's first frame stands
+		if (m_ragdoll != NULL && m_ragdollSaved != NULL)
+			m_ragdoll->restorePose(*m_ragdollSaved);
+		delete m_ragdollSaved;
+		m_ragdollSaved = NULL;
 		if (m_ragdoll == NULL)
 		{
 			m_ragdollRefused = TRUE;
@@ -5418,7 +5426,8 @@ void W3DModelDraw::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 2;
+	// 3: the Ragdoll option's body
+	const XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -5639,6 +5648,47 @@ void W3DModelDraw::xfer( Xfer *xfer )
 		}  // end else, load
 
 	}  // end if, version with animation info
+
+	// the Ragdoll option's body: a lying soldier loaded went back to his death clip without it
+	if( version >= 3 )
+	{
+		Bool ragdoll = m_ragdoll != NULL;
+		xfer->xferBool( &ragdoll );
+		if( ragdoll )
+		{
+			W3DRagdoll::SavedPose *pose = new W3DRagdoll::SavedPose;
+			if( xfer->getXferMode() != XFER_LOAD )
+				m_ragdoll->savePose( *pose );
+			xfer->xferInt( &pose->numBones );
+			if( pose->numBones < 0 || pose->numBones > W3DRagdoll::MAX_SAVED_BONES )
+			{
+				delete pose;
+				throw XFER_INVALID_PARAMETERS;
+			}
+			for( Int i = 0; i < pose->numBones; ++i )
+			{
+				xfer->xferReal( &pose->x[ i ].X );
+				xfer->xferReal( &pose->x[ i ].Y );
+				xfer->xferReal( &pose->x[ i ].Z );
+				xfer->xferReal( &pose->q[ i ].X );
+				xfer->xferReal( &pose->q[ i ].Y );
+				xfer->xferReal( &pose->q[ i ].Z );
+				xfer->xferReal( &pose->q[ i ].W );
+			}
+			xfer->xferReal( &pose->trunkQ.X );
+			xfer->xferReal( &pose->trunkQ.Y );
+			xfer->xferReal( &pose->trunkQ.Z );
+			xfer->xferReal( &pose->trunkQ.W );
+			xfer->xferBool( &pose->asleep );
+			if( xfer->getXferMode() == XFER_LOAD )
+			{
+				delete m_ragdollSaved;
+				m_ragdollSaved = pose;
+			}
+			else
+				delete pose;
+		}
+	}
 
 	// when loading, update the sub objects if we have any
 	if( xfer->getXferMode() == XFER_LOAD && m_subObjectVec.empty() == FALSE )

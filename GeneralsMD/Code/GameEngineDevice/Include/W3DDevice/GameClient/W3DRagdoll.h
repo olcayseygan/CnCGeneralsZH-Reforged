@@ -73,6 +73,22 @@ public:
 		render object it took over (a model swap): the caller deletes it and the animation takes over. */
 	Bool update( RenderObjClass *robj );
 
+	enum { MAX_SAVED_BONES = 64 };
+	/** The body's shape as a save keeps it: every bone's world position and turn, the trunk's turn, and
+		whether it sleeps.  Positions are world ones: a dead soldier's drawable does not move but to sink. */
+	struct SavedPose
+	{
+		Int numBones;
+		Vector3 x[ MAX_SAVED_BONES ];
+		Quaternion q[ MAX_SAVED_BONES ];
+		Quaternion trunkQ;
+		Bool asleep;
+	};
+	void savePose( SavedPose &out ) const;
+	/** A save's shape put on a ragdoll just made from the same model at load; FALSE when the skeleton
+		differs, and the ragdoll then falls from the pose it was made from. */
+	Bool restorePose( const SavedPose &in );
+
 private:
 	enum { MAX_BONES = 64, MAX_NEIGHBORS = 8, MAX_CONSTRAINTS = 192, MAX_OBSTACLES = 8, STOWED = -2 };
 

@@ -360,6 +360,24 @@ void W3DSmudgeManager::render(RenderInfoClass &rinfo)
 	if (m_usedSmudgeSetList.Head() == NULL)
 		return;
 
+	//
+	// The particle pass adds its global set every frame, smudges or not, so the check above almost
+	// never fires in a match.  A frame whose sets are all empty returns here as well, after the one
+	// thing the path below did for it: the flush of the sorted translucent polys, which it reached
+	// on a render texture before finding nothing to draw.  Kept so the draw order is the same.
+	//
+	SmudgeSet *anySet = m_usedSmudgeSetList.Head();
+	while (anySet && anySet->getUsedSmudgeList().Head() == NULL)
+		anySet = anySet->Succ();
+	if (anySet == NULL)
+	{
+#ifndef USE_COPY_RECTS
+		if (W3DShaderManager::getRenderTexture() && W3DShaderManager::isRenderingToTexture())
+#endif
+			SortingRendererClass::Flush();
+		return;
+	}
+
 	CameraClass &camera=rinfo.Camera;
 	Vector3 vsVert;
 	Vector4 ssVert;

@@ -335,6 +335,7 @@ BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass(void)
 	m_staticDiffuseStale = true;
 	m_staticDiffuseFrame = 0;
 	m_terrainContentVersion = 0;
+	m_drawnRevision = 0;
 	m_subdivided = FALSE;
 	m_drawnHalfWidth = 0;
 	m_drawnHalfHeight = 0;
@@ -1166,6 +1167,8 @@ Bool BaseHeightMapRenderObjClass::takeDrawnInputs(Int x0, Int y0, Int x1, Int y1
 			}
 		}
 	}
+	if (moved)
+		m_drawnRevision++;	// drawnFlip answers differently, whole cells or subdivided
 	return moved;
 }
 
@@ -1199,10 +1202,12 @@ void BaseHeightMapRenderObjClass::refreshDrawnHalf(Int x0, Int y0, Int x1, Int y
 	const TerrainSubdivide::Heights heights = { m_map->getDataPtr(), m_map->getXExtent(), m_map->getYExtent() };
 	TerrainSubdivide::fill(heights, x0, y0, x1, y1, flip, MAP_HEIGHT_SCALE, &m_drawnHalf[0], width);
 	m_drawnHalfMap = m_map;
+	m_drawnRevision++;
 }
 
 void BaseHeightMapRenderObjClass::freeDrawnHalf(void)
 {
+	m_drawnRevision++;
 	std::vector<Real>().swap(m_drawnHalf);
 	std::vector<UnsignedByte>().swap(m_drawnFlip);
 	std::vector<UnsignedByte>().swap(m_drawnHeights);
@@ -1817,6 +1822,7 @@ Int BaseHeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pM
 		s_logicHeights.copyFrom(pMap);
 	m_staticDiffuseStale = true;
 	m_terrainContentVersion++;
+	m_drawnRevision++;	// another map, or the same one read again
 	m_skirtStale = TRUE;
 	m_skirtSceneryStale = TRUE;
 
@@ -2763,6 +2769,7 @@ void BaseHeightMapRenderObjClass::terrainHeightChanged( Int x, Int y )
 		 rebuilding only the cell that moved leaves a seam of stale shading around it. */
 	const Int PAD = 2;
 	m_terrainContentVersion++;
+	m_drawnRevision++;	// the map's samples moved; the half cell table follows at the next updateBlock
 	if (!m_hasDirtyRegion)
 	{
 		m_dirtyRegion.lo.x = x - PAD;

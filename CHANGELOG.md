@@ -11,6 +11,7 @@ found and fixed, EA's own, not port damage.**
 ## Huge battles run lighter
 
 - Late-game fights with thousands of units cost the computer players less to think about: picking a target and deciding when a unit pulls back skip the checks for enemies that are out of reach. At about 3000 units a frame takes roughly 14% less time. Replays recorded on an earlier build can drift apart in very dense battles. Another 3 to 4% comes off that frame because the game no longer looks up every unit's armour again on every tick to get ready for those target searches. That part plays out exactly as before: the same 3000-unit battle ends on the same checksum.
+- The cursor over the ground costs less: the game keeps the last spot it found under the mouse until the camera moves, the ground changes or a tick passes, where it used to cast the ray again. A frame with no heat haze on screen skips the haze pass, and freeing memory takes a shorter path. None of it changes what you see or how a match plays.
 - A rare out-of-sync between players and observers in the same match, set off by fogged enemy buildings, is fixed: whether a unit reuses its last target search no longer depends on what a particular machine has drawn.
 
 ## The game room in the new menu look

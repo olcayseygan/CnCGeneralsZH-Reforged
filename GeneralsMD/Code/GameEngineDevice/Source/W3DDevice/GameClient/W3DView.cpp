@@ -130,7 +130,6 @@ Real TheW3DFrameLengthInMsec = MSEC_PER_LOGICFRAME_REAL;
 // The camera's steppers - the smoothing, the scripted moves counted in steps, the scroll - were tuned for
 // one step a retail logic frame and step on that cadence whatever the logic rate is.
 static const Int CAMERA_STEP_MSEC = 1000/RETAIL_LOGICFRAMES_PER_SECOND;
-static const Int MAX_REQUEST_CACHE_SIZE = 40;	// Any size larger than 10, or examine code below for changes. jkmcd.
 static const Real DRAWABLE_OVERSCAN = 75.0f;  ///< 3D world coords of how much to overscan in the 3D screen region
 
 /* A tick flushed after rendering can replace model poses with raw logic transforms. Recompose that
@@ -240,13 +239,14 @@ W3DView::W3DView()
 	m_shakeKick = FALSE;
 	m_FXPitch = 1.0f;
 	m_freezeTimeForCameraMovement = false;
-	m_cameraHasMovedSinceRequest = true;
+	m_lastPickValid = false;
+	m_lastPickFrame = 0;
+	m_lastPickGround = 0;
+	m_lastPickWorld.zero();
 	// Scripted pans may expand this region even while map constraints are disabled.
 	m_cameraConstraint.lo.x = m_cameraConstraint.lo.y = 0.0f;
 	m_cameraConstraint.hi.x = m_cameraConstraint.hi.y = 0.0f;
 	m_cameraConstraintValid = false;
-	m_locationRequests.clear();
-	m_locationRequests.reserve(MAX_REQUEST_CACHE_SIZE + 10);	// This prevents the vector from ever re-allocing
 
 	//Enhancements from CNC3 WST 4/15/2003. JSC Integrated 5/20/03.
 	m_CameraArrivedAtWaypointOnPathFlag = false;	// Scripts for polling camera reached targets
@@ -1036,7 +1036,6 @@ void W3DView::aimCamera( void )
 
 void W3DView::aimCamera(CameraTransformSource source)
 {
-	m_cameraHasMovedSinceRequest = true;
 	if (m_freeCamera)
 	{
 		// every setter that dirties the player's camera ends here, and none of them owns the view now
@@ -1375,6 +1374,9 @@ void W3DView::reset( void )
 	m_distortionCount = 0;
 
 	s_matchFirstDrawLogged = FALSE;	// the next match's first picture logs its camera (draw)
+
+	// the next map's ground is another one, and its logic frames count from nought again
+	m_lastPickValid = false;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2347,6 +2349,7 @@ void W3DView::update(void)
 #ifdef DO_SEISMIC_SIMULATIONS
   // Give the terrain a chance to refresh animaing (Seismic) regions, if any.
   TheTerrainVisual->updateSeismicSimulations();
+	m_lastPickValid = false;	// the ground moved under the cached pick, on no logic frame of its own
 #endif
   
 	/* -directorrecord's corner window draws first on its client frames and takes the frame's one
@@ -3542,31 +3545,31 @@ Bool W3DView::screenToTerrain( const ICoord2D *screen, Coord3D *world )
 	if( screen == NULL || world == NULL || TheTerrainRenderObject == NULL )
 		return FALSE;
 
-	if (m_cameraHasMovedSinceRequest) {
-		m_locationRequests.clear();
-		m_cameraHasMovedSinceRequest = false;
-	}
-
-	if (m_locationRequests.size() > MAX_REQUEST_CACHE_SIZE) {
-		m_locationRequests.erase(m_locationRequests.begin(), m_locationRequests.begin() + 10);
-	}
-
-
-	// We insert them at the end for speed (no copies needed), but using the princ of locality, we should 
-	// start searching where we most recently inserted
-	for (int i = m_locationRequests.size() - 1; i >= 0; --i) {
-		if (m_locationRequests[i].first.x == screen->x && m_locationRequests[i].first.y == screen->y) {
-			(*world) = m_locationRequests[i].second;
-			return TRUE;
-		}
-	}
-
 	Vector3 rayStart,rayEnd;
 	LineSegClass lineseg;
 	CastResultStruct result;
 	Vector3 intersection(0,0,0);
 
 	getPickRay(screen,&rayStart,&rayEnd);
+
+	//
+	// The cursor asks for the same pixel several times a frame, and often frame after frame.  EA kept
+	// forty answers by pixel and threw them out only when the camera moved, so a bridge going down
+	// or the ground being raised under a still cursor went on answering the old height.  One answer
+	// is kept now, and its key is what the cast reads: the ray, which any camera, viewport or origin
+	// change moves; the logic frame, which every bridge change moves; and the drawn ground's
+	// revision, which moves with the heights, the subdivided shape, the half cell table and the
+	// diagonals, however late the draw refills them.  The same ray over the same ground casts the
+	// same point, so a hit gives what a cast would.
+	//
+	const UnsignedInt pickFrame = TheGameLogic ? TheGameLogic->getFrame() : 0;
+	const UnsignedInt pickGround = TheTerrainRenderObject->drawnRevision();
+	if (m_lastPickValid && m_lastPickFrame == pickFrame && m_lastPickGround == pickGround
+		&& m_lastPickRayStart == rayStart && m_lastPickRayEnd == rayEnd)
+	{
+		*world = m_lastPickWorld;
+		return TRUE;
+	}
 
 	lineseg.Set(rayStart,rayEnd);
 
@@ -3604,10 +3607,12 @@ Bool W3DView::screenToTerrain( const ICoord2D *screen, Coord3D *world )
 	if (!hit)
 		return FALSE;
 
-	PosRequest req;
-	req.first = (*screen);
-	req.second = (*world);
-	m_locationRequests.push_back(req);	// Insert this request at the end, requires no extra copies
+	m_lastPickValid = true;
+	m_lastPickFrame = pickFrame;
+	m_lastPickGround = pickGround;
+	m_lastPickRayStart = rayStart;
+	m_lastPickRayEnd = rayEnd;
+	m_lastPickWorld = *world;
 
 	return TRUE;
 

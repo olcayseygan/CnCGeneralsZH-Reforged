@@ -346,8 +346,15 @@ private:
 	Bool		m_freezeTimeForCameraMovement;
 	Int			m_timeMultiplier;												///< Time speedup multiplier.
 
-	Bool		m_cameraHasMovedSinceRequest;					///< If true, throw out all saved locations
-	VecPosRequests	m_locationRequests;		///< These are cached. New requests are added here
+	// screenToTerrain's last ground hit, keyed by the pick ray it cast, the logic frame it was cast on
+	// and the drawn ground's revision.  The ray carries every camera, viewport and origin change, the
+	// frame every change logic makes to bridges, the revision every change to what Cast_Ray reads.
+	Bool		m_lastPickValid;
+	UnsignedInt	m_lastPickFrame;
+	UnsignedInt	m_lastPickGround;
+	Vector3	m_lastPickRayStart;
+	Vector3	m_lastPickRayEnd;
+	Coord3D	m_lastPickWorld;
 
 	Coord3D m_cameraOffset;													///< offset for camera from view center
 	Coord3D m_previousLookAtPosition;													///< offset for camera from view center

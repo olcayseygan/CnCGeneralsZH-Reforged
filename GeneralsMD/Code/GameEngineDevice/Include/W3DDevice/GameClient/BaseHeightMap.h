@@ -421,7 +421,11 @@ public:
 	Real getDrawnHeight(Real x, Real y);
 	/// The step in half cells the things on the ground lay their vertices at: 1 subdivided, 2 not.
 	Int drawnStep(void) const { return m_subdivided ? 1 : 2; }
+	/// Moves whenever the ground Cast_Ray reads may have changed: the heights, the shape, the half
+	/// cell table or the diagonals.  W3DView's pick cache keys on it.
+	UnsignedInt drawnRevision(void) const { return m_drawnRevision; }
 protected:
+	UnsignedInt m_drawnRevision;
 	/** drawnHalfZ's answers for the whole map, (2 * width - 1) by (2 * height - 1), kept while the
 		tiles are subdivided.  The shoreline and the decals ask for them every frame, and the patch
 		is twenty-odd samples a point: worked out per frame it cost a Golden Oasis match half its frame

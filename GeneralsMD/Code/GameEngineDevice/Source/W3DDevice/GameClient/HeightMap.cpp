@@ -1072,6 +1072,7 @@ Bool HeightMapRenderObjClass::setSubdivided(Bool on)
 	}
 	m_subdivided = on;
 	m_terrainContentVersion++;
+	m_drawnRevision++;	// Cast_Ray takes the other shape
 	freeDrawnHalf();	// refilled by the rebuild that follows, or not needed at all
 #ifdef DO_SCORCH
 	m_scorchesInBuffer = 0;

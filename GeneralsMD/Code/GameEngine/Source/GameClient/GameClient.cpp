@@ -646,7 +646,7 @@ static void readAIMatch( Player *me, OnlineAIResult &out )
 		AsciiString seat;
 		seat.format( "player%d", i );
 		const Player *p = ThePlayerList->findPlayerWithNameKey( NAMEKEY( seat ) );
-		if (p && p != me && p->getPlayerTemplate())
+		if (p && p != me && p->getPlayerType() == PLAYER_COMPUTER && p->getPlayerTemplate())
 		{
 			out.aiArmy = p->getPlayerTemplate()->getName();
 			break;

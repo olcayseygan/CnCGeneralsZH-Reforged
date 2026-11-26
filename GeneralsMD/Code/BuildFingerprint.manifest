@@ -5930,6 +5930,7 @@ Tools/timingTest/StdAfx.h
 Tools/timingTest/timingTest.cpp
 Tools/timingTest/timingTest.dsp
 Tools/timingTest/timingTest.dsw
+Tools/ui_walk.py
 Tools/unix_define_check.py
 Tools/vendor.ps1
 Tools/vendor.sh

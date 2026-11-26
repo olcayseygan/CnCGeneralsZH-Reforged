@@ -1827,9 +1827,13 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 			}
 		}
 
-		if (numTeams > 1)
+		/* An Apocalypse map wants them on one team too: its seats are one alliance against the dead, and
+			 without these scripts the last seat falling brought no end window, timer or score screen.  The
+			 director is not awake yet, so its marker decides, as for the day and night latch below. */
+		if (numTeams > 1 || TheTerrainLogic->getWaypointByName( "Apocalypse_Centre" ) != NULL)
 		{
 			// add in the multiplayer victory/defeat scripts
+			DEBUG_LOG(("startNewGame: the multiplayer victory and defeat scripts go in (%d lobby teams)\n", numTeams));
 			AsciiString path = "Data\\Scripts\\MultiplayerScripts.scb";
 			CachedFileInputStream theInputStream;
 			if (theInputStream.open(path))

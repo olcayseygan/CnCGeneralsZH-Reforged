@@ -2421,6 +2421,54 @@ void ApocalypseDirector::update( void )
 				kinds.concat( one );
 			}
 			DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u alive by kind:%s\n", now, kinds.str() ));
+
+			/* What the list and the tallies do not show, read only: the dead walking that are not on the list
+				 the alive cap counts (a Broodmother's young, a Carrier's bats, a Sack's spill), the ones a
+				 Howler has in a frenzy, and the hurt ones standing in a Rotmother's reach (her
+				 PropagandaTowerBehavior heals them and says nothing). */
+			std::vector<ObjectID> listed;
+			listed.reserve( m_zombies.size() );
+			for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
+				listed.push_back( m_zombies[ i ].id );
+			std::sort( listed.begin(), listed.end() );
+			std::vector<const Object *> mothers;
+			Int offList = 0, frenzied = 0, tended = 0;
+			for( const Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+			{
+				if( obj->isEffectivelyDead() || obj->getControllingPlayer() == NULL
+						|| obj->getControllingPlayer()->getPlayerIndex() != m_zombiePlayer
+						|| !obj->getTemplate()->getName().startsWith( "ApocalypseZombie" ) )
+					continue;
+				if( !std::binary_search( listed.begin(), listed.end(), obj->getID() ) )
+					++offList;
+				if( obj->testWeaponBonusCondition( WEAPONBONUSCONDITION_FRENZY_ONE ) )
+					++frenzied;
+				if( obj->getTemplate()->getName() == "ApocalypseZombieRotmother" )
+					mothers.push_back( obj );
+			}
+			const Real ROTMOTHER_REACH = 150.0f;	// her PropagandaTowerBehavior's Radius in ApocalypseReforged.ini
+			for( const Object *obj = TheGameLogic->getFirstObject(); obj && !mothers.empty(); obj = obj->getNextObject() )
+			{
+				const BodyModuleInterface *body = obj->getBodyModule();
+				if( obj->isEffectivelyDead() || body == NULL || body->getHealth() >= body->getMaxHealth()
+						|| obj->getControllingPlayer() == NULL || obj->getControllingPlayer()->getPlayerIndex() != m_zombiePlayer
+						|| !obj->getTemplate()->getName().startsWith( "ApocalypseZombie" ) )
+					continue;
+				for( UnsignedInt m = 0; m < mothers.size(); ++m )
+				{
+					if( mothers[ m ] == obj )
+						continue;
+					const Real dx = obj->getPosition()->x - mothers[ m ]->getPosition()->x;
+					const Real dy = obj->getPosition()->y - mothers[ m ]->getPosition()->y;
+					if( dx * dx + dy * dy <= ROTMOTHER_REACH * ROTMOTHER_REACH )
+					{
+						++tended;
+						break;
+					}
+				}
+			}
+			DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %u on the list against a cap of %d, %d more off it; %d in a Howler's frenzy, %d hurt in reach of %u Rotmothers\n",
+									now, (UnsignedInt)m_zombies.size(), Apocalypse_phaseRules( m_phase ).aliveCap, offList, frenzied, tended, (UnsignedInt)mothers.size() ));
 		}
 		for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 		{

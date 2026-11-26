@@ -710,6 +710,31 @@ static void updateOnline( void )
 	if (!OnlineIsAIMatchLive())
 		s_aiPlaying = FALSE;
 
+	/* Team vs AI: the score screen sends no report for a match with computer seats (EA's "no stats for any AI"),
+		 so a member who left before the victory conditions decided it would never be heard and the server would
+		 wait on its line.  Once the match is gone without one, its report goes from here: no winner, the last
+		 frame it played, which the server counts as leaving.  OnlineSendReport drops it after an endframe one. */
+	static Int s_teamFrame = 0;
+	if (OnlineIsTeamAIMatch())
+	{
+		if (TheGameLogic->isInGame() && TheGameLogic->getGameMode() == GAME_INTERNET && !TheGameLogic->isLoadingMap())
+			s_teamFrame = (Int)TheGameLogic->getFrame();
+		else if (s_teamFrame > 0)
+		{
+			OnlineReport left;
+			left.seed = TheGameSpyGame ? TheGameSpyGame->getSeed() : 0;
+			left.endFrame = left.duration = s_teamFrame;
+			left.winningTeam = -1;
+			left.sawGameEnd = FALSE;
+			left.speed = TheGameSpyGame ? TheGameSpyGame->getGameSpeedPercent() : RETAIL_GAME_SPEED_PERCENT;
+			left.map = TheGameSpyGame ? TheGameSpyGame->getMap() : AsciiString::TheEmptyString;
+			if (OnlineSendReport( left ))
+				DEBUG_LOG(("ONLINE REPORT sent from=teamleft endFrame=%d\n", s_teamFrame));
+			OnlineEndTeamAIMatch();
+			s_teamFrame = 0;
+		}
+	}
+
 	static Bool s_reported = FALSE;
 	if (!TheGameLogic->isInGame() || TheGameLogic->getGameMode() != GAME_INTERNET
 		|| !TheGameSpyGame || !TheGameSpyGame->isGameInProgress())

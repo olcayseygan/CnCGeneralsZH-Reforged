@@ -537,6 +537,10 @@ struct OnlinePartyMember
 	AsciiString nick;
 };
 Bool OnlineTeamAIAvailable( void );
+/* The match is a team's from a team ai.ready, until OnlineEndTeamAIMatch: the score screen sends no report for
+	 a match with computer seats (EA's rule), so GameClient's updateOnline sends a leaver's itself. */
+Bool OnlineIsTeamAIMatch( void );
+void OnlineEndTeamAIMatch( void );
 UnsignedInt OnlineGetParty( std::vector<OnlinePartyMember> &out );
 void OnlineLeaveParty( void );
 Bool OnlineTakeTeamAsk( AsciiString &match, AsciiString &fromNick );

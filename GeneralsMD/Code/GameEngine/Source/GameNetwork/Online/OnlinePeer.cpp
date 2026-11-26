@@ -1376,6 +1376,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 				teamAsk.clear();
 				teamQueueSize = 0;		// a queued team's match: out of the queue
 				matchId = m.getString( "matchId" );
+				teamMatch = matchId;
 				quickMatch.clear();		// its replay stays home
 				hostLeftGame = 0;
 				hostLeftPumps = 0;
@@ -2571,6 +2572,17 @@ Bool OnlineIsTeamAIMatchReady( void )
 {
 	const OnlineSession &s = OnlineSession::get();
 	return s.teamReady && s.aiState == ONLINE_AI_READY;
+}
+
+Bool OnlineIsTeamAIMatch( void )
+{
+	const OnlineSession &s = OnlineSession::get();
+	return !s.teamMatch.empty() && s.teamMatch == s.matchId;
+}
+
+void OnlineEndTeamAIMatch( void )
+{
+	OnlineSession::get().teamMatch.clear();
 }
 
 Bool OnlineTeamAIAvailable( void )

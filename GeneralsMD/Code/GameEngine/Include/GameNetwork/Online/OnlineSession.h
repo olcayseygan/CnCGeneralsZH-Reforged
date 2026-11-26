@@ -337,6 +337,7 @@ struct OnlineSession
 	std::string teamAskNick;
 	Bool teamReady;					///< the ai.ready of a team match waits for the hub, asked for or not
 	Int teamQueueSize;			///< ai.team.queued's size, 0 out of the queue
+	std::string teamMatch;	///< the team match the last team ai.ready started, until its report goes (OnlineIsTeamAIMatch)
 	Bool partyScriptInvited, partyScriptStarted;	///< -onlineparty's steps, once each
 
 	OnlinePeerQueue *peer;

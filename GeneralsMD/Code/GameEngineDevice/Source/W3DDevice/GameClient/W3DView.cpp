@@ -1255,6 +1255,10 @@ void W3DView::setFreeCamera( Bool on )
 	m_freeCameraKeys = 0;
 	m_freeCameraMouseValid = FALSE;
 	m_freeCameraLastStep = Clock_Milliseconds();
+	// the wheel's lens stays in the camera until something sets it again, and only the isometric
+	// switch does: landing puts the player's lens back itself
+	if (!on)
+		m_3DCamera->Set_View_Plane( perspectiveHorizontalFov( getWidth() ), -1 );
 	// leaving, the player's camera is rebuilt from its look point, which never moved
 	setCameraTransform();
 }
@@ -1450,6 +1454,7 @@ void W3DView::reset( void )
 		m_freeCameraKeys = 0;
 		if (TheMouse)
 			TheMouse->setVisibility( TRUE );
+		m_3DCamera->Set_View_Plane( perspectiveHorizontalFov( getWidth() ), -1 );
 	}
 
 	// Just in case...

@@ -5670,16 +5670,8 @@ void W3DModelDraw::xfer( Xfer *xfer )
 				xfer->xferReal( &pose->x[ i ].X );
 				xfer->xferReal( &pose->x[ i ].Y );
 				xfer->xferReal( &pose->x[ i ].Z );
-				xfer->xferReal( &pose->q[ i ].X );
-				xfer->xferReal( &pose->q[ i ].Y );
-				xfer->xferReal( &pose->q[ i ].Z );
-				xfer->xferReal( &pose->q[ i ].W );
 			}
-			xfer->xferReal( &pose->trunkQ.X );
-			xfer->xferReal( &pose->trunkQ.Y );
-			xfer->xferReal( &pose->trunkQ.Z );
-			xfer->xferReal( &pose->trunkQ.W );
-			xfer->xferBool( &pose->asleep );
+			xfer->xferReal( &pose->height0 );
 			if( xfer->getXferMode() == XFER_LOAD )
 			{
 				delete m_ragdollSaved;

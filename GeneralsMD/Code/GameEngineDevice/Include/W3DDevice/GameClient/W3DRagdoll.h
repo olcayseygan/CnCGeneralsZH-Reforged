@@ -74,15 +74,15 @@ public:
 	Bool update( RenderObjClass *robj );
 
 	enum { MAX_SAVED_BONES = 64 };
-	/** The body's shape as a save keeps it: every bone's world position and turn, the trunk's turn, and
-		whether it sleeps.  Positions are world ones: a dead soldier's drawable does not move but to sink. */
+	/** The body's shape as a save keeps it: every bone's world position, and the drawable's height at
+		death that the sink is measured from.  Positions are world ones: a dead soldier's drawable does not
+		move but to sink.  The bones' turns are not kept: they are relative to the pose the ragdoll was
+		made from, which at load is another one, so they are found again from the positions. */
 	struct SavedPose
 	{
 		Int numBones;
 		Vector3 x[ MAX_SAVED_BONES ];
-		Quaternion q[ MAX_SAVED_BONES ];
-		Quaternion trunkQ;
-		Bool asleep;
+		Real height0;
 	};
 	void savePose( SavedPose &out ) const;
 	/** A save's shape put on a ragdoll just made from the same model at load; FALSE when the skeleton

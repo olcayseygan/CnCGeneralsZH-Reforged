@@ -1105,12 +1105,8 @@ void W3DRagdoll::savePose( SavedPose &out ) const
 	static_assert( (Int)MAX_SAVED_BONES == (Int)MAX_BONES, "a saved pose holds every bone a ragdoll can have" );
 	out.numBones = m_numBones;
 	for( Int i = 0; i < m_numBones; ++i )
-	{
 		out.x[ i ] = m_bone[ i ].x;
-		out.q[ i ] = m_bone[ i ].q;
-	}
-	out.trunkQ = m_trunkQ;
-	out.asleep = m_asleep;
+	out.height0 = m_height0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1124,18 +1120,21 @@ Bool W3DRagdoll::restorePose( const SavedPose &in )
 	for( Int i = 1; i < m_numBones; ++i )
 	{
 		Bone &b = m_bone[ i ];
-		b.q = in.q[ i ];
 		if( b.role != ROLE_PARTICLE )
 			continue;
 		b.x = in.x[ i ];
 		b.xPrev = in.x[ i ];
 	}
-	m_trunkQ = in.trunkQ;
-	m_asleep = in.asleep;
+	// the sink goes on from where it was, not from the sunk height the drawable loaded at
+	m_height0 = in.height0;
+	// awake until it has been still a moment, so the poses find the bones' turns again from where the
+	// particles lie (a sleeping body keeps its last ones); then it sleeps as it is, no more tries
+	m_asleep = FALSE;
 	m_stillSteps = 0;
+	m_heldAwake = MAX_HELD_AWAKE;
 	// the body had been down a while: its gun lies level from the first pose, as it did when saved
 	m_startSync = WW3D::Get_Sync_Time() - (UnsignedInt)LEVEL_MS - 1;
-	DEBUG_LOG(( "RAGDOLL: %s restored from a save, %s\n", m_name, m_asleep ? "asleep" : "awake" ));
+	DEBUG_LOG(( "RAGDOLL: %s restored from a save\n", m_name ));
 	return TRUE;
 }
 

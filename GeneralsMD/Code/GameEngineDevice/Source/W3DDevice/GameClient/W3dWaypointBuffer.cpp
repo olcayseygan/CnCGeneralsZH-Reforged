@@ -421,6 +421,12 @@ void W3DWaypointBuffer::drawWaypoints(RenderInfoClass &rinfo)
 // height, times the zoom scale like the selection rings'
 static const Real ORDER_LINE_WIDTH = 0.75f;		///< about two and a half pixels of colour between the rims
 static const Real ORDER_LINE_OPACITY = 0.9f;
+// the Reforged look's line, a fixed 1.3 world units at GROUND_MARKS_ZOOM: 0.49 lost its colour under a
+// pixel zoomed out and its rims on sand and snow (owner 2026-11-26). Now about four pixels of colour at
+// the default height, one at the ceiling, six at the closest, a solid dark rim either side; Classic keeps
+// the above, which follow the zoom
+static const Real ORDER_LINE_WIDTH_FINE = 2.0f;
+static const Real ORDER_LINE_OPACITY_FINE = 1.0f;
 static const Real ORDER_MARK_WIDTH = 0.6f;
 static const Real ORDER_END_RADIUS = 2.2f;		///< on the last bit of ground a unit is sent to
 static const Real ORDER_JOINT_RADIUS = 1.4f;		///< on a target, and between the points of a shift list
@@ -468,9 +474,18 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 		const Bool classic = TheGlobalData->m_classicGraphics;
 		const Real endRadius = classic ? ORDER_END_RADIUS : ORDER_END_RADIUS_FINE;
 		const Real jointRadius = classic ? ORDER_JOINT_RADIUS : ORDER_JOINT_RADIUS_FINE;
+		const Real lineWidth = ( classic ? ORDER_LINE_WIDTH : ORDER_LINE_WIDTH_FINE ) * m_orderWidthScale;
+		const Real lineOpacity = classic ? ORDER_LINE_OPACITY : ORDER_LINE_OPACITY_FINE;
 		auto targetRing = [&]( const InGameUI::OrderHint& hint, SelectionCircle& ring ) -> Bool
 		{
 			return hint.onObject && orderTargetRing( hint.target, ring );
+		};
+		// a line cut flat at a ring's outer radius leaves a bare crescent at each corner, the ring's edge
+		// curving away from it; cut where the corners touch that edge, the chord at the line's half width
+		const Real lineHalf = 0.5f * lineWidth;
+		auto ringCut = [&]( Real outer ) -> Real
+		{
+			return (Real)sqrt( MAX( 0.0f, outer * outer - lineHalf * lineHalf ) );
 		};
 		auto markRadius = [&]( const InGameUI::OrderHint& hint ) -> Real
 		{
@@ -478,8 +493,8 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 				return 0.0f;
 			SelectionCircle ring;
 			if( targetRing( hint, ring ) )
-				return ring.r + markHalf;
-			return ( hint.mark == InGameUI::ORDER_MARK_FLAG ? endRadius : jointRadius ) * markScale + markHalf;
+				return ringCut( ring.r + markHalf );
+			return ringCut( ( hint.mark == InGameUI::ORDER_MARK_FLAG ? endRadius : jointRadius ) * markScale + markHalf );
 		};
 		std::vector< std::pair<ObjectID, UnsignedInt> > ringedTargets;
 		const std::vector<InGameUI::OrderHint>& hints = TheInGameUI->getOrderHints();
@@ -529,7 +544,7 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 					}
 				}
 				if( fromOnRing )
-					startCut = MAX( startCut, fromRing.r + markHalf );		// never out of the middle of a unit
+					startCut = MAX( startCut, ringCut( fromRing.r + markHalf ) );		// never out of the middle of a unit
 				const Real endCut = markRadius( *it );
 				const Real dx = points[ 1 ].X - points[ 0 ].X, dy = points[ 1 ].Y - points[ 0 ].Y;
 				const Real flat = (Real)sqrt( dx * dx + dy * dy );
@@ -562,7 +577,7 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 						Vector3 piece[ 2 ];
 						piece[ 0 ] = cut[ 0 ] + run * from;
 						piece[ 1 ] = cut[ 0 ] + run * to;
-						recordRing( DRAW_ORDER_LINE, 2, piece, color * light, ORDER_LINE_WIDTH * m_orderWidthScale, ORDER_LINE_OPACITY );
+						recordRing( DRAW_ORDER_LINE, 2, piece, color * light, lineWidth, lineOpacity );
 						from = to;
 						light = next;
 					}

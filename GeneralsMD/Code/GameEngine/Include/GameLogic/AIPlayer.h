@@ -1045,6 +1045,9 @@ protected:
 	/** Kill zones: where this AI's own units died (m_lossMap), and the guns it knows on the road an attack takes.
 		* -aiknobsoff ... killzones takes all of it off a seat. */
 	Bool killZonesHere(void) const;
+	/** A Normal seat plays with its allies: joins an ally's attack and helps an ally's hit base.  -aiknobsoff ...
+		* teamplay takes it off a seat. */
+	Bool teamPlayHere(void);
 	Real killZoneWeight(void) const;							///< how much of the loss record a reading counts, 0 when off
 	Real killZoneAt(const Coord3D *at) const;			///< ... the losses round one spot, weighed
 	Real gunOdds(void) const;											///< what an attack has to be worth against the guns it meets, 0 when off

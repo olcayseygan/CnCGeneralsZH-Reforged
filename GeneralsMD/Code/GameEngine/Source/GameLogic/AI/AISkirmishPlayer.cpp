@@ -730,8 +730,9 @@ void AISkirmishPlayer::acquireEnemy(void)
 	Player *bestEnemy = NULL;
 	Real bestDistanceSqr = HUGE_DIST*HUGE_DIST;
 
-	// a personality joins an ally's attack (the team board): his target is ours while it stands
-	if (m_persona != AIPERSONA_NORMAL && m_persona != AIPERSONA_OPPORTUNIST) {
+	// a personality joins an ally's attack (the team board): his target is ours while it stands; so does a
+	// Normal seat (teamPlayHere)
+	if ((m_persona != AIPERSONA_NORMAL || teamPlayHere()) && m_persona != AIPERSONA_OPPORTUNIST) {
 		const AITeamRequest *attack = freshRequest(AIREQ_ATTACK, AI_COOP_JOIN_FRAMES);
 		Player *target = attack && attack->enemy >= 0 ? ThePlayerList->getNthPlayer(attack->enemy) : NULL;
 		if (target && target != m_currentEnemy && m_player->getRelationship(target->getDefaultTeam()) == ENEMIES &&
@@ -1366,8 +1367,17 @@ static Int64 bankForSurrender( Player *player )
 
 // doSurrender's Easy, Medium and Hard, read at the seat's rating; extern for aiRatingTables
 extern const AIRungInt SURRENDER_EARLIEST_MINUTE = { { 6, 8, 10 }, AIKNOB_OPEN };	// never before this
-extern const AIRungInt SURRENDER_WORTH_PERCENT   = { { 20, 12, 8 }, AIKNOB_OPEN };	// of the strongest enemy's
-extern const AIRungInt SURRENDER_HOLD_SECONDS    = { { 30, 45, 60 }, AIKNOB_OPEN };	// lost this long before GG
+extern const AIRungInt SURRENDER_WORTH_PERCENT   = { { 20, 15, 12 }, AIKNOB_OPEN };	// of the strongest enemy's
+extern const AIRungInt SURRENDER_HOLD_SECONDS    = { { 30, 35, 40 }, AIKNOB_OPEN };	// lost this long before GG
+
+/** The rating the three are read at: past Hard they stay at Hard's.  Read on along their curves, an Insane
+	* seat (4200) waited 19.6 game minutes and 132 seconds and gave up only under 3% of the strongest enemy,
+	* so in six eight-seat Twilight Flame matches at Insane eleven seats were wiped out by frame 18000 without
+	* one GG.  A stronger player does not hold on longer to a lost match. */
+static Real surrenderRating( Real rating )
+{
+	return rating < AI_RATING_HARD ? rating : AI_RATING_HARD;
+}
 
 //----------------------------------------------------------------------------------------------------------
 /**
@@ -1377,7 +1387,7 @@ extern const AIRungInt SURRENDER_HOLD_SECONDS    = { { 30, 45, 60 }, AIKNOB_OPEN
  *   - nothing left that builds and nothing that could put a builder back up, while behind on worth;
  *   - worth (build cost of everything alive, plus the bank unless it is Unlimited) a small fraction of the strongest
  *     living enemy's.
- * Easy gives up soonest, Hard fights longest.  Only in skirmish and multiplayer, and their replays:
+ * Easy gives up soonest, Hard and every level past it fight longest.  Only in skirmish and multiplayer, and their replays:
  * a mission or Challenge opponent belongs to its script.  Every input is logic state, so every
  * machine and the replay say GG on the same frame; the chat line is a write to the client.
  */
@@ -1406,7 +1416,8 @@ void AISkirmishPlayer::doSurrender( void )
 	if( !TheRecorder->isMultiplayer() || !m_player->isPlayableSide() || !runsOwnAI() )
 		return;
 
-	if( now < (UnsignedInt)( aiRatingLerp( m_rating, SURRENDER_EARLIEST_MINUTE ) * 60 * LOGICFRAMES_PER_GAME_SECOND ) )
+	const Real rating = surrenderRating( m_rating );
+	if( now < (UnsignedInt)( aiRatingLerp( rating, SURRENDER_EARLIEST_MINUTE ) * 60 * LOGICFRAMES_PER_GAME_SECOND ) )
 		return;
 
 	SurrenderTally mine = { 0, 0 };
@@ -1460,7 +1471,7 @@ void AISkirmishPlayer::doSurrender( void )
 
 	// out of builders is this seat's own end: what is left goes to an ally either way
 	const Bool cannotRebuild = !m_player->hasAnyBuildFacility() && mine.builders == 0 && mine.value < strongestEnemy;
-	const Bool outweighed = ourSide * 100 < enemySide * aiRatingLerp( m_rating, SURRENDER_WORTH_PERCENT );
+	const Bool outweighed = ourSide * 100 < enemySide * aiRatingLerp( rating, SURRENDER_WORTH_PERCENT );
 	if( !cannotRebuild && !outweighed )
 	{
 		m_hopelessSinceFrame = 0;
@@ -1471,7 +1482,7 @@ void AISkirmishPlayer::doSurrender( void )
 		m_hopelessSinceFrame = now;
 		return;
 	}
-	if( now - m_hopelessSinceFrame < (UnsignedInt)( aiRatingLerp( m_rating, SURRENDER_HOLD_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) )
+	if( now - m_hopelessSinceFrame < (UnsignedInt)( aiRatingLerp( rating, SURRENDER_HOLD_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) )
 		return;
 
 	DEBUG_LOG(( "AI GG player %d frame %u worth %lld side %lld enemy %lld enemies %lld rebuild %d\n", (Int)m_player->getPlayerIndex(),

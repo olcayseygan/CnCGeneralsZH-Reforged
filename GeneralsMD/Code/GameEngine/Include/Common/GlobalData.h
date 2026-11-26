@@ -124,6 +124,7 @@ enum
 	AIKNOB_SECOND_BASE	= 1024,	///< a base away from home is a war factory on the rung's timer, as before it was a Command Center founded once home is full
 	AIKNOB_KILL_ZONES		= 2048,	///< no loss map, no hold on attacks that do not beat the known guns, no regrouping instead of a lone hunt, the enemy's defences not in the pressure, as before them
 	AIKNOB_PRESSURE			= 4096,	///< no spare guards sent from home, the gun hold a flat 180 game seconds and the smallest attack rising past Hard, as before 2026-11-23
+	AIKNOB_TEAM_PLAY		= 8192,	///< a Normal seat neither joins an ally's attack nor sends its home units into an ally's hit base, as before 2026-11-27
 };
 
 //-------------------------------------------------------------------------------------------------

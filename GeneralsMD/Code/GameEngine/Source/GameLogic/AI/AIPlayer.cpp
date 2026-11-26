@@ -8560,14 +8560,22 @@ static Bool priorityBuildPending( Player *player, const ThingTemplate *tmpl )
 	return FALSE;
 }
 
-/** A plant of this player's is already going up.  One halfway built is the answer to the outage
-	* arriving, and queueing a second one is a war factory this player will not be able to buy. */
-static void findPowerUnderConstruction( Object *obj, void *userData )
+/** A plant's output as the shortfall counts it.  One whose template gives none still answers the whole
+	* outage on its own, as every plant going up did before. */
+static Int plantOutput( const ThingTemplate *tmpl )
 {
-	Bool *building = (Bool *)userData;
+	const Int output = tmpl->getEnergyProduction();
+	return output > 0 ? output : 100000;
+}
+
+/** What the plants of this player's already going up will add.  One halfway built is the answer to a
+	* small outage arriving, and queueing a second one for it is a war factory this player will not be
+	* able to buy; a raid that took three plants needs three. */
+static void addPowerUnderConstruction( Object *obj, void *userData )
+{
 	if( obj->isKindOf( KINDOF_FS_POWER ) && !obj->isKindOf( KINDOF_CASH_GENERATOR )
-			&& obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
-		*building = TRUE;
+			&& obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) && !obj->isEffectivelyDead() )
+		*(Int *)userData += plantOutput( obj->getTemplate() );
 }
 
 /** What the army and the base are made of, standing or going up. */
@@ -8767,9 +8775,12 @@ void AIPlayer::doPower( void )
 		DEBUG_LOG(("AI POWER frame %d player %d dark, %d of %d, %d in the bank\n", TheGameLogic->getFrame(),
 			m_player->getPlayerIndex(), energy->getProduction(), energy->getConsumption(), m_player->getMoney()->countMoney()));
 
-	Bool building = FALSE;
-	m_player->iterateObjects( findPowerUnderConstruction, &building );
-	if( building )
+	// the plants already going up count for what they will give: a base a raid left 35 short went on
+	// building one plant at a time, and an Insane China sat dark for 465 of a match's seconds
+	const Int needed = energy->getConsumption() + POWER_RESERVE - energy->getProduction();
+	Int coming = 0;
+	m_player->iterateObjects( addPowerUnderConstruction, &coming );
+	if( coming >= needed )
 		return;
 
 	Object *dozer = NULL;
@@ -8777,9 +8788,10 @@ void AIPlayer::doPower( void )
 	if( dozer == NULL )
 		return;
 
-	// with the purchase queue the plant is asked for before the bank can pay, and the queue saves for it
+	// with the purchase queue the plant is asked for before the bank can pay, and the queue saves for it;
+	// one asked for and not yet started counts as coming too
 	const ThingTemplate *tmpl = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, KINDOF_FS_POWER, purchaseQueueOn() );
-	if( tmpl == NULL || tmpl->isKindOf( KINDOF_CASH_GENERATOR ) || priorityBuildPending( m_player, tmpl ) )
+	if( tmpl == NULL || tmpl->isKindOf( KINDOF_CASH_GENERATOR ) || ( priorityBuildPending( m_player, tmpl ) && coming + plantOutput( tmpl ) >= needed ) )
 		return;
 
 	Coord3D spot = m_baseCenter;
@@ -8790,6 +8802,11 @@ void AIPlayer::doPower( void )
 		spot.y -= dir.y * m_baseRadius * POWER_SETBACK;
 	}
 
+	// In the dark the base waits on the dozer's walk, so the plant goes up near the back spot inside the
+	// base's edge first: walking outward, the plants of an Insane China went up 1,150 to 1,360 from a base
+	// of radius 385, its dozer 1,180 to 1,500 on the road to each.
+	if( !energy->hasSufficientPower() && placeNear( tmpl, &spot, 0.0f, FALSE, NULL, TRUE ) )
+		return;
 	// the back of a grown base fills up.  the spot behind the base walks outward with it; a miss there
 	// still tries the inner rings of the base itself, and that try does not move the outward walk
 	if( !placeNear( tmpl, &spot, 0.0f, TRUE ) )
@@ -10511,6 +10528,15 @@ static const Real LOSS_READ_RADIUS = 1.5f * INFLUENCE_CELL_SIZE;
 Bool AIPlayer::killZonesHere( void ) const
 {
 	return !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_KILL_ZONES ) != 0 );
+}
+
+/** In eight 2v2 Hard matches the four Normal seats posted their attacks and help calls on the team board and no
+	* seat ever read one (no AI COOP line): only the personalities joined an ally's attack or helped his base, so two
+	* allied computers played two games side by side.  A Normal seat now joins an ally's attack and sends its idle
+	* home units into an ally's hit base, as the Supporter does. */
+Bool AIPlayer::teamPlayHere( void )
+{
+	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_TEAM_PLAY ) != 0 );
 }
 
 /** The owner, 2026-11-23: players beat even the hardest level easily, and every level should press them
@@ -13714,7 +13740,7 @@ void AIPlayer::doWaves( void )
 	postTeamRequests();
 	if( m_persona != AIPERSONA_NORMAL )
 		answerTeamRequests();
-	if( m_persona == AIPERSONA_SUPPORTER )
+	if( m_persona == AIPERSONA_SUPPORTER || ( m_persona == AIPERSONA_NORMAL && teamPlayHere() ) )
 		defendAlly();
 	if( m_persona == AIPERSONA_RAIDER )
 		doPersonaRaids();
@@ -16178,10 +16204,26 @@ static Bool airGunReaches( const AIKnownGun &gun, Real x, Real y )
 	return gun.m_airReach > 0.0f && sqr( gun.m_x - x ) + sqr( gun.m_y - y ) <= sqr( gun.m_airReach + HELIX_GUN_MARGIN );
 }
 
+/** How far past a known defence's reach a pile still counts as under it for a truck: the truck stands on the
+	* pile's near side to load, and the China trucks a turtle's Fire Bases killed (reach 272) were loading at a
+	* pile 288 from the gun, 225 to 257 from it when shot. */
+static const Real GROUND_DOCK_GUN_MARGIN = 60.0f;
+
 Bool AIPlayer::gathererShunsDock( const Object *gatherer, const Object *dock )
 {
-	if( !gatherer->isKindOf( KINDOF_AIRCRAFT ) || !runsOwnAI() || aiRatingLerp( m_rating, AIR_SHUNS_KNOWN_GUNS ) <= 0.0f )
+	if( !runsOwnAI() || aiRatingLerp( m_rating, AIR_SHUNS_KNOWN_GUNS ) <= 0.0f )
 		return FALSE;
+	if( !gatherer->isKindOf( KINDOF_AIRCRAFT ) )
+	{
+		// A truck or worker shuns a pile a known defence covers: in 12 turtle bench matches 176 of the 1,607 the AI
+		// lost to defences were China trucks shot loading beside the turtle's guns.  Never its own side's center.
+		const Player *owner = dock->getControllingPlayer();
+		if( owner == m_player || ( owner && m_player->getRelationship( owner->getDefaultTeam() ) == ALLIES ) )
+			return FALSE;
+		std::vector<KnownDefence> defences;
+		collectKnownDefences( m_player, &defences );
+		return dropCovered( defences, dock->getPosition(), GROUND_DOCK_GUN_MARGIN );
+	}
 	std::vector<AIKnownGun> guns;
 	readKnownGuns( &guns );
 	const Coord3D *from = gatherer->getPosition();
@@ -18837,6 +18879,15 @@ void AIPlayer::keepSiegeBehind( void )
 		spot.z = TheTerrainLogic->getGroundHeight( spot.x, spot.y );
 		if( sqr( gun->getPosition()->x - spot.x ) + sqr( gun->getPosition()->y - spot.y ) <= sqr( SIEGE_SLACK ) )
 			continue;
+		// one behind the front and already driving to within a trail of its place keeps its order, and is sent
+		// again once it gets there or gets ahead.  Every order is a new path and a stop while it comes: in six
+		// eight-seat Insane matches 48,439 of 64,770 of these orders went to a gun whose last one, under three
+		// seconds old, was within 40 of the same spot, the rest mostly a front's two seconds of walk further on,
+		// and the guns rolled forward in jerks
+		const Bool gunAhead = sqr( gun->getPosition()->x - base.x ) + sqr( gun->getPosition()->y - base.y ) > frontSqr;
+		const Coord3D *goal = gun->getAI()->getGoalPosition();
+		if( !gunAhead && !gun->getAI()->isIdle() && goal && sqr( goal->x - spot.x ) + sqr( goal->y - spot.y ) <= sqr( max( trail, SIEGE_SLACK ) ) )
+			continue;
 		gun->getAI()->aiAttackMoveToPosition( &spot, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
 		++sent;
 		if( sqr( gun->getPosition()->x - base.x ) + sqr( gun->getPosition()->y - base.y ) > frontSqr )
@@ -19145,6 +19196,9 @@ void AIPlayer::holdAtDefences( void )
 			}
 		}
 		spot.z = TheTerrainLogic->getGroundHeight( spot.x, spot.y );
+		// one already walking to that wait keeps its walk: sent again, it stopped for a new path every look
+		if( goal && sqr( goal->x - spot.x ) + sqr( goal->y - spot.y ) <= sqr( EDGE_ROUND ) )
+			continue;
 		leaveTacticsAlone( obj->getID() );
 		stepCalmly( obj, tacticalStepFor( obj->getID() ), &spot );
 		++held;

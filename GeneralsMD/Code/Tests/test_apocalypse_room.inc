@@ -20,11 +20,12 @@ TEST( apocalypse_room_four_rows_in_seat_order_under_one_head )
 		CHECK( !row.head );
 		CHECK_EQ( row.slot, i );
 		CHECK_EQ( row.height, (Int)LOBBY_ROW_SEAT );
-		// seat rows under the head from 160: 192 + 90 i (the README's 194 had a head of 34)
-		CHECK_EQ( LOBBY_SEATS_TOP + row.top, 192 + 90 * i );
+		// one-line rows back to back under the head: 192 + 56 i at 1080
+		CHECK_EQ( row.top, (Int)LOBBY_ROW_HEAD + i * (Int)LOBBY_ROW_SEAT );
 	}
-	// the last row ends over THE NIGHTS head at 566
-	CHECK( LOBBY_SEATS_TOP + plan.items[ plan.itemCount - 1 ].top + LOBBY_ROW_SEAT <= 566 );
+	// the four rows end at 416, where GUIUtil.cpp's APOC_NIGHTS_TOP stands 14 under them (THE NIGHTS head at 430)
+	const LobbyRoomItem &last = plan.items[ plan.itemCount - 1 ];
+	CHECK_EQ( last.top + last.height, (Int)LOBBY_ROW_HEAD + (Int)APOCALYPSE_SEATS * (Int)LOBBY_ROW_SEAT );
 	CHECK_EQ( plan.maxScroll, 0 );
 	CHECK_EQ( plan.above + plan.below, 0 );
 }

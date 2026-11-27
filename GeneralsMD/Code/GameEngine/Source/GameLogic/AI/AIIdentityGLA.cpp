@@ -25,7 +25,7 @@
 // Anthrax Bomb lands on the army or the road between a supply pile and the enemy's supply center, and a
 // tractor poisons that road.  Demolition trades lives: demo traps at the chokes whatever the personality,
 // a Bomb Truck dressed as one of the enemy's own vehicles driven at his dearest building, and a unit with
-// the suicide upgrade that is nearly dead blows itself up among the enemy instead of being pulled out.
+// the suicide upgrade that is nearly dead blows itself up beside an enemy worth the trade.
 // Stealth is never seen: the GPS Scrambler goes up over every wave as it sets out, and the units that are
 // invisible from the factory raid the enemy's supply centers down a side road no detector watches.
 
@@ -67,20 +67,19 @@ public:
 		MOVE_POISON_SUPPLY		= 1 << 5,		///< Toxin: a tractor poisons the road between a supply pile and the enemy's center (poisonSupply)
 		MOVE_CHOKE_TRAPS			= 1 << 6,		///< Demolition: demo traps at the chokes whatever the personality (AIPlayer::fortifyChokes)
 		MOVE_DISGUISED_TRUCK	= 1 << 7,		///< Demolition: a Bomb Truck in enemy colours at his dearest building (disguisedTruck)
-		MOVE_DEATH_BLAST			= 1 << 8,		///< Demolition: nearly dead, it blows itself up among the enemy (deathBlasts, pullHealth)
+		MOVE_DEATH_BLAST			= 1 << 8,		///< Demolition: nearly dead, it blows itself up among the enemy (deathBlasts)
 		MOVE_GPS_COVER				= 1 << 9,		///< Stealth: the GPS Scrambler over a wave as it sets out (onWaveSent)
 		MOVE_SUPPLY_RAID			= 1 << 10,	///< Stealth: the invisible raid a supply center down an unwatched side road (supplyRaid)
 	};
 
 	AIIdentityGLA( AIPlayer *ai, AIGeneral general ) : AIIdentity( ai, general ),
 		m_jumpFrame( 0 ), m_scudFrame( 0 ), m_poisonFrame( 0 ), m_poisonerID( INVALID_ID ),
-		m_truckID( INVALID_ID ), m_truckFrame( 0 ), m_raidFrame( 0 ), m_trapFrame( 0 ) {}
+		m_truckID( INVALID_ID ), m_truckFrame( 0 ), m_raidFrame( 0 ), m_trapFrame( 0 ), m_truckTargetID( INVALID_ID ) {}
 
 	virtual void onStart( void );
 	virtual void onTick( void );
 	virtual void onWaveSent( AIGroup *wave, Real power );
 	virtual Bool powerTarget( const SpecialPowerTemplate *power, Int enemyIndex, Real radius, Coord3D *target );
-	virtual Real pullHealth( const Object *unit, Real shared ) const;
 	virtual void xfer( Xfer *xfer );
 
 private:
@@ -104,6 +103,7 @@ private:
 	UnsignedInt	m_truckFrame;		///< when it was told to dress
 	UnsignedInt	m_raidFrame;		///< the last invisible raid sent, 0 for none
 	UnsignedInt	m_trapFrame;		///< the last look at the chokes' traps, 0 for none
+	ObjectID		m_truckTargetID;	///< the building the Bomb Truck was sent at, INVALID_ID before it is sent
 };
 
 AIIdentity *createGLAIdentity( AIPlayer *ai, AIGeneral general )
@@ -134,9 +134,11 @@ static const Real BLOB_RADIUS = 60.0f;
 static const Int BLOB_LEAST = 4;								///< infantry in one blob worth driving at
 static const Real ANTHRAX_ARMY_LEAST = 6.0f;		///< an army in the bomb's circle worth it: infantry 2, anything else 1
 static const Real SUPPLY_PILE_REACH = 350.0f;		///< the pile a supply center trucks from lies this near it
-static const Real BLAST_HEALTH = 0.3f;					///< under this share a suicide unit goes in
-static const Real BLAST_REACH = 160.0f;					///< ... at an enemy this near
+static const Real BLAST_HEALTH = 0.2f;					///< under this share a suicide unit goes in
+static const Real BLAST_REACH = 120.0f;					///< ... at an enemy this near
 static const Real BLAST_TOUCH = 35.0f;					///< ... and blows when this near its edge
+static const Real BLAST_WORTH_SHARE = 0.5f;			///< ... worth at least this share of its own price
+static const Real BLAST_DEAR_COST = 1000.0f;		///< one this dear the shared AI mends instead (pullOutRanked)
 static const Int RAID_LEAST = 2;
 static const Int RAID_MOST = 6;
 static const Real DETECTOR_REACH = 450.0f;			///< the widest sight a detector is looked for within
@@ -275,7 +277,7 @@ void AIIdentityGLA::onStart( void )
 void AIIdentityGLA::xfer( Xfer *xfer )
 {
 	AIIdentity::xfer( xfer );
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;		// 2: the Bomb Truck's target
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	xfer->xferUnsignedInt( &m_jumpFrame );
@@ -286,6 +288,10 @@ void AIIdentityGLA::xfer( Xfer *xfer )
 	xfer->xferUnsignedInt( &m_truckFrame );
 	xfer->xferUnsignedInt( &m_raidFrame );
 	xfer->xferUnsignedInt( &m_trapFrame );
+	if( version >= 2 )
+		xfer->xferObjectID( &m_truckTargetID );
+	else
+		m_truckTargetID = INVALID_ID;	// the truck is sent at a building again on its next turn
 }
 
 void AIIdentityGLA::onTick( void )
@@ -705,19 +711,20 @@ void AIIdentityGLA::disguisedTruck( const std::vector<Object *> &owned, Player *
 		truck->findSpecialPowerModuleInterface( SPECIAL_DISGUISE_AS_VEHICLE )->doSpecialPowerAtObject( model, COMMAND_FIRED_BY_SCRIPT );
 		m_truckID = truck->getID();
 		m_truckFrame = now;
+		m_truckTargetID = INVALID_ID;
 		DEBUG_LOG(("AI DEMO frame %d player %d dresses Bomb Truck %d as '%s' %d\n", now, me, truck->getID(),
 			model->getTemplate()->getName().str(), model->getID()));
 		return;
 	}
 
-	// dressed, or out of time: at his dearest building, unless already on its way to one
+	// dressed, or out of time: at his dearest building, unless still on its way to the one it was sent at
 	const StealthUpdate *stealth = truck->getStealth();
 	const Bool dressed = stealth && stealth->isDisguised();
 	if( !dressed && now - m_truckFrame < TRUCK_DRESS_FRAMES )
 		return;
-	const Object *goal = truck->getAI()->getGoalObject();
-	if( goal && !goal->isEffectivelyDead() && goal->isKindOf( KINDOF_STRUCTURE ) )
-		return;
+	const Object *sentAt = TheGameLogic->findObjectByID( m_truckTargetID );
+	if( sentAt && !sentAt->isEffectivelyDead() && !waiting( truck ) )
+		return;	// the first version gave a fresh order every second the attack state named no goal: 433 orders for 202 trucks
 	std::vector<Object *> theirs;
 	foe->iterateObjects( collectOwned, &theirs );
 	Object *best = NULL;
@@ -741,12 +748,15 @@ void AIIdentityGLA::disguisedTruck( const std::vector<Object *> &owned, Player *
 	if( best == NULL )
 		return;
 	truck->getAI()->aiAttackObject( best, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+	m_truckTargetID = best->getID();
 	DEBUG_LOG(("AI DEMO frame %d player %d drives Bomb Truck %d%s at '%s' %d at (%.0f,%.0f)\n", now, me, truck->getID(),
 		dressed ? " in his colours" : "", best->getTemplate()->getName().str(), best->getID(), best->getPosition()->x, best->getPosition()->y));
 }
 
 /** With the suicide upgrade a unit that dies by its own hand fires a far bigger charge than one that is shot.
-	* So a fighter nearly dead goes at the nearest enemy within BLAST_REACH and blows itself up beside it. */
+	* So a cheap fighter nearly dead goes at the nearest enemy within BLAST_REACH worth half its price or more and
+	* blows itself up beside it.  A dear one is left to the shared AI, which pulls it out to be mended: the first
+	* version kept those in the fight too, and the side with it won 15 of 40 Demolitions mirrors to the other's 21. */
 void AIIdentityGLA::deathBlasts( const std::vector<Object *> &owned )
 {
 	if( !suicideReady() )
@@ -758,6 +768,9 @@ void AIIdentityGLA::deathBlasts( const std::vector<Object *> &owned )
 		Object *obj = owned[ o ];
 		if( !freeFighter( obj ) || obj->isKindOf( KINDOF_DISGUISER ) || !carriesCharge( obj ) || healthShare( obj ) >= BLAST_HEALTH )
 			continue;
+		const Real price = INT_TO_REAL( obj->getTemplate()->calcCostToBuild( m_ai->m_player ) );
+		if( price >= BLAST_DEAR_COST )
+			continue;
 		PartitionFilterRelationship enemies( obj, PartitionFilterRelationship::ALLOW_ENEMIES );
 		PartitionFilterAlive alive;
 		PartitionFilterOnMap onMap;
@@ -766,7 +779,7 @@ void AIIdentityGLA::deathBlasts( const std::vector<Object *> &owned )
 		PartitionFilterRejectByKindOf notMine( MAKE_KINDOF_MASK( KINDOF_MINE ), KINDOFMASK_NONE );
 		PartitionFilter *filters[] = { &enemies, &alive, &onMap, &notAir, &notShell, &notMine, NULL };
 		Object *victim = ThePartitionManager->getClosestObject( obj, BLAST_REACH, FROM_BOUNDINGSPHERE_2D, filters );
-		if( !glaKnows( victim, me ) )
+		if( !glaKnows( victim, me ) || INT_TO_REAL( victim->getTemplate()->calcCostToBuild( victim->getControllingPlayer() ) ) < BLAST_WORTH_SHARE * price )
 			continue;
 		const Real touch = BLAST_TOUCH + victim->getGeometryInfo().getBoundingCircleRadius();
 		if( distSqr2D( obj->getPosition(), victim->getPosition() ) <= sqr( touch ) )
@@ -786,14 +799,6 @@ void AIIdentityGLA::deathBlasts( const std::vector<Object *> &owned )
 	}
 	if( charged > 0 )
 		DEBUG_LOG(("AI DEMO frame %d player %d sends %d nearly dead units at the enemy to blow\n", TheGameLogic->getFrame(), me, charged));
-}
-
-Real AIIdentityGLA::pullHealth( const Object *unit, Real shared ) const
-{
-	// a unit that carries the big charge is worth more blown up among the enemy than mended
-	if( hasMove( MOVE_DEATH_BLAST ) && carriesCharge( unit ) && suicideReady() )
-		return 0.0f;
-	return shared;
 }
 
 // ---- Stealth ---------------------------------------------------------------------------------------------

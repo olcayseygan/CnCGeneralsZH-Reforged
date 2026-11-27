@@ -397,7 +397,8 @@ namespace
 			if( now - s.burstStart >= (UnsignedInt)( BARREL_HOT_SECONDS * LOGICFRAMES_PER_GAME_SECOND ) )
 				s.heatUntil = now + (UnsignedInt)( BARREL_COOL_SECONDS * LOGICFRAMES_PER_GAME_SECOND );
 		}
-		if( now < s.heatUntil )
+		// heat only: nothing to place unless the Heat Haze option draws it
+		if( now < s.heatUntil && TheGlobalData->m_heatHaze )
 		{
 			Coord3D muzzle;
 			if( draw->getPristineBonePositions( "MUZZLE", 1, &muzzle, NULL, 1 ) != 1 )

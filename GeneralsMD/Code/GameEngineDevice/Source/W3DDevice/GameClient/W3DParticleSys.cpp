@@ -2418,6 +2418,15 @@ void W3DParticleSystemManager::refreshFrameView( void )
 			view.owner = sys->getAttachedDrawableObjectForDraw();
 		else view.owner = sys->getAttachedObject();
 #endif
+		// a heat source that draws nothing (HeatHaze on a blended template, a hot gun barrel) is heat
+		// only: its near-transparent cards stacked into a grey smudge and cast into the smoke map when
+		// drawn, so it never joins the view and only the haze reads it
+		if (sys->getTemplate()->isHeatHaze() && sys->getShaderType() != ParticleSystemInfo::ADDITIVE)
+		{
+			m_frameExhausts.push_back( sys );
+			m_frameExhaustFades.push_back( fade );
+			continue;
+		}
 		m_frameView.push_back( view );
 		if (sys->getTemplate()->isFireLook()
 				&& (sys->getShaderType() == ParticleSystemInfo::ADDITIVE || sys->getTemplate()->isEmissive()))

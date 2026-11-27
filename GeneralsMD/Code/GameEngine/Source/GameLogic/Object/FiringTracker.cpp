@@ -364,13 +364,14 @@ void FiringTracker::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: the idle reload's frame and the end of the looping fire sound, which set when the tracker wakes */
 // ------------------------------------------------------------------------------------------------
 void FiringTracker::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -385,6 +386,17 @@ void FiringTracker::xfer( Xfer *xfer )
 
 	// frame to start cooldown
 	xfer->xferUnsignedInt( &m_frameToStartCooldown );
+
+	/* A weapon with AutoReloadWhenIdle fills its clip on this frame, and a load left it at 0, so a
+		 Comanche saved with one missile of four kept that one for the rest of the game, where the game
+		 that was saved reloaded it a few seconds later; the two parted there.  The looping sound's end is
+		 a logic frame too, and with the reload it decides when update runs.  The sound itself is the
+		 client's and starts again with the next shot.  An older save has neither, as before. */
+	if( version >= 2 )
+	{
+		xfer->xferUnsignedInt( &m_frameToForceReload );
+		xfer->xferUnsignedInt( &m_frameToStopLoopingSound );
+	}
 
 }  // end xfer
 

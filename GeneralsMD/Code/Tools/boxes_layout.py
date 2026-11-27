@@ -3,8 +3,8 @@
 
 The design is the boxes README under experiments/proofs/2026-11-24/screens/boxes in the wrapper
 (docs/plans/MENU-REDESIGN.md, packages 2 and 5).  Every box is UIStyle's box: frame A round a
-glass, an 82 px title band, the content, an 84 px foot with its keys at the right, 170 wide and 12
-apart, Enter's key rightmost.  The code draws everything that is a line, a frame, a state or a word
+glass, an 82 px title band, the content, an 84 px foot with its keys at the right, 170 wide and 16
+apart (UIStyle's BOX_KEY_GAP, the 8 px grid), Enter's key rightmost.  The code draws everything that is a line, a frame, a state or a word
 and lays the windows out again from UIStyle's numbers when a box's height follows what it holds;
 these masters carry every window the code looks up, at the rects the design draws, and hide the
 windows the language drops (EA's title art, logos, rules and fixed player rows) so lookups still
@@ -54,7 +54,7 @@ BOARD = (1920, 1080)
 # UIStyle.h's box numbers
 BOX_MENU, BOX_QUESTION, BOX_LIST = 560, 720, 1040
 BOX_PAD, BOX_HEAD, BOX_FOOT, BOX_LINE = 32, 82, 84, 28
-KEY_WIDTH, KEY_GAP, KEY_HEIGHT = 170, 12, 48
+KEY_WIDTH, KEY_GAP, KEY_HEIGHT = 170, 16, 48
 BAR_TOP, TOP_MIN = 832, 56
 
 # the rail's keys in the in-game menu (the main menu's 62 px buttons, 10 apart, 24 more before the
@@ -324,15 +324,16 @@ def desc_rects(over_match):
 
 
 # Save Replay over the end screen: NAME and its text box, the saved replays (seven rows of 38), CANCEL
-# and SAVE; "replay saved" is the one-line question box over it
-REPLAY_POPUP = box_rect(BOX_LIST, BOX_HEAD + 24 + 48 + 24 + 34 + 7 * 38 + 16 + BOX_FOOT, False)
+# and SAVE; "replay saved" is the one-line question box over it.  The column heads stand 22 under the
+# text box and 34 over the list, so the text box and the list are 56 apart, on the 8 px grid
+REPLAY_POPUP = box_rect(BOX_LIST, BOX_HEAD + 24 + 48 + 22 + 34 + 7 * 38 + 16 + BOX_FOOT, False)
 
 
 def popup_replay_rects():
     box = REPLAY_POPUP
     x0, x1 = box[0] + BOX_PAD, box[2] - BOX_PAD
     y = box[1] + BOX_HEAD + 24
-    rows = y + 48 + 24 + 34
+    rows = y + 48 + 22 + 34
     return {"PopupReplaySubMenu": box, "TextEntryReplayName": (x0 + 100, y, x1, y + 48),
             "ListboxGames": (x0, rows, x1, rows + 7 * 38), "ButtonSave": key_rect(box, 0),
             "ButtonBack": key_rect(box, 1), "PopupReplaySaved": QUESTION_BOX}

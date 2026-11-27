@@ -41,6 +41,7 @@
 #include "GameClient/GadgetListBox.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpyOverlay.h"
+#include "GameClient/MapPicker.h"
 #include "GameClient/MapUtil.h"
 #include "GameNetwork/GUIUtil.h"
 
@@ -84,6 +85,7 @@ static void NullifyControls(void)
 		buttonMapStartPosition[i] = NULL;
 	}
 	RandomMapTabShutdown();
+	MapPickerShutdown();
 }
 
 static const char *layoutFilename = "GameSpyGameOptionsMenu.wnd";
@@ -209,6 +211,8 @@ void WOLMapSelectMenuInit( WindowLayout *layout, void *userData )
 	AsciiString listString( "WOLMapSelectMenu.wnd:ListboxMap" );
 	NameKeyType mapListID = TheNameKeyGenerator->nameToKey( listString );
 	mapList = TheWindowManager->winGetWindowFromId( parent, mapListID );
+	// the list as a grid of map pictures and the preview at each map's shape, before the fill moves it
+	MapPickerInit( "WOLMapSelectMenu.wnd", parent, mapList, winMapPreview, TheGameSpyGame, 0, FALSE );
 	if( mapList )
 	{
 		if (TheMapCache)

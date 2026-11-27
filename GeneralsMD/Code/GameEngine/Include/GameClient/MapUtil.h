@@ -136,6 +136,8 @@ extern TechAndSupplyImages TheSupplyAndTechImageLocations;
 /// minPlayers leaves out a map with fewer start spots (the skirmish room seating more than eight).
 Int populateMapListbox( GameWindow *listbox, Bool useSystemMaps, Bool isMultiplayer, AsciiString mapToSelect = AsciiString::TheEmptyString, Int minPlayers = 0 );
 Int populateMapListboxNoReset( GameWindow *listbox, Bool useSystemMaps, Bool isMultiplayer, AsciiString mapToSelect = AsciiString::TheEmptyString, Int minPlayers = 0 );
+/// how many maps that listbox would hold, for a map picker's tab
+Int countMapListMaps( Bool useSystemMaps, Bool isMultiplayer, Int minPlayers = 0 );
 Bool isValidMap( AsciiString mapName, Bool isMultiplayer );						/// Validate a map
 Image *getMapPreviewImage( AsciiString mapName );
 AsciiString getDefaultMap( Bool isMultiplayer );											/// Find a valid map

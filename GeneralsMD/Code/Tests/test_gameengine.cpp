@@ -28708,6 +28708,7 @@ TEST(game_speed_set_to_200_and_back_reads_what_it_read)
 #include "test_menu_boxes.inc"
 #include "test_main_menu.inc"
 #include "test_room_layout.inc"
+#include "test_map_picker.inc"
 #include "test_apocalypse_room.inc"
 #include "test_game_lists.inc"
 #include "test_options_menu.inc"

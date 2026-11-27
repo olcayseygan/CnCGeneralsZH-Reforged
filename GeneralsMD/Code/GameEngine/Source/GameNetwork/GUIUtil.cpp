@@ -63,6 +63,7 @@
 #include "GameClient/DirectStrikeTheme.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/FactionPicker.h"
+#include "GameClient/MapPicker.h"
 #include "Lib/Clock.h"
 #include "Common/RandomMapGenerator.h"
 #include "Common/RandomMapTemplate.h"
@@ -1294,18 +1295,8 @@ void LobbySwatchFill(Int x, Int y, Int width, Int height, Color fill)
 
 void DrawMapListTab(GameWindow *window, WinInstanceData *instData)
 {
-	Int x, y, width, height;
-	window->winGetScreenPosition(&x, &y);
-	window->winGetSize(&width, &height);
-	// the radio button keeps WIN_STATE_HILITED while the mouse is on it, and lights as a layout button does
-	const Color color = UIStyle::tab(x, y, width, height, BitTest(window->winGetStatus(), WIN_STATUS_ENABLED),
-		BitTest(instData->getState(), WIN_STATE_SELECTED), BitTest(instData->getState(), WIN_STATE_HILITED));
-	DisplayString *text = instData->getTextDisplayString();
-	if (text->getFont() != window->winGetFont())
-		text->setFont(window->winGetFont());
-	Int textWidth, textHeight;
-	text->getSize(&textWidth, &textHeight);
-	text->draw(x + (width - textWidth) / 2, y + (height - textHeight) / 2, color, UIStyle::SHADOW);
+	// the menu's tab, a list tab's count after its name (MapPicker.cpp)
+	MapPickerDrawTab(window, instData);
 }
 
 // The Random tab ------------------------------------------------------------------------------
@@ -1362,11 +1353,14 @@ static void saveRandomTab(void)
 	pref.write();
 }
 
-/// The template row's own shipped map with its start spots, the Official tab's picture; Surprise me
-/// shows the unknown map.
+/// The template row's own shipped map, the Official tab's picture, tagged STYLE by the grid; its start
+/// spots are not the new map's, so none shows.  Surprise me shows the unknown map.
 static void showRandomTemplate(void)
 {
 	positionStartSpots(theRandomTemplate, theRandomStartSpots, theRandomPreview);
+	for (Int i = 0; theRandomStartSpots && i < MAX_SLOTS; ++i)
+		if (theRandomStartSpots[i])
+			theRandomStartSpots[i]->winHide(TRUE);
 }
 
 static void showRandomTab(Bool open)
@@ -1477,15 +1471,13 @@ void RandomMapTabInit(const char *layoutFilename, GameWindow *parent, GameWindow
 
 	fillTemplateList();
 	GadgetRadioSetSelection(theSizeButtons[theRandomSize], FALSE);
+	// the type list as the map list's grid of pictures, MAP SIZE and MAP TYPE as heads
+	MapPickerAttachTypes(theTemplateList, randomTabWindow("StaticTextRandomSize"), randomTabWindow("StaticTextRandomTemplate"));
 
 	// more players than a shipped map holds: the lists keep the maps with a start spot for each of
-	// them (the picker fills them so), and a room already on a generated map opens on this tab
+	// them (the picker fills them so, and the grid says so under the tabs), and a room already on a
+	// generated map opens on this tab
 	const Bool crowded = allowed && game->getNumNonObserverPlayers() > SHIPPED_MAP_MAX_PLAYERS;
-	if (crowded)
-	{
-		theListTabs[0]->winSetTooltip(TheGameText->fetch("TOOLTIP:MapListCrowded"));
-		theListTabs[1]->winSetTooltip(TheGameText->fetch("TOOLTIP:MapListCrowded"));
-	}
 
 	const Bool open = allowed && ((crowded && isGeneratedMapPath(game->getMap())) || pref.getBool("Open", FALSE));
 	if (open)
@@ -1504,13 +1496,10 @@ Bool RandomMapTabHandle(UnsignedInt msg, UnsignedIntPtr mData1, UnsignedIntPtr m
 		const Int row = (Int)mData2;
 		if (row < 0)
 			return TRUE;
-		const AsciiString &chosen = theTemplates[(Int)(intptr_t)GadgetListBoxGetItemData(theTemplateList, row)];
-		if (chosen != theRandomTemplate)
-		{
-			theRandomTemplate = chosen;
-			saveRandomTab();
-			showRandomTemplate();
-		}
+		// a row picked again (row 0, Surprise me, is the pick on a first visit) still answers
+		theRandomTemplate = RandomMapTabTemplateAt(row);
+		saveRandomTab();
+		showRandomTemplate();
 		if (msg == GLM_DOUBLE_CLICKED)
 		{
 			GameWindow *ok = randomTabWindow("ButtonOK");
@@ -1568,6 +1557,42 @@ AsciiString RandomMapTabMap(void)
 	if (!theRandomTabOpen)
 		return AsciiString::TheEmptyString;
 	return stageRoomRandomMap(theRandomRoom, theRandomSize, theRandomTemplate);
+}
+
+// what the grid (MapPicker.cpp) reads of the tab
+Bool RandomMapTabIsOpen(void)
+{
+	return theRandomTab != NULL && theRandomTabOpen;
+}
+
+AsciiString RandomMapTabTemplateAt(Int row)
+{
+	if (theRandomTab == NULL || theTemplateList == NULL || row < 0 || row >= GadgetListBoxGetNumEntries(theTemplateList))
+		return AsciiString::TheEmptyString;
+	const Int index = (Int)(intptr_t)GadgetListBoxGetItemData(theTemplateList, row);
+	return index >= 0 && index < (Int)theTemplates.size() ? theTemplates[index] : AsciiString::TheEmptyString;
+}
+
+AsciiString RandomMapTabTemplate(void)
+{
+	return theRandomTemplate;
+}
+
+Int RandomMapTabSize(void)
+{
+	return theRandomSize;
+}
+
+Int RandomMapTabPlayers(void)
+{
+	return theRandomRoom ? roomRandomMapPlayers(theRandomRoom) : (Int)RandomMapGenerator::MIN_PLAYERS;
+}
+
+GameWindow *RandomMapTabButton(Int which)
+{
+	if (theRandomTab == NULL || which < 0 || which > 2)
+		return NULL;
+	return which == 2 ? theRandomTab : theListTabs[which];
 }
 
 Bool GenerateMapForCrowdedRoom(GameInfo *game, Bool whenTooSmall)
@@ -3641,10 +3666,11 @@ namespace
 			roomFill(1284, (thumbTop + thumbBottom) / 2 + 2, 1290, (thumbTop + thumbBottom) / 2 + 3, UIStyle::EDGE_LIT);
 		}
 
-		// the map's facts under its name; a joiner reads who picks it
+		// the map's facts under its name; a joiner reads who picks it.  A map picker over the room says
+		// its own map's words in that band, and its legend and hint in the foot
 		if (apocalypse)
 			drawApocalypseMapFacts(md);
-		else if (md && theRoomMapName)
+		else if (md && theRoomMapName && !theSeatsUnderPicker)
 		{
 			Int x, y, w, h;
 			theRoomMapName->winGetScreenPosition(&x, &y);
@@ -3656,7 +3682,7 @@ namespace
 			s->getSize(&sw, &sh);
 			s->draw(x, y + h + roomPx(2), UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
 		}
-		if (theRoomSelectMap && theRoomSelectMap->winIsHidden() && !apocalypse)
+		if (theRoomSelectMap && theRoomSelectMap->winIsHidden() && !apocalypse && !theSeatsUnderPicker)
 		{
 			Int x, y, w, h;
 			theRoomSelectMap->winGetScreenPosition(&x, &y);
@@ -3683,6 +3709,10 @@ namespace
 			GameFont *hint = UIStyle::menuFont(UIStyle::MENU_TEXT_HINT);
 			roomDraw(TEXT_APOCALYPSE + APOC_FOOT, UIStyle::fitKey("GUI:ApocalypseScore", hint, roomPx(ROOM_COLUMN_LEFT - 20 - 580)), hint,
 				580, 1002, UIStyle::MUTED);
+		}
+		else if (theSeatsUnderPicker)
+		{
+			// the map picker's legend and hint take the foot (MapPicker.cpp)
 		}
 		else if (theRoomKind == ROOM_SKIRMISH)
 		{
@@ -4173,6 +4203,9 @@ Bool LobbyRoomInput(UnsignedInt msg, UnsignedIntPtr mData1)
 
 void FitLobbyRoomMap(GameWindow *mapWindow, const MapMetaData *map)
 {
+	// a map picker's preview stands where the room's does, by the same rule
+	if (MapPickerFitPreview(mapWindow, map))
+		return;
 	if (mapWindow == NULL || mapWindow != theRoomMap || !theRoomClassic)
 		return;
 	if (roomApocalypse())

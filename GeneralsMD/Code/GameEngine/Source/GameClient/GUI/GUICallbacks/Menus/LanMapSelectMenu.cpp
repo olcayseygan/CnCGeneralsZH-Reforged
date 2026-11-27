@@ -41,6 +41,7 @@
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GadgetRadioButton.h"
 #include "GameNetwork/LANAPICallbacks.h"
+#include "GameClient/MapPicker.h"
 #include "GameClient/MapUtil.h"
 #include "GameNetwork/GUIUtil.h"
 
@@ -127,6 +128,7 @@ static void NullifyControls()
 		buttonMapStartPosition[i] = NULL;
 	}
 	RandomMapTabShutdown();
+	MapPickerShutdown();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -190,6 +192,8 @@ void LanMapSelectMenuInit( WindowLayout *layout, void *userData )
 	AsciiString listString( "LanMapSelectMenu.wnd:ListboxMap" );
 	NameKeyType mapListID = TheNameKeyGenerator->nameToKey( listString );
 	mapList = TheWindowManager->winGetWindowFromId( parent, mapListID );
+	// the list as a grid of map pictures and the preview at each map's shape, before the fill moves it
+	MapPickerInit( "LanMapSelectMenu.wnd", parent, mapList, winMapPreview, TheLAN->GetMyGame(), 0, FALSE );
 	if( mapList )
 	{
 		if (TheMapCache)

@@ -2163,6 +2163,7 @@ GameEngine/Include/GameClient/LoadScreen.h
 GameEngine/Include/GameClient/LoadScreenLayout.h
 GameEngine/Include/GameClient/LookAtXlat.h
 GameEngine/Include/GameClient/MainMenuLayout.h
+GameEngine/Include/GameClient/MapPicker.h
 GameEngine/Include/GameClient/MapUtil.h
 GameEngine/Include/GameClient/MatchClock.h
 GameEngine/Include/GameClient/MenuBoxParts.h
@@ -2844,6 +2845,7 @@ GameEngine/Source/GameClient/GUI/HeaderTemplate.cpp
 GameEngine/Source/GameClient/GUI/IMEManager.cpp
 GameEngine/Source/GameClient/GUI/IMEManagerPosix.cpp
 GameEngine/Source/GameClient/GUI/LoadScreen.cpp
+GameEngine/Source/GameClient/GUI/MapPicker.cpp
 GameEngine/Source/GameClient/GUI/ProcessAnimateWindow.cpp
 GameEngine/Source/GameClient/GUI/Shell/Shell.cpp
 GameEngine/Source/GameClient/GUI/Shell/ShellMenuScheme.cpp
@@ -4853,6 +4855,7 @@ Tests/test_macos_app.sh
 Tests/test_main.cpp
 Tests/test_main_menu.inc
 Tests/test_map_ini_rollback.inc
+Tests/test_map_picker.inc
 Tests/test_menu_boxes.inc
 Tests/test_menu_style.inc
 Tests/test_miles_effects.cpp

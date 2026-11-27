@@ -46,6 +46,7 @@
 #include "GameClient/GadgetStaticText.h"
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/GUIUtil.h"
+#include "GameClient/MapPicker.h"
 #include "GameClient/MapUtil.h"
 
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
@@ -78,51 +79,12 @@ static void NullifyControls()
 		buttonMapStartPosition[i] = NULL;
 	}
 	RandomMapTabShutdown();
+	MapPickerShutdown();
 }
 
 extern WindowLayout *skirmishMapSelectLayout;
 
-// Tooltips -------------------------------------------------------------------------------
-
-static void mapListTooltipFunc(GameWindow *window,
-													WinInstanceData *instData,
-													UnsignedInt mouse)
-{
-	Int x, y, row, col;
-	x = LOLONGTOSHORT(mouse);
-	y = HILONGTOSHORT(mouse);
-
-	GadgetListBoxGetEntryBasedOnXY(window, x, y, row, col);
-
-	if (row == -1 || col == -1)
-	{
-		TheMouse->setCursorTooltip( UnicodeString::TheEmptyString);
-		return;
-	}
-
-	Int imageItemData = (Int)(intptr_t)GadgetListBoxGetItemData(window, row, 1);
-	UnicodeString tooltip;
-	switch (imageItemData)
-	{
-		case 0:
-			tooltip = TheGameText->fetch("TOOLTIP:MapNoSuccess");
-			break;
-		case 1:
-			tooltip = TheGameText->fetch("TOOLTIP:MapEasySuccess");
-			break;
-		case 2:
-			tooltip = TheGameText->fetch("TOOLTIP:MapMediumSuccess");
-			break;
-		case 3:
-			tooltip = TheGameText->fetch("TOOLTIP:MapHardSuccess");
-			break;
-		case 4:
-			tooltip = TheGameText->fetch("TOOLTIP:MapMaxBrutalSuccess");
-			break;
-	}
-
-	TheMouse->setCursorTooltip( tooltip );
-}
+// The map grid (MapPicker.cpp) draws the row's tooltip, EA's TOOLTIP:Map*Success among its lines.
 
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////////////////////////
 void positionStartSpots( AsciiString mapName, GameWindow *buttonMapStartPositions[], GameWindow *mapWindow);
@@ -250,6 +212,8 @@ void SkirmishMapSelectMenuInit( WindowLayout *layout, void *userData )
 	AsciiString listString( "SkirmishMapSelectMenu.wnd:ListboxMap" );
 	NameKeyType mapListID = TheNameKeyGenerator->nameToKey( listString );
 	mapList = TheWindowManager->winGetWindowFromId( parent, mapListID );
+	// the list as a grid of map pictures and the preview at each map's shape, before the fill moves it
+	MapPickerInit( "SkirmishMapSelectMenu.wnd", parent, mapList, winMapPreview, TheSkirmishGameInfo, crowdMinPlayers(), TRUE );
 	if( mapList )
 	{
 		if (TheMapCache)
@@ -263,7 +227,6 @@ void SkirmishMapSelectMenuInit( WindowLayout *layout, void *userData )
 			populateMapListbox( mapList, FALSE, FALSE, TheSkirmishGameInfo->getMap(), crowdMinPlayers() );
 			populateMapListboxNoReset( mapList, FALSE, TRUE, TheSkirmishGameInfo->getMap(), crowdMinPlayers() );
 		}
-		mapList->winSetTooltipFunc(mapListTooltipFunc);
 	}
 	RandomMapTabInit( "SkirmishMapSelectMenu.wnd", parent, winMapPreview, buttonMapStartPosition, TheSkirmishGameInfo, TRUE );
 

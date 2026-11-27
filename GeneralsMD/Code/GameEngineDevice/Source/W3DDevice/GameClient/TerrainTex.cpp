@@ -54,6 +54,7 @@
 #include "ffactory.h"
 #include "Common/Debug.h"
 #include "W3DDevice/GameClient/CloudShadowBake.h"
+#include "W3DDevice/GameClient/TerrainRelief.h"
 
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/WorldHeightMap.h"
@@ -393,6 +394,50 @@ int TerrainTextureClass::update(WorldHeightMap *htMap)
 void TerrainTextureClass::setLOD(Int LOD)
 {
 	if (Peek_D3D_Texture()) Peek_D3D_Texture()->SetLOD(LOD);
+}
+
+//=============================================================================
+// TerrainTextureClass::buildRelief
+//=============================================================================
+/** The Ground Relief option's relief, read off the atlas's top level as update left it: each texture
+class's square, wrapped, as TerrainRelief.h says.  Nothing is kept: the relief goes straight to the
+Direct3D 11 backend, and a new device or a new map asks again. */
+//=============================================================================
+Bool TerrainTextureClass::buildRelief(WorldHeightMap *htMap, std::vector<UnsignedByte> &relief, Int &width, Int &height)
+{
+	if (Peek_D3D_Texture() == NULL || htMap == NULL) {
+		return false;
+	}
+	IDirect3DSurface9 *surface_level;
+	D3DSURFACE_DESC surface_desc;
+	D3DLOCKED_RECT locked_rect;
+	if (FAILED(Peek_D3D_Texture()->GetSurfaceLevel(0, &surface_level))) {
+		return false;
+	}
+	surface_level->GetDesc(&surface_desc);
+	const Bool fullColour = surface_desc.Format == D3DFMT_A8R8G8B8;
+	if ((!fullColour && surface_desc.Format != D3DFMT_A1R5G5B5)
+			|| FAILED(surface_level->LockRect(&locked_rect, NULL, D3DLOCK_READONLY))) {
+		surface_level->Release();
+		return false;
+	}
+	std::vector<TerrainRelief::Region> regions;
+	for (Int texClass = 0; texClass < htMap->m_numTextureClasses; texClass++) {
+		const ICoord2D origin = htMap->m_textureClasses[texClass].positionInTexture;
+		if (origin.x <= 0) continue;
+		TerrainRelief::Region region;
+		region.x = origin.x;
+		region.y = origin.y;
+		region.size = htMap->m_textureClasses[texClass].width * TILE_PIXEL_EXTENT;
+		regions.push_back(region);
+	}
+	TerrainRelief::build((const unsigned char *)locked_rect.pBits, (int)surface_desc.Width,
+		(int)surface_desc.Height, locked_rect.Pitch, fullColour != FALSE, regions, relief);
+	surface_level->UnlockRect();
+	surface_level->Release();
+	width = (Int)surface_desc.Width;
+	height = (Int)surface_desc.Height;
+	return true;
 }
 //=============================================================================
 // TerrainTextureClass::update

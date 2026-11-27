@@ -368,6 +368,9 @@ DX11BackendClass::DX11BackendClass()
 	TerrainHeightsWidth = 0;
 	TerrainHeightsHeight = 0;
 	TerrainHeightsHighest = 255;
+	TerrainReliefOn = false;
+	TerrainReliefTexture = NULL;
+	TerrainReliefView = NULL;
 	RayShadowsWanted = false;
 	RayShadowsRefused = false;
 	RayCapturing = false;
@@ -697,6 +700,7 @@ void DX11BackendClass::Shutdown()
 	RayShadowsRefused = false;		// a new device may make them
 	RayLights.Refused = false;
 	Release_Terrain_Heights();
+	Release_Terrain_Relief();
 	Release_Shadow_Casters();
 	Release_Scene_Depth();
 	Release_Depth_Resolve();
@@ -2079,6 +2083,65 @@ void DX11BackendClass::Release_Terrain_Heights()
 	PipelineChanged = true;
 }
 
+void DX11BackendClass::Set_Terrain_Relief(bool on)
+{
+	if (TerrainReliefOn != on) {
+		TerrainReliefOn = on;
+		PipelineChanged = true;
+	}
+}
+
+/** The atlas's relief, made again whole each time: a map's atlas is built once as it loads. */
+bool DX11BackendClass::Set_Terrain_Relief_Map(const unsigned char * rgba, unsigned width, unsigned height)
+{
+	Release_Terrain_Relief();
+	if (Device == NULL || rgba == NULL || width == 0 || height == 0) {
+		return false;
+	}
+	D3D11_TEXTURE2D_DESC description;
+	memset(&description, 0, sizeof(description));
+	description.Width = width;
+	description.Height = height;
+	description.MipLevels = 3;		// the atlas's own count: a fourth would read across the tiles' four texel borders
+	description.ArraySize = 1;
+	description.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	description.SampleDesc.Count = 1;
+	description.Usage = D3D11_USAGE_DEFAULT;
+	description.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+	description.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+	if (FAILED(Device->Get_Device()->CreateTexture2D(&description, NULL, &TerrainReliefTexture))) {
+		TerrainReliefTexture = NULL;
+		return false;
+	}
+	if (FAILED(Device->Get_Device()->CreateShaderResourceView(TerrainReliefTexture, NULL, &TerrainReliefView))) {
+		TerrainReliefView = NULL;
+		Release_Terrain_Relief();
+		return false;
+	}
+	Device->Get_Context()->UpdateSubresource(TerrainReliefTexture, 0, NULL, rgba, width * 4, 0);
+	Device->Get_Context()->GenerateMips(TerrainReliefView);
+	PipelineChanged = true;
+	return true;
+}
+
+void DX11BackendClass::Release_Terrain_Relief()
+{
+	if (TerrainReliefView != NULL) {
+		TerrainReliefView->Release();
+		TerrainReliefView = NULL;
+	}
+	if (TerrainReliefTexture != NULL) {
+		TerrainReliefTexture->Release();
+		TerrainReliefTexture = NULL;
+	}
+	PipelineChanged = true;
+}
+
+bool DX11BackendClass::Terrain_Relief() const
+{
+	return TerrainReliefOn && TerrainReliefView != NULL && Terrain_Relight();
+}
+
 /** Whether this draw adds the ground's sun.  A world draw only: not into the sun's map, where only
 		depth goes, not pre-transformed and not in camera space, which WorldFromClip would not take back
 		to where the heights are. */
@@ -3327,6 +3390,7 @@ bool DX11BackendClass::Build_Combiner_Description(CombinerDescription & descript
 	description.PixelPipeline.FogEnabled = RenderStates.Get_Render_State(D3DRS_FOGENABLE) != FALSE;
 	description.PixelPipeline.AlphaToCoverage = Alpha_To_Coverage();
 	description.PixelPipeline.TerrainRelight = Terrain_Relight();
+	description.PixelPipeline.TerrainRelief = Terrain_Relief();
 	description.SpecularAdd = RenderStates.Get_Render_State(D3DRS_SPECULARENABLE) != FALSE;
 
 	description.StageCount = 0;
@@ -4378,6 +4442,15 @@ void DX11BackendClass::Bind_State_Objects()
 		if (!known || heights != Bound.TerrainHeights) {
 			context->PSSetShaderResources(DX11_BACKEND_TEXTURE_STAGES, 1, &heights);
 			Bound.TerrainHeights = heights;
+		}
+	}
+
+	// The atlas's relief at t10 for the Ground Relief option, read through stage 0's sampler.
+	if (Terrain_Relief()) {
+		ID3D11ShaderResourceView * const relief = TerrainReliefView;
+		if (!known || relief != Bound.TerrainRelief) {
+			context->PSSetShaderResources(DX11_BACKEND_TEXTURE_STAGES + 6, 1, &relief);
+			Bound.TerrainRelief = relief;
 		}
 	}
 }

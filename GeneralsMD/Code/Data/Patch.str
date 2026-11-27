@@ -2214,6 +2214,14 @@ TOOLTIP:GroundFoliage
 "Grass, bushes, ferns and stones grow on the ground and sway in the breeze with the trees. Looks only: units walk through it. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
 END
 
+GUI:TerrainRelief
+"Ground Relief"
+END
+
+TOOLTIP:TerrainRelief
+"The ground's stones, cracks and ridges catch the sun and throw their own shade, and where two kinds of ground meet, sand settles between the rocks instead of fading over them. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
+END
+
 GUI:Ragdoll
 "Ragdoll Deaths"
 END
@@ -9292,6 +9300,10 @@ END
 
 OPTIONTIP:GroundFoliage
 "Grass and small plants grow on grassy ground and sway in the wind. Looks only; units walk through."
+END
+
+OPTIONTIP:TerrainRelief
+"Stones and ridges on the ground catch the sun. Where two grounds meet, sand settles between the rocks."
 END
 
 OPTIONTIP:GroundLighting

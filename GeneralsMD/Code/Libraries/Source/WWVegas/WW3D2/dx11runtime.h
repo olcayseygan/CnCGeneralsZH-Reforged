@@ -167,6 +167,12 @@ void Direct3D11_Set_Terrain_Light(const float * light);
 bool Direct3D11_Set_Terrain_Heights(const unsigned char * heights, unsigned width, unsigned height);
 // False until heights went up, and again after the device was made anew.
 bool Direct3D11_Holds_Terrain_Heights();
+// The Ground Relief option (TERRAIN_RELIEF_SAMPLING in ffshader.h): between an on and an off, the
+// draws that add the sun also take the atlas's relief, an RGBA8 image of the atlas's size
+// (TerrainRelief.h).  Holds is false until a map went up, and again after the device was made anew.
+void Direct3D11_Set_Terrain_Relief(bool on);
+bool Direct3D11_Set_Terrain_Relief_Map(const unsigned char * rgba, unsigned width, unsigned height);
+bool Direct3D11_Holds_Terrain_Relief();
 
 // The draws that follow are sorted particle billboards, which fade where they meet the scene's
 // depth.  The sorting pool sets it around the billboards' runs.

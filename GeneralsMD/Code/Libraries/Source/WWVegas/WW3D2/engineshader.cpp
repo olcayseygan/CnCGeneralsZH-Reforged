@@ -582,17 +582,26 @@ static void write_monochrome(std::string & hlsl)
 // matters is the one at the top, and it applies at every step, not only the last: a chain that
 // overflows in the middle and comes back down is a different colour with the clamps than without them.
 static void write_multiply_chain(std::string & hlsl, const EngineShaderEntry & entry,
-	bool volumetric, bool relight)
+	bool volumetric, bool relight, bool relief)
 {
 	// The sun per pixel needs WorldFromClip, which only the Direct3D 11 text declares.
 	relight = relight && volumetric;
-	write_pixel_preamble(hlsl, volumetric, relight ? TERRAIN_RELIGHT_SAMPLING : NULL);
-	if (relight) {
+	// The Ground Relief option rides on it: the two layer ground blends by the relief, and roadnoise2,
+	// which the 3-way tiles draw with under cloud and light map (the roads themselves draw with it
+	// off), takes stage 0's relief alone.
+	const bool two_layers = entry.Opening == TERRAIN_OPENING;
+	relief = relief && relight && (two_layers || entry.Opening == ROAD_NOISE_2_OPENING);
+	write_pixel_preamble(hlsl, volumetric,
+		relief ? TERRAIN_RELIEF_SAMPLING : (relight ? TERRAIN_RELIGHT_SAMPLING : NULL));
+	if (relief) {
+		hlsl += two_layers ? TERRAIN_RELIEF_APPLY : TERRAIN_RELIEF_APPLY_ONE_LAYER;
+	}
+	else if (relight) {
 		hlsl += TERRAIN_RELIGHT_APPLY;
 	}
 
 	hlsl += "    float4 current = saturate(";
-	hlsl += entry.Opening;
+	hlsl += relief && two_layers ? TERRAIN_RELIEF_OPENING : entry.Opening;
 	hlsl += ");\n";
 
 	for (const char * const * step = entry.Chain; *step != NULL; ++step) {
@@ -1714,7 +1723,7 @@ static bool write_engine_pixel_program(EngineShaderProgram program,
 
 	const EngineShaderEntry * entry = entry_for(program);
 	if (entry != NULL && entry->Opening != NULL) {
-		write_multiply_chain(hlsl, *entry, volumetric, pipeline.TerrainRelight);
+		write_multiply_chain(hlsl, *entry, volumetric, pipeline.TerrainRelight, pipeline.TerrainRelief);
 	}
 	else if (program == ENGINE_SHADER_WATER_TRAPEZOID || program == ENGINE_SHADER_WATER_CLASSIC_TRAPEZOID) {
 		write_trapezoid_water(hlsl);

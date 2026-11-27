@@ -185,6 +185,7 @@ OPTION_BOOL_ACCESSORS( m_waterFoam )
 OPTION_BOOL_ACCESSORS( m_mapAwareWaveHeading )
 OPTION_BOOL_ACCESSORS( m_underwaterClarity )
 OPTION_BOOL_ACCESSORS( m_groundFoliage )
+OPTION_BOOL_ACCESSORS( m_terrainRelief )
 OPTION_BOOL_ACCESSORS( m_ragdoll )
 OPTION_BOOL_ACCESSORS( m_groundMarks )
 OPTION_BOOL_ACCESSORS( m_firelight )
@@ -863,6 +864,14 @@ const OptionDef TheOptionCatalog[] =
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_groundFoliage, set_m_groundFoliage },
 
+	// The ground's tiles lit by the map's sun as relief made from their own pixels as the map loads,
+	// and the higher texel winning where two textures blend (TERRAIN_RELIEF_SAMPLING).  Read by the
+	// terrain draw every frame; rides on the ground's sun per pixel, so Direct3D 11 only and off under
+	// Classic graphics, greyed under -d3d9.  On Options > World beside Ground Foliage.
+	{ "TerrainRelief",						OPT_WND( "CheckTerrainRelief" ), "GUI:TerrainRelief",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_terrainRelief, set_m_terrainRelief },
+
 	// A dying soldier goes limp and falls by the last hit instead of playing his death animation.
 	// W3DRagdoll asks at each death, so a switch mid-match reaches the next one and a body already
 	// falling finishes.  Client only: the logic never reads it, and the dead object is the same with
@@ -1062,6 +1071,10 @@ const GraphicsQualityRow TheGraphicsQualityTable[] =
 	// not measured yet: Direct3D 11 does not present on the machine that would sweep it.  Ultra only,
 	// for the faults docs/plans/TODO.md still lists (shader cache, structures a script makes)
 	{ "CheckGroundFoliage",			0.0f,  {    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1 } },
+	// a prototype of 2026-11-27, so above High until the owner has played it.  Scene GPU means, two
+	// pairs at 1920x1080 windowed -noFPSLimit, RTX 2060: Golden Oasis 1.445 off, 1.372 on; Alpine
+	// Assault 0.696 off, 0.722 on, inside the baselines' wander
+	{ "CheckTerrainRelief",			0.0f,  {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    1 } },
 	{ "ComboBoxTextureFilter",	0.1f,  {    0,    1,    2,    2,    2,    2,    2,    2,    2,    2,    2 } },
 	{ "ComboBoxBloom",					0.1f,  {    0,    1,    2,    2,    2,    2,    2,    2,    2,    2,    2 } },
 	{ "SliderAnisotropy",				0.1f,  {    2,    4,    8,   16,   16,   16,   16,   16,   16,   16,   16 } },

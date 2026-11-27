@@ -85,6 +85,11 @@ struct PixelPipelineDescription
 	// Set_Terrain_Relight), and the program adds the map's sun from the heights' own smooth normal
 	// before anything reads the colour (TERRAIN_RELIGHT_SAMPLING).  Key suffix ",T".
 	bool TerrainRelight = false;
+
+	// D3D11 only, and only with TerrainRelight: the Ground Relief option.  The ground's own relief at
+	// t10 bends the sun's normal and decides the blend between its two tiles (TERRAIN_RELIEF_SAMPLING).
+	// Key suffix ",N".
+	bool TerrainRelief = false;
 };
 
 struct CombinerDescription
@@ -564,7 +569,10 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"}\n" \
 	"\n"
 
-#define TERRAIN_RELIGHT_SAMPLING \
+// The relight in three pieces, so the Ground Relief option (TERRAIN_RELIEF_SAMPLING below) can put
+// one line between the normal and the light while TERRAIN_RELIGHT_SAMPLING stays the text it always
+// was, character for character: the shipped cache's ",T" programs hash it.
+#define TERRAIN_RELIGHT_HEAD \
 	"Texture2D<float> TerrainHeights : register(t4);\n" \
 	"\n" \
 	"float4 terrain_heights_row(int2 at, int2 last)\n" \
@@ -576,8 +584,9 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"                  TerrainHeights.Load(int3(clamp(at.x + 3, 0, last.x), y, 0))) * 255.0;\n" \
 	"}\n" \
 	"\n" \
-	TERRAIN_VARIATION_SAMPLING \
-	"float3 terrain_relight(float4 position, float3 base)\n" \
+	TERRAIN_VARIATION_SAMPLING
+
+#define TERRAIN_RELIGHT_NORMAL \
 	"{\n" \
 	"    float2 ndc = float2(position.x * ShadowViewport.x * 2.0 - 1.0,\n" \
 	"                        1.0 - position.y * ShadowViewport.y * 2.0);\n" \
@@ -608,7 +617,9 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"        slope_y += slope_weight_y[row] * dot(weight_x, heights);\n" \
 	"    }\n" \
 	"    float rise = NormalMapParameters.w * NormalMapParameters.y;\n" \
-	"    float3 normal = normalize(float3(-slope_x * rise, -slope_y * rise, 1.0));\n" \
+	"    float3 normal = normalize(float3(-slope_x * rise, -slope_y * rise, 1.0));\n"
+
+#define TERRAIN_RELIGHT_LIGHT \
 	"    float3 light = base + NormalLightDiffuse[3].rgb;\n" \
 	"    int count = (int)NormalMapParameters.x;\n" \
 	"    [unroll] for (int i = 0; i < 3; ++i) {\n" \
@@ -625,9 +636,83 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"    return saturate(light) * terrain_variation(world.xy, length(world.xyz - nearest.xyz / nearest.w));\n" \
 	"}\n" \
 	"\n"
+
+#define TERRAIN_RELIGHT_SAMPLING \
+	TERRAIN_RELIGHT_HEAD \
+	"float3 terrain_relight(float4 position, float3 base)\n" \
+	TERRAIN_RELIGHT_NORMAL \
+	TERRAIN_RELIGHT_LIGHT
 // The colour every later line reads, put back with the sun in it, first thing in main.
 #define TERRAIN_RELIGHT_APPLY \
 	"    input.Diffuse.rgb = terrain_relight(input.Position, input.Diffuse.rgb);\n"
+
+// The Ground Relief option, Direct3D 11 only and only beside the sun per pixel (key suffix ",N").
+// The ground has no authored relief, so the terrain atlas carries a second one made from itself as a
+// map loads (TerrainRelief.h): the tiles' luminance with everything wider than about 16 texels taken
+// out, so a stain or a painted patch is no dent, squashed to a height in blue, and its slope per atlas
+// texel in red and green, each byte 128 plus 127 times a value from -1 to 1.  It sits at t10 and is read through stage 0's sampler, the atlas's own,
+// with the atlas's coordinates, so the two line up texel for texel.
+// The slope bends the heights' smooth normal by the surface gradient (Mikkelsen, "Bump Mapping
+// Unparametrized Surfaces on the GPU", 2010): the height's change along each screen axis, carried
+// onto the surface through the world position's derivatives, so no tangent is stored and a tile the
+// atlas holds turned or a cliff cell's stretched coordinates still bend the right way.  The height
+// also decides where one texture class gives way to the next: across a blend the higher texel wins
+// the middle of the ramp (terrain_relief_blend), so sand settles between stones rather than fading
+// over them.  The ends of the ramp stay exactly the two tiles.
+// TERRAIN_RELIEF_DEPTH is the world units the 0 to 1 height stands for; TERRAIN_RELIEF_SLOPE the
+// slope, in height per texel, that a full red or green stands for (TerrainRelief::SLOPE_RANGE).
+#define TERRAIN_RELIEF_DEPTH "0.35"
+#define TERRAIN_RELIEF_SLOPE "0.25"
+#define TERRAIN_RELIEF_FUNCTIONS \
+	"Texture2D TerrainRelief : register(t10);\n" \
+	"\n" \
+	"float3 terrain_relief_texel(float2 uv)\n" \
+	"{\n" \
+	"    float3 relief = (TerrainRelief.Sample(Sampler0, uv).rgb * 255.0 - 128.0) / 127.0;\n" \
+	"    return float3(relief.rg * " TERRAIN_RELIEF_SLOPE ", 0.5 + 0.5 * relief.b);\n" \
+	"}\n" \
+	"\n" \
+	"float terrain_relief_blend(float height0, float height1, float weight)\n" \
+	"{\n" \
+	"    float lean = (height1 - height0) * weight * (1.0 - weight);\n" \
+	"    return saturate(weight + lean);\n" \
+	"}\n" \
+	"\n" \
+	"float3 terrain_relief_bend(float3 normal, float3 world, float2 uv, float2 slope)\n" \
+	"{\n" \
+	"    uint width, height;\n" \
+	"    TerrainRelief.GetDimensions(width, height);\n" \
+	"    float2 rise = slope * float2(width, height) * " TERRAIN_RELIEF_DEPTH ";\n" \
+	"    float3 dp1 = ddx(world);\n" \
+	"    float3 dp2 = ddy(world);\n" \
+	"    float3 r1 = cross(dp2, normal);\n" \
+	"    float3 r2 = cross(normal, dp1);\n" \
+	"    float det = dot(dp1, r1);\n" \
+	"    if (abs(det) < 1e-12) return normal;\n" \
+	"    float3 gradient = (r1 * dot(rise, ddx(uv)) + r2 * dot(rise, ddy(uv))) / det;\n" \
+	"    return normalize(normal - gradient);\n" \
+	"}\n" \
+	"\n"
+#define TERRAIN_RELIEF_SAMPLING \
+	TERRAIN_RELIGHT_HEAD \
+	TERRAIN_RELIEF_FUNCTIONS \
+	"float3 terrain_relight(float4 position, float3 base, float2 relief_uv, float2 relief_slope)\n" \
+	TERRAIN_RELIGHT_NORMAL \
+	"    normal = terrain_relief_bend(normal, world.xyz, relief_uv, relief_slope);\n" \
+	TERRAIN_RELIGHT_LIGHT
+// The two layer ground: both texels' relief, the height blend, the light from the blended slope.
+// The opening then blends the two tiles by relief_weight in place of the vertex alpha.
+#define TERRAIN_RELIEF_APPLY \
+	"    float3 relief0 = terrain_relief_texel(input.TexCoord0);\n" \
+	"    float3 relief1 = terrain_relief_texel(input.TexCoord1);\n" \
+	"    float relief_weight = terrain_relief_blend(relief0.z, relief1.z, input.Diffuse.a);\n" \
+	"    input.Diffuse.rgb = terrain_relight(input.Position, input.Diffuse.rgb, input.TexCoord0,\n" \
+	"        lerp(relief0.xy, relief1.xy, relief_weight));\n"
+#define TERRAIN_RELIEF_OPENING "lerp(texel0, texel1, relief_weight)"
+// One layer (the 3-way tiles' generated programs): stage 0's texel's relief, no blend.
+#define TERRAIN_RELIEF_APPLY_ONE_LAYER \
+	"    float3 relief0 = terrain_relief_texel(input.TexCoord0);\n" \
+	"    input.Diffuse.rgb = terrain_relight(input.Position, input.Diffuse.rgb, input.TexCoord0, relief0.xy);\n"
 
 // A particle sprite fading out where it meets what is drawn behind it.  The scene's depth is a copy
 // taken after the opaque world was drawn (DX11BackendClass::Soft_Particle_Depth), read texel for

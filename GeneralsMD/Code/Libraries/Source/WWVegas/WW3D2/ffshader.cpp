@@ -255,6 +255,7 @@ bool CombinerShader_Generate(const CombinerDescription & description, CombinerSh
 		// Ordinary model looks now have native immutable draw state and a color-only cloak copy.
 		// SDL has no heights at t4; its ground keeps the vertex light.
 		supported.PixelPipeline.TerrainRelight = false;
+		supported.PixelPipeline.TerrainRelief = false;
 		return generate_combiners(supported, target, hlsl, true)
 			&& SDL3_Shader_Retarget(hlsl, false);
 	}
@@ -275,7 +276,10 @@ static bool generate_combiners(const CombinerDescription & description,
 	const unsigned fire = volumetric ? description.FireLook : FIRE_LOOK_NONE;
 	// The ground's sun per pixel, which needs WorldFromClip and the heights whether or not a shadow lands.
 	const bool relight = volumetric && description.PixelPipeline.TerrainRelight;
-	volumetric = volumetric && description.ShadowReceiving;
+	// The Ground Relief option over a draw whose stage 0 is the atlas (the 3-way tiles).
+	const bool relief = relight && description.PixelPipeline.TerrainRelief && description.StageCount > 0
+		&& description.Stages[0].TextureBound;
+	volumetric =volumetric && description.ShadowReceiving;
 	if (description.StageCount == 0 || description.StageCount > MAXIMUM_COMBINER_STAGES) {
 		return false;
 	}
@@ -434,7 +438,10 @@ static bool generate_combiners(const CombinerDescription & description,
 		if (fire != FIRE_LOOK_NONE) {
 			hlsl += FIRE_LOOK_SAMPLING;
 		}
-		if (relight) {
+		if (relief) {
+			hlsl += TERRAIN_RELIEF_SAMPLING;
+		}
+		else if (relight) {
 			hlsl += TERRAIN_RELIGHT_SAMPLING;
 		}
 	}
@@ -482,7 +489,10 @@ static bool generate_combiners(const CombinerDescription & description,
 	hlsl +=
 		"{\n"
 		"    float4 texel;\n";
-	if (relight) {
+	if (relief) {
+		hlsl += TERRAIN_RELIEF_APPLY_ONE_LAYER;
+	}
+	else if (relight) {
 		hlsl += TERRAIN_RELIGHT_APPLY;
 	}
 	hlsl += "    float4 current = input.Diffuse;\n";
@@ -601,12 +611,13 @@ bool CombinerShader_Append_Pixel_Pipeline(const PixelPipelineDescription & pipel
 std::string CombinerShader_Pipeline_Key(const PixelPipelineDescription & pipeline)
 {
 	char field[32];
-	snprintf(field, sizeof(field), ":A%u,%lu,F%u%s%s",
+	snprintf(field, sizeof(field), ":A%u,%lu,F%u%s%s%s",
 		pipeline.AlphaTestEnabled ? 1u : 0u,
 		pipeline.AlphaTestEnabled ? pipeline.AlphaFunction : 0ul,
 		pipeline.FogEnabled ? 1u : 0u,
 		alpha_to_coverage(pipeline) ? ",C" : "",
-		pipeline.TerrainRelight ? ",T" : "");
+		pipeline.TerrainRelight ? ",T" : "",
+		pipeline.TerrainRelight && pipeline.TerrainRelief ? ",N" : "");
 	return field;
 }
 

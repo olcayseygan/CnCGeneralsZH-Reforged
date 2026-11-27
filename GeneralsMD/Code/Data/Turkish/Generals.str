@@ -16876,6 +16876,14 @@ TOOLTIP:GroundFoliage
 "Yerde otlar, çalılar, eğrelti otları ve taşlar biter, ağaçlarla birlikte rüzgârda sallanır. Yalnızca görüntüdür, birlikler içinden geçer. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
 END
 
+GUI:TerrainRelief
+"Zemin Kabartma"
+END
+
+TOOLTIP:TerrainRelief
+"Zemindeki taşlar, çatlaklar ve sırtlar güneşi yakalar, kendi gölgelerini düşürür. İki zemin buluştuğunda kum kayaların üstüne yayılmaz, aralarına dolar. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
+END
+
 GUI:Ragdoll
 "Gevşek Ölümler"
 END
@@ -23475,6 +23483,10 @@ END
 
 OPTIONTIP:GroundFoliage
 "Çimenli zeminde otlar ve küçük bitkiler biter, rüzgârda sallanır. Yalnızca görüntüdür, birlikler içinden geçer."
+END
+
+OPTIONTIP:TerrainRelief
+"Zemindeki taşlar ve sırtlar güneşi yakalar. İki zemin buluştuğunda kum kayaların arasına dolar."
 END
 
 OPTIONTIP:GroundLighting

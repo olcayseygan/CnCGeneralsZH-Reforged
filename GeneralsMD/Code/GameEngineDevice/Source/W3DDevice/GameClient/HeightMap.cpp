@@ -184,6 +184,9 @@ Int HeightMapRenderObjClass::freeMapResources(void)
 	BaseHeightMapRenderObjClass::freeMapResources();
 	freeIndexVertexBuffers();
 	freeDrawnHalf();
+	// the atlas goes with the map, and the next one may be made at the same address
+	m_reliefAtlas = NULL;
+	m_reliefBuilt = FALSE;
 
 	return 0;
 }
@@ -994,7 +997,9 @@ m_sunPerPixel(FALSE),
 m_spreadRelightRow(-1),
 m_spreadRowsLeft(0),
 m_sunHeightsMap(NULL),
-m_sunHeightsVersion(0)
+m_sunHeightsVersion(0),
+m_reliefAtlas(NULL),
+m_reliefBuilt(FALSE)
 {
 	for (Int b = 0; b < EXTRA_BLEND_BATCHES; b++) {
 		m_extraBlendVB[b] = NULL;
@@ -1352,6 +1357,36 @@ Bool HeightMapRenderObjClass::prepareSunPerPixel(void)
 	light[39] = TheGlobalData->m_waterPositionZ;
 	Direct3D11_Set_Terrain_Light(light);
 	return TRUE;
+}
+
+//=============================================================================
+// HeightMapRenderObjClass::prepareRelief
+//=============================================================================
+/** The Ground Relief option, which rides on the sun per pixel: the relief of the atlas this frame
+draws with, made when the atlas or the device is new (TerrainTextureClass::buildRelief).  Off under
+Classic Graphics, which has no sun per pixel anyway.  A map whose relief cannot be made draws without
+it until the next atlas. */
+//=============================================================================
+Bool HeightMapRenderObjClass::prepareRelief(void)
+{
+	if (m_map == NULL || m_stageZeroTexture == NULL || !TheGlobalData->m_terrainRelief
+			|| TheGlobalData->m_classicGraphics) {
+		return FALSE;
+	}
+	// freeMapResources clears the key, so a new map's atlas made where the last one stood is new here
+	if (m_reliefAtlas == m_stageZeroTexture && (!m_reliefBuilt || Direct3D11_Holds_Terrain_Relief())) {
+		return m_reliefBuilt;	// in place, or refused for this atlas; a new device that dropped it makes it again
+	}
+	const Int start = (Int)Clock_Milliseconds_Coarse();
+	std::vector<UnsignedByte> relief;
+	Int width = 0, height = 0;
+	const Bool built = m_map->buildTerrainRelief(relief, width, height)
+		&& Direct3D11_Set_Terrain_Relief_Map(relief.data(), (unsigned)width, (unsigned)height);
+	DEBUG_LOG(("TERRAIN RELIEF: %dx%d %s in %d ms\n", width, height, built ? "made" : "refused",
+		(Int)Clock_Milliseconds_Coarse() - start));
+	m_reliefAtlas = m_stageZeroTexture;
+	m_reliefBuilt = built;
+	return built;
 }
 
 
@@ -2277,6 +2312,8 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	// The tiles hold the light without the sun when this is on; the ground's two draws below, the
 	// base pass and the 3-way tiles, add it per pixel and nothing else does.
 	const Bool sunPerPixel = prepareSunPerPixel();
+	// The Ground Relief option, on the screen's ground only: the mirror's is blurred by the water.
+	const Bool relief = sunPerPixel && !ShaderClass::Is_Backface_Culling_Inverted() && prepareRelief();
 	// A frame whose wish no longer matches the tiles' shape asks for the whole rebuild that remakes
 	// them, and draws them as they are: the draw's counts follow the tiles, not the wish.
 	if (m_map != NULL && subdivideWanted() != m_subdivided)
@@ -2389,6 +2426,8 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	const FrustumClass &viewFrustum = rinfo.Camera.Get_Frustum();
 	if (sunPerPixel)
 		Direct3D11_Set_Terrain_Relight(true);
+	if (relief)
+		Direct3D11_Set_Terrain_Relief(true);
 	for (pass=0; pass<devicePasses && drawGround; pass++) {	//Classic water leaves the ground out, see the shorelines below
 #ifdef TIMING_TESTS
 #endif
@@ -2446,6 +2485,8 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 
 	if (sunPerPixel)
 		Direct3D11_Set_Terrain_Relight(false);
+	if (relief)
+		Direct3D11_Set_Terrain_Relief(false);
 
 	if (!doMultiPassWireFrame)
 	{
@@ -2473,9 +2514,13 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 				// Their vertices are lit as the tiles' are (getStaticDiffuse with the same switch).
 				if (sunPerPixel)
 					Direct3D11_Set_Terrain_Relight(true);
+				if (relief)
+					Direct3D11_Set_Terrain_Relief(true);
 				renderExtraBlendTiles();
 				if (sunPerPixel)
 					Direct3D11_Set_Terrain_Relight(false);
+				if (relief)
+					Direct3D11_Set_Terrain_Relief(false);
 			}
 		}
 

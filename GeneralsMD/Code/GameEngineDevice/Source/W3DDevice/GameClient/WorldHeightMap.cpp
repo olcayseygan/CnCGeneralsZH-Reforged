@@ -1816,6 +1816,12 @@ void WorldHeightMap::setTextureLOD(Int lod)
 		m_terrainTex->setLOD(lod);
 }
 
+Bool WorldHeightMap::buildTerrainRelief(std::vector<UnsignedByte> &relief, Int &width, Int &height)
+{
+	getTerrainTexture();
+	return m_terrainTex != NULL && m_terrainTex->buildRelief(this, relief, width, height);
+}
+
 TextureClass *WorldHeightMap::getTerrainTexture(void)
 {
 	if (m_terrainTex == NULL) {

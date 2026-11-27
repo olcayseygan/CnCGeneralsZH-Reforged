@@ -637,6 +637,7 @@ public:
 	Bool m_underwaterClarity;				///< "UnderwaterClarity": shallow shelves and ruins show through Modern water (SDL, client only)
 	Bool m_waterFoam;								///< "WaterFoam": foam, shore band and the sun's shadow on water (Direct3D 11, client only)
 	Bool m_groundFoliage;						///< "GroundFoliage": grass tufts on grass ground, swaying in the wind (client only; off under Classic graphics)
+	Bool m_terrainRelief;						///< "TerrainRelief": the ground's tiles lit as relief made from themselves, and blended by it (Direct3D 11, client only; off under Classic graphics)
 	Bool m_ragdoll;									///< "Ragdoll": a dying soldier goes limp instead of playing his death animation (W3DRagdoll; client only, never read by the logic; off under Classic graphics)
 	Bool m_groundMarks;							///< "GroundMarks": craters, stains and longer treads that fade over minutes (Direct3D 11, client only)
 	Bool m_firelight;								///< "Firelight": flames light the ground, walls and units around them (Direct3D 11, client only)

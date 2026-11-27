@@ -172,6 +172,7 @@ GROUP_LAYOUT = [
         ("GUI:OptionsHeadGround", [
             check("ShowProps", "CheckShowProps"),
             check("GroundFoliage", "CheckGroundFoliage"),
+            check("TerrainRelief", "CheckTerrainRelief"),
             check("GroundLighting", "CheckGroundLighting", MORE),
             check("TreeSway", "CheckTreeSway", MORE)]),
         ("GUI:OptionsHeadWater", [
@@ -318,6 +319,8 @@ NEW_VIEWS = [
     ("COMBO", "ComboBoxReflections", None),
     # Key Grid's Grid Keys box (2026-11-27), the catalog's GridKeys row
     ("CHECK", "CheckGridKeys", "GUI:GridKeys"),
+    # the catalog's TerrainRelief row, Ground Relief (2026-11-27)
+    ("CHECK", "CheckTerrainRelief", "GUI:TerrainRelief"),
 ]
 
 # Renamed captions (the plan's renames and the two Turkish words the writing rule forced), and the
@@ -853,9 +856,9 @@ def selfcheck():
 
     # every row, fader and rail choice has its pane sentences in both languages, and its name
     stems = [row[0] for _page, groups in GROUP_LAYOUT for _h, rs in groups for row in rs] + RAIL_STEMS
-    # the plan's 118 and Key Grid's Grid Keys (2026-11-27)
-    if len(stems) != 119:
-        problems.append("%d settings on the screen, the plan's tooltip table holds 118 and Grid Keys" % len(stems))
+    # the plan's 118, Key Grid's Grid Keys and Ground Relief (2026-11-27)
+    if len(stems) != 120:
+        problems.append("%d settings on the screen, the plan's tooltip table holds 118, Grid Keys and Ground Relief" % len(stems))
     for stem in stems:
         for table, language in ((keys, "Patch.str"), (turkish, "Turkish/Generals.str")):
             if "OPTIONTIP:%s" % stem not in table:

@@ -711,6 +711,23 @@ bool Direct3D11_Holds_Terrain_Heights()
 	return Active && Backend.Holds_Terrain_Heights();
 }
 
+void Direct3D11_Set_Terrain_Relief(bool on)
+{
+	if (Active) {
+		Backend.Set_Terrain_Relief(on);
+	}
+}
+
+bool Direct3D11_Set_Terrain_Relief_Map(const unsigned char * rgba, unsigned width, unsigned height)
+{
+	return Active && Backend.Set_Terrain_Relief_Map(rgba, width, height);
+}
+
+bool Direct3D11_Holds_Terrain_Relief()
+{
+	return Active && Backend.Holds_Terrain_Relief();
+}
+
 void Direct3D11_Set_Soft_Particles(bool soft)
 {
 	if (Active) {

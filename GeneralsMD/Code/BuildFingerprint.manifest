@@ -3342,6 +3342,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/StructureCollapse.h
 GameEngineDevice/Include/W3DDevice/GameClient/SubObjectBoneWalk.h
 GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h
 GameEngineDevice/Include/W3DDevice/GameClient/TankWheelSpin.h
+GameEngineDevice/Include/W3DDevice/GameClient/TerrainRelief.h
 GameEngineDevice/Include/W3DDevice/GameClient/TerrainSkirt.h
 GameEngineDevice/Include/W3DDevice/GameClient/TerrainSubdivide.h
 GameEngineDevice/Include/W3DDevice/GameClient/TerrainTex.h
@@ -4950,6 +4951,7 @@ Tests/test_supply_center_save.inc
 Tests/test_support.cpp
 Tests/test_team_glow.cpp
 Tests/test_terrain_golden.cpp
+Tests/test_terrain_relief.cpp
 Tests/test_terrain_skirt.cpp
 Tests/test_terrain_subdivide.cpp
 Tests/test_user_data_guard.cpp

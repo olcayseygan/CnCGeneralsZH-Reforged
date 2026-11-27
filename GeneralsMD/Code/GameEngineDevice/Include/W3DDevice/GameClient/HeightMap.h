@@ -177,6 +177,9 @@ protected:
 	static Bool sunPerPixelWanted(void);
 	void setSunPerPixel(Bool on);	///< the tiles' light from the next rebuild on; the 3-way tiles and roads follow
 	Bool prepareSunPerPixel(void);	///< heights and light up for this frame; whether the draws add the sun
+	TextureClass *m_reliefAtlas;		///< the atlas the Ground Relief option's relief was last made from
+	Bool m_reliefBuilt;							///< and whether the backend took it
+	Bool prepareRelief(void);				///< the relief up for this frame's atlas; whether the ground takes it
 public:
 	virtual Bool sunPerPixelBaked(void) const { return m_sunPerPixel; }
 protected:

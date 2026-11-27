@@ -2503,6 +2503,9 @@ target_include_directories(test_grown_radar PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/
 # W3DDevice/GameClient/TerrainSubdivide.h: the subdivided ground through the samples, near the plane.
 add_lib_test(test_terrain_subdivide)
 target_include_directories(test_terrain_subdivide PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+# W3DDevice/GameClient/TerrainRelief.h: the Ground Relief option's relief, made from the terrain atlas.
+add_lib_test(test_terrain_relief)
+target_include_directories(test_terrain_relief PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 # W3DDevice/GameClient/CloudShadowBake.h: the cloud shadow's texture, scattered so its tile does not repeat.
 add_lib_test(test_cloud_shadow_bake)
 target_include_directories(test_cloud_shadow_bake PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)

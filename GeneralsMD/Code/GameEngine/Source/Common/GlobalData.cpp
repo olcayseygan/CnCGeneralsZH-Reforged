@@ -850,6 +850,7 @@ GlobalData::GlobalData()
 	m_underwaterClarity = FALSE;
 	m_waterFoam = FALSE;
 	m_groundFoliage = FALSE;
+	m_terrainRelief = FALSE;
 	m_ragdoll = FALSE;
 	m_groundMarks = FALSE;
 	m_firelight = FALSE;
@@ -1759,6 +1760,7 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 		TheWritableGlobalData->m_shadowMap = FALSE;
 		TheWritableGlobalData->m_volumetricSmokeShadows = FALSE;
 		TheWritableGlobalData->m_groundFoliage = FALSE;
+		TheWritableGlobalData->m_terrainRelief = FALSE;
 		TheWritableGlobalData->m_lightingStyle = LIGHTING_STYLE_CLASSIC;
 		TheWritableGlobalData->m_direct3D11PostChain = "off";
 	}

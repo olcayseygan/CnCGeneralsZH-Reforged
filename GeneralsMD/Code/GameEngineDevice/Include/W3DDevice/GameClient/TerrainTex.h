@@ -66,6 +66,8 @@ public:
 	/// Lays each key's block of tiles at its origin (WorldHeightMap::getSkirtFlatTexture).
 	Bool updateSkirt(WorldHeightMap *htMap, const std::vector<Int> &keys, const std::vector<ICoord2D> &origins, Int tilePixels);
 	void setLOD(Int LOD);
+	/// The Ground Relief option's relief of this atlas (TerrainRelief.h), RGBA8 at the atlas's size.
+	Bool buildRelief(WorldHeightMap *htMap, std::vector<UnsignedByte> &relief, Int &width, Int &height);
 };
 
 

@@ -2719,6 +2719,7 @@ namespace
 		{ "Weather", ROW_REFORGED | ROW_D3D11 },
 		{ "ShowProps", ROW_NEXT_MAP },
 		{ "GroundFoliage", ROW_REFORGED | ROW_D3D11 },
+		{ "TerrainRelief", ROW_REFORGED | ROW_D3D11 },
 		{ "TreeSway", ROW_NEXT_MAP },
 		{ "SmoothWater", ROW_NEXT_MAP },
 		{ "WaterFoam", ROW_REFORGED | ROW_D3D11 },
@@ -2756,7 +2757,7 @@ namespace
 
 	// the rows -d3d9 greys (OptionsMenuInit); Heat Haze is not one, EA's half of its box still draws there
 	const char *const TheDirect3D11OnlyRows[] = { "MapLight", "TeamGlow", "WaterFoam", "GroundMarks", "Firelight", "HemiAmbient",
-		"AmbientOcclusion", "InternalHdr", "Weather", "WaterSplashes", "Atmosphere", "StructureCollapse", "GroundFoliage", "SunShafts" };
+		"AmbientOcclusion", "InternalHdr", "Weather", "WaterSplashes", "Atmosphere", "StructureCollapse", "GroundFoliage", "SunShafts", "TerrainRelief" };
 
 	// the merged lists' views and the models behind them, and the models the slider still drives
 	const char *const TheMergedModels[] = { "ComboBoxTextureFilter", "SliderAnisotropy", "CheckHeatEffects",

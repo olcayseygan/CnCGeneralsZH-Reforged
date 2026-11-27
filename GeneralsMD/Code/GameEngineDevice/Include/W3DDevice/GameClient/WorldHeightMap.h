@@ -249,6 +249,8 @@ public:  // height map info.
 public:  // tile and texture info.	
 	void setTextureLOD(Int lod);	///< set maximum lod level sent to the hardware.
 	TextureClass *getTerrainTexture(void);  //< generates if needed and returns the terrain texture
+	/// the Ground Relief option's relief of the terrain texture (TerrainTextureClass::buildRelief)
+	Bool buildTerrainRelief(std::vector<UnsignedByte> &relief, Int &width, Int &height);
 	TextureClass *getAlphaTerrainTexture(void); //< generates if needed and returns alpha terrain texture
 	TextureClass *getEdgeTerrainTexture(void); //< generates if needed and returns blend edge texture
 	/// UV mapping data for a cell to map into the terrain texture.  Returns true if the textures had to be stretched for cliffs.

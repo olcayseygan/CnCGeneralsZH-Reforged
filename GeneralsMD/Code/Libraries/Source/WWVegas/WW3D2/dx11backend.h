@@ -131,6 +131,12 @@ public:
 	void Set_Terrain_Light(const float * block);
 	bool Set_Terrain_Heights(const unsigned char * heights, unsigned width, unsigned height);
 	bool Holds_Terrain_Heights() const { return TerrainHeightsView != NULL; }
+	// The Ground Relief option (TERRAIN_RELIEF_SAMPLING): the draws between an on and an off that add
+	// the sun also take the atlas's relief, an RGBA8 texture of the atlas's size given here with its
+	// three mip levels made on the GPU, as the atlas has three.
+	void Set_Terrain_Relief(bool on);
+	bool Set_Terrain_Relief_Map(const unsigned char * rgba, unsigned width, unsigned height);
+	bool Holds_Terrain_Relief() const { return TerrainReliefView != NULL; }
 	// The heights for a post pass that wants the ground (the sun shafts tell casters from terrain by it),
 	// and how a world point finds its texel: cells a world unit, the border in cells, world units a byte.
 	ID3D11ShaderResourceView * Terrain_Heights_View() const { return TerrainHeightsView; }
@@ -996,6 +1002,13 @@ private:
 	unsigned TerrainHeightsHighest;	///< the highest byte, where a ray toward the sun stops looking for ground
 	bool Terrain_Relight() const;
 	void Release_Terrain_Heights();
+	// Set_Terrain_Relief and Set_Terrain_Relief_Map's texture; a draw takes the relief only while it
+	// adds the sun as well.
+	bool TerrainReliefOn;
+	ID3D11Texture2D * TerrainReliefTexture;
+	ID3D11ShaderResourceView * TerrainReliefView;
+	bool Terrain_Relief() const;
+	void Release_Terrain_Relief();
 	// Set_Soft_Particles, and which fade the current draw takes (a SOFT_PARTICLE_* value).
 	bool SoftParticles;
 	bool SoftParticlesAllowed;
@@ -1330,6 +1343,8 @@ private:
 		ID3D11ShaderResourceView * SceneColour;
 		// The map's heights at t4, for the ground's sun.
 		ID3D11ShaderResourceView * TerrainHeights;
+		// The atlas's relief at t10, for the Ground Relief option.
+		ID3D11ShaderResourceView * TerrainRelief;
 		ID3D11InputLayout * Layout;
 		ID3D11Buffer * VertexBuffer;
 		UINT VertexStride;

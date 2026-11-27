@@ -73,6 +73,9 @@ void Direct3D11_Set_Terrain_Relight(bool) {}
 void Direct3D11_Set_Terrain_Light(const float *) {}
 bool Direct3D11_Set_Terrain_Heights(const unsigned char *, unsigned, unsigned) { return false; }
 bool Direct3D11_Holds_Terrain_Heights() { return false; }
+void Direct3D11_Set_Terrain_Relief(bool) {}
+bool Direct3D11_Set_Terrain_Relief_Map(const unsigned char *, unsigned, unsigned) { return false; }
+bool Direct3D11_Holds_Terrain_Relief() { return false; }
 void Direct3D11_Set_Soft_Particles(bool) {}
 void Direct3D11_Take_Scene_Depth() {}
 void Direct3D11_Allow_Soft_Particles(bool) {}

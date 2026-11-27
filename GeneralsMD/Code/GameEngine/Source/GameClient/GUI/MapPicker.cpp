@@ -105,6 +105,7 @@ struct PickerGrid
 	Int pressRow;
 	UnsignedInt pressTime;
 	Int grab;						///< board pixels between the pointer and the thumb's top while it is dragged, -1 none
+	Bool pressed;				///< the left press this release ends came to the grid
 	std::vector< PickerRow > rows;
 };
 
@@ -411,6 +412,9 @@ static void takeRows( PickerGrid &g, const MapPickerShape &shape )
 	g.rows.resize( entries, blank );
 	g.first = MapPickerFirstRow( selectedRow( g ), shape.columns, shape.rows, entries );
 	g.pressRow = -1;
+	// the list's own position follows the grid's (scrollTo says why)
+	if( entries > 0 )
+		GadgetListBoxSetTopVisibleEntry( g.list, min( g.first * shape.columns, entries - 1 ) );
 }
 
 /// the tiles of rows firstRow to lastRow, the screen's first tile at the area's top left
@@ -1103,6 +1107,11 @@ static void scrollTo( PickerGrid &g, Int first )
 	Int allRows = 0;
 	layoutCells( g, cells, shape, allRows );
 	g.first = max( 0, min( first, allRows - shape.rows ) );
+	/* The list behind the grid follows to the grid's first row on screen, so the list's own position
+		 (what Tools/ui_walk.py reads as a list's scroll, through ControlServer's uitree) says the grid
+		 moved: the wheel was turning the tiles while the walker saw a list that never scrolled. */
+	if( g.list && (Int)g.rows.size() > 0 )
+		GadgetListBoxSetTopVisibleEntry( g.list, min( g.first * shape.columns, (Int)g.rows.size() - 1 ) );
 }
 
 static WindowMsgHandledType gridInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
@@ -1126,6 +1135,7 @@ static WindowMsgHandledType gridInput( GameWindow *window, UnsignedInt msg, Wind
 
 		case GWM_LEFT_DOWN:
 		{
+			g->pressed = TRUE;
 			// the groove: a press on the thumb takes it, one beside it moves a window's worth
 			const IRegion2D groove = board( PICK_GROOVE_LEFT - 6, top, PICK_RIGHT, PICK_BOTTOM );
 			if( allRows > shape.rows && inside( groove, x, y ) )
@@ -1153,11 +1163,17 @@ static WindowMsgHandledType gridInput( GameWindow *window, UnsignedInt msg, Wind
 
 		case GWM_LEFT_UP:
 		{
+			// only the release of a press the grid took picks: a click that began on another window
+			// (the room's Select Map, a key) ends here without picking or accepting
+			const Bool pressed = g->pressed;
+			g->pressed = FALSE;
 			if( g->grab >= 0 )
 			{
 				g->grab = -1;
 				return MSG_HANDLED;
 			}
+			if( !pressed )
+				return MSG_HANDLED;
 			for( Int k = 0; k < (Int)cells.size(); k++ )
 			{
 				const PickerCell &c = cells[ k ];
@@ -1203,6 +1219,7 @@ static void attachGrid( Int which, GameWindow *listbox )
 	g.pressRow = -1;
 	g.pressTime = 0;
 	g.grab = -1;
+	g.pressed = FALSE;
 	g.rows.clear();
 	if( listbox == NULL )
 		return;

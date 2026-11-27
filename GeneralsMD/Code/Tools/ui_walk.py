@@ -152,6 +152,7 @@ SCREENS = {
     # walk clicks; the map grid and the random templates are drawn over their list boxes, so a tile is a
     # point (map tile c, r at 132 + 153c, 275 + 194r; template tile t at 117 + 122t, 380, tile 0 Surprise me)
     "mappicker": dict(args=["-skirmishlobby"], nav=["SkirmishGameOptionsMenu.wnd:ButtonSelectMap"],
+                      nodescend=["SkirmishMapSelectMenu.wnd:ButtonBack", "SkirmishMapSelectMenu.wnd:ButtonOK"],
                       parts=[("map tile 0,0", [(132, 275)]), ("map tile 1,0", [(285, 275)]),
                              ("map tile 0,1", [(132, 469)]),
                              ("random template 0", [(1092, 146), (117, 380)]),
@@ -159,7 +160,7 @@ SCREENS = {
     # the army screen from seat 1's army box, drawn whole: tabs, a side's RANDOM key and first tile, the tick
     # box on Custom, BACK and CONFIRM; once it closes the room must take clicks again (room_check)
     "factionpicker": dict(args=["-skirmishlobby"], nav=["SkirmishGameOptionsMenu.wnd:ComboBoxPlayerTemplate0"],
-                          picker="FactionPicker.wnd:FactionPicker", room_check=True,
+                          picker="FactionPicker.wnd:FactionPicker", room_check=True, parts_only=True,
                           parts=[("tab random all", [(258, 146)]), ("tab custom", [(662, 146)]),
                                  ("side 1 random key", [(150, 259)]), ("side 1 tile 1", [(328, 275)]),
                                  ("side 2 tile 1", [(328, 469)]),
@@ -776,6 +777,7 @@ class Walk(object):
             if row == original:		# the row already picked changes nothing
                 continue
             state = self.reach(path, name)
+            label = "%s row %d" % (leaf(name), row)
             if not state.get("lone"):
                 self.game.send("uiclick " + name)
                 if not settle(self.game, minimum=0.4).get("lone"):
@@ -825,11 +827,19 @@ class Walk(object):
     def act_list(self, path, cur, tree, before_bad):
         name = cur["n"]
         if (cur.get("sh") or 0) > (cur.get("dh") or 0) + 8:		# a list that really overflows
+            # down first, then up when down does not move it (a list already at its foot cannot go further)
+            back = 3
             self.game.send("uiscroll %s -3" % name)
             after = settle(self.game)
             moved = named(after).get(name, {}).get("sc") != cur.get("sc")
+            if not moved:
+                self.game.send("uiscroll %s 3" % name)
+                after = settle(self.game)
+                moved = named(after).get(name, {}).get("sc") != cur.get("sc")
+                back = -3
             self.judge(leaf(name) + " (wheel)", path, after, diff(tree, after) if moved else [], before_bad)
-            self.game.send("uiscroll %s 3" % name)
+            if moved:
+                self.game.send("uiscroll %s %d" % (name, back))
             tree = settle(self.game)
         else:
             self.record(leaf(name) + " (wheel)", "n/a", "%d rows fit" % (cur.get("rows") or 0), path)
@@ -1035,7 +1045,8 @@ class Walk(object):
                 self.walk_persist()
                 self.game.stop()
                 self.root = None
-            self.walk([], 0)
+            if not self.game.spec.get("parts_only"):		# a picker drawn whole has nothing else to walk
+                self.walk([], 0)
         except Crashed as e:
             self.record("(screen)", "crashes", str(e), [])
         finally:

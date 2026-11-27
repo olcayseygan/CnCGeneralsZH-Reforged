@@ -22366,7 +22366,7 @@ GUI:GameModeDirectStrikeSolo
 END
 
 GUI:GameModeApocalypseSolo
-"SEN VE EN ÇOK 3 YZ"
+"YALNIZ SEN"
 END
 
 // Menu redesign package 5, the boxes: the in-game menu, the disconnect box, Establish Connections, the
@@ -22619,7 +22619,7 @@ GUI:ApocalypseBossHealth
 END
 
 GUI:ApocalypseOpenSeat
-"Dolu her yer her dalgaya %d puan ekler"
+"Katılan her oyuncu her dalgaya %d puan ekler"
 END
 
 GUI:ApocalypseNights
@@ -22766,75 +22766,6 @@ GUI:RoomSeatBelow
 "%d YER AŞAĞIDA"
 END
 
-// Menu redesign package 13, the end screens.
-GUI:ScorePlace
-"Sıra"
-END
-
-GUI:ScorePlaces
-"Sıra %d–%d"
-END
-
-GUI:ScoreObservers
-"İzleyici"
-END
-
-GUI:ScoreTotal
-"Toplam"
-END
-
-GUI:ScoreBestInColumn
-"Sütunun en iyisi"
-END
-
-GUI:ScoreChat
-"Sohbet"
-END
-
-GUI:ScoreHighlightDestroyedValue
-"%ls yok edildi"
-END
-
-GUI:ScoreHighlightEarnedValue
-"%ls kazanıldı"
-END
-
-GUI:ScoreHighlightArmyValue
-"Ordu en çok %ls"
-END
-
-GUI:BuildOrderUnit
-"Birlik"
-END
-
-GUI:BuildOrderStructure
-"Yapı"
-END
-
-GUI:BuildOrderFolded
-"Yapım yok, katlandı"
-END
-
-GUI:BuildOrderAxis
-"Eksen son yapımda biter, %ls · maç %ls sürdü"
-END
-
-GUI:LaneEndTopUnit
-"En iyi birlik"
-END
-
-GUI:LaneEndTimelineMiddle
-"Orta"
-END
-
-GUI:LaneEndTowerDown
-"Kule yıkıldı"
-END
-
-GUI:LaneEndWaveSent
-"Dalga gönderildi"
-END
-
 // Menu redesign package 6, the load screens: the board's heads and rules, the Direct Strike and Apocalypse
 // facts and tips, the mission count, a saved game and the map transfer.
 GUI:LoadReady
@@ -22953,10 +22884,79 @@ GUI:LoadTipApocalypse3
 "İlk dalga %d saniye sonra gelir. Savaşmadan önce kur."
 END
 
+// Menu redesign package 13, the end screens.
+GUI:ScorePlace
+"Sıra"
+END
+
+GUI:ScorePlaces
+"Sıra %d–%d"
+END
+
+GUI:ScoreObservers
+"İzleyici"
+END
+
+GUI:ScoreTotal
+"Toplam"
+END
+
+GUI:ScoreBestInColumn
+"Sütunun en iyisi"
+END
+
+GUI:ScoreChat
+"Sohbet"
+END
+
+GUI:ScoreHighlightDestroyedValue
+"%ls yok edildi"
+END
+
+GUI:ScoreHighlightEarnedValue
+"%ls kazanıldı"
+END
+
+GUI:ScoreHighlightArmyValue
+"Ordu en çok %ls"
+END
+
+GUI:BuildOrderUnit
+"Birlik"
+END
+
+GUI:BuildOrderStructure
+"Yapı"
+END
+
+GUI:BuildOrderFolded
+"Yapım yok, katlandı"
+END
+
+GUI:BuildOrderAxis
+"Eksen son yapımda biter, %ls · maç %ls sürdü"
+END
+
+GUI:LaneEndTopUnit
+"En iyi birlik"
+END
+
+GUI:LaneEndTimelineMiddle
+"Orta"
+END
+
+GUI:LaneEndTowerDown
+"Kule yıkıldı"
+END
+
+GUI:LaneEndWaveSent
+"Dalga gönderildi"
+END
+
 // Menu redesign package 8, the options screen: the rail's tabs and groups, Look and Quality, the fold,
 // the badges and their legend, the reasons a row is greyed, the merged lists, the pane's blocks and
-// every row's OPTIONTIP:<Stem>, the two sentences the pane says about it.  OPTIONCOST:<Stem><entry> is a
-// list entry's measured price where one was measured.  OptionsMenu.cpp, optionsmenu_layout.py.
+// every row's OPTIONTIP:<Stem>, the two sentences the pane says about it: what the row changes on the
+// screen.  OptionsMenu.cpp, optionsmenu_layout.py.
 GUI:OptionsTabSystem
 "Sistem"
 END
@@ -23033,38 +23033,6 @@ GUI:OptionsLegendNextMap
 "sonraki haritadan"
 END
 
-GUI:OptionsCost
-"Yük"
-END
-
-GUI:OptionsCostMs
-"Kare başına yaklaşık %s ms"
-END
-
-GUI:OptionsCostZero
-"Ölçülebilir yükü yok"
-END
-
-GUI:OptionsCostUnmeasured
-"Yükü henüz ölçülmedi"
-END
-
-GUI:OptionsCostRig
-"RTX 2060, 1080p"
-END
-
-GUI:OptionsCostWaterStyle
-"Deniz haritasında Klasik 3-6 ms, Modern 11-45 ms"
-END
-
-GUI:OptionsTabCost
-"Bu sekmenin ölçülen yükü"
-END
-
-GUI:OptionsTabCostUnit
-"kare başına, RTX 2060, 1080p"
-END
-
 GUI:OptionsNeeds
 "Gerekenler"
 END
@@ -23077,16 +23045,8 @@ GUI:OptionsChoices
 "Seçimler"
 END
 
-GUI:OptionsGroupCost
-"%s · kare başına yük"
-END
-
 GUI:OptionsGroupAsSet
 "%s · şu anki hali"
-END
-
-GUI:OptionsNotMeasured
-"ölçülmedi"
 END
 
 GUI:OptionsNot
@@ -23329,40 +23289,8 @@ GUI:HotkeysAlsoOnKey
 "Bu tuşta ayrıca"
 END
 
-OPTIONCOST:ShadowQuality2
-"yaklaşık 0,25 ms"
-END
-
-OPTIONCOST:ShadowQuality3
-"1,6 ms'ye kadar"
-END
-
-OPTIONCOST:MSAA2
-"yaklaşık 0,4 ms"
-END
-
-OPTIONCOST:SunShafts1
-"Yüksek'in yarısı"
-END
-
-OPTIONCOST:SunShafts2
-"yaklaşık 0,4 ms"
-END
-
-OPTIONCOST:WaterStyle0
-"deniz haritasında 3-6 ms"
-END
-
-OPTIONCOST:WaterStyle1
-"deniz haritasında 11-45 ms"
-END
-
-OPTIONCOST:Smoke2
-"yaklaşık 0,75 ms"
-END
-
 OPTIONTIP:Resolution
-"Oyunun kaç piksel çizdiği. En net görüntü monitörün kendi boyutundadır; daha küçüğü daha hızlı ama daha bulanıktır."
+"Oyunun kaç piksel çizdiği. En net görüntü monitörün kendi boyutundadır; daha küçüğü daha bulanıktır."
 END
 
 OPTIONTIP:WindowMode
@@ -23418,15 +23346,15 @@ OPTIONTIP:ConnectionTest
 END
 
 OPTIONTIP:CastShadows
-"Birlikler, binalar ve ağaçlar yere ve birbirine gölge düşürür. Buradaki en ağır ayardır; büyük savaşlar takılıyorsa önce bunu kapatın."
+"Birlikler, binalar ve ağaçlar yere ve birbirine gölge düşürür."
 END
 
 OPTIONTIP:ShadowQuality
-"Gölge kenarlarının netliği. Işın İzlemeli her yakınlıkta net tutar ama en pahalısıdır; Düşük zayıf kartta bellek açar."
+"Gölge kenarlarının netliği. Düşük yumuşak ve kaba çizer; Işın İzlemeli her yakınlıkta keskin tutar."
 END
 
 OPTIONTIP:FlatShadows
-"Gerçek gölgesi olmayan birliklerin altında yassı koyu bir leke. Yük getirmez."
+"Gerçek gölgesi olmayan birliklerin altında yassı koyu bir leke."
 END
 
 OPTIONTIP:InfantryShadows
@@ -23438,11 +23366,11 @@ OPTIONTIP:ProjectileShadows
 END
 
 OPTIONTIP:PropShadows
-"Çitler, çöpler ve çalılar da gölge düşürür. Dekoru bol haritalarda küçük bir yükü vardır."
+"Çitler, çöpler ve çalılar da gölge düşürür."
 END
 
 OPTIONTIP:ParticleShadows
-"Büyük duman ve toz bulutları yere yumuşak bir gölge düşürür. Yoğun çatışmada küçük bir yükü vardır."
+"Büyük duman ve toz bulutları yere yumuşak bir gölge düşürür."
 END
 
 OPTIONTIP:VolumetricSmoke
@@ -23450,19 +23378,19 @@ OPTIONTIP:VolumetricSmoke
 END
 
 OPTIONTIP:CloudShadows
-"Geçen bulutların gölgesi zeminde kayar. Yük getirmez."
+"Geçen bulutların gölgesi zeminde kayar."
 END
 
 OPTIONTIP:TextureResolution
-"Yakından bakınca kaplamaların netliği. Yalnızca ekran kartının belleği azsa düşürün."
+"Yakından bakınca kaplamaların netliği. Düşük duvarları, araçları ve zemini bulanıklaştırır."
 END
 
 OPTIONTIP:MSAA
-"Model kenarlarındaki merdiven basamaklarını yumuşatır. 2x ya da 4x yeterlidir; fazlası az fark için kare hızı yer."
+"Model kenarlarındaki merdiven basamaklarını yumuşatır. 4x'ten sonra kenarlar pek değişmez."
 END
 
 OPTIONTIP:HDTextures
-"Bütün kaplamalar ve zemin iki kat ayrıntılı. Ekran kartının belleği yetmiyorsa kapatın."
+"Bütün kaplamalar ve zemin iki kat ayrıntılı."
 END
 
 OPTIONTIP:DetailedModels
@@ -23470,7 +23398,7 @@ OPTIONTIP:DetailedModels
 END
 
 OPTIONTIP:TextureFiltering
-"Uzaktaki zemini bulanık ve titrek yerine net tutar. Anizotropik 16x yeni kartlarda neredeyse hiç yük getirmez."
+"Uzaktaki zemini bulanık ve titrek yerine net tutar. Anizotropik 16x en netidir."
 END
 
 OPTIONTIP:KeepDetail
@@ -23478,7 +23406,7 @@ OPTIONTIP:KeepDetail
 END
 
 OPTIONTIP:FullDetailAtDistance
-"Kameradan uzaktaki birlikler ve binalar hafif model yerine tam ayrıntıda kalır. Küçük bir yükü vardır, en çok uzaktan bakınca görünür."
+"Kameradan uzaktaki birlikler ve binalar hafif model yerine tam ayrıntıda kalır. En çok uzaktan bakınca görünür."
 END
 
 OPTIONTIP:LightingStyle
@@ -23494,7 +23422,7 @@ OPTIONTIP:MapLight
 END
 
 OPTIONTIP:SunShafts
-"Güneş ışığı binalar ve ağaçlar arasındaki tozdan huzme huzme süzülür, en çok sabah ve akşam belli olur. Düşük, Yüksek'in yarısı kadar yük getirir."
+"Güneş ışığı binalar ve ağaçlar arasındaki tozdan huzme huzme süzülür, en çok sabah ve akşam belli olur. Yüksek, Düşük'ten daha pürüzsüz huzme çizer."
 END
 
 OPTIONTIP:AmbientOcclusion
@@ -23530,7 +23458,7 @@ OPTIONTIP:GroundFoliage
 END
 
 OPTIONTIP:GroundLighting
-"Zemindeki hafif açık-koyu desen tekrar eden karoları gizler. Yük getirmez."
+"Zemindeki hafif açık-koyu desen tekrar eden karoları gizler."
 END
 
 OPTIONTIP:TreeSway
@@ -23538,7 +23466,7 @@ OPTIONTIP:TreeSway
 END
 
 OPTIONTIP:WaterStyle
-"Modern su dalga, kıyı ayrıntısı ve gemi arkasında köpük ekler. Deniz haritalarında ağırdır; zayıf kartta Klasik'te bırakın."
+"Modern su dalga, kıyı ayrıntısı ve gemi arkasında köpük ekler. Klasik, oyunun ilk düz suyudur."
 END
 
 OPTIONTIP:SmoothWater
@@ -23550,15 +23478,15 @@ OPTIONTIP:WaterFoam
 END
 
 OPTIONTIP:WaterSplashes
-"Suya düşen mermi ve cesetler su sıçratır, halkalar yayar. Yalnızca Klasik suda; yoğun bombardımanda küçük bir yükü vardır."
+"Suya düşen mermi ve cesetler su sıçratır, halkalar yayar. Yalnızca Klasik suda."
 END
 
 OPTIONTIP:WaterFftResolution
-"Modern sudaki dalgaların ince kırışıkları. Düşük daha hızlıdır."
+"Modern sudaki dalgaların ince kırışıkları. Yüksek en incesini çizer."
 END
 
 OPTIONTIP:WaterRefractionQuality
-"Tam suyun altını dalgayla kırar, Basit berrak tutar, Kapalı suyu donuk yapar ve en hızlısıdır."
+"Tam suyun altını dalgayla kırar, Basit berrak tutar, Kapalı suyu donuk yapar."
 END
 
 OPTIONTIP:MapAwareWaveHeading
@@ -23570,19 +23498,19 @@ OPTIONTIP:UnderwaterClarity
 END
 
 OPTIONTIP:Reflections
-"Suyun neyi yansıttığı. Kapalı yalnızca gök ve güneş parıltısını bırakır, en hızlısıdır; Hibrit en güzelidir."
+"Suyun neyi yansıttığı. Kapalı yalnızca gök ve güneş parıltısını bırakır; Hibrit en çoğunu gösterir."
 END
 
 OPTIONTIP:WaterReflectionDetail
-"Yansımaların netliği. Düşük daha hızlıdır."
+"Yansımaların netliği."
 END
 
 OPTIONTIP:ParticleCap
-"Aynı anda kaç kıvılcım, duman ve alev olabileceği. İkinci en ağır ayardır; patlamalar oyunu yavaşlatıyorsa düşürün."
+"Aynı anda kaç kıvılcım, duman ve alev olabileceği. Düşük büyük patlamaları seyreltir."
 END
 
 OPTIONTIP:Smoke
-"Dumanın ne kadar asılı kaldığı ve kalınlığı. Çok Kalın savaş alanını daha çok örter, yanan üslerde kare hızı yer."
+"Dumanın ne kadar asılı kaldığı ve kalınlığı. Çok Kalın savaş alanını daha çok örter."
 END
 
 OPTIONTIP:DebrisTrails
@@ -23594,7 +23522,7 @@ OPTIONTIP:ParticleBounce
 END
 
 OPTIONTIP:Firelight
-"Yangın ve patlamalar zemine, duvarlara ve birliklere titrek turuncu ışık vurur, en çok gece. Gece savaşları takılıyorsa kapatın."
+"Yangın ve patlamalar zemine, duvarlara ve birliklere titrek turuncu ışık vurur, en çok gece."
 END
 
 OPTIONTIP:HeatHaze
@@ -23602,7 +23530,7 @@ OPTIONTIP:HeatHaze
 END
 
 OPTIONTIP:SmokeFireLighting
-"Ateşin yanındaki duman onun turuncu ışığını alır. Yük getirmez."
+"Ateşin yanındaki duman onun turuncu ışığını alır."
 END
 
 OPTIONTIP:CloudStyle
@@ -23614,7 +23542,7 @@ OPTIONTIP:GroundMarks
 END
 
 OPTIONTIP:StructureCollapse
-"Yıkılan bina bir anda kaybolmak yerine yere gömülür. Yalnızca görüntüdür; üs çökerken takılma oluyorsa kapatın."
+"Yıkılan bina bir anda kaybolmak yerine yere gömülür."
 END
 
 OPTIONTIP:Ragdoll
@@ -24275,6 +24203,10 @@ END
 
 GUI:SPHintEscEnterSaves
 "Esc vazgeçer, Enter kaydeder"
+END
+
+GUI:ReplayBadName
+"Bu ad dosya adı olamaz. / \\ : * ? \" < > | işaretlerini çıkarın."
 END
 
 // Menu redesign package 11, online self: the ladder's side column, the short column heads, the player

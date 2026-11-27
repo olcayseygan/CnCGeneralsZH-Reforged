@@ -1937,6 +1937,16 @@ namespace
 		}
 		if( msg == GWM_LEFT_UP )
 			return MSG_HANDLED;
+		// Esc closes an open list first, on its release as the rooms' own Esc goes; the next Esc is the room's Back
+		if( msg == GWM_CHAR && (UnsignedByte)mData1 == KEY_ESC && s_list != LIST_NONE )
+		{
+			if( BitTest( mData2, KEY_STATE_UP ) )
+			{
+				s_list = LIST_NONE;
+				s_listSlot = -1;
+			}
+			return MSG_HANDLED;
+		}
 		if( ( msg == GWM_WHEEL_UP || msg == GWM_WHEEL_DOWN ) && s_game != NULL && isNetwork() )
 		{
 			Real x, y;

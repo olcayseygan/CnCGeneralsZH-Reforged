@@ -1218,18 +1218,6 @@ Bool graphicsQualityRowIsReforged( const GraphicsQualityRow &row )
 }
 
 //-----------------------------------------------------------------------------
-Int optionCostMark( Real costMs )
-{
-	if( costMs < 0.15f )
-		return 0;	// under the noise the baselines wander by, or never measured
-	if( costMs < 0.3f )
-		return 1;
-	if( costMs <= 1.0f )
-		return 2;
-	return 3;
-}
-
-//-----------------------------------------------------------------------------
 OptionsFlowResult optionsFlow( OptionsFlowItem *items, Int count, const OptionsFlowMetrics &m, Int scroll )
 {
 	OptionsFlowResult out;

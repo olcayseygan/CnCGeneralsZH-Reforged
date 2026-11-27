@@ -99,6 +99,15 @@ if not exist "%BUILD%\CMakeCache.txt" (
     )
 )
 
+rem --- a source written while the compiler runs leaves an exe of two versions: the objects built before
+rem the write saw the old header, the ones after it the new, and a class laid out two ways reads one
+rem member through another. On 2026-11-27 ControlBar.h lost its uncommitted members at 09:13 in a
+rem 09:12-09:14 build, and the bar's background draw read the scheme pointer 0x128 bytes short of where
+rem ControlBar.cpp kept it. The build notes when it starts and refuses the result if a source under
+rem Code was written after; the next run recompiles exactly those, so running it again is the fix. ---
+set "BUILD_START="
+for /f %%T in ('powershell -NoProfile -Command "[DateTime]::UtcNow.Ticks"') do set "BUILD_START=%%T"
+
 rem --- build ---
 if defined TARGET (
     echo [build] building target %TARGET%
@@ -108,6 +117,12 @@ if defined TARGET (
 )
 if !errorlevel! neq 0 (
     echo [build] ERROR: build failed.
+    goto :fail
+)
+powershell -NoProfile -Command "if (-not $env:BUILD_START) { exit 0 }; $t = [long]$env:BUILD_START; $c = @(Get-ChildItem -LiteralPath $env:SRC -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match '^\.(h|hpp|inl|inc|c|cpp)$' -and $_.LastWriteTimeUtc.Ticks -gt $t }); if ($c.Count -eq 0) { exit 0 }; $c | Select-Object -First 20 | ForEach-Object { '[build]   ' + $_.FullName }; exit 1"
+if !errorlevel! neq 0 (
+    echo [build] ERROR: the sources above were written during the build, so its objects mix two versions.
+    echo [build] Run build.bat again once nobody is editing them; it recompiles what changed.
     goto :fail
 )
 

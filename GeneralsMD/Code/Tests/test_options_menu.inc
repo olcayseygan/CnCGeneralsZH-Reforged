@@ -46,18 +46,6 @@ TEST( options_menu_reflections_list_is_the_two_rows )
 	CHECK_EQ( mode, 1 );
 }
 
-TEST( options_menu_cost_mark_follows_the_plan )
-{
-	CHECK_EQ( optionCostMark( -1.0f ), 0 );
-	CHECK_EQ( optionCostMark( 0.0f ), 0 );
-	CHECK_EQ( optionCostMark( 0.1f ), 0 );
-	CHECK_EQ( optionCostMark( 0.15f ), 1 );
-	CHECK_EQ( optionCostMark( 0.25f ), 1 );
-	CHECK_EQ( optionCostMark( 0.4f ), 2 );
-	CHECK_EQ( optionCostMark( 1.0f ), 2 );
-	CHECK_EQ( optionCostMark( 2.5f ), 3 );
-}
-
 static OptionsFlowMetrics optionsTestMetrics( Bool hasMore )
 {
 	OptionsFlowMetrics m;

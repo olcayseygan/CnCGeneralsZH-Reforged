@@ -182,6 +182,13 @@ Bool IsInGameChatActive() {
 	return FALSE;
 }
 
+Bool IsInGameChatAvailable() {
+	if (TheGameLogic->isInReplayGame())
+		return FALSE;
+	// EA's sandbox rule: a game that is not multiplayer has no chat unless -netMinPlayers 0
+	return TheGameInfo != NULL && (TheGameInfo->isMultiPlayer() || !TheGlobalData->m_netMinPlayers);
+}
+
 // Slash commands -------------------------------------------------------------------------
 extern "C" {
 int getQR2HostingStatus(void);
@@ -285,10 +292,7 @@ void ToggleInGameChat( Bool immediate )
 	if (Clock_Milliseconds() - hiddenAtMs < SAME_PRESS_MS)
 		return;
 
-	if (TheGameLogic->isInReplayGame())
-		return;
-
-	if (!TheGameInfo->isMultiPlayer() && TheGlobalData->m_netMinPlayers)
+	if (!IsInGameChatAvailable())
 		return;
 
 	if (chatWindow)

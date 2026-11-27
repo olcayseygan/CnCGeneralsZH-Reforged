@@ -323,16 +323,79 @@ static std::string replayPath;
 /** Save the replay */
 // ------------------------------------------------------------------------------------------------
 static GameWindow *messageBoxWin = NULL;
+
+/** The name as the file gets it: a Turkish or Western accented letter as its plain one (c-cedilla c, g-breve g,
+	* dotless i and dotted I as i and I, s-cedilla s, the umlauts and the rest of Latin-1 likewise), anything else past
+	* ASCII as _.  AsciiString::translate keeps a character's low byte, so these went to the disk as other
+	* characters (dotless i, 0x131, as 1; s-cedilla, 0x15F, as _). */
+static UnicodeString foldReplayName( const UnicodeString &name )
+{
+	// U+00C0 to U+00FF in order, the multiplication and division signs as _
+	static const char LATIN1[] = "AAAAAAACEEEEIIIIDNOOOOO_OUUUUYTsaaaaaaaceeeeiiiidnooooo_ouuuuyty";
+	UnicodeString folded;
+	for( Int i = 0; i < name.getLength(); i++ )
+	{
+		WideChar c = name.getCharAt( i );
+		if( c >= 0xC0 && c <= 0xFF )
+			c = (WideChar)LATIN1[ c - 0xC0 ];
+		else if( c == 0x11E || c == 0x11F )
+			c = c == 0x11E ? u'G' : u'g';
+		else if( c == 0x130 || c == 0x131 )
+			c = c == 0x130 ? u'I' : u'i';
+		else if( c == 0x15E || c == 0x15F )
+			c = c == 0x15E ? u'S' : u's';
+		else if( c > 126 )
+			c = u'_';
+		folded.concat( c );
+	}
+	return folded;
+}
+
+/** A name Windows takes as a file, already folded to ASCII: none of / \ : * ? " < > | or a control character, not
+	* ending in a dot, not a device name (CON, NUL, COM1 and the rest). */
+static Bool isReplayFileName( const UnicodeString &name )
+{
+	const Int length = name.getLength();
+	if( length == 0 || name.getCharAt( length - 1 ) == u'.' )
+		return FALSE;
+	for( Int i = 0; i < length; i++ )
+	{
+		const WideChar c = name.getCharAt( i );
+		if( c < 32 || c > 126 || strchr( "/\\:*?\"<>|", (char)c ) != NULL )
+			return FALSE;
+	}
+	AsciiString ascii;
+	ascii.translate( name );
+	const char *text = ascii.str();
+	const char *dot = strchr( text, '.' );
+	const Int stem = dot != NULL ? (Int)( dot - text ) : length;
+	static const char *const DEVICES[] = { "CON", "PRN", "AUX", "NUL" };
+	for( Int each = 0; each < ARRAY_SIZE( DEVICES ); each++ )
+		if( stem == 3 && strncasecmp( text, DEVICES[ each ], 3 ) == 0 )
+			return FALSE;
+	if( stem == 4 && ( strncasecmp( text, "COM", 3 ) == 0 || strncasecmp( text, "LPT", 3 ) == 0 ) && text[ 3 ] >= '1' && text[ 3 ] <= '9' )
+		return FALSE;
+	return TRUE;
+}
+
 static void saveReplay( UnicodeString filename )
 {
 	AsciiString translated;
+	filename.trim();
 	if (filename == TheGameText->fetch("GUI:LastReplay"))
 	{
 		translated = TheRecorder->getLastReplayFileName();
 	}
 	else
 	{
-		translated.translate(filename);
+		const UnicodeString folded = foldReplayName(filename);
+		if (!isReplayFileName(folded))
+		{
+			// said in the player's words before anything touches the disk, where Windows' own error used to come up
+			MessageBoxOk(TheGameText->fetch("GUI:Error"), TheGameText->fetch("GUI:ReplayBadName"), NULL);
+			return;
+		}
+		translated.translate(folded);
 	}
 
 	AsciiString fullPath = TheRecorder->getReplayDir();

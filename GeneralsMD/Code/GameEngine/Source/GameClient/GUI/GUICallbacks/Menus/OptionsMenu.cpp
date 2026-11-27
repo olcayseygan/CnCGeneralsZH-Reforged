@@ -3021,58 +3021,6 @@ static UnicodeString lookValueText( const LookItem &item )
 	return UnicodeString::TheEmptyString;
 }
 
-/// a row's measured price from the quality table, -1 for none; on is whether the row now pays it
-static Real lookCostOf( const LookItem &item, Bool *on )
-{
-	*on = FALSE;
-	if( item.control == NULL )
-		return -1.0f;
-	AsciiString name = lookShortName( item.control );
-	const char *models[ 2 ] = { name.str(), NULL };
-	// a merged list costs what its models do
-	if( name == "ComboBoxTextureFiltering" )
-	{
-		models[ 0 ] = "ComboBoxTextureFilter";
-		models[ 1 ] = "SliderAnisotropy";
-	}
-	else if( name == "ComboBoxReflections" )
-		models[ 0 ] = "CheckWaterReflectionEnabled";
-	Real cost = -1.0f;
-	for( Int m = 0; m < 2 && models[ m ]; ++m )
-	{
-		const GraphicsQualityRow *row = findGraphicsQualityRow( models[ m ] );
-		if( row == NULL )
-			continue;
-		cost = max( 0.0f, cost ) + row->costMs;
-		GameWindow *model = m == 0 && models[ 0 ] == name.str() ? item.control : lookFind( models[ m ] );
-		if( model && lookValueOf( model ) != row->values[ 0 ] )
-			*on = TRUE;
-	}
-	return cost;
-}
-
-/// a price in milliseconds, its decimals the language's: 0.4, 2.5, 0.25, and 0,4 in Turkish
-static UnicodeString lookMs( Real ms )
-{
-	const Int hundredths = REAL_TO_INT_FLOOR( ms * 100.0f + 0.5f );
-	UnicodeString text;
-	if( hundredths % 10 == 0 )
-		text.format( u"%d.%d", hundredths / 100, ( hundredths / 10 ) % 10 );
-	else
-		text.format( u"%d.%02d", hundredths / 100, hundredths % 100 );
-	if( TheGlobalData->m_textLanguage != TEXT_LANGUAGE_ENGLISH )
-	{
-		UnicodeString comma;
-		for( const WideChar *c = text.str(); *c; ++c )
-		{
-			WideChar one[ 2 ] = { *c == u'.' ? u',' : *c, 0 };
-			comma.concat( one );
-		}
-		return comma;
-	}
-	return text;
-}
-
 //-------------------------------------------------------------------------------------------------
 // the pages as items
 //-------------------------------------------------------------------------------------------------
@@ -3907,7 +3855,7 @@ static void lookQualityDraw( GameWindow *window, WinInstanceData *instData )
 	lookOutline( mark, enabled ? UIStyle::EDGE_LIT : UIStyle::FRAME );
 }
 
-/// the page's own figures under its rows: Graphics' and Effects' measured cost, the scroll track
+/// the page's own figure under its rows: the scroll track
 static void lookPageDraw( GameWindow *window, WinInstanceData *instData )
 {
 	Int page = -1;
@@ -3929,79 +3877,6 @@ static void lookPageDraw( GameWindow *window, WinInstanceData *instData )
 		UIStyle::litLine( track.lo.x, at, track.hi.x - track.lo.x, max( 4, visible ), UIStyle::EDGE_LIT );
 	}
 
-	// Graphics (1) and Effects (3): what the ticked rows cost a frame, added up
-	if( page != 1 && page != 3 )
-		return;
-	struct Cost { Real ms; Int item; };
-	std::vector< Cost > costs;
-	Real total = 0.0f;
-	for( Int i = 0; i < (Int)p.items.size(); ++i )
-	{
-		Bool on = FALSE;
-		const Real ms = lookCostOf( p.items[ i ], &on );
-		if( p.items[ i ].kind != LOOK_ROW || !lookRowHere( p.items[ i ] ) || !on || ms <= 0.0f )
-			continue;
-		Cost c = { ms, i };
-		costs.push_back( c );
-		total += ms;
-	}
-	Int y = p.flow.end + 22;
-	if( y + 70 > LOOK_BODY_BOTTOM || p.flow.maxScroll > 0 )
-		return;
-	lookCaps( TheGameText->fetch( "GUI:OptionsTabCost" ), lookX( LOOK_ROWS_LEFT + 16 ), lookY( y + 8 ), UIStyle::MUTED );
-	UnicodeString figure;
-	figure.format( u"%s ms", lookMs( total ).str() );
-	const Int fw = lookDraw( figure, UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE, TRUE ), lookX( LOOK_ROWS_LEFT + 16 ), lookY( y + 34 ), UIStyle::INK );
-	lookDraw( TheGameText->fetch( "GUI:OptionsTabCostUnit" ), UIStyle::menuFont( UIStyle::MENU_TEXT_HINT ), lookX( LOOK_ROWS_LEFT + 16 ) + fw + lookPx( 12.0f ),
-		lookY( y + 36 ), UIStyle::MUTED );
-
-	// the bar split by row, the hovered row's part cyan
-	const IRegion2D bar = lookRect( LOOK_ROWS_LEFT + 16, y + 54, LOOK_ROWS_RIGHT - 16, y + 62 );
-	lookFill( bar, UIStyle::withAlpha( UIStyle::FRAME, 120 ) );
-	Int x = bar.lo.x;
-	const Int width = bar.hi.x - bar.lo.x;
-	for( Int c = 0; c < (Int)costs.size(); ++c )
-	{
-		const Int part = total > 0.0f ? REAL_TO_INT_FLOOR( (Real)width * costs[ c ].ms / total + 0.5f ) : 0;
-		const Bool lit = page == s_lookShown && costs[ c ].item == s_lookHover && s_lookRail == 0;
-		TheDisplay->drawFillRect( x, bar.lo.y, max( 1, part - 1 ), bar.hi.y - bar.lo.y, lit ? UIStyle::EDGE_LIT : ( c % 2 ? UIStyle::FRAME : UIStyle::EDGE ) );
-		x += part;
-	}
-
-	// the dearest first, a line each at 28 px as far as the column holds; three on one line where fewer than two fit
-	for( Int a = 0; a < (Int)costs.size(); ++a )
-		for( Int b = a + 1; b < (Int)costs.size(); ++b )
-			if( costs[ b ].ms > costs[ a ].ms )
-				std::swap( costs[ a ], costs[ b ] );
-	y += 78;
-	const Int lines = ( LOOK_BODY_BOTTOM - y ) / 28;
-	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
-	if( lines < 2 )
-	{
-		UnicodeString three;
-		for( Int c = 0; c < (Int)costs.size() && c < 3 && lines > 0; ++c )
-		{
-			if( c > 0 )
-				three.concat( UIStyle::HEADER_JOINER );
-			three.concat( p.items[ costs[ c ].item ].window->winGetText() );
-			three.concat( u" " );
-			three.concat( lookMs( costs[ c ].ms ) );
-		}
-		lookDraw( UIStyle::fitText( three, body, lookPx( (Real)( LOOK_ROWS_RIGHT - LOOK_ROWS_LEFT - 32 ) ) ), body, lookX( LOOK_ROWS_LEFT + 16 ), lookY( y + 14 ), UIStyle::MUTED );
-		return;
-	}
-	const Real dearest = costs.empty() ? 1.0f : costs[ 0 ].ms;
-	for( Int c = 0; c < (Int)costs.size() && c < lines; ++c )
-	{
-		const Int middle = lookY( y + 28 * c + 14 );
-		const LookItem &item = p.items[ costs[ c ].item ];
-		lookDraw( UIStyle::fitText( item.window->winGetText(), body, lookPx( 380.0f ) ), body, lookX( LOOK_ROWS_LEFT + 16 ), middle, UIStyle::INK );
-		const Int barLeft = lookX( LOOK_ROWS_LEFT + 420 ), barRight = lookX( LOOK_ROWS_RIGHT - 90 );
-		const Int len = REAL_TO_INT_FLOOR( (Real)( barRight - barLeft ) * costs[ c ].ms / dearest );
-		const Bool lit = costs[ c ].item == s_lookHover && s_lookRail == 0;
-		TheDisplay->drawFillRect( barLeft, middle - lookPx( 3.0f ), max( 1, len ), max( 2, lookPx( 6.0f ) ), lit ? UIStyle::EDGE_LIT : UIStyle::EDGE );
-		lookDraw( lookMs( costs[ c ].ms ), body, lookX( LOOK_ROWS_RIGHT - 16 ), middle, UIStyle::MUTED, 2 );
-	}
 }
 
 /// the wheel scrolls a page taller than its body; a click on its track pages it
@@ -4094,6 +3969,365 @@ static Int lookPaneHead( const char *key, const UnicodeString &arg, Int y )
 	return y + 26;
 }
 
+//-------------------------------------------------------------------------------------------------
+// The pane's pictures: what a row changes, one frame a value, the value in use framed green.  A row
+// that places the interface or marks units is drawn here from the game's own rects; any other takes
+// a still where one ships, the mapped image OptPreview_<Stem>_<value> (a check's 0 or 1, a list's
+// entry, a slider's two ends).  The stills are shots of the game, so they ship vendored outside the
+// repository (experiments/proofs/2026-11-27/options-previews/ in the wrapper lists them); while one is
+// missing its frame is left out, and with none the pane says what it said before.
+//-------------------------------------------------------------------------------------------------
+namespace
+{
+	enum { LOOK_SHOTS_MAX = 4, LOOK_SHOT_W = 320, LOOK_SHOT_H = 180, LOOK_SHOT_GAP = 20, LOOK_SHOT_PITCH = LOOK_SHOT_H + 40 };
+
+	/// one value's frame
+	struct LookShot
+	{
+		Int value;
+		UnicodeString words;
+		const Image *image;		///< its still, NULL where the frame is drawn
+	};
+
+	/// a screen of w x h shrunk into a box and centred in it
+	struct LookMini
+	{
+		Real s, x, y;
+		LookMini( const IRegion2D &box, Real w, Real h )
+		{
+			const Real bw = (Real)( box.hi.x - box.lo.x ), bh = (Real)( box.hi.y - box.lo.y );
+			s = min( bw / max( 1.0f, w ), bh / max( 1.0f, h ) );
+			x = (Real)box.lo.x + ( bw - s * w ) * 0.5f;
+			y = (Real)box.lo.y + ( bh - s * h ) * 0.5f;
+		}
+		IRegion2D map( Real l, Real t, Real r, Real b ) const
+		{
+			IRegion2D out;
+			out.lo.x = REAL_TO_INT_FLOOR( x + l * s + 0.5f );
+			out.lo.y = REAL_TO_INT_FLOOR( y + t * s + 0.5f );
+			out.hi.x = max( out.lo.x + 1, REAL_TO_INT_FLOOR( x + r * s + 0.5f ) );
+			out.hi.y = max( out.lo.y + 1, REAL_TO_INT_FLOOR( y + b * s + 0.5f ) );
+			return out;
+		}
+		IRegion2D map( const IRegion2D &r ) const { return map( (Real)r.lo.x, (Real)r.lo.y, (Real)r.hi.x, (Real)r.hi.y ); }
+	};
+
+	/// the rows drawn rather than shot
+	const char *const TheLookDrawnRows[] = { "HudLayout", "HudWidth", "MinimapSize", "HealthBars", "HealthBarColors",
+		"PlayerColors", "FullscreenScaling" };
+}
+
+/// what another row shows now, or otherwise when it is not on the screen
+static Int lookShownValue( const char *stem, Int otherwise )
+{
+	LookItem *item = lookFindStem( stem );
+	const Int value = item ? lookValueOf( item->control ) : -1;
+	return value >= 0 ? value : otherwise;
+}
+
+static void lookMiniWorld( const IRegion2D &r )
+{
+	lookFill( r, GameMakeColor( 46, 52, 40, 255 ) );
+	lookOutline( r, UIStyle::FRAME );
+}
+
+static void lookMiniPlate( const IRegion2D &r )
+{
+	lookFill( r, UIStyle::withAlpha( UIStyle::EDGE, 110 ) );
+	lookOutline( r, UIStyle::EDGE );
+}
+
+static void lookMiniRadar( const IRegion2D &r )
+{
+	lookFill( r, GameMakeColor( 18, 56, 36, 255 ) );
+	lookOutline( r, UIStyle::EDGE_LIT );
+}
+
+/** The interface on rects.screen as a layout places it.  The sidebar's every piece is the rects'; the
+	* bottom bar paints its own plates, so those are its painting's boxes at 1920x1080 (hud_command_bar.py's
+	* layout()), anchored to the area as the bar is: the radar box left, the centre plate centred, the
+	* right box right, all at the rects' scale.  layout is the row's value (Classic keeps no command tabs),
+	* minimap Minimap Size's percent, growing the radar up and right from its corner. */
+static void lookMiniHud( const LookMini &m, const HudLayoutRects &r, Int layout, Int minimap )
+{
+	lookMiniWorld( m.map( r.screen ) );
+	if( r.layout == HUD_LAYOUT_SIDEBAR )
+	{
+		lookMiniPlate( m.map( r.sidebar ) );
+		lookMiniPlate( m.map( r.strip ) );
+		lookMiniPlate( m.map( r.card ) );
+		lookMiniRadar( m.map( r.radar ) );
+		lookFill( m.map( r.powerRail ), UIStyle::EDGE_LIT );
+		for( Int i = 0; i < HUD_SIDEBAR_TABS; ++i )
+			lookOutline( m.map( r.tabs[ i ] ), UIStyle::EDGE_LIT );
+		for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; ++i )
+			lookOutline( m.map( r.cameos[ i ] ), UIStyle::FRAME );
+		for( Int i = 0; i < HUD_STRIP_BUTTONS; ++i )
+			lookOutline( m.map( r.stripButtons[ i ] ), UIStyle::FRAME );
+	}
+	else
+	{
+		const Real k = r.scale, foot = (Real)r.screen.hi.y;
+		const Real left = (Real)r.area.lo.x, right = (Real)r.area.hi.x, middle = ( left + right ) * 0.5f;
+		auto atLeft = [ & ]( Real l, Real t, Real rr, Real b )
+			{ return m.map( left + l * k, foot - ( 1080.0f - t ) * k, left + rr * k, foot - ( 1080.0f - b ) * k ); };
+		auto atMiddle = [ & ]( Real l, Real t, Real rr, Real b )
+			{ return m.map( middle + ( l - 960.0f ) * k, foot - ( 1080.0f - t ) * k, middle + ( rr - 960.0f ) * k, foot - ( 1080.0f - b ) * k ); };
+		auto atRight = [ & ]( Real l, Real t, Real rr, Real b )
+			{ return m.map( right - ( 1920.0f - l ) * k, foot - ( 1080.0f - t ) * k, right - ( 1920.0f - rr ) * k, foot - ( 1080.0f - b ) * k ); };
+		lookMiniPlate( atLeft( 0, 735, 345, 1080 ) );
+		lookMiniPlate( atMiddle( 566, 878, 1384, 1080 ) );
+		lookMiniPlate( atRight( 1626, 863, 1920, 1080 ) );
+		lookMiniPlate( atRight( 1816, 794, 1920, 863 ) );
+		for( Int row = 0; row < 2; ++row )
+			for( Int col = 0; col < 7; ++col )
+				lookOutline( atMiddle( 600.0f + 88.0f * col, 916.0f + 76.0f * row, 680.0f + 88.0f * col, 984.0f + 76.0f * row ), UIStyle::FRAME );
+		if( hudLayoutHasCommandTabs( layout ) )
+			for( Int tab = 0; tab < 3; ++tab )
+				lookOutline( atMiddle( 600.0f + 84.0f * tab, 852, 680.0f + 84.0f * tab, 878 ), UIStyle::EDGE_LIT );
+		// the radar's glass, 322x232 at 100, grown from its bottom left corner and stopped at the centre plate
+		const Real grow = (Real)max( 100, min( minimap, 200 ) ) / 100.0f;
+		lookMiniRadar( atLeft( 5, 1064.0f - 232.0f * grow, min( 5.0f + 322.0f * grow, 560.0f ), 1064 ) );
+	}
+	// a narrower interface area: its two edges down the screen
+	if( r.area.lo.x > r.screen.lo.x || r.area.hi.x < r.screen.hi.x )
+	{
+		const IRegion2D a = m.map( r.area );
+		TheDisplay->drawFillRect( a.lo.x, a.lo.y, 1, a.hi.y - a.lo.y, UIStyle::MUTED );
+		TheDisplay->drawFillRect( a.hi.x - 1, a.lo.y, 1, a.hi.y - a.lo.y, UIStyle::MUTED );
+	}
+}
+
+/** A few units on the ground: yours, an ally's and two enemies', some hurt, two selected, one under
+	* the pointer.  bars is Health Bars' value (-1 draws none), barColors Health Bar Colors', colors
+	* Player Colors' (PlayerColorScheme.h: the lobby's own, you blue and allies green and foes red, a
+	* hue per team). */
+static void lookMiniUnits( const IRegion2D &box, Int bars, Int barColors, Int colors )
+{
+	struct Unit { Real x, y; Int owner; Real health; Bool selected, pointed; };
+	static const Unit units[] =
+	{
+		{ 0.16f, 0.42f, 0, 1.0f, TRUE, FALSE },
+		{ 0.28f, 0.66f, 0, 0.45f, TRUE, FALSE },
+		{ 0.40f, 0.34f, 1, 0.8f, FALSE, FALSE },
+		{ 0.64f, 0.40f, 2, 1.0f, FALSE, TRUE },
+		{ 0.80f, 0.62f, 2, 0.3f, FALSE, FALSE },
+		{ 0.58f, 0.74f, 3, 1.0f, FALSE, FALSE },
+	};
+	const Color original[ 4 ] = { GameMakeColor( 240, 150, 30, 255 ), GameMakeColor( 230, 220, 60, 255 ), GameMakeColor( 60, 190, 70, 255 ), GameMakeColor( 160, 80, 220, 255 ) };
+	const Color relation[ 4 ] = { GameMakeColor( 60, 110, 250, 255 ), GameMakeColor( 60, 200, 70, 255 ), GameMakeColor( 220, 40, 40, 255 ), GameMakeColor( 220, 40, 40, 255 ) };
+	const Color team[ 4 ] = { GameMakeColor( 80, 140, 255, 255 ), GameMakeColor( 40, 80, 190, 255 ), GameMakeColor( 235, 70, 55, 255 ), GameMakeColor( 160, 30, 30, 255 ) };
+	const Color *owner = colors == 1 ? relation : colors == 2 ? team : original;
+
+	lookMiniWorld( box );
+	const Int w = box.hi.x - box.lo.x, h = box.hi.y - box.lo.y;
+	const Int size = max( 6, h / 9 );
+	for( Int i = 0; i < ARRAY_SIZE( units ); ++i )
+	{
+		const Unit &u = units[ i ];
+		const Int cx = box.lo.x + REAL_TO_INT_FLOOR( u.x * w ), cy = box.lo.y + REAL_TO_INT_FLOOR( u.y * h );
+		IRegion2D body;
+		body.lo.x = cx - size / 2;
+		body.lo.y = cy - size / 2;
+		body.hi.x = body.lo.x + size;
+		body.hi.y = body.lo.y + size;
+		lookFill( body, owner[ u.owner ] );
+		lookOutline( body, GameMakeColor( 0, 0, 0, 220 ) );
+		if( u.selected )
+		{
+			IRegion2D ring = body;
+			ring.lo.x -= 4;
+			ring.lo.y -= 4;
+			ring.hi.x += 4;
+			ring.hi.y += 4;
+			lookOutline( ring, UIStyle::INK );
+		}
+		if( u.pointed )
+		{
+			const Int px = body.hi.x + 2, py = body.hi.y + 2, len = max( 6, size );
+			TheDisplay->drawLine( px, py, px, py + len, 1.0f, UIStyle::INK );
+			TheDisplay->drawLine( px, py, px + len * 2 / 3, py + len * 2 / 3, 1.0f, UIStyle::INK );
+			TheDisplay->drawLine( px, py + len, px + len * 2 / 3, py + len * 2 / 3, 1.0f, UIStyle::INK );
+		}
+		// Always, Smart (hurt, selected or pointed at), Selection Only, Never
+		const Bool barShown = bars == 0 || ( bars == 1 && ( u.health < 1.0f || u.selected || u.pointed ) ) || ( bars == 2 && u.selected );
+		if( !barShown )
+			continue;
+		IRegion2D bar;
+		bar.lo.x = body.lo.x - 3;
+		bar.hi.x = body.hi.x + 3;
+		bar.hi.y = body.lo.y - ( u.selected ? 6 : 3 );
+		bar.lo.y = bar.hi.y - max( 3, size / 4 );
+		lookFill( bar, GameMakeColor( 0, 0, 0, 230 ) );
+		IRegion2D fill = bar;
+		fill.hi.x = fill.lo.x + max( 1, REAL_TO_INT_FLOOR( u.health * ( bar.hi.x - bar.lo.x ) + 0.5f ) );
+		const Color byHealth = GameMakeColor( REAL_TO_INT_FLOOR( 255.0f * min( 1.0f, 2.0f * ( 1.0f - u.health ) ) ),
+			REAL_TO_INT_FLOOR( 255.0f * min( 1.0f, 2.0f * u.health ) ), 0, 255 );
+		lookFill( fill, barColors == 1 ? owner[ u.owner ] : byHealth );
+	}
+}
+
+/** A 4:3 picture on a 16:9 monitor: stretched over it, or kept in shape between black bars.  The
+	* square in the picture shows the shape. */
+static void lookMiniScaling( const IRegion2D &box, Int keepShape )
+{
+	lookFill( box, GameMakeColor( 0, 0, 0, 255 ) );
+	IRegion2D picture = box;
+	if( keepShape )
+	{
+		const LookMini m( box, 4.0f, 3.0f );
+		picture = m.map( 0, 0, 4, 3 );
+	}
+	lookMiniWorld( picture );
+	const Real sx = (Real)( picture.hi.x - picture.lo.x ) / 4.0f, sy = (Real)( picture.hi.y - picture.lo.y ) / 3.0f;
+	IRegion2D square;
+	square.lo.x = picture.lo.x + REAL_TO_INT_FLOOR( 1.5f * sx );
+	square.hi.x = picture.lo.x + REAL_TO_INT_FLOOR( 2.5f * sx );
+	square.lo.y = picture.lo.y + REAL_TO_INT_FLOOR( 1.0f * sy );
+	square.hi.y = picture.lo.y + REAL_TO_INT_FLOOR( 2.0f * sy );
+	lookMiniPlate( square );
+}
+
+/// a drawn row's value in its box
+static void lookDrawRowValue( const AsciiString &stem, Int value, const IRegion2D &box )
+{
+	HudLayoutRects r;
+	if( stem == "HudLayout" )
+	{
+		HudLayoutForScreen( 1920, 1080, value, HUD_WIDTH_FULL, &r );
+		lookMiniHud( LookMini( box, 1920.0f, 1080.0f ), r, value, 100 );
+	}
+	else if( stem == "HudWidth" )
+	{
+		// a 32:9 screen, where every choice parts from the others
+		const Int layout = lookShownValue( "HudLayout", HUD_LAYOUT_CLASSIC );
+		HudLayoutForScreen( 5120, 1440, layout, value, &r );
+		lookFill( box, GameMakeColor( 0, 0, 0, 200 ) );
+		lookMiniHud( LookMini( box, 5120.0f, 1440.0f ), r, layout, 100 );
+	}
+	else if( stem == "MinimapSize" )
+	{
+		Int layout = lookShownValue( "HudLayout", HUD_LAYOUT_CLASSIC );
+		if( layout == HUD_LAYOUT_SIDEBAR )
+			layout = HUD_LAYOUT_CLASSIC;
+		HudLayoutForScreen( 1920, 1080, layout, HUD_WIDTH_FULL, &r );
+		lookMiniHud( LookMini( box, 1920.0f, 1080.0f ), r, layout, value );
+	}
+	else if( stem == "HealthBars" )
+		lookMiniUnits( box, value, lookShownValue( "HealthBarColors", 0 ), lookShownValue( "PlayerColors", 0 ) );
+	else if( stem == "HealthBarColors" )
+		lookMiniUnits( box, 0, value, lookShownValue( "PlayerColors", 0 ) );
+	else if( stem == "PlayerColors" )
+		lookMiniUnits( box, -1, 0, value );
+	else if( stem == "FullscreenScaling" )
+		lookMiniScaling( box, value );
+}
+
+/// the pane's frames for a row from board y; returns the next block's top, y itself when it has none
+static Int lookPanePictures( const AsciiString &stem, const LookItem *item, Int y )
+{
+	Bool drawn = FALSE;
+	for( Int i = 0; i < ARRAY_SIZE( TheLookDrawnRows ); ++i )
+		if( stem == TheLookDrawnRows[ i ] )
+			drawn = TRUE;
+
+	// every value the row can take, in its own words
+	std::vector< LookShot > values;
+	Int picked = -1;
+	GameWindow *control = item ? item->control : NULL;
+	LookShot shot;
+	shot.image = NULL;
+	if( s_lookRail == 1 )
+	{
+		picked = lookClassicPicked() ? 0 : 1;
+		shot.value = 0;
+		shot.words = TheGameText->fetch( "GUI:OptionsLookClassic" );
+		values.push_back( shot );
+		shot.value = 1;
+		shot.words = TheGameText->fetch( "GUI:OptionsLookReforged" );
+		values.push_back( shot );
+	}
+	else if( control && BitTest( control->winGetStyle(), GWS_CHECK_BOX ) )
+	{
+		picked = lookValueOf( control );
+		for( Int v = 0; v < 2; ++v )
+		{
+			shot.value = v;
+			shot.words = TheGameText->fetch( v ? "GUI:OptionsValueOn" : "GUI:OptionsValueOff" );
+			values.push_back( shot );
+		}
+	}
+	else if( control && BitTest( control->winGetStyle(), GWS_COMBO_BOX ) )
+	{
+		picked = lookValueOf( control );
+		GameWindow *list = GadgetComboBoxGetListBox( control );
+		const Int count = list ? GadgetListBoxGetNumEntries( list ) : 0;
+		for( Int e = 0; e < count; ++e )
+		{
+			shot.value = e;
+			shot.words = lookEntryText( control, e );
+			values.push_back( shot );
+		}
+	}
+	else if( control && BitTest( control->winGetStyle(), GWS_HORZ_SLIDER | GWS_VERT_SLIDER ) )
+	{
+		// the two ends; a drawn slider (Minimap Size, in percent) also where it stands now
+		Int lo = 0, hi = 100;
+		GadgetSliderGetMinMax( control, &lo, &hi );
+		picked = GadgetSliderGetPosition( control );
+		const Int ends[ 3 ] = { lo, picked, hi };
+		for( Int e = 0; e < 3; ++e )
+		{
+			if( e == 1 && ( !drawn || picked <= lo || picked >= hi ) )
+				continue;
+			shot.value = ends[ e ];
+			if( drawn )
+				shot.words.format( u"%d%%", ends[ e ] );
+			else
+				shot.words = TheGameText->fetch( e == 0 ? "GUI:OptionsQualityStep0" : "GUI:OptionsQualityStep2" );
+			values.push_back( shot );
+		}
+	}
+
+	// the frames there are: a drawn row's every value, another row's values with a still
+	std::vector< LookShot > shots;
+	for( Int v = 0; v < (Int)values.size() && (Int)shots.size() < LOOK_SHOTS_MAX; ++v )
+	{
+		if( !drawn )
+		{
+			AsciiString name;
+			name.format( "OptPreview_%s_%d", stem.str(), values[ v ].value );
+			values[ v ].image = TheMappedImageCollection ? TheMappedImageCollection->findImageByName( name ) : NULL;
+			if( values[ v ].image == NULL )
+				continue;
+		}
+		shots.push_back( values[ v ] );
+	}
+	if( shots.empty() )
+		return y;
+
+	// two a row, 16:9, the words under each
+	GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+	for( Int i = 0; i < (Int)shots.size(); ++i )
+	{
+		const Int left = LOOK_PANE_INNER_LEFT + ( i % 2 ) * ( LOOK_SHOT_W + LOOK_SHOT_GAP );
+		const Int top = y + ( i / 2 ) * LOOK_SHOT_PITCH;
+		const IRegion2D box = lookRect( left, top, left + LOOK_SHOT_W, top + LOOK_SHOT_H );
+		if( shots[ i ].image )
+			TheDisplay->drawImage( shots[ i ].image, box.lo.x, box.lo.y, box.hi.x, box.hi.y );
+		else
+			lookDrawRowValue( stem, shots[ i ].value, box );
+		const Bool inUse = shots[ i ].value == picked;
+		if( inUse )
+			UIStyle::litEdge( box, UIStyle::ACTIVE );
+		else
+			lookOutline( box, UIStyle::FRAME );
+		lookDraw( UIStyle::fitText( shots[ i ].words, hint, lookPx( (Real)LOOK_SHOT_W ) ), hint, lookX( left ), lookY( top + LOOK_SHOT_H + 16 ),
+			inUse ? UIStyle::ACTIVE : UIStyle::INK );
+	}
+	return y + ( ( (Int)shots.size() + 1 ) / 2 ) * LOOK_SHOT_PITCH + 8;
+}
+
 static void lookPaneDraw( GameWindow *window, WinInstanceData *instData )
 {
 	if( s_lookShown == OPTIONS_PAGE_COUNT - 1 )
@@ -4133,7 +4367,7 @@ static void lookPaneDraw( GameWindow *window, WinInstanceData *instData )
 	if( stem.isEmpty() )
 		return;
 
-	// the label at 24 px and its badges, the plan's sentences, the cost
+	// the label at 24 px and its badges, the plan's sentences
 	GameFont *title = UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE, TRUE );
 	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
 	const Int innerW = lookPx( (Real)( LOOK_PANE_INNER_RIGHT - LOOK_PANE_INNER_LEFT ) );
@@ -4151,46 +4385,12 @@ static void lookPaneDraw( GameWindow *window, WinInstanceData *instData )
 		for( Int l = 0; l < (Int)lines.size(); ++l, y += 26 )
 			lookDraw( lines[ l ], body, lookX( LOOK_PANE_INNER_LEFT ), lookY( y + 12 ), UIStyle::INK );
 	}
-	if( item && ( s_lookShown == 1 || s_lookShown == 2 || s_lookShown == 3 ) && item->kind == LOOK_ROW )
-	{
-		y += 10;
-		Bool on = FALSE;
-		const Real ms = lookCostOf( *item, &on );
-		const Int middle = lookY( y + 12 );
-		Int x = lookX( LOOK_PANE_INNER_LEFT );
-		x += lookCaps( TheGameText->fetch( "GUI:OptionsCost" ), x, middle, UIStyle::MUTED ) + lookPx( 12.0f );
-		const Int mark = optionCostMark( ms );
-		for( Int b = 0; b < 3; ++b )
-		{
-			IRegion2D block;
-			block.lo.x = x + b * lookPx( 14.0f );
-			block.hi.x = block.lo.x + lookPx( 10.0f );
-			block.lo.y = middle - lookPx( 5.0f );
-			block.hi.y = middle + lookPx( 5.0f );
-			if( b < mark )
-				lookFill( block, UIStyle::EDGE_LIT );
-			else
-				lookOutline( block, UIStyle::FRAME );
-		}
-		x += lookPx( 54.0f );
-		UnicodeString words;
-		if( item->stem == "WaterStyle" )
-			words = TheGameText->fetch( "GUI:OptionsCostWaterStyle" );
-		else if( ms < 0.0f )
-			words = TheGameText->fetch( "GUI:OptionsCostUnmeasured" );
-		else if( ms < 0.15f )
-			words = TheGameText->fetch( "GUI:OptionsCostZero" );
-		else
-		{
-			words.format( TheGameText->fetch( "GUI:OptionsCostMs" ).str(), lookMs( ms ).str() );
-			words.concat( UIStyle::HEADER_JOINER );
-			words.concat( TheGameText->fetch( "GUI:OptionsCostRig" ) );
-		}
-		GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
-		lookDraw( UIStyle::fitText( words, hint, lookX( LOOK_PANE_INNER_RIGHT ) - x ), hint, x, middle, UIStyle::MUTED );
-		y += 26;
-	}
 	y += 18;
+
+	// what the row changes, one frame a value: the stills, or the layout drawn
+	const Int picturesTop = y;
+	y = lookPanePictures( stem, item, y );
+	const Bool pictured = y != picturesTop;
 
 	// what the row needs, each with its mark lit when met
 	std::vector< std::pair< UnicodeString, Bool > > needs;
@@ -4241,8 +4441,8 @@ static void lookPaneDraw( GameWindow *window, WinInstanceData *instData )
 	if( headed )
 		y += 12;
 
-	// a list's values spelled out, the one in use green, a measured price beside one that has it
-	if( item && item->control && BitTest( item->control->winGetStyle(), GWS_COMBO_BOX ) )
+	// a list's values spelled out, the one in use green, where no picture already names them
+	if( !pictured && item && item->control && BitTest( item->control->winGetStyle(), GWS_COMBO_BOX ) )
 	{
 		GameWindow *list = GadgetComboBoxGetListBox( item->control );
 		const Int count = list ? GadgetListBoxGetNumEntries( list ) : 0;
@@ -4252,21 +4452,12 @@ static void lookPaneDraw( GameWindow *window, WinInstanceData *instData )
 			GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
 			const Int picked = lookValueOf( item->control );
 			for( Int e = 0; e < count; ++e, y += 26 )
-			{
-				const Int middle = lookY( y + 13 );
-				const Int w = lookDraw( lookEntryText( item->control, e ), hint, lookX( LOOK_PANE_INNER_LEFT + 22 ), middle, e == picked ? UIStyle::ACTIVE : UIStyle::INK );
-				AsciiString costKey;
-				costKey.format( "OPTIONCOST:%s%d", stem.str(), e );
-				if( UIStyle::hasText( costKey.str() ) )
-					lookDraw( TheGameText->fetch( costKey ), hint, lookX( LOOK_PANE_INNER_LEFT + 22 ) + w + lookPx( 14.0f ), middle, UIStyle::MUTED );
-			}
+				lookDraw( lookEntryText( item->control, e ), hint, lookX( LOOK_PANE_INNER_LEFT + 22 ), lookY( y + 13 ), e == picked ? UIStyle::ACTIVE : UIStyle::INK );
 			y += 12;
 		}
 	}
 
-	// the rest: the whole page as set when it fits at 26 a row, otherwise the row's group; on Graphics,
-	// World and Effects every row's measured price on one scale, elsewhere every row's value
-	const Bool priced = s_lookShown == 1 || s_lookShown == 2 || s_lookShown == 3;
+	// the rest: the whole page as set when it fits at 26 a row, otherwise the row's group, every row's value
 	Int rows = 0;
 	for( Int i = 0; i < (Int)p.items.size(); ++i )
 		if( p.items[ i ].kind == LOOK_ROW && lookRowHere( p.items[ i ] ) )
@@ -4281,13 +4472,7 @@ static void lookPaneDraw( GameWindow *window, WinInstanceData *instData )
 		for( Int i = 0; i < (Int)p.items.size(); ++i )
 			if( p.items[ i ].kind == LOOK_HEAD && p.items[ i ].group == group )
 				name = p.items[ i ].window->winGetText();
-	y = lookPaneHead( priced ? "GUI:OptionsGroupCost" : "GUI:OptionsGroupAsSet", name, y );
-	Real dearest = 0.0f;
-	for( Int i = 0; i < (Int)p.items.size(); ++i )
-	{
-		Bool on = FALSE;
-		dearest = max( dearest, lookCostOf( p.items[ i ], &on ) );
-	}
+	y = lookPaneHead( "GUI:OptionsGroupAsSet", name, y );
 	GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
 	const Int nameRight = lookX( LOOK_PANE_INNER_LEFT + 300 );
 	const Int barLeft = lookX( LOOK_PANE_INNER_LEFT + 316 ), barRight = lookX( LOOK_PANE_INNER_RIGHT - 110 );
@@ -4304,21 +4489,7 @@ static void lookPaneDraw( GameWindow *window, WinInstanceData *instData )
 		const Bool dim = lookReasonOf( each ) != NULL || ( each.control && !each.control->winGetEnabled() );
 		lookDraw( UIStyle::fitText( each.window->winGetText(), hint, nameRight - lookX( LOOK_PANE_INNER_LEFT ) ), hint,
 			lookX( LOOK_PANE_INNER_LEFT ), middle, lit ? UIStyle::EDGE_LIT : dim ? UIStyle::MUTED : UIStyle::INK );
-		if( priced )
-		{
-			Bool on = FALSE;
-			const Real ms = lookCostOf( each, &on );
-			if( ms < 0.0f )
-				lookDraw( TheGameText->fetch( "GUI:OptionsNotMeasured" ), hint, lookX( LOOK_PANE_INNER_RIGHT ), middle, UIStyle::MUTED, 2 );
-			else
-			{
-				const Int len = dearest > 0.0f ? REAL_TO_INT_FLOOR( (Real)( barRight - barLeft ) * ms / dearest ) : 0;
-				const Color c = lit ? UIStyle::EDGE_LIT : ( !on || dim ) ? UIStyle::FRAME : UIStyle::EDGE;
-				TheDisplay->drawFillRect( barLeft, middle - lookPx( 3.0f ), max( 1, len ), max( 2, lookPx( 6.0f ) ), c );
-				lookDraw( lookMs( ms ), hint, lookX( LOOK_PANE_INNER_RIGHT ), middle, ( !on || dim ) ? UIStyle::MUTED : UIStyle::INK, 2 );
-			}
-		}
-		else if( each.control && BitTest( each.control->winGetStyle(), GWS_HORZ_SLIDER | GWS_VERT_SLIDER ) )
+		if( each.control && BitTest( each.control->winGetStyle(), GWS_HORZ_SLIDER | GWS_VERT_SLIDER ) )
 		{
 			Int lo = 0, hi = 100;
 			GadgetSliderGetMinMax( each.control, &lo, &hi );

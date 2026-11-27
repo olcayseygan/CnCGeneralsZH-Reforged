@@ -2971,6 +2971,19 @@ static void updateReplaySeek( void )
 }
 
 //-------------------------------------------------------------------------------------------------
+/// the top seat of the standings by `stat` still in the game, NO_PLAYER with nobody left: who a key that wants a
+/// seat takes when nobody is followed
+static Int topActiveSeat( Int stat )
+{
+	const std::vector< SpectatorStats > ranked = gatherSpectatorStats( SPECTATOR_STATS[ stat ], ThePlayerList->getLocalPlayer(),
+		PLAYERMASK_ALL, TRUE );
+	for( size_t row = 0; row < ranked.size(); row++ )
+		if( ranked[ row ].player->isPlayerActive() )
+			return ranked[ row ].player->getPlayerIndex();
+	return ObserverCamera::NO_PLAYER;
+}
+
+//-------------------------------------------------------------------------------------------------
 void InGameUI::runSpectatorAction( const std::string &action )
 {
 	if( action.compare( 0, CAMERA_ACTION.size(), CAMERA_ACTION ) == 0 )
@@ -2984,13 +2997,7 @@ void InGameUI::runSpectatorAction( const std::string &action )
 			// with nobody left in it the camera stays as it is
 			Int player = TheObserverCamera.getFollowedPlayerIndex();
 			if( player == ObserverCamera::NO_PLAYER )
-			{
-				const std::vector< SpectatorStats > ranked = gatherSpectatorStats( SPECTATOR_STATS[ m_rackStat ],
-					ThePlayerList->getLocalPlayer(), PLAYERMASK_ALL, TRUE );
-				for( size_t row = 0; row < ranked.size() && player == ObserverCamera::NO_PLAYER; row++ )
-					if( ranked[ row ].player->isPlayerActive() )
-						player = ranked[ row ].player->getPlayerIndex();
-			}
+				player = topActiveSeat( m_rackStat );
 			if( player != ObserverCamera::NO_PLAYER )
 				takePlayerCamera( player );
 		}
@@ -13120,10 +13127,17 @@ static const Image *obsPiece( const char *name, const char *state = "" )
 }
 
 /// a key of the watcher's sheet: its piece in the state the pointer and `lit` say (P lit or held down, H under
-/// the pointer), and a click that does `action`; TRUE while the pointer is on it
-static Bool consoleKey( const char *piece, const IRegion2D &r, Bool lit, Int action, Int arg )
+/// the pointer), and a click that does `action`; TRUE while the pointer is on it.  A key that cannot act draws its
+/// I piece and takes no click (the radar box's steel still swallows it)
+static Bool consoleKey( const char *piece, const IRegion2D &r, Bool lit, Int action, Int arg, Bool usable = TRUE )
 {
 	const Bool hot = consoleHot( r );
+	if( !usable )
+	{
+		if( const Image *image = obsPiece( piece, "I" ) )
+			TheDisplay->drawImage( image, r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+		return hot;
+	}
 	const Bool held = hot && TheMouse->getMouseStatus()->leftState != MBS_Up;
 	const Image *image = obsPiece( piece, lit || held ? "P" : hot ? "H" : "" );
 	if( image != NULL )
@@ -13888,9 +13902,11 @@ void InGameUI::drawObserverConsole( void )
 	static const Int KEY_ACTION[ OBSHUD_KEYS ] = { CON_STANDINGS, CON_VISION_CYCLE, CON_CHAT, CON_OPTIONS, CON_QUIT };
 	WindowLayout *options = TheShell != NULL ? TheShell->getOptionsLayout( FALSE ) : NULL;
 	const Bool lit[ OBSHUD_KEYS ] = { theStandingsOpen, FALSE, IsInGameChatActive(), options != NULL && !options->isHidden(), isQuitMenuVisible() };
+	// chat is dimmed where there is nobody to talk to (a skirmish watched alone, a replay)
+	const Bool usable[ OBSHUD_KEYS ] = { TRUE, TRUE, IsInGameChatAvailable(), TRUE, TRUE };
 	Int tip = -1;
 	for( Int each = 0; each < OBSHUD_KEYS; each++ )
-		if( consoleKey( KEY_PIECES[ each ], m.atL( ObsHud_key( each ) ), lit[ each ], KEY_ACTION[ each ], 0 ) )
+		if( consoleKey( KEY_PIECES[ each ], m.atL( ObsHud_key( each ) ), lit[ each ], KEY_ACTION[ each ], 0, usable[ each ] ) )
 			tip = each;
 
 	// the right box, as tall as its list
@@ -14308,9 +14324,22 @@ void InGameUI::runConsoleAction( Int action, Int arg )
 			theStandingsOpen = !theStandingsOpen;
 			break;
 		case CON_VISION_CYCLE:
-			// all, the team, the seat, round again; a seat's sight wants a followed seat, so without one it stays all
-			runConsoleAction( CON_VISION, picked != NULL ? ( theConsoleVision + 1 ) % 3 : 0 );
+		{
+			// all, the team, the seat, round again.  The fog drawn is the followed seat's (ObserverCamera), so a
+			// press with nobody followed follows the seat picked on the bar, or the top of the standings, first,
+			// as the camera's follow key does; it used to stay on all and change nothing
+			Int seat = TheObserverCamera.getFollowedPlayerIndex();
+			if( seat == ObserverCamera::NO_PLAYER && picked != NULL )
+				seat = picked->getPlayerIndex();
+			if( seat == ObserverCamera::NO_PLAYER )
+				seat = topActiveSeat( m_rackStat );
+			if( seat == ObserverCamera::NO_PLAYER )
+				break;
+			if( seat != TheObserverCamera.getFollowedPlayerIndex() )
+				follow( seat );
+			runConsoleAction( CON_VISION, ( theConsoleVision + 1 ) % 3 );
 			break;
+		}
 		case CON_DROP:
 			theDropOpen = theDropOpen == arg ? -1 : arg;
 			break;

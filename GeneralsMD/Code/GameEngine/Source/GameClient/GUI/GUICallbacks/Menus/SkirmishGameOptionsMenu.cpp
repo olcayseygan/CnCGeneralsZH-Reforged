@@ -931,14 +931,14 @@ static void startPressed(void)
 	// and a fresh Apocalypse map for the seats as they stand
 	if (skirmishApocalypse)
 	{
-		FitApocalypseRoom(TheSkirmishGameInfo);
+		FitApocalypseRoom(TheSkirmishGameInfo, APOCALYPSE_SKIRMISH_SEATS);
 		SetApocalypseMap(TheSkirmishGameInfo);
 	}
 
 	if (FitRandomMapToRoom(TheSkirmishGameInfo))
 	{
 		if (skirmishApocalypse)
-			FitApocalypseRoom(TheSkirmishGameInfo);	// a restaged map clears the start spots; the seats keep 1..n
+			FitApocalypseRoom(TheSkirmishGameInfo, APOCALYPSE_SKIRMISH_SEATS);	// a restaged map clears the start spots; the seats keep 1..n
 		skirmishPositionStartSpots();
 		skirmishUpdateSlotList();
 	}
@@ -1864,7 +1864,7 @@ void InitSkirmishGameGadgets( void )
 		}
 		else
 		{
-			PopulatePlayerSlotComboBox(comboBoxPlayer[i], white, TRUE);
+			PopulatePlayerSlotComboBox(comboBoxPlayer[i], white, !skirmishApocalypse, !skirmishApocalypse);
 		}
 
 		tmpString.format("SkirmishGameOptionsMenu.wnd:ComboBoxColor%d", i);
@@ -1946,7 +1946,7 @@ void skirmishUpdateSlotList( void )
 		if (skirmishDirectStrike)
 			FitDirectStrikeRoom(TheSkirmishGameInfo);
 		if (skirmishApocalypse)
-			FitApocalypseRoom(TheSkirmishGameInfo);
+			FitApocalypseRoom(TheSkirmishGameInfo, APOCALYPSE_SKIRMISH_SEATS);
     UpdateSlotList( TheSkirmishGameInfo, comboBoxPlayer,
 										comboBoxColor, comboBoxPlayerTemplate,
 									  comboBoxTeam, NULL, buttonStart, buttonMapStartPosition );
@@ -1956,9 +1956,9 @@ void skirmishUpdateSlotList( void )
 		updateMapStartSpots(TheSkirmishGameInfo, buttonMapStartPosition, FALSE);
 		if (skirmishDirectStrike)
 			LayoutDirectStrikeRoom(parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", TheSkirmishGameInfo);
-		// the four seats and no more; the scroll stays on the first page (seatScrollMax)
+		// the player's own seat and no more; the scroll stays on the first page (seatScrollMax)
 		if (skirmishApocalypse)
-			HideLobbySeatRowsFrom(parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", APOCALYPSE_SEATS);
+			HideLobbySeatRowsFrom(parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", APOCALYPSE_SKIRMISH_SEATS);
     doUpdateSlotList = TRUE;
   }
 }
@@ -2158,7 +2158,7 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	// Apocalypse the same way: a stand-in map for the seats, Start makes the match's own
 	if (skirmishApocalypse)
 	{
-		FitApocalypseRoom(TheSkirmishGameInfo);
+		FitApocalypseRoom(TheSkirmishGameInfo, APOCALYPSE_SKIRMISH_SEATS);	// the default Easy AI in seat 2 goes too
 		SetApocalypseMap(TheSkirmishGameInfo);
 	}
 	const MapMetaData *md = TheMapCache->findMap(TheSkirmishGameInfo->getMap());

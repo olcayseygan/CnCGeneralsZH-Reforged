@@ -213,7 +213,7 @@ TTC_NEAR_FRAMES: float = 0.5 * LOGICFRAMES_PER_GAME_SECOND     # the push falls 
 TTC_STRENGTH: float = 0.25              # the push at contact, in shares of the unit's top speed; the stand-in
                                         # tank's 0.75 bent real treads and wheels into a crawl
 TTC_AIR: float = 2.0                    # added to the radius sum between two moving units
-TTC_PARKED_SLACK: float = 4.0           # overlap allowed against a parked unit before it pushes
+TTC_PARKED_SLACK: float = 1.0           # overlap allowed against a parked unit before it pushes (swept 4 to 0 on bench seeds 2-3: 1 is nearest the game's overlap)
 TTC_SLOT_REACH: float = CELL            # a parked unit this far past contact from my goal never pushes
 TTC_KEEP_RIGHT: float = 0.6             # share of a push against the heading turned to the right
 TTC_MAX_BEND: float = math.radians(60.0)

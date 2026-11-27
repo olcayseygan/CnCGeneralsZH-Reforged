@@ -531,9 +531,10 @@ Bool AIIdentityChina::breachDrop( Real radius, Coord3D *target )
 
 // ---- Infantry ----
 
-/** A loaded crawler idle at home drives at the enemy's supply that no known gun covers, nearest our base first,
-	* and lets its men out there; once out they stand idle away from home and the shared AI sends them hunting under
-	* the company rule it gives every hunter.  RAID_SLOTS out at once, one leaving every RAID_EVERY. */
+/** A loaded crawler idle on our side of the map drives at the enemy's supply that no known gun covers, nearest
+	* our base first, and lets its men out there; once out they stand idle away from home and the shared AI sends
+	* them hunting under the company rule it gives every hunter.  RAID_SLOTS out at once, one leaving every
+	* RAID_EVERY. */
 void AIIdentityChina::doCrawlerRaids( void )
 {
 	Player *player = m_ai->m_player;
@@ -577,26 +578,33 @@ void AIIdentityChina::doCrawlerRaids( void )
 	if( slot < 0 )
 		return;
 
-	// a loaded crawler with nothing to do at home, not parked for a wave
+	// a loaded crawler standing about on our side of the map.  A parked one too: the shared AI parks every team
+	// for the next wave, its scripts' supply hunters included, and with parked ones left out 40 matches had two
+	// raids.  The rest of its wave goes without it
 	std::vector<Object *> owned;
 	player->iterateObjects( collectAll, &owned );
 	Object *crawler = NULL;
+	Int crawlers = 0;
+	Int loaded = 0;
 	for( size_t o = 0; o < owned.size() && crawler == NULL; ++o )
 	{
 		Object *obj = owned[ o ];
-		if( obj->isEffectivelyDead() || obj->getAI() == NULL || !templateNamed( obj->getTemplate(), "TroopCrawler" ) ||
-				obj->getContain() == NULL || obj->getContain()->getContainCount() == 0 || !m_ai->isAtHome( obj->getPosition() ) ||
-				!idleOrGuarding( obj ) )
+		if( obj->isEffectivelyDead() || obj->getAI() == NULL || !templateNamed( obj->getTemplate(), "TroopCrawler" ) )
 			continue;
-		Bool parked = FALSE;
-		for( Int i = 0; i < AIPlayer::MAX_HELD_TEAMS; ++i )
-			if( m_ai->m_heldUsed[ i ] && obj->getTeam() && m_ai->m_heldTeam[ i ] == obj->getTeam()->getID() )
-				parked = TRUE;
-		if( !parked )
+		++crawlers;
+		if( obj->getContain() == NULL || obj->getContain()->getContainCount() == 0 )
+			continue;
+		++loaded;
+		if( idleOrGuarding( obj ) && m_ai->isOurSideOfMap( obj->getPosition() ) )
 			crawler = obj;
 	}
 	if( crawler == NULL )
+	{
+		if( crawlers > 0 && tickDue( player, RAID_EVERY ) )
+			DEBUG_LOG(("AI IDENTITY frame %d player %d has no crawler to raid with: %d crawlers, %d loaded, none idle on our side\n",
+				now, me, crawlers, loaded));
 		return;
+	}
 
 	// his gatherers and supply centers this AI knows of, out of every known gun's reach, nearest our base first
 	std::vector<AIKnownGun> guns;
@@ -619,7 +627,12 @@ void AIIdentityChina::doCrawlerRaids( void )
 		}
 	}
 	if( target == NULL )
+	{
+		if( tickDue( player, RAID_EVERY ) )
+			DEBUG_LOG(("AI IDENTITY frame %d player %d crawler %d has no raid target: no supply of his known out of his known guns (%d)\n",
+				now, me, crawler->getID(), (Int)guns.size()));
 		return;
+	}
 	m_crawler[ slot ] = crawler->getID();
 	m_crawlerSent[ slot ] = now;
 	m_crawlerTarget[ slot ] = *target->getPosition();

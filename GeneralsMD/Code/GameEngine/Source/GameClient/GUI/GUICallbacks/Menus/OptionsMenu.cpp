@@ -3502,7 +3502,8 @@ static void lookNothingDraw( GameWindow *, WinInstanceData * )
 static void lookHeadDraw( GameWindow *window, WinInstanceData *instData )
 {
 	const IRegion2D r = lookWindowRect( window );
-	lookCaps( window->winGetText(), r.lo.x + lookPx( 16.0f ), r.lo.y + lookPx( 17.0f ), UIStyle::ACTIVE );
+	// a head is a static text, whose words live in the gadget and not in the window's own text
+	lookCaps( GadgetStaticTextGetText( window ), r.lo.x + lookPx( 16.0f ), r.lo.y + lookPx( 17.0f ), UIStyle::ACTIVE );
 	UIStyle::litLine( r.lo.x, r.lo.y + lookPx( 31.0f ), r.hi.x - r.lo.x, 1, UIStyle::FRAME );
 }
 
@@ -3685,7 +3686,7 @@ static void lookTabDraw( GameWindow *window, WinInstanceData *instData )
 	else
 		for( Int i = 0; i < (Int)s_lookPage[ page ].items.size(); ++i )
 			if( s_lookPage[ page ].items[ i ].kind == LOOK_HEAD )
-				heads.push_back( s_lookPage[ page ].items[ i ].window->winGetText() );
+				heads.push_back( GadgetStaticTextGetText( s_lookPage[ page ].items[ i ].window ) );
 	const UnicodeString longRate = TheGameText->fetch( "GUI:OptionsHeadFrameRate" );
 	const Int room = r.hi.x - lookPx( 10.0f ) - x;
 	for( Int pass = 0; pass < 2; ++pass )
@@ -4392,7 +4393,7 @@ static void lookPaneDraw( GameWindow *window, WinInstanceData *instData )
 	if( !whole && group >= 0 )
 		for( Int i = 0; i < (Int)p.items.size(); ++i )
 			if( p.items[ i ].kind == LOOK_HEAD && p.items[ i ].group == group )
-				name = p.items[ i ].window->winGetText();
+				name = GadgetStaticTextGetText( p.items[ i ].window );
 	y = lookPaneHead( "GUI:OptionsGroupAsSet", name, y );
 	GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
 	const Int nameRight = lookX( LOOK_PANE_INNER_LEFT + 300 );

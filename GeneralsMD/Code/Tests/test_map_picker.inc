@@ -21,7 +21,7 @@ TEST( map_picker_grid_fills_its_height )
 	CHECK( official.tileHeight >= official.tileWidth - 2 * MAP_PICKER_INSET + MAP_PICKER_NAME_ROOM );
 
 	// the Random tab's map types under MAP SIZE: from nine columns, ten win
-	const MapPickerShape types = MapPickerGridShape( 60, 1276, 302, 952, 9 );
+	const MapPickerShape types = MapPickerGridShape( 60, 1276, 306, 952, 9 );
 	CHECK_EQ( types.columns, 10 );
 	CHECK_EQ( types.rows, 4 );
 	CHECK( types.tileHeight >= types.tileWidth - 2 * MAP_PICKER_INSET + MAP_PICKER_NAME_ROOM );

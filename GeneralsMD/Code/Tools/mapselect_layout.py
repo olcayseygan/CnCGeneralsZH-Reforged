@@ -64,11 +64,11 @@ NAMED = ["ButtonOK", "ButtonBack", "ListboxMap", "RadioButtonSystemMaps", "Radio
 
 TAB_HEIGHT = 40          # the tabs, 126 to 166
 CONTENT_TOP = 182        # the grid, or the Random tab's MAP SIZE head
-HEAD_HEIGHT = 22         # MAP SIZE, MAP TYPE
-SIZE_TOP = 210           # the five size boxes, 44 high
+HEAD_HEIGHT = 24         # MAP SIZE, MAP TYPE; each 8 over what it heads, the type head 16 under the sizes
+SIZE_TOP = 214           # the five size boxes, 44 high
 SIZE_HEIGHT = 44
 TYPE_HEAD_TOP = 274
-TYPE_TOP = 302           # the map type grid
+TYPE_TOP = 306           # the map type grid (MapPicker.cpp's PICK_TYPES_TOP)
 CANCEL_WIDTH = 200
 KEY_GAP = 16             # Cancel to Accept, UIStyle::MENU_KEY_GAP
 MAP_ROWS = 4096

@@ -5353,7 +5353,7 @@ Bool PartitionManager::findPositionAround( const Coord3D *center,
 // is in Object where Allies make sense.  AddLooker literally just adds a looker for the player you specify.
 // This way, Full map reveals and Observer mode active look will not carry over to all 
 // allies.  They'll use the RevealWholeDamnMap series, which call addLooker directly.
-void PartitionManager::doShroudReveal(Real centerX, Real centerY, Real radius, PlayerMaskType playerMask) 
+void PartitionManager::doShroudReveal(Real centerX, Real centerY, Real radius, PlayerMaskType playerMask)
 {
 	Int cellCenterX, cellCenterY;
 	ThePartitionManager->worldToCell(centerX, centerY, &cellCenterX, &cellCenterY);
@@ -5423,7 +5423,7 @@ void PartitionManager::resetPendingUndoShroudRevealQueue()
 }
 
 //-----------------------------------------------------------------------------
-void PartitionManager::undoShroudReveal(Real centerX, Real centerY, Real radius, PlayerMaskType playerMask) 
+void PartitionManager::undoShroudReveal(Real centerX, Real centerY, Real radius, PlayerMaskType playerMask)
 {
 	Int cellCenterX, cellCenterY;
 	ThePartitionManager->worldToCell(centerX, centerY, &cellCenterX, &cellCenterY);

@@ -671,7 +671,7 @@ void AIUpdateInterface::doPathfind( PathfindServicesInterface *pathfinder )
 pathfinder (air units just move point to point) it generates the path immediately.  Otherwise the path
 will be processed when we get to the front of the pathfind queue. jba */
 //-------------------------------------------------------------------------------------------------
-void AIUpdateInterface::requestPath( Coord3D *destination, Bool isFinalGoal ) 
+void AIUpdateInterface::requestPath( Coord3D *destination, Bool isFinalGoal )
 {
 
 	if (m_locomotorSet.getValidSurfaces() == 0) {
@@ -760,7 +760,7 @@ void AIUpdateInterface::requestAttackPath( ObjectID victimID, const Coord3D* vic
 }
 
 //-------------------------------------------------------------------------------------------------
-void AIUpdateInterface::requestApproachPath( Coord3D *destination ) 
+void AIUpdateInterface::requestApproachPath( Coord3D *destination )
 {
 	if (m_locomotorSet.getValidSurfaces() == 0) {
 		DEBUG_CRASH(("Attempting to path immobile unit."));

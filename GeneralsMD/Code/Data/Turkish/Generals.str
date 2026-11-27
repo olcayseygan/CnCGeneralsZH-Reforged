@@ -22322,7 +22322,7 @@ GUI:GameModeDirectStrikeSolo
 END
 
 GUI:GameModeApocalypseSolo
-"YALNIZ SEN"
+"SEN VE EN ÇOK 3 YZ"
 END
 
 // Menu redesign package 5, the boxes: the in-game menu, the disconnect box, Establish Connections, the
@@ -22575,7 +22575,7 @@ GUI:ApocalypseBossHealth
 END
 
 GUI:ApocalypseOpenSeat
-"Katılan her oyuncu her dalgaya %d puan ekler"
+"Dolu her yer her dalgaya %d puan ekler"
 END
 
 GUI:ApocalypseNights

@@ -160,7 +160,7 @@ SCREENS = {
     # the army screen from seat 1's army box, drawn whole: tabs, a side's RANDOM key and first tile, the tick
     # box on Custom, BACK and CONFIRM; once it closes the room must take clicks again (room_check)
     "factionpicker": dict(args=["-skirmishlobby"], nav=["SkirmishGameOptionsMenu.wnd:ComboBoxPlayerTemplate0"],
-                          picker="FactionPicker.wnd:FactionPicker", room_check=True,
+                          picker="FactionPicker.wnd:FactionPicker", room_check=True, parts_only=True,
                           parts=[("tab random all", [(258, 146)]), ("tab custom", [(662, 146)]),
                                  ("side 1 random key", [(150, 259)]), ("side 1 tile 1", [(328, 275)]),
                                  ("side 2 tile 1", [(328, 469)]),
@@ -1045,7 +1045,8 @@ class Walk(object):
                 self.walk_persist()
                 self.game.stop()
                 self.root = None
-            self.walk([], 0)
+            if not self.game.spec.get("parts_only"):		# a picker drawn whole has nothing else to walk
+                self.walk([], 0)
         except Crashed as e:
             self.record("(screen)", "crashes", str(e), [])
         finally:

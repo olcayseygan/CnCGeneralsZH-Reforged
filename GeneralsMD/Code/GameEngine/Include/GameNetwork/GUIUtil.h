@@ -46,9 +46,8 @@ void ShowUnderlyingGUIElements( Bool show, const char *layoutFilename, const cha
 
 // Every seat a lobby can offer - Open, Closed and the six rungs of the AI ladder - in one list,
 // each entry tagged with the SlotState it stands for.  allowTakeover adds the empty seat you
-// take over in game, which only the skirmish lobby offers.  allowComputers FALSE leaves the ladder out
-// (an Apocalypse room: Open, Closed and players only)
-void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeover, Bool allowComputers = TRUE);
+// take over in game, which only the skirmish lobby offers.
+void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeover);
 void PopulateColorComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myGame, Bool isObserver = FALSE);
 // directStrike leaves out the sides that mode does not offer (Turkiye)
 void PopulatePlayerTemplateComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myGame, Bool allowObservers, Bool directStrike = FALSE );
@@ -251,23 +250,15 @@ Bool DirectStrikeTakeSeat(GameInfo *game, Int slot, Int seat);
 // lobby over the room's layout, DirectStrikeLobby.h, its three seat cards a team facing each other.  A
 // room calls it after every slot list repaint; ShutdownLobbySeatVisuals takes it off.
 void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, const GameInfo *game);
-enum
-{
-	APOCALYPSE_SEATS = 4,					///< a network room's co-op seats: RMG_APOC_SEATS_MOST, which clampSettings holds the map to
-	APOCALYPSE_SKIRMISH_SEATS = 1,		///< the skirmish room's: the player alone (the owner, 2026-11-27)
-};
+enum { APOCALYPSE_SEATS = 4 };	///< RMG_APOC_SEATS_MOST, which clampSettings holds the map to
 // Apocalypse in the skirmish room: like Direct Strike the map's name carries the mode
 // (ApocalypseDirector wakes on its waypoints), so nothing travels in the options string.  A fresh
 // Apocalypse map for the room's seats, staged, in the cache and the game's, CRC and size with it
 Bool SetApocalypseMap(GameInfo *game, Bool allSeats = FALSE);	// allSeats: four starts, so a network room opens four seats
-// No computer seats (the owner, 2026-11-27): one becomes Open within the room's seats and Closed past
-// them, as does any empty seat past them; the seated players on starts 1..n in seat order (the day
-// waves' first front faces start 1), and the rules that mean nothing in a co-op survival off.  seats is
-// APOCALYPSE_SEATS for a network room, APOCALYPSE_SKIRMISH_SEATS for the skirmish room; TRUE when it
-// changed anything
-Bool FitApocalypseRoom(GameInfo *game, Int seats = APOCALYPSE_SEATS);
-// the SlotState FitApocalypseRoom gives seat `seat` of a room of `seats` that holds SlotState `state`
-Int ApocalypseSeatState(Int seat, Int seats, Int state);
+// Seats past four closed (the map's starts, clampSettings), the seated players on starts 1..n in seat
+// order (the day waves' first front faces start 1), and the rules that mean nothing in a co-op survival
+// off; TRUE when it changed anything
+Bool FitApocalypseRoom(GameInfo *game);
 // a generated Apocalypse map ("rmg_v<n>_<seed>_<n>p_<cells>c_apocalypse"), by its name or its folder's,
 // '\' or '/' paths alike: how a joiner, a game list and a network room know the mode
 Bool IsApocalypseMap(const AsciiString &map);

@@ -230,7 +230,7 @@ void ShowUnderlyingGUIElements( Bool show, const char *layoutFilename, const cha
 	* SlotState order and read the choice back as SlotState(position), so a seat appended to the enum
 	* - the takeover seat - could not be offered there at all.  Every entry now carries the state it
 	* stands for and the position it sits at means nothing. */
-void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeover, Bool allowComputers)
+void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeover)
 {
 	if (!comboBox)
 		return;
@@ -254,14 +254,9 @@ void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeo
 	// The combo box only grows its listbox when an add crosses the current length, and both
 	// GadgetListBoxSetItemData and the add itself silently do nothing past it - so make room for
 	// the whole list first, and tell the box how many rows to drop down before the first add.
-	// Open and Closed come first, the takeover seat next, the ladder after it
-	const Int firstComputer = 3;
-	const Int ladder = (Int)(sizeof(seats)/sizeof(seats[0])) - firstComputer;
 	Int numSeats = (Int)(sizeof(seats)/sizeof(seats[0]));
 	if (!allowTakeover)
 		--numSeats;
-	if (!allowComputers)
-		numSeats -= ladder;
 	GameWindow *listBox = GadgetComboBoxGetListBox(comboBox);
 	if (listBox)
 	{
@@ -275,8 +270,6 @@ void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeo
 	for (Int i = 0; i < (Int)(sizeof(seats)/sizeof(seats[0])); ++i)
 	{
 		if (seats[i] == SLOT_TAKEOVER && !allowTakeover)
-			continue;
-		if (i >= firstComputer && !allowComputers)
 			continue;
 		const UnicodeString name = seats[i] > SLOT_TAKEOVER ? SlotStateName(SLOT_BRUTAL_AI, seats[i]) : SlotStateName((SlotState)seats[i]);
 		GadgetComboBoxAddEntry(comboBox, name, color);
@@ -1890,20 +1883,7 @@ Bool SetApocalypseMap(GameInfo *game, Bool allSeats)
 	return TRUE;
 }
 
-Int ApocalypseSeatState(Int seat, Int seats, Int state)
-{
-	/* No computer in Apocalypse (the owner, 2026-11-27: solo alone, co-op for up to four players).  A
-		 computer seat, a saved slot list's or the room's default one, opens for a player within the room's
-		 seats; past them every seat but a human's closes (the map has four starts; a human is never thrown
-		 out). */
-	if (state == SLOT_PLAYER)
-		return state;
-	if (seat >= seats)
-		return SLOT_CLOSED;
-	return IsAISlotState((SlotState)state) ? (Int)SLOT_OPEN : state;
-}
-
-Bool FitApocalypseRoom(GameInfo *game, Int seats)
+Bool FitApocalypseRoom(GameInfo *game)
 {
 	Bool changed = FALSE;
 	Int nextStart = 0;
@@ -1912,10 +1892,10 @@ Bool FitApocalypseRoom(GameInfo *game, Int seats)
 		GameSlot *slot = game->getSlot(i);
 		if (slot == NULL)
 			continue;
-		const SlotState fit = (SlotState)ApocalypseSeatState(i, seats, slot->getState());
-		if (slot->getState() != fit)
+		// the map has four starts; a human is never thrown out
+		if (i >= APOCALYPSE_SEATS && !slot->isHuman() && slot->getState() != SLOT_CLOSED)
 		{
-			slot->setState(fit);
+			slot->setState(SLOT_CLOSED);
 			changed = TRUE;
 		}
 		/* The seats stand on starts 1, 2, 3 in seat order.  The day waves rotate over as many fronts as
@@ -3117,12 +3097,6 @@ namespace
 		return theRoomGame != NULL && IsApocalypseMap(theRoomGame->getMap());
 	}
 
-	/// the seats an Apocalypse room lists: the player alone in a skirmish, four in a network room
-	Int apocRoomSeats(void)
-	{
-		return theRoomKind == ROOM_SKIRMISH ? (Int)APOCALYPSE_SKIRMISH_SEATS : (Int)APOCALYPSE_SEATS;
-	}
-
 	/// words from a screen x, centred on board y; their width on screen
 	Int roomDrawAt(Int key, const UnicodeString &text, GameFont *font, Int screenX, Int middle, Color color)
 	{
@@ -3219,7 +3193,7 @@ namespace
 		apocMark(middle, 16);
 		const Int nameW = apocCaps(TheGameText->fetch("GUI:ApocalypseSurvivors"), roomX(ROOM_LEFT + 24), middle, UIStyle::INK);
 		UnicodeString count;
-		count.format(u"%d / %d", seated, apocRoomSeats());
+		count.format(u"%d / %d", seated, (Int)APOCALYPSE_SEATS);
 		const Int countX = roomX(ROOM_LEFT + 24) + nameW + roomPx(12);
 		const Int countW = roomDrawAt(key + 1, count, UIStyle::menuFont(UIStyle::MENU_TEXT_BODY), countX, middle, UIStyle::INK);
 		const Int health = Apocalypse_bossHealthPercent(max(1, seated));
@@ -3880,12 +3854,12 @@ namespace
 			if (md)
 				count = max(count, min((Int)MAX_SLOTS, md->m_numPlayers));
 		}
-		/* The Apocalypse room lists its seats always, four in a network room and the player's own alone in
-			 the skirmish room.  Its skirmish map is made for the seats taken, so the count above (the last seat
-			 not closed, or the map's starts) dropped a seat closed at the end of the four off the list, and
-			 nothing could open it again: its row was parked and the walker's picks on it went nowhere. */
+		/* The Apocalypse room lists its four seats always.  Its skirmish map is made for the seats taken,
+			 so the count above (the last seat not closed, or the map's starts) dropped a seat closed at the
+			 end of the four off the list, and nothing could open it again: its row was parked and the
+			 walker's picks on it went nowhere. */
 		if (IsApocalypseMap(theRoomGame->getMap()))
-			count = min(theRoomRowCount, apocRoomSeats());
+			count = min(theRoomRowCount, (Int)APOCALYPSE_SEATS);
 		Bool listOpen = FALSE;
 		for (Int row = 0; row < theRoomRowCount; ++row)
 			listOpen = listOpen || roomComboOpen(theRoomRows[row].team);

@@ -411,6 +411,9 @@ static void takeRows( PickerGrid &g, const MapPickerShape &shape )
 	g.rows.resize( entries, blank );
 	g.first = MapPickerFirstRow( selectedRow( g ), shape.columns, shape.rows, entries );
 	g.pressRow = -1;
+	// the list's own position follows the grid's (scrollTo says why)
+	if( entries > 0 )
+		GadgetListBoxSetTopVisibleEntry( g.list, min( g.first * shape.columns, entries - 1 ) );
 }
 
 /// the tiles of rows firstRow to lastRow, the screen's first tile at the area's top left
@@ -1103,6 +1106,11 @@ static void scrollTo( PickerGrid &g, Int first )
 	Int allRows = 0;
 	layoutCells( g, cells, shape, allRows );
 	g.first = max( 0, min( first, allRows - shape.rows ) );
+	/* The list behind the grid follows to the grid's first row on screen, so the list's own position
+		 (what Tools/ui_walk.py reads as a list's scroll, through ControlServer's uitree) says the grid
+		 moved: the wheel was turning the tiles while the walker saw a list that never scrolled. */
+	if( g.list && (Int)g.rows.size() > 0 )
+		GadgetListBoxSetTopVisibleEntry( g.list, min( g.first * shape.columns, (Int)g.rows.size() - 1 ) );
 }
 
 static WindowMsgHandledType gridInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )

@@ -284,6 +284,8 @@ void UpdateLocalPlayerStats(void)
 static Bool s_aiAsked = FALSE;							///< ai.start is out
 static Int s_aiArmy = PLAYERTEMPLATE_RANDOM;	///< the army it named, which the player then plays
 static UnicodeString s_aiRefusal;					///< why the last Play did not start, shown on the card over Play
+static UnicodeString s_aiWaitLine;				///< while ai.start is out: "Starting the match...", later "still waiting"
+static UnsignedInt s_aiAskedAt = 0;				///< when it went out
 static Bool s_cardsDirty = TRUE;						///< the cards' words want laying out again
 static Bool s_playOnEntry = FALSE;					///< WOLWelcomeMenuStartPlayVsAIOnEntry: the next init presses Play
 
@@ -385,6 +387,10 @@ void WOLPlayVsAI( void )
 	const PlayerTemplate *army = s_aiArmy >= 0 ? ThePlayerTemplateStore->getNthPlayerTemplate( s_aiArmy ) : NULL;
 	OnlineRequestAIMatch( army ? army->getName() : AsciiString( "Random" ), aiGameSpeed() );
 	s_aiAsked = TRUE;
+	// the card says the ask is out until the server answers it
+	s_aiAskedAt = Clock_Milliseconds();
+	s_aiWaitLine = TheGameText->fetch( "GUI:OnlineAIAsking" );
+	s_cardsDirty = TRUE;
 }
 
 /// the answer to Play: the match starts, or the reason it did not goes on the Play vs AI card
@@ -404,8 +410,21 @@ Bool WOLPlayVsAIUpdate( void )
 	OnlineAIMatch ai;
 	const OnlineAIMatchState state = OnlineGetAIMatch( ai );
 	if (state == ONLINE_AI_WAITING)
+	{
+		// a team start waits up to 15 s on the party's hubs; past AI_ASK_SLOW_MS the line says the server is slow.
+		// ponytail: no give-up, a late ai.ready still starts the match (giving up would leave it open, a loss)
+		static const UnsignedInt AI_ASK_SLOW_MS = 30000;
+		if (s_aiAsked && Clock_Milliseconds() - s_aiAskedAt > AI_ASK_SLOW_MS && s_aiWaitLine.compare( TheGameText->fetch( "GUI:OnlineAIStillWaiting" ) ) != 0)
+		{
+			s_aiWaitLine = TheGameText->fetch( "GUI:OnlineAIStillWaiting" );
+			s_cardsDirty = TRUE;
+			DEBUG_LOG(("ONLINE AI WAITING over %u ms\n", AI_ASK_SLOW_MS));
+		}
 		return TRUE;
+	}
 	s_aiAsked = FALSE;
+	s_aiWaitLine.clear();
+	s_cardsDirty = TRUE;
 	UnicodeString what;
 	if (state == ONLINE_AI_READY)
 	{
@@ -1225,7 +1244,8 @@ static void refreshCards( void )
 	// clear of LEAVE at its right
 	ai.facts = OnlineTeamAIAvailable() ? 4 : 3;
 	const Bool leaveShown = buttonLeaveParty && !buttonLeaveParty->winIsHidden();
-	setCardStatus( ai, s_aiRefusal.isEmpty() ? s_teamLine : s_aiRefusal, leaveShown ? 126 : 0 );
+	const UnicodeString &aiLine = !s_aiRefusal.isEmpty() ? s_aiRefusal : !s_aiWaitLine.isEmpty() ? s_aiWaitLine : s_teamLine;
+	setCardStatus( ai, aiLine, leaveShown ? 126 : 0 );
 
 	HubCard &qm = s_cards[ CARD_QUICK_MATCH ];
 	const UIStyle::RatingTier tier = UIStyle::playerTier( info );

@@ -10434,3 +10434,11 @@ END
 GUI:GameModeTeamAI
 "TEAM VS AI"
 END
+
+GUI:OnlineAIAsking
+"Starting the match..."
+END
+
+GUI:OnlineAIStillWaiting
+"The server has not answered yet. Still waiting."
+END

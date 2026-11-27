@@ -24610,3 +24610,11 @@ END
 GUI:GameModeTeamAI
 "BİLGİSAYARA KARŞI TAKIM"
 END
+
+GUI:OnlineAIAsking
+"Maç başlatılıyor..."
+END
+
+GUI:OnlineAIStillWaiting
+"Sunucu henüz yanıt vermedi, bekleniyor."
+END

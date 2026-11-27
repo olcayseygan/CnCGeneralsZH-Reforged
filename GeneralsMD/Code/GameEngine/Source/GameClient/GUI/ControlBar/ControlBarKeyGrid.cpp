@@ -754,7 +754,7 @@ void ControlBar::drawKeyGridConsole( void )
 		steelPlate( moved( kg.box, d ) );
 		steelPlate( moved( kg.spine, d ) );
 		IRegion2D lower = moved( kg.spine, d );
-		lower.lo.y = deckAt.lo.y;
+		lower.lo.y = moved( kg.deck, d ).lo.y;
 		steelPlate( lower );
 		steelPlate( moved( kg.head, d ) );
 		for( Int row = 0; row < 3; row++ )
@@ -764,7 +764,7 @@ void ControlBar::drawKeyGridConsole( void )
 			back.lo.x -= lip;
 			back.lo.y -= lip;
 			back.hi.x += lip;
-			back.hi.y = row == 2 ? TheDisplay->getHeight() : back.hi.y + lip;
+			back.hi.y = row == 2 ? screenH : back.hi.y + lip;
 			steelPlate( moved( back, d ) );
 		}
 		for( Int place = 0; place < COMMAND_PLACE_COUNT; place++ )

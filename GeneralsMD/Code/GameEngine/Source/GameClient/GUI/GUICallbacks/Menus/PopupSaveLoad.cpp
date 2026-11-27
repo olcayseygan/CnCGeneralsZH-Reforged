@@ -365,9 +365,10 @@ static void drawSaveDetails( const AvailableGameInfo *info )
 	saveFact( fx, top + 162, SPL::RIGHT, "GUI:SPLoads", TheGameText->fetch( loads ? "GUI:SPLoadsYes" : "GUI:SPLoadsNo" ), loads ? INK : MUTED );
 	saveFact( fx, top + 216, SPL::RIGHT, "GUI:SPFile", file );
 
-	// the mission's place, then how hard and how long, or why it will not load
+	// the mission's place (a skirmish's map), then how hard and how long, or why it will not load
 	const Int x0 = SPP::point( (Real)SPL::SAVE_DETAILS_LEFT, 0.0f ).x, x1 = SPP::point( (Real)SPL::RIGHT, 0.0f ).x;
-	SPP::section( saveText, x0, x1, SPP::point( 0.0f, (Real)SPL::SAVE_MISSION_TOP ).y, TheGameText->fetch( "GUI:SPMission" ) );
+	SPP::section( saveText, x0, x1, SPP::point( 0.0f, (Real)SPL::SAVE_MISSION_TOP ).y,
+		TheGameText->fetch( campaign != NULL ? "GUI:SPMission" : "GUI:SPMap" ) );
 	Bool labelled = FALSE;
 	UnicodeString place = TheGameText->fetch( save.mapLabel, &labelled );
 	if( !labelled )
@@ -383,13 +384,20 @@ static void drawSaveDetails( const AvailableGameInfo *info )
 	}
 	if( !haveExtras )
 		return;
+	// the campaign's difficulty; a skirmish has none of its own (each computer seat has its level, which the
+	// list does not read), so its PLAYED FOR takes the first place
 	const Int half = ( SPL::SAVE_DETAILS_LEFT + SPL::RIGHT ) / 2;
-	const char *difficulty = extras.difficulty == DIFFICULTY_EASY ? "GUI:Easy" : extras.difficulty == DIFFICULTY_HARD ? "GUI:Hard" : "GUI:Medium";
-	saveFact( SPL::SAVE_DETAILS_LEFT, SPL::SAVE_DIFFICULTY_TOP, half - 12, "GUI:SPDifficulty", TheGameText->fetch( difficulty ) );
+	Int playedAt = SPL::SAVE_DETAILS_LEFT;
+	if( campaign != NULL )
+	{
+		const char *difficulty = extras.difficulty == DIFFICULTY_EASY ? "GUI:Easy" : extras.difficulty == DIFFICULTY_HARD ? "GUI:Hard" : "GUI:Medium";
+		saveFact( SPL::SAVE_DETAILS_LEFT, SPL::SAVE_DIFFICULTY_TOP, half - 12, "GUI:SPDifficulty", TheGameText->fetch( difficulty ) );
+		playedAt = half;
+	}
 	if( extras.frames > 0 )
 	{
 		const Int perSecond = save.framesPerSecond > 0 ? save.framesPerSecond : LOGICFRAMES_PER_SECOND;
-		saveFact( half, SPL::SAVE_DIFFICULTY_TOP, SPL::RIGHT, "GUI:SPPlayedFor", lengthText( (Int)( extras.frames / perSecond ) ) );
+		saveFact( playedAt, SPL::SAVE_DIFFICULTY_TOP, SPL::RIGHT, "GUI:SPPlayedFor", lengthText( (Int)( extras.frames / perSecond ) ) );
 	}
 }
 

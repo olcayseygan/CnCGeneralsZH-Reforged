@@ -19,6 +19,7 @@ and the client-side input that goes through the game's own message stream:
     click <x> <y> [HOLD]                             left click at a screen pixel: selects, places;
                                                      HOLD keeps the button down until the next click
     rclick <x> <y> [HOLD]                            right click there: orders, rally point, minimap
+    wheel <notches>                                  the mouse wheel, up positive: zoom, freecam lens
     aim <CommandButton> [<Object>]                   press that button on your first object owning its
                                                      power (of that template): its cursor is up, hover
                                                      moves its ground marker, click fires it

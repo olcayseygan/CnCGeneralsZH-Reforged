@@ -1231,6 +1231,7 @@ void W3DView::setFreeCamera( Bool on )
 	if (on == m_freeCamera)
 		return;
 
+	const Real flownFov = getFreeCameraFov();
 	if (on)
 	{
 		// take off from where the player's camera is, looking where it looks (a W3D camera looks down -Z)
@@ -1261,6 +1262,9 @@ void W3DView::setFreeCamera( Bool on )
 		m_3DCamera->Set_View_Plane( perspectiveHorizontalFov( getWidth() ), -1 );
 	// leaving, the player's camera is rebuilt from its look point, which never moved
 	setCameraTransform();
+	DEBUG_LOG(( "FREECAM: %s at %.0f %.0f %.0f %.1f %.1f, flown on %.1f deg, the camera's lens now %.1f deg\n", on ? "up" : "landed",
+		m_freeCameraEye.X, m_freeCameraEye.Y, m_freeCameraEye.Z, m_freeCameraHeading * 180.0f / PI, m_freeCameraTilt * 180.0f / PI,
+		flownFov * 180.0f / PI, m_3DCamera->Get_Horizontal_FOV() * 180.0f / PI ));
 }
 
 //-------------------------------------------------------------------------------------------------

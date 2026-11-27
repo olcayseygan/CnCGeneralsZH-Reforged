@@ -148,6 +148,7 @@ private:
 	void addConstraint( Int a, Int b, Real minD, Real maxD );
 	void step( Real dt, Bool gravity, Real sinkOffset );
 	Real worstStretch( Int *which ) const;	///< how far the constraint furthest out is, and which one
+	Bool fitTrunk( Int passes, Bool carryVelocity );	///< the trunk put back in its shape at death, turned to fit; FALSE with no trunk
 	void gatherObstacles( const Vector3 &at );	///< the vehicles and buildings the body could fall into
 	void collide( Vector3 &x );						///< a particle pushed out of them
 	void pose( RenderObjClass *robj, Real sinkOffset );
@@ -173,6 +174,7 @@ private:
 	Real m_height0;						///< the drawable's height over the drawn ground at death, when below it; the sink is measured from there
 	Int m_stillSteps;
 	Int m_heldAwake;					///< times it came to rest with its constraints still out
+	Bool m_rigidTrunk;				///< held awake once: the trunk is kept in its shape every constraint round from then on
 	Bool m_asleep;
 };
 

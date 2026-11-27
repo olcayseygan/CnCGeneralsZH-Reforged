@@ -6846,6 +6846,9 @@ void AIPlayer::doUpgradesAndSkills( void )
 		Int i;
 		for (i=0; i<skillset->m_numSkills; i++) {
 			ScienceType science = skillset->m_skills[i];
+			// the general's own pick may go first (AIIdentity::sciencePick)
+			if (identityOn())
+				science = m_identity->sciencePick(science);
 
 			//
 			// Saving up (B5).  EA walked the whole set and bought the first thing it could afford,
@@ -10697,6 +10700,15 @@ AsciiString AIPlayer::chooseApproachLabel( const Coord3D *from, const AsciiStrin
 	}
 	// and the roads it has been losing units on, by share
 	aiWeighLaneLosses( firepower, lost, LANE_COUNT, lossWeight );
+	// and the general's own taste in roads (AIIdentity::laneScore)
+	if( identityOn() )
+	{
+		for( Int i = 0; i < LANE_COUNT; ++i )
+		{
+			if( firepower[ i ] >= 0.0f )
+				firepower[ i ] = max( 0.0f, m_identity->laneScore( AsciiString( LANES[ i ] ), from, firepower[ i ] ) );
+		}
+	}
 
 	const Int lane = aiLeastDefendedLane( firepower, LANE_COUNT, requestedLane );
 	if( lane != requestedLane )
@@ -25702,7 +25714,12 @@ AsciiString AIPlayer::sneakyLane( const Coord3D *from, const AsciiString &reques
 			requested.compareNoCase( SKIRMISH_BACKDOOR ) != 0 )
 		return requested;
 	static const char *const SIDE_ROADS[ 2 ] = { SKIRMISH_BACKDOOR, SKIRMISH_FLANK };
-	const Int turn = (Int)( ( TheGameLogic->getFrame() / ( 60 * LOGICFRAMES_PER_GAME_SECOND ) ) % 2 );
+	Int turn = (Int)( ( TheGameLogic->getFrame() / ( 60 * LOGICFRAMES_PER_GAME_SECOND ) ) % 2 );
+	// the general's own taste may swap the order (AIIdentity::laneScore: the turn's road 0, the other 1)
+	if( identityOn() &&
+			m_identity->laneScore( AsciiString( SIDE_ROADS[ (turn + 1) % 2 ] ), from, 1.0f ) <
+			m_identity->laneScore( AsciiString( SIDE_ROADS[ turn ] ), from, 0.0f ) )
+		turn = (turn + 1) % 2;
 	for( Int k = 0; k < 2; ++k )
 	{
 		const char *lane = SIDE_ROADS[ (turn + k) % 2 ];

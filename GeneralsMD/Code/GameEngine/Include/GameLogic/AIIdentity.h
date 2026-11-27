@@ -17,6 +17,7 @@ class SpecialPowerTemplate;
 class TeamPrototype;
 class ThingTemplate;
 class Xfer;
+enum ScienceType : Int;
 
 /** Every general a skirmish seat can play.  Written in saves through AIIdentity::xfer; append only. */
 enum AIGeneral
@@ -83,6 +84,14 @@ public:
 	virtual Bool powerTarget( const SpecialPowerTemplate *power, Int enemyIndex, Real radius, Coord3D *target ) { return FALSE; }
 	/// unit retreat: the health share under which a dear unit is pulled out to be mended, 0 for never (pullOutRanked)
 	virtual Real pullHealth( const Object *unit, Real shared ) const { return shared; }
+	/// science pick: the science the skill set buyer weighs at this place of its list (AIPlayer::update's SKILLS walk).
+	/// Return another to put it first: one the seat cannot afford yet stops the walk there and saves the points, as
+	/// the shared buyer does for its own list.  Asked once per place per walk, so keep it pure
+	virtual ScienceType sciencePick( ScienceType shared ) const { return shared; }
+	/// attack road: the score of a lane a wave weighs, lower taken first (chooseApproachLabel: the known firepower
+	/// along it, never negative for a road that exists; sneakyLane: 0 for the side road its turn takes, 1 for the
+	/// other).  Keep it pure and never negative
+	virtual Real laneScore( const AsciiString &lane, const Coord3D *from, Real shared ) const { return shared; }
 
 	/// the identity's own state; a side class calls this first, then saves its own under its own version
 	virtual void xfer( Xfer *xfer );

@@ -3806,7 +3806,10 @@ namespace
 		if (slot == NULL)
 			return;
 		const Bool seated = slot->isOccupied();
-		const Bool computer = slot->isAI();
+		// a takeover seat ("Human" on a skirmish seat past the first) counts as AI to the lobby but has no
+		// AI and no personality (UpdateAIPersonaComboBoxes hides it): it is laid out as a player's row,
+		// its box where every other box of the row is, not up on a level line over nothing
+		const Bool computer = slot->isAI() && !slot->isTakeover();
 		const Bool network = theRoomKind != ROOM_SKIRMISH;
 		const Bool apocalypse = roomApocalypse();
 		const Int boxTop = top + ROW_BOX_TOP, boxBottom = boxTop + ROW_BOX_HEIGHT;

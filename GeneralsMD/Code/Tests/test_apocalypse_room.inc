@@ -37,6 +37,31 @@ TEST( apocalypse_room_fewer_seats_fewer_rows )
 	CHECK_EQ( plan.orderCount, 2 );
 	ApocalypsePlanRoom( 4, 3, plan );		// the skirmish room's rows bound it too
 	CHECK_EQ( plan.orderCount, 3 );
+	// the skirmish room is the player alone: one row under the head
+	ApocalypsePlanRoom( APOCALYPSE_SKIRMISH_SEATS, 15, plan );
+	CHECK_EQ( plan.itemCount, 2 );
+	CHECK_EQ( plan.items[ 1 ].slot, 0 );
+}
+
+TEST( apocalypse_room_has_no_computer_seats )
+{
+	// the owner, 2026-11-27: no computer in Apocalypse; co-op up to four players, the skirmish room alone
+	const Int computers[] = { SLOT_EASY_AI, SLOT_MED_AI, SLOT_BRUTAL_AI, SLOT_TAKEOVER };
+	for( Int c = 0; c < (Int)ARRAY_SIZE( computers ); ++c )
+	{
+		CHECK_EQ( ApocalypseSeatState( 1, APOCALYPSE_SEATS, computers[ c ] ), (Int)SLOT_OPEN );
+		CHECK_EQ( ApocalypseSeatState( 3, APOCALYPSE_SEATS, computers[ c ] ), (Int)SLOT_OPEN );
+		CHECK_EQ( ApocalypseSeatState( 4, APOCALYPSE_SEATS, computers[ c ] ), (Int)SLOT_CLOSED );
+		CHECK_EQ( ApocalypseSeatState( 1, APOCALYPSE_SKIRMISH_SEATS, computers[ c ] ), (Int)SLOT_CLOSED );
+	}
+	// open and closed seats stay within the room's seats, past them every one closes
+	CHECK_EQ( ApocalypseSeatState( 2, APOCALYPSE_SEATS, SLOT_OPEN ), (Int)SLOT_OPEN );
+	CHECK_EQ( ApocalypseSeatState( 2, APOCALYPSE_SEATS, SLOT_CLOSED ), (Int)SLOT_CLOSED );
+	CHECK_EQ( ApocalypseSeatState( 7, APOCALYPSE_SEATS, SLOT_OPEN ), (Int)SLOT_CLOSED );
+	CHECK_EQ( ApocalypseSeatState( 1, APOCALYPSE_SKIRMISH_SEATS, SLOT_OPEN ), (Int)SLOT_CLOSED );
+	// a human is never thrown out, wherever he sits
+	CHECK_EQ( ApocalypseSeatState( 0, APOCALYPSE_SKIRMISH_SEATS, SLOT_PLAYER ), (Int)SLOT_PLAYER );
+	CHECK_EQ( ApocalypseSeatState( 9, APOCALYPSE_SEATS, SLOT_PLAYER ), (Int)SLOT_PLAYER );
 }
 
 TEST( apocalypse_room_nights_fall_on_the_directors_clock )

@@ -1092,7 +1092,7 @@ void InitLanGameGadgets( void )
 		}
 		else
 		{
-			PopulatePlayerSlotComboBox(comboBoxPlayer[i], white, FALSE);
+			PopulatePlayerSlotComboBox(comboBoxPlayer[i], white, FALSE, !s_apocalypse);	// Apocalypse: no computer seats
 		}
 		/*
 		if(i != 0)

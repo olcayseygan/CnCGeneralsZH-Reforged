@@ -1689,7 +1689,7 @@ void InitWOLGameGadgets( void )
 		}
 		else
 		{
-			PopulatePlayerSlotComboBox(comboBoxPlayer[i], GameSpyColor[GSCOLOR_PLAYER_NORMAL], FALSE);
+			PopulatePlayerSlotComboBox(comboBoxPlayer[i], GameSpyColor[GSCOLOR_PLAYER_NORMAL], FALSE, !s_apocalypse);	// Apocalypse: no computer seats
 		}
 
 		tmpString.format("GameSpyGameOptionsMenu.wnd:ComboBoxColor%d", i);

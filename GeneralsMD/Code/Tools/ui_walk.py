@@ -631,6 +631,9 @@ class Walk(object):
         if self.root is None or tree.get("lone") or tree.get("screen") is None:
             return False
         modal = tree.get("modal") or ""
+        picker = self.game.spec.get("picker")
+        if picker and picker not in named(tree):		# a picker's screen is the picker, not the room under it
+            return False
         if target is None:
             return not modal or modal == (self.root.get("modal") or "")
         w = named(tree).get(target)
@@ -967,7 +970,10 @@ class Walk(object):
                     # a drawn part changes only the picture: a still after the build says whether it worked
                     result = "dead" if self.game.spec.get("probe") else "drawn, unverified"
                 self.record(label, result, "; ".join(change), [])
-                if after.get("screen") != tree.get("screen") or after.get("modal") or (self.game.spec.get("match") and change):
+                # a picker that closed is a state the next part cannot start from: the room under it would take
+                # that part's clicks (CONFIRM's spot is the room's START)
+                if after.get("screen") != tree.get("screen") or after.get("modal") or (self.game.spec.get("match") and change) \
+                        or (picker and picker not in named(after)):
                     self.game.stop()
                     self.root = None
             except Crashed as e:

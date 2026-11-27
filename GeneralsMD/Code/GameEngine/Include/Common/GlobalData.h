@@ -135,6 +135,7 @@ enum
 	AIKNOB_ROCKVEE			= 2097152,	///< a transport kites at its own gun's reach, and riders board in the order they were found, as before 2026-11-27
 	AIKNOB_SCOUTING			= 4194304,	///< scouts walk the start positions only, reveal powers wait for the scripts, and an enemy's shape is read through the fog, as before 2026-11-27
 	AIKNOB_POWER_HOLD		= 8388608,	///< a ready strike fires at once on whatever it finds, as before 2026-11-27
+	AIKNOB_HARASS				= 16777216,	///< only the Raider raids, and its raiders never withdraw, as before 2026-11-27
 };
 
 //-------------------------------------------------------------------------------------------------

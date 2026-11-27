@@ -10731,6 +10731,13 @@ Bool AIPlayer::powerHoldHere( void )
 	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_POWER_HOLD ) != 0 );
 }
 
+Bool AIPlayer::harassHere( void )
+{
+	// an Apocalypse seat fights the director's night, with no economy of the enemy's to raid
+	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_HARASS ) != 0 ) &&
+		!( TheApocalypseDirector != NULL && TheApocalypseDirector->isActive() );
+}
+
 /** The owner, 2026-11-26: every general's computer player plays in its own style, under whatever personality the
 	* seat was given.  The style is the side's AIIdentity (AIIdentity.h), made at the seat's first turn or on a load. */
 void AIPlayer::ensureIdentity( void )
@@ -13966,8 +13973,8 @@ void AIPlayer::doWaves( void )
 		answerTeamRequests();
 	if( m_persona == AIPERSONA_SUPPORTER || ( m_persona == AIPERSONA_NORMAL && teamPlayHere() ) )
 		defendAlly();
-	if( m_persona == AIPERSONA_RAIDER )
-		doPersonaRaids();
+	if( raidPartySize() >= 2 )
+		doPersonaRaids();		// the Raider's own, and every other personality's smaller ones (harass)
 	// and an Air, Infantry or Armor AI on every rung: what trainFavoured trains stands on no team, it skips
 	// the scripts' teams short of its kind, and a Hard Infantry USA sent no wave the whole match
 	const Bool sorties = runsOwnAI() && ( isKindPersona() ||
@@ -25511,6 +25518,14 @@ void AIPlayer::notePersonaProgress( void )
 	* the gatherers at it.  Easy sends the fewest, the latest and the least often. */
 //-------------------------------------------------------------------------------------------------
 static const AIRungInt RAID_EVERY_SECONDS = { { 60, 40, 30 }, AIKNOB_OPEN };
+/** Every other personality raids too (-aiknobsoff harass), smaller and less often: a party of HARASS_PARTY from
+	* Medium up, rising past Hard, every HARASS_EVERY_SECONDS.  Only the Raider used to touch the enemy's economy,
+	* and a person playing any other seat never had a truck shot at by anything but the main army. */
+static const AIRungInt HARASS_PARTY = { { 0, 1, 2 }, AIKNOB_OPEN };
+static const AIRungInt HARASS_EVERY_SECONDS = { { 180, 120, 90 }, AIKNOB_OPEN };
+/** A raider away from home goes back below this share of its health, or where the map shows more enemy reach
+	* than friends; the default team it stands on is no squad, so doRetreats never pulled one. */
+static const Real RAID_WITHDRAW_HEALTH = 0.4f;
 static const Int RAID_MAX_GUNS_OVER_TARGET = 1;
 static const Real RAID_GUN_MARGIN = 50.0f;
 /** How far a raider looks round itself for a gatherer to turn on, and how near a supply centre a pile
@@ -25532,11 +25547,22 @@ static Bool raidsFasterFirst( Object *a, Object *b )
 	return sa != sb ? sa > sb : a->getID() < b->getID();
 }
 
+Int AIPlayer::raidPartySize( void )
+{
+	if( m_persona == AIPERSONA_RAIDER )
+		return aiRatingLerp( m_rating, RAID_PARTY );
+	return harassHere() ? aiRatingLerp( m_rating, HARASS_PARTY ) : 0;
+}
+
 void AIPlayer::doPersonaRaids( void )
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
 	if( !m_baseCenterSet || now + 60 * LOGICFRAMES_PER_GAME_SECOND < (UnsignedInt)( aiRatingLerp( m_rating, RAID_START_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) )
 		return;
+	const Int partySize = raidPartySize();
+	const Int everySeconds = m_persona == AIPERSONA_RAIDER ? aiRatingLerp( m_rating, RAID_EVERY_SECONDS ) : aiRatingLerp( m_rating, HARASS_EVERY_SECONDS );
+	if( partySize < 2 )
+		return;		// never one alone, below
 
 	// the raiders are its own, two sorties' worth, so the waves and the home guard do not take them: the
 	// first version picked from whatever stood idle at home, which the next wave had already taken, and
@@ -25544,7 +25570,7 @@ void AIPlayer::doPersonaRaids( void )
 	// The party knob rises past Hard (5 at Brutal), and two of them ran off the end of m_raider into
 	// m_chatFrame: the frame of the last chat line read back as a raider's ID found a tree or a building,
 	// and its missing AI crashed the sortie (v4.2.0, 20 reports)
-	const Int keep = min( 2 * aiRatingLerp( m_rating, RAID_PARTY ), (Int)MAX_PERSONA_RAIDERS );
+	const Int keep = min( 2 * partySize, (Int)MAX_PERSONA_RAIDERS );
 	Int free = 0;
 	for( Int r = 0; r < keep; ++r )
 	{
@@ -25586,12 +25612,12 @@ void AIPlayer::doPersonaRaids( void )
 	huntGatherers();
 
 	if( isBaseUnderAttack() || now < (UnsignedInt)( aiRatingLerp( m_rating, RAID_START_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) ||
-			(m_raidFrame != 0 && now - m_raidFrame < (UnsignedInt)( aiRatingLerp( m_rating, RAID_EVERY_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND )) )
+			(m_raidFrame != 0 && now - m_raidFrame < (UnsignedInt)( everySeconds * LOGICFRAMES_PER_GAME_SECOND )) )
 		return;
 
 	// the sortie: the raiders with nothing to do, wherever they stand, a party's worth
 	std::vector<Object *> party;
-	for( Int r = 0; r < keep && (Int)party.size() < aiRatingLerp( m_rating, RAID_PARTY ); ++r )
+	for( Int r = 0; r < keep && (Int)party.size() < partySize; ++r )
 	{
 		Object *raider = TheGameLogic->findObjectByID( m_raider[ r ] );
 		if( raider == NULL || raider->isContained() )
@@ -25670,7 +25696,7 @@ void AIPlayer::doPersonaRaids( void )
 		const Int count = possibleEnemyStarts( starts, &known );
 		if( count == 0 )
 			return;
-		const Int sortie = (Int)( now / max( 1, aiRatingLerp( m_rating, RAID_EVERY_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) );
+		const Int sortie = (Int)( now / max( 1, everySeconds * LOGICFRAMES_PER_GAME_SECOND ) );
 		guess = starts[ known > 0 ? sortie % known : sortie % count ];
 		from = &guess;
 	}
@@ -25722,11 +25748,48 @@ void AIPlayer::doPersonaRaids( void )
 void AIPlayer::huntGatherers( void )
 {
 	const Int me = m_player->getPlayerIndex();
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Bool withdraws = harassHere();
+	Bool friendsRead = FALSE;
+	AIThreatMix friendMix = AITHREAT_GROUND_MIX;
 	for( Int r = 0; r < MAX_PERSONA_RAIDERS; ++r )
 	{
 		Object *raider = TheGameLogic->findObjectByID( m_raider[ r ] );
 		if( raider == NULL || raider->isEffectivelyDead() || raider->isContained() || isAtHome( raider->getPosition() ) )
 			continue;
+		// the withdraw rule (-aiknobsoff harass): hurt, or where the map shows more enemy reach than friends, it
+		// drives home round what the map shows, and is left to the walk
+		if( withdraws )
+		{
+			const TacticalStep *row = findTacticalStep( raider->getID() );
+			if( row && row->fallbackFrame != 0 && now - row->fallbackFrame < RETREAT_HOME_WALK_FRAMES )
+				continue;
+			const BodyModuleInterface *body = raider->getBodyModule();
+			const Bool hurt = body && body->getHealth() < body->getMaxHealth() * RAID_WITHDRAW_HEALTH;
+			Bool outgunned = FALSE;
+			if( !hurt && hasTacticalMap() )
+			{
+				ensureInfluence();
+				if( !friendsRead )
+				{
+					friendMix = friendReadMix();
+					friendsRead = TRUE;
+				}
+				const Coord3D *at = raider->getPosition();
+				outgunned = m_influence.enemyAt( at->x, at->y, unitMix( raider ) ) > m_influence.friendAt( at->x, at->y, friendMix );
+			}
+			if( hurt || outgunned )
+			{
+				TacticalStep *step = tacticalStepFor( raider->getID() );
+				step->fallingBack = FALSE;
+				step->fallbackFrom = *raider->getPosition();
+				step->fallbackFrame = now;
+				walkCalmlyRound( raider, step, &m_baseCenter );
+				DEBUG_LOG(("AI RAIDER frame %d player %d pulls '%s' %d home, %s\n", now, me, raider->getTemplate()->getName().str(), raider->getID(),
+					hurt ? "hurt" : "outgunned"));
+				continue;
+			}
+		}
 		// a raider at an empty start crosses it off as a scout would, so the next sortie goes elsewhere
 		for( Int startNdx = 0; startNdx < MAX_PLAYER_COUNT; ++startNdx )
 		{
@@ -27605,6 +27668,8 @@ static const AIRatingTable s_ratingTables[] =
 	AI_TABLE_REAL( EDGE_ODDS ),
 	AI_TABLE_REAL( DEAR_PULL_HEALTH ),
 	AI_TABLE_REAL( POWER_VALUE_FLOOR ),
+	AI_TABLE_INT( HARASS_PARTY ),
+	AI_TABLE_INT( HARASS_EVERY_SECONDS ),
 	AI_TABLE_INT( RUSH_SECONDS ),
 	AI_TABLE_INT( RAID_EVERY_SECONDS ),
 	AI_TABLE_INT( SHARE_CAP ),

@@ -192,16 +192,6 @@ static void frameBox( const IRegion2D &b, Color color )
 	TheDisplay->drawOpenRect( b.lo.x, b.lo.y, boxW( b ), boxH( b ), 1.0f, color );
 }
 
-/// words with their top left at screen x, y; their width
-static Int drawAt( Int key, const UnicodeString &words, GameFont *font, Int x, Int y, Color color )
-{
-	DisplayString *s = pickText( key, words, font );
-	if( s == NULL || words.isEmpty() )
-		return 0;
-	s->draw( x, y, color, PICK_SHADOW );
-	return s->getWidth( -1 );
-}
-
 /// words centred in a screen box, across or only down (across FALSE: from its left)
 static void drawIn( Int key, const UnicodeString &words, GameFont *font, const IRegion2D &b, Color color, Bool across )
 {
@@ -483,9 +473,9 @@ static void layoutCells( PickerGrid &g, std::vector< PickerCell > &cells, MapPic
 		cells.push_back( c );
 	}
 	// the last row on screen and short: its empty places are the tenants'
-	const Int free = lastRow == total ? ( g.first + shape.rows ) * shape.columns - total : 0;
+	const Int spare = lastRow == total ? ( g.first + shape.rows ) * shape.columns - total : 0;
 	const Int onLastRow = total % shape.columns == 0 ? 0 : shape.columns - total % shape.columns;
-	const Int places = min( free, onLastRow );
+	const Int places = min( spare, onLastRow );
 	if( places > 0 && tenantCount > 0 )
 	{
 		const Int used = min( places, tenantCount );
@@ -725,6 +715,7 @@ static void drawTenant( const PickerCell &c, Int slot, Bool hovered )
 		y += 18;
 	}
 	GameFont *lineFont = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL );
+	lines.clear();	// wrapLines adds to what the vector holds
 	UIStyle::wrapLines( words, pickPx( c.right - c.left - 16 ), measureIn, lineFont, lines );
 	y += 4;
 	for( Int k = 0; k < (Int)lines.size() && k < 2; k++ )
@@ -877,6 +868,7 @@ static void drawPickedWords( const UnicodeString &name, const std::vector< Unico
 			drawIn( TEXT_WORDS + 5, badge, badgeFont, star ? at : board( x, y, PICK_COLUMN_RIGHT, y + 22 ), UIStyle::INK, FALSE );
 			y += 24;
 		}
+		lines.clear();	// wrapLines adds to what the vector holds
 		UIStyle::wrapLines( note, pickPx( PICK_COLUMN_RIGHT - x ), measureIn, factFont, lines );
 		for( Int k = 0; k < (Int)lines.size() && k < 4; k++ )
 		{
@@ -1301,8 +1293,8 @@ void MapPickerDrawTab( GameWindow *window, WinInstanceData *instData )
 	window->winGetSize( &w, &h );
 	const IRegion2D box = { { x, y }, { x + w, y + h } };
 	const Bool enabled = BitTest( window->winGetStatus(), WIN_STATUS_ENABLED );
-	const Bool open = BitTest( instData->getState(), WIN_STATE_SELECTED );
-	const Bool hovered = enabled && !open && BitTest( instData->getState(), WIN_STATE_HILITED );
+	const Bool isOpen = BitTest( instData->getState(), WIN_STATE_SELECTED );
+	const Bool hovered = enabled && !isOpen && BitTest( instData->getState(), WIN_STATE_HILITED );
 	DisplayString *lead = instData->getTextDisplayString();
 	if( lead == NULL )
 		return;
@@ -1320,7 +1312,7 @@ void MapPickerDrawTab( GameWindow *window, WinInstanceData *instData )
 	}
 
 	// the button's own words, put in capitals once; a list tab's count after them in its own string
-	UIStyle::menuTab( box, NULL, open, hovered );
+	UIStyle::menuTab( box, NULL, isOpen, hovered );
 	GameFont *labelFont = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL + 2, TRUE );
 	GameFont *tailFont = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
 	const UnicodeString words = lead->getText();
@@ -1339,7 +1331,7 @@ void MapPickerDrawTab( GameWindow *window, WinInstanceData *instData )
 		rest->getSize( &restW, &restH );
 		restW += pickPx( 12 );
 	}
-	const Color ink = open ? UIStyle::ACTIVE : ( enabled ? UIStyle::INK : UIStyle::MUTED );
+	const Color ink = isOpen ? UIStyle::ACTIVE : ( enabled ? UIStyle::INK : UIStyle::MUTED );
 	const Int left = x + ( w - leadW - restW ) / 2;
 	lead->draw( left, y + ( h - leadH ) / 2, ink, PICK_SHADOW );
 	if( rest )

@@ -413,7 +413,11 @@ def layout_strings(layouts):
             if kind == "STATICTEXT":
                 size = re.search(r"SIZE:\s*(\d+)", _statement(window, "FONT") or "")
                 left, top, right, bottom = window.rect[:4]
-                label = bool(size) and bottom - top < 2 * int(size.group(1))
+                # a hidden static parked at a pixel is EA's old window kept for its name; code draws
+                # that text elsewhere (the menu boxes, the message box), wrapped
+                parked = "HIDDEN" in (_statement(window, "STATUS") or "").upper() and (
+                    right - left <= 2 or bottom - top <= 2)
+                label = bool(size) and not parked and bottom - top < 2 * int(size.group(1))
             yield text.group(1), "label" if label else "text", "%s %s" % (where, kind.lower()), path
 
 

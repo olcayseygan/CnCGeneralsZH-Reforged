@@ -104,6 +104,8 @@ static const char *gadgetsToHide[] =
 	"TextEntryMapDisplay",
 	"ButtonSelectMap",
 	"ButtonStart",
+	"ButtonBack",		// the room's way out: the picker's hint takes the foot's left
+	"ButtonCommunicator",
 
 	NULL // keep this last
 };

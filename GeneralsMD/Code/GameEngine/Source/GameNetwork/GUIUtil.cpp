@@ -1503,10 +1503,17 @@ Bool RandomMapTabHandle(UnsignedInt msg, UnsignedIntPtr mData1, UnsignedIntPtr m
 		const Int row = (Int)mData2;
 		if (row < 0)
 			return TRUE;
-		// a row picked again (row 0, Surprise me, is the pick on a first visit) still answers
-		theRandomTemplate = RandomMapTabTemplateAt(row);
-		saveRandomTab();
-		showRandomTemplate();
+		// a row picked again (row 0, Surprise me, is the pick on a first visit) still answers.  Only the
+		// open tab shows its type: the list's own fill at the picker's init selects a row too, and with
+		// the map list open that put Surprise me's unknown map over the picked map's preview
+		const AsciiString chosen = RandomMapTabTemplateAt(row);
+		if (chosen != theRandomTemplate)
+		{
+			theRandomTemplate = chosen;
+			saveRandomTab();
+		}
+		if (theRandomTabOpen)
+			showRandomTemplate();
 		if (msg == GLM_DOUBLE_CLICKED)
 		{
 			GameWindow *ok = randomTabWindow("ButtonOK");

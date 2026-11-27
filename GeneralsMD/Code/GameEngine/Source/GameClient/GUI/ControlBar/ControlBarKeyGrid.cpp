@@ -140,16 +140,30 @@ static Int prerequisiteAlternatives( const ProductionPrerequisite *line, const T
 	return line ? line->getAllPossibleBuildFacilityTemplates( alternatives, most ) : 0;
 }
 
+/// the template as this map plays it: a map.ini's edit is an override hanging off the head the buttons name
+static const ThingTemplate *finalOf( const ThingTemplate *thing )
+{
+	return thing ? (const ThingTemplate *)thing->getFinalOverride() : NULL;
+}
+
+/// read again on the next ask: a new map can bring map.ini overrides with prerequisites of their own
+static void forgetStructureFacts( void )
+{
+	s_factsFor = NULL;
+	s_refs.clear();
+	s_depth.clear();
+}
+
 static void readStructureFacts( void )
 {
 	const ThingTemplate *first = TheThingFactory ? TheThingFactory->firstTemplate() : NULL;
 	if( first == s_factsFor )
 		return;
+	forgetStructureFacts();
 	s_factsFor = first;
-	s_refs.clear();
-	s_depth.clear();
-	for( const ThingTemplate *thing = first; thing != NULL; thing = thing->friend_getNextTemplate() )
+	for( const ThingTemplate *head = first; head != NULL; head = head->friend_getNextTemplate() )
 	{
+		const ThingTemplate *thing = finalOf( head );
 		std::set< const ThingTemplate * > named;
 		for( Int line = 0; line < thing->getPrereqCount(); line++ )
 		{
@@ -157,21 +171,24 @@ static void readStructureFacts( void )
 			const Int count = prerequisiteAlternatives( thing->getNthPrereq( line ), alternatives, 32 );
 			for( Int a = 0; a < count; a++ )
 				if( alternatives[ a ] != NULL )
-					named.insert( alternatives[ a ] );
+					named.insert( finalOf( alternatives[ a ] ) );
 		}
 		for( std::set< const ThingTemplate * >::const_iterator it = named.begin(); it != named.end(); ++it )
 			s_refs[ *it ]++;
 	}
 }
 
-/// 0 with no Object line, else one more than the deepest line's shallowest alternative
-static Int structureDepth( const ThingTemplate *thing, Int guard = 0 )
+/// 0 with no Object line, else one more than the deepest line's shallowest alternative; every template
+/// met on the way is kept, by its final override, and a cycle counts 0 where it closes
+static Int structureDepth( const ThingTemplate *head )
 {
-	if( thing == NULL || guard > 16 )
+	const ThingTemplate *thing = finalOf( head );
+	if( thing == NULL )
 		return 0;
 	std::map< const ThingTemplate *, Int >::const_iterator known = s_depth.find( thing );
 	if( known != s_depth.end() )
 		return known->second;
+	s_depth[ thing ] = 0;
 	Int deepest = -1;
 	for( Int line = 0; line < thing->getPrereqCount(); line++ )
 	{
@@ -181,12 +198,11 @@ static Int structureDepth( const ThingTemplate *thing, Int guard = 0 )
 			continue;
 		Int shallowest = 1 << 20;
 		for( Int a = 0; a < count; a++ )
-			shallowest = MIN( shallowest, structureDepth( alternatives[ a ], guard + 1 ) );
+			shallowest = MIN( shallowest, structureDepth( alternatives[ a ] ) );
 		deepest = MAX( deepest, shallowest );
 	}
 	const Int depth = deepest < 0 ? 0 : deepest + 1;
-	if( guard == 0 )
-		s_depth[ thing ] = depth;
+	s_depth[ thing ] = depth;
 	return depth;
 }
 
@@ -240,7 +256,7 @@ static void keyGridSlotOf( const CommandButton *command, KeyGridSlot *slot )
 	const ThingTemplate *real = realStructure( thing );
 	if( real == NULL || !real->isKindOf( KINDOF_FS_SUPERWEAPON ) )
 	{
-		std::map< const ThingTemplate *, Int >::const_iterator refs = s_refs.find( thing );
+		std::map< const ThingTemplate *, Int >::const_iterator refs = s_refs.find( finalOf( thing ) );
 		slot->refs = refs != s_refs.end() ? refs->second : 0;
 	}
 }
@@ -264,21 +280,35 @@ static AsciiString mirrorKey( const ThingTemplate *thing )
 //-------------------------------------------------------------------------------------------------
 Bool ControlBar::getKeyGridPlaces( Int *places ) const
 {
-	readStructureFacts();
 	const Bool groupShown = !m_contextParent[ CP_COMMAND ]->winIsHidden();
-	KeyGridSlot slots[ MAX_COMMANDS_PER_SET ];
 	const CommandButton *commands[ MAX_COMMANDS_PER_SET ];
 	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
 	{
 		GameWindow *window = m_commandWindows[ slot ];
 		commands[ slot ] = ( groupShown && window && !BitTest( window->winGetStatus(), WIN_STATUS_HIDDEN ) )
 			? (const CommandButton *)GadgetButtonGetData( window ) : NULL;
-		keyGridSlotOf( commands[ slot ], &slots[ slot ] );
 	}
+	const Object *obj = m_currentSelectedDrawable ? m_currentSelectedDrawable->getObject() : NULL;
+
+	// asked a few times a frame (the arrangement, the empty keys' letters, a tooltip): the same buttons
+	// for the same object are the same places
+	Bool same = m_keyGridPlacesKnown && obj == m_keyGridPlacedOwner;
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET && same; slot++ )
+		same = commands[ slot ] == m_keyGridPlacedCommands[ slot ];
+	if( same )
+	{
+		for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+			places[ slot ] = m_keyGridPlaces[ slot ];
+		return m_keyGridPlacesFight;
+	}
+
+	readStructureFacts();
+	KeyGridSlot slots[ MAX_COMMANDS_PER_SET ];
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+		keyGridSlotOf( commands[ slot ], &slots[ slot ] );
 
 	// The GLA worker's fake buildings stand where their real ones do, so H never moves a building: the
 	// real set's places, worked out as the bar would show it, lend each fake its real building's
-	const Object *obj = m_currentSelectedDrawable ? m_currentSelectedDrawable->getObject() : NULL;
 	static const char FAKE_SET[] = "FakeBuildingsCommandSet";
 	if( obj != NULL && obj->getCommandSetString().endsWithNoCase( FAKE_SET ) )
 	{
@@ -301,19 +331,31 @@ Bool ControlBar::getKeyGridPlaces( Int *places ) const
 			}
 			Int realPlaces[ MAX_COMMANDS_PER_SET ];
 			ControlBar_keyGridPlaces( realSlots, MAX_COMMANDS_PER_SET, realPlaces );
+			AsciiString realKeys[ MAX_COMMANDS_PER_SET ];
+			for( Int other = 0; other < MAX_COMMANDS_PER_SET; other++ )
+				if( realSlots[ other ].role != KEY_GRID_ROLE_OTHER && realPlaces[ other ] >= 0 )
+					realKeys[ other ] = mirrorKey( realCommands[ other ]->getThingTemplate() );
 			for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
 			{
 				if( slots[ slot ].role == KEY_GRID_ROLE_OTHER )
 					continue;
 				const AsciiString key = mirrorKey( commands[ slot ]->getThingTemplate() );
 				for( Int other = 0; other < MAX_COMMANDS_PER_SET; other++ )
-					if( realSlots[ other ].role != KEY_GRID_ROLE_OTHER && realPlaces[ other ] >= 0
-							&& mirrorKey( realCommands[ other ]->getThingTemplate() ) == key )
+					if( realKeys[ other ].isNotEmpty() && realKeys[ other ] == key )
 						slots[ slot ].mirror = realPlaces[ other ];
 			}
 		}
 	}
-	return ControlBar_keyGridPlaces( slots, MAX_COMMANDS_PER_SET, places );
+	const Bool fights = ControlBar_keyGridPlaces( slots, MAX_COMMANDS_PER_SET, places );
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+	{
+		m_keyGridPlacedCommands[ slot ] = commands[ slot ];
+		m_keyGridPlaces[ slot ] = places[ slot ];
+	}
+	m_keyGridPlacedOwner = obj;
+	m_keyGridPlacesFight = fights;
+	m_keyGridPlacesKnown = TRUE;
+	return fights;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -461,6 +503,9 @@ void ControlBar::layoutKeyGrid( void )
 	const ICoord2D d = frameTravel( frame, m_panelOrigin );
 	ICoord2D origin;
 	frame->winGetScreenPosition( &origin.x, &origin.y );
+	// a new map (this runs for each) may bring map.ini overrides of the structures' prerequisites
+	forgetStructureFacts();
+	m_keyGridPlacesKnown = FALSE;
 
 	// the radar's picture fills the glass, the map's own shape, a pixel of bezel round it
 	// (W3DLeftHUDDraw paints a pixel inside the window)
@@ -552,11 +597,13 @@ void ControlBar::layoutKeyGrid( void )
 			m_contextParent[ CP_BUILD_QUEUE ]->winClearStatus( WIN_STATUS_IMAGE );
 			s_queueImageCleared = TRUE;
 		}
-		for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS && i < KEY_GRID_QUEUE_CELLS; i++ )
+		for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS; i++ )
 		{
 			AsciiString name;
 			name.format( "ButtonQueue%02d", i + 1 );
-			placeWindowAt( barWindow( name.str() ), moved( kg.queue[ i ], d ) );
+			m_keyGridQueueButtons[ i ] = barWindow( name.str() );
+			if( i < KEY_GRID_QUEUE_CELLS )
+				placeWindowAt( m_keyGridQueueButtons[ i ], moved( kg.queue[ i ], d ) );
 		}
 	}
 
@@ -695,9 +742,7 @@ void ControlBar::drawKeyGridConsole( void )
 	if( m_contextParent[ CP_BUILD_QUEUE ] != NULL && !m_contextParent[ CP_BUILD_QUEUE ]->winIsHidden() )
 		for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS; i++ )
 		{
-			AsciiString name;
-			name.format( "ButtonQueue%02d", i + 1 );
-			GameWindow *button = barWindow( name.str() );
+			GameWindow *button = m_keyGridQueueButtons[ i ];
 			if( button != NULL && !button->winIsHidden() )
 				queue = i + 1;
 		}
@@ -822,8 +867,9 @@ void ControlBar::drawKeyGridConsole( void )
 //-------------------------------------------------------------------------------------------------
 // The squad tray on the deck (the owner's, 2026-11-27): with a squad that has a build tray chosen, a
 // switch on the spine flips the deck between the selection's commands and the squad's tray on the same
-// eighteen keys, Q W E R T Y then the A row then the Z row; Caps Lock does the same
-// (MSG_META_TOGGLE_KEY_GRID_TRAY).  GroupPanel lays the tray's buttons on the cells
+// eighteen keys, Q W E R T Y then the A row then the Z row; Ctrl+Tab does the same in every scheme
+// (MSG_META_TOGGLE_KEY_GRID_TRAY, MetaMap's fork defaults; Caps Lock was turned down: it flips the
+// caps state chat types in, and SDL sends it as a toggle).  GroupPanel lays the tray's buttons on the cells
 // (getKeyGridCells); a press of a place's key in tray view builds that entry into the squad.
 //-------------------------------------------------------------------------------------------------
 Bool ControlBar::getKeyGridCells( IRegion2D *cells ) const
@@ -962,4 +1008,27 @@ void ControlBar::updateKeyGridSwitch( void )
 	window->winSetPosition( at.lo.x, at.lo.y );
 	window->winSetSize( at.hi.x - at.lo.x, at.hi.y - at.lo.y );
 	window->winHide( FALSE );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar::keyGridTrayCovers( const GameWindow *win ) const
+{
+	if( win == NULL || m_contextParent[ CP_COMMAND ] == NULL || !keyGridTrayView() )
+		return FALSE;
+	return const_cast< GameWindow * >( win )->winGetParent() == m_contextParent[ CP_COMMAND ];
+}
+
+//-------------------------------------------------------------------------------------------------
+void ControlBar::shutdownKeyGrid( void )
+{
+	// the switch is a top-level window of its own, which the bar's layout does not take down with it
+	if( m_keyGridSwitchParent != NULL && TheWindowManager != NULL
+			&& TheWindowManager->winGetWindowFromId( NULL, keyGridSwitchId() ) == m_keyGridSwitchParent )
+		TheWindowManager->winDestroy( m_keyGridSwitchParent );
+	m_keyGridSwitchParent = NULL;
+	m_keyGridTrayView = FALSE;
+	m_keyGridPlacesKnown = FALSE;
+	m_keyGridPlacedOwner = NULL;
+	for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS; i++ )
+		m_keyGridQueueButtons[ i ] = NULL;
 }

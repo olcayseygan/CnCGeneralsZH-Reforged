@@ -96,11 +96,12 @@ TEST(key_grid_console_stands_where_the_mockup_has_it)
 
 	// 1280x720 on a 21:9 area: two thirds of everything, from the area's left edge
 	const IRegion2D narrow = { { 100, 0 }, { 1180, 720 } };
-	KeyGridRects small;
-	KeyGridLayoutForScreen( 1280, 720, narrow, 720.0f / 1080.0f, 322.0f / 232.0f, &small );
-	CHECK_EQ( small.glass.lo.x, 100 + 3 );
-	CHECK_EQ( small.glass.hi.y, 720 - 11 );
-	CHECK_EQ( small.cells[ COMMAND_PLACE_Q ].lo.x, 100 + 258 );
+	// ("small" is a Windows macro for char, rpcndr.h)
+	KeyGridRects shrunk;
+	KeyGridLayoutForScreen( 1280, 720, narrow, 720.0f / 1080.0f, 322.0f / 232.0f, &shrunk );
+	CHECK_EQ( shrunk.glass.lo.x, 100 + 3 );
+	CHECK_EQ( shrunk.glass.hi.y, 720 - 11 );
+	CHECK_EQ( shrunk.cells[ COMMAND_PLACE_Q ].lo.x, 100 + 258 );
 }
 
 /* order.py's rule on the American Dozer: Power Q, Supply W, Barracks E, War Factory R, Airfield T;
@@ -339,6 +340,63 @@ TEST(key_grid_grid_keys_option_picks_the_scheme)
 	CHECK_EQ( TheGlobalData->m_hotkeyScheme, (Int)HOTKEY_SCHEME_CLASSIC );
 	CHECK( !hudLayoutHasCommandTabs( HUD_LAYOUT_GRID ) );
 
+	// the box's grid by window slot (Q W E R T Y U over A S D F G H J) on the bottom bar, never on the
+	// Red Alert sidebar's strip, whose bare Q W E R and D are its tabs and deploy
+	const Bool wasGrid = HotKeyManager::commandBarGrid(), wasFixed = HotKeyManager::fixedOrderKeys();
+	HotKeyManager::setCommandBarGrid( FALSE );
+	HotKeyManager::setFixedOrderKeys( TRUE );
+	std::map< std::string, WideChar > none;
+	const AsciiString stop( "Command_Stop" );
+	CHECK_EQ( HotKeyManager::buttonKeyIn( stop, 'S', GUI_COMMAND_STOP, none, 0, -1, HOTKEY_SCHEME_CLASSIC ), (WideChar)'Q' );
+	layout->set( HUD_LAYOUT_SIDEBAR );
+	CHECK_EQ( HotKeyManager::buttonKeyIn( stop, 'S', GUI_COMMAND_STOP, none, 0, -1, HOTKEY_SCHEME_RED_ALERT ), (WideChar)'S' );
+	grid->set( 0 );
+	layout->set( HUD_LAYOUT_CLASSIC );
+	CHECK_EQ( HotKeyManager::buttonKeyIn( stop, 'S', GUI_COMMAND_STOP, none, 0, -1, HOTKEY_SCHEME_CLASSIC ), (WideChar)'S' );
+	HotKeyManager::setCommandBarGrid( wasGrid );
+	HotKeyManager::setFixedOrderKeys( wasFixed );
+
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;
+}
+
+/* What the English CommandMap.ini puts bare on the eighteen letters, and where Key Grid's keys move it:
+   E Q H W X and the replay's F to U J M Ctrl+U Ctrl+J Ctrl+M, Deploy to K, Follow to L, the path build
+   hold to O.  Stop alone gives up its S, the stop place's own key (ControlBar's orderAtPlace) */
+TEST(key_grid_scheme_moves_what_classic_had_on_the_places)
+{
+	static const char MAP[] =
+		"CommandMap SELECT_MATCHING_UNITS\r\n  Key = KEY_E\r\n  Modifiers = NONE\r\n  UseableIn = GAME\r\n  Category = SELECTION\r\nEnd\r\n"
+		"CommandMap VIEW_COMMAND_CENTER\r\n  Key = KEY_H\r\n  Modifiers = NONE\r\n  UseableIn = GAME\r\n  Category = SELECTION\r\nEnd\r\n"
+		"CommandMap SELECT_ALL\r\n  Key = KEY_Q\r\n  Modifiers = NONE\r\n  UseableIn = GAME\r\n  Category = SELECTION\r\nEnd\r\n"
+		"CommandMap SELECT_ALL_AIRCRAFT\r\n  Key = KEY_W\r\n  Modifiers = NONE\r\n  UseableIn = GAME\r\n  Category = SELECTION\r\nEnd\r\n"
+		"CommandMap SCATTER\r\n  Key = KEY_X\r\n  Modifiers = NONE\r\n  UseableIn = GAME\r\n  Category = CONTROL\r\nEnd\r\n"
+		"CommandMap STOP\r\n  Key = KEY_S\r\n  Modifiers = NONE\r\n  UseableIn = GAME\r\n  Category = CONTROL\r\nEnd\r\n"
+		"CommandMap DEPLOY\r\n  Key = KEY_D\r\n  Modifiers = NONE\r\n  UseableIn = GAME\r\n  Category = CONTROL\r\nEnd\r\n"
+		"CommandMap FOLLOW\r\n  Key = KEY_F\r\n  Modifiers = NONE\r\n  UseableIn = GAME\r\n  Category = CONTROL\r\nEnd\r\n"
+		"CommandMap BEGIN_PATH_BUILD\r\n  Key = KEY_Z\r\n  Modifiers = NONE\r\n  UseableIn = GAME\r\n  Category = CONTROL\r\nEnd\r\n"
+		"CommandMap TOGGLE_FAST_FORWARD_REPLAY\r\n  Key = KEY_F\r\n  Modifiers = NONE\r\n  UseableIn = GAME\r\n  Category = INTERFACE\r\nEnd\r\n";
+	std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( MAP );
+	HotkeyScheme_applyToRows( rows, HOTKEY_SCHEME_GRID );
+	struct Move { const char *id; const char *key; const char *mods; };
+	static const Move moves[] =
+	{
+		{ "SELECT_MATCHING_UNITS", "KEY_U", "NONE" }, { "SELECT_ALL", "KEY_J", "NONE" }, { "VIEW_COMMAND_CENTER", "KEY_M", "NONE" },
+		{ "SELECT_ALL_AIRCRAFT", "KEY_U", "CTRL" }, { "SCATTER", "KEY_J", "CTRL" }, { "TOGGLE_FAST_FORWARD_REPLAY", "KEY_M", "CTRL" },
+		{ "DEPLOY", "KEY_K", "NONE" }, { "FOLLOW", "KEY_L", "NONE" }, { "BEGIN_PATH_BUILD", "KEY_O", "NONE" },
+	};
+	for( Int each = 0; each < (Int)( sizeof( moves ) / sizeof( moves[ 0 ] ) ); each++ )
+	{
+		Bool found = FALSE;
+		for( size_t row = 0; row < rows.size(); row++ )
+			if( rows[ row ].id == moves[ each ].id )
+			{
+				found = TRUE;
+				CHECK( rows[ row ].binding == HotkeyBinding( moves[ each ].key, moves[ each ].mods ) );
+			}
+		CHECK( found );
+	}
+	for( size_t row = 0; row < rows.size(); row++ )
+		if( rows[ row ].id == "STOP" )
+			CHECK( rows[ row ].binding.key.empty() );
 }

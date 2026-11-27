@@ -1003,6 +1003,9 @@ void MetaMap::keepArrowsForCamera()
 	static const struct { GameMessage::Type meta; MappableKeyType key; MappableKeyModState mods; } DEFAULTS[] =
 	{
 		{ GameMessage::MSG_META_TOGGLE_RADAR_COLORS, MK_F11, NONE },
+		// Key Grid's deck between the commands and the chosen squad's build tray, in every scheme so the
+		// Grid Keys box clear still has it; Ctrl+Tab, which no shipped file binds (Tab is diplomacy)
+		{ GameMessage::MSG_META_TOGGLE_KEY_GRID_TRAY, MK_TAB, CTRL },
 		// the smoke signals on Alt with Z, X and C, the launcher's own default (HotKey.cpp's
 		// LAUNCHER_DEFAULTS), which it leaves out of Hotkeys.ini as no change of the player's: without
 		// these a game run with no launcher-written file had the signals on no key at all, and the

@@ -164,6 +164,9 @@ Bool HotKeyManager::barHoldsKey( Int key, Int modState )
 		return FALSE;
 	Bool pressable = FALSE;
 	GameWindow *win = TheHotKeyManager->findHotKey( nameOf( letter ), &pressable );
+	// a bar button under Key Grid's squad tray holds no key while the tray takes the deck's
+	if( win != NULL && TheControlBar != NULL && TheControlBar->keyGridTrayCovers( win ) )
+		return FALSE;
 	return win != NULL && !BitTest( win->winGetStatus(), WIN_STATUS_HIDDEN ) && ( !alt || isEvacuateButton( win ) );
 }
 
@@ -340,7 +343,8 @@ GameWindow *HotKeyManager::findHotKey( const AsciiString& keyIn, Bool *pressable
 
 	GameWindow *win = it->second.m_win;
 	const UnsignedInt status = win->winGetStatus();
-	*pressable = !BitTest( status, WIN_STATUS_HIDDEN ) && BitTest( status, WIN_STATUS_ENABLED );
+	*pressable = !BitTest( status, WIN_STATUS_HIDDEN ) && BitTest( status, WIN_STATUS_ENABLED )
+		&& !( TheControlBar != NULL && TheControlBar->keyGridTrayCovers( win ) );
 	return win;
 }
 
@@ -354,6 +358,9 @@ Bool HotKeyManager::executeHotKey( const AsciiString& keyIn )
 		return FALSE;
 	GameWindow *win = it->second.m_win;
 	if( !win )
+		return FALSE;
+	// a bar button under Key Grid's squad tray: the place's key builds the tray's entry instead
+	if( TheControlBar != NULL && TheControlBar->keyGridTrayCovers( win ) )
 		return FALSE;
 	if( !BitTest( win->winGetStatus(), WIN_STATUS_HIDDEN ) )
 	{
@@ -476,22 +483,28 @@ static const char *const FIXED_H_BUTTONS[] =
 };
 static const char FIXED_H_PREFIX[] = "command_becomerealgla";	///< a fake building's switch to the real one
 
-/// -1 is the scheme in force, the options menu's (GlobalData m_hotkeyScheme)
+/// -1 is the scheme in force, the options menu's (GlobalData m_hotkeyScheme), but Key Grid's only while
+/// its bar is up: the shell, a replay, a watcher and a defeated seat show the Reforged bar, which plays
+/// Classic's keys (ControlBar::layoutPanels reloads the keys when the bar changes)
 static Int schemeOf( Int scheme )
 {
 	if( scheme >= 0 )
 		return scheme;
-	return TheGlobalData ? TheGlobalData->m_hotkeyScheme : HOTKEY_SCHEME_CLASSIC;
+	const Int chosen = TheGlobalData ? TheGlobalData->m_hotkeyScheme : (Int)HOTKEY_SCHEME_CLASSIC;
+	if( chosen == HOTKEY_SCHEME_GRID && ( TheControlBar == NULL || !TheControlBar->isKeyGridLayout() ) )
+		return HOTKEY_SCHEME_CLASSIC;
+	return chosen;
 }
 
 /** The command bar grid by window slot (commandBarGridKey): CommandBarGrid in Hotkeys.ini, or the Grid
-	* Keys box (GlobalData m_gridKeys), on every layout but Key Grid, whose grid is its places' and whose
-	* box picks HOTKEY_SCHEME_GRID instead. */
+	* Keys box (GlobalData m_gridKeys) on the bottom bar.  Never on Key Grid's bar, whose grid is its
+	* places', and the box never on the Red Alert sidebar, whose bare Q W E R are its tabs and D deploy. */
 static Bool slotGridOn( void )
 {
-	if( TheGlobalData != NULL && TheGlobalData->m_hudLayout == HUD_LAYOUT_GRID )
+	if( TheControlBar != NULL && TheControlBar->isKeyGridLayout() )
 		return FALSE;
-	return s_commandBarGrid || ( TheGlobalData != NULL && TheGlobalData->m_gridKeys );
+	const Bool box = TheGlobalData != NULL && TheGlobalData->m_gridKeys && TheGlobalData->m_hudLayout != HUD_LAYOUT_SIDEBAR;
+	return s_commandBarGrid || box;
 }
 
 /// one of Key Grid's eighteen place letters (ControlBar_commandPlaceKey), upper case
@@ -827,10 +840,9 @@ void HotKeyManager::reloadKeys( void )
 const char HOTKEYS_LAUNCHER_PART[] = "; the launcher's own keys from here on";
 
 /// KEY_NAMES in hotkeys.js: the keys a command may take there, so what this writes the launcher reads.
-/// KEY_CAPS is the game's alone (Key Grid's squad tray switch, in HotkeysGrid.ini, which no launcher reads).
 static const char *const HOTKEY_KEY_NAMES[] =
 {
-	"KEY_ESC", "KEY_BACKSPACE", "KEY_ENTER", "KEY_SPACE", "KEY_TAB", "KEY_CAPS",
+	"KEY_ESC", "KEY_BACKSPACE", "KEY_ENTER", "KEY_SPACE", "KEY_TAB",
 	"KEY_F1", "KEY_F2", "KEY_F3", "KEY_F4", "KEY_F5", "KEY_F6", "KEY_F7", "KEY_F8", "KEY_F9", "KEY_F10", "KEY_F11", "KEY_F12",
 	"KEY_A", "KEY_B", "KEY_C", "KEY_D", "KEY_E", "KEY_F", "KEY_G", "KEY_H", "KEY_I", "KEY_J", "KEY_K", "KEY_L", "KEY_M",
 	"KEY_N", "KEY_O", "KEY_P", "KEY_Q", "KEY_R", "KEY_S", "KEY_T", "KEY_U", "KEY_V", "KEY_W", "KEY_X", "KEY_Y", "KEY_Z",

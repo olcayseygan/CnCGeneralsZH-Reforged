@@ -1426,7 +1426,18 @@ protected:
 	Bool m_keyGridLayout;													///< see isKeyGridLayout
 	Bool m_keyGridTrayView;												///< the deck shows the chosen squad's build tray, not the commands
 	GameWindow *m_keyGridSwitchParent;						///< the switch's window, checked against the window manager before use
+	GameWindow *m_keyGridQueueButtons[ MAX_BUILD_QUEUE_BUTTONS ];	///< ButtonQueue01..09 as layoutKeyGrid found them
+	// getKeyGridPlaces' last answer and what it was worked out from: each slot's shown command and the
+	// selection's object; the same again is the same answer (asked a few times a frame)
+	mutable const CommandButton *m_keyGridPlacedCommands[ MAX_COMMANDS_PER_SET ];
+	mutable const Object *m_keyGridPlacedOwner;
+	mutable Int m_keyGridPlaces[ MAX_COMMANDS_PER_SET ];
+	mutable Bool m_keyGridPlacesFight;
+	mutable Bool m_keyGridPlacesKnown;
+	void shutdownKeyGrid( void );									///< the switch's window gone, the caches emptied (shutdownWindows)
 public:
+	/// a command window under Key Grid's squad tray while the tray shows: its letter presses nothing (HotKey.cpp)
+	Bool keyGridTrayCovers( const GameWindow *win ) const;
 	Bool isKeyGridLayout( void ) const { return m_keyGridLayout; }
 	void getKeyGridRects( KeyGridRects *out ) const;	///< KeyGridLayoutForScreen for this screen, HUD width and map
 	Bool getKeyGridCells( IRegion2D *cells ) const;	///< the deck's eighteen cells where they stand now; FALSE off Key Grid

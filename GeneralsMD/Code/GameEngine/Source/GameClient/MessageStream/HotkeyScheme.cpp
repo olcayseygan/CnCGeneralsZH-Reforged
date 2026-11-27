@@ -75,9 +75,10 @@ static const HotkeySchemeKey RED_ALERT_KEYS[] =
 };
 
 /// What Key Grid changes over Classic: the bar's eighteen places on their own letters, bare, in
-/// CommandPlace order (ControlBar_commandPlaceKey), the commands Classic had on those letters moved to
-/// the free columns U J M I (the bare ones) and under Ctrl, and Caps Lock flipping the deck to the
-/// chosen squad's build tray.  Every other chord stays Classic's.
+/// CommandPlace order (ControlBar_commandPlaceKey), and the commands the English CommandMap.ini had on
+/// those letters moved to letters it leaves free, U J M I K L O bare and U J M under Ctrl.  Stop alone
+/// gives up its S, the stop place's own (orderAtPlace).  Every other chord stays Classic's; the squad
+/// tray's Ctrl+Tab is every scheme's (MetaMap's fork defaults).
 static const HotkeySchemeKey GRID_KEYS[] =
 {
 	{ "COMMAND_SLOT01",								"KEY_Q",	"NONE",		FALSE },
@@ -107,7 +108,10 @@ static const HotkeySchemeKey GRID_KEYS[] =
 	{ "SELECT_ALL_AIRCRAFT",					"KEY_U",	"CTRL",		FALSE },
 	{ "SCATTER",											"KEY_J",	"CTRL",		FALSE },
 	{ "TOGGLE_FAST_FORWARD_REPLAY",		"KEY_M",	"CTRL",		FALSE },
-	{ "TOGGLE_KEY_GRID_TRAY",					"KEY_CAPS",	"NONE",		FALSE },
+	// D deploy, F follow and the Z held for a path of walls gave theirs too
+	{ "DEPLOY",												"KEY_K",	"NONE",		FALSE },
+	{ "FOLLOW",												"KEY_L",	"NONE",		FALSE },
+	{ "BEGIN_PATH_BUILD",							"KEY_O",	"NONE",		FALSE },
 };
 
 //-------------------------------------------------------------------------------------------------

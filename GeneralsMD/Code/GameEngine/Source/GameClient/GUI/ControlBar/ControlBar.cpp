@@ -2026,6 +2026,16 @@ ControlBar::ControlBar( void )
 	m_keyGridLayout = FALSE;
 	m_keyGridTrayView = FALSE;
 	m_keyGridSwitchParent = NULL;
+	m_keyGridPlacedOwner = NULL;
+	m_keyGridPlacesFight = FALSE;
+	m_keyGridPlacesKnown = FALSE;
+	for( i = 0; i < MAX_BUILD_QUEUE_BUTTONS; i++ )
+		m_keyGridQueueButtons[ i ] = NULL;
+	for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+	{
+		m_keyGridPlacedCommands[ i ] = NULL;
+		m_keyGridPlaces[ i ] = -1;
+	}
 	for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
 	{
 		m_commandWindows[ i ] = NULL;
@@ -3083,9 +3093,15 @@ void ControlBar::layoutPanels( void )
 	// Key Grid comes after the Classic pass the same way, its left half moved by layoutKeyGrid, which
 	// fitRadarToMap runs below (the radar box takes the map's shape)
 	const Bool keyGrid = !sidebar && wantsKeyGridLayout();
-	if( keyGrid != m_keyGridLayout )
+	const Bool keyGridChanged = keyGrid != m_keyGridLayout;
+	if( keyGridChanged )
 		markUIDirty();
 	m_keyGridLayout = keyGrid;
+	m_keyGridPlacesKnown = FALSE;
+	// Key Grid's keys hold only while its bar is up (HotKey.cpp's schemeOf), so the keys follow the bar
+	if( keyGridChanged && TheGlobalData != NULL && TheGlobalData->m_hotkeyScheme == HOTKEY_SCHEME_GRID
+			&& TheMetaMap != NULL && TheHotKeyManager != NULL )
+		HotKeyManager::reloadKeys();
 	if( sidebar )
 		layoutSidebar();
 	else
@@ -3585,6 +3601,7 @@ void ControlBar::shutdownWindows( void )
 	m_sidebarBlockSaved = FALSE;
 	m_keyGridLayout = FALSE;
 	m_keyGridTrayView = FALSE;
+	shutdownKeyGrid();
 
 	if( m_scienceLayout )
 	{

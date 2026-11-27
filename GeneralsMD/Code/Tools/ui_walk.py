@@ -10,6 +10,8 @@
     python ui_walk.py observer        a match watched as an observer, its HUD
     python ui_walk.py end             the end screen of an observed match left at once
     python ui_walk.py apocalypse      the Apocalypse room (Solo Play, Mods, Apocalypse)
+    python ui_walk.py mappicker       the map picker over the skirmish room (Select Map)
+    python ui_walk.py factionpicker   the army screen over the skirmish room (seat 1's army box)
     python ui_walk.py ladder          the online ladder, signed in (ZHR_UI_WALK_ONLINE; also skins, card)
     python ui_walk.py all             every screen above, one launch after another (or main,options,...)
 
@@ -146,6 +148,23 @@ SCREENS = {
                        ("build order all", [(453, 174), (1770, 174)])]),
     "apocalypse": dict(args=[], nav=["MainMenu.wnd:ButtonSinglePlayer", "MainMenu.wnd:ButtonMods",
                                      "MainMenu.wnd:ButtonModeApocalypse"]),
+    # package 7's map picker from the skirmish room's Select Map: its tabs, sizes and keys are gadgets the
+    # walk clicks; the map grid and the random templates are drawn over their list boxes, so a tile is a
+    # point (map tile c, r at 132 + 153c, 275 + 194r; template tile t at 117 + 122t, 380, tile 0 Surprise me)
+    "mappicker": dict(args=["-skirmishlobby"], nav=["SkirmishGameOptionsMenu.wnd:ButtonSelectMap"],
+                      parts=[("map tile 0,0", [(132, 275)]), ("map tile 1,0", [(285, 275)]),
+                             ("map tile 0,1", [(132, 469)]),
+                             ("random template 0", [(1092, 146), (117, 380)]),
+                             ("random template 1", [(1092, 146), (239, 380)])]),
+    # the army screen from seat 1's army box, drawn whole: tabs, a side's RANDOM key and first tile, the tick
+    # box on Custom, BACK and CONFIRM; once it closes the room must take clicks again (room_check)
+    "factionpicker": dict(args=["-skirmishlobby"], nav=["SkirmishGameOptionsMenu.wnd:ComboBoxPlayerTemplate0"],
+                          picker="FactionPicker.wnd:FactionPicker", room_check=True,
+                          parts=[("tab random all", [(258, 146)]), ("tab custom", [(662, 146)]),
+                                 ("side 1 random key", [(150, 259)]), ("side 1 tile 1", [(328, 275)]),
+                                 ("side 2 tile 1", [(328, 469)]),
+                                 ("custom tick side 1", [(662, 146), (72, 198)]),
+                                 ("back", [(165, 1002)]), ("confirm", [(328, 275), (1589, 1002)])]),
     # the signed-in online pages: "@online" is the switches in ZHR_UI_WALK_ONLINE (or the file it names)
     # that reach a server and sign in, -online host:port -onlineca ca.pem -onlineuser mail -onlinepass pass,
     # as online/online_check.py's Stack makes them for a local site and server; wait names the hub's window
@@ -910,7 +929,18 @@ class Walk(object):
                     probe_ok = bool(hidden_diff(p0, p1))
                     self.game.send("uiclickat %d %d" % px(self.game.spec["probe"]))
                     settle(self.game, minimum=0.4)
-                if probe_ok is False and label != "mixed armies":
+                picker = self.game.spec.get("picker")
+                if picker and self.game.spec.get("room_check") and picker not in named(after):
+                    # the picker closed: the room under it must take its clicks again
+                    bad = unreachable(self.game, after, self.area)
+                    change.append("picker closed")
+                    if bad:
+                        probe_ok = False
+                        change.append("%d room controls then miss their clicks, taken by %s" % (
+                            len(bad), short(sorted(set(bad.values())), 2)))
+                if probe_ok is False and picker:
+                    result = "locks input"
+                elif probe_ok is False and label != "mixed armies":
                     result = "locks input"
                     change.append("the Mixed armies box no longer answers")
                 elif change:

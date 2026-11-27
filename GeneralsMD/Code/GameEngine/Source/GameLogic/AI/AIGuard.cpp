@@ -845,21 +845,10 @@ StateReturnType AIGuardReturnState::onEnter( void )
 	Real dy = m_goalPosition.y - pos->y;
 	m_stayedAtPost = getMachineOwner()->testStatus(OBJECT_STATUS_DEPLOYED) && dx*dx + dy*dy <= 4*PATHFIND_CELL_SIZE_F*PATHFIND_CELL_SIZE_F;
 
-	// A circle the player sized with the wheel is the ground to hold, and it can be 800 wide: after
-	// a fight a unit still inside it stays where it is rather than driving back to the one middle
-	// point with the whole group. The first walk to the post after the order is still made, and a
-	// guard without a radius (no wheel, AI, scripts, old replays) goes back as EA's did, and so does
-	// an aircraft: a guarding plane flies back to its post and circles it.
-	const Real radius = getMachineOwner()->getAI()->getGuardRadius();
-	if (!m_stayedAtPost && radius > 0.0f && getGuardMachine()->hasReachedPost()
-			&& !getMachineOwner()->isKindOf(KINDOF_AIRCRAFT)
-			&& getMachineOwner()->getAI()->getGuardTargetType() == GUARDTARGET_LOCATION)
-	{
-		const Coord3D *post = getGuardMachine()->getPositionToGuard();
-		const Real px = post->x - pos->x;
-		const Real py = post->y - pos->y;
-		m_stayedAtPost = px*px + py*py <= radius*radius;
-	}
+	// Every guard walks back to its post once its circle is clear, a wheeled one too: the wheel only
+	// sizes what the guard takes on. A wheeled guard used to stay wherever its last kill left it while
+	// inside the circle, up to 163 from its post in a six-Crusader test, and players reported their
+	// guards no longer going back to the spot. The scan above still takes the next enemy at once.
 	if (m_stayedAtPost)
 	{
 		return STATE_SUCCESS;

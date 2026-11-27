@@ -34,6 +34,7 @@ found and fixed, EA's own, not port damage.**
 - In every room the mouse wheel scrolls the seats with the pointer over a drop-down as well. The boxes cover most of a seat row and swallowed the wheel without doing anything with it, so the list only scrolled with the pointer over a portrait or a gap.
 - The track beside a long seat list takes its thumb in hand now: press it and drag, and the seats follow a seat at a time. A click on the track above or below it still pages. A drop-down left open while the room moved its row (a seat set to Open regroups the seats) is closed first instead of staying a list's height taller than its box, an unseen window over the seats that took their clicks.
 - In the Apocalypse room the generated basin's preview stands square again (it was stretched to twice its width), the rules the mode sets read clearly under SET BY THE MODE, and the room is titled APOCALYPSE with its version beside the tagline.
+- A drop-down you had just picked from snapped shut the next time you opened it, so every second open took two clicks, in every menu. It opens on the first click now.
 
 ## The Direct Strike lobby in the new menu look
 

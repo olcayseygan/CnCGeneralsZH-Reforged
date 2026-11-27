@@ -8770,7 +8770,7 @@ GUI:LaneEndWaveSent
 "Wave sent"
 END
 
-// Menu redesign package 8, the options screen: the rail's tabs and groups, Look and Quality, the fold,
+// Menu redesign package 8, the options screen: the rail's tabs and groups, Look and Quality,
 // the badges and their legend, the reasons a row is greyed, the merged lists, the pane's blocks and
 // every row's OPTIONTIP:<Stem>, the two sentences the pane says about it: what the row changes on the
 // screen.  OptionsMenu.cpp, optionsmenu_layout.py.
@@ -8780,14 +8780,6 @@ END
 
 GUI:OptionsTabWorld
 "World"
-END
-
-GUI:OptionsMore
-"More"
-END
-
-GUI:OptionsMoreCount
-"%d more:"
 END
 
 GUI:OptionsLook
@@ -10386,4 +10378,35 @@ END
 
 GUI:FactionPickHintTick_Short
 "Click to tick · Esc goes back"
+END
+
+// Team vs AI on the hub's Play vs AI card: the Team fact, the search, the party and its LEAVE, the mode's word on
+// a party invite's toast
+
+GUI:OnlineHubTeamLabel
+"Team"
+END
+
+GUI:OnlineHubFindTeam
+"Find team"
+END
+
+GUI:OnlineHubCancelSearch
+"Cancel"
+END
+
+GUI:OnlineHubFindingTeam
+"Finding a team · %s · %d:%02d"
+END
+
+GUI:OnlineHubParty
+"Party"
+END
+
+GUI:OnlineHubLeaveParty
+"Leave"
+END
+
+GUI:GameModeTeamAI
+"TEAM VS AI"
 END

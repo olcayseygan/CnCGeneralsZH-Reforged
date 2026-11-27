@@ -268,10 +268,10 @@ extern Bool graphicsQualityRowIsReforged( const GraphicsQualityRow &row );
 
 //-----------------------------------------------------------------------------
 // One page of the options screen laid out down its column (menu package 8): group heads and rows one
-// under the other, a gap before every head but the first, Audio's faders taking what the rest leave,
-// then the More bar.  A head whose rows are all gone (folded, or not on this machine) goes with them.
-// When the page is taller than the body it scrolls: the More bar is pinned at the body's foot and an
-// item that would cross the body's top or the bar is not drawn.  Pure, so the test can hold it.
+// under the other, a gap before every head but the first, Audio's faders taking what the rest leave.
+// A head whose rows are all gone (not on this machine) goes with them.  When the page is taller than
+// the body it scrolls, and an item that would cross the body's top or foot is not drawn.  Pure, so the
+// test can hold it.
 //-----------------------------------------------------------------------------
 enum OptionsFlowKind { OPTIONS_FLOW_HEAD, OPTIONS_FLOW_ROW, OPTIONS_FLOW_FADER };
 
@@ -279,7 +279,7 @@ struct OptionsFlowItem
 {
 	Int		kind;			///< OptionsFlowKind
 	Int		height;		///< a fader's is ignored: the faders share what is left
-	Bool	shown;		///< a row on this machine and not behind a closed fold; a head's is worked out
+	Bool	shown;		///< a row on this machine; a head's is worked out
 	Int		top;			///< out: where it stands, or -1 when it is not drawn
 	Int		drawnHeight;	///< out: a fader's height; the item's own otherwise
 };
@@ -289,17 +289,13 @@ struct OptionsFlowMetrics
 	Int top, bottom;					///< the body
 	Int groupGap;
 	Int faderMin;
-	Int moreGap, moreHeight;	///< the bar's gap under the last item and its height
-	Int pinGap;								///< the pinned bar's distance from the body's foot
-	Bool hasMore;							///< the page has a fold
 };
 
 struct OptionsFlowResult
 {
-	Int moreTop;							///< where the More bar stands
-	Int contentHeight;				///< every shown item and the bar, unscrolled
+	Int contentHeight;				///< every shown item, unscrolled
 	Int maxScroll;						///< 0 when the page fits
-	Int end;									///< the foot of what is drawn: the bar's foot, or the last item's
+	Int end;									///< the foot of what is drawn: the last item's, or the body's when it scrolls
 };
 
 extern OptionsFlowResult optionsFlow( OptionsFlowItem *items, Int count, const OptionsFlowMetrics &m, Int scroll );

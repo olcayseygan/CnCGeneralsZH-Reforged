@@ -1221,7 +1221,6 @@ Bool graphicsQualityRowIsReforged( const GraphicsQualityRow &row )
 OptionsFlowResult optionsFlow( OptionsFlowItem *items, Int count, const OptionsFlowMetrics &m, Int scroll )
 {
 	OptionsFlowResult out;
-	out.moreTop = m.top;
 	out.contentHeight = 0;
 	out.maxScroll = 0;
 	out.end = m.top;
@@ -1238,7 +1237,7 @@ OptionsFlowResult optionsFlow( OptionsFlowItem *items, Int count, const OptionsF
 	}
 
 	// what the page holds without its faders, then the faders take the rest, never under faderMin
-	Int fixed = m.hasMore ? m.moreGap + m.moreHeight : 0;
+	Int fixed = 0;
 	Bool firstHead = TRUE;
 	Bool anyFader = FALSE;
 	for( Int i = 0; i < count; ++i )
@@ -1260,11 +1259,8 @@ OptionsFlowResult optionsFlow( OptionsFlowItem *items, Int count, const OptionsF
 	const Int faderHeight = anyFader ? max( m.faderMin, body - fixed ) : 0;
 	out.contentHeight = fixed + faderHeight;
 	const Bool scrolls = out.contentHeight > body;
-	const Int pinned = m.bottom - m.pinGap - m.moreHeight;
-	const Int clipBottom = scrolls ? ( m.hasMore ? pinned - m.moreGap : m.bottom ) : m.bottom;
-	// scrolled to its foot, the last item stands on the bar's gap
-	const Int itemsHeight = out.contentHeight - ( m.hasMore ? m.moreGap + m.moreHeight : 0 );
-	out.maxScroll = scrolls ? max( 0, itemsHeight - ( clipBottom - m.top ) ) : 0;
+	// scrolled to its foot, the last item stands on the body's foot
+	out.maxScroll = scrolls ? out.contentHeight - body : 0;
 	scroll = max( 0, min( scroll, out.maxScroll ) );
 
 	Int y = m.top - scroll;
@@ -1299,19 +1295,13 @@ OptionsFlowResult optionsFlow( OptionsFlowItem *items, Int count, const OptionsF
 		}
 		else
 			y += item.height;
-		if( at >= m.top && at + item.drawnHeight <= clipBottom )
+		if( at >= m.top && at + item.drawnHeight <= m.bottom )
 		{
 			item.top = at;
 			lastFoot = max( lastFoot, at + item.drawnHeight );
 		}
 	}
-	if( m.hasMore )
-	{
-		out.moreTop = scrolls ? pinned : y + m.moreGap;
-		out.end = out.moreTop + m.moreHeight;
-	}
-	else
-		out.end = scrolls ? m.bottom : lastFoot;
+	out.end = scrolls ? m.bottom : lastFoot;
 	return out;
 }
 

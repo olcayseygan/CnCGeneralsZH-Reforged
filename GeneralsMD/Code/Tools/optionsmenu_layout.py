@@ -7,17 +7,18 @@ eight tabs down the left with Look and Quality under them, one column of rows in
 pane on the right that explains whatever row the pointer or the focus is on.
 
 Eight pages: System, Graphics, World, Effects, Audio, Controls, Interface, Hotkeys.  Each is a list of
-groups, each group a head and its rows, the first page's rows before the folded ones ("More"), the
-way the plan orders them.  A row is a container window named Row<Stem> (RowMore<Stem> when it folds)
-holding its label and its control, so the code moves, hides and lights a row as one; its TEXT is the
+groups, each group a head and its rows, a group's first rows before its second-tier ones, the way the
+plan orders them.  A row is a container window named Row<Stem> holding its label and its control, so the code moves, hides and lights a row as one; its TEXT is the
 label key the pane names it by, and OPTIONTIP:<Stem> in Patch.str is the pane's two sentences.  The
 Audio page's five volumes are faders, Fader<Stem>, drawn by the code over the five sliders it keeps
 hidden.  Everything that is a line, a frame, a state or a figure is drawn by OptionsMenu.cpp; this
 file holds where the windows stand and which ones exist.
 
-The rows of this file stand as the screen opens with every fold open.  OptionsMenu.cpp lays a page
-out again whenever a fold closes, a row goes (a second monitor unplugged, a borderless window owning
-edge scrolling) or a page scrolls, taking the rows in the order of their top edges here.
+Every row of a page stands in the column; there is no fold (the owner, 2026-11-27: scroll, not More).
+The rows of this file stand as the screen opens, a long page's last rows past the body's foot.
+OptionsMenu.cpp lays a page out again whenever a row goes (a second monitor unplugged, a borderless
+window owning edge scrolling) or the page scrolls under the wheel, taking the rows in the order of
+their top edges here.
 
     python optionsmenu_layout.py <OptionsMenuClassic.wnd in> <out>
 
@@ -30,8 +31,8 @@ the tabbed layout before this one (git history of this file).
 
 reads the tracked files back and checks they agree: every widget TheOptionCatalog names is in the
 layout, every row has its pane sentences in English and Turkish, every window is authored at
-1920x1080, no two visible windows in one container overlap, every page but the folded ones fits the
-body with its fold open, and the script reproduces the tracked file byte for byte.  Run by CTest as
+1920x1080, no two visible windows in one container overlap, and the script reproduces the tracked
+file byte for byte.  Run by CTest as
 optionsmenu_selfcheck.  Layouts are not in the multiplayer INI checksum.
 """
 
@@ -64,8 +65,6 @@ SLIDER_LEFT, SLIDER_RIGHT = 828, 1028
 READOUT_LEFT = 1044
 ROW_HEIGHT, HEAD_HEIGHT, GROUP_GAP = 34, 34, 4
 BUTTON_ROW_HEIGHT = 48
-MORE_GAP, MORE_HEIGHT = 10, 40
-MORE_PINNED_TOP = 906
 FADER_MIN = 330
 PANE = (1156, 132, 1860, 954)
 KEYS_TOP, KEYS_BOTTOM = 980, 1032
@@ -86,8 +85,6 @@ TABS = [
 ]
 # The rail's line under each tab's name is its group heads joined, which the code shortens (Frame
 # rate to FPS, GUI:OptionsHeadFrameRate_Short) and then drops the last of; it needs no key of its own.
-# the one page that opens with its fold closed: open it scrolls (README-settings.md, "The fold")
-FOLDED_BY_DEFAULT = ["PageControls"]
 
 
 # A row, by kind:
@@ -97,7 +94,8 @@ FOLDED_BY_DEFAULT = ["PageControls"]
 #   slider  (stem, "slider", label, slider, readout)
 #   button  (stem, "button", push button)                  the connection test
 #   fader   (stem, "fader", label, slider, readout)        Audio's volumes, drawn upright by the code
-# with ("more",) appended for a row behind the fold.
+# with ("more",) appended for a row of the plan's second tier, which stood behind the More fold until
+# 2026-11-27 and now only marks the order: it stands after its group's first rows.
 def check(stem, name, *more):
     return (stem, "check", name) + more
 
@@ -274,10 +272,6 @@ GROUP_LAYOUT = [
             check("UseCamera", "CheckBoxUseCamera", MORE)])]),
 ]
 
-# the rows only the Linux renderer shows (Modern water's tiers); every other build hides them, so a
-# page is measured without them
-LINUX_ONLY = ["WaterFftResolution", "WaterRefractionQuality", "MapAwareWaveHeading", "UnderwaterClarity",
-              "Reflections", "WaterReflectionDetail"]
 # the rail's two choices, not rows: their pane sentences are OPTIONTIP:Look and OPTIONTIP:Quality
 RAIL_STEMS = ["Look", "Quality"]
 
@@ -377,7 +371,7 @@ SLIDER_RANGES = [("SliderAnisotropy", 0, 16), ("SliderDragTolerance", 2, 50),
 # Strings the code draws besides the rows' own: the rail, the fold, the badges, the pane's blocks,
 # the reasons a row is greyed, the merged lists' entries, the connection test.
 CODE_STRINGS = (
-    ["GUI:OptionsTabSystem", "GUI:OptionsTabWorld", "GUI:OptionsMore", "GUI:OptionsMoreCount",
+    ["GUI:OptionsTabSystem", "GUI:OptionsTabWorld",
      "GUI:OptionsLook", "GUI:OptionsLookName", "GUI:OptionsLookClassic", "GUI:OptionsLookReforged",
      "GUI:OptionsQuality", "GUI:OptionsQualityName", "GUI:OptionsLocked", "GUI:OptionsHeadFrameRate_Short",
      "GUI:OptionsBadgeRestart", "GUI:OptionsBadgeNextMap", "GUI:OptionsLegendRestart",
@@ -483,10 +477,6 @@ def row_names(row):
     return [row[2], row[3], row[4]]
 
 
-def is_more(row):
-    return row[-1] == MORE
-
-
 def build(layout):
     to_wide(layout)
     root = layout.root
@@ -577,7 +567,7 @@ def build(layout):
             build_hotkeys_page(page, templates, lan_list, take)
             continue
         groups = dict(GROUP_LAYOUT)[page_name]
-        fixed = (len(groups) * HEAD_HEIGHT + (len(groups) - 1) * GROUP_GAP + MORE_GAP + MORE_HEIGHT
+        fixed = (len(groups) * HEAD_HEIGHT + (len(groups) - 1) * GROUP_GAP
                  + sum(ROW_HEIGHT for _h, rows in groups for row in rows if row[1] != "fader"))
         fader_height = max(FADER_MIN, BODY_BOTTOM - BODY_TOP - fixed)
         y = BODY_TOP
@@ -607,7 +597,7 @@ def build(layout):
             for row in rows:
                 stem, kind = row[0], row[1]
                 height = BUTTON_ROW_HEIGHT if kind == "button" else ROW_HEIGHT
-                box = container(page_template, ("RowMore%s" if is_more(row) else "Row%s") % stem)
+                box = container(page_template, "Row%s" % stem)
                 place(box, ROWS_LEFT, y, ROWS_RIGHT, y + height)
                 names = row_names(row)
                 if kind == "check":
@@ -640,13 +630,6 @@ def build(layout):
                 box.put_prop("TEXT", '"%s"' % key)
                 page.children.append(box)
                 y += height
-        if any(is_more(row) for _h, rows in groups for row in rows):
-            more = clone(templates["BUTTON"], _named("ButtonMore%s" % page_name[len("Page"):]))
-            more.children = []
-            more.put_prop("TEXT", '"GUI:OptionsMore"')
-            drop_prop(more, "TOOLTIPTEXT")
-            place(more, ROWS_LEFT, y + MORE_GAP, ROWS_RIGHT, y + MORE_GAP + MORE_HEIGHT)
-            page.children.append(more)
 
     for page_name, name in HIDDEN_MODELS:
         control = waiting.pop(name)
@@ -891,7 +874,7 @@ def selfcheck():
     for page, groups in GROUP_LAYOUT:
         for _h, rs in groups:
             for row in rs:
-                prefix = "Fader" if row[1] == "fader" else ("RowMore" if is_more(row) else "Row")
+                prefix = "Fader" if row[1] == "fader" else "Row"
                 wanted.append(prefix + row[0])
                 wanted.extend(row_names(row))
     for name in wanted:
@@ -917,23 +900,13 @@ def selfcheck():
         if len(values) != steps:
             problems.append("quality row %s has %d values for %d steps" % (control, len(values), steps))
 
-    # authored at 1920x1080, nothing drawn over anything, every page but the folded ones fits its body
+    # authored at 1920x1080, nothing drawn over anything, no fold left (a page too long scrolls)
     for node in layout.root.walk():
         if tuple(node.rect[4:]) != WIDE:
             problems.append("%s is authored at %dx%d" % (short(node) or "the root", node.rect[4], node.rect[5]))
+        if short(node).startswith(("RowMore", "ButtonMore")):
+            problems.append("%s is a fold's window; every row stands in the column" % short(node))
     problems.extend(overlaps(layout.root))
-    for page_name, groups in GROUP_LAYOUT:
-        page = layout.find(page_name)
-        if page is None or page_name in FOLDED_BY_DEFAULT:
-            continue
-        bottom = 0
-        for node in page.children:
-            name = short(node)
-            if name.startswith(("Row", "Fader", "Head")) and not any(name.endswith(stem) for stem in LINUX_ONLY):
-                bottom = max(bottom, node.rect[3])
-        if bottom + MORE_GAP + MORE_HEIGHT > BODY_BOTTOM:
-            problems.append("%s runs to %d with its fold open, past the body's %d"
-                            % (page_name, bottom + MORE_GAP + MORE_HEIGHT, BODY_BOTTOM))
     for _page, tab, _text in TABS:
         control = layout.find(tab)
         if control is None or control.rect[0] < RAIL_LEFT or control.rect[2] > RAIL_RIGHT:

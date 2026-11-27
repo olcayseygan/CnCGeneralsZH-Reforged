@@ -46,17 +46,13 @@ TEST( options_menu_reflections_list_is_the_two_rows )
 	CHECK_EQ( mode, 1 );
 }
 
-static OptionsFlowMetrics optionsTestMetrics( Bool hasMore )
+static OptionsFlowMetrics optionsTestMetrics( void )
 {
 	OptionsFlowMetrics m;
 	m.top = 132;
 	m.bottom = 954;
 	m.groupGap = 4;
 	m.faderMin = 330;
-	m.moreGap = 10;
-	m.moreHeight = 40;
-	m.pinGap = 8;
-	m.hasMore = hasMore;
 	return m;
 }
 
@@ -71,36 +67,35 @@ static void optionsTestItem( OptionsFlowItem &item, Int kind, Bool shown )
 
 TEST( options_menu_page_stands_down_its_column )
 {
-	// two groups: a head, two rows, one folded; a head, one folded row
+	// two groups: a head and two rows, a head and one row
 	OptionsFlowItem items[ 5 ];
 	optionsTestItem( items[ 0 ], OPTIONS_FLOW_HEAD, FALSE );
 	optionsTestItem( items[ 1 ], OPTIONS_FLOW_ROW, TRUE );
 	optionsTestItem( items[ 2 ], OPTIONS_FLOW_ROW, TRUE );
 	optionsTestItem( items[ 3 ], OPTIONS_FLOW_HEAD, FALSE );
 	optionsTestItem( items[ 4 ], OPTIONS_FLOW_ROW, TRUE );
-	OptionsFlowResult open = optionsFlow( items, 5, optionsTestMetrics( TRUE ), 0 );
+	OptionsFlowResult all = optionsFlow( items, 5, optionsTestMetrics(), 0 );
 	CHECK_EQ( items[ 0 ].top, 132 );
 	CHECK_EQ( items[ 1 ].top, 166 );
 	CHECK_EQ( items[ 2 ].top, 200 );
 	CHECK_EQ( items[ 3 ].top, 238 );		// the group gap
 	CHECK_EQ( items[ 4 ].top, 272 );
-	CHECK_EQ( open.moreTop, 316 );
-	CHECK_EQ( open.end, 356 );
-	CHECK_EQ( open.maxScroll, 0 );
+	CHECK_EQ( all.end, 306 );
+	CHECK_EQ( all.maxScroll, 0 );
 
-	// the fold closed: the second group's only row goes and its head with it
+	// rows this machine lacks: the second group's only row goes and its head with it
 	items[ 2 ].shown = FALSE;
 	items[ 4 ].shown = FALSE;
-	OptionsFlowResult closed = optionsFlow( items, 5, optionsTestMetrics( TRUE ), 0 );
+	OptionsFlowResult fewer = optionsFlow( items, 5, optionsTestMetrics(), 0 );
 	CHECK_EQ( items[ 1 ].top, 166 );
 	CHECK_EQ( items[ 2 ].top, -1 );
 	CHECK_EQ( items[ 3 ].top, -1 );
-	CHECK_EQ( closed.moreTop, 210 );
+	CHECK_EQ( fewer.end, 200 );
 }
 
-TEST( options_menu_long_page_scrolls_under_a_pinned_bar )
+TEST( options_menu_long_page_scrolls_to_the_body_foot )
 {
-	// Controls with its fold open: 21 rows and 4 heads run past the body's 822
+	// Controls: 21 rows and 4 heads, 862 high, run past the body's 822
 	OptionsFlowItem items[ 26 ];
 	Int n = 0;
 	for( Int group = 0; group < 4; ++group )
@@ -110,24 +105,23 @@ TEST( options_menu_long_page_scrolls_under_a_pinned_bar )
 		for( Int r = 0; r < rows; ++r )
 			optionsTestItem( items[ n++ ], OPTIONS_FLOW_ROW, TRUE );
 	}
-	OptionsFlowResult top = optionsFlow( items, n, optionsTestMetrics( TRUE ), 0 );
-	CHECK( top.maxScroll > 0 );
-	CHECK_EQ( top.moreTop, 906 );
+	OptionsFlowResult top = optionsFlow( items, n, optionsTestMetrics(), 0 );
+	CHECK_EQ( top.maxScroll, 862 - 822 );
+	CHECK_EQ( top.end, 954 );
 	for( Int i = 0; i < n; ++i )
-		CHECK( items[ i ].top == -1 || items[ i ].top + items[ i ].drawnHeight <= 896 );
+		CHECK( items[ i ].top == -1 || items[ i ].top + items[ i ].drawnHeight <= 954 );
 	CHECK_EQ( items[ 0 ].top, 132 );
+	CHECK_EQ( items[ n - 1 ].top, -1 );
 
-	// scrolled to its foot, the first head is gone and the last row stands over the bar
-	OptionsFlowResult foot = optionsFlow( items, n, optionsTestMetrics( TRUE ), 100000 );
-	CHECK_EQ( foot.moreTop, 906 );
+	// scrolled to its foot, the first head is gone and the last row stands on the body's foot
+	optionsFlow( items, n, optionsTestMetrics(), 100000 );
 	CHECK_EQ( items[ 0 ].top, -1 );
-	CHECK( items[ n - 1 ].top > 0 );
-	CHECK( items[ n - 1 ].top + 34 <= 896 );
+	CHECK_EQ( items[ n - 1 ].top, 954 - 34 );
 }
 
 TEST( options_menu_faders_take_what_the_rows_leave )
 {
-	// Audio: Volume's five faders, Output's three rows, Mix's two folded rows
+	// Audio: Volume's five faders, Output's three rows, Mix's two rows
 	OptionsFlowItem items[ 13 ];
 	Int n = 0;
 	optionsTestItem( items[ n++ ], OPTIONS_FLOW_HEAD, FALSE );
@@ -139,10 +133,10 @@ TEST( options_menu_faders_take_what_the_rows_leave )
 	optionsTestItem( items[ n++ ], OPTIONS_FLOW_HEAD, FALSE );
 	for( Int r = 0; r < 2; ++r )
 		optionsTestItem( items[ n++ ], OPTIONS_FLOW_ROW, TRUE );
-	OptionsFlowResult open = optionsFlow( items, n, optionsTestMetrics( TRUE ), 0 );
-	// the More bar lands on the foot: 822 less 3 heads, 5 rows, 2 gaps and the bar
-	CHECK_EQ( items[ 1 ].drawnHeight, 822 - 8 * 34 - 2 * 4 - 50 );
+	OptionsFlowResult page = optionsFlow( items, n, optionsTestMetrics(), 0 );
+	// the last row lands on the foot: 822 less 3 heads, 5 rows and 2 gaps
+	CHECK_EQ( items[ 1 ].drawnHeight, 822 - 8 * 34 - 2 * 4 );
 	CHECK_EQ( items[ 1 ].top, items[ 5 ].top );
-	CHECK_EQ( open.end, 954 );
-	CHECK_EQ( open.maxScroll, 0 );
+	CHECK_EQ( page.end, 954 );
+	CHECK_EQ( page.maxScroll, 0 );
 }

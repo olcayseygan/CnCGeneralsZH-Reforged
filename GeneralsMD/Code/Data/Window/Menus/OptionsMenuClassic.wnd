@@ -2533,7 +2533,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 302, BOTTOMRIGHT: 1124 336, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreFullscreenScaling";
+          NAME = "OptionsMenu.wnd:RowFullscreenScaling";
           TEXT = "GUI:FullscreenScaling";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -3339,7 +3339,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 442, BOTTOMRIGHT: 1124 476, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreSmoothMotion";
+          NAME = "OptionsMenu.wnd:RowSmoothMotion";
           TEXT = "GUI:SmoothMotion";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -3957,7 +3957,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 582, BOTTOMRIGHT: 1124 616, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreOnlineIP";
+          NAME = "OptionsMenu.wnd:RowOnlineIP";
           TEXT = "GUI:OnlineIPAddresses";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -4290,7 +4290,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 616, BOTTOMRIGHT: 1124 650, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreSendDelay";
+          NAME = "OptionsMenu.wnd:RowSendDelay";
           TEXT = "GUI:SendDelay";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -4383,7 +4383,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 650, BOTTOMRIGHT: 1124 684, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreHTTPProxy";
+          NAME = "OptionsMenu.wnd:RowHTTPProxy";
           TEXT = "GUI:HTTPProxy";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -4616,52 +4616,6 @@ WINDOW
                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
           END
           ENDALLCHILDREN
-        END
-        CHILD
-        WINDOW
-          WINDOWTYPE = PUSHBUTTON;
-          SCREENRECT = UPPERLEFT: 372 742, BOTTOMRIGHT: 1124 782, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:ButtonMoreSystem";
-          STATUS = ENABLED+IMAGE;
-          STYLE = PUSHBUTTON+MOUSETRACK;
-          SYSTEMCALLBACK = "[None]";
-          INPUTCALLBACK = "[None]";
-          TOOLTIPCALLBACK = "[None]";
-          DRAWCALLBACK = "[None]";
-          FONT = NAME: "Generals", SIZE: 15, BOLD: 0;
-          HEADERTEMPLATE = "MainButton";
-          TOOLTIPDELAY = -1;
-          TEXT = "GUI:OptionsMore";
-          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
-                      DISABLED: 62 64 92 255, DISABLEDBORDER: 31 32 47 255,
-                      HILITE:   186 255 12 255, HILITEBORDER:   0 2 0 255;
-          ENABLEDDRAWDATA = IMAGE: Buttons-Left, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                            IMAGE: NoImage, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          DISABLEDDRAWDATA = IMAGE: Buttons-Disabled-Left, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                             IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 128 128 128 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          HILITEDRAWDATA = IMAGE: Buttons-HiLite-Left, COLOR: 209 253 4 255, BORDERCOLOR: 59 60 52 255,
-                           IMAGE: Buttons-Pushed-Left, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
         END
         CHILD
         WINDOW
@@ -5516,7 +5470,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 234, BOTTOMRIGHT: 1124 268, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreFlatShadows";
+          NAME = "OptionsMenu.wnd:RowFlatShadows";
           TEXT = "GUI:Shadows2D";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -5609,7 +5563,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 268, BOTTOMRIGHT: 1124 302, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreInfantryShadows";
+          NAME = "OptionsMenu.wnd:RowInfantryShadows";
           TEXT = "GUI:InfantryShadows";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -5702,7 +5656,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 302, BOTTOMRIGHT: 1124 336, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreProjectileShadows";
+          NAME = "OptionsMenu.wnd:RowProjectileShadows";
           TEXT = "GUI:ProjectileShadows";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -5795,7 +5749,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 336, BOTTOMRIGHT: 1124 370, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMorePropShadows";
+          NAME = "OptionsMenu.wnd:RowPropShadows";
           TEXT = "GUI:PropShadows";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -5888,7 +5842,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 370, BOTTOMRIGHT: 1124 404, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreParticleShadows";
+          NAME = "OptionsMenu.wnd:RowParticleShadows";
           TEXT = "GUI:ParticleShadows";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -5981,7 +5935,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 404, BOTTOMRIGHT: 1124 438, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreVolumetricSmoke";
+          NAME = "OptionsMenu.wnd:RowVolumetricSmoke";
           TEXT = "GUI:VolumetricSmoke";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -6074,7 +6028,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 438, BOTTOMRIGHT: 1124 472, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreCloudShadows";
+          NAME = "OptionsMenu.wnd:RowCloudShadows";
           TEXT = "GUI:CloudShadows";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -6947,7 +6901,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 646, BOTTOMRIGHT: 1124 680, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreTextureFiltering";
+          NAME = "OptionsMenu.wnd:RowTextureFiltering";
           TEXT = "GUI:OptionsTextureFiltering";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -7280,7 +7234,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 680, BOTTOMRIGHT: 1124 714, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreKeepDetail";
+          NAME = "OptionsMenu.wnd:RowKeepDetail";
           TEXT = "GUI:OptionsKeepDetail";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -7373,7 +7327,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 714, BOTTOMRIGHT: 1124 748, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreFullDetailAtDistance";
+          NAME = "OptionsMenu.wnd:RowFullDetailAtDistance";
           TEXT = "GUI:FullDetailAtDistance";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -7461,52 +7415,6 @@ WINDOW
                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
           END
           ENDALLCHILDREN
-        END
-        CHILD
-        WINDOW
-          WINDOWTYPE = PUSHBUTTON;
-          SCREENRECT = UPPERLEFT: 372 758, BOTTOMRIGHT: 1124 798, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:ButtonMoreGraphics";
-          STATUS = ENABLED+IMAGE;
-          STYLE = PUSHBUTTON+MOUSETRACK;
-          SYSTEMCALLBACK = "[None]";
-          INPUTCALLBACK = "[None]";
-          TOOLTIPCALLBACK = "[None]";
-          DRAWCALLBACK = "[None]";
-          FONT = NAME: "Generals", SIZE: 15, BOLD: 0;
-          HEADERTEMPLATE = "MainButton";
-          TOOLTIPDELAY = -1;
-          TEXT = "GUI:OptionsMore";
-          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
-                      DISABLED: 62 64 92 255, DISABLEDBORDER: 31 32 47 255,
-                      HILITE:   186 255 12 255, HILITEBORDER:   0 2 0 255;
-          ENABLEDDRAWDATA = IMAGE: Buttons-Left, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                            IMAGE: NoImage, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          DISABLEDDRAWDATA = IMAGE: Buttons-Disabled-Left, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                             IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 128 128 128 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          HILITEDRAWDATA = IMAGE: Buttons-HiLite-Left, COLOR: 209 253 4 255, BORDERCOLOR: 59 60 52 255,
-                           IMAGE: Buttons-Pushed-Left, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
         END
         CHILD
         WINDOW
@@ -9671,7 +9579,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 302, BOTTOMRIGHT: 1124 336, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreAmbientOcclusion";
+          NAME = "OptionsMenu.wnd:RowAmbientOcclusion";
           TEXT = "GUI:OptionsAmbientOcclusion";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -9764,7 +9672,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 336, BOTTOMRIGHT: 1124 370, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreHemiAmbient";
+          NAME = "OptionsMenu.wnd:RowHemiAmbient";
           TEXT = "GUI:HemiAmbient";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -9857,7 +9765,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 370, BOTTOMRIGHT: 1124 404, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreInternalHdr";
+          NAME = "OptionsMenu.wnd:RowInternalHdr";
           TEXT = "GUI:OptionsFireColors";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -9950,7 +9858,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 404, BOTTOMRIGHT: 1124 438, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreTeamGlow";
+          NAME = "OptionsMenu.wnd:RowTeamGlow";
           TEXT = "GUI:TeamGlow";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -10509,7 +10417,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 650, BOTTOMRIGHT: 1124 684, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreGroundLighting";
+          NAME = "OptionsMenu.wnd:RowGroundLighting";
           TEXT = "GUI:GroundLighting";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -10602,7 +10510,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 684, BOTTOMRIGHT: 1124 718, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreTreeSway";
+          NAME = "OptionsMenu.wnd:RowTreeSway";
           TEXT = "GUI:TreeSway";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -11075,7 +10983,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 790, BOTTOMRIGHT: 1124 824, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreSmoothWater";
+          NAME = "OptionsMenu.wnd:RowSmoothWater";
           TEXT = "GUI:SmoothWater";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -11168,7 +11076,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 824, BOTTOMRIGHT: 1124 858, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreWaterFoam";
+          NAME = "OptionsMenu.wnd:RowWaterFoam";
           TEXT = "GUI:WaterFoam";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -11261,7 +11169,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 858, BOTTOMRIGHT: 1124 892, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreWaterSplashes";
+          NAME = "OptionsMenu.wnd:RowWaterSplashes";
           TEXT = "GUI:WaterSplashes";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -11354,7 +11262,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 892, BOTTOMRIGHT: 1124 926, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreWaterFftResolution";
+          NAME = "OptionsMenu.wnd:RowWaterFftResolution";
           TEXT = "GUI:WaterFftResolution";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -11687,7 +11595,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 926, BOTTOMRIGHT: 1124 960, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreWaterRefractionQuality";
+          NAME = "OptionsMenu.wnd:RowWaterRefractionQuality";
           TEXT = "GUI:WaterRefractionQuality";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -12020,7 +11928,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 960, BOTTOMRIGHT: 1124 994, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreMapAwareWaveHeading";
+          NAME = "OptionsMenu.wnd:RowMapAwareWaveHeading";
           TEXT = "GUI:MapAwareWaveHeading";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -12113,7 +12021,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 994, BOTTOMRIGHT: 1124 1028, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreUnderwaterClarity";
+          NAME = "OptionsMenu.wnd:RowUnderwaterClarity";
           TEXT = "GUI:UnderwaterClarity";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -12206,7 +12114,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 1028, BOTTOMRIGHT: 1124 1062, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreReflections";
+          NAME = "OptionsMenu.wnd:RowReflections";
           TEXT = "GUI:OptionsReflections";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -12539,7 +12447,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 1062, BOTTOMRIGHT: 1124 1096, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreWaterReflectionDetail";
+          NAME = "OptionsMenu.wnd:RowWaterReflectionDetail";
           TEXT = "GUI:WaterReflectionDetail";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -12867,52 +12775,6 @@ WINDOW
                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
           END
           ENDALLCHILDREN
-        END
-        CHILD
-        WINDOW
-          WINDOWTYPE = PUSHBUTTON;
-          SCREENRECT = UPPERLEFT: 372 1106, BOTTOMRIGHT: 1124 1146, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:ButtonMoreWorld";
-          STATUS = ENABLED+IMAGE;
-          STYLE = PUSHBUTTON+MOUSETRACK;
-          SYSTEMCALLBACK = "[None]";
-          INPUTCALLBACK = "[None]";
-          TOOLTIPCALLBACK = "[None]";
-          DRAWCALLBACK = "[None]";
-          FONT = NAME: "Generals", SIZE: 15, BOLD: 0;
-          HEADERTEMPLATE = "MainButton";
-          TOOLTIPDELAY = -1;
-          TEXT = "GUI:OptionsMore";
-          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
-                      DISABLED: 62 64 92 255, DISABLEDBORDER: 31 32 47 255,
-                      HILITE:   186 255 12 255, HILITEBORDER:   0 2 0 255;
-          ENABLEDDRAWDATA = IMAGE: Buttons-Left, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                            IMAGE: NoImage, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          DISABLEDDRAWDATA = IMAGE: Buttons-Disabled-Left, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                             IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 128 128 128 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          HILITEDRAWDATA = IMAGE: Buttons-HiLite-Left, COLOR: 209 253 4 255, BORDERCOLOR: 59 60 52 255,
-                           IMAGE: Buttons-Pushed-Left, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
         END
         CHILD
         WINDOW
@@ -13986,7 +13848,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 268, BOTTOMRIGHT: 1124 302, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreParticleBounce";
+          NAME = "OptionsMenu.wnd:RowParticleBounce";
           TEXT = "GUI:OptionsBouncingDebris";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -14312,7 +14174,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 408, BOTTOMRIGHT: 1124 442, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreSmokeFireLighting";
+          NAME = "OptionsMenu.wnd:RowSmokeFireLighting";
           TEXT = "GUI:SmokeFireLighting";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -14405,7 +14267,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 442, BOTTOMRIGHT: 1124 476, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreCloudStyle";
+          NAME = "OptionsMenu.wnd:RowCloudStyle";
           TEXT = "GUI:OptionsToxinClouds";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -14878,7 +14740,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 548, BOTTOMRIGHT: 1124 582, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreStructureCollapse";
+          NAME = "OptionsMenu.wnd:RowStructureCollapse";
           TEXT = "GUI:StructureCollapse";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -14971,7 +14833,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 582, BOTTOMRIGHT: 1124 616, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreRagdoll";
+          NAME = "OptionsMenu.wnd:RowRagdoll";
           TEXT = "GUI:Ragdoll";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -15064,7 +14926,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 616, BOTTOMRIGHT: 1124 650, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreExtraAnimations";
+          NAME = "OptionsMenu.wnd:RowExtraAnimations";
           TEXT = "GUI:ExtraAnimations";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -15152,52 +15014,6 @@ WINDOW
                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
           END
           ENDALLCHILDREN
-        END
-        CHILD
-        WINDOW
-          WINDOWTYPE = PUSHBUTTON;
-          SCREENRECT = UPPERLEFT: 372 660, BOTTOMRIGHT: 1124 700, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:ButtonMoreEffects";
-          STATUS = ENABLED+IMAGE;
-          STYLE = PUSHBUTTON+MOUSETRACK;
-          SYSTEMCALLBACK = "[None]";
-          INPUTCALLBACK = "[None]";
-          TOOLTIPCALLBACK = "[None]";
-          DRAWCALLBACK = "[None]";
-          FONT = NAME: "Generals", SIZE: 15, BOLD: 0;
-          HEADERTEMPLATE = "MainButton";
-          TOOLTIPDELAY = -1;
-          TEXT = "GUI:OptionsMore";
-          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
-                      DISABLED: 62 64 92 255, DISABLEDBORDER: 31 32 47 255,
-                      HILITE:   186 255 12 255, HILITEBORDER:   0 2 0 255;
-          ENABLEDDRAWDATA = IMAGE: Buttons-Left, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                            IMAGE: NoImage, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          DISABLEDDRAWDATA = IMAGE: Buttons-Disabled-Left, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                             IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 128 128 128 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          HILITEDRAWDATA = IMAGE: Buttons-HiLite-Left, COLOR: 209 253 4 255, BORDERCOLOR: 59 60 52 255,
-                           IMAGE: Buttons-Pushed-Left, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
         END
         CHILD
         WINDOW
@@ -15342,7 +15158,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 374 166, BOTTOMRIGHT: 520 658, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 374 166, BOTTOMRIGHT: 520 708, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:FaderMasterVolume";
           TEXT = "GUI:MasterVolume";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -15555,7 +15371,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 524 166, BOTTOMRIGHT: 670 658, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 524 166, BOTTOMRIGHT: 670 708, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:FaderMusicVolume";
           TEXT = "GUI:MusicVolume";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -15769,7 +15585,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 674 166, BOTTOMRIGHT: 820 658, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 674 166, BOTTOMRIGHT: 820 708, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:FaderSFXVolume";
           TEXT = "GUI:SFXVolume";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -15983,7 +15799,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 824 166, BOTTOMRIGHT: 970 658, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 824 166, BOTTOMRIGHT: 970 708, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:FaderVoiceVolume";
           TEXT = "GUI:VoiceVolume";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -16197,7 +16013,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 974 166, BOTTOMRIGHT: 1120 658, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 974 166, BOTTOMRIGHT: 1120 708, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:FaderAmbientVolume";
           TEXT = "GUI:AmbientVolume";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -16410,7 +16226,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = STATICTEXT;
-          SCREENRECT = UPPERLEFT: 372 662, BOTTOMRIGHT: 1124 696, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 712, BOTTOMRIGHT: 1124 746, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:HeadAudio1";
           STATUS = ENABLED;
           STYLE = STATICTEXT+MOUSETRACK;
@@ -16457,7 +16273,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 696, BOTTOMRIGHT: 1124 730, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 746, BOTTOMRIGHT: 1124 780, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowAudioDevice";
           TEXT = "GUI:AudioDevice";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -16502,7 +16318,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = STATICTEXT;
-            SCREENRECT = UPPERLEFT: 388 696, BOTTOMRIGHT: 816 730, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 388 746, BOTTOMRIGHT: 816 780, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:LabelAudioDevice";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
@@ -16549,7 +16365,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = COMBOBOX;
-            SCREENRECT = UPPERLEFT: 824 698, BOTTOMRIGHT: 1114 728, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 824 748, BOTTOMRIGHT: 1114 778, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:ComboBoxAudioDevice";
             STATUS = ENABLED+IMAGE;
             STYLE = MOUSETRACK+COMBOBOX;
@@ -16790,7 +16606,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 730, BOTTOMRIGHT: 1124 764, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 780, BOTTOMRIGHT: 1124 814, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowSpeakerType";
           TEXT = "GUI:SpeakerType";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -16835,7 +16651,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = STATICTEXT;
-            SCREENRECT = UPPERLEFT: 388 730, BOTTOMRIGHT: 816 764, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 388 780, BOTTOMRIGHT: 816 814, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:LabelSpeakerType";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
@@ -16882,7 +16698,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = COMBOBOX;
-            SCREENRECT = UPPERLEFT: 824 732, BOTTOMRIGHT: 1114 762, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 824 782, BOTTOMRIGHT: 1114 812, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:ComboBoxSpeakerType";
             STATUS = ENABLED+IMAGE;
             STYLE = MOUSETRACK+COMBOBOX;
@@ -17123,7 +16939,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 764, BOTTOMRIGHT: 1124 798, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 814, BOTTOMRIGHT: 1124 848, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowMuteInBackground";
           TEXT = "GUI:MuteInBackground";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -17168,7 +16984,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 764, BOTTOMRIGHT: 1124 798, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 814, BOTTOMRIGHT: 1124 848, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckMuteInBackground";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -17216,7 +17032,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = STATICTEXT;
-          SCREENRECT = UPPERLEFT: 372 802, BOTTOMRIGHT: 1124 836, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 852, BOTTOMRIGHT: 1124 886, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:HeadAudio2";
           STATUS = ENABLED;
           STYLE = STATICTEXT+MOUSETRACK;
@@ -17263,8 +17079,8 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 836, BOTTOMRIGHT: 1124 870, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreLegacySound";
+          SCREENRECT = UPPERLEFT: 372 886, BOTTOMRIGHT: 1124 920, CREATIONRESOLUTION: 1920 1080;
+          NAME = "OptionsMenu.wnd:RowLegacySound";
           TEXT = "GUI:LegacySound";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -17308,7 +17124,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 836, BOTTOMRIGHT: 1124 870, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 886, BOTTOMRIGHT: 1124 920, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckLegacySound";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -17356,8 +17172,8 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 870, BOTTOMRIGHT: 1124 904, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreDynamicMusic";
+          SCREENRECT = UPPERLEFT: 372 920, BOTTOMRIGHT: 1124 954, CREATIONRESOLUTION: 1920 1080;
+          NAME = "OptionsMenu.wnd:RowDynamicMusic";
           TEXT = "GUI:OptionsDynamicMusic";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -17401,7 +17217,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 870, BOTTOMRIGHT: 1124 904, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 920, BOTTOMRIGHT: 1124 954, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckDynamicMusic";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -17445,52 +17261,6 @@ WINDOW
                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
           END
           ENDALLCHILDREN
-        END
-        CHILD
-        WINDOW
-          WINDOWTYPE = PUSHBUTTON;
-          SCREENRECT = UPPERLEFT: 372 914, BOTTOMRIGHT: 1124 954, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:ButtonMoreAudio";
-          STATUS = ENABLED+IMAGE;
-          STYLE = PUSHBUTTON+MOUSETRACK;
-          SYSTEMCALLBACK = "[None]";
-          INPUTCALLBACK = "[None]";
-          TOOLTIPCALLBACK = "[None]";
-          DRAWCALLBACK = "[None]";
-          FONT = NAME: "Generals", SIZE: 15, BOLD: 0;
-          HEADERTEMPLATE = "MainButton";
-          TOOLTIPDELAY = -1;
-          TEXT = "GUI:OptionsMore";
-          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
-                      DISABLED: 62 64 92 255, DISABLEDBORDER: 31 32 47 255,
-                      HILITE:   186 255 12 255, HILITEBORDER:   0 2 0 255;
-          ENABLEDDRAWDATA = IMAGE: Buttons-Left, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                            IMAGE: NoImage, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          DISABLEDDRAWDATA = IMAGE: Buttons-Disabled-Left, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                             IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 128 128 128 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          HILITEDRAWDATA = IMAGE: Buttons-HiLite-Left, COLOR: 209 253 4 255, BORDERCOLOR: 59 60 52 255,
-                           IMAGE: Buttons-Pushed-Left, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
         END
         ENDALLCHILDREN
       END
@@ -18388,7 +18158,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 370, BOTTOMRIGHT: 1124 404, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreEdgeScrollWindowed";
+          NAME = "OptionsMenu.wnd:RowEdgeScrollWindowed";
           TEXT = "GUI:EdgeScrollWindowed";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -18481,7 +18251,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 404, BOTTOMRIGHT: 1124 438, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreIsometricCamera";
+          NAME = "OptionsMenu.wnd:RowIsometricCamera";
           TEXT = "GUI:IsometricCamera";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -18574,7 +18344,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 438, BOTTOMRIGHT: 1124 472, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreSnapCamera45";
+          NAME = "OptionsMenu.wnd:RowSnapCamera45";
           TEXT = "GUI:SnapCamera45";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -18667,7 +18437,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 472, BOTTOMRIGHT: 1124 506, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreDrawAnchor";
+          NAME = "OptionsMenu.wnd:RowDrawAnchor";
           TEXT = "GUI:DrawScrollAnchor";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -18760,7 +18530,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 506, BOTTOMRIGHT: 1124 540, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreMoveAnchor";
+          NAME = "OptionsMenu.wnd:RowMoveAnchor";
           TEXT = "GUI:MoveScrollAnchor";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -19086,7 +18856,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 646, BOTTOMRIGHT: 1124 680, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreDoubleClickAttackMove";
+          NAME = "OptionsMenu.wnd:RowDoubleClickAttackMove";
           TEXT = "GUI:DoubleClickAttackMove";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -19179,7 +18949,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 680, BOTTOMRIGHT: 1124 714, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreDragTolerance";
+          NAME = "OptionsMenu.wnd:RowDragTolerance";
           TEXT = "GUI:DragTolerance";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -19718,7 +19488,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 854, BOTTOMRIGHT: 1124 888, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreNudgeBuild";
+          NAME = "OptionsMenu.wnd:RowNudgeBuild";
           TEXT = "GUI:NudgeBuild";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -19811,7 +19581,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 888, BOTTOMRIGHT: 1124 922, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreSnapBuild45";
+          NAME = "OptionsMenu.wnd:RowSnapBuild45";
           TEXT = "GUI:SnapBuild45";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -19951,7 +19721,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 960, BOTTOMRIGHT: 1124 994, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreChromaLighting";
+          NAME = "OptionsMenu.wnd:RowChromaLighting";
           TEXT = "GUI:ChromaLighting";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -20039,52 +19809,6 @@ WINDOW
                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
           END
           ENDALLCHILDREN
-        END
-        CHILD
-        WINDOW
-          WINDOWTYPE = PUSHBUTTON;
-          SCREENRECT = UPPERLEFT: 372 1004, BOTTOMRIGHT: 1124 1044, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:ButtonMoreControls";
-          STATUS = ENABLED+IMAGE;
-          STYLE = PUSHBUTTON+MOUSETRACK;
-          SYSTEMCALLBACK = "[None]";
-          INPUTCALLBACK = "[None]";
-          TOOLTIPCALLBACK = "[None]";
-          DRAWCALLBACK = "[None]";
-          FONT = NAME: "Generals", SIZE: 15, BOLD: 0;
-          HEADERTEMPLATE = "MainButton";
-          TOOLTIPDELAY = -1;
-          TEXT = "GUI:OptionsMore";
-          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
-                      DISABLED: 62 64 92 255, DISABLEDBORDER: 31 32 47 255,
-                      HILITE:   186 255 12 255, HILITEBORDER:   0 2 0 255;
-          ENABLEDDRAWDATA = IMAGE: Buttons-Left, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                            IMAGE: NoImage, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          DISABLEDDRAWDATA = IMAGE: Buttons-Disabled-Left, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                             IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 128 128 128 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          HILITEDRAWDATA = IMAGE: Buttons-HiLite-Left, COLOR: 209 253 4 255, BORDERCOLOR: 59 60 52 255,
-                           IMAGE: Buttons-Pushed-Left, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
         END
         CHILD
         WINDOW
@@ -20869,7 +20593,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 268, BOTTOMRIGHT: 1124 302, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreHudWidth";
+          NAME = "OptionsMenu.wnd:RowHudWidth";
           TEXT = "GUI:HudWidth";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -21202,7 +20926,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 302, BOTTOMRIGHT: 1124 336, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreMenuTransitionSpeed";
+          NAME = "OptionsMenu.wnd:RowMenuTransitionSpeed";
           TEXT = "GUI:MenuTransitionSpeed";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -22593,7 +22317,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 612, BOTTOMRIGHT: 1124 646, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreHealthBarColors";
+          NAME = "OptionsMenu.wnd:RowHealthBarColors";
           TEXT = "GUI:HealthBarColors";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -22926,7 +22650,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 646, BOTTOMRIGHT: 1124 680, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreAircraftAltitudeLine";
+          NAME = "OptionsMenu.wnd:RowAircraftAltitudeLine";
           TEXT = "GUI:AircraftAltitudeLine";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -23019,7 +22743,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 680, BOTTOMRIGHT: 1124 714, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreEmptyBuildingPips";
+          NAME = "OptionsMenu.wnd:RowEmptyBuildingPips";
           TEXT = "GUI:EmptyBuildingPips";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -23825,7 +23549,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 820, BOTTOMRIGHT: 1124 854, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreSaveCamera";
+          NAME = "OptionsMenu.wnd:RowSaveCamera";
           TEXT = "GUI:SaveCamera";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -23918,7 +23642,7 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 854, BOTTOMRIGHT: 1124 888, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowMoreUseCamera";
+          NAME = "OptionsMenu.wnd:RowUseCamera";
           TEXT = "GUI:UseCamera";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
@@ -24006,52 +23730,6 @@ WINDOW
                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
           END
           ENDALLCHILDREN
-        END
-        CHILD
-        WINDOW
-          WINDOWTYPE = PUSHBUTTON;
-          SCREENRECT = UPPERLEFT: 372 898, BOTTOMRIGHT: 1124 938, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:ButtonMoreInterface";
-          STATUS = ENABLED+IMAGE;
-          STYLE = PUSHBUTTON+MOUSETRACK;
-          SYSTEMCALLBACK = "[None]";
-          INPUTCALLBACK = "[None]";
-          TOOLTIPCALLBACK = "[None]";
-          DRAWCALLBACK = "[None]";
-          FONT = NAME: "Generals", SIZE: 15, BOLD: 0;
-          HEADERTEMPLATE = "MainButton";
-          TOOLTIPDELAY = -1;
-          TEXT = "GUI:OptionsMore";
-          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
-                      DISABLED: 62 64 92 255, DISABLEDBORDER: 31 32 47 255,
-                      HILITE:   186 255 12 255, HILITEBORDER:   0 2 0 255;
-          ENABLEDDRAWDATA = IMAGE: Buttons-Left, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                            IMAGE: NoImage, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: Buttons-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          DISABLEDDRAWDATA = IMAGE: Buttons-Disabled-Left, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                             IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 128 128 128 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: Buttons-Disabled-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          HILITEDRAWDATA = IMAGE: Buttons-HiLite-Left, COLOR: 209 253 4 255, BORDERCOLOR: 59 60 52 255,
-                           IMAGE: Buttons-Pushed-Left, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-Pushed-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Middle, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: Buttons-HiLite-Right, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
         END
         ENDALLCHILDREN
       END

@@ -36,7 +36,9 @@
 #include "gamespy/peer/peer.h"
 
 #include <map>
+#include <vector>
 
+#include "Lib/Clock.h"
 #include "Common/GameEngine.h"
 #include "Common/GameState.h"
 #include "Common/GameSpyMiscPreferences.h"
@@ -449,10 +451,180 @@ void WOLWelcomeMenuStartPlayVsAIOnEntry( void )
 	s_playOnEntry = TRUE;
 }
 
+//-------------------------------------------------------------------------------------------------
+// Team vs AI on the Play vs AI card (docs/plans/TEAM-VS-AI.md), on a server that takes it: a Team fact
+// with a key that steps 1V1, 2V2, 3V3, 4V4 (never under the party's size), the party on the status row
+// with LEAVE at its right, and PLAY that plays the party, queues for a team the party cannot fill
+// (FIND TEAM) or leaves the queue (CANCEL).  Friends join the party from the friends box's INVITE.
+//-------------------------------------------------------------------------------------------------
+static Int s_teamSize = 1;								///< humans a side; 1 is the 1v1
+static GameWindow *buttonTeamSize = NULL;
+static GameWindow *buttonLeaveParty = NULL;
+static UnicodeString s_teamLine;					///< the search or the party, on the status row when no refusal is up
+static UnicodeString s_playWords;					///< PLAY as the master words it
+static UnsignedInt s_teamQueuedAt = 0;		///< when the queue took us, for the wait's clock
+static UnsignedInt s_teamSerial = 0;			///< OnlineGetParty's serial as the card last showed it
+static Int s_teamQueued = -1;
+static Int s_teamSecond = -1;
+static Int s_teamShownSize = -1;
+static GameFont *labelFont( void );		// the cards' faces and lengths, further down
+static Int hpx( Real at1080 );
+
+static Int partySize( void )
+{
+	std::vector<OnlinePartyMember> party;
+	OnlineGetParty( party );
+	return (Int)party.size();
+}
+
+/// a key the master has no window for, made once on the hub's panel, drawn by the language
+static GameWindow *makeTeamKey( const char *name, const UnicodeString &label )
+{
+	if (parentWOLWelcome == NULL)
+		return NULL;
+	const NameKeyType id = TheNameKeyGenerator->nameToKey( name );
+	GameWindow *key = TheWindowManager->winGetWindowFromId( parentWOLWelcome, id );		// the hub's next init
+	if (key == NULL)
+	{
+		WinInstanceData inst;
+		inst.init();
+		BitSet( inst.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK );
+		inst.m_decoratedNameString = name;
+		inst.m_id = (Int)id;
+		key = TheWindowManager->gogoGadgetPushButton( parentWOLWelcome, WIN_STATUS_ENABLED, 0, 0, 1, 1, &inst, labelFont(), FALSE );
+		if (key == NULL)
+			return NULL;
+		key->winBringToTop();
+	}
+	GadgetButtonSetText( key, label );
+	UIStyle::setMenuKey( key, FALSE );
+	key->winHide( TRUE );
+	return key;
+}
+
+/// a key stood on the screen at x, y, w, h, whatever its parent
+static void placeTeamKey( GameWindow *key, Int x, Int y, Int w, Int h )
+{
+	if (key == NULL)
+		return;
+	Int px = 0, py = 0;
+	if (key->winGetParent())
+		key->winGetParent()->winGetScreenPosition( &px, &py );
+	key->winSetPosition( x - px, y - py );
+	key->winSetSize( w, h );
+}
+
+static void makeTeamKeys( void )
+{
+	buttonTeamSize = makeTeamKey( "WOLWelcomeMenu.wnd:ButtonTeamSize", UnicodeString( u"1V1" ) );
+	buttonLeaveParty = makeTeamKey( "WOLWelcomeMenu.wnd:ButtonLeaveParty", UIStyle::capitals( TheGameText->fetch( "GUI:OnlineHubLeaveParty" ) ) );
+	s_playWords = UIStyle::capitals( TheGameText->fetch( "GUI:OnlineHubPlay" ) );	// the master's word: the key may still read FIND TEAM
+	s_teamSerial = 0;
+	s_teamQueued = s_teamSecond = s_teamShownSize = -1;
+}
+
+/** The card's team state each update: the size held at the party's, the keys shown and placed on card (the
+	* Play vs AI card's window), PLAY's word, the status line. */
+static void updateTeam( GameWindow *card )
+{
+	const Bool on = OnlineTeamAIAvailable();
+	std::vector<OnlinePartyMember> party;
+	const UnsignedInt serial = OnlineGetParty( party );
+	const Int members = on ? (Int)party.size() : 0;
+	if (!on)
+		s_teamSize = 1;
+	else if (members > s_teamSize)
+		s_teamSize = min( members, (Int)ONLINE_TEAM_SEATS );
+	const Int queued = on ? OnlineGetTeamAIQueue() : 0;
+	if (queued > 0 && s_teamQueuedAt == 0)
+		s_teamQueuedAt = Clock_Milliseconds();
+	else if (queued == 0)
+		s_teamQueuedAt = 0;
+	const Int second = queued > 0 ? (Int)( ( Clock_Milliseconds() - s_teamQueuedAt ) / 1000 ) : -1;
+
+	if (card && buttonTeamSize && buttonLeaveParty)
+	{
+		Int x, y, w, h;
+		card->winGetScreenPosition( &x, &y );
+		card->winGetSize( &w, &h );
+		const Int right = x + w - hpx( 24.0f ), keyWidth = hpx( 110.0f );
+		placeTeamKey( buttonTeamSize, right - keyWidth, y + hpx( 192.0f ), keyWidth, hpx( 32.0f ) );
+		placeTeamKey( buttonLeaveParty, right - keyWidth, y + h - hpx( 98.0f ) - hpx( 14.0f ), keyWidth, hpx( 28.0f ) );
+		buttonTeamSize->winHide( !on );
+		buttonTeamSize->winEnable( queued == 0 );
+		buttonLeaveParty->winHide( members < 2 );
+	}
+	if (serial == s_teamSerial && queued == s_teamQueued && second == s_teamSecond && s_teamSize == s_teamShownSize)
+		return;
+	s_teamSerial = serial;
+	s_teamQueued = queued;
+	s_teamSecond = second;
+	s_teamShownSize = s_teamSize;
+	s_cardsDirty = TRUE;
+
+	UnicodeString size;
+	size.format( u"%dV%d", s_teamSize, s_teamSize );
+	if (buttonTeamSize)
+		GadgetButtonSetText( buttonTeamSize, size );
+	if (buttonPlayAI)
+	{
+		UnicodeString play = s_playWords;
+		if (queued > 0)
+			play = UIStyle::capitals( TheGameText->fetch( "GUI:OnlineHubCancelSearch" ) );
+		else if (s_teamSize > max( 1, members ))
+			play = UIStyle::capitals( TheGameText->fetch( "GUI:OnlineHubFindTeam" ) );
+		GadgetButtonSetText( buttonPlayAI, play );
+	}
+	s_teamLine.clear();
+	if (queued > 0)
+	{
+		UnicodeString wanted;
+		wanted.format( u"%dV%d", queued, queued );
+		s_teamLine.format( TheGameText->fetch( "GUI:OnlineHubFindingTeam" ), wanted.str(), second / 60, second % 60 );
+	}
+	else if (members >= 2)
+	{
+		UnicodeString names;
+		for (size_t each = 0; each < party.size(); ++each)
+		{
+			UnicodeString nick;
+			nick.translate( party[ each ].nick );
+			if (each)
+				names.concat( u", " );
+			names.concat( nick );
+		}
+		s_teamLine.format( u"%s  %s", UIStyle::capitals( TheGameText->fetch( "GUI:OnlineHubParty" ) ).str(), names.str() );
+	}
+}
+
+/// the Team key: the next size the party can play, back to its own (or the 1v1) after 4V4
+static void stepTeamSize( void )
+{
+	const Int members = partySize();
+	const Int smallest = members >= 2 ? members : 1;
+	s_teamSize = s_teamSize >= (Int)ONLINE_TEAM_SEATS ? smallest : max( smallest, s_teamSize + 1 );
+}
+
 static void pressPlay( void )
 {
 	s_aiRefusal.clear();
 	s_cardsDirty = TRUE;
+	// Team vs AI: CANCEL leaves the queue; a team bigger than the party (or than a lone player) is found by it
+	if (OnlineTeamAIAvailable())
+	{
+		if (OnlineGetTeamAIQueue() > 0)
+		{
+			OnlineLeaveTeamAIQueue();
+			return;
+		}
+		if (s_teamSize > max( 1, partySize() ))
+		{
+			s_aiArmy = quickMatchArmy();
+			const PlayerTemplate *army = s_aiArmy >= 0 ? ThePlayerTemplateStore->getNthPlayerTemplate( s_aiArmy ) : NULL;
+			OnlineQueueTeamAI( s_teamSize, army ? army->getName() : AsciiString( "Random" ), aiGameSpeed() );
+			return;
+		}
+	}
 	WOLPlayVsAI();
 	if (buttonPlayAI)
 		buttonPlayAI->winEnable( FALSE );		// the update wakes it when the answer is in
@@ -464,7 +636,7 @@ static void pressPlay( void )
 // design's at 1080 through UIStyle::px, the scale the master was fitted at; type through
 // UIStyle::menuFont.  The head, frame A and the foot's rule are UIStyle::onlineHeader's.
 //-------------------------------------------------------------------------------------------------
-enum { CARD_FACTS = 3, RECENT_ROWS = 5, FORM_RESULTS = 5, OPEN_GAME_ROWS = 3, LADDER_ROWS = 5 };
+enum { CARD_FACTS = 4, RECENT_ROWS = 5, FORM_RESULTS = 5, OPEN_GAME_ROWS = 3, LADDER_ROWS = 5 };
 static const Real FACT_WIDTH = 236.0f;		///< the facts' column, ending 24 in from the card's right
 
 struct HubCard
@@ -920,10 +1092,11 @@ static void drawHubHeader( GameWindow *window, WinInstanceData *instData )
 static void makeCards( void )
 {
 	freeHubStrings();
-	static const char *const aiFacts[] = { "GUI:OnlineGamesLabel", "GUI:OnlineWinRateLabel", "GUI:OnlineSpeedLabel" };
+	// the fourth, Team, shows only on a server with Team vs AI (refreshCards sets the count)
+	static const char *const aiFacts[] = { "GUI:OnlineGamesLabel", "GUI:OnlineWinRateLabel", "GUI:OnlineSpeedLabel", "GUI:OnlineHubTeamLabel" };
 	static const char *const qmFacts[] = { "GUI:OnlinePlaceLabel", "GUI:OnlineHubRecord", "GUI:OnlineHubInQueue" };
 	makeCard( s_cards[ CARD_AI ], "CardPlayVsAI", "GUI:OnlineHubVsAITitle", "GUI:OnlineHubVsAILead",
-		"GUI:OnlineAIRatingLabel", TRUE, 3, aiFacts );
+		"GUI:OnlineAIRatingLabel", TRUE, 4, aiFacts );
 	makeCard( s_cards[ CARD_QUICK_MATCH ], "CardQuickMatch", "GUI:OnlineQuickMatchLabel",
 		"GUI:OnlineHubQuickMatchLead", "GUI:OnlineLadderRatingLabel", TRUE, 3, qmFacts );
 	// the Speed fact's value is the master's ComboBoxGameSpeed, over its place
@@ -1008,12 +1181,12 @@ static void makeCards( void )
 }
 
 /// a card's status line (a refusal, the Quick Match lock) over its key, empty for none, cut to the card
-static void setCardStatus( HubCard &card, const UnicodeString &text )
+static void setCardStatus( HubCard &card, const UnicodeString &text, Int reserve1080 = 0 )
 {
 	Int w = 0, h = 0;
 	if (card.window)
 		card.window->winGetSize( &w, &h );
-	card.status->setText( text.isEmpty() ? text : UIStyle::fitText( text, bodyFont(), w - hpx( 48.0f ) ) );
+	card.status->setText( text.isEmpty() ? text : UIStyle::fitText( text, bodyFont(), w - hpx( 48.0f + reserve1080 ) ) );
 }
 
 /// the three cards' numbers, laid out again when the player's numbers, the counts or the army change
@@ -1048,7 +1221,11 @@ static void refreshCards( void )
 	ai.factValue[ 0 ]->setText( info.hasAIRating ? UIStyle::grouped( info.aiGames ) : none );
 	ai.factValue[ 1 ]->setText( info.hasAIRating && info.aiGames > 0
 		? UIStyle::percentText( UIStyle::percent( info.aiWins, info.aiGames ) ) : none );
-	setCardStatus( ai, s_aiRefusal );
+	// Team vs AI: the Team fact, and the search or the party on the status row while no refusal is up,
+	// clear of LEAVE at its right
+	ai.facts = OnlineTeamAIAvailable() ? 4 : 3;
+	const Bool leaveShown = buttonLeaveParty && !buttonLeaveParty->winIsHidden();
+	setCardStatus( ai, s_aiRefusal.isEmpty() ? s_teamLine : s_aiRefusal, leaveShown ? 126 : 0 );
 
 	HubCard &qm = s_cards[ CARD_QUICK_MATCH ];
 	const UIStyle::RatingTier tier = UIStyle::playerTier( info );
@@ -1581,6 +1758,8 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 		GadgetButtonSetText( buttonPlayAI, UIStyle::capitals( buttonPlayAI->winGetText() ) );
 	if (buttonRejoin)
 		GadgetButtonSetText( buttonRejoin, UIStyle::capitals( buttonRejoin->winGetText() ) );
+	// Team vs AI's Team key and LEAVE, hidden until a server with it and a party show them (updateTeam)
+	makeTeamKeys();
 	// the recent matches are drawn on their card: a chip and a coloured change are more than a
 	// one-column listbox's text
 	if (GameWindow *recent = hubWindow( "ListboxRecent" ))
@@ -1697,6 +1876,8 @@ void WOLWelcomeMenuShutdown( WindowLayout *layout, void *userData )
 {
 	listboxInfo = NULL;
 	buttonRejoin = NULL;
+	buttonTeamSize = NULL;		// children of the panel; the next init finds them again
+	buttonLeaveParty = NULL;
 
 	if (TheFirewallHelper != NULL) {
 		delete TheFirewallHelper;
@@ -1853,6 +2034,7 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 				const Bool answerAwaited = WOLPlayVsAIUpdate();
 				buttonPlayAI->winEnable( !answerAwaited && !s_joiningRoom );
 			}
+			updateTeam( s_cards[ CARD_AI ].window );
 			applyControls();
 			refreshCards();
 			refreshRecent();
@@ -2021,6 +2203,15 @@ WindowMsgHandledType WOLWelcomeMenuSystem( GameWindow *window, UnsignedInt msg,
 				else if (controlID == buttonPlayAIID)
 				{
 					pressPlay();
+				}
+				else if (buttonTeamSize != NULL && control == buttonTeamSize)
+				{
+					stepTeamSize();
+				}
+				else if (buttonLeaveParty != NULL && control == buttonLeaveParty)
+				{
+					DEBUG_LOG(("ONLINE PARTY leave pressed\n"));
+					OnlineLeaveParty();
 				}
 				else if (controlID == buttonRejoinID)
 				{

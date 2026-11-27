@@ -853,6 +853,9 @@ protected:
 	enum { MAX_AI_SCOUTS = 2 };				///< the ladder's maxScouts never asks for more than this
 	ObjectID	m_scoutID[ MAX_AI_SCOUTS ];	///< the units currently touring the map for us
 	Int				m_scoutTargetFor[ MAX_AI_SCOUTS ];	///< which start position each one is walking to
+	Coord3D		m_scoutExtraAt[ MAX_AI_SCOUTS ];		///< the last spot off the start positions each one was sent to look at
+	UnsignedInt m_scoutExtraFrame[ MAX_AI_SCOUTS ];	///< ... and when; 0 for never
+	Bool			extraScoutTarget(Int slot, const Coord3D *from, UnsignedInt fresh, Coord3D *pos);	///< off the start positions: the army's last seen place, then a supply pile in our fog
 	Int				m_scoutTimer;						///< frames until the next scouting check
 	UnsignedInt m_scoutSeenFrame[ MAX_PLAYER_COUNT ];	///< when each start position was last looked at; 0 == never
 	Bool			m_startChecked[ MAX_PLAYER_COUNT ];	///< start positions we have looked at, or deduced without looking
@@ -1065,6 +1068,8 @@ protected:
 	Bool mendersHere(void);	///< heal auras and tunnels mend what it pulls out
 	Bool routeHomeHere(void);	///< a unit pulled out to a dock walks round what the map shows first, and docks when it stands there
 	Bool rockveeHere(void);		///< a transport kites at the reach of the riders who shoot out of it, and the vehicle-killers board first
+	Bool scoutingHere(void);	///< scouts look past the start positions, reveal powers fire on a stale ledger, a crippled enemy is one seen so
+	Bool powerHoldHere(void);	///< a ready strike waits for a target worth a rated floor, and takes the fight its wave is in
 	Real killZoneWeight(void) const;							///< how much of the loss record a reading counts, 0 when off
 	Real killZoneAt(const Coord3D *at) const;			///< ... the losses round one spot, weighed
 	Real gunOdds(void) const;											///< what an attack has to be worth against the guns it meets, 0 when off

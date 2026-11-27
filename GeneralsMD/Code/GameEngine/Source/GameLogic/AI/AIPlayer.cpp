@@ -477,6 +477,8 @@ m_role(AIROLE_AGGRESSIVE)
 	for (Int scoutSlot = 0; scoutSlot < MAX_AI_SCOUTS; ++scoutSlot) {
 		m_scoutID[scoutSlot] = INVALID_ID;
 		m_scoutTargetFor[scoutSlot] = -1;	// nothing looked at yet; the score picks the first target
+		m_scoutExtraAt[scoutSlot].zero();
+		m_scoutExtraFrame[scoutSlot] = 0;
 	}
 	for (Int startNdx = 0; startNdx < MAX_PLAYER_COUNT; ++startNdx) {
 		m_scoutSeenFrame[startNdx] = 0;		// 0 == never seen, which outranks every real age below
@@ -10218,6 +10220,74 @@ static void collectObjects( Object *obj, void *userData )
 	* left it with no powers at all (40 ladder games, not one).  A minute's wait keeps Easy below Medium. */
 static const AIRungReal POWER_WAIT_SECONDS = { { 60.0f, 0.0f, 0.0f }, AIKNOB_OPEN };
 
+/** Powers held for value (-aiknobsoff powerhold): a ready strike waits while the best cell it knows is worth
+	* under this, from Medium up and rising past Hard, at most POWER_HOLD_SECONDS past ready.  Fired on the
+	* cooldown, a strike landed on whatever stood in sight, a lone power plant as often as an army. */
+static const AIRungReal POWER_VALUE_FLOOR = { { 0.0f, 500.0f, 1000.0f }, AIKNOB_OPEN };
+static const UnsignedInt POWER_HOLD_SECONDS = 90;
+/** ... and it takes the knot of enemies its own units away from home are shooting at, when that is worth this
+	* share of the best cell and none of ours stands under it. */
+static const Real POWER_FIGHT_SHARE = 0.5f;
+static const Real POWER_FIGHT_CLEAR = 40.0f;	///< past the strike's radius, the ground kept clear of our own
+/** A reveal power the scripts hold (CIA Intelligence, the spy satellite) fires once nothing of the enemy's has
+	* been seen for this long (-aiknobsoff scouting); the scripts let CIA Intelligence sit ready 117 s on average. */
+static const UnsignedInt REVEAL_STALE_SECONDS = 60;
+
+/** A power that hurts what it lands on, by its type: what the value floor holds. */
+static Bool aiIsStrikePower( SpecialPowerType type )
+{
+	switch( type )
+	{
+		case SPECIAL_DAISY_CUTTER: case AIRF_SPECIAL_DAISY_CUTTER: case SPECIAL_CARPET_BOMB: case AIRF_SPECIAL_CARPET_BOMB:
+		case SPECIAL_CHINA_CARPET_BOMB: case EARLY_SPECIAL_CHINA_CARPET_BOMB: case SPECIAL_NAPALM_STRIKE:
+		case SPECIAL_NEUTRON_MISSILE: case NUKE_SPECIAL_NEUTRON_MISSILE: case SUPW_SPECIAL_NEUTRON_MISSILE:
+		case SPECIAL_ANTHRAX_BOMB: case SPECIAL_SCUD_STORM: case SPECIAL_A10_THUNDERBOLT_STRIKE: case AIRF_SPECIAL_A10_THUNDERBOLT_STRIKE:
+		case SPECIAL_ARTILLERY_BARRAGE: case SPECIAL_PARTICLE_UPLINK_CANNON: case SUPW_SPECIAL_PARTICLE_UPLINK_CANNON:
+		case LAZR_SPECIAL_PARTICLE_UPLINK_CANNON: case SPECIAL_SPECTRE_GUNSHIP: case AIRF_SPECIAL_SPECTRE_GUNSHIP:
+		case SPECIAL_EMP_PULSE: case SUPR_SPECIAL_CRUISE_MISSILE: case SPECIAL_BATTLESHIP_BOMBARDMENT:
+			return TRUE;
+		default:
+			return FALSE;
+	}
+}
+
+/** The middle of what this player's units away from home shoot at of one enemy's, weighed by the shooters, when
+	* none of its own units stands within clear of it. */
+static Bool aiOwnFightAim( const std::vector<Object *> &owned, Int enemyNdx, Real clear, const Coord3D *home, Real homeReach, Coord3D *aim )
+{
+	Real weight = 0.0f;
+	Real x = 0.0f, y = 0.0f;
+	for( size_t o = 0; o < owned.size(); ++o )
+	{
+		const Object *unit = owned[ o ];
+		const AIUpdateInterface *uai = unit->getAI();
+		if( uai == NULL || unit->isEffectivelyDead() || unit->isKindOf( KINDOF_STRUCTURE ) ||
+				sqr( unit->getPosition()->x - home->x ) + sqr( unit->getPosition()->y - home->y ) <= sqr( homeReach ) )
+			continue;
+		const Object *victim = uai->getCurrentVictim();
+		if( victim == NULL || victim->isEffectivelyDead() || victim->getControllingPlayer() == NULL ||
+				victim->getControllingPlayer()->getPlayerIndex() != enemyNdx )
+			continue;
+		const Real w = aiCombatPower( unit );
+		x += victim->getPosition()->x * w;
+		y += victim->getPosition()->y * w;
+		weight += w;
+	}
+	if( weight <= 0.0f )
+		return FALSE;
+	aim->x = x / weight;
+	aim->y = y / weight;
+	aim->z = TheTerrainLogic->getGroundHeight( aim->x, aim->y );
+	for( size_t o = 0; o < owned.size(); ++o )
+	{
+		const Object *unit = owned[ o ];
+		if( !unit->isEffectivelyDead() && !unit->isKindOf( KINDOF_STRUCTURE ) &&
+				sqr( unit->getPosition()->x - aim->x ) + sqr( unit->getPosition()->y - aim->y ) < sqr( clear ) )
+			return FALSE;
+	}
+	return TRUE;
+}
+
 void AIPlayer::doReadySpecialPowers( void )
 {
 	// Only below Medium: the curve alone falls through Medium at 30 seconds. An Apocalypse seat below Medium
@@ -10233,29 +10303,88 @@ void AIPlayer::doReadySpecialPowers( void )
 	if( enemy == NULL )
 		return;
 
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Int enemyNdx = enemy->getPlayerIndex();
+	const Bool hold = powerHoldHere();
+	// a stale ledger on this enemy: nothing of his seen for REVEAL_STALE_SECONDS
+	Bool stale = FALSE;
+	if( scoutingHere() )
+	{
+		UnsignedInt lastSeen = 0;
+		for( std::map<ObjectID, SeenEnemy>::const_iterator s = m_seenEnemies.begin(); s != m_seenEnemies.end(); ++s )
+			if( s->second.owner == enemyNdx && s->second.seen > lastSeen )
+				lastSeen = s->second.seen;
+		stale = now > REVEAL_STALE_SECONDS * LOGICFRAMES_PER_GAME_SECOND && now - lastSeen >= REVEAL_STALE_SECONDS * LOGICFRAMES_PER_GAME_SECOND;
+	}
+
 	std::vector<Object*> owned;
 	m_player->iterateObjects( collectObjects, &owned );
-	for( std::vector<Object*>::iterator it = owned.begin(); it != owned.end(); ++it )
+	for( size_t o = 0; o < owned.size(); ++o )
 	{
-		Object *obj = *it;
+		Object *obj = owned[ o ];
 		if( obj->isEffectivelyDead() || obj->isDisabled() )
 			continue;
 		for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
 		{
 			SpecialPowerModuleInterface *power = (*m)->getSpecialPower();
-			if( power == NULL || !power->getSpecialPowerTemplate()->isFiredByAIWhenReady() || !power->isReady() ||
-					TheGameLogic->getFrame() < power->getReadyFrame() + wait )
+			if( power == NULL || !power->isReady() || now < power->getReadyFrame() + wait )
+				continue;
+			const SpecialPowerTemplate *tmpl = power->getSpecialPowerTemplate();
+			const SpecialPowerType type = tmpl->getSpecialPowerType();
+			const Bool reveal = !tmpl->isFiredByAIWhenReady() && stale && ( type == SPECIAL_CIA_INTELLIGENCE || type == SPECIAL_SPY_SATELLITE );
+			if( !tmpl->isFiredByAIWhenReady() && !reveal )
 				continue;
 			const ScienceType science = power->getRequiredScience();
 			if( science != SCIENCE_INVALID && !m_player->hasScience( science ) )
 				continue;
 
-			const SpecialPowerTemplate *tmpl = power->getSpecialPowerTemplate();
+			if( reveal && type == SPECIAL_CIA_INTELLIGENCE )
+			{
+				DEBUG_LOG(("AI POWER frame %d player %d fires '%s' on a stale ledger\n", now, m_player->getPlayerIndex(), tmpl->getName().str()));
+				power->doSpecialPower( COMMAND_FIRED_BY_SCRIPT );
+				continue;
+			}
 			const Real radius = max( 50.0f, tmpl->getRadiusCursorRadius( m_player ) );
 			Coord3D target;
-			if( !m_player->computeSuperweaponTarget( tmpl, &target, enemy->getPlayerIndex(), radius ) || target.lengthSqr() <= 0.0f )
+			if( reveal )
+			{
+				// the spy satellite over the middle of what we know of his base
+				Region2D bounds;
+				getPlayerStructureBounds( &bounds, enemyNdx, FALSE, m_player->getPlayerIndex() );
+				if( bounds.width() <= 0.0f && bounds.height() <= 0.0f )
+					continue;
+				target.x = bounds.lo.x + bounds.width() / 2;
+				target.y = bounds.lo.y + bounds.height() / 2;
+				target.z = TheTerrainLogic->getGroundHeight( target.x, target.y );
+				DEBUG_LOG(("AI POWER frame %d player %d fires '%s' on a stale ledger at (%.0f,%.0f)\n", now, m_player->getPlayerIndex(),
+					tmpl->getName().str(), target.x, target.y));
+				power->doSpecialPowerAtLocation( &target, INVALID_ANGLE, COMMAND_FIRED_BY_SCRIPT );
 				continue;
-			DEBUG_LOG(("AI POWER frame %d player %d fires '%s' at (%.0f,%.0f)\n", TheGameLogic->getFrame(),
+			}
+			if( !m_player->computeSuperweaponTarget( tmpl, &target, enemyNdx, radius ) || target.lengthSqr() <= 0.0f )
+				continue;
+			if( hold && aiIsStrikePower( type ) )
+			{
+				const Real best = (Real)superweaponScore( &target, enemyNdx, radius, TRUE );
+				Coord3D fightAim;
+				const Bool atOwnFight = aiOwnFightAim( owned, enemyNdx, radius + POWER_FIGHT_CLEAR, &m_baseCenter, 2.0f * m_baseRadius, &fightAim );	// isAtHome's reach
+				const Real atFight = atOwnFight ? (Real)superweaponScore( &fightAim, enemyNdx, radius, TRUE ) : 0.0f;
+				const Real floor = aiRatingLerp( m_rating, POWER_VALUE_FLOOR );
+				if( max( best, atFight ) < floor && now < power->getReadyFrame() + wait + POWER_HOLD_SECONDS * LOGICFRAMES_PER_GAME_SECOND )
+				{
+					if( now < power->getReadyFrame() + wait + SPECIAL_POWER_CHECK_RATE )
+						DEBUG_LOG(("AI POWER frame %d player %d holds '%s': best %.0f, at its fight %.0f, floor %.0f\n", now,
+							m_player->getPlayerIndex(), tmpl->getName().str(), best, atFight, floor));
+					continue;
+				}
+				if( atOwnFight && atFight >= floor && atFight >= POWER_FIGHT_SHARE * best )
+				{
+					DEBUG_LOG(("AI POWER frame %d player %d takes '%s' to its own fight at (%.0f,%.0f), %.0f against %.0f\n", now,
+						m_player->getPlayerIndex(), tmpl->getName().str(), fightAim.x, fightAim.y, atFight, best));
+					target = fightAim;
+				}
+			}
+			DEBUG_LOG(("AI POWER frame %d player %d fires '%s' at (%.0f,%.0f)\n", now,
 				m_player->getPlayerIndex(), tmpl->getName().str(), target.x, target.y));
 			power->doSpecialPowerAtLocation( &target, INVALID_ANGLE, COMMAND_FIRED_BY_SCRIPT );
 		}
@@ -10590,6 +10719,16 @@ Bool AIPlayer::routeHomeHere( void )
 Bool AIPlayer::rockveeHere( void )
 {
 	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_ROCKVEE ) != 0 );
+}
+
+Bool AIPlayer::scoutingHere( void )
+{
+	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_SCOUTING ) != 0 );
+}
+
+Bool AIPlayer::powerHoldHere( void )
+{
+	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_POWER_HOLD ) != 0 );
 }
 
 /** The owner, 2026-11-26: every general's computer player plays in its own style, under whatever personality the
@@ -23633,11 +23772,95 @@ Bool AIPlayer::nextScoutTarget( Int slot, const Coord3D *from, Coord3D *pos )
 		}
 	}
 
+	// with no start left to search, the second scout looks round the rest of the map, and the first does too
+	// once every base was seen lately.  Before this they walked the starts and nothing else, and an expansion
+	// or an army out in the field stayed unknown (-aiknobsoff scouting)
+	if( !bestSearching && ( bestNdx < 0 || slot == 1 ) && scoutingHere() && extraScoutTarget( slot, from, fresh, pos ) )
+	{
+		m_scoutTargetFor[ slot ] = -1;
+		return TRUE;
+	}
+
 	if( bestNdx < 0 )
 		return FALSE;			// everything worth seeing has been seen recently enough
 
 	m_scoutTargetFor[ slot ] = bestNdx;
 	*pos = bestPos;
+	return TRUE;
+}
+
+/** Off the start positions, where an enemy hides what the start tour never sees.  First the place his army was
+	* last seen, once that sighting is older than fresh and younger than four times it.  Then the nearest supply
+	* pile or dock in our fog more than SCOUT_EXTRA_START_CLEAR from every start, where an expansion goes up.  A
+	* spot within SCOUT_EXTRA_SPACING of one either scout was sent to in the last four fresh spans is skipped, so
+	* two piles are not looked at by turns. */
+static const Real SCOUT_EXTRA_START_CLEAR = 500.0f;
+static const Real SCOUT_EXTRA_SPACING = 300.0f;
+
+Bool AIPlayer::extraScoutTarget( Int slot, const Coord3D *from, UnsignedInt fresh, Coord3D *pos )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const UnsignedInt kept = 4 * fresh;
+	Bool found = FALSE;
+	Coord3D spot;
+	spot.zero();
+	// the newest sighting in the ledger, ties to the first by ID
+	const SeenEnemy *newest = NULL;
+	for( std::map<ObjectID, SeenEnemy>::const_iterator it = m_seenEnemies.begin(); it != m_seenEnemies.end(); ++it )
+		if( newest == NULL || it->second.seen > newest->seen )
+			newest = &it->second;
+	Bool armyLooked = FALSE;
+	if( newest && now - newest->seen >= fresh && now - newest->seen < kept )
+	{
+		for( Int s = 0; s < MAX_AI_SCOUTS; ++s )
+			if( m_scoutExtraFrame[ s ] != 0 && now - m_scoutExtraFrame[ s ] < kept &&
+					sqr( m_scoutExtraAt[ s ].x - newest->pos.x ) + sqr( m_scoutExtraAt[ s ].y - newest->pos.y ) < sqr( SCOUT_EXTRA_SPACING ) )
+				armyLooked = TRUE;
+		if( !armyLooked )
+		{
+			spot = newest->pos;
+			found = TRUE;
+		}
+	}
+	if( !found )
+	{
+		const Int me = m_player->getPlayerIndex();
+		Real bestSqr = 0.0f;
+		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+		{
+			if( !obj->isKindOf( KINDOF_SUPPLY_SOURCE ) || obj->isEffectivelyDead() )
+				continue;
+			const Coord3D *at = obj->getPosition();
+			if( ThePartitionManager->getShroudStatusForPlayer( me, at ) == CELLSHROUD_CLEAR || isAtHome( at ) )
+				continue;
+			const Real distSqr = sqr( at->x - from->x ) + sqr( at->y - from->y );
+			if( found && distSqr >= bestSqr )
+				continue;
+			Bool skip = FALSE;
+			for( Int startNdx = 0; startNdx < MAX_PLAYER_COUNT && !skip; ++startNdx )
+			{
+				Coord3D start;
+				if( startAt( startNdx, &start ) && sqr( start.x - at->x ) + sqr( start.y - at->y ) < sqr( SCOUT_EXTRA_START_CLEAR ) )
+					skip = TRUE;
+			}
+			for( Int s = 0; s < MAX_AI_SCOUTS && !skip; ++s )
+				if( m_scoutExtraFrame[ s ] != 0 && now - m_scoutExtraFrame[ s ] < kept &&
+						sqr( m_scoutExtraAt[ s ].x - at->x ) + sqr( m_scoutExtraAt[ s ].y - at->y ) < sqr( SCOUT_EXTRA_SPACING ) )
+					skip = TRUE;
+			if( skip )
+				continue;
+			spot = *at;
+			bestSqr = distSqr;
+			found = TRUE;
+		}
+	}
+	if( !found )
+		return FALSE;
+	DEBUG_LOG(("AI SCOUT frame %d player %d sends scout %d off the starts to (%.0f,%.0f), %s\n", now, m_player->getPlayerIndex(), slot,
+		spot.x, spot.y, armyLooked || newest == NULL || now - newest->seen < fresh || now - newest->seen >= kept ? "a supply pile in the fog" : "the army's last seen place"));
+	m_scoutExtraAt[ slot ] = spot;
+	m_scoutExtraFrame[ slot ] = now;
+	*pos = spot;
 	return TRUE;
 }
 
@@ -26123,7 +26346,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 47;		// 47: the general's identity (AIIdentity::xfer)  46: the USA identity's moves and battle plan clock on the AIPlayer  45: the dozer's search  44: the rating on Elo  43: the loss map and the guns' hold  42: the rating  41: a strike route kept once struck  40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
+	XferVersion currentVersion = 48;		// 48: the scouts' spots off the start positions  47: the general's identity (AIIdentity::xfer)  46: the USA identity's moves and battle plan clock on the AIPlayer  45: the dozer's search  44: the rating on Elo  43: the loss map and the guns' hold  42: the rating  41: a strike route kept once struck  40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -26851,6 +27074,24 @@ void AIPlayer::xfer( Xfer *xfer )
 		m_identityStarted = FALSE;
 	}
 
+	// where the scouts last looked off the start positions; an older save has looked nowhere yet
+	if( version >= 48 )
+	{
+		for( Int s = 0; s < MAX_AI_SCOUTS; ++s )
+		{
+			xfer->xferCoord3D( &m_scoutExtraAt[ s ] );
+			xfer->xferUnsignedInt( &m_scoutExtraFrame[ s ] );
+		}
+	}
+	else if( xfer->getXferMode() == XFER_LOAD )
+	{
+		for( Int s = 0; s < MAX_AI_SCOUTS; ++s )
+		{
+			m_scoutExtraAt[ s ].zero();
+			m_scoutExtraFrame[ s ] = 0;
+		}
+	}
+
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------
@@ -27363,6 +27604,7 @@ static const AIRatingTable s_ratingTables[] =
 	AI_TABLE_INT( AMBULANCE_MATCH_CAP ),
 	AI_TABLE_REAL( EDGE_ODDS ),
 	AI_TABLE_REAL( DEAR_PULL_HEALTH ),
+	AI_TABLE_REAL( POWER_VALUE_FLOOR ),
 	AI_TABLE_INT( RUSH_SECONDS ),
 	AI_TABLE_INT( RAID_EVERY_SECONDS ),
 	AI_TABLE_INT( SHARE_CAP ),

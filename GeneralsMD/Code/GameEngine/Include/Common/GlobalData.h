@@ -133,6 +133,8 @@ enum
 	AIKNOB_DEAR_STAY		= 524288,	///< a hurt dear unit is pulled out of a fight its team is winning too, as before 2026-11-27
 	AIKNOB_ROUTE_HOME		= 1048576,	///< a hurt unit pulled out to a dock or tunnel walks there straight, through what the map shows, as before 2026-11-27
 	AIKNOB_ROCKVEE			= 2097152,	///< a transport kites at its own gun's reach, and riders board in the order they were found, as before 2026-11-27
+	AIKNOB_SCOUTING			= 4194304,	///< scouts walk the start positions only, reveal powers wait for the scripts, and an enemy's shape is read through the fog, as before 2026-11-27
+	AIKNOB_POWER_HOLD		= 8388608,	///< a ready strike fires at once on whatever it finds, as before 2026-11-27
 };
 
 //-------------------------------------------------------------------------------------------------

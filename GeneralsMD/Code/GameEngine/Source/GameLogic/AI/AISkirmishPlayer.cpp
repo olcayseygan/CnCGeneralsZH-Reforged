@@ -776,7 +776,11 @@ void AISkirmishPlayer::acquireEnemy(void)
 			if (curPlayer->hasAnyObjects()==false) continue; // not much of an enemy.
 			// ok, we got an enemy;
 			// If a player is out of units, or out of build facilities, we can lower his priority.
+			// Through the fog only what it knows (-aiknobsoff scouting): his start found, and nothing of his in sight or
+			// remembered.  EA's asked the world for his units and factories, which no player sees through the fog
 			Bool inBadShape = !curPlayer->hasAnyUnits() || !curPlayer->hasAnyBuildFacility();
+			if (scoutingHere())
+				inBadShape = i < MAX_PLAYER_COUNT && m_playerStartNdx[i] >= 0 && estate[i] <= 0.0f;
 
 			Coord3D enemyPos = m_baseCenter;
 			Region2D bounds;

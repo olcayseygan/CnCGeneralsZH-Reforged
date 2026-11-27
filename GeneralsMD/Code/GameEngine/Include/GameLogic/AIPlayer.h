@@ -1072,6 +1072,7 @@ protected:
 	Bool powerHoldHere(void);	///< a ready strike waits for a target worth a rated floor, and takes the fight its wave is in
 	Bool harassHere(void);		///< every personality raids the enemy's economy, smaller than the Raider, and raiders withdraw when hurt or outgunned
 	Int raidPartySize(void);	///< how many go on a raid: the Raider's party, any other personality's harass party, under 2 for none
+	void clearGarrisons(void);	///< units whose weapons clear a garrison go at a known enemy-held building near them (-aiknobsoff garrison)
 	Real killZoneWeight(void) const;							///< how much of the loss record a reading counts, 0 when off
 	Real killZoneAt(const Coord3D *at) const;			///< ... the losses round one spot, weighed
 	Real gunOdds(void) const;											///< what an attack has to be worth against the guns it meets, 0 when off

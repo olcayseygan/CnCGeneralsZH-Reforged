@@ -13975,6 +13975,8 @@ void AIPlayer::doWaves( void )
 		defendAlly();
 	if( raidPartySize() >= 2 )
 		doPersonaRaids();		// the Raider's own, and every other personality's smaller ones (harass)
+	if( runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_GARRISON ) != 0 ) )
+		clearGarrisons();
 	// and an Air, Infantry or Armor AI on every rung: what trainFavoured trains stands on no team, it skips
 	// the scripts' teams short of its kind, and a Hard Infantry USA sent no wave the whole match
 	const Bool sorties = runsOwnAI() && ( isKindPersona() ||
@@ -25830,6 +25832,81 @@ void AIPlayer::huntGatherers( void )
 			DEBUG_LOG(("AI RAIDER frame %d player %d turns '%s' %d on '%s' %d\n", TheGameLogic->getFrame(), me,
 				raider->getTemplate()->getName().str(), raider->getID(), obj->getTemplate()->getName().str(), obj->getID()));
 			break;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Garrison clearing (-aiknobsoff garrison): no code here took an enemy-held building as a target of its own,
+	* so a wave walked past a Bunker of missile men or shelled the walls of a civilian block the men inside
+	* outlived.  Every wave look, each known enemy garrison with men in it that clearing reaches gets up to
+	* CLEAR_PER_GARRISON of our units out of home within CLEAR_REACH whose weapon clears one, by its damage type
+	* (KILL_GARRISONED, SURRENDER, flame, poison, microwave): the flashbang Ranger, the Dragon Tank, the Toxin
+	* Tractor and the Microwave Tank without a list.  One already shooting it is counted, not sent again. */
+static const Real CLEAR_REACH = 450.0f;
+static const Int CLEAR_PER_GARRISON = 3;
+
+static Bool clearsGarrison( const Object *obj )
+{
+	for( Int slot = PRIMARY_WEAPON; slot < WEAPONSLOT_COUNT; ++slot )
+	{
+		const Weapon *weapon = obj->getWeaponInWeaponSlot( (WeaponSlotType)slot );
+		if( weapon == NULL || (weapon->getTemplate()->getAntiMask() & WEAPON_ANTI_GROUND) == 0 )
+			continue;
+		const DamageType type = weapon->getDamageType();
+		if( type == DAMAGE_KILL_GARRISONED || type == DAMAGE_SURRENDER || type == DAMAGE_FLAME || type == DAMAGE_POISON ||
+				type == DAMAGE_MICROWAVE )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+void AIPlayer::clearGarrisons( void )
+{
+	if( !m_baseCenterSet )
+		return;
+	const Int me = m_player->getPlayerIndex();
+	std::vector<Object *> clearers;
+	{
+		std::vector<Object *> owned;
+		m_player->iterateObjects( collectOwned, &owned );
+		for( size_t o = 0; o < owned.size(); ++o )
+		{
+			Object *obj = owned[ o ];
+			if( obj->getAI() == NULL || isAtHome( obj->getPosition() ) || !clearsGarrison( obj ) || !fightsOnItsOwn( obj ) )
+				continue;
+			clearers.push_back( obj );
+		}
+	}
+	if( clearers.empty() )
+		return;
+	std::vector<Bool> sent( clearers.size(), FALSE );
+	for( Object *building = TheGameLogic->getFirstObject(); building; building = building->getNextObject() )
+	{
+		if( !building->isKindOf( KINDOF_STRUCTURE ) || building->isEffectivelyDead() )
+			continue;
+		const ContainModuleInterface *contain = building->getContain();
+		if( contain == NULL || !contain->isGarrisonable() || contain->getContainCount() == 0 || contain->isImmuneToClearBuildingAttacks() ||
+				m_player->getRelationship( building->getTeam() ) != ENEMIES || !observerKnowsAbout( building, me ) )
+			continue;
+		const Coord3D *at = building->getPosition();
+		Int on = 0;
+		for( size_t c = 0; c < clearers.size(); ++c )
+			if( clearers[ c ]->getAI()->getCurrentVictim() == building || clearers[ c ]->getAI()->getGoalObject() == building )
+				++on;
+		for( size_t c = 0; c < clearers.size() && on < CLEAR_PER_GARRISON; ++c )
+		{
+			Object *unit = clearers[ c ];
+			if( sent[ c ] || unit->getAI()->getCurrentVictim() == building || unit->getAI()->getGoalObject() == building ||
+					sqr( unit->getPosition()->x - at->x ) + sqr( unit->getPosition()->y - at->y ) > sqr( CLEAR_REACH ) ||
+					unit->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, building, CMD_FROM_AI ) != ATTACKRESULT_POSSIBLE )
+				continue;
+			unit->getAI()->aiAttackObject( building, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+			sent[ c ] = TRUE;
+			++on;
+			DEBUG_LOG(("AI CLEAR frame %d player %d sends '%s' %d at '%s' %d, %d inside\n", TheGameLogic->getFrame(), me,
+				unit->getTemplate()->getName().str(), unit->getID(), building->getTemplate()->getName().str(), building->getID(),
+				(Int)contain->getContainCount()));
 		}
 	}
 }

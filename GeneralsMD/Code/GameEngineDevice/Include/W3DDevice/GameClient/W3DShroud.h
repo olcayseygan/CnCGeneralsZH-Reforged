@@ -99,6 +99,7 @@ public:
 	Int	 getTextureWidth(void)		{return m_dstTextureWidth;}	///<internal use by the shader system.
 	Int	 getTextureHeight(void)		{return m_dstTextureHeight;}
 	W3DShroudLevel getShroudLevel(Int x, Int y);
+	W3DShroudLevel getTexelLevel(Int x, Int y);	///<a cell's level, or off the cells the border's ring's, as the clamped texture holds it
 	void setShroudLevel(Int x, Int y, W3DShroudLevel,Bool textureOnly=FALSE);
 	void setShroudFilter(Bool enable);	///<turns on bilinear filtering of shroud cells.
 	void setBorderShroudLevel(W3DShroudLevel level);	///<color that will appear in unused border terrain.

@@ -327,19 +327,31 @@ W3DShroudLevel W3DShroud::getShroudLevel(Int x, Int y)
 	// the upper bound was checked and the lower was not, so a negative cell - which is what a
 	// position just off the edge of the map gives - read backwards out of the shroud texture
 	if (m_srcTextureData != NULL && x >= 0 && y >= 0 && x < m_numCellsX && y < m_numCellsY)
-	{
-		UnsignedShort pixel=*(UnsignedShort *)((Byte *)m_srcTextureData + x*2 + y*m_srcTexturePitch);
-		
-#if defined(_DEBUG) || defined(_INTERNAL)
-		if (TheGlobalData && TheGlobalData->m_fogOfWarOn)
-			//in this mode, alpha channel holds intensity
-			return (W3DShroudLevel)((1.0f-((Real)(pixel >> 12)/15.0f))*255.0f);
-		else
-#endif
-			//in this mode, green has the best precision at 6 bits.
-			return (W3DShroudLevel)((Real)((pixel >> 5)&0x3f)/63.0f*255.0f);
-	}
+		return getTexelLevel(x, y);
 	return 0;
+}
+
+//-----------------------------------------------------------------------------
+/** Any cell index, on the grid or off it: off it the ring fillBorderRamp last wrote, and past the ring
+its outer texel, the border's level, as the texture's clamp carries it on. */
+W3DShroudLevel W3DShroud::getTexelLevel(Int x, Int y)
+{
+	if (m_srcTextureData == NULL || m_numCellsX <= 0 || m_numCellsY <= 0)
+		return 0;
+	const Int ramp = SHROUD_BORDER_RAMP;
+	x = (x < -ramp) ? -ramp : ((x >= m_numCellsX + ramp) ? m_numCellsX + ramp - 1 : x);
+	y = (y < -ramp) ? -ramp : ((y >= m_numCellsY + ramp) ? m_numCellsY + ramp - 1 : y);
+	// signed: a ring row above the cells is a negative one, which the unsigned pitch would wrap
+	UnsignedShort pixel=*(UnsignedShort *)((Byte *)m_srcTextureData + x*2 + y*(Int)m_srcTexturePitch);
+
+#if defined(_DEBUG) || defined(_INTERNAL)
+	if (TheGlobalData && TheGlobalData->m_fogOfWarOn)
+		//in this mode, alpha channel holds intensity
+		return (W3DShroudLevel)((1.0f-((Real)(pixel >> 12)/15.0f))*255.0f);
+	else
+#endif
+		//in this mode, green has the best precision at 6 bits.
+		return (W3DShroudLevel)((Real)((pixel >> 5)&0x3f)/63.0f*255.0f);
 }
 
 //-----------------------------------------------------------------------------

@@ -24,12 +24,18 @@ public:
 	DX11RayOcclusionClass();
 	~DX11RayOcclusionClass() { Release(); }
 
-	// The rays for every half size pixel of a width by height scene, into a texture of the post
-	// chain's first pass's format; NULL when the device refused any of it or ZHR_RT_AO=0 asks for the
-	// screen's occlusion at this level.  The grid has to be bound by the caller (DX11RayGridClass::Bind).
+	// The rays for every half size pixel of a width by height scene, folded into the frames before
+	// them, into a texture whose first two channels are the post chain's first pass's format; NULL
+	// when the device refused any of it or ZHR_RT_AO=0 asks for the screen's occlusion at this level.
+	// clip_from_world is world_from_clip's inverse, kept to find this frame's pixels again in the
+	// next.  projection_y is the scene projection's y scale.  The grid has to be bound by the caller
+	// (DX11RayGridClass::Bind).
 	ID3D11ShaderResourceView * Trace(DX11BackendClass & backend, ID3D11Device * device, ID3D11DeviceContext * context,
 		ID3D11ShaderResourceView * depth, unsigned width, unsigned height, const float world_from_clip[16],
-		ID3D11ShaderResourceView * shroud, const float shroud_rect[4]);
+		const float clip_from_world[16], float projection_y, ID3D11ShaderResourceView * shroud, const float shroud_rect[4]);
+
+	// The next Trace starts its history afresh.
+	void Forget() { HistoryHeld = false; }
 
 	// Around the whole occlusion, either kind, so the report can set the two against each other.
 	void Time(ID3D11Device * device, ID3D11DeviceContext * context, bool begin, bool traced);
@@ -64,10 +70,12 @@ private:
 	struct Constants
 	{
 		float WorldFromClip[16];
+		float PreviousClipFromWorld[16];	///< the camera the history was traced under
 		float Screen[4];
 		float Half[4];
 		float ShroudRect[4];
-		float Tuning[4];
+		float Tuning[4];				///< shroud held, probe on, frame number, history held
+		float Temporal[4];				///< world units a pixel spans per unit of eye distance, most frames folded
 	};
 
 	bool Refused;
@@ -79,11 +87,21 @@ private:
 	unsigned Width;
 	unsigned Height;
 	ID3D11ComputeShader * Program;
+	ID3D11ComputeShader * Accumulate;	///< this frame's rays into the history, clamped by their neighbours
 	ID3D11Buffer * ConstantBuffer;
 	ID3D11SamplerState * Sampler;
-	ID3D11Texture2D * Texture;
+	ID3D11Texture2D * Texture;			///< this frame's rays alone: kept, eye distance
 	ID3D11UnorderedAccessView * Write;
 	ID3D11ShaderResourceView * Read;
+	// Two in turn, last frame's read while this frame's is written: kept as shown (the shroud's fade
+	// on), eye distance, kept as folded, frames folded.
+	ID3D11Texture2D * History[2];
+	ID3D11UnorderedAccessView * HistoryWrite[2];
+	ID3D11ShaderResourceView * HistoryRead[2];
+	unsigned HistoryIndex;				///< the one written last
+	bool HistoryHeld;					///< it holds a traced frame at this size
+	float HistoryClipFromWorld[16];
+	unsigned FrameNumber;
 	ID3D11Buffer * Hits;
 	ID3D11UnorderedAccessView * HitsWrite;
 	Frame Frames[QUERY_FRAMES];

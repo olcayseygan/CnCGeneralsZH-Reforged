@@ -11,18 +11,29 @@
 ** AO_REACH and the whole of it, so a blocker at distance d is counted by the rays longer than d: the
 ** occlusion falls off with distance without the any-hit rays ever knowing it.  The directions and
 ** lengths are stratified and turned per pixel by the same interleaved noise the first pass turns its
-** taps by, fixed in screen space, so a still frame does not crawl.
+** taps by, and turned again every frame.
 **
-** What comes out is the first pass's texture exactly: the light kept, faded by the shroud as the
-** first pass fades it, and the distance along the eye's axis.  The option's depth-stopped blur and
-** upsample then take the noise off and multiply it onto the opaque scene, before the water and
-** everything translucent, so what darkens is what darkened before.
+** Two rays a pixel leave each one at nought, a half or one, and the option's blur alone left that as
+** grain the eye catches the moment the camera moves (Grandma_babs, 2026-11-27: "a lot of noise").
+** So a second pass folds each frame into the ones before it (RAY_AO_ACCUMULATE_PROGRAM): the pixel's
+** world point goes back through the last traced camera, the history is read there bilinear where its
+** eye distance agrees, and the frame weighs one over the frames held, up to AO_FRAMES.  What history
+** says is first clamped between the least and the most this frame's rays found over the three by
+** three half size pixels round it, widened by a quarter each way, so where a tank drove off the
+** open ground drops most of its shade in a frame instead of trailing it.  The cell cap's shimmer
+** below (which 32 triangles a crowded cell tests changes with the fill's order) is folded away with
+** the grain.  ponytail: the history follows the camera only, so a moving unit's own surface fails
+** the distance test and keeps one frame's rays and the blur, as before; motion vectors are the
+** upgrade.
 **
-** ponytail: two rays a pixel, denoised only by the option's spatial blur; a temporal accumulation
-** over the last frames is the upgrade if the grain shows on a moving camera.  The time goes in the
-** triangle lists of the cells round the ray's start, not in the walk: four rays cost 1.85 times two,
-** a reach of 16 against 24 saved a sixth.  Cut casters (leaves, fences, the foliage) close off
-** where their texel is solid, as the grid's hit test has it.
+** What comes out holds the first pass's texture in its first two channels: the light kept, faded
+** by the shroud as the first pass fades it, and the distance along the eye's axis.  The option's
+** depth-stopped blur and upsample then take the rest off and multiply it onto the opaque scene,
+** before the water and everything translucent, so what darkens is what darkened before.
+**
+** The time goes in the triangle lists of the cells round the ray's start, not in the walk: four rays
+** cost 1.85 times two, a reach of 16 against 24 saved a sixth.  Cut casters (leaves, fences, the
+** foliage) close off where their texel is solid, as the grid's hit test has it.
 **
 ** Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
 */
@@ -31,6 +42,7 @@
 #include "dx11backend.h"
 #include "dx11raygrid.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,26 +56,26 @@
 // frame to frame, so a crowded cell can shimmer; a list sorted nearest first is the upgrade.
 static const char RAY_AO_LIST_CAP[] = "#define RG_LIST_CAP 32\n";
 
-static const char RAY_AO_PROGRAM[] =
-	"#define AO_RAYS 2\n"			// 1.28 ms on Twilight Flame's drawlooks view, 4 cost 2.36: the cost is per ray
-	"#define AO_REACH 24.0\n"			// world units, beside the first pass's 22
-	"#define AO_STRENGTH 1.0\n"
-	"#define AO_OFFSET 1.0\n"			// world units a ray starts off its surface, as the sun's do
-	"#define TILE_COUNTS 5\n"
+// The frames a pixel's history folds at most: the frame weighs at least a sixteenth, so a shade that
+// changes under a still camera has mostly settled in half a second at 60 frames a second, and what is
+// left of the per-frame turn on a parked camera is about a seventh of one frame's grain before the blur.
+static const float AO_FRAMES = 16.0f;
+
+// What the trace and the fold share: the block, the depth and a pixel's world point.
+static const char RAY_AO_COMMON[] =
 	"cbuffer Occlusion : register(b0)\n"
 	"{\n"
 	"    row_major float4x4 AoWorldFromClip;\n"
+	"    row_major float4x4 AoPreviousClipFromWorld;\n"
 	"    float4 AoScreen;\n"				// full width, height and their reciprocals
 	"    float4 AoHalf;\n"				// half width, height; tiles across, tiles down
 	"    float4 AoShroudRect;\n"
-	"    float4 AoTuning;\n"				// shroud held, probe on
+	"    float4 AoTuning;\n"				// shroud held, probe on, frame number, history held
+	"    float4 AoTemporal;\n"			// world units a pixel spans per unit of eye distance, most frames folded
 	"};\n"
 	"Texture2D<float> AoDepth : register(t0);\n"
 	"Texture2D AoShroud : register(t1);\n"
 	"SamplerState AoSampler : register(s0);\n"
-	"RWTexture2D<float2> AoOut : register(u0);\n"
-	"RWBuffer<uint> AoTiles : register(u1);\n"
-	"groupshared uint AoGroup[TILE_COUNTS];\n"
 	"\n"
 	"float3 ao_world(int2 texel, float raw)\n"
 	"{\n"
@@ -71,6 +83,25 @@ static const char RAY_AO_PROGRAM[] =
 	"    float4 world = mul(float4(ndc, raw, 1.0), AoWorldFromClip);\n"
 	"    return world.xyz / world.w;\n"
 	"}\n"
+	// The first pass's fade: under the shroud nothing, in the fog little.
+	"float ao_faded(float kept, float3 here)\n"
+	"{\n"
+	"    if (AoTuning.x < 0.5) return kept;\n"
+	"    float lit = AoShroud.SampleLevel(AoSampler, (here.xy - AoShroudRect.xy) * AoShroudRect.zw, 0.0).g;\n"
+	"    return lerp(1.0, kept, lit * lit * lit);\n"
+	"}\n"
+	"\n";
+
+static const char RAY_AO_PROGRAM[] =
+	"#define AO_RAYS 2\n"			// 1.28 ms on Twilight Flame's drawlooks view, 4 cost 2.36: the cost is per ray
+	"#define AO_REACH 24.0\n"			// world units, beside the first pass's 22
+	"#define AO_STRENGTH 1.0\n"
+	"#define AO_OFFSET 1.0\n"			// world units a ray starts off its surface, as the sun's do
+	"#define TILE_COUNTS 5\n"
+	"RWTexture2D<float2> AoOut : register(u0);\n"
+	"RWBuffer<uint> AoTiles : register(u1);\n"
+	"groupshared uint AoGroup[TILE_COUNTS];\n"
+	"\n"
 	"float3 ao_world_of(int2 texel) { return ao_world(texel, AoDepth.Load(int3(texel, 0))); }\n"
 	"float3 ao_shorter(float3 a, float3 b) { return dot(a, a) < dot(b, b) ? a : b; }\n"
 	"uint ao_hash(uint x)\n"
@@ -103,11 +134,13 @@ static const char RAY_AO_PROGRAM[] =
 	"            float3 side = abs(normal.z) < 0.9 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);\n"
 	"            float3 tangent = normalize(cross(side, normal));\n"
 	"            float3 bitangent = cross(normal, tangent);\n"
-	// The first pass's turn, and two more numbers from a hash of the same pixel.
-	"            float turn = frac(52.9829189 * frac(dot(float2(half_pixel), float2(0.06711056, 0.00583715))));\n"
+	// The first pass's turn, and two more numbers from a hash of the same pixel, each moved on every
+// frame by its own irrational step, so the fold below sees new strata each frame.
+	"            float frame = AoTuning.z;\n"
+	"            float turn = frac(52.9829189 * frac(dot(float2(half_pixel), float2(0.06711056, 0.00583715))) + frame * 0.61803399);\n"
 	"            uint key = ao_hash(uint(half_pixel.y) * 4096u + uint(half_pixel.x));\n"
-	"            float spin = (key & 0xffff) * (1.0 / 65536.0);\n"
-	"            float stretch = (key >> 16) * (1.0 / 65536.0);\n"
+	"            float spin = frac((key & 0xffff) * (1.0 / 65536.0) + frame * 0.75487767);\n"
+	"            float stretch = frac((key >> 16) * (1.0 / 65536.0) + frame * 0.56984029);\n"
 	"            uint struck = 0;\n"
 	"            uint by_ground = 0;\n"
 	"            [loop] for (int k = 0; k < AO_RAYS; ++k) {\n"
@@ -122,14 +155,10 @@ static const char RAY_AO_PROGRAM[] =
 	"                else if (ray_hits_ground(from, way, reach)) { struck += 1; by_ground += 1; }\n"
 	"            }\n"
 	"            kept = saturate(1.0 - AO_STRENGTH * struck / (float)AO_RAYS);\n"
-	// The first pass's fade: under the shroud nothing, in the fog little.
-	"            if (AoTuning.x > 0.5) {\n"
-	"                float lit = AoShroud.SampleLevel(AoSampler, (here.xy - AoShroudRect.xy) * AoShroudRect.zw, 0.0).g;\n"
-	"                kept = lerp(1.0, kept, lit * lit * lit);\n"
-	"            }\n"
+	// Unfaded: the fold fades what it folded.  The probe counts this frame's rays faded, as before.
 	"            if (AoTuning.y > 0.5) {\n"
 	"                InterlockedAdd(AoGroup[0], 1);\n"
-	"                InterlockedAdd(AoGroup[1], (uint)(kept * 256.0));\n"
+	"                InterlockedAdd(AoGroup[1], (uint)(ao_faded(kept, here) * 256.0));\n"
 	"                InterlockedAdd(AoGroup[2], AO_RAYS);\n"
 	"                InterlockedAdd(AoGroup[3], struck - by_ground);\n"
 	"                InterlockedAdd(AoGroup[4], by_ground);\n"
@@ -145,11 +174,95 @@ static const char RAY_AO_PROGRAM[] =
 	"    }\n"
 	"}\n";
 
+// This frame's rays folded into the history, a half size pixel a thread.  A history texel counts
+// only where its eye distance is within eight pixels' width of ground of where this pixel's world
+// point stood from the last camera, so a unit that moved off the ground behind it, or ground
+// uncovered at the frame's edge, starts again from this frame.
+static const char RAY_AO_ACCUMULATE_PROGRAM[] =
+	"Texture2D<float2> AoRaw : register(t2);\n"
+	"Texture2D<float4> AoHistory : register(t3);\n"
+	"RWTexture2D<float4> AoFolded : register(u0);\n"
+	"[numthreads(8, 8, 1)]\n"
+	"void main(uint3 id : SV_DispatchThreadID)\n"
+	"{\n"
+	"    int2 half_pixel = int2(id.xy);\n"
+	"    int2 last = int2(AoHalf.xy) - 1;\n"
+	"    if (any(half_pixel > last)) return;\n"
+	"    float2 now = AoRaw.Load(int3(half_pixel, 0));\n"
+	"    int2 texel = min(half_pixel * 2 + 1, int2(AoScreen.xy) - 1);\n"
+	"    float raw = AoDepth.Load(int3(texel, 0));\n"
+	"    if (raw >= 0.99999) { AoFolded[half_pixel] = float4(1.0, now.y, 1.0, 0.0); return; }\n"
+	"    float low = now.x;\n"
+	"    float high = now.x;\n"
+	"    [unroll] for (int y = -1; y <= 1; ++y) {\n"
+	"        [unroll] for (int x = -1; x <= 1; ++x) {\n"
+	"            float near_kept = AoRaw.Load(int3(clamp(half_pixel + int2(x, y), int2(0, 0), last), 0)).x;\n"
+	"            low = min(low, near_kept);\n"
+	"            high = max(high, near_kept);\n"
+	"        }\n"
+	"    }\n"
+	"    float3 here = ao_world(texel, raw);\n"
+	"    float history = now.x;\n"
+	"    float frames = 0.0;\n"
+	"    float4 before = mul(float4(here, 1.0), AoPreviousClipFromWorld);\n"
+	"    if (AoTuning.w > 0.5 && before.w > 0.0) {\n"
+	"        float2 ndc = before.xy / before.w;\n"
+	// A half size pixel holds full size texel 2i+1, so its centre is at 2i+1.5, the upsample's 0.75.
+	"        float2 at = float2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5) * AoScreen.xy * 0.5 - 0.75;\n"
+	"        int2 corner = int2(floor(at));\n"
+	"        float2 part = at - corner;\n"
+	"        float allowed = 8.0 * AoTemporal.x * before.w;\n"
+	"        float folded = 0.0;\n"
+	"        float counted = 0.0;\n"
+	"        float total = 0.0;\n"
+	"        [unroll] for (int ty = 0; ty < 2; ++ty) {\n"
+	"            [unroll] for (int tx = 0; tx < 2; ++tx) {\n"
+	"                int2 tap = corner + int2(tx, ty);\n"
+	"                if (any(tap < 0) || any(tap > last)) continue;\n"
+	"                float4 held = AoHistory.Load(int3(tap, 0));\n"
+	"                if (held.w <= 0.0 || abs(held.y - before.w) > allowed) continue;\n"
+	"                float weight = (tx == 1 ? part.x : 1.0 - part.x) * (ty == 1 ? part.y : 1.0 - part.y);\n"
+	"                folded += held.z * weight;\n"
+	"                counted += held.w * weight;\n"
+	"                total += weight;\n"
+	"            }\n"
+	"        }\n"
+	"        if (total > 0.05) {\n"
+	"            history = folded / total;\n"
+	"            frames = counted / total;\n"
+	"        }\n"
+	"    }\n"
+	"    frames = min(frames + 1.0, AoTemporal.y);\n"
+// A quarter past the box each way: two rays a pixel give nought, a half or one, and over faint
+// shade all nine read one most frames, which a plain box would snap the history to.
+	"    float kept = lerp(clamp(history, low - 0.25, high + 0.25), now.x, 1.0 / frames);\n"
+	"    AoFolded[half_pixel] = float4(ao_faded(kept, here), now.y, kept, frames);\n"
+	"}\n";
+
+// a times b, row vectors as the backend's matrices are.
+static void ao_multiply(const float a[16], const float b[16], float out[16])
+{
+	for (unsigned row = 0; row < 4; ++row) {
+		for (unsigned column = 0; column < 4; ++column) {
+			float sum = 0.0f;
+			for (unsigned index = 0; index < 4; ++index) {
+				sum += a[row * 4 + index] * b[index * 4 + column];
+			}
+			out[row * 4 + column] = sum;
+		}
+	}
+}
+
 DX11RayOcclusionClass::DX11RayOcclusionClass()
 	: Refused(false), Wanted(true), ProbeWanted(false), ProbeTooWide(false), QueriesMade(false), QueriesRefused(false), Width(0), Height(0), Program(NULL),
-	  ConstantBuffer(NULL), Sampler(NULL), Texture(NULL), Write(NULL), Read(NULL), Hits(NULL), HitsWrite(NULL),
+	  Accumulate(NULL), ConstantBuffer(NULL), Sampler(NULL), Texture(NULL), Write(NULL), Read(NULL), HistoryIndex(0), HistoryHeld(false),
+	  FrameNumber(0), Hits(NULL), HitsWrite(NULL),
 	  FrameIndex(0), TilesX(0), TilesY(0), CountsRead(false), LastTraced(false), WholeMS(0.0f), RaysMS(0.0f)
 {
+	memset(History, 0, sizeof(History));
+	memset(HistoryWrite, 0, sizeof(HistoryWrite));
+	memset(HistoryRead, 0, sizeof(HistoryRead));
+	memset(HistoryClipFromWorld, 0, sizeof(HistoryClipFromWorld));
 	memset(Frames, 0, sizeof(Frames));
 	memset(Counts, 0, sizeof(Counts));
 	const char * wanted = getenv("ZHR_RT_AO");
@@ -159,8 +272,10 @@ DX11RayOcclusionClass::DX11RayOcclusionClass()
 
 void DX11RayOcclusionClass::Release()
 {
-	IUnknown ** const held[] = { (IUnknown **)&Program, (IUnknown **)&ConstantBuffer, (IUnknown **)&Sampler,
-		(IUnknown **)&Write, (IUnknown **)&Read, (IUnknown **)&Texture, (IUnknown **)&HitsWrite, (IUnknown **)&Hits };
+	IUnknown ** const held[] = { (IUnknown **)&Program, (IUnknown **)&Accumulate, (IUnknown **)&ConstantBuffer, (IUnknown **)&Sampler,
+		(IUnknown **)&Write, (IUnknown **)&Read, (IUnknown **)&Texture, (IUnknown **)&HitsWrite, (IUnknown **)&Hits,
+		(IUnknown **)&HistoryWrite[0], (IUnknown **)&HistoryRead[0], (IUnknown **)&History[0],
+		(IUnknown **)&HistoryWrite[1], (IUnknown **)&HistoryRead[1], (IUnknown **)&History[1] };
 	for (unsigned index = 0; index < sizeof(held) / sizeof(held[0]); ++index) {
 		if (*held[index] != NULL) {
 			(*held[index])->Release();
@@ -181,6 +296,7 @@ void DX11RayOcclusionClass::Release()
 	}
 	QueriesMade = false;
 	QueriesRefused = false;
+	HistoryHeld = false;
 	Width = Height = 0;
 }
 
@@ -224,8 +340,10 @@ bool DX11RayOcclusionClass::Make(DX11BackendClass & backend, ID3D11Device * devi
 	bool made = true;
 	if (Program == NULL) {
 		std::vector<unsigned char> code;
-		made = backend.Compile_Program(RAY_AO_LIST_CAP + DX11RayGridClass::Trace_Program() + RAY_AO_PROGRAM, "rayao", "cs_5_0", code)
+		made = backend.Compile_Program(RAY_AO_LIST_CAP + DX11RayGridClass::Trace_Program() + RAY_AO_COMMON + RAY_AO_PROGRAM, "rayao", "cs_5_0", code)
 			&& SUCCEEDED(device->CreateComputeShader(&code[0], code.size(), NULL, &Program));
+		made = made && backend.Compile_Program(std::string(RAY_AO_COMMON) + RAY_AO_ACCUMULATE_PROGRAM, "rayaofold", "cs_5_0", code)
+			&& SUCCEEDED(device->CreateComputeShader(&code[0], code.size(), NULL, &Accumulate));
 		D3D11_BUFFER_DESC constants;
 		memset(&constants, 0, sizeof(constants));
 		constants.ByteWidth = sizeof(Constants);
@@ -254,8 +372,10 @@ bool DX11RayOcclusionClass::Make(DX11BackendClass & backend, ID3D11Device * devi
 	const unsigned half_width = (width + 1) / 2;
 	const unsigned half_height = (height + 1) / 2;
 	if (made && (Texture == NULL || Width != width || Height != height)) {
-		IUnknown ** const old[] = { (IUnknown **)&Write, (IUnknown **)&Read, (IUnknown **)&Texture };
-		for (unsigned index = 0; index < 3; ++index) {
+		IUnknown ** const old[] = { (IUnknown **)&Write, (IUnknown **)&Read, (IUnknown **)&Texture,
+			(IUnknown **)&HistoryWrite[0], (IUnknown **)&HistoryRead[0], (IUnknown **)&History[0],
+			(IUnknown **)&HistoryWrite[1], (IUnknown **)&HistoryRead[1], (IUnknown **)&History[1] };
+		for (unsigned index = 0; index < sizeof(old) / sizeof(old[0]); ++index) {
 			if (*old[index] != NULL) {
 				(*old[index])->Release();
 				*old[index] = NULL;
@@ -274,6 +394,13 @@ bool DX11RayOcclusionClass::Make(DX11BackendClass & backend, ID3D11Device * devi
 		made = SUCCEEDED(device->CreateTexture2D(&description, NULL, &Texture))
 			&& SUCCEEDED(device->CreateUnorderedAccessView(Texture, NULL, &Write))
 			&& SUCCEEDED(device->CreateShaderResourceView(Texture, NULL, &Read));
+		description.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		for (unsigned index = 0; index < 2 && made; ++index) {
+			made = SUCCEEDED(device->CreateTexture2D(&description, NULL, &History[index]))
+				&& SUCCEEDED(device->CreateUnorderedAccessView(History[index], NULL, &HistoryWrite[index]))
+				&& SUCCEEDED(device->CreateShaderResourceView(History[index], NULL, &HistoryRead[index]));
+		}
+		HistoryHeld = false;
 		Width = width;
 		Height = height;
 	}
@@ -286,9 +413,10 @@ bool DX11RayOcclusionClass::Make(DX11BackendClass & backend, ID3D11Device * devi
 
 ID3D11ShaderResourceView * DX11RayOcclusionClass::Trace(DX11BackendClass & backend, ID3D11Device * device,
 	ID3D11DeviceContext * context, ID3D11ShaderResourceView * depth, unsigned width, unsigned height,
-	const float world_from_clip[16], ID3D11ShaderResourceView * shroud, const float shroud_rect[4])
+	const float world_from_clip[16], const float clip_from_world[16], float projection_y,
+	ID3D11ShaderResourceView * shroud, const float shroud_rect[4])
 {
-	if (!Wanted || depth == NULL || width == 0 || height == 0 || !Make(backend, device, width, height)) {
+	if (!Wanted || depth == NULL || width == 0 || height == 0 || projection_y == 0.0f || !Make(backend, device, width, height)) {
 		return NULL;
 	}
 	const unsigned tiles_x = (width + TILE_WIDTH - 1) / TILE_WIDTH;
@@ -309,6 +437,13 @@ ID3D11ShaderResourceView * DX11RayOcclusionClass::Trace(DX11BackendClass & backe
 	memcpy(block.ShroudRect, shroud_rect, sizeof(block.ShroudRect));
 	block.Tuning[0] = (shroud != NULL) ? 1.0f : 0.0f;
 	block.Tuning[1] = probing ? 1.0f : 0.0f;
+	// Kept small, so the steps it multiplies stay exact in a float.
+	FrameNumber = (FrameNumber + 1) % 4096;
+	block.Tuning[2] = static_cast<float>(FrameNumber);
+	block.Tuning[3] = HistoryHeld ? 1.0f : 0.0f;
+	memcpy(block.PreviousClipFromWorld, HistoryClipFromWorld, sizeof(block.PreviousClipFromWorld));
+	block.Temporal[0] = 2.0f / (fabsf(projection_y) * static_cast<float>(height));
+	block.Temporal[1] = AO_FRAMES;
 	context->UpdateSubresource(ConstantBuffer, 0, NULL, &block, 0, 0);
 
 	if (probing) {
@@ -322,21 +457,37 @@ ID3D11ShaderResourceView * DX11RayOcclusionClass::Trace(DX11BackendClass & backe
 	context->CSSetSamplers(0, 1, &Sampler);
 	context->CSSetUnorderedAccessViews(0, 2, writes, NULL);
 	context->CSSetShader(Program, NULL, 0);
-	context->Dispatch((static_cast<UINT>(block.Half[0]) + 7) / 8, (static_cast<UINT>(block.Half[1]) + 7) / 8, 1);
+	const UINT groups_x = (static_cast<UINT>(block.Half[0]) + 7) / 8;
+	const UINT groups_y = (static_cast<UINT>(block.Half[1]) + 7) / 8;
+	context->Dispatch(groups_x, groups_y, 1);
+	Frame & frame = Frames[FrameIndex];
+	if (frame.Open) {
+		context->End(frame.Traced);
+	}
 
-	ID3D11ShaderResourceView * no_reads[2] = { NULL, NULL };
+	// The fold: this frame's rays and last frame's history in, the other history out.
 	ID3D11UnorderedAccessView * no_writes[2] = { NULL, NULL };
+	context->CSSetUnorderedAccessViews(0, 2, no_writes, NULL);
+	const unsigned written = HistoryIndex ^ 1u;
+	ID3D11ShaderResourceView * folding[4] = { depth, shroud, Read, HistoryRead[HistoryIndex] };
+	context->CSSetShaderResources(0, 4, folding);
+	context->CSSetUnorderedAccessViews(0, 1, &HistoryWrite[written], NULL);
+	context->CSSetShader(Accumulate, NULL, 0);
+	context->Dispatch(groups_x, groups_y, 1);
+	HistoryIndex = written;
+	HistoryHeld = true;
+	memcpy(HistoryClipFromWorld, clip_from_world, sizeof(HistoryClipFromWorld));
+
+	ID3D11ShaderResourceView * no_reads[4] = { NULL, NULL, NULL, NULL };
 	ID3D11Buffer * no_buffer = NULL;
 	ID3D11SamplerState * no_sampler = NULL;
-	context->CSSetUnorderedAccessViews(0, 2, no_writes, NULL);
-	context->CSSetShaderResources(0, 2, no_reads);
+	context->CSSetUnorderedAccessViews(0, 1, no_writes, NULL);
+	context->CSSetShaderResources(0, 4, no_reads);
 	context->CSSetConstantBuffers(0, 1, &no_buffer);
 	context->CSSetSamplers(0, 1, &no_sampler);
 	context->CSSetShader(NULL, NULL, 0);
 
-	Frame & frame = Frames[FrameIndex];
 	if (frame.Open) {
-		context->End(frame.Traced);
 		if (probing) {
 			context->CopyResource(frame.Readback, Hits);
 			frame.Probed = true;
@@ -344,7 +495,7 @@ ID3D11ShaderResourceView * DX11RayOcclusionClass::Trace(DX11BackendClass & backe
 			frame.TilesY = tiles_y;
 		}
 	}
-	return Read;
+	return HistoryRead[HistoryIndex];
 }
 
 void DX11RayOcclusionClass::Time(ID3D11Device * device, ID3D11DeviceContext * context, bool begin, bool traced)
@@ -466,6 +617,8 @@ ID3D11ShaderResourceView * DX11BackendClass::Trace_Ray_Occlusion(const float wor
 	ID3D11ShaderResourceView * shroud, const float shroud_rect[4])
 {
 	if (!RayShadowsWanted || !RayGrid.Built() || Device == NULL) {
+		// A frame without rays leaves the history behind the scene it was traced over.
+		RayOcclusion.Forget();
 		return NULL;
 	}
 	Resolve_Scene_Depth();
@@ -480,8 +633,10 @@ ID3D11ShaderResourceView * DX11BackendClass::Trace_Ray_Occlusion(const float wor
 	// The depth is read, so it cannot stay bound as the depth the frame tests against.
 	context->OMSetRenderTargets(0, NULL, NULL);
 	RayGrid.Bind(context, ground ? TerrainHeightsView : NULL, ground_numbers);
+	float clip_from_world[16];
+	ao_multiply(SceneView, SceneProjection, clip_from_world);
 	ID3D11ShaderResourceView * traced = RayOcclusion.Trace(*this, Device->Get_Device(), context, depth,
-		Device->Get_Width(), Device->Get_Height(), world_from_clip, shroud, shroud_rect);
+		Device->Get_Width(), Device->Get_Height(), world_from_clip, clip_from_world, SceneProjection[5], shroud, shroud_rect);
 	RayGrid.Unbind(context);
 	// Taken, as Trace_Ray_Shadows takes RayCaptured: a frame whose caster pass does not run (a
 	// refused sun box, a filter's frame) must not trace the casters of the last one that did.

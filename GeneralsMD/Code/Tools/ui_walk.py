@@ -665,9 +665,11 @@ class Walk(object):
                 change.append("no keyboard: " + typed.get("error", ""))
             elif leaf(typed.get("to", "")) != leaf(name):
                 change.append("keys went to %s" % (leaf(typed.get("to", "")) or "nobody"))
+            # judged before the two characters come off: the hit test is live, and a key the text
+            # enabled (Save Replay's SAVE) would be disabled again under the tree that lists it
+            self.judge(leaf(name), path, after, change, before_bad)
             for _ in range(2):
                 self.game.send("key KEY_BACKSPACE")
-            self.judge(leaf(name), path, after, change, before_bad)
             return None
 
         if leaf(name).startswith("Fader"):
@@ -752,15 +754,18 @@ class Walk(object):
                 settle(self.game, minimum=0.4)
             at = self.game.send("uirow %s %d" % (name, row))
             label = "%s = %s" % (leaf(name), at.get("tx", row) if at.get("ok") else row)
-            if not at.get("ok") or not at.get("shown"):
-                if at.get("ok"):
-                    self.record(label, "n/a", "row below the open list's end, behind its scroll bar", path)
-                else:
-                    self.record(label, "blocked", at.get("error", ""), path)
-                self.game.send("key KEY_ESC")
+            if not at.get("ok"):
+                self.record(label, "blocked", at.get("error", ""), path)
+                self.game.send("uiclick " + name)		# fold the list (Escape is Back on some screens)
                 settle(self.game, minimum=0.3)
                 continue
             hit = self.game.send("uihit %d %d" % (at["x"], at["y"]))["hits"][0]
+            if name not in hit["chain"] and not at.get("shown"):
+                # uirow's "shown" read every other row of a 1080 list as past its end: the hit test decides
+                self.record(label, "n/a", "row below the open list's end, behind its scroll bar", path)
+                self.game.send("uiclick " + name)
+                settle(self.game, minimum=0.3)
+                continue
             if name not in hit["chain"]:
                 self.record(label, "blocked", "row covered by %s" % leaf(hit["hit"] or "(nothing)"), path)
                 self.game.send("key KEY_ESC")

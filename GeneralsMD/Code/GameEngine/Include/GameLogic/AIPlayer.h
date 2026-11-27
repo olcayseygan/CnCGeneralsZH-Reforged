@@ -1073,6 +1073,11 @@ protected:
 	Bool harassHere(void);		///< every personality raids the enemy's economy, smaller than the Raider, and raiders withdraw when hurt or outgunned
 	Int raidPartySize(void);	///< how many go on a raid: the Raider's party, any other personality's harass party, under 2 for none
 	void clearGarrisons(void);	///< units whose weapons clear a garrison go at a known enemy-held building near them (-aiknobsoff garrison)
+	Bool ambushHere(void);					///< GLA's tunnel ambush beside the enemy's gatherer road (-aiknobsoff ambush)
+	Object *ambushSupplyCenter(void);		///< the known enemy supply center nearest our base, NULL for none
+	Bool ambushSpot(Coord3D *spot);			///< where the ambush tunnel goes, off that center's road to its pile, clear of known guns
+	Object *ambushTunnel(void);					///< the ambush tunnel standing, NULL for none
+	Bool doTunnelAmbush(Int keep);			///< the raiders wait in the network and spring at a gatherer near the ambush; TRUE when it took their turn
 	Bool flankRoute(const Coord3D *from, Waypoint *way, std::vector<Coord3D> *route);	///< three turn points and the road's end round the guns on the influence grid, when the road runs under them (-aiknobsoff flank)
 	/** The attention budget (-aiknobsoff attention): a rated count of unit looks a game second, banked up to a few
 		* seconds' worth, spent by the tactics, the answers to fire, the units' buttons and the hurt pull-outs.  A unit

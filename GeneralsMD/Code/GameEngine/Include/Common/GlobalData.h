@@ -141,6 +141,7 @@ enum
 	AIKNOB_FLANK				= 134217728,	///< a wave walks its authored road however gunned, as before 2026-11-27
 	AIKNOB_SIEGE_LEAD		= 268435456,	///< a siege gun out with a wave walks SHELL_WALK for a defence at every rating, as before 2026-11-27
 	AIKNOB_PLANS				= 536870912,	///< a Random seat draws any of thirteen personalities alike, as before 2026-11-27
+	AIKNOB_AMBUSH				= 1073741824,	///< no ambush tunnel, and the raiders never wait in the network, as before 2026-11-27; the last bit an Int mask holds
 };
 
 //-------------------------------------------------------------------------------------------------

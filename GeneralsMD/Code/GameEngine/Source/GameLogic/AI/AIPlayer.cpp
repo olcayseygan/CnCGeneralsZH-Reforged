@@ -9632,7 +9632,7 @@ void AIPlayer::doTunnels( Object *dozer )
 	if( tunnel == NULL || priorityBuildPending( m_player, tunnel ) )
 		return;
 
-	const Int MAX_SPOTS = 3;
+	const Int MAX_SPOTS = 4;
 	Coord3D spots[ MAX_SPOTS ];
 	Real innerRadius[ MAX_SPOTS ];
 	Int count = 0;
@@ -9691,6 +9691,10 @@ void AIPlayer::doTunnels( Object *dozer )
 		}
 	}
 
+	// the ambush, last: beside his gatherers' road, the raiders' hidden way in (doTunnelAmbush)
+	if( count < MAX_SPOTS && ambushHere() && raidPartySize() >= 2 && ambushSpot( &spots[ count ] ) )
+		innerRadius[ count++ ] = 0.0f;
+
 	for( Int i = 0; i < count; ++i )
 	{
 		if( hasTunnelNear( m_player, &spots[ i ] ) )
@@ -9698,6 +9702,186 @@ void AIPlayer::doTunnels( Object *dozer )
 		placeNear( tunnel, &spots[ i ], innerRadius[ i ], FALSE );
 		return;
 	}
+}
+
+/** The tunnel ambush (-aiknobsoff ambush), GLA's, on top of the raids.  A tunnel beside the road between the known
+	* enemy supply center nearest us and the pile nearest it, AMBUSH_OFFSET off the road's middle to our side (or the
+	* other, when a known gun covers ours), clear of every gun we know by AMBUSH_GUN_MARGIN.  The raiders wait inside
+	* the network, hidden, and come up at it when one of his gatherers is within AMBUSH_STRIKE of it and what we last
+	* saw of his army there in AMBUSH_ARMY_FRESH_SECONDS is worth less than they are. */
+static const Real AMBUSH_OFFSET = 300.0f;
+static const Real AMBUSH_GUN_MARGIN = 100.0f;
+static const Real AMBUSH_PILE_REACH = 600.0f;
+static const Real AMBUSH_SITE_REACH = 700.0f;	///< a tunnel of ours this near a known enemy supply center, away from home, is the ambush
+static const Real AMBUSH_STRIKE = 450.0f;
+static const Real AMBUSH_ARMY_REACH = 900.0f;
+static const UnsignedInt AMBUSH_ARMY_FRESH_SECONDS = 30;
+
+Bool AIPlayer::ambushHere( void )
+{
+	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_AMBUSH ) != 0 );
+}
+
+/** The known enemy supply center nearest our base, NULL for none. */
+Object *AIPlayer::ambushSupplyCenter( void )
+{
+	const Int me = m_player->getPlayerIndex();
+	Object *best = NULL;
+	Real bestSqr = 0.0f;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if( !obj->isKindOf( KINDOF_FS_SUPPLY_CENTER ) || obj->isEffectivelyDead() || m_player->getRelationship( obj->getTeam() ) != ENEMIES ||
+				!observerKnowsAbout( obj, me ) )
+			continue;
+		const Real distSqr = sqr( obj->getPosition()->x - m_baseCenter.x ) + sqr( obj->getPosition()->y - m_baseCenter.y );
+		if( best == NULL || distSqr < bestSqr )
+		{
+			best = obj;
+			bestSqr = distSqr;
+		}
+	}
+	return best;
+}
+
+Bool AIPlayer::ambushSpot( Coord3D *spot )
+{
+	const Object *center = ambushSupplyCenter();
+	if( center == NULL )
+		return FALSE;
+	const Object *pile = NULL;
+	Real nearestSqr = 0.0f;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if( !obj->isKindOf( KINDOF_SUPPLY_SOURCE ) || obj->isEffectivelyDead() )
+			continue;
+		const Real distSqr = sqr( obj->getPosition()->x - center->getPosition()->x ) + sqr( obj->getPosition()->y - center->getPosition()->y );
+		if( distSqr <= sqr( AMBUSH_PILE_REACH ) && ( pile == NULL || distSqr < nearestSqr ) )
+		{
+			pile = obj;
+			nearestSqr = distSqr;
+		}
+	}
+	if( pile == NULL )
+		return FALSE;
+	const Coord3D *a = center->getPosition();
+	const Coord3D *b = pile->getPosition();
+	const Real length = (Real)sqrt( sqr( b->x - a->x ) + sqr( b->y - a->y ) );
+	if( length <= 1.0f )
+		return FALSE;
+	// across the road, our side first
+	Real px = -( b->y - a->y ) / length;
+	Real py = ( b->x - a->x ) / length;
+	const Real mx = 0.5f * ( a->x + b->x );
+	const Real my = 0.5f * ( a->y + b->y );
+	if( sqr( mx - px * AMBUSH_OFFSET - m_baseCenter.x ) + sqr( my - py * AMBUSH_OFFSET - m_baseCenter.y ) <
+			sqr( mx + px * AMBUSH_OFFSET - m_baseCenter.x ) + sqr( my + py * AMBUSH_OFFSET - m_baseCenter.y ) )
+	{
+		px = -px;
+		py = -py;
+	}
+	std::vector<AIKnownGun> guns;
+	collectKnownGuns( &guns );
+	for( Int side = 0; side < 2; ++side )
+	{
+		const Real sign = side == 0 ? 1.0f : -1.0f;
+		const Real x = mx + sign * px * AMBUSH_OFFSET;
+		const Real y = my + sign * py * AMBUSH_OFFSET;
+		Bool covered = FALSE;
+		for( size_t g = 0; g < guns.size() && !covered; ++g )
+			if( sqr( guns[ g ].m_x - x ) + sqr( guns[ g ].m_y - y ) <= sqr( guns[ g ].m_reach + AMBUSH_GUN_MARGIN ) )
+				covered = TRUE;
+		if( covered )
+			continue;
+		spot->x = x;
+		spot->y = y;
+		spot->z = TheTerrainLogic->getGroundHeight( x, y );
+		return TRUE;
+	}
+	return FALSE;
+}
+
+/** A finished tunnel of ours away from home near the known enemy supply center nearest us, NULL for none. */
+Object *AIPlayer::ambushTunnel( void )
+{
+	const Object *center = ambushSupplyCenter();
+	if( center == NULL )
+		return NULL;
+	const std::list<ObjectID> *tunnels = m_player->getTunnelSystem()->getContainerList();
+	for( std::list<ObjectID>::const_iterator it = tunnels->begin(); it != tunnels->end(); ++it )
+	{
+		Object *tunnel = TheGameLogic->findObjectByID( *it );
+		if( tunnel == NULL || tunnel->isEffectivelyDead() || tunnel->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || isAtHome( tunnel->getPosition() ) )
+			continue;
+		if( sqr( tunnel->getPosition()->x - center->getPosition()->x ) + sqr( tunnel->getPosition()->y - center->getPosition()->y ) <= sqr( AMBUSH_SITE_REACH ) )
+			return tunnel;
+	}
+	return NULL;
+}
+
+/** With an ambush tunnel standing, the idle raiders wait inside the network instead of setting out, and come up at
+	* the ambush when a gatherer of his is near it and his army is not.  TRUE when the ambush took the raiders' turn. */
+Bool AIPlayer::doTunnelAmbush( Int keep )
+{
+	Object *mouth = ambushTunnel();
+	if( mouth == NULL )
+		return FALSE;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Int me = m_player->getPlayerIndex();
+	const Coord3D *at = mouth->getPosition();
+	// who waits inside, and what they are worth
+	Real waiting = 0.0f;
+	for( Int r = 0; r < keep; ++r )
+	{
+		const Object *raider = TheGameLogic->findObjectByID( m_raider[ r ] );
+		const Object *holder = raider ? raider->getContainedBy() : NULL;
+		if( holder && holder->getContain() && holder->getContain()->isTunnelContain() )
+			waiting += aiCombatPower( raider );
+	}
+	if( waiting > 0.0f )
+	{
+		// a gatherer of his near the mouth, and his army we last saw there worth less than ours inside
+		Bool prey = FALSE;
+		for( Object *obj = TheGameLogic->getFirstObject(); obj && !prey; obj = obj->getNextObject() )
+			if( ( obj->isKindOf( KINDOF_HARVESTER ) || obj->isKindOf( KINDOF_DOZER ) ) && !obj->isKindOf( KINDOF_AIRCRAFT ) &&
+					!obj->isEffectivelyDead() && m_player->getRelationship( obj->getTeam() ) == ENEMIES && observerKnowsAbout( obj, me ) &&
+					sqr( obj->getPosition()->x - at->x ) + sqr( obj->getPosition()->y - at->y ) <= sqr( AMBUSH_STRIKE ) )
+				prey = TRUE;
+		Real army = 0.0f;
+		for( std::map<ObjectID, SeenEnemy>::const_iterator s = m_seenEnemies.begin(); s != m_seenEnemies.end(); ++s )
+			if( now - s->second.seen < AMBUSH_ARMY_FRESH_SECONDS * LOGICFRAMES_PER_GAME_SECOND &&
+					sqr( s->second.pos.x - at->x ) + sqr( s->second.pos.y - at->y ) <= sqr( AMBUSH_ARMY_REACH ) )
+				army += templateCombatPower( s->second.tmpl, ThePlayerList->getNthPlayer( s->second.owner ) );
+		if( prey && army < waiting )
+		{
+			Int out = 0;
+			for( Int r = 0; r < keep; ++r )
+			{
+				Object *raider = TheGameLogic->findObjectByID( m_raider[ r ] );
+				const Object *holder = raider ? raider->getContainedBy() : NULL;
+				if( holder && holder->getContain() && holder->getContain()->isTunnelContain() && raider->getAI() )
+				{
+					raider->getAI()->aiExit( mouth, CMD_FROM_AI );
+					++out;
+				}
+			}
+			DEBUG_LOG(("AI AMBUSH frame %d player %d springs %d raiders out of tunnel %d at (%.0f,%.0f), %.0f against %.0f seen\n", now, me,
+				out, mouth->getID(), at->x, at->y, waiting, army));
+		}
+	}
+	// the idle ones outside go in by the nearest mouth of ours and wait
+	for( Int r = 0; r < keep; ++r )
+	{
+		Object *raider = TheGameLogic->findObjectByID( m_raider[ r ] );
+		if( raider == NULL || raider->isContained() || raider->getAI() == NULL )
+			continue;
+		const StateID state = raider->getAI()->getCurrentStateID();
+		if( state != AI_IDLE && state != AI_GUARD && state != AI_GUARD_RETALIATE )
+			continue;
+		Object *door = m_player->getTunnelSystem()->findTunnelNear( raider->getPosition(), raider );
+		if( door && TheActionManager->canEnterObject( raider, door, CMD_FROM_AI, CHECK_CAPACITY ) )
+			raider->getAI()->aiEnter( door, CMD_FROM_AI );
+	}
+	return TRUE;
 }
 
 /** One of this player's supply centers stands within reach of a warehouse. */
@@ -25856,6 +26040,9 @@ void AIPlayer::doPersonaRaids( void )
 	}
 
 	huntGatherers();
+	// with a tunnel beside his gatherers' road the raiders wait in the network and spring from it (GLA)
+	if( ambushHere() && doTunnelAmbush( keep ) )
+		return;
 
 	if( isBaseUnderAttack() || now < (UnsignedInt)( aiRatingLerp( m_rating, RAID_START_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) ||
 			(m_raidFrame != 0 && now - m_raidFrame < (UnsignedInt)( everySeconds * LOGICFRAMES_PER_GAME_SECOND )) )

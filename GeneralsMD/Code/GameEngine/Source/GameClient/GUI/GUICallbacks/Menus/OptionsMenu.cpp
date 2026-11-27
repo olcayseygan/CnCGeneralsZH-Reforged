@@ -3970,12 +3970,13 @@ static Int lookPaneHead( const char *key, const UnicodeString &arg, Int y )
 }
 
 //-------------------------------------------------------------------------------------------------
-// The pane's pictures: what a row changes, one frame a value, the value in use framed green.  A row
-// that places the interface or marks units is drawn here from the game's own rects; any other takes
-// a still where one ships, the mapped image OptPreview_<Stem>_<value> (a check's 0 or 1, a list's
-// entry, a slider's two ends).  The stills are shots of the game, so they ship vendored outside the
-// repository (experiments/proofs/2026-11-27/options-previews/ in the wrapper lists them); while one is
-// missing its frame is left out, and with none the pane says what it said before.
+// The pane's pictures: what a row changes, one frame a value, the value in use framed green.  Every
+// frame is a still from the game where one ships, the mapped image OptPreview_<Stem>_<value> (a check's
+// 0 or 1, a list's entry, a slider's two ends).  The stills are shots of the game, so they ship vendored
+// outside the repository (experiments/proofs/2026-11-27/options-previews/ in the wrapper lists them);
+// while one is missing its frame is left out, and with none the pane says what it said before.  The
+// rows that place the interface or mark units are drawn here from the game's own rects until their
+// stills ship.
 //-------------------------------------------------------------------------------------------------
 namespace
 {
@@ -4012,7 +4013,7 @@ namespace
 		IRegion2D map( const IRegion2D &r ) const { return map( (Real)r.lo.x, (Real)r.lo.y, (Real)r.hi.x, (Real)r.hi.y ); }
 	};
 
-	/// the rows drawn rather than shot
+	/// the rows drawn while none of their stills ships
 	const char *const TheLookDrawnRows[] = { "HudLayout", "HudWidth", "MinimapSize", "HealthBars", "HealthBarColors",
 		"PlayerColors", "FullscreenScaling" };
 }
@@ -4289,20 +4290,21 @@ static Int lookPanePictures( const AsciiString &stem, const LookItem *item, Int 
 		}
 	}
 
-	// the frames there are: a drawn row's every value, another row's values with a still
+	// the frames there are: the values with a still, every row alike; a drawn row with none of its
+	// stills shipped draws every value instead, so stills and drawings never share a pane
+	Int stills = 0;
+	for( Int v = 0; v < (Int)values.size(); ++v )
+	{
+		AsciiString name;
+		name.format( "OptPreview_%s_%d", stem.str(), values[ v ].value );
+		values[ v ].image = TheMappedImageCollection ? TheMappedImageCollection->findImageByName( name ) : NULL;
+		if( values[ v ].image )
+			++stills;
+	}
 	std::vector< LookShot > shots;
 	for( Int v = 0; v < (Int)values.size() && (Int)shots.size() < LOOK_SHOTS_MAX; ++v )
-	{
-		if( !drawn )
-		{
-			AsciiString name;
-			name.format( "OptPreview_%s_%d", stem.str(), values[ v ].value );
-			values[ v ].image = TheMappedImageCollection ? TheMappedImageCollection->findImageByName( name ) : NULL;
-			if( values[ v ].image == NULL )
-				continue;
-		}
-		shots.push_back( values[ v ] );
-	}
+		if( values[ v ].image || ( drawn && stills == 0 ) )
+			shots.push_back( values[ v ] );
 	if( shots.empty() )
 		return y;
 

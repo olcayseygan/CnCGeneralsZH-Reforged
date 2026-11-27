@@ -454,6 +454,10 @@ void TeamFactory::xfer( Xfer *xfer )
 	// unique team ID counter
 	xfer->xferUser( &m_uniqueTeamID, sizeof( TeamID ) );
 
+	// the prototypes below remake their teams through createTeamOnPrototype, which counts the counter up
+	// once a team; the saved count is put back after them
+	const TeamID savedUniqueTeamID = m_uniqueTeamID;
+
 	// how many team prototypes of data do we have to write
 	UnsignedShort prototypeCount = m_prototypes.size();
 	xfer->xferUnsignedShort( &prototypeCount );
@@ -523,6 +527,8 @@ void TeamFactory::xfer( Xfer *xfer )
 
 		}  // end for, i
 
+		m_uniqueTeamID = savedUniqueTeamID;
+
 	}  // end else, loading
 
 /*
@@ -567,9 +573,13 @@ fclose( fp );
 void TeamFactory::loadPostProcess( void )
 {
 
-	// set the next unique team and prototype ID to just over the highest one in use
-	m_uniqueTeamID = 0;
-	m_uniqueTeamPrototypeID = 0;
+	//
+	// Both counters are pre-incremented when an ID is handed out, so each holds the last ID given, not
+	// the next.  Setting them to one past the highest in use gave every team made after a load an ID
+	// one higher than the game that was saved gave it.  The team counter is the save's (TeamFactory::xfer)
+	// and the prototype counter the map load's; either only rises here, for a save that holds an ID
+	// past its own counter.
+	//
 	TeamPrototypeMap::iterator prototypeIt;
 	TeamPrototype *prototype;
 	Team *team;
@@ -580,16 +590,16 @@ void TeamFactory::loadPostProcess( void )
 		prototype = prototypeIt->second;
 
 		// do protype ID check
-		if( prototype->getID() >= m_uniqueTeamPrototypeID )
-			m_uniqueTeamPrototypeID = prototype->getID() + 1;
+		if( prototype->getID() > m_uniqueTeamPrototypeID )
+			m_uniqueTeamPrototypeID = prototype->getID();
 
 		// iterate team instances on each prototype and do the team ID check
 		for( DLINK_ITERATOR<Team> iter = prototype->iterate_TeamInstanceList(); !iter.done(); iter.advance() ) 
 		{
 
 			team = iter.cur();
-			if( team->getID() >= m_uniqueTeamID )
-				m_uniqueTeamID = team->getID() + 1;
+			if( team->getID() > m_uniqueTeamID )
+				m_uniqueTeamID = team->getID();
 
 		}  // end for
 

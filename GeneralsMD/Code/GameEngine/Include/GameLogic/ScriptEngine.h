@@ -549,6 +549,7 @@ protected:
 	Int								m_fadeFramesDecrease;
 
 	UnsignedInt				m_frameObjectCountChanged;
+	UnsignedInt				m_frameObjectCountChangedFromSave;	///< the save's, put back by loadPostProcess after the load made every object
 
 	ObjectTypeCount		m_objectCounts[MAX_PLAYER_COUNT];
 

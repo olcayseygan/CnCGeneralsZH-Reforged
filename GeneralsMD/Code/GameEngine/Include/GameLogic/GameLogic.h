@@ -557,6 +557,7 @@ private:
 #endif
 
 	UnsignedInt m_frameObjectsChangedTriggerAreas;					///< Last frame objects moved into/outof trigger areas, or were created/destroyed. jba.
+	UnsignedInt m_frameObjectsChangedTriggerAreasFromSave;	///< the save's, put back by loadPostProcess after the load made and moved every object
 
 	// ----------------------------------------------------------------------------------------------
 	struct ObjectTOCEntry

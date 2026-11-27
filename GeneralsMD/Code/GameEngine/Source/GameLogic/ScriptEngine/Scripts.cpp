@@ -974,13 +974,17 @@ void Script::crc( Xfer *xfer )
 	* Version Info:
 	* 1: Initial version
 	* 2: The next evaluation frame of a delayed script.  Without it every delayed script ran its
-	*    conditions on the first frame after a load instead of waiting out its delay. */
+	*    conditions on the first frame after a load instead of waiting out its delay.
+	* 3: Each condition's cached answer and the frame it was cached on.  The conditions that count
+	*    objects in an area keep an answer until an object is made or destroyed or a team crosses an
+	*    area, so a unit that died but is not yet gone still counts in the uninterrupted game; a load
+	*    that dropped the cache counted afresh and could fire a script the saved game would not. */
 // ------------------------------------------------------------------------------------------------
 void Script::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -991,6 +995,40 @@ void Script::xfer( Xfer *xfer )
 
 	if( version >= 2 )
 		xfer->xferUnsignedInt( &m_frameToEvaluateAt );
+
+	if( version >= 3 )
+	{
+		// the conditions come from the map, so a load has the same ones in the same order; a count that
+		// differs reads what the save holds and leaves the rest uncached
+		UnsignedShort conditionCount = 0;
+		for( OrCondition *o = m_condition; o; o = o->getNextOrCondition() )
+			for( Condition *c = o->getFirstAndCondition(); c; c = c->getNext() )
+				++conditionCount;
+		const UnsignedShort ownCount = conditionCount;
+		xfer->xferUnsignedShort( &conditionCount );
+
+		OrCondition *orCond = m_condition;
+		Condition *cond = orCond ? orCond->getFirstAndCondition() : NULL;
+		for( UnsignedShort i = 0; i < conditionCount; ++i )
+		{
+			while( cond == NULL && orCond != NULL )
+			{
+				orCond = orCond->getNextOrCondition();
+				cond = orCond ? orCond->getFirstAndCondition() : NULL;
+			}
+			Int customData = cond ? cond->getCustomData() : 0;
+			Int customFrame = cond ? cond->getCustomFrame() : 0;
+			xfer->xferInt( &customData );
+			xfer->xferInt( &customFrame );
+			if( cond && xfer->getXferMode() == XFER_LOAD && conditionCount == ownCount )
+			{
+				cond->setCustomData( customData );
+				cond->setCustomFrame( customFrame );
+			}
+			if( cond )
+				cond = cond->getNext();
+		}
+	}
 
 }  // end xfer
 

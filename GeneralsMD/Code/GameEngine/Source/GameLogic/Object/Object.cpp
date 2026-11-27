@@ -2999,16 +2999,22 @@ void Object::setTriggerAreaFlagsForChangeInPosition()
 	if (m_enteredOrExitedFrame != 0 && m_enteredOrExitedFrame != now)
 		updateTriggerAreaFlags();
 
+	// A load makes every object on the neutral player's default team and then puts it where it was:
+	// that is no step into an area, and it marked the neutral team as having entered one for the
+	// scripts of the frame after the load.  The object's own flags are read back from the save after
+	// this, and the team's flag is in the save as well.
+	const Bool marksTeam = !TheGameState->isInLoadGame();
+
 	// Check for exited.
 	Int i;
-	for (i=0; i<m_numTriggerAreasActive; i++) 
+	for (i=0; i<m_numTriggerAreasActive; i++)
 	{
-		if (!m_triggerInfo[i].pTrigger->pointInTrigger(m_iPos)) 
+		if (!m_triggerInfo[i].pTrigger->pointInTrigger(m_iPos))
 		{
 			m_triggerInfo[i].isInside = false;
 			m_triggerInfo[i].exited = true;
 			m_enteredOrExitedFrame = now;
-			if (m_team) 
+			if (m_team && marksTeam)
 				m_team->setEnteredExited();
 			TheGameLogic->updateObjectsChangedTriggerAreas();
 #ifdef _DEBUG
@@ -3045,7 +3051,7 @@ void Object::setTriggerAreaFlagsForChangeInPosition()
 				m_triggerInfo[m_numTriggerAreasActive].exited = false;
 				m_triggerInfo[m_numTriggerAreasActive].pTrigger = pTrig;  
 				m_enteredOrExitedFrame = now;
-				if (m_team) 
+				if (m_team && marksTeam)
 					m_team->setEnteredExited();
 				TheGameLogic->updateObjectsChangedTriggerAreas();
 				++m_numTriggerAreasActive;

@@ -631,10 +631,16 @@ void PolygonTrigger::xfer( Xfer *xfer )
 	// bounds need update
 	xfer->xferBool( &m_boundsNeedsUpdate );
 
-	// the radius is derived from the points, and a save from before the half-height fix holds a wrong one
+	// The radius is derived from the points, and a save from before the half-height fix holds a wrong
+	// one, so a trigger saved with its bounds worked out has them worked out again now.  Left to the
+	// first question instead, every trigger loaded still waiting while the game it came from had them
+	// done, and the save after a load wrote that difference.
 	if( xfer->getXferMode() == XFER_LOAD )
 	{
+		const Bool wasWorkedOut = !m_boundsNeedsUpdate;
 		m_boundsNeedsUpdate = TRUE;
+		if( wasWorkedOut )
+			updateBounds();
 		++s_shapeRevision;
 	}
 

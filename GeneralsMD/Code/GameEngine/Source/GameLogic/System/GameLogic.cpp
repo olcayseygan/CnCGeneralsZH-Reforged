@@ -264,6 +264,7 @@ GameLogic::GameLogic( void )
 	m_frame = 0;
 	m_frameForClient = 0;
 	m_frameObjectsChangedTriggerAreas = 0;
+	m_frameObjectsChangedTriggerAreasFromSave = 0;
 	m_width = 0;
 	m_height = 0;
 	m_objList = NULL;
@@ -523,6 +524,7 @@ void GameLogic::reset( void )
 	m_pendingTechBuildings.clear();
 
 	m_frameObjectsChangedTriggerAreas = 0;
+	m_frameObjectsChangedTriggerAreasFromSave = 0;
 
 	TheGhostObjectManager->reset();
 	ThePartitionManager->reset();
@@ -6936,18 +6938,29 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 21: xfer TheDirectStrikeStats
 	* 22: xfer TheApocalypseDirector
 	* 23: xfer m_dayNight
+	* 24: xfer m_frameObjectsChangedTriggerAreas
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 23;
+	const XferVersion currentVersion = 24;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
 	// logic frame number
 	xfer->xferUnsignedInt( &m_frame );
+
+	// Last frame an object was made, destroyed or crossed a trigger area: a guard watching an area
+	// scans only within the guard scan rate of it (AIGuard.cpp).  The load makes and places every
+	// object, which stamped the load's frame on it; the save's goes back in loadPostProcess.  A save
+	// from before this has none and keeps that stamp.
+	m_frameObjectsChangedTriggerAreasFromSave = m_frameObjectsChangedTriggerAreas;
+	if ( version >= 24 )
+		xfer->xferUnsignedInt( &m_frameObjectsChangedTriggerAreasFromSave );
+	else if ( xfer->getXferMode() == XFER_LOAD )
+		m_frameObjectsChangedTriggerAreasFromSave = m_frame;
 
 	// the day and night cycle, before the objects: an object that looks again while it loads takes the
 	// scale of the saved frame, as it did in the game that was saved
@@ -7576,6 +7589,9 @@ void GameLogic::loadPostProcess( void )
 	// ties is not a heap of them.
 	if (!m_sleepyUpdates.empty())
 		remakeSleepyUpdate();
+
+	// last, after every object's own post-process has placed it
+	m_frameObjectsChangedTriggerAreas = m_frameObjectsChangedTriggerAreasFromSave;
 
 }  // end loadPostProcess
 

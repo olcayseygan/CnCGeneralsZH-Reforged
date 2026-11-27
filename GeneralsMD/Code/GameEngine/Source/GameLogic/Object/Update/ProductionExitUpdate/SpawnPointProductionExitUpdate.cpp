@@ -32,6 +32,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/GameState.h"
 #include "Common/Xfer.h"
 #include "GameClient/Drawable.h"
 #include "GameLogic/AI.h"
@@ -206,27 +207,36 @@ void SpawnPointProductionExitUpdate::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: The spawn points themselves.  They are read off the drawable's bones the first time a door is
+	*    asked for, in whatever model state the drawable is in then, and version 1 left them to be read
+	*    again after a load, from the loaded drawable's state: a loaded game could put its spawn at
+	*    other points than the game that was saved, or have none. */
 // ------------------------------------------------------------------------------------------------
 void SpawnPointProductionExitUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
 	// extend base class
 	UpdateModule::xfer( xfer );
 
-	//
-	// we can ignore all the data with the bone position arrays and spawn point counts
-	// because this module will load them lazily
-	//
-	//	Bool m_bonesInitialized;													///< To prevent creation bugs, only init the World coords when first asked for one
-	//	Int m_spawnPointCount;														///< How many in the array are actually live and valid
-	//	Coord3D m_worldCoordSpawnPoints[MAX_SPAWN_POINTS];///< Where my little friends will be created
-	//	Real m_worldAngleSpawnPoints[MAX_SPAWN_POINTS];		///< And what direction they should face
+	if( version >= 2 )
+	{
+		xfer->xferBool( &m_bonesInitialized );
+		xfer->xferInt( &m_spawnPointCount );
+		if( m_spawnPointCount < 0 || m_spawnPointCount > MAX_SPAWN_POINTS )
+			throw SC_INVALID_DATA;
+		for( Int i = 0; i < m_spawnPointCount; ++i )
+		{
+			xfer->xferCoord3D( &m_worldCoordSpawnPoints[ i ] );
+			xfer->xferReal( &m_worldAngleSpawnPoints[ i ] );
+		}
+	}
+	// version 1: the bone data is read again the first time a door is asked for
 
 	// spawn point occupants
 	xfer->xferUser( &m_spawnPointOccupier, sizeof( ObjectID ) * MAX_SPAWN_POINTS );

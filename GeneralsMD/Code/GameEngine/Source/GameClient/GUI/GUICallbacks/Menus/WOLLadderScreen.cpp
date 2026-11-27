@@ -361,7 +361,7 @@ static const Real BOX_TOP = 182.0f, BOX_BOTTOM = 946.0f, PLACE_BOTTOM = 516.0f, 
 /// the columns at 1080 (README-online-self.md): right edges of the figures, the left of the words
 static const Real COL_RANK_RIGHT = 112.0f, COL_PLAYER = 128.0f, COL_PLAYER_END = 520.0f, COL_TIER = 540.0f,
 	COL_TIER_END = 760.0f, COL_ELO = 970.0f, COL_WINS = 1080.0f, COL_LOSSES = 1190.0f, COL_PCT = 1280.0f;
-static const Real HEAD_TOP = 232.0f, HEAD_RULE = 256.0f, ROWS_TOP = ONLINE_LADDER_ROWS_TOP;
+static const Real HEAD_TOP = 226.0f, HEAD_RULE = 250.0f, ROWS_TOP = ONLINE_LADDER_ROWS_TOP;
 
 /// rated games: a ranked player has his five, whatever the record says
 static Int ladderGames( const OnlineLadderRow &r )
@@ -512,13 +512,13 @@ static void layoutLadderTable( OnlineLadderState state, Int offset, const std::v
 	addCaps( capsFit( "GUI:OnlineLadderWinPct", bp( 82.0f ) ), bx( COL_PCT ), headTop, headBand, UIStyle::MUTED, ALIGN_RIGHT );
 	addPiece( PIECE_LIT, bx( TABLE_LEFT + 8.0f ), by( HEAD_RULE ), bx( TABLE_RIGHT - 8.0f ) - bx( TABLE_LEFT + 8.0f ), 1, UIStyle::FRAME );
 
-	// the rows: 20 of 33, or of 30 when his row is pinned under them; zebra on every second, no hairlines
+	// the rows: 20 of 32, his row pinned under them when the page lacks him; zebra on every second, no hairlines
 	const AsciiString self = localNick();
 	Bool meInPage = FALSE;
 	for (Int i = 0; i < shown; ++i)
 		meInPage = meInPage || ( self.isNotEmpty() && rows[ i ].nick.compareNoCase( self ) == 0 );
 	const Bool pinned = shown > 0 && answerHasMe && !meInPage && s_me.rank > 0;
-	const Real rowHeight = OnlineLadderRowHeight( pinned );
+	const Real rowHeight = ONLINE_LADDER_ROW_HEIGHT;
 	Real best = 1001.0f;
 	for (Int i = 0; i < shown; ++i)
 		if (rows[ i ].hasElo)
@@ -550,10 +550,10 @@ static void layoutLadderTable( OnlineLadderState state, Int offset, const std::v
 
 	if (pinned)
 	{
-		// the ranks skipped between the page and his row, a dotted rule; then his row, 48 high
+		// the ranks skipped between the page and his row, a dotted rule in the 8 gap; then his row
 		const Real gap = ROWS_TOP + LADDER_PAGE * rowHeight;
 		for (Real x = TABLE_LEFT + 28.0f; x < TABLE_RIGHT - 28.0f; x += 12.0f)
-			addPiece( PIECE_FILL, bx( x ), by( gap + 9.0f ), bp( 4.0f ), 1, UIStyle::withAlpha( UIStyle::FRAME, 200 ) );
+			addPiece( PIECE_FILL, bx( x ), by( gap + ONLINE_LADDER_PINNED_GAP / 2.0f ), bp( 4.0f ), 1, UIStyle::withAlpha( UIStyle::FRAME, 200 ) );
 		const Int top = by( gap + ONLINE_LADDER_PINNED_GAP );
 		const Int height = by( gap + ONLINE_LADDER_PINNED_GAP + ONLINE_LADDER_PINNED_HEIGHT ) - top;
 		addRow( rowLeft, top, rowWidth, height, UIStyle::ROW_LOCAL, FALSE );
@@ -898,7 +898,7 @@ static const Color SKIN_CARD_GROUND = GameMakeColor( 0x09, 0x0b, 0x13, 0xff );
 /// the three panels at 1080: the list 360 wide, the platform 520, the cards between, 24 apart
 static const Real LIST_LEFT = 60.0f, LIST_RIGHT = 420.0f, MID_LEFT = 444.0f, MID_RIGHT = 1316.0f,
 	PLATFORM_LEFT = 1340.0f, PLATFORM_RIGHT = 1860.0f;
-static const Real CARDS_TOP = 262.0f, CARDS_BOTTOM = 930.0f;
+static const Real CARDS_TOP = ONLINE_SKINS_CARDS_TOP, CARDS_BOTTOM = ONLINE_SKINS_CARDS_BOTTOM;
 
 /// a five-pointed star, its points on a circle of size across centred in the size-square box at x, y:
 /// a rare look's mark, white on the cyan edge (gold is the local player's alone)
@@ -960,34 +960,31 @@ static Int sideHeads( void )
 	return heads;
 }
 
-/** Row r's place in the list at 1080: a side's head 30 high over its first unit, the rows sharing the
-	* column out (81 for eight units under three heads), 6 apart; the head's top in headTop when r is a
-	* side's first, else -1. */
+/** Row r's place in the list at 1080 (OnlineSelfLayout.h): 8 apart inside a side, 40 between sides,
+	* 70 high or less where more units must fit; a side's head 30 over its first unit, its top in headTop
+	* when r is a side's first, else -1. */
 static void unitPlace( size_t r, Real &x, Real &y, Real &width, Real &height, Real &headTop )
 {
 	const Int heads = sideHeads();
 	const Int units = max( 1, (Int)s_skinRows.size() );
-	const Real band = min( 81.0f, (Real)(Int)( ( BOX_BOTTOM - 12.0f - ( BOX_TOP + 10.0f ) - 30.0f * heads ) / units ) );
-	Real top = BOX_TOP + 10.0f;
+	const Real gaps = ONLINE_SKINS_UNIT_GAP * max( 0, units - max( 1, heads ) ) + ONLINE_SKINS_SIDE_GAP * max( 0, heads - 1 );
+	height = min( ONLINE_SKINS_UNIT_HEIGHT, (Real)(Int)( ( ONLINE_SKINS_UNITS_BOTTOM - ONLINE_SKINS_UNITS_TOP - gaps ) / units ) );
+	Real top = ONLINE_SKINS_UNITS_TOP;
 	Int side = -1;
 	headTop = -1.0f;
 	for (size_t i = 0; i <= r && i < s_skinRows.size(); ++i)
 	{
 		const Int its = rowSide( i );
-		if (its != side && its >= 0)
-		{
-			if (i == r)
-				headTop = top;
-			top += 30.0f;
-		}
+		const Bool newSide = its != side && its >= 0;
+		if (i > 0)
+			top += height + ( newSide ? ONLINE_SKINS_SIDE_GAP : ONLINE_SKINS_UNIT_GAP );
+		if (i == r && newSide)
+			headTop = top - 30.0f;
 		side = its;
-		if (i < r)
-			top += band;
 	}
 	x = LIST_LEFT + 8.0f;
 	y = top;
 	width = LIST_RIGHT - 8.0f - x;
-	height = band - 6.0f;
 }
 
 /// the look in focus on the shown unit's row, its first when the focus is not one of its own
@@ -1299,7 +1296,7 @@ static void createSkinsGadgets( void )
 	static const char *const FILTER_NAME[ FILTER_COUNT ] = { "WOLLadderScreen.wnd:SkinFilterAll", "WOLLadderScreen.wnd:SkinFilterOwned",
 		"WOLLadderScreen.wnd:SkinFilterLocked" };
 	GameFont *tabFont = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL + 2, TRUE );
-	Int right = bx( MID_RIGHT - 20.0f );
+	Int right = bx( ONLINE_SKINS_CARDS_RIGHT );
 	for (Int i = FILTER_COUNT - 1; i >= 0; --i)
 	{
 		const UnicodeString label = UIStyle::capitals( TheGameText->fetch( FILTER_KEY[i] ) );
@@ -1415,7 +1412,7 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 		s_skinFocus = focus->id;
 
 	// the middle: the unit's name at 28 and its owned count left of the filter, the owned bar, the cards
-	const Real midLeft = MID_LEFT + 20.0f, midRight = MID_RIGHT - 20.0f;
+	const Real midLeft = ONLINE_SKINS_CARDS_LEFT, midRight = ONLINE_SKINS_CARDS_RIGHT;
 	if (row)
 	{
 		const Int looks = (Int)row->choices.size();

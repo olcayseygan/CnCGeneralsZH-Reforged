@@ -1032,6 +1032,18 @@ TOOLTIP:SelectionOutlines
 "A glowing ring in its owner's color under each selected unit, and the same line around a selected building. Off, neither is drawn; order lines and the marks where you click stay."
 END
 
+GUI:GridKeys
+"Grid Keys"
+END
+
+TOOLTIP:GridKeys
+"Every command button is pressed by where it stands, not by a letter of its own. Under Key Grid that is the letter on its key: Q W E R T Y, under it A S D F G H, then Z X C V B N. On the other layouts it is the bar's two rows, Q W E R T Y U over A S D F G H J. Picking Key Grid ticks it."
+END
+
+OPTIONTIP:GridKeys
+"Each command button is pressed by its place on the bar instead of its own letter. Picking Key Grid turns it on."
+END
+
 GUI:PlayerColors
 "Player Colors"
 END
@@ -2296,7 +2308,7 @@ GUI:HudLayout1
 END
 
 TOOLTIP:HudLayout
-"Reforged keeps the command bar along the bottom with everything this version adds: the build tabs, the signal keys over the minimap, the production list, the squad list with its build tray, the hero's button, superweapon icons and the general's powers in a tray. Classic is that bar as the original game had it, none of those: the superweapons written out as a name and a time, the general's powers in one column climbing the right edge. Red Alert Style moves building and training into a sidebar down the right, puts the selected units' commands in a strip along the bottom, and takes Red Alert 2's keys where they fit this game: Q W E R for the build tabs, D to deploy, L to sell, K to repair, Z held for waypoints. Reforged and Classic share the game's own keys and Red Alert Style keeps its own; change either on the Hotkeys page."
+"Reforged keeps the command bar along the bottom with everything this version adds: the build tabs, the signal keys over the minimap, the production list, the squad list with its build tray, the hero's button, superweapon icons and the general's powers in a tray. Classic is that bar as the original game had it, none of those: the superweapons written out as a name and a time, the general's powers in one column climbing the right edge. Red Alert Style moves building and training into a sidebar down the right, puts the selected units' commands in a strip along the bottom, and takes Red Alert 2's keys where they fit this game: Q W E R for the build tabs, D to deploy, L to sell, K to repair, Z held for waypoints. Key Grid is the Reforged bar rebuilt round the keyboard: the commands in three staggered rows of six, Q W E R T Y over A S D F G H over Z X C V B N, and the minimap's box cut to each map's shape. With Grid Keys ticked each button wears its letter and that letter presses it; select all, matching units, the command center and the idle worker move to J, U, M and I. Reforged and Classic share the game's own keys, Red Alert Style and Key Grid keep their own; change any of them on the Hotkeys page."
 END
 
 GUI:HudWidth
@@ -2809,6 +2821,10 @@ GUI:HotkeyScheme1
 "Red Alert"
 END
 
+GUI:HotkeyScheme2
+"Key Grid"
+END
+
 GUI:HotkeysEditingScheme
 "Editing the %s keys."
 END
@@ -2823,6 +2839,10 @@ END
 
 GUI:HotkeysCommandREPAIR_MODE
 "Repair mode"
+END
+
+GUI:HotkeysCommandTOGGLE_KEY_GRID_TRAY
+"Squad tray on the keys"
 END
 
 GUI:HotkeysCommandBEGIN_WAYPOINTS_KEY
@@ -7339,6 +7359,10 @@ GUI:HudLayout2
 "Classic"
 END
 
+GUI:HudLayout3
+"Key Grid"
+END
+
 Network:WaitingForReconnect
 "Waiting for %ls to reconnect (%d:%02d)"
 END
@@ -9487,7 +9511,7 @@ OPTIONTIP:ChromaLighting
 END
 
 OPTIONTIP:HudLayout
-"Reforged is the bottom bar with tabs, production list and power tray. Classic is the 2003 bar; Red Alert Style moves building into a sidebar and uses Red Alert 2's keys."
+"Reforged is the bottom bar with tabs, production list and power tray. Classic is the 2003 bar; Red Alert Style moves building into a sidebar and uses Red Alert 2's keys. Key Grid lays the commands out like the keyboard, each on its letter."
 END
 
 OPTIONTIP:MinimapSize

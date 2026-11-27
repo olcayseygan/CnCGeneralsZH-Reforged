@@ -71,6 +71,8 @@ class ProductionUpdateInterface;
 class GameWindowTransitionsHandler;
 class DisplayString;
 struct HudLayoutRects;
+struct KeyGridRects;
+struct KeyGridSlot;
 
 /// one line of a code-drawn window's text (the talents, the trainer), laid out again only when its
 /// text, size or well changes
@@ -1411,9 +1413,39 @@ protected:
 	void updateSelectionCardReadout( void );			///< the card's name, rank and health, copied for its draw (ControlBar::update)
 	void arrangeStripByRole( void );							///< the strip's buttons by role: own left, Attack Stop Guard right, the container's before them
 	Bool m_sidebarLayout;													///< see isSidebarLayout
-	std::vector< GameWindow * > m_sidebarHidden;	///< windows layoutSidebar hid that were showing
+	std::vector< GameWindow * > m_sidebarHidden;	///< windows layoutSidebar (and layoutKeyGrid) hid that were showing
 	Bool m_sidebarBlockSaved;											///< the strip blocker's enabled state below was saved
 	Bool m_sidebarBlockEnabled;										///< ...and what it was under Classic
+
+	// the Key Grid layout (ControlBarKeyGrid.cpp, HUD_LAYOUT_GRID)
+	Bool wantsKeyGridLayout( void ) const;				///< the option asks for it and this seat may have it
+	void layoutKeyGrid( void );										///< layoutPanels' last step under Key Grid, and every map's radar fit
+	void arrangeKeyGrid( void );									///< each command window on its place's cell, with its letter; every frame
+	void updateKeyGridSwitch( void );							///< the squad tray switch on the spine: shown with a squad's tray
+	Bool getKeyGridPlaces( Int *places ) const;		///< getCommandPlaces under Key Grid (ControlBar_keyGridPlaces)
+	Bool m_keyGridLayout;													///< see isKeyGridLayout
+	Bool m_keyGridTrayView;												///< the deck shows the chosen squad's build tray, not the commands
+	GameWindow *m_keyGridSwitchParent;						///< the switch's window, checked against the window manager before use
+	GameWindow *m_keyGridQueueButtons[ MAX_BUILD_QUEUE_BUTTONS ];	///< ButtonQueue01..09 as layoutKeyGrid found them
+	// getKeyGridPlaces' last answer and what it was worked out from: each slot's shown command and the
+	// selection's object; the same again is the same answer (asked a few times a frame)
+	mutable const CommandButton *m_keyGridPlacedCommands[ MAX_COMMANDS_PER_SET ];
+	mutable const Object *m_keyGridPlacedOwner;
+	mutable Int m_keyGridPlaces[ MAX_COMMANDS_PER_SET ];
+	mutable Bool m_keyGridPlacesFight;
+	mutable Bool m_keyGridPlacesKnown;
+	void shutdownKeyGrid( void );									///< the switch's window gone, the caches emptied (shutdownWindows)
+public:
+	/// a command window under Key Grid's squad tray while the tray shows: its letter presses nothing (HotKey.cpp)
+	Bool keyGridTrayCovers( const GameWindow *win ) const;
+	Bool isKeyGridLayout( void ) const { return m_keyGridLayout; }
+	void getKeyGridRects( KeyGridRects *out ) const;	///< KeyGridLayoutForScreen for this screen, HUD width and map
+	Bool getKeyGridCells( IRegion2D *cells ) const;	///< the deck's eighteen cells where they stand now; FALSE off Key Grid
+	Bool keyGridTrayView( void ) const;							///< the deck shows the chosen squad's build tray now
+	void toggleKeyGridTray( void );								///< the switch and its key: the squad's tray or the commands
+	void drawKeyGridConsole( void );								///< the console's art under the windows (ControlBarSchemeManager::drawPainting)
+	WideChar keyGridLetter( const GameWindow *win ) const;	///< Key Grid's letter on a command window, 0 for none
+protected:
 
 	ControlBarSchemeManager *m_controlBarSchemeManager;		///< The Scheme singleton
 

@@ -1140,6 +1140,7 @@ static void dressFriendsBox( GameWindow *box )
 	{
 		GadgetButtonSetText( s_friendAddKey, UIStyle::capitals( TheGameText->fetch( "GUI:AddFriend" ) ) );
 		UIStyle::setMenuKey( s_friendAddKey, FALSE );
+		s_friendAddKey->winEnable( FALSE );		// the field is empty; the box's update wakes it
 	}
 }
 
@@ -1230,6 +1231,10 @@ void WOLBuddyOverlayInit( WindowLayout *layout, void *userData )
 	PopulateOldBuddyMessages();
 
 	dressFriendsBox( parent );
+	// BuddiesParent and IgnoreParent reach down to the foot (the chat line is a child of the first) and
+	// load after CLOSE, so the shown one covered it: the IGNORED page could not be closed by its key
+	if (buttonHide)
+		buttonHide->winBringToTop();
 
 	// Show Menu
 	layout->hide( FALSE );
@@ -1278,6 +1283,14 @@ void WOLBuddyOverlayUpdate( WindowLayout * layout, void *userData)
 	if (onlineFriends())
 	{
 		showFriendError();
+		// ADD FRIEND takes clicks only with a name typed beside it
+		if (s_friendAddKey && s_friendNameEntry)
+		{
+			UnicodeString typed;
+			typed.set( GadgetTextEntryGetText( s_friendNameEntry ) );
+			typed.trim();
+			s_friendAddKey->winEnable( !typed.isEmpty() );
+		}
 		std::vector<OnlineFriend> rows;
 		if (OnlineGetFriends( rows ) != s_friendRowsSerial)
 		{

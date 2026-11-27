@@ -8,6 +8,18 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Key Grid: the command bar laid out like your keyboard
+
+Layout under Options > Interface has a fourth choice, Key Grid. The commands stand in three staggered rows of six at full size, Q W E R T Y over A S D F G H over Z X C V B N, the way your left hand lies on the keys, and with Grid Keys ticked every button wears its letter and that letter presses it. You read the key off the bar instead of learning one per unit.
+
+A button keeps its spot from bar to bar. A Dozer, Worker or Istihkam lays its buildings out in the order they open up: power and supply on Q and W, then the factories in the order their requirements allow, defences along A, and the Z row opens with the tech building, the structure the most others list as a requirement. The Command Center takes the last free key of its row, since you rebuild it rather than open with it. The orders never move: S stop, D attack move, X guard, Z unload, B rally point, N sell, and on a unit that fights A, C and V stay free for force attack, hold position and move. Passengers fill in from N leftward. A GLA Worker's fake buildings sit on their real buildings' keys, so H never moves a building.
+
+The minimap's box takes each map's own shape at today's size. Tournament Desert, a tall map that left half of the old 322 by 232 glass black, gets a 239 by 313 glass with nothing wasted. The money sits on a column beside the map with the power standing in it as a meter, the signal keys, Options, beacon, idle worker and chat ride on a shelf over the map, and a factory's queue climbs above the shelf. The select army and idle unit buttons and the build tabs are gone from this layout; their keys still work. Select all, matching units, the command center and the idle worker move to J, U, M and I, deploy to K, follow to L and the held key for a line of walls to O, and Key Grid keeps its keys in a file of its own, so what you set for Classic and Red Alert Style stays as it is.
+
+Pick a squad by its number and a switch appears on the column. Press it or Ctrl+Tab and the key rows show the squad's build tray in place of the commands, each unit on a letter that builds it into the squad; leave the squad and the commands come back.
+
+Options > Interface also has a Grid Keys box for the other layouts, after Age of Empires IV's grid hotkeys. Ticked, a command button is pressed by where it stands on the bar, Q W E R T Y U over A S D F G H J, whatever its own letter. Picking Key Grid ticks it, picking another layout clears it, and you can change it after.
+
 ## Computer players give up, fire, rebuild and drive like players
 
 - A beaten computer kept playing on with a handful of units. Above Hard the rules for giving up stretched with the level, so an Insane seat waited nearly 20 game minutes and held on until it was worth 3% of the strongest enemy: six eight-player Insane matches on Twilight Flame at double speed saw 27 seats knocked out and 3 GGs. Every level above Hard now gives up as Hard does, and Hard gives up at 12% of the strongest enemy side held for 40 seconds (it was 8% for a minute). The same six matches: 34 seats out, 17 of them by GG. A seat that says GG leaves the match two seconds later, its units to a living ally or destroyed.

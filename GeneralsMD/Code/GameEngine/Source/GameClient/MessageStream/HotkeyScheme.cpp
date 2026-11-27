@@ -74,6 +74,46 @@ static const HotkeySchemeKey RED_ALERT_KEYS[] =
 	{ "TOGGLE_PURCHASE_SCIENCE",			"KEY_G",	"CTRL",		FALSE },
 };
 
+/// What Key Grid changes over Classic: the bar's eighteen places on their own letters, bare, in
+/// CommandPlace order (ControlBar_commandPlaceKey), and the commands the English CommandMap.ini had on
+/// those letters moved to letters it leaves free, U J M I K L O bare and U J M under Ctrl.  Stop alone
+/// gives up its S, the stop place's own (orderAtPlace).  Every other chord stays Classic's; the squad
+/// tray's Ctrl+Tab is every scheme's (MetaMap's fork defaults).
+static const HotkeySchemeKey GRID_KEYS[] =
+{
+	{ "COMMAND_SLOT01",								"KEY_Q",	"NONE",		FALSE },
+	{ "COMMAND_SLOT02",								"KEY_W",	"NONE",		FALSE },
+	{ "COMMAND_SLOT03",								"KEY_E",	"NONE",		FALSE },
+	{ "COMMAND_SLOT04",								"KEY_R",	"NONE",		FALSE },
+	{ "COMMAND_SLOT05",								"KEY_T",	"NONE",		FALSE },
+	{ "COMMAND_SLOT06",								"KEY_Y",	"NONE",		FALSE },
+	{ "COMMAND_SLOT07",								"KEY_A",	"NONE",		FALSE },
+	{ "COMMAND_SLOT08",								"KEY_S",	"NONE",		FALSE },
+	{ "COMMAND_SLOT09",								"KEY_D",	"NONE",		FALSE },
+	{ "COMMAND_SLOT10",								"KEY_F",	"NONE",		FALSE },
+	{ "COMMAND_SLOT11",								"KEY_G",	"NONE",		FALSE },
+	{ "COMMAND_SLOT12",								"KEY_H",	"NONE",		FALSE },
+	{ "COMMAND_SLOT13",								"KEY_Z",	"NONE",		FALSE },
+	{ "COMMAND_SLOT14",								"KEY_X",	"NONE",		FALSE },
+	{ "COMMAND_SLOT15",								"KEY_C",	"NONE",		FALSE },
+	{ "COMMAND_SLOT16",								"KEY_V",	"NONE",		FALSE },
+	{ "COMMAND_SLOT17",								"KEY_B",	"NONE",		FALSE },
+	{ "COMMAND_SLOT18",								"KEY_N",	"NONE",		FALSE },
+	// Q select all, E matching units, H the command center, X scatter, W all aircraft and F the
+	// replay's fast forward gave their letters to the grid
+	{ "SELECT_MATCHING_UNITS",				"KEY_U",	"NONE",		FALSE },
+	{ "SELECT_ALL",										"KEY_J",	"NONE",		FALSE },
+	{ "VIEW_COMMAND_CENTER",					"KEY_M",	"NONE",		FALSE },
+	{ "SELECT_NEXT_IDLE_WORKER",			"KEY_I",	"NONE",		FALSE },
+	{ "SELECT_ALL_AIRCRAFT",					"KEY_U",	"CTRL",		FALSE },
+	{ "SCATTER",											"KEY_J",	"CTRL",		FALSE },
+	{ "TOGGLE_FAST_FORWARD_REPLAY",		"KEY_M",	"CTRL",		FALSE },
+	// D deploy, F follow and the Z held for a path of walls gave theirs too
+	{ "DEPLOY",												"KEY_K",	"NONE",		FALSE },
+	{ "FOLLOW",												"KEY_L",	"NONE",		FALSE },
+	{ "BEGIN_PATH_BUILD",							"KEY_O",	"NONE",		FALSE },
+};
+
 //-------------------------------------------------------------------------------------------------
 const HotkeySchemeKey *HotkeyScheme_keys( Int scheme, Int *count )
 {
@@ -82,6 +122,11 @@ const HotkeySchemeKey *HotkeyScheme_keys( Int scheme, Int *count )
 		*count = (Int)( sizeof( RED_ALERT_KEYS ) / sizeof( RED_ALERT_KEYS[ 0 ] ) );
 		return RED_ALERT_KEYS;
 	}
+	if( scheme == HOTKEY_SCHEME_GRID )
+	{
+		*count = (Int)( sizeof( GRID_KEYS ) / sizeof( GRID_KEYS[ 0 ] ) );
+		return GRID_KEYS;
+	}
 	*count = 0;
 	return NULL;
 }
@@ -89,12 +134,17 @@ const HotkeySchemeKey *HotkeyScheme_keys( Int scheme, Int *count )
 //-------------------------------------------------------------------------------------------------
 const char *HotkeyScheme_fileName( Int scheme )
 {
+	if( scheme == HOTKEY_SCHEME_GRID )
+		return "HotkeysGrid.ini";
 	return scheme == HOTKEY_SCHEME_RED_ALERT ? "HotkeysRedAlert.ini" : "Hotkeys.ini";
 }
 
 //-------------------------------------------------------------------------------------------------
 const char *HotkeyScheme_fixedLetters( Int scheme )
 {
+	// Key Grid's orders stand on their places (S stop, D attack move, X guard), not on fixed letters
+	if( scheme == HOTKEY_SCHEME_GRID )
+		return "";
 	return scheme == HOTKEY_SCHEME_RED_ALERT ? "ASGYVLCH" : "ASGYVNCH";
 }
 

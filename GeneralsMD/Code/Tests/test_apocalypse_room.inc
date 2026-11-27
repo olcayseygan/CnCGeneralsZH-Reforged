@@ -20,8 +20,8 @@ TEST( apocalypse_room_four_rows_in_seat_order_under_one_head )
 		CHECK( !row.head );
 		CHECK_EQ( row.slot, i );
 		CHECK_EQ( row.height, (Int)LOBBY_ROW_SEAT );
-		// README: seat rows at 194 + 90 i, the head from 160
-		CHECK_EQ( LOBBY_SEATS_TOP + row.top, 194 + 90 * i );
+		// seat rows under the head from 160: 192 + 90 i (the README's 194 had a head of 34)
+		CHECK_EQ( LOBBY_SEATS_TOP + row.top, 192 + 90 * i );
 	}
 	// the last row ends over THE NIGHTS head at 566
 	CHECK( LOBBY_SEATS_TOP + plan.items[ plan.itemCount - 1 ].top + LOBBY_ROW_SEAT <= 566 );

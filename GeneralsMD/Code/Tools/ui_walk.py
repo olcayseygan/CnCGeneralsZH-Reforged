@@ -13,6 +13,8 @@
     python ui_walk.py mappicker       the map picker over the skirmish room (Select Map)
     python ui_walk.py factionpicker   the army screen over the skirmish room (seat 1's army box)
     python ui_walk.py ladder          the online ladder, signed in (ZHR_UI_WALK_ONLINE; also skins, card)
+    python ui_walk.py hub             the online hub with nothing open over it (ZHR_UI_WALK_ONLINE)
+    python ui_walk.py customgames     the online Custom games list and its Host and Join boxes (ZHR_UI_WALK_ONLINE)
     python ui_walk.py all             every screen above, one launch after another (or main,options,...)
 
     --res 1280x720   --lang turkish   --only <name part>   --rows <n>   --json <file>
@@ -87,6 +89,8 @@ INPUT_KINDS = ("button", "check", "radio", "hslider", "vslider", "list", "entry"
 GADGET_KINDS = INPUT_KINDS + ("static", "progress")
 # box buttons that would leave the walk (quit, start a mission, accept a change): not pressed
 COMMITS = re.compile(r"(Yes|Ok|OK|Accept|Start|Play|Quit|Exit)$")
+# never pressed anywhere: the player card's COMMUNICATOR opens the web profile in the browser
+NEVER = re.compile(r"ButtonCommunicator$")
 # buttons a restore may press to step back, in this order
 BACKS = ("Cancel", "No", "Back", "Close", "Ok", "OK")
 
@@ -174,6 +178,12 @@ SCREENS = {
     "ladder": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:TabLadder", nav=["WOLWelcomeMenu.wnd:TabLadder"]),
     "skins": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:TabSkins", nav=["WOLWelcomeMenu.wnd:TabSkins"]),
     "card": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:ButtonMyInfo", nav=["WOLWelcomeMenu.wnd:ButtonMyInfo"]),
+    # the hub itself with nothing open over it: Play vs AI, Quick Match, Custom, My Info, Back and the Team vs AI
+    # keys (team size, leave party, PLAY / FIND TEAM / CANCEL) of a client whose hello says teamai:1
+    "hub": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:ButtonPlayVsAI", nav=[],
+                nodescend=["WOLWelcomeMenu.wnd:ButtonMyInfo"]),
+    # the online Custom games list and its Host and Join boxes
+    "customgames": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:TabCustom", nav=["WOLWelcomeMenu.wnd:TabCustom"]),
 }
 
 
@@ -887,7 +897,11 @@ class Walk(object):
     # -- boxes -------------------------------------------------------------------------------------
 
     def walk_box(self, path, trigger, tree):
+        # read again once the box has finished coming up: the Exit box's NO was missing from the first read
+        tree = settle(self.game, minimum=1.0)
         box = tree.get("modal") or ""
+        if not box:
+            return
         layout = box.split(":")[0]
         key = (layout, tuple(sorted(w.get("tx", "") for w in windows(tree) if w["n"].startswith(layout))))
         if key in self.boxes:
@@ -897,7 +911,11 @@ class Walk(object):
         print("  box %s: %s" % (layout, " | ".join(texts)[:120]), flush=True)
         self.faults.update("%s: %s" % (layout, f) for f in lint(tree))
         buttons = [w for w in controls(tree, self.area) if w["n"].startswith(layout + ":")]
+        print("    buttons: %s" % (short([b["n"] for b in buttons], 8) or "none"), flush=True)
         for b in buttons:
+            if NEVER.search(b["n"]):
+                self.record("  [%s] %s" % (layout, leaf(b["n"])), "skipped", "opens the browser", path + [trigger])
+                continue
             if COMMITS.search(leaf(b["n"])):
                 self.record("  [%s] %s" % (layout, leaf(b["n"])), "skipped", "commits", path + [trigger])
                 continue
@@ -919,7 +937,8 @@ class Walk(object):
             self.faults.add("covered: %s under %s" % (leaf(n), leaf(by)))
         todo = [w for w in controls(tree, self.area) if w["n"] not in self.done
                 and (not self.opts.only or self.opts.only.lower() in w["n"].lower())
-                and w["n"].startswith(self.game.spec.get("prefix", ""))]		# a picker's own windows, not the room's
+                and w["n"].startswith(self.game.spec.get("prefix", ""))		# a picker's own windows, not the room's
+                and not NEVER.search(w["n"])]
         for w in todo:
             if w["n"] in self.done:		# a deeper walk got to it first
                 continue
@@ -947,7 +966,11 @@ class Walk(object):
             elif depth < 2 and after.get("screen") == before.get("screen") and not after.get("modal") \
                     and w["n"] not in self.game.spec.get("nodescend", []):
                 fresh = [c for c in controls(after, self.area) if c["n"] not in self.done and c["n"] not in named(before)]
-                if fresh:
+                if fresh and (w["t"] == "tab" or leaf(w["n"]).startswith("Tab")):
+                    # a tab's page is reached from the root by that tab alone, not through the tab before it, so
+                    # eight tabs do not use up the depth on the way
+                    self.walk([w["n"]], 1)
+                elif fresh:
                     self.walk(path + [w["n"]], depth + 1)
         disabled = [w for w in controls(tree, self.area) if not w["e"]]
         if disabled and depth == 0 and not path:

@@ -1059,6 +1059,7 @@ GlobalData::GlobalData()
 	m_hudLayout = HUD_LAYOUT_CLASSIC;
 	m_hudWidth = HUD_WIDTH_FULL;
 	m_hotkeyScheme = HOTKEY_SCHEME_CLASSIC;
+	m_gridKeys = FALSE;
 	// the game's own mouse unless the launcher passes -mouse reforged
 	m_mouseStyle = MOUSE_STYLE_CLASSIC;
 	// the lobby's own colours until somebody asks for something else

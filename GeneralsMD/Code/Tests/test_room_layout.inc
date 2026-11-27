@@ -50,7 +50,8 @@ TEST( room_layout_ties_keep_team_order )
 
 TEST( room_layout_eight_seats_in_two_teams_fit_without_a_scroll )
 {
-	// the README's figure: eight seats in two teams take 788 of the 792 pixels
+	// eight seats in two teams take 784 of the 792 pixels (the README's 788 with heads of 34; heads
+	// are 32 since the rows' boxes were put on the 8 px grid)
 	const Int teams[] = { 0, 0, 0, 0, 1, 1, 1, 1 };
 	const Bool seated[] = { TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE };
 	LobbySeatState seats[ 8 ];
@@ -66,7 +67,7 @@ TEST( room_layout_eight_seats_in_two_teams_fit_without_a_scroll )
 	CHECK( plan.items[ 5 ].head );
 	const LobbyRoomItem &last = plan.items[ plan.itemCount - 1 ];
 	CHECK_EQ( last.top + last.height, 2 * LOBBY_ROW_HEAD + 8 * LOBBY_ROW_SEAT );
-	CHECK_EQ( last.top + last.height, 788 );
+	CHECK_EQ( last.top + last.height, 784 );
 }
 
 TEST( room_layout_rows_keep_their_size_at_32_seats )

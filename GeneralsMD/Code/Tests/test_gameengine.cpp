@@ -11933,10 +11933,16 @@ TEST(hud_layout_and_width_round_trip_through_options_ini)
 	CHECK_EQ( TheGlobalData->m_hudLayout, (Int)HUD_LAYOUT_CLASSIC );
 	CHECK_EQ( TheGlobalData->m_hudWidth, HUD_WIDTH_COUNT - 1 );
 	CHECK_EQ( TheGlobalData->m_hotkeyScheme, (Int)HOTKEY_SCHEME_CLASSIC );
-	CHECK_EQ( (Int)HUD_LAYOUT_COUNT, 3 );
-	pref[ AsciiString( "HudLayout" ) ] = AsciiString( "3" );
+	CHECK_EQ( (Int)HUD_LAYOUT_COUNT, 4 );
+	pref[ AsciiString( "HudLayout" ) ] = AsciiString( "4" );
 	loadOptionsFromPreferences( pref );
 	CHECK_EQ( TheGlobalData->m_hudLayout, (Int)HUD_LAYOUT_CLASSIC );
+	// 3 is Key Grid since 2026-11-27 (the plain layout's 3 never reached a release); its own keys only
+	// with Grid Keys ticked, which this file leaves off
+	pref[ AsciiString( "HudLayout" ) ] = AsciiString( "3" );
+	loadOptionsFromPreferences( pref );
+	CHECK_EQ( TheGlobalData->m_hudLayout, (Int)HUD_LAYOUT_GRID );
+	CHECK_EQ( TheGlobalData->m_hotkeyScheme, (Int)HOTKEY_SCHEME_CLASSIC );
 	pref[ AsciiString( "HudLayout" ) ] = AsciiString( "2" );
 	loadOptionsFromPreferences( pref );
 	CHECK_EQ( TheGlobalData->m_hudLayout, (Int)HUD_LAYOUT_RETAIL );
@@ -11958,6 +11964,7 @@ TEST(hud_layout_and_width_round_trip_through_options_ini)
 	CHECK_EQ( retail.play.hi.y, reforged.play.hi.y );
 	CHECK( hudLayoutHasCommandTabs( HUD_LAYOUT_CLASSIC ) );
 	CHECK( !hudLayoutHasCommandTabs( HUD_LAYOUT_RETAIL ) );
+	CHECK( !hudLayoutHasCommandTabs( HUD_LAYOUT_GRID ) );
 
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;
@@ -28051,6 +28058,7 @@ TEST(chroma_money_bar_is_a_thousand_credits_a_lamp)
 #include "test_production_input.inc"
 #include "test_hotkey_scheme.inc"
 #include "test_hotkey_scheme_map.inc"
+#include "test_key_grid.inc"
 
 // The two cursor indexes a float decides.  Mouse.ini's FPS or GameData.ini's scroll speed of inf or NaN
 // made them INT_MIN on Windows and indexed a table with that; a negative FPS made a negative frame on

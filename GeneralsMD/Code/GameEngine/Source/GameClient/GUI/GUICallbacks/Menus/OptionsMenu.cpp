@@ -51,6 +51,7 @@
 #include "Common/version.h"
 
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarKeyGrid.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/WindowLayout.h"
@@ -3501,7 +3502,8 @@ static void lookNothingDraw( GameWindow *, WinInstanceData * )
 static void lookHeadDraw( GameWindow *window, WinInstanceData *instData )
 {
 	const IRegion2D r = lookWindowRect( window );
-	lookCaps( window->winGetText(), r.lo.x + lookPx( 16.0f ), r.lo.y + lookPx( 17.0f ), UIStyle::ACTIVE );
+	// a head is a static text, whose words live in the gadget and not in the window's own text
+	lookCaps( GadgetStaticTextGetText( window ), r.lo.x + lookPx( 16.0f ), r.lo.y + lookPx( 17.0f ), UIStyle::ACTIVE );
 	UIStyle::litLine( r.lo.x, r.lo.y + lookPx( 31.0f ), r.hi.x - r.lo.x, 1, UIStyle::FRAME );
 }
 
@@ -3684,7 +3686,7 @@ static void lookTabDraw( GameWindow *window, WinInstanceData *instData )
 	else
 		for( Int i = 0; i < (Int)s_lookPage[ page ].items.size(); ++i )
 			if( s_lookPage[ page ].items[ i ].kind == LOOK_HEAD )
-				heads.push_back( s_lookPage[ page ].items[ i ].window->winGetText() );
+				heads.push_back( GadgetStaticTextGetText( s_lookPage[ page ].items[ i ].window ) );
 	const UnicodeString longRate = TheGameText->fetch( "GUI:OptionsHeadFrameRate" );
 	const Int room = r.hi.x - lookPx( 10.0f ) - x;
 	for( Int pass = 0; pass < 2; ++pass )
@@ -3961,6 +3963,28 @@ static void lookMiniHud( const LookMini &m, const HudLayoutRects &r, Int layout,
 			lookOutline( m.map( r.cameos[ i ] ), UIStyle::FRAME );
 		for( Int i = 0; i < HUD_STRIP_BUTTONS; ++i )
 			lookOutline( m.map( r.stripButtons[ i ] ), UIStyle::FRAME );
+	}
+	else if( layout == HUD_LAYOUT_GRID )
+	{
+		// Key Grid's console on today's glass (KeyGridLayoutForScreen) and the Reforged right box
+		KeyGridRects kg;
+		KeyGridLayoutForScreen( r.screen.width(), r.screen.height(), r.area, (Real)r.screen.height() / KEY_GRID_DESIGN_H, 0.0f, &kg );
+		lookMiniPlate( m.map( kg.box ) );
+		lookMiniPlate( m.map( kg.shelf ) );
+		lookMiniPlate( m.map( kg.spine ) );
+		lookMiniPlate( m.map( kg.head ) );
+		for( Int row = 0; row < 3; ++row )
+		{
+			IRegion2D back = kg.cells[ row * COMMAND_PLACE_COLUMNS ];
+			back.hi = kg.cells[ row * COMMAND_PLACE_COLUMNS + COMMAND_PLACE_COLUMNS - 1 ].hi;
+			lookMiniPlate( m.map( back ) );
+		}
+		for( Int place = 0; place < COMMAND_PLACE_COUNT; ++place )
+			lookOutline( m.map( kg.cells[ place ] ), UIStyle::FRAME );
+		lookFill( m.map( kg.meter ), UIStyle::EDGE_LIT );
+		lookMiniRadar( m.map( kg.glass ) );
+		const Real k = r.scale, foot = (Real)r.screen.hi.y, right = (Real)r.area.hi.x;
+		lookMiniPlate( m.map( right - ( 1920.0f - 1626.0f ) * k, foot - ( 1080.0f - 863.0f ) * k, right, foot ) );
 	}
 	else
 	{
@@ -4369,7 +4393,7 @@ static void lookPaneDraw( GameWindow *window, WinInstanceData *instData )
 	if( !whole && group >= 0 )
 		for( Int i = 0; i < (Int)p.items.size(); ++i )
 			if( p.items[ i ].kind == LOOK_HEAD && p.items[ i ].group == group )
-				name = p.items[ i ].window->winGetText();
+				name = GadgetStaticTextGetText( p.items[ i ].window );
 	y = lookPaneHead( "GUI:OptionsGroupAsSet", name, y );
 	GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
 	const Int nameRight = lookX( LOOK_PANE_INNER_LEFT + 300 );

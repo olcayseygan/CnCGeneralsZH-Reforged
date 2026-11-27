@@ -261,7 +261,7 @@ static void fitChildren( ControlBar *bar, GameWindow *window, const IRegion2D &f
 	* `to`'s top left: a Classic pane (the construction timer, the beacon, the portrait) on a sidebar
 	* cell of another shape keeps its own shape. */
 //-------------------------------------------------------------------------------------------------
-static void fitWindowTree( ControlBar *bar, GameWindow *window, const IRegion2D &to )
+void ControlBar_fitWindowTree( ControlBar *bar, GameWindow *window, const IRegion2D &to )
 {
 	if( window == NULL )
 		return;
@@ -271,6 +271,17 @@ static void fitWindowTree( ControlBar *bar, GameWindow *window, const IRegion2D 
 		return;
 	const Real s = MIN( (Real)to.width() / from.width(), (Real)to.height() / from.height() );
 	fitChildren( bar, window, from, to.lo, s );
+}
+
+//-------------------------------------------------------------------------------------------------
+void ControlBar_standPowerOnEnd( GameWindow *power )
+{
+	GameWinDrawFunc vertical = TheFunctionLexicon ? TheFunctionLexicon->gameWinDrawFunc( NAMEKEY( "W3DPowerDrawV" ) ) : NULL;
+	if( power != NULL && vertical != NULL && power->winGetDrawFunc() != vertical )
+	{
+		s_classicPowerDraw = power->winGetDrawFunc();
+		power->winSetDrawFunc( vertical );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -524,6 +535,7 @@ void ControlBar::restoreClassicWindows( void )
 	m_sidebarHidden.clear();
 
 	restoreClassicKeys();
+	ControlBar_restoreKeyGridKeys();
 	if( s_moneySaved )
 	{
 		TextData *text = moneyText( barWindow( "MoneyDisplay" ) );
@@ -663,12 +675,7 @@ void ControlBar::layoutSidebar( void )
 	if( power != NULL )
 	{
 		placeWindowAt( power, hud.powerRail );
-		GameWinDrawFunc vertical = TheFunctionLexicon ? TheFunctionLexicon->gameWinDrawFunc( NAMEKEY( "W3DPowerDrawV" ) ) : NULL;
-		if( vertical != NULL && power->winGetDrawFunc() != vertical )
-		{
-			s_classicPowerDraw = power->winGetDrawFunc();
-			power->winSetDrawFunc( vertical );
-		}
+		ControlBar_standPowerOnEnd( power );
 	}
 
 	// the blockers: the radar's covers the sidebar, the production plate's the strip
@@ -697,9 +704,9 @@ void ControlBar::layoutSidebar( void )
 	IRegion2D buttons = hud.strip;
 	buttons.lo.x = hud.stripButtons[ 0 ].lo.x;
 	buttons.hi.x = hud.stripButtons[ HUD_STRIP_BUTTONS - 1 ].hi.x;
-	fitWindowTree( this, m_contextParent[ CP_UNDER_CONSTRUCTION ], buttons );
-	fitWindowTree( this, m_contextParent[ CP_OCL_TIMER ], buttons );
-	fitWindowTree( this, m_contextParent[ CP_BEACON ], buttons );
+	ControlBar_fitWindowTree( this, m_contextParent[ CP_UNDER_CONSTRUCTION ], buttons );
+	ControlBar_fitWindowTree( this, m_contextParent[ CP_OCL_TIMER ], buttons );
+	ControlBar_fitWindowTree( this, m_contextParent[ CP_BEACON ], buttons );
 
 	//
 	// The selection card, welded to the strip: the right HUD covers the card, so a click on any of it

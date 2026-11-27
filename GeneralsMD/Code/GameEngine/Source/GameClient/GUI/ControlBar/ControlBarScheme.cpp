@@ -563,6 +563,8 @@ ControlBarScheme::ControlBarScheme(void)
 	m_grownRadarPeriod = 0;
 	m_grownRadarLedge = 0;
 	m_grownRadarGlass = NULL;
+	for( Int piece = 0; piece < KEY_GRID_PIECE_COUNT; piece++ )
+		m_keyGrid[ piece ] = NULL;
 	m_tooltip = ControlBarTooltipImages();
 	for( Int i = 0; i < TALENT_PIECE_COUNT; i++ )
 		m_talent[ i ] = NULL;
@@ -644,6 +646,16 @@ void ControlBarScheme::init(void)
 	findPieces( m_signalPlateImageName, "", tabStates, 1, &m_signalPlateImage );
 	static const char *const grownSuffixes[ GROWN_PIECE_COUNT ] = { "TL", "T", "TR", "L", "R", "BL", "B", "BR", "C" };
 	findPieces( m_grownRadarName, "", grownSuffixes, GROWN_PIECE_COUNT, m_grownRadar );
+	// Key Grid's console, hud_key_grid.py's pieces under the tooltip art's prefix (AmericaPro, ChinaPro...)
+	static const char *const keyGridSuffixes[ KEY_GRID_PIECE_COUNT ] =
+	{
+		"Deck", "Right", "BoxTL", "BoxT", "BoxTR", "BoxL", "BoxC", "BoxR", "BoxBL", "BoxB", "BoxBR",
+		"Spine", "Shoulder", "ShelfLeft", "ShelfMid", "ShelfRight", "QueueCap", "QueueCell", "QueueLast", "KeyEmpty",
+		"ToolOptions", "ToolOptionsH", "ToolOptionsP", "ToolOptionsI", "ToolBeacon", "ToolBeaconH", "ToolBeaconP", "ToolBeaconI",
+		"ToolWorker", "ToolWorkerH", "ToolWorkerP", "ToolWorkerI", "ToolChat", "ToolChatH", "ToolChatP", "ToolChatI",
+		"SwitchGroup", "SwitchGroupH", "SwitchGroupP", "SwitchGroupI", "SwitchBack", "SwitchBackH", "SwitchBackP", "SwitchBackI"
+	};
+	findPieces( m_tooltipName, "KeyGrid", keyGridSuffixes, KEY_GRID_PIECE_COUNT, m_keyGrid );
 
 	// C taken at the point in its middle, which bilinear filtering answers with the average of the
 	// four texels round it wherever the quad is drawn: one flat colour however far it stretches
@@ -1528,6 +1540,11 @@ Bool ControlBarSchemeManager::getSignalSeats( IRegion2D *keys, IRegion2D *plate 
 		ControlBarScheme::SIGNAL_KEY_COUNT, m_currentScheme->m_signalPlateUL, m_currentScheme->m_signalPlateLR, keys, plate );
 }
 
+const Image *const *ControlBarSchemeManager::getKeyGridPieces( void ) const
+{
+	return m_currentScheme ? m_currentScheme->m_keyGrid : NULL;
+}
+
 const Image *const *ControlBarSchemeManager::getGrownRadarPieces( void ) const
 {
 	if( m_currentScheme == NULL )
@@ -1873,7 +1890,13 @@ void ControlBarSchemeManager::drawPainting( ICoord2D offset, Bool foreground )
 	// copy (<ImageName>NoTabs, the hud-artist's, rim closed where the socket was) draws that copy.  One
 	// without it has the piece holding the socket drawn round the socket's plate, which leaves the
 	// battlefield showing there; the plate goes to the screen as updateCommandTabButtons seats it
-	const Bool noTabs = !hudLayoutHasCommandTabs( TheGlobalData->m_hudLayout );
+	// Key Grid (ControlBarKeyGrid.cpp): its console in the left and centre pieces' place, and its own
+	// right console (KeyGridRight) in the right piece's where the side has one
+	const Bool keyGrid = TheControlBar != NULL && TheControlBar->isKeyGridLayout();
+	const Bool keyGridRight = keyGrid && m_currentScheme->m_keyGrid[ ControlBarScheme::KEY_GRID_RIGHT ] != NULL;
+	if( keyGrid && !foreground )
+		TheControlBar->drawKeyGridConsole();
+	const Bool noTabs = !keyGrid && !hudLayoutHasCommandTabs( TheGlobalData->m_hudLayout );
 	Bool plainPainting = FALSE;
 	for( Int layer = first; layer < last && noTabs && !plainPainting; layer++ )
 		for( ControlBarScheme::ControlBarSchemeImageList::const_iterator it = m_currentScheme->m_layer[ layer ].begin();
@@ -1895,6 +1918,8 @@ void ControlBarSchemeManager::drawPainting( ICoord2D offset, Bool foreground )
 
 	for( Int p = 0; p < ControlBar::CB_PANEL_COUNT; p++ )
 	{
+		if( keyGrid && ( p != ControlBar::CB_PANEL_RIGHT || keyGridRight ) )
+			continue;
 		// the left piece holds only the observer's column, which stands against the radar's frame
 		// (ControlBar::fitRadarToMap); a side's left piece is empty and its shift is 0
 		offset.x = barOffset.x + ( p == ControlBar::CB_PANEL_LEFT ? TheControlBar->getRadarColumnShift() : 0 );
@@ -1966,7 +1991,10 @@ void ControlBarSchemeManager::drawPainting( ICoord2D offset, Bool foreground )
 	}
 
 	// the radar window travels with the bar, so its frame needs no offset
+	// (Key Grid's box round its glass is its own nine-slice, drawn with the console)
 	const Image *const *frame = getRadarFrame();
+	if( keyGrid )
+		return;
 	if( !foreground && frame )
 		drawRadarFrame( frame );
 	else if( !foreground )

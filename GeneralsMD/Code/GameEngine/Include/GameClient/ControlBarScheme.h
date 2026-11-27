@@ -322,6 +322,24 @@ public:
 	/// texels straddle a DXT block seam and differ by a few levels, a gradient once stretched); owned
 	Image *m_grownRadarGlass;
 
+	/// The Key Grid layout's console (ControlBarKeyGrid.cpp; Tools/hud_key_grid.py paints it):
+	/// <TooltipImage prefix>KeyGrid<piece>, so a general's scheme takes its side's with no key of its own.
+	/// Laid by ControlBar::drawKeyGridConsole as hud_key_grid.py's compose() lays them, each at its own
+	/// size at 1080.  A piece a scheme lacks is drawn as plain steel
+	enum
+	{
+		KEY_GRID_DECK, KEY_GRID_RIGHT,
+		KEY_GRID_BOX_TL, KEY_GRID_BOX_T, KEY_GRID_BOX_TR, KEY_GRID_BOX_L, KEY_GRID_BOX_C, KEY_GRID_BOX_R,
+		KEY_GRID_BOX_BL, KEY_GRID_BOX_B, KEY_GRID_BOX_BR,
+		KEY_GRID_SPINE, KEY_GRID_SHOULDER, KEY_GRID_SHELF_LEFT, KEY_GRID_SHELF_MID, KEY_GRID_SHELF_RIGHT,
+		KEY_GRID_QUEUE_CAP, KEY_GRID_QUEUE_CELL, KEY_GRID_QUEUE_LAST, KEY_GRID_KEY_EMPTY,
+		KEY_GRID_TOOL_FIRST,																	///< Tool{Options,Beacon,Worker,Chat}{,H,P,I}
+		KEY_GRID_SWITCH_GROUP = KEY_GRID_TOOL_FIRST + 16,	///< SwitchGroup{,H,P,I}: leads to the squad's tray
+		KEY_GRID_SWITCH_BACK = KEY_GRID_SWITCH_GROUP + 4,		///< SwitchBack{,H,P,I}: leads back to the commands
+		KEY_GRID_PIECE_COUNT = KEY_GRID_SWITCH_BACK + 4
+	};
+	const Image *m_keyGrid[ KEY_GRID_PIECE_COUNT ];
+
 	/// RadarFrameImage: the nine pieces the radar's frame is drawn from round the map's own shape,
 	/// <name>TL, T, TR, L, C, R, BL, B, BR.  The corners' sizes are the frame's thickness on each side.
 	enum { FRAME_TL, FRAME_T, FRAME_TR, FRAME_L, FRAME_C, FRAME_R, FRAME_BL, FRAME_B, FRAME_BR, FRAME_PIECE_COUNT };
@@ -435,6 +453,8 @@ public:
 	Int getGrownRadarRight( void ) const;
 	Int getGrownRadarLedge( void ) const;
 	const Image *getGrownRadarGlass( void ) const;	///< m_grownRadarGlass, NULL without a scheme or a C piece
+	/// the scheme on screen's Key Grid pieces (ControlBarScheme::KEY_GRID_*), any of them NULL; NULL without a scheme
+	const Image *const *getKeyGridPieces( void ) const;
 	/// the scheme's art pixels to the screen's: the display's height over its creation height
 	Real getArtScale( void ) const;
 	/// its signal plate picture, NULL for none

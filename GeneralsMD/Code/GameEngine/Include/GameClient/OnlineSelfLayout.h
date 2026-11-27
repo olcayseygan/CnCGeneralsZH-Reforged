@@ -27,20 +27,28 @@
 #ifndef _ONLINESELFLAYOUT_H_
 #define _ONLINESELFLAYOUT_H_
 
-/// the ladder's table: 20 rows from 262, 33 high, or 30 when the player's own row is pinned under them
-/// after a 20 high dotted gap, 48 high; the table's box ends at 946
-const Real ONLINE_LADDER_ROWS_TOP = 262.0f;
+/// the ladder's table: 20 rows of 32 from 256, on the 8 px grid, and the player's own row pinned under
+/// them after an 8 high dotted gap, 32 high too; the table's box ends at 946
+const Real ONLINE_LADDER_ROWS_TOP = 256.0f;
+const Real ONLINE_LADDER_ROW_HEIGHT = 32.0f;
 const Real ONLINE_LADDER_BOX_BOTTOM = 946.0f;
-const Real ONLINE_LADDER_PINNED_GAP = 20.0f;
-const Real ONLINE_LADDER_PINNED_HEIGHT = 48.0f;
+const Real ONLINE_LADDER_PINNED_GAP = 8.0f;
+const Real ONLINE_LADDER_PINNED_HEIGHT = 32.0f;
 
-inline Real OnlineLadderRowHeight( Bool pinned )
-{
-	return pinned ? 30.0f : 33.0f;
-}
-
-/// the skins page's cards: 12 apart in the middle panel's 832 by 668 under the owned bar
-const Real ONLINE_SKINS_CARD_GAP = 12.0f;
+/// The skins page on the 8 px grid.  The unit list: its first row 64 under the tabs' foot (162), rows 8
+/// apart inside a side and 40 between sides (the side's head stands in that gap), each at most 70 high,
+/// the last ending more than 64 over the keys (976).  The cards: 16 apart in 460 to 1300 and 258 to 930,
+/// 48 right of the list's rows (412) and 32 under the filters' foot (226).
+const Real ONLINE_SKINS_UNITS_TOP = 226.0f;
+const Real ONLINE_SKINS_UNITS_BOTTOM = 906.0f;
+const Real ONLINE_SKINS_UNIT_HEIGHT = 70.0f;
+const Real ONLINE_SKINS_UNIT_GAP = 8.0f;
+const Real ONLINE_SKINS_SIDE_GAP = 40.0f;
+const Real ONLINE_SKINS_CARDS_LEFT = 460.0f;
+const Real ONLINE_SKINS_CARDS_RIGHT = 1300.0f;
+const Real ONLINE_SKINS_CARDS_TOP = 258.0f;
+const Real ONLINE_SKINS_CARDS_BOTTOM = 930.0f;
+const Real ONLINE_SKINS_CARD_GAP = 16.0f;
 
 /** The cards sized to their count: the column count (1 to 4) that gives the largest card near the
 	* model's 4:3, the rows split as evenly as they go (the first rows take the spare cards), each row's
@@ -75,6 +83,8 @@ inline void OnlineSkinsCardPlace( Int slot, Int count, Real width, Real height, 
 			w = (Real)(Int)( ( width - ( here - 1 ) * ONLINE_SKINS_CARD_GAP ) / here );
 			x = ( slot - first ) * ( w + ONLINE_SKINS_CARD_GAP );
 			y = row * ( h + ONLINE_SKINS_CARD_GAP );
+			if( slot == first + here - 1 )
+				w = width - x;		// the row's last card takes the rounding, so every row ends on the same edge
 			return;
 		}
 		first += here;

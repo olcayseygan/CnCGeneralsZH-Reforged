@@ -40,6 +40,7 @@ Data/Art/Textures/ReforgedGuardShield.tga
 Data/Art/Textures/ReforgedHudAmericaCommandBar.dds
 Data/Art/Textures/ReforgedHudAmericaCommandBarNoTabs.dds
 Data/Art/Textures/ReforgedHudAmericaDirectStrike.dds
+Data/Art/Textures/ReforgedHudAmericaKeyGrid.dds
 Data/Art/Textures/ReforgedHudAmericaPowers.dds
 Data/Art/Textures/ReforgedHudAmericaSidebar.dds
 Data/Art/Textures/ReforgedHudAmericaSidebarStrip.dds
@@ -51,6 +52,7 @@ Data/Art/Textures/ReforgedHudBlankTexture.tga
 Data/Art/Textures/ReforgedHudChinaCommandBar.dds
 Data/Art/Textures/ReforgedHudChinaCommandBarNoTabs.dds
 Data/Art/Textures/ReforgedHudChinaDirectStrike.dds
+Data/Art/Textures/ReforgedHudChinaKeyGrid.dds
 Data/Art/Textures/ReforgedHudChinaPowers.dds
 Data/Art/Textures/ReforgedHudChinaSidebar.dds
 Data/Art/Textures/ReforgedHudChinaSidebarStrip.dds
@@ -64,6 +66,7 @@ Data/Art/Textures/ReforgedHudDisconnectWindow.dds
 Data/Art/Textures/ReforgedHudGlaCommandBar.dds
 Data/Art/Textures/ReforgedHudGlaCommandBarNoTabs.dds
 Data/Art/Textures/ReforgedHudGlaDirectStrike.dds
+Data/Art/Textures/ReforgedHudGlaKeyGrid.dds
 Data/Art/Textures/ReforgedHudGlaPowers.dds
 Data/Art/Textures/ReforgedHudGlaSidebar.dds
 Data/Art/Textures/ReforgedHudGlaSidebarStrip.dds
@@ -80,6 +83,7 @@ Data/Art/Textures/ReforgedHudObsTabComm.dds
 Data/Art/Textures/ReforgedHudObsTabPanel.dds
 Data/Art/Textures/ReforgedHudTurkiyeCommandBar.dds
 Data/Art/Textures/ReforgedHudTurkiyeCommandBarNoTabs.dds
+Data/Art/Textures/ReforgedHudTurkiyeKeyGrid.dds
 Data/Art/Textures/ReforgedHudTurkiyePowers.dds
 Data/Art/Textures/ReforgedHudTurkiyeSidebar.dds
 Data/Art/Textures/ReforgedHudTurkiyeSidebarStrip.dds
@@ -1427,6 +1431,7 @@ Data/INI/MappedImages/HandCreated/ReforgedGroundMarkers.ini
 Data/INI/MappedImages/HandCreated/ReforgedGuardShield.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaCommandBar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaDirectStrike.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudAmericaKeyGrid.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaTabPanel.ini
@@ -1434,6 +1439,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudAmericaTalents.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudBlankTexture.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaCommandBar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaDirectStrike.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudChinaKeyGrid.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaTabPanel.ini
@@ -1443,6 +1449,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudControlButtons.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudDisconnectWindow.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaCommandBar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaDirectStrike.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudGlaKeyGrid.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaTabPanel.ini
@@ -1454,6 +1461,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudObsPlayerWindow.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsSpec.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsTabPanel.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeCommandBar.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeKeyGrid.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyePowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeTabPanel.ini
@@ -2100,6 +2108,7 @@ GameEngine/Include/GameClient/ClientRandomValue.h
 GameEngine/Include/GameClient/Color.h
 GameEngine/Include/GameClient/CommandXlat.h
 GameEngine/Include/GameClient/ControlBar.h
+GameEngine/Include/GameClient/ControlBarKeyGrid.h
 GameEngine/Include/GameClient/ControlBarScheme.h
 GameEngine/Include/GameClient/ControlBarSidebar.h
 GameEngine/Include/GameClient/Credits.h
@@ -2769,6 +2778,7 @@ GameEngine/Source/GameClient/GUI/ControlBar/ControlBar.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarBeacon.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarCommand.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarCommandProcessing.cpp
+GameEngine/Source/GameClient/GUI/ControlBar/ControlBarKeyGrid.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarMultiSelect.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarOCLTimer.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarObserver.cpp
@@ -4862,6 +4872,7 @@ Tests/test_hotkey_scheme_map.inc
 Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
+Tests/test_key_grid.inc
 Tests/test_lan_broadcast.cpp
 Tests/test_linux_portable.sh
 Tests/test_load_screen.inc
@@ -5787,6 +5798,7 @@ Tools/guard_marker.py
 Tools/hud_command_bar.py
 Tools/hud_direct_strike.py
 Tools/hud_direct_strike_theme.py
+Tools/hud_key_grid.py
 Tools/hud_match_clock.py
 Tools/hud_sidebar.py
 Tools/include_case_check.py

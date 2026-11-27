@@ -106,12 +106,12 @@ BOX_DRAWN = (CLEAR, CLEAR)
 # the popups: the player card (README-online-self.md, "Player card": 1240 by 900, centred, the code draws its
 # glass and frame A and shrinks it while the history waits); Host Game and Join Game are boxes of the message
 # box's pattern, 760 wide and centred (README-game-lists.md: 454 and 320 high), fields 32 in, keys 220 by 48,
-# 12 apart at the foot's right, 20 over its foot
+# 16 apart (UIStyle's BOX_KEY_GAP, the 8 px grid) at the foot's right, 20 over its foot
 CARD = (340, 90, 1240, 900)
 HOST_CARD = (580, 313, 760, 454)
 JOIN_CARD = (580, 380, 760, 320)
 BOX_X0, BOX_W = 612, 696
-BOX_KEY_W, BOX_KEY_H, BOX_KEY_GAP = 220, 48, 12
+BOX_KEY_W, BOX_KEY_H, BOX_KEY_GAP = 220, 48, 16
 
 
 def box_key(box, index):
@@ -231,17 +231,19 @@ HUB_REJOIN = (HUB_RECENT[0] + HUB_RECENT[2] - 24 - KEY, HUB_RECENT[1] + HUB_RECE
 
 # The player card's two tabs under its head, 164 to 198 down from its top and 28 in; the code sizes each to
 # its words (16 px bold capitals plus 22 a side, 8 apart, PopupPlayerInfo.cpp), these stand them roughly there.
-# Its foot: CLOSE 220 wide at the right (Enter's, lit), PROFILE 380 wide 12 before it, 48 high, 20 over the foot
+# Its foot: CLOSE 220 wide at the right (Enter's, lit), PROFILE 380 wide 16 before it (UIStyle's BOX_KEY_GAP, the
+# 8 px grid; ADD FRIEND is made in code 16 before that), 48 high, 20 over the foot
 CARD_X0, CARD_X1, CARD_Y1 = CARD[0] + 28, CARD[0] + CARD[2] - 28, CARD[1] + CARD[3]
+CARD_KEY_GAP = BOX_KEY_GAP
 CARD_TABS = [(CARD_X0, CARD[1] + 164, 200, 34), (CARD_X0 + 208, CARD[1] + 164, 120, 34)]
 CARD_CLOSE = (CARD_X1 - 220, CARD_Y1 - 68, 220, 48)
-CARD_PROFILE = (CARD_X1 - 232 - 380, CARD_Y1 - 68, 380, 48)
+CARD_PROFILE = (CARD_X1 - 220 - CARD_KEY_GAP - 380, CARD_Y1 - 68, 380, 48)
 
 # The ladder's and the skins page's keys (README-online-self.md): Previous and Next at the foot's right, Save
 # where Next stands (the skins page shows it, the ladder hides it), Jump to my page in Your place, the
 # platform's one key under the look's name
 LADDER_JUMP = (1344, 452, 492, 46)
-SKINS_ACTION = (1364, 860, 472, 54)
+SKINS_ACTION = (1364, 860, 472, 52)        # 64 over the foot's keys, the 8 px grid
 
 
 def card_tab(name, label, rect):

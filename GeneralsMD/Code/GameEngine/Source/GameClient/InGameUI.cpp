@@ -13866,6 +13866,12 @@ void InGameUI::drawObserverConsole( void )
 	// the HUD stands where the bar stands, so not while the bar is hidden (hidehud, a script)
 	if( controlBarTop() >= TheDisplay->getHeight() )
 		return;
+	// nor while a menu is over the match: drawn after the windows (drawHudOverlay), it covered the Esc menu, the
+	// options' DEFAULTS and CANCEL, and any box.  Forgotten above, so its keys and rows take no click and its
+	// hotkeys wait until the menu goes (TODO Overlays and Seat Pips 5)
+	WindowLayout *optionsOver = TheShell != NULL ? TheShell->getOptionsLayout( FALSE ) : NULL;
+	if( isQuitMenuVisible() || TheWindowManager->winGetModalWindow() != NULL || ( optionsOver != NULL && !optionsOver->isHidden() ) )
+		return;
 	theConsoleShown = TRUE;
 	ObsMap m = obsMap();
 	keepConsoleWindows( m.atL( ObsHud_radarGlass() ) );

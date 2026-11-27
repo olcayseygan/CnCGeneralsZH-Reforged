@@ -106,6 +106,7 @@ static const char *gadgetsToHide[] =
 	"TextEntryMapDisplay",
 	"ButtonSelectMap",
 	"ButtonStart",
+	"ButtonBack",		// Main Menu: the picker's medal legend and hint take the foot's left
 	"ButtonRecord",
 	"ButtonPresets",
 	"ButtonSeatScrollUp",

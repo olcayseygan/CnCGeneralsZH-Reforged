@@ -1971,6 +1971,11 @@ static void openCardTab( Int tab )
 {
 	s_cardTab = tab;
 	s_cardDirty = TRUE;
+	// the open tab is the disabled one, as on the online pages: a second click on it does nothing, and the
+	// switch shows in the window tree (a script sees which page is open), not only in the drawing
+	for( Int each = 0; each < CARD_TAB_COUNT; each++ )
+		if( s_cardTabs[ each ] )
+			s_cardTabs[ each ]->winEnable( each != tab );
 	if( !s_historyAsked[ tab ] && lookAtPlayerID > 0 )
 	{
 		s_historyAsked[ tab ] = TRUE;
@@ -1993,7 +1998,7 @@ static Bool cardIsLocal( void )
 }
 
 /** ADD FRIEND on another player's card while the service has friends (package F4): Close's look, its
-	* width, 12 left of Profile (of Close when Profile is hidden), "PopupPlayerInfo.wnd:ButtonAddFriend". */
+	* width, BOX_KEY_GAP (16) left of Profile (of Close when Profile is hidden), "PopupPlayerInfo.wnd:ButtonAddFriend". */
 static void makeAddFriendKey( void )
 {
 	s_addFriend = NULL;
@@ -2016,7 +2021,7 @@ static void makeAddFriendKey( void )
 		buttonBuddies->winGetPosition( &profileX, &profileY );
 		right = profileX;
 	}
-	right -= at( 12 );
+	right -= at( (Real)UIStyle::BOX_KEY_GAP );
 	s_addFriend = TheWindowManager->gogoGadgetPushButton( holder, WIN_STATUS_ENABLED, right - closeWidth, closeY,
 		closeWidth, closeHeight, &inst, buttonClose->winGetFont(), FALSE );
 	if( s_addFriend == NULL )
@@ -2346,8 +2351,8 @@ WindowMsgHandledType GameSpyPlayerInfoOverlaySystem( GameWindow *window, Unsigne
 					if (OnlineIsEnabled())
 					{
 						const AsciiString url = profileUrl( AsciiString( lookAtPlayerName.c_str() ) );
-						if (url.isNotEmpty())
-							OnlineOpenURL( url.str() );
+						const Bool opened = url.isNotEmpty() && OnlineOpenURL( url.str() );
+						DEBUG_LOG(( "ONLINE PROFILE url=%s opened=%d\n", url.str(), (Int)opened ));		// the browser, no window here
 					}
 					else
 					{

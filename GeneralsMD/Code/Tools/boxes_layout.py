@@ -219,9 +219,10 @@ def build_download(layout):
     place_tree(layout.root, {"ButtonCancel": key_rect(box, 0)}, box)
 
 
-# seven rows of 46 at the design's size
+# seven rows of 46 at the design's size; 16 between the tabs and the list, 32 between the list and the chat line
+# in the foot (the foot's entry stands 68 over the box's bottom, 16 under the faint rule)
 FRIENDS_LIST = 7 * 46
-FRIENDS_BOX = box_rect(BOX_LIST, BOX_HEAD + 20 + 36 + 16 + FRIENDS_LIST + 20 + BOX_FOOT, False)
+FRIENDS_BOX = box_rect(BOX_LIST, BOX_HEAD + 20 + 36 + 16 + FRIENDS_LIST + 16 + BOX_FOOT, False)
 
 
 def friends_rects():
@@ -232,9 +233,10 @@ def friends_rects():
     content = (x0, top, x1, box[3] - 20)		# down to the foot: the chat line is a child of it
     lx1 = x0 + 520
     close = key_rect(box, 0)
+    # the ignored page holds its list alone, so it stops there, clear of CLOSE in the foot
     return box, {"RadioButtonBuddies": (x0, tabs, x0 + 190, tabs + 36),
-                 "RadioButtonIgnore": (x0 + 202, tabs, x0 + 362, tabs + 36),
-                 "BuddiesParent": content, "IgnoreParent": content,
+                 "RadioButtonIgnore": (x0 + 206, tabs, x0 + 366, tabs + 36),
+                 "BuddiesParent": content, "IgnoreParent": (x0, top, x1, top + FRIENDS_LIST),
                  "ListboxBuddies": (x0, top, lx1, top + FRIENDS_LIST),
                  "ListboxBuddyChat": (lx1 + 24, top, x1, top + FRIENDS_LIST),
                  "ListboxIgnore": (x0, top, lx1, top + FRIENDS_LIST),

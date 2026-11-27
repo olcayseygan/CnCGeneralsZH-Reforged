@@ -30,11 +30,14 @@ struct HotkeySchemeKey
 const HotkeySchemeKey *HotkeyScheme_keys( Int scheme, Int *count );
 
 /** The player file the scheme's keys live in, in the user data folder: Hotkeys.ini for Classic, which
-	* the launcher reads too, HotkeysRedAlert.ini for Red Alert, which only the game reads. */
+	* the launcher reads too, HotkeysRedAlert.ini for Red Alert and HotkeysGrid.ini for Key Grid, which
+	* only the game reads.  Key Grid's file is its own so the player's per-button keys for Classic never
+	* move a button off its place. */
 const char *HotkeyScheme_fileName( Int scheme );
 
 /** The bar's fixed letters in FIXED_KEYS order (attack move, stop, guard, rally, evacuate, sell,
-	* combat drop, switch): "ASGYVNCH", and "ASGYVLCH" under Red Alert, whose sell is L. */
+	* combat drop, switch): "ASGYVNCH", and "ASGYVLCH" under Red Alert, whose sell is L.  Key Grid has
+	* none (""): its orders stand on their places. */
 const char *HotkeyScheme_fixedLetters( Int scheme );
 
 /** The Hotkeys page's rows with the scheme's defaults in place of the game's own keys. */

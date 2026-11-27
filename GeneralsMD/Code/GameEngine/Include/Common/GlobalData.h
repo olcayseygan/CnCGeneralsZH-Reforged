@@ -414,9 +414,10 @@ public:
 	Bool m_showObjectHealth;			///< debug display object health
 	Int m_healthBarMode;					///< HealthBarModeType: which units wear a bar at all
 	Int m_healthBarColors;				///< 0 the green-to-red health ramp, 1 the owner's player colour (client only)
-	Int m_hudLayout;							///< "HudLayout": HUD_LAYOUT_CLASSIC, _SIDEBAR, _RETAIL or _PLAIN (OptionsCatalog.h, client only)
+	Int m_hudLayout;							///< "HudLayout": HUD_LAYOUT_CLASSIC, _SIDEBAR, _RETAIL or _GRID (OptionsCatalog.h, client only)
 	Int m_hudWidth;								///< "HudWidth": HUD_WIDTH_FULL, _21_9 or _16_9, the interface's centred area (client only)
-	Int m_hotkeyScheme;						///< HOTKEY_SCHEME_CLASSIC or _RED_ALERT, set from m_hudLayout (hotkeySchemeForHudLayout, client only)
+	Int m_hotkeyScheme;						///< HOTKEY_SCHEME_CLASSIC, _RED_ALERT or _GRID, set from m_hudLayout and m_gridKeys (hotkeySchemeFor, client only)
+	Bool m_gridKeys;							///< "GridKeys": command buttons pressed by where they stand (OptionsCatalog.cpp, client only)
 	Int m_mouseStyle;							///< MOUSE_STYLE_CLASSIC or MOUSE_STYLE_REFORGED, set by -mouse only (client only, never GameLogic)
 	Bool isClassicMouse() const { return m_mouseStyle == MOUSE_STYLE_CLASSIC; }
 	/// which button gives a click on the ground its order.  Reforged mouse: the right.  Classic: the left,

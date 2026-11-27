@@ -70,6 +70,7 @@
 #include "GameClient/CommandXlat.h"
 #include "GameClient/HotkeyScheme.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarKeyGrid.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/InGameUI.h"
@@ -163,6 +164,9 @@ Bool HotKeyManager::barHoldsKey( Int key, Int modState )
 		return FALSE;
 	Bool pressable = FALSE;
 	GameWindow *win = TheHotKeyManager->findHotKey( nameOf( letter ), &pressable );
+	// a bar button under Key Grid's squad tray holds no key while the tray takes the deck's
+	if( win != NULL && TheControlBar != NULL && TheControlBar->keyGridTrayCovers( win ) )
+		return FALSE;
 	return win != NULL && !BitTest( win->winGetStatus(), WIN_STATUS_HIDDEN ) && ( !alt || isEvacuateButton( win ) );
 }
 
@@ -339,7 +343,8 @@ GameWindow *HotKeyManager::findHotKey( const AsciiString& keyIn, Bool *pressable
 
 	GameWindow *win = it->second.m_win;
 	const UnsignedInt status = win->winGetStatus();
-	*pressable = !BitTest( status, WIN_STATUS_HIDDEN ) && BitTest( status, WIN_STATUS_ENABLED );
+	*pressable = !BitTest( status, WIN_STATUS_HIDDEN ) && BitTest( status, WIN_STATUS_ENABLED )
+		&& !( TheControlBar != NULL && TheControlBar->keyGridTrayCovers( win ) );
 	return win;
 }
 
@@ -353,6 +358,9 @@ Bool HotKeyManager::executeHotKey( const AsciiString& keyIn )
 		return FALSE;
 	GameWindow *win = it->second.m_win;
 	if( !win )
+		return FALSE;
+	// a bar button under Key Grid's squad tray: the place's key builds the tray's entry instead
+	if( TheControlBar != NULL && TheControlBar->keyGridTrayCovers( win ) )
 		return FALSE;
 	if( !BitTest( win->winGetStatus(), WIN_STATUS_HIDDEN ) )
 	{
@@ -475,17 +483,43 @@ static const char *const FIXED_H_BUTTONS[] =
 };
 static const char FIXED_H_PREFIX[] = "command_becomerealgla";	///< a fake building's switch to the real one
 
-/// -1 is the scheme in force, the options menu's (GlobalData m_hotkeyScheme)
+/// -1 is the scheme in force, the options menu's (GlobalData m_hotkeyScheme), but Key Grid's only while
+/// its bar is up: the shell, a replay, a watcher and a defeated seat show the Reforged bar, which plays
+/// Classic's keys (ControlBar::layoutPanels reloads the keys when the bar changes)
 static Int schemeOf( Int scheme )
 {
 	if( scheme >= 0 )
 		return scheme;
-	return TheGlobalData ? TheGlobalData->m_hotkeyScheme : HOTKEY_SCHEME_CLASSIC;
+	const Int chosen = TheGlobalData ? TheGlobalData->m_hotkeyScheme : (Int)HOTKEY_SCHEME_CLASSIC;
+	if( chosen == HOTKEY_SCHEME_GRID && ( TheControlBar == NULL || !TheControlBar->isKeyGridLayout() ) )
+		return HOTKEY_SCHEME_CLASSIC;
+	return chosen;
+}
+
+/** The command bar grid by window slot (commandBarGridKey): CommandBarGrid in Hotkeys.ini, or the Grid
+	* Keys box (GlobalData m_gridKeys) on the bottom bar.  Never on Key Grid's bar, whose grid is its
+	* places', and the box never on the Red Alert sidebar, whose bare Q W E R are its tabs and D deploy. */
+static Bool slotGridOn( void )
+{
+	if( TheControlBar != NULL && TheControlBar->isKeyGridLayout() )
+		return FALSE;
+	const Bool box = TheGlobalData != NULL && TheGlobalData->m_gridKeys && TheGlobalData->m_hudLayout != HUD_LAYOUT_SIDEBAR;
+	return s_commandBarGrid || box;
+}
+
+/// one of Key Grid's eighteen place letters (ControlBar_commandPlaceKey), upper case
+static Bool isPlaceLetter( WideChar letter )
+{
+	for( Int place = 0; place < COMMAND_PLACE_COUNT; place++ )
+		if( ControlBar_commandPlaceKey( place ) == letter )
+			return TRUE;
+	return FALSE;
 }
 
 static WideChar fixedButtonKey( const AsciiString& lowerName, Int commandType, Int scheme )
 {
-	if( !s_fixedOrderKeys )
+	// Key Grid has no fixed letters: its orders stand on their places
+	if( !s_fixedOrderKeys || scheme == HOTKEY_SCHEME_GRID )
 		return 0;
 	const char *letters = HotkeyScheme_fixedLetters( scheme );
 	if( strncmp( lowerName.str(), FIXED_H_PREFIX, sizeof( FIXED_H_PREFIX ) - 1 ) == 0 )
@@ -555,7 +589,7 @@ static Int keyClaim( GameWindow *win, const AsciiString& key, Int barSlot )
 	WideChar letter = 0;
 	if( findPlayerSlotKey( s_playerButtonKeys, std::string( lower.str() ), barSlot, &letter ) )
 		return letter != 0 && HotKeyManager::nameOf( letter ) == key ? 1 : 0;
-	if( s_commandBarGrid && barSlot >= 0 )
+	if( slotGridOn() && barSlot >= 0 )
 		return 0;
 	const WideChar fixed = fixedButtonKey( lower, command->getCommandType(), schemeOf( -1 ) );
 	return fixed != 0 && HotKeyManager::nameOf( fixed ) == key ? 2 : 0;
@@ -622,7 +656,18 @@ WideChar HotKeyManager::buttonKeyIn( const AsciiString& button, WideChar labelKe
 	// included: the fixed letter is only its default.  With the grid on, the bar's place is next
 	WideChar letter = labelKey;
 	const Bool chosen = findPlayerSlotKey( keys, std::string( lower.str() ), barSlot, &letter );
-	if( !chosen && s_commandBarGrid && barSlot >= 0 )
+	// Key Grid's keys: a command bar button is pressed by its place's letter through COMMAND_SLOTnn, never
+	// by a letter of its own, and no other button may hold one of the eighteen, the player's own
+	// included, or a line in HotkeysGrid.ini would put one key on two cells
+	if( scheme == HOTKEY_SCHEME_GRID )
+	{
+		if( letter >= 'a' && letter <= 'z' )
+			letter -= 'a' - 'A';
+		if( barSlot >= 0 || letter == 0 || isPlaceLetter( letter ) )
+			return 0;
+		return chosen || !schemeHoldsLetter( scheme, letter ) ? letter : 0;
+	}
+	if( !chosen && slotGridOn() && barSlot >= 0 )
 	{
 		const Bool upgrade = commandType == GUI_COMMAND_PLAYER_UPGRADE || commandType == GUI_COMMAND_OBJECT_UPGRADE;
 		return commandBarGridKey( barSlot, upgrade ? upgradeRank : -1 );

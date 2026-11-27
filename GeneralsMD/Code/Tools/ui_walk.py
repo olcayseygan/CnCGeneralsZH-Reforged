@@ -152,6 +152,7 @@ SCREENS = {
     # walk clicks; the map grid and the random templates are drawn over their list boxes, so a tile is a
     # point (map tile c, r at 132 + 153c, 275 + 194r; template tile t at 117 + 122t, 380, tile 0 Surprise me)
     "mappicker": dict(args=["-skirmishlobby"], nav=["SkirmishGameOptionsMenu.wnd:ButtonSelectMap"],
+                      nodescend=["SkirmishMapSelectMenu.wnd:ButtonBack", "SkirmishMapSelectMenu.wnd:ButtonOK"],
                       parts=[("map tile 0,0", [(132, 275)]), ("map tile 1,0", [(285, 275)]),
                              ("map tile 0,1", [(132, 469)]),
                              ("random template 0", [(1092, 146), (117, 380)]),
@@ -776,6 +777,7 @@ class Walk(object):
             if row == original:		# the row already picked changes nothing
                 continue
             state = self.reach(path, name)
+            label = "%s row %d" % (leaf(name), row)
             if not state.get("lone"):
                 self.game.send("uiclick " + name)
                 if not settle(self.game, minimum=0.4).get("lone"):

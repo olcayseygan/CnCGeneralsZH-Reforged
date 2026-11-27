@@ -22781,10 +22781,6 @@ TOOLTIP:OnlineKeepSignedIn
 "Votre mot de passe n'est jamais enregistré"
 END
 
-TOOLTIP:OnlineNeedsLauncher
-"Lancez le jeu en ligne depuis le lanceur"
-END
-
 TOOLTIP:OnlinePlayerInfo
 "\n %d victoires/%d défaites"
 END

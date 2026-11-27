@@ -22772,7 +22772,3 @@ END
 TOOLTIP:OnlineKeepSignedIn
 "Ваш пароль никогда не сохраняется"
 END
-
-TOOLTIP:OnlineNeedsLauncher
-"Запускайте сетевую игру из лаунчера"
-END

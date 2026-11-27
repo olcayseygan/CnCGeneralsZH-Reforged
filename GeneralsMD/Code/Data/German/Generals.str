@@ -21089,10 +21089,6 @@ TOOLTIP:OnlineKeepSignedIn
 "Angemeldet bleiben. Dein Passwort wird nie gespeichert"
 END
 
-TOOLTIP:OnlineNeedsLauncher
-"Starte das Online-Spiel über den Launcher"
-END
-
 TOOLTIP:StatPerSecond
 "/s"
 END

@@ -22769,10 +22769,6 @@ TOOLTIP:OnlineKeepSignedIn
 "Ваш пароль ніколи не зберігається"
 END
 
-TOOLTIP:OnlineNeedsLauncher
-"Запускайте онлайн-гру з лаунчера"
-END
-
 TOOLTIP:UpgradeChangesHint
 "(звичайний підрозділ → з цим)"
 END

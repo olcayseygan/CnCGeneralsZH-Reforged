@@ -1548,10 +1548,12 @@ WindowMsgHandledType LanGameOptionsMenuInput( GameWindow *window, UnsignedInt ms
 		}  // end char
 		break;
 
-		// the wheel over the seats, a click on their strips or track
+		// the wheel over the seats, a click on their strips or track, the track's thumb dragged
 		case GWM_WHEEL_UP:
 		case GWM_WHEEL_DOWN:
 		case GWM_LEFT_DOWN:
+		case GWM_LEFT_DRAG:
+		case GWM_LEFT_UP:
 			if ( LobbyRoomInput( msg, mData1 ) )
 				return MSG_HANDLED;
 			break;

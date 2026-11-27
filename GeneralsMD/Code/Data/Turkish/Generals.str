@@ -22713,6 +22713,14 @@ GUI:ApocalypseScore
 "Galibiyet de mağlubiyet de yok: ne kadar dayandığın sayılır"
 END
 
+GUI:RoomSeatAbove
+"%d YER YUKARIDA"
+END
+
+GUI:RoomSeatBelow
+"%d YER AŞAĞIDA"
+END
+
 // Menu redesign package 13, the end screens.
 GUI:ScorePlace
 "Sıra"

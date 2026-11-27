@@ -342,8 +342,9 @@ void SetLobbyRowBinder( LobbyRowBinder binder );
 void FitLobbyRoomMap( GameWindow *mapWindow, const MapMetaData *map );
 /// a room's Update: lays the rows out again when a held team change or a scroll is owed
 void LobbyRoomUpdate( void );
-/// a room's Input: the wheel over the seats and a click on a strip or the track scroll them; TRUE
-/// when it took the message
+/// a room's Input: the wheel over the seats and a click on a strip or the track scroll them, a press
+/// on the track's thumb drags it (the room passes its GWM_LEFT_DRAG and GWM_LEFT_UP too); TRUE when
+/// it took the message
 Bool LobbyRoomInput( UnsignedInt msg, UnsignedIntPtr mData1 );
 
 // The mode a host's room is for, the Create Game and Host buttons' question.  Set by the lobby that

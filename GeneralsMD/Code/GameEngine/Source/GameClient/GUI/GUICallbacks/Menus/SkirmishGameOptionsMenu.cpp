@@ -2367,10 +2367,13 @@ WindowMsgHandledType SkirmishGameOptionsMenuInput( GameWindow *window, UnsignedI
 		}  // end char
 		break;
 
-		// a wheel over the seats, or a click on their strips and track, that nothing under it took scrolls them
+		// a wheel over the seats, or a click on their strips and track, that nothing under it took scrolls
+		// them; a press on the track's thumb drags it, its moves and release held here until the release
 		case GWM_WHEEL_UP:
 		case GWM_WHEEL_DOWN:
 		case GWM_LEFT_DOWN:
+		case GWM_LEFT_DRAG:
+		case GWM_LEFT_UP:
 		{
 			if ( ( recordPopover && !recordPopover->winIsHidden() ) || ( presetPopover && !presetPopover->winIsHidden() ) )
 				break;

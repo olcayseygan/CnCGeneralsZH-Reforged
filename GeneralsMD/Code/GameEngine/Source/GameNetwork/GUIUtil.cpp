@@ -2688,6 +2688,27 @@ namespace
 		if (GameWindow *parent = window->winGetParent())
 			parent->winGetScreenPosition(&parentX, &parentY);
 		Int x, y, w, h;
+		/* An open combo is its box plus the list it dropped (placeOpenList grows the window, and one that
+			 opened upward is moved up by the list, its field moved down), and HideListBox undoes exactly
+			 that.  Moved or sized while open, it was left a list's height taller than its box, or a list's
+			 height off its row once the list closed: an unseen window over the seats that took their
+			 clicks.  Its field stands where the closed box does, so a combo whose field is already on
+			 the rectangle keeps its list open; any other closes it first. */
+		if (BitTest(window->winGetStyle(), GWS_COMBO_BOX) && roomComboOpen(window))
+		{
+			GameWindow *field = GadgetComboBoxGetEditBox(window);
+			Int fx = 0, fy = 0, fw = 0, fh = 0;
+			if (field)
+			{
+				field->winGetScreenPosition(&fx, &fy);
+				field->winGetSize(&fw, &fh);
+			}
+			window->winGetSize(&w, &h);
+			if (field == NULL || fx != box.lo.x || fy != box.lo.y || fh != box.hi.y - box.lo.y || w != box.hi.x - box.lo.x)
+				GadgetComboBoxHideList(window);
+			else
+				return;
+		}
 		window->winGetPosition(&x, &y);
 		if (x != box.lo.x - parentX || y != box.lo.y - parentY)
 			window->winSetPosition(box.lo.x - parentX, box.lo.y - parentY);
@@ -3373,6 +3394,14 @@ namespace
 			roomPark(roomWindow(theRoomLayout, pinned[i]));
 		roomPark(theRoomSelectMap);
 		roomPark(theRoomPresets);
+		/* The preview square at the column's left, the mode's name and the map's facts beside it.  The
+			 generated basin is square, while the room's map fit reads the shape of the shipped map the
+			 generator borrows its look from (a wide one stretched the basin to twice its width). */
+		roomPlace(theRoomMap, ROOM_COLUMN_LEFT, LOBBY_SEATS_TOP, ROOM_COLUMN_LEFT + 324, LOBBY_SEATS_TOP + 324);
+		roomPlace(theRoomMapName, ROOM_COLUMN_LEFT + 344, LOBBY_SEATS_TOP, ROOM_RIGHT, LOBBY_SEATS_TOP + 30);
+		const UnicodeString mode = TheGameText->fetch("GUI:ApocalypseLower");
+		if (theRoomMapName && GadgetStaticTextGetText(theRoomMapName).compare(mode) != 0)
+			GadgetStaticTextSetText(theRoomMapName, mode);
 
 		static const char *const rules[4][2] = { { "LabelGameSpeed", "ComboBoxGameSpeed" }, { "StartingCashLabel", "ComboBoxStartingCash" },
 			{ "LabelSuperweapons", "ComboBoxSuperweapons" }, { "LabelIncomeSharing", "ComboBoxIncomeSharing" } };
@@ -3398,11 +3427,21 @@ namespace
 		const Int checkW = (ROOM_RIGHT - ROOM_COLUMN_LEFT - 16) / 3;
 		for (Int c = 0; c < 2; ++c)
 			roomPlace(checks[c], ROOM_COLUMN_LEFT + c * (checkW + 8), checksTop, ROOM_COLUMN_LEFT + c * (checkW + 8) + checkW, checksTop + 34);
-		if (moved && theRoomParent)
-			SnapLobbyRulesLists(theRoomParent, theRoomLayout);	// the lists end on the rows where they now stand
-		if (GameWindow *page = roomWindow(theRoomLayout, "PageLobbySettings"))
+		// the rules page ends over SET BY THE MODE, which the room draws under it and the page's glass dimmed
+		GameWindow *page = roomWindow(theRoomLayout, "PageLobbySettings");
+		if (page)
+		{
+			Int was = 0, wasH = 0;
+			page->winGetSize(&was, &wasH);
+			roomPlace(page, ROOM_COLUMN_LEFT, APOC_RULES_TOP, ROOM_RIGHT, APOC_MODE_TOP - 14);
+			Int now = 0, nowH = 0;
+			page->winGetSize(&now, &nowH);
+			moved = moved || nowH != wasH;
 			if (page->winIsHidden())
 				page->winHide(FALSE);
+		}
+		if (moved && theRoomParent)
+			SnapLobbyRulesLists(theRoomParent, theRoomLayout);	// the lists end on the rows where they now stand
 
 		if (theRoomChat == NULL)
 			return;
@@ -3437,8 +3476,15 @@ namespace
 		const Bool apocalypse = roomApocalypse();
 		if (apocalypse)
 		{
-			// the Create Game card's two lines: what the mode is, who plays it
-			subtitle = TheGameText->fetch("GUI:GameModeApocalypseFact");
+			// the mode's name in the title and its version quiet at the subtitle's head, as the design sets
+			// them (an online room's title is its own name); then the Create Game card's two lines
+			if (theRoomKind != ROOM_ONLINE)
+			{
+				title = UIStyle::capitals(TheGameText->fetch("GUI:Apocalypse"));
+				subtitle = TheGameText->fetch("GUI:ApocalypseVersion");
+				subtitle.concat(u"   ");
+			}
+			subtitle.concat(TheGameText->fetch("GUI:GameModeApocalypseFact"));
 			subtitle.concat(UIStyle::HEADER_JOINER);
 			subtitle.concat(TheGameText->fetch("GUI:GameModeApocalypseSeats"));
 		}
@@ -3570,7 +3616,7 @@ namespace
 		if (theRoomPlan.above > 0 && !theSeatsUnderPicker)
 		{
 			drawRoomChevrons(ROOM_LEFT + 12, LOBBY_SEATS_TOP + 13, TRUE);
-			roomDraw(TEXT_STRIPS, roomCountText("GUI:RoomSeatsAbove", theRoomPlan.above), label, ROOM_LEFT + 44, LOBBY_SEATS_TOP + 13, UIStyle::EDGE_LIT);
+			roomDraw(TEXT_STRIPS, roomCountText(theRoomPlan.above == 1 ? "GUI:RoomSeatAbove" : "GUI:RoomSeatsAbove", theRoomPlan.above), label, ROOM_LEFT + 44, LOBBY_SEATS_TOP + 13, UIStyle::EDGE_LIT);
 		}
 		if (theRoomPlan.below > 0 && !theSeatsUnderPicker)
 		{
@@ -3578,7 +3624,7 @@ namespace
 			for (Int step = 0; step < 7; ++step)
 				roomFill(ROOM_LEFT, LOBBY_SEATS_BOTTOM - 54 + 4 * step, ROOM_CELLS_RIGHT, LOBBY_SEATS_BOTTOM - 50 + 4 * step, GameMakeColor(0, 0, 0, 12 * step));
 			drawRoomChevrons(ROOM_LEFT + 12, LOBBY_SEATS_BOTTOM - 13, FALSE);
-			roomDraw(TEXT_STRIPS + 1, roomCountText("GUI:RoomSeatsBelow", theRoomPlan.below), label, ROOM_LEFT + 44, LOBBY_SEATS_BOTTOM - 13, UIStyle::EDGE_LIT);
+			roomDraw(TEXT_STRIPS + 1, roomCountText(theRoomPlan.below == 1 ? "GUI:RoomSeatBelow" : "GUI:RoomSeatsBelow", theRoomPlan.below), label, ROOM_LEFT + 44, LOBBY_SEATS_BOTTOM - 13, UIStyle::EDGE_LIT);
 		}
 		if (theRoomPlan.maxScroll > 0 && theRoomPlan.orderCount > 0 && !theSeatsUnderPicker)
 		{
@@ -4044,14 +4090,62 @@ void LobbyRoomUpdate(void)
 		roomRefresh();
 }
 
+/// the board pixels between the pointer and the top of the seat track's thumb while it is dragged, -1 when not
+static Int theRoomThumbGrip = -1;
+
 Bool LobbyRoomInput(UnsignedInt msg, UnsignedIntPtr mData1)
 {
+	const Bool dragging = theRoomThumbGrip >= 0;
+	if (msg == GWM_LEFT_UP || msg == GWM_LEFT_DRAG)
+	{
+		// the thumb's drag: the press that took it made the room the window the pointer is held by, so
+		// the moves and the release come here wherever the pointer goes
+		if (!dragging)
+			return FALSE;
+		if (msg == GWM_LEFT_UP)
+		{
+			theRoomThumbGrip = -1;
+			return TRUE;
+		}
+	}
 	if (theRoomParent == NULL || !theRoomClassic || theRoomGame == NULL || theRoomPlan.maxScroll == 0 || theSeatsUnderPicker)
-		return FALSE;
+	{
+		theRoomThumbGrip = -1;
+		return dragging;
+	}
 	const Int mouseX = (Short)LOLONGTOSHORT(mData1), mouseY = (Short)HILONGTOSHORT(mData1);
+	const UIStyle::BoardFit fit = UIStyle::boardFit(TheDisplay->getWidth(), TheDisplay->getHeight());
+	const Int boardY = fit.scale > 0.0f ? REAL_TO_INT((mouseY - fit.y) / fit.scale) : mouseY;
+	const Int span = LOBBY_SEATS_BOTTOM - LOBBY_SEATS_TOP;
+	const Int count = max(1, theRoomPlan.orderCount);
+	const Int thumbTop = LOBBY_SEATS_TOP + span * theRoomPlan.above / count;
+	if (msg == GWM_LEFT_DRAG)
+	{
+		// the seat whose share of the track the thumb's top stands on is the first one shown
+		const Int top = boardY - theRoomThumbGrip;
+		const Int seat = max(0, min(theRoomPlan.maxScroll, (Int)((top - LOBBY_SEATS_TOP) * count + span / 2) / span));
+		if (seat != theRoomScroll)
+		{
+			TheWindowManager->winSetLoneWindow(NULL);
+			theRoomScroll = seat;
+			roomRefresh();
+		}
+		return TRUE;
+	}
 	const IRegion2D seats = UIStyle::boardRect(ROOM_LEFT, LOBBY_SEATS_TOP, ROOM_SEAT_COLUMN_RIGHT, LOBBY_SEATS_BOTTOM);
 	if (mouseX < seats.lo.x || mouseX >= seats.hi.x || mouseY < seats.lo.y || mouseY >= seats.hi.y)
 		return FALSE;
+	if (msg == GWM_LEFT_DOWN && mouseX >= UIStyle::boardRect(1276, 0, 1276, 0).lo.x)
+	{
+		// a press on the thumb takes it; the drag moves it a seat at a time
+		const Int shown = max(1, theRoomPlan.orderCount - theRoomPlan.above - theRoomPlan.below);
+		const Int thumbBottom = thumbTop + max(24, span * shown / count);
+		if (boardY >= thumbTop && boardY < thumbBottom)
+		{
+			theRoomThumbGrip = boardY - thumbTop;
+			return TRUE;
+		}
+	}
 	Int step = 0;
 	if (msg == GWM_WHEEL_UP || msg == GWM_WHEEL_DOWN)
 		step = msg == GWM_WHEEL_UP ? -1 : 1;
@@ -4066,11 +4160,7 @@ Bool LobbyRoomInput(UnsignedInt msg, UnsignedIntPtr mData1)
 		else if (theRoomPlan.below > 0 && mouseY >= below.lo.y && mouseX < below.hi.x)
 			step = 1;
 		else if (mouseX >= UIStyle::boardRect(1276, 0, 1276, 0).lo.x)
-		{
-			const Int span = LOBBY_SEATS_BOTTOM - LOBBY_SEATS_TOP;
-			const Int thumbTop = roomY(LOBBY_SEATS_TOP + span * theRoomPlan.above / max(1, theRoomPlan.orderCount));
-			step = mouseY < thumbTop ? -shown : shown;
-		}
+			step = boardY < thumbTop ? -shown : shown;
 	}
 	if (step == 0)
 		return FALSE;
@@ -4085,6 +4175,11 @@ void FitLobbyRoomMap(GameWindow *mapWindow, const MapMetaData *map)
 {
 	if (mapWindow == NULL || mapWindow != theRoomMap || !theRoomClassic)
 		return;
+	if (roomApocalypse())
+	{
+		placeApocalypseRoom();	// its square preview, whatever shipped map the generator borrowed its look from
+		return;
+	}
 	Real ratio = 542.0f / 278.0f;
 	if (map)
 	{
@@ -4110,14 +4205,12 @@ void FitLobbyRoomMap(GameWindow *mapWindow, const MapMetaData *map)
 		roomPlace(theRoomMapName, ROOM_COLUMN_LEFT + 344, LOBBY_SEATS_TOP, ROOM_RIGHT, LOBBY_SEATS_TOP + 64);
 		roomPlace(theRoomSelectMap, ROOM_RIGHT - 200, LOBBY_SEATS_TOP + 278, ROOM_RIGHT, LOBBY_SEATS_TOP + 324);
 	}
-	// an Apocalypse room's map is the mode's: its choice stays parked (placeApocalypseRoom)
-	if (roomApocalypse())
-		roomPark(theRoomSelectMap);
 }
 
 void InitLobbySeatVisuals(GameWindow *parent, const char *layoutFilename)
 {
 	DirectStrikeLobby_restoreRoom();	// what a Direct Strike room before this one hid
+	theRoomThumbGrip = -1;
 	resetSeatRows();
 	attachSeatRatings(parent, layoutFilename);
 	initRoomLook(parent, layoutFilename);

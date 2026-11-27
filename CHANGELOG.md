@@ -32,6 +32,8 @@ found and fixed, EA's own, not port damage.**
 - Under the seats, THE NIGHTS draws one day to scale with the first wave's tick on it, then nights 1 to 9 and the twelfth on: when each falls at the room's speed (night 1 at 3:10 at 1.5x, 4:45 at 1.0x), how many new kinds of the dead it brings, and the Blood Moon boss on nights 3, 6 and 9. The skirmish room, with no chat to fit, names every kind. Every figure is read from the mode itself, so the room cannot drift from the match.
 - The map column says what you get, a basin made new every match with a start for each seat, with a key for its marks and the deadly fog's red round the preview. In a LAN or online room the chat stays open under the nights, and the skirmish foot says how you are scored in place of a win and loss record the mode never counts.
 - In every room the mouse wheel scrolls the seats with the pointer over a drop-down as well. The boxes cover most of a seat row and swallowed the wheel without doing anything with it, so the list only scrolled with the pointer over a portrait or a gap.
+- The track beside a long seat list takes its thumb in hand now: press it and drag, and the seats follow a seat at a time. A click on the track above or below it still pages. A drop-down left open while the room moved its row (a seat set to Open regroups the seats) is closed first instead of staying a list's height taller than its box, an unseen window over the seats that took their clicks.
+- In the Apocalypse room the generated basin's preview stands square again (it was stretched to twice its width), the rules the mode sets read clearly under SET BY THE MODE, and the room is titled APOCALYPSE with its version beside the tagline.
 
 ## The Direct Strike lobby in the new menu look
 

@@ -8526,6 +8526,14 @@ GUI:ApocalypseScore
 "No win, no loss: you are scored by how long you hold out"
 END
 
+GUI:RoomSeatAbove
+"%d SEAT ABOVE"
+END
+
+GUI:RoomSeatBelow
+"%d SEAT BELOW"
+END
+
 // Menu redesign package 13, the end screens: the Summary's places, totals and foot, the build order's
 // axis and frames, the Direct Strike results' head, rows and timeline.
 GUI:ScorePlace

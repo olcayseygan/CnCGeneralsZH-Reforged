@@ -3238,8 +3238,9 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 WindowMsgHandledType WOLGameSetupMenuInput( GameWindow *window, UnsignedInt msg,
 																			 WindowMsgData mData1, WindowMsgData mData2 )
 {
-	// the wheel over the seats, a click on their strips or track
-	if ( ( msg == GWM_WHEEL_UP || msg == GWM_WHEEL_DOWN || msg == GWM_LEFT_DOWN ) && LobbyRoomInput( msg, mData1 ) )
+	// the wheel over the seats, a click on their strips or track, the track's thumb dragged
+	if ( ( msg == GWM_WHEEL_UP || msg == GWM_WHEEL_DOWN || msg == GWM_LEFT_DOWN || msg == GWM_LEFT_DRAG || msg == GWM_LEFT_UP )
+		&& LobbyRoomInput( msg, mData1 ) )
 		return MSG_HANDLED;
 	/*
 	switch( msg )

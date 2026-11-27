@@ -193,8 +193,9 @@ protected:
 public:
 	/** What a state that is not the current one carries into its next turn: a member its onEnter
 		* does not set again.  The machine's xfer saves only the current state whole (StateMachine xfer
-		* 2 calls this for every other one); a state with no such member writes nothing. */
-	virtual void xferIdle( Xfer *xfer ) {}
+		* 2 calls this for every other one); a state with no such member writes nothing.  version is the
+		* machine's xfer version, so a state reads only what the save it comes from wrote. */
+	virtual void xferIdle( Xfer *xfer, XferVersion version ) {}
 
 protected:
 	// snapshot interface	 - pure virtual here.

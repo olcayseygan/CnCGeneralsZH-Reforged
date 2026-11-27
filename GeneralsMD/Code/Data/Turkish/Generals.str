@@ -22722,75 +22722,6 @@ GUI:RoomSeatBelow
 "%d YER AŞAĞIDA"
 END
 
-// Menu redesign package 13, the end screens.
-GUI:ScorePlace
-"Sıra"
-END
-
-GUI:ScorePlaces
-"Sıra %d–%d"
-END
-
-GUI:ScoreObservers
-"İzleyici"
-END
-
-GUI:ScoreTotal
-"Toplam"
-END
-
-GUI:ScoreBestInColumn
-"Sütunun en iyisi"
-END
-
-GUI:ScoreChat
-"Sohbet"
-END
-
-GUI:ScoreHighlightDestroyedValue
-"%ls yok edildi"
-END
-
-GUI:ScoreHighlightEarnedValue
-"%ls kazanıldı"
-END
-
-GUI:ScoreHighlightArmyValue
-"Ordu en çok %ls"
-END
-
-GUI:BuildOrderUnit
-"Birlik"
-END
-
-GUI:BuildOrderStructure
-"Yapı"
-END
-
-GUI:BuildOrderFolded
-"Yapım yok, katlandı"
-END
-
-GUI:BuildOrderAxis
-"Eksen son yapımda biter, %ls · maç %ls sürdü"
-END
-
-GUI:LaneEndTopUnit
-"En iyi birlik"
-END
-
-GUI:LaneEndTimelineMiddle
-"Orta"
-END
-
-GUI:LaneEndTowerDown
-"Kule yıkıldı"
-END
-
-GUI:LaneEndWaveSent
-"Dalga gönderildi"
-END
-
 // Menu redesign package 6, the load screens: the board's heads and rules, the Direct Strike and Apocalypse
 // facts and tips, the mission count, a saved game and the map transfer.
 GUI:LoadReady
@@ -22907,6 +22838,75 @@ END
 
 GUI:LoadTipApocalypse3
 "İlk dalga %d saniye sonra gelir. Savaşmadan önce kur."
+END
+
+// Menu redesign package 13, the end screens.
+GUI:ScorePlace
+"Sıra"
+END
+
+GUI:ScorePlaces
+"Sıra %d–%d"
+END
+
+GUI:ScoreObservers
+"İzleyici"
+END
+
+GUI:ScoreTotal
+"Toplam"
+END
+
+GUI:ScoreBestInColumn
+"Sütunun en iyisi"
+END
+
+GUI:ScoreChat
+"Sohbet"
+END
+
+GUI:ScoreHighlightDestroyedValue
+"%ls yok edildi"
+END
+
+GUI:ScoreHighlightEarnedValue
+"%ls kazanıldı"
+END
+
+GUI:ScoreHighlightArmyValue
+"Ordu en çok %ls"
+END
+
+GUI:BuildOrderUnit
+"Birlik"
+END
+
+GUI:BuildOrderStructure
+"Yapı"
+END
+
+GUI:BuildOrderFolded
+"Yapım yok, katlandı"
+END
+
+GUI:BuildOrderAxis
+"Eksen son yapımda biter, %ls · maç %ls sürdü"
+END
+
+GUI:LaneEndTopUnit
+"En iyi birlik"
+END
+
+GUI:LaneEndTimelineMiddle
+"Orta"
+END
+
+GUI:LaneEndTowerDown
+"Kule yıkıldı"
+END
+
+GUI:LaneEndWaveSent
+"Dalga gönderildi"
 END
 
 // Menu redesign package 8, the options screen: the rail's tabs and groups, Look and Quality, the fold,

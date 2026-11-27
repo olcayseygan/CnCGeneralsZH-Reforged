@@ -1076,6 +1076,8 @@ class Walk(object):
 
 
 def main():
+    # a language list names itself in every script: a console code page that has no such letters must not end the walk
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("screen", help="one of %s, several joined by commas, or all" % ", ".join(sorted(SCREENS)))
     ap.add_argument("--res", default="1920x1080")

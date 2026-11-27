@@ -4386,6 +4386,36 @@ GUI:SuperweaponTurkiyeKarguSwarm
 "Kargu Swarm"
 END
 
+// The superweapon countdowns' names, written across the top of each cameo in the top right
+// (InGameUI's superweapon tray), where the whole name is wider than the picture
+GUI:SuperweaponParticleUplinkCannon_Short
+"Particle"
+END
+
+GUI:SupW_SuperweaponParticleUplinkCannon_Short
+"Particle"
+END
+
+GUI:Lazr_SuperweaponParticleUplinkCannon_Short
+"Particle"
+END
+
+GUI:SuperweaponNeutronMissile_Short
+"Nuke"
+END
+
+GUI:Nuke_SuperweaponNeutronMissile_Short
+"Nuke"
+END
+
+GUI:SuperweaponScudStorm_Short
+"Scud"
+END
+
+GUI:SuperweaponTurkiyeKarguSwarm_Short
+"Kargu"
+END
+
 GUI:RandomMapTemplate
 "Map type"
 END

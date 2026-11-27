@@ -44,6 +44,7 @@ found and fixed, EA's own, not port damage.**
 - Under Ragdoll Deaths a hunched body, the homeless civilian's most of all, keeps the shape of its back when it lands instead of being pressed flat into the ground with its spine pulled out of joint, and the Missile Defender's brown hip bag stays on his hip instead of turning with his leg and sticking out through the body.
 - Roads darken with the night. With Day and Night ticked, a road the camera had in view when the light turned kept the daylight it was drawn with and glowed against the dark ground beside it under Classic graphics and Direct3D 9; it now takes each change of light with the ground under it, the Apocalypse's red nights and a mission's change of hour too.
 - With Ground Foliage on, the grass, stones and dead trees no longer stop in a straight line where the map's ground ends and the land past the edge carries on bare: they thin out over the last hundred and twenty units instead.
+- The superweapon countdowns in the top right say which superweapon each one is, its name across the top of the picture, and the seconds left are written large under it in the owner's colour on a soft shadow, where they were a small white number in the corner. The Classic HUD keeps EA's list of lines.
 ## The game room in the new menu look
 
 - The room you set up every skirmish, LAN game and online custom game in is the next screen in the new menu look: the thin lit frame with its ruler ticks, one lit key (Play Game, Start or Accept), and every drop-down and check box drawn in the same lines instead of EA's 2003 art.

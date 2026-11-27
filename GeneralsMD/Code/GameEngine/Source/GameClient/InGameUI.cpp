@@ -9270,10 +9270,91 @@ void InGameUI::postDraw( void )
 					drawOwnerRing( place[ each ], listed[ each ].owner, style.marginX );
 				TheDisplay->endBatch2D();
 
-				// a charged one wears no number: zero seconds says nothing the glow does not
-				for( Int each = 0; each < cameos; each++ )
-					if( !listed[ each ].ready )
-						drawCellSeconds( m_superweaponCellText[ each ], listed[ each ].seconds, place[ each ], style.plate );
+				//
+				// Each cameo says which power it is and how long it has left: the power's name across its top
+				// ("GUI:<power>", its _Short form where the whole one is wider than the picture), and under it
+				// the seconds left, large, in the owner's colour as his units show it, lifted where a dark house
+				// colour would sink into the picture.  Both stand on a soft shadow, a faint dark ring and a drop
+				// to the bottom right, so a light picture or the charge's scrim never swallows them.  A charged
+				// one keeps its name and wears no number: zero seconds says nothing the glow does not.  The type
+				// follows the cameo, so every HUD Size keeps it in proportion: a 49 pixel cameo at 1080 takes a
+				// 16 pixel name line and a 27 pixel clock line.  The strings are the timer's own two, which only
+				// the Red Alert style rows use otherwise; the fonts are worked out once per cameo size, and a
+				// name is fitted again only when its string holds none in that font or one too wide
+				//
+				static Int s_fitCameoW = -1;
+				static Int s_fitCameoH = -1;
+				static GameFont *s_nameFont = NULL;
+				static GameFont *s_clockFont = NULL;
+				const Int pad = max( cameoH / 16, 1 );
+				if( s_fitCameoW != cameoW || s_fitCameoH != cameoH )
+				{
+					s_fitCameoW = cameoW;
+					s_fitCameoH = cameoH;
+					// the largest bold size whose line fits, from the line's own height down: a font's line is
+					// taller than its size, so the search is a step or three
+					auto fitLine = [ this ]( Int line )
+					{
+						GameFont *fitted = NULL;
+						for( Int point = max( line, 5 ); point > 4 && fitted == NULL; point-- )
+						{
+							GameFont *font = TheFontLibrary->getFont( m_superweaponNormalFont,
+								TheGlobalLanguageData->adjustFontSize( point ), TRUE );
+							if( font != NULL && font->height <= line )
+								fitted = font;
+						}
+						return fitted;
+					};
+					s_nameFont = fitLine( cameoH * 16 / 49 );
+					s_clockFont = fitLine( cameoH * 27 / 49 );
+				}
+
+				const Color halo = GameMakeColor( 0, 0, 0, 90 );
+				const Color drop = GameMakeColor( 0, 0, 0, 200 );
+				const Color clear = GameMakeColor( 0, 0, 0, 0 );
+				const Int step = max( cameoH / 40, 1 );
+				auto shadowed = [ & ]( DisplayString *text, Int x, Int y, Color ink )
+				{
+					text->draw( x - step, y, halo, clear, 0, 0 );
+					text->draw( x + step, y, halo, clear, 0, 0 );
+					text->draw( x, y - step, halo, clear, 0, 0 );
+					text->draw( x, y + step, halo, clear, 0, 0 );
+					text->draw( x, y, ink, drop, step, step );
+				};
+
+				for( Int each = 0; each < cameos && s_nameFont != NULL && s_clockFont != NULL; each++ )
+				{
+					const ListedSuperweapon &line = listed[ each ];
+					const IRegion2D &cameo = place[ each ];
+					IRegion2D cell = m_superweaponPlace[ each ];
+					DisplayString *name = line.info->getNameString();
+					DisplayString *clock = line.info->getTimeString();
+
+					const Int nameRoom = cameoW - 2 * pad;
+					if( name->getFont() != s_nameFont || name->getTextLength() == 0 || name->getWidth() > nameRoom )
+					{
+						AsciiString label;
+						label.format( "GUI:%s", line.power.str() );
+						name->setFont( s_nameFont );
+						name->setText( UIStyle::fitKey( label.str(), s_nameFont, nameRoom ) );
+					}
+					name->setClipRegion( &cell );
+					const Int nameY = cameo.lo.y + pad / 2;
+					shadowed( name, cameo.lo.x + ( cameoW - name->getWidth() ) / 2, nameY, GameMakeColor( 236, 238, 242, 255 ) );
+
+					if( line.ready )
+						continue;
+					UnicodeString seconds;
+					seconds.format( u"%d", line.seconds > 0 ? line.seconds : 0 );
+					clock->setFont( s_clockFont );
+					clock->setText( seconds );
+					clock->setClipRegion( &cell );
+					// centred under the name; a figure has no descender, so the line sits a tenth of itself low
+					const Int roomTop = nameY + s_nameFont->height;
+					const Int clockY = roomTop + ( cameo.hi.y - roomTop - s_clockFont->height ) / 2 + s_clockFont->height / 10;
+					shadowed( clock, cameo.lo.x + ( cameoW - clock->getWidth() ) / 2, clockY,
+										UIStyle::readable( readableHouseColor( line.owner ) ) );
+				}
 				if( more )
 				{
 					UnicodeString rest;

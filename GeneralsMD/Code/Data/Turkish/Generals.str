@@ -19006,6 +19006,34 @@ GUI:SuperweaponTurkiyeKarguSwarm
 "Kargu Sürüsü"
 END
 
+GUI:SuperweaponParticleUplinkCannon_Short
+"Parçacık"
+END
+
+GUI:SupW_SuperweaponParticleUplinkCannon_Short
+"Parçacık"
+END
+
+GUI:Lazr_SuperweaponParticleUplinkCannon_Short
+"Parçacık"
+END
+
+GUI:SuperweaponNeutronMissile_Short
+"Nükleer"
+END
+
+GUI:Nuke_SuperweaponNeutronMissile_Short
+"Nükleer"
+END
+
+GUI:SuperweaponScudStorm_Short
+"Scud"
+END
+
+GUI:SuperweaponTurkiyeKarguSwarm_Short
+"Kargu"
+END
+
 GUI:RandomMapTemplate
 "Harita türü"
 END

@@ -11057,10 +11057,10 @@ static void roadPoints( Waypoint *way, std::vector<Real> *xs, std::vector<Real> 
 	* all three of which run under the guns still walks under them.  On Hard's map, a search over the influence
 	* grid from the wave to its road's end, each cell costing its length times one plus FLANK_DANGER_WEIGHT times
 	* its danger (the still guns and the kill zone, each by its own largest cell), gives the wave three turn points
-	* and the road's end when that way meets under FLANK_SHARE of the road's danger and is no longer than
+	* and the road's end when that way meets under FLANK_DANGER_SHARE of the road's danger and is no longer than
 	* FLANK_LONGEST times it.  The target stays the road's end: B4's dearest-cell attack doubled the losses. */
 static const Real FLANK_DANGER_WEIGHT = 20.0f;
-static const Real FLANK_SHARE = 0.5f;
+static const Real FLANK_DANGER_SHARE = 0.5f;
 static const Real FLANK_LONGEST = 1.6f;
 static const Real FLANK_LEAST_DANGER = 1.0f;		///< a road quieter than one fully gunned cell is walked as it is
 
@@ -11184,7 +11184,7 @@ Bool AIPlayer::flankRoute( const Coord3D *from, Waypoint *way, std::vector<Coord
 			flankLength += ( dc != 0 && dr != 0 ? 1.41421356f : 1.0f ) * size;
 		}
 	}
-	if( flankDanger >= FLANK_SHARE * roadDanger || flankLength > FLANK_LONGEST * roadLength || path.size() < 4 )
+	if( flankDanger >= FLANK_DANGER_SHARE * roadDanger || flankLength > FLANK_LONGEST * roadLength || path.size() < 4 )
 		return FALSE;
 	route->clear();
 	for( Int q = 1; q <= 3; ++q )

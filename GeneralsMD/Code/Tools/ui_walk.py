@@ -13,6 +13,8 @@
     python ui_walk.py mappicker       the map picker over the skirmish room (Select Map)
     python ui_walk.py factionpicker   the army screen over the skirmish room (seat 1's army box)
     python ui_walk.py ladder          the online ladder, signed in (ZHR_UI_WALK_ONLINE; also skins, card)
+    python ui_walk.py hub             the online hub with nothing open over it (ZHR_UI_WALK_ONLINE)
+    python ui_walk.py customgames     the online Custom games list and its Host and Join boxes (ZHR_UI_WALK_ONLINE)
     python ui_walk.py all             every screen above, one launch after another (or main,options,...)
 
     --res 1280x720   --lang turkish   --only <name part>   --rows <n>   --json <file>
@@ -174,6 +176,12 @@ SCREENS = {
     "ladder": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:TabLadder", nav=["WOLWelcomeMenu.wnd:TabLadder"]),
     "skins": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:TabSkins", nav=["WOLWelcomeMenu.wnd:TabSkins"]),
     "card": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:ButtonMyInfo", nav=["WOLWelcomeMenu.wnd:ButtonMyInfo"]),
+    # the hub itself with nothing open over it: Play vs AI, Quick Match, Custom, My Info, Back and the Team vs AI
+    # keys (team size, leave party, PLAY / FIND TEAM / CANCEL) of a client whose hello says teamai:1
+    "hub": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:ButtonPlayVsAI", nav=[],
+                nodescend=["WOLWelcomeMenu.wnd:ButtonMyInfo"]),
+    # the online Custom games list and its Host and Join boxes
+    "customgames": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:TabCustom", nav=["WOLWelcomeMenu.wnd:TabCustom"]),
 }
 
 

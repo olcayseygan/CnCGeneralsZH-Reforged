@@ -408,6 +408,14 @@ void HideListBox(GameWindow * window)
 			window->winSetPosition( x, y + comboData->dropUpShift );
 			comboData->dropUpShift = 0;
 		}
+		/* A closed box is no longer the window manager's lone window.  Retail left it lone after a pick
+			 until a press landed elsewhere, and a lone box that has nothing open did harm: asked for the
+			 point before the windows over it, and on the release that opened it again let go with a
+			 GGM_CLOSE that shut the list it had just opened (the UI walker's "snaps shut", which came
+			 back on a screen reached through another one).  The GGM_CLOSE that letting go sends lands
+			 here again with the list already hidden, so this runs once. */
+		if( TheWindowManager && TheWindowManager->winGetLoneWindow() == window )
+			TheWindowManager->winSetLoneWindow( NULL );
 	}
 }
 

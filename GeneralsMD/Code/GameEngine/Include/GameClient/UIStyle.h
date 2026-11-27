@@ -208,7 +208,7 @@ namespace UIStyle
 	/// the tier a rating falls in: general from 30, colonel 25, major 20, captain 15, lieutenant 10,
 	/// sergeant 5, private under that; unranked under RANKED_GAMES games or with the count unknown
 	/// (-1).  A ladder rating goes through playerTier.  elo reads rating as the ladder's Elo, on the site's
-	/// TIERS: general from 1500, colonel 1350, major 1250, captain 1150, lieutenant 1075, sergeant 1000.
+	/// TIERS: general from 2000, colonel 1800, major 1600, captain 1400, lieutenant 1200, sergeant 1000.
 	RatingTier ratingTier( Real rating, Int games, Bool elo = FALSE );
 	/// the same tiers for an AI rating, which is an Elo and has no tier from the site: Easy's 800 is
 	/// private, Medium's 1300 captain, Hard's 1800 general, each step between at its share of the ladder's

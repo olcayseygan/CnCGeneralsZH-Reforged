@@ -453,7 +453,7 @@ static void addLadderRow( const OnlineLadderRow &r, Int top, Int height, Bool mi
 		ALIGN_RIGHT, height );
 }
 
-/// a tier's range as the Ranks box lists it: "1350 to 1499", or the old scale's "25.00 to 29.99"
+/// a tier's range as the Ranks box lists it: "1800 to 1999", or the old scale's "25.00 to 29.99"
 static UnicodeString tierRange( UIStyle::RatingTier tier )
 {
 	const Bool elo = ladderOnElo();

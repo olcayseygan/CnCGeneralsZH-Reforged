@@ -2402,11 +2402,13 @@ TEST(online_ranked_screens_show_elo_and_fall_back_to_rating)
 	// the site's Elo tiers, for a card without a tier and the ladder's track
 	CHECK_EQ( (int)UIStyle::ratingTier( 999.0f, 9, TRUE ), (int)UIStyle::TIER_PRIVATE );
 	CHECK_EQ( (int)UIStyle::ratingTier( 1000.0f, 9, TRUE ), (int)UIStyle::TIER_SERGEANT );
-	CHECK_EQ( (int)UIStyle::ratingTier( 1250.0f, 9, TRUE ), (int)UIStyle::TIER_MAJOR );
-	CHECK_EQ( (int)UIStyle::ratingTier( 1500.0f, 9, TRUE ), (int)UIStyle::TIER_GENERAL );
-	CHECK_EQ( (int)UIStyle::ratingTier( 1500.0f, 4, TRUE ), (int)UIStyle::TIER_UNRANKED );
-	CHECK_NEAR( UIStyle::tierStart( UIStyle::TIER_LIEUTENANT, TRUE ), 1075.0, 0.001 );
-	CHECK_NEAR( UIStyle::tierStart( UIStyle::TIER_COLONEL, TRUE ), 1350.0, 0.001 );
+	CHECK_EQ( (int)UIStyle::ratingTier( 1599.0f, 9, TRUE ), (int)UIStyle::TIER_CAPTAIN );
+	CHECK_EQ( (int)UIStyle::ratingTier( 1600.0f, 9, TRUE ), (int)UIStyle::TIER_MAJOR );
+	CHECK_EQ( (int)UIStyle::ratingTier( 1999.0f, 9, TRUE ), (int)UIStyle::TIER_COLONEL );
+	CHECK_EQ( (int)UIStyle::ratingTier( 2000.0f, 9, TRUE ), (int)UIStyle::TIER_GENERAL );
+	CHECK_EQ( (int)UIStyle::ratingTier( 2000.0f, 4, TRUE ), (int)UIStyle::TIER_UNRANKED );
+	CHECK_NEAR( UIStyle::tierStart( UIStyle::TIER_LIEUTENANT, TRUE ), 1200.0, 0.001 );
+	CHECK_NEAR( UIStyle::tierStart( UIStyle::TIER_COLONEL, TRUE ), 1800.0, 0.001 );
 	CHECK_NEAR( UIStyle::tierStart( UIStyle::TIER_COLONEL ), 25.0, 0.001 );
 
 	// ladder rows, one with elo and one without

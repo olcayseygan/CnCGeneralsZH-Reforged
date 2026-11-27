@@ -693,7 +693,7 @@ Int chip( DisplayString *label, Int x, Int y, Color color, Color edge )
 static const Real TIER_START[ TIER_COUNT ] = { 0.0f, 0.0f, 5.0f, 10.0f, 15.0f, 20.0f, 25.0f, 30.0f };
 // the same on the ladder's Elo (TIERS); private has no floor there, its track runs from the site's
 // starting Elo (app/Online/Elo.php START), so it shows empty as the site's meter does
-static const Real ELO_TIER_START[ TIER_COUNT ] = { 1000.0f, 1000.0f, 1000.0f, 1075.0f, 1150.0f, 1250.0f, 1350.0f, 1500.0f };
+static const Real ELO_TIER_START[ TIER_COUNT ] = { 1000.0f, 1000.0f, 1000.0f, 1200.0f, 1400.0f, 1600.0f, 1800.0f, 2000.0f };
 static const char *const TIER_KEY[ TIER_COUNT ] = { "unranked", "private", "sergeant", "lieutenant", "captain", "major", "colonel", "general" };
 // EA's rank table below, by name: RANK_NAME[ 7 ] is the portrait called General
 static const Int TIER_RANK[ TIER_COUNT ] = { -1, 0, 2, 3, 4, 5, 6, 7 };

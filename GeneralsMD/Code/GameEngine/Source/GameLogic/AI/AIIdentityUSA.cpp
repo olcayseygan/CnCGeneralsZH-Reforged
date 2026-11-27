@@ -88,6 +88,7 @@ private:
 	UnsignedInt		m_planSwitchFrame;		///< the last plan change ordered, 0 for none
 	UnsignedInt		m_laserFrontFrame;		///< the wave front (AIPlayer::m_shuttleFrontFrame) a forward turret was last looked for at, 0 for none
 	UnsignedInt		m_airFrontFrame;			///< the wave front the jets were last sent ahead of, 0 for none
+	std::vector<ObjectID> m_waveJets;		///< the jets the waves sent since that front took, for doClearAntiAir
 };
 
 AIIdentity *createUSAIdentity( AIPlayer *ai, AIGeneral general )
@@ -138,7 +139,8 @@ void AIIdentityUSA::xfer( Xfer *xfer )
 {
 	AIIdentity::xfer( xfer );
 	// 2: the wave fronts the forward lasers and the jets last answered
-	XferVersion currentVersion = 2;
+	// 3: the jets the last waves took
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	xfer->xferUnsignedInt( &m_planWaveFrame );
@@ -149,6 +151,10 @@ void AIIdentityUSA::xfer( Xfer *xfer )
 		xfer->xferUnsignedInt( &m_laserFrontFrame );
 		xfer->xferUnsignedInt( &m_airFrontFrame );
 	}
+	if( version >= 3 )
+		xfer->xferSTLObjectIDVector( &m_waveJets );
+	else if( xfer->getXferMode() == XFER_LOAD )
+		m_waveJets.clear();
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -587,18 +593,28 @@ static const Real CLEAR_AA_RANGE = 600.0f;
 static const Int CLEAR_AA_MIN_JETS = 2;
 
 /** Comanches go in with the wave and die to the anti-air it walks into.  When a wave sets out, the jets standing
-	* idle on the airfield strike the known anti-air building nearest its front first.  The shared air guard
-	* (steerAircraft) still calls a strike off whose flight crosses other known guns. */
+	* idle on the airfield and the ones the wave took strike the known anti-air building nearest its front first.
+	* It fired no strike in 40 Air Force matches (2026-11-27): a jet had to be able to shoot the gun from where it
+	* stood (ATTACKRESULT_POSSIBLE), which a jet on its airfield never is, and the wave and the spare-guard sweep take
+	* every jet idle at home, so by the next check none was left.  The shared air guard (steerAircraft) still calls
+	* a strike off whose flight crosses other known guns. */
 void AIIdentityUSA::doClearAntiAir( void )
 {
 	const UnsignedInt front = m_ai->m_shuttleFrontFrame;
-	if( !hasMove( MOVE_CLEAR_AA ) || front == 0 || front == m_airFrontFrame )
+	if( !hasMove( MOVE_CLEAR_AA ) )
 		return;
+	if( front == 0 || front == m_airFrontFrame )
+	{
+		m_waveJets.clear();		// a wave sent with no road sets no front: its jets are not this move's
+		return;
+	}
 	Player *player = m_ai->m_player;
 	const UnsignedInt now = TheGameLogic->getFrame();
 	if( ( now + player->getPlayerIndex() ) % CLEAR_AA_CHECK_FRAMES != 0 )
 		return;
 	m_airFrontFrame = front;
+	std::vector<ObjectID> waveJets;
+	waveJets.swap( m_waveJets );
 	if( now - front > CLEAR_AA_FRESH_FRAMES )
 		return;
 	const Coord3D *at = &m_ai->m_shuttleFront;
@@ -631,9 +647,14 @@ void AIIdentityUSA::doClearAntiAir( void )
 		Object *obj = owned[ o ];
 		AIUpdateInterface *ai = obj->getAI();
 		const JetAIUpdate *jet = ai ? ai->getJetAIUpdate() : NULL;
-		if( jet == NULL || !jet->friend_needsRunway() || obj->isEffectivelyDead() || !ai->isIdle() || obj->isAirborneTarget() ||
-				jet->isOutOfSpecialReloadAmmo() || jet->friend_isTakeoffOrLandingInProgress() || !obj->isAbleToAttack() ||
-				obj->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, gun, CMD_FROM_AI ) != ATTACKRESULT_POSSIBLE )
+		if( jet == NULL || !jet->friend_needsRunway() || obj->isEffectivelyDead() || jet->isOutOfSpecialReloadAmmo() ||
+				!obj->isAbleToAttack() )
+			continue;
+		// parked and idle, or one of the wave's on its way out; an order given in the takeoff waits for the wheels
+		const Bool parked = ai->isIdle() && !obj->isAirborneTarget() && !jet->friend_isTakeoffOrLandingInProgress();
+		const Bool sent = std::find( waveJets.begin(), waveJets.end(), obj->getID() ) != waveJets.end() && !jet->isReturningForLanding();
+		if( ( !parked && !sent ) ||
+				obj->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, gun, CMD_FROM_AI ) < ATTACKRESULT_POSSIBLE_AFTER_MOVING )
 			continue;
 		jets.push_back( obj );
 	}
@@ -658,6 +679,19 @@ static const Real BATTLE_PLAN_SIEGE_SHARE = 0.25f;	///< known guns on its road w
 
 void AIIdentityUSA::onWaveSent( AIGroup *wave, Real power )
 {
+	// the jets this wave takes off the airfield, for doClearAntiAir to send ahead of it
+	if( hasMove( MOVE_CLEAR_AA ) )
+	{
+		const VecObjectID &ids = wave->getAllIDs();
+		for( VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it )
+		{
+			const Object *obj = TheGameLogic->findObjectByID( *it );
+			const AIUpdateInterface *ai = obj ? obj->getAI() : NULL;
+			const JetAIUpdate *jet = ai ? ai->getJetAIUpdate() : NULL;
+			if( jet && jet->friend_needsRunway() && std::find( m_waveJets.begin(), m_waveJets.end(), *it ) == m_waveJets.end() )
+				m_waveJets.push_back( *it );
+		}
+	}
 	if( !hasMove( MOVE_BATTLE_PLANS ) )
 		return;
 	const Bool siege = m_ai->m_gunHoldSince != 0 || m_ai->guardedRoad() >= BATTLE_PLAN_SIEGE_SHARE * power;

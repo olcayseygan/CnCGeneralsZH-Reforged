@@ -673,13 +673,19 @@ class Walk(object):
             return None
         if kind == "entry":
             self.game.send("uiclick " + name)
-            settle(self.game, minimum=0.3)
-            # one character off first: a box already at its length (a 12 letter name) takes nothing more
-            self.game.send("key KEY_BACKSPACE")
+            start = named(settle(self.game, minimum=0.3)).get(name, {}).get("tx", "")
+            # characters off first: a box at or near its length (a 12 letter name) takes nothing more, so a
+            # long text goes down to four
+            for _ in range(max(1, len(start) - 4) if len(start) >= 11 else 1):
+                self.game.send("key KEY_BACKSPACE")
             tree = settle(self.game, minimum=0.3)
+            cut = named(tree).get(name, {}).get("tx", "")
             typed = self.game.send("uitype 12")		# digits: a port box takes nothing else
             after = settle(self.game)
             change = diff(tree, after)
+            # the text at each step, for a box that refuses: "start" (length), after Backspace, after "12";
+            # added to the row once judged, so it does not count as a change itself
+            steps = "text %r (%d) -> %r -> %r" % (start, len(start), cut, named(after).get(name, {}).get("tx", ""))
             if not typed.get("ok"):
                 change.append("no keyboard: " + typed.get("error", ""))
             elif leaf(typed.get("to", "")) != leaf(name):
@@ -687,6 +693,8 @@ class Walk(object):
             # judged before the two characters come off: the hit test is live, and a key the text
             # enabled (Save Replay's SAVE) would be disabled again under the tree that lists it
             self.judge(leaf(name), path, after, change, before_bad)
+            self.rows[-1]["change"] = "; ".join(c for c in (self.rows[-1]["change"], steps) if c)
+            print("    %s" % steps, flush=True)
             for _ in range(2):
                 self.game.send("key KEY_BACKSPACE")
             return None

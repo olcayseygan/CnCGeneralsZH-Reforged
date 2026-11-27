@@ -73,6 +73,7 @@ found and fixed, EA's own, not port damage.**
 - A setting you cannot change says why in place of its box: Reforged look only, Direct3D 11 only, Needs Cast Shadows, Classic water only, Off while Legacy Sound is on, Fullscreen only. A RESTART or NEXT MAP tag beside a name tells you when it takes hold, with a legend at the foot.
 - Texture Filtering and Anisotropic Samples are one list, Bilinear to Anisotropic 16x; the two Heat Haze boxes, the fork's and EA's, are one; the volumes are five faders side by side. Every Options.ini line you already have is read as before.
 - On Hotkeys the picked command stands under the bar's keys with its key large and every other command bound to that key under it, so a clash shows before you play it.
+- A button whose key the launcher had set for its place on the bar ignored the in-game Hotkeys page: you gave it a new letter, Accept saved it, and the match kept the old one. The page now changes the key for that place, the button and its tooltip wear the new letter, a button you moved is gold, and Reset gives it back the game's own letter there without touching the same button on other bars.
 
 ## Single player screens in the new menu look
 

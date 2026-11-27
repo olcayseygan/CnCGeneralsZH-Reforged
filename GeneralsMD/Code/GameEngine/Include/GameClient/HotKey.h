@@ -236,6 +236,17 @@ std::string Hotkeys_format( const HotkeysFile& file, const std::vector< HotkeyCo
 /** The launcher's part's own blocks, by name to its Key line (CommandMap) or letter (CommandButtonHotKey). */
 void Hotkeys_launcherKeys( const std::string& launcherPart, std::map< std::string, HotkeyBinding > *commands,
 	std::map< std::string, std::string > *buttons );
+/** The CommandButtonHotKey block that holds a button's key in bar slot barSlot (0 up, -1 off the bar),
+	* where the options menu's page writes it: "<button>@<barSlot + 1>" when the player's part or the
+	* launcher's has one, the game reading that before the bare "<button>" (HotKeyManager::buttonKeyIn),
+	* else the bare block.  Spelled as the file already spells it, so the launcher's block of that name is
+	* the one Hotkeys_format drops. */
+std::string Hotkeys_buttonBlock( const HotkeysFile& file, const std::map< std::string, std::string >& launcherButtons,
+	const std::string& button, Int barSlot );
+/** The player's own key for a button in bar slot barSlot back to gameLetter ("" for none), the key it has
+	* without his blocks: his slot block goes, or takes gameLetter while his bare block would say otherwise
+	* in that slot; without a slot block his bare block goes. */
+void Hotkeys_resetButton( HotkeysFile *file, const std::string& button, Int barSlot, const std::string& gameLetter );
 /** Whether a KEY_ name is one the launcher reads (hotkeys.js, KEY_NAMES). */
 Bool Hotkeys_isKeyName( const std::string& key );
 /** English words for a binding, the launcher's chordText: "Ctrl + F", "Alt", "Num 4"; empty for none. */

@@ -250,9 +250,12 @@ const char *categoryOf( const HotkeyCommandRow& row )
 	return row.category.c_str();
 }
 
-/// The bar's letters on the page: the launcher's moves, then the player's own over them, by lower case name.
-std::map< std::string, WideChar > buttonKeys( void )
+/// The bar's letters on the page: the launcher's moves, then the player's own over them, by lower case
+/// name; with `without`, none of the player's own for that button, which leaves the key it has without him.
+std::map< std::string, WideChar > buttonKeys( const CommandButton *without = NULL )
 {
+	AsciiString skip = without ? without->getName() : AsciiString();
+	skip.toLower();
 	std::map< std::string, WideChar > keys;
 	for( int pass = 0; pass < 2; pass++ )
 	{
@@ -261,23 +264,43 @@ std::map< std::string, WideChar > buttonKeys( void )
 		{
 			AsciiString name( it->first.c_str() );
 			name.toLower();
+			if( pass == 1 && !skip.isEmpty() && strncmp( name.str(), skip.str(), skip.getLength() ) == 0
+					&& ( name.getLength() == skip.getLength() || name.getCharAt( skip.getLength() ) == '@' ) )
+				continue;
 			keys[ name.str() ] = it->second.empty() ? 0 : (WideChar)it->second[ 0 ];
 		}
 	}
 	return keys;
 }
 
-/// A button's letter in a bar's slot as text; empty for none.
-UnicodeString buttonKeyText( const BarObject *object, Int slot, const std::map< std::string, WideChar >& keys )
+/// A button's letter in a bar's slot; 0 for none.
+WideChar slotKey( const BarObject *object, Int slot, const std::map< std::string, WideChar >& keys )
 {
 	const CommandButton *button = object->slots[ slot ];
 	Int types[ BAR_SLOTS ], ranks[ BAR_SLOTS ];
 	for( Int each = 0; each < BAR_SLOTS; each++ )
 		types[ each ] = object->slots[ each ] ? object->slots[ each ]->getCommandType() : GUI_COMMAND_NONE;
 	HotKeyManager::commandBarUpgradeRanks( types, BAR_SLOTS, ranks );
-	const WideChar letter = HotKeyManager::buttonKeyIn( button->getName(),
+	return HotKeyManager::buttonKeyIn( button->getName(),
 		TheGameText->fetchEnglishHotKey( button->getTextLabel() ), button->getCommandType(), keys, slot, ranks[ slot ], s_scheme );
-	return letterText( letter );
+}
+
+/// A button's letter in a bar's slot as text; empty for none.
+UnicodeString buttonKeyText( const BarObject *object, Int slot, const std::map< std::string, WideChar >& keys )
+{
+	return letterText( slotKey( object, slot, keys ) );
+}
+
+/// The key a bar's slot has without the player's own blocks for its button.
+WideChar gameKeyIn( const BarObject *object, Int slot )
+{
+	return slotKey( object, slot, buttonKeys( object->slots[ slot ] ) );
+}
+
+/// Whether the player's blocks change a bar slot's key, his slot block or his bare one.
+Bool buttonChanged( const BarObject *object, Int slot, const std::map< std::string, WideChar >& keys )
+{
+	return slotKey( object, slot, keys ) != gameKeyIn( object, slot );
 }
 
 UnicodeString buttonName( const CommandButton *button )
@@ -376,6 +399,16 @@ const BarObject *selectedObject( void )
 		return NULL;
 	const Int index = (Int)(intptr_t)GadgetComboBoxGetItemData( s_objectCombo, object );
 	return &s_factions[ faction ].objects[ index ];
+}
+
+/// The open bar's slot of the selected button; -1 for none.
+Int selectedSlot( void )
+{
+	const BarObject *object = selectedObject();
+	for( Int slot = 0; object && s_button && slot < BAR_SLOTS; slot++ )
+		if( object->slots[ slot ] == s_button )
+			return slot;
+	return -1;
 }
 
 /// Letters two or more buttons of the open bar share, each with those buttons' names.
@@ -499,7 +532,7 @@ void fillButtons( void )
 			continue;
 		const UnicodeString key = buttonKeyText( object, slot, keys );
 		const Bool waiting = s_capture == CAPTURE_BUTTON && button == s_button;
-		const Bool changed = s_file.buttons.count( button->getName().str() ) != 0;
+		const Bool changed = buttonChanged( object, slot, keys );
 		const Int at = GadgetListBoxAddEntryImage( s_buttonList, button->getButtonImage(), -1, 0, height, height * 61 / 48 );
 		GadgetListBoxAddEntryText( s_buttonList, buttonName( button ), changed ? CHANGED_COLOR : TEXT_COLOR, at, 1 );
 		GadgetListBoxAddEntryText( s_buttonList,
@@ -580,13 +613,14 @@ void updateNote( void )
 	{
 		const WideChar fixed = HotKeyManager::fixedKey( s_button->getName(), s_button->getCommandType(), s_scheme );
 		const std::string name = s_button->getName().str();
-		changed = s_file.buttons.count( name ) != 0;
+		const Int slot = selectedSlot();
+		changed = slot >= 0 && buttonChanged( object, slot, buttonKeys() );
 		canChange = TRUE;
 		if( s_capture == CAPTURE_BUTTON )
 			note = TheGameText->fetch( "GUI:HotkeysPressLetter" );
 		else if( changed )
 		{
-			const UnicodeString key = letterText( fixed != 0 ? fixed : TheGameText->fetchEnglishHotKey( s_button->getTextLabel() ) );
+			const UnicodeString key = letterText( gameKeyIn( object, slot ) );
 			note.format( TheGameText->fetch( "GUI:HotkeysGameKey" ), key.isEmpty() ? TheGameText->fetch( "GUI:HotkeysNone" ).str() : key.str() );
 		}
 		else if( fixed != 0 )
@@ -675,10 +709,16 @@ void applySelected( const HotkeyBinding *binding, Bool backToGame )
 		setCommand( s_rows[ s_commandRow ].id, backToGame ? NULL : binding );
 	else if( s_active == 1 && s_button )
 	{
+		// the block the game reads for this slot, the button's own there before its bare one
+		const std::string name = s_button->getName().str();
+		const Int slot = selectedSlot();
 		if( backToGame )
-			s_file.buttons.erase( s_button->getName().str() );
+		{
+			const WideChar game = slot >= 0 ? gameKeyIn( selectedObject(), slot ) : 0;
+			Hotkeys_resetButton( &s_file, name, slot, game != 0 ? std::string( 1, (char)game ) : std::string() );
+		}
 		else
-			s_file.buttons[ s_button->getName().str() ] = binding->key.size() == 5 ? binding->key.substr( 4 ) : std::string();
+			s_file.buttons[ Hotkeys_buttonBlock( s_file, s_launcherButtons, name, slot ) ] = binding->key.size() == 5 ? binding->key.substr( 4 ) : std::string();
 	}
 	s_capture = CAPTURE_NONE;
 	refresh();

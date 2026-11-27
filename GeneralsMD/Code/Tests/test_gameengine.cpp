@@ -2760,6 +2760,38 @@ TEST(hotkeys_file_keeps_a_digit_on_a_button)
 	CHECK( Hotkeys_format( file, rows ).find( "CommandButtonHotKey Command_Guard\r\n  Key = 4\r\n" ) != std::string::npos );
 }
 
+/* HotKey.cpp, Hotkeys_buttonBlock and Hotkeys_resetButton: the options page edits the block the game
+	reads for a button in that slot, Name@slot before Name, and Reset leaves the slot its game key. */
+TEST(hotkeys_page_edits_the_block_the_slot_reads)
+{
+	const std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( HOTKEYS_COMMAND_MAP );
+	HotkeysFile file = Hotkeys_parse(
+		"CommandButtonHotKey Command_Guard\r\n  Key = NONE\r\nEnd\r\n\r\n"
+		"CommandButtonHotKey command_guard@3\r\n  Key = Q\r\nEnd\r\n\r\n"
+		"CommandButtonHotKey Command_Stop@2\r\n  Key = W\r\nEnd\r\n\r\n", rows );
+	std::map< std::string, std::string > launcher;
+	launcher[ "Command_Sell@5" ] = "Z";
+	// the slot's own block in any case, else the bare one, else the launcher's slot block, else the name
+	CHECK_STR( Hotkeys_buttonBlock( file, launcher, "Command_Guard", 2 ).c_str(), "command_guard@3" );
+	CHECK_STR( Hotkeys_buttonBlock( file, launcher, "Command_Guard", 0 ).c_str(), "Command_Guard" );
+	CHECK_STR( Hotkeys_buttonBlock( file, launcher, "Command_Guard", -1 ).c_str(), "Command_Guard" );
+	CHECK_STR( Hotkeys_buttonBlock( file, launcher, "Command_Sell", 4 ).c_str(), "Command_Sell@5" );
+	CHECK_STR( Hotkeys_buttonBlock( file, launcher, "Command_Sell", 3 ).c_str(), "Command_Sell" );
+
+	// Reset: a slot block over a bare NONE takes the game's letter, the bare block stays for the other slots
+	Hotkeys_resetButton( &file, "Command_Guard", 2, "G" );
+	CHECK_STR( file.buttons[ "command_guard@3" ].c_str(), "G" );
+	CHECK_STR( file.buttons[ "Command_Guard" ].c_str(), "" );
+	// one whose game key the bare block already gives goes
+	Hotkeys_resetButton( &file, "Command_Guard", 2, "" );
+	CHECK( file.buttons.count( "command_guard@3" ) == 0 );
+	// a slot block alone goes; with none, the bare block goes
+	Hotkeys_resetButton( &file, "Command_Stop", 1, "S" );
+	CHECK( file.buttons.count( "Command_Stop@2" ) == 0 );
+	Hotkeys_resetButton( &file, "Command_Guard", 0, "G" );
+	CHECK( file.buttons.empty() );
+}
+
 TEST(hotkeys_file_the_launcher_wrote_comes_back_byte_for_byte)
 {
 	const std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( HOTKEYS_COMMAND_MAP );

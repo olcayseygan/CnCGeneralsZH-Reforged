@@ -302,8 +302,13 @@ CATALOG = os.path.join(SOURCES, "Common", "OptionsCatalog.cpp")
 # then the tracked masters
 LAYOUT_ARCHIVES = [os.path.join(RUN, name) for name in ("WindowZH.big", "PatchWindow.big")]
 LAYOUT_DIRS = [os.path.join(RUN, "Window"), os.path.join(_CODE, "Data", "Window")]
+# layouts the game no longer opens: retail's copy in WindowZH.big, or a stale loose one in Run/Window,
+# would otherwise hold translations to boxes no player sees
+RETIRED_LAYOUTS = {
+    "menus/optionsmenu.wnd": "Shell::optionsLayoutFile() opens OptionsMenuClassic.wnd, the GameSpy overlay too",
+}
 LABEL_CONTROLS = ("PUSHBUTTON", "CHECKBOX", "RADIOBUTTON", "COMBOBOX")
-SETTINGS_LAYOUTS = ("menus/optionsmenu.wnd", "menus/optionsmenuclassic.wnd")
+SETTINGS_LAYOUTS = ("menus/optionsmenuclassic.wnd",)
 SETTINGS_SOURCES = ("OptionsMenu.cpp", "OptionsMenuHotkeys.cpp", "OptionsCatalog.cpp")
 
 LABEL_SETTER = re.compile(
@@ -389,6 +394,8 @@ def load_layouts():
                     path = os.path.relpath(os.path.join(folder, name), root).replace("\\", "/").lower()
                     layouts[path] = (os.path.basename(os.path.dirname(root)) + "/" + os.path.basename(root),
                                      wndlayout.load(os.path.join(folder, name)))
+    for path in RETIRED_LAYOUTS:
+        layouts.pop(path, None)
     return layouts
 
 

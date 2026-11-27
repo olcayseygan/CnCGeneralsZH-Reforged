@@ -132,6 +132,9 @@ public:
 	void friend_setAllowCircling(Bool v) { setFlag(ALLOW_CIRCLING, v); }
 	Bool friend_isOnFinal() const { return getFlag(ON_FINAL); }
 	void friend_setOnFinal(Bool v) { setFlag(ON_FINAL, v); }
+	/// on the final nose away from the runway: which way it turns round, once picked (0 none, 1 left, -1 right)
+	Int friend_getTurnRoundSide() const { return getFlag(TURN_ROUND_PICKED) ? (getFlag(TURN_ROUND_LEFT) ? 1 : -1) : 0; }
+	void friend_setTurnRoundSide(Int side) { setFlag(TURN_ROUND_PICKED, side != 0); setFlag(TURN_ROUND_LEFT, side > 0); }
 	const Coord3D& friend_getLandingPosForHelipadStuff() const { return m_landingPosForHelipadStuff; }
 	void friend_enableAfterburners(Bool v);
 	void friend_setAllowAirLoco(Bool a);
@@ -180,7 +183,9 @@ private:
 		ALLOW_INTERRUPT_AND_RESUME_OF_CUR_STATE_FOR_RELOAD,
 		TAXI_IN_PROGRESS,
 		HAD_AIRFIELD,			///< it has belonged to an airfield at some point, so it was not placed on the map without one
-		ON_FINAL					///< landing, it has started its turn in or lined up, and stays on the final unless it goes round
+		ON_FINAL,					///< landing, it has started its turn in or lined up, and stays on the final unless it goes round
+		TURN_ROUND_PICKED,		///< on the final nose away from the runway, the side it turns round on is picked
+		TURN_ROUND_LEFT				///< and that side is left of the runway's centre line (seen landing)
 	};
 
 	Coord3D									m_producerLocation;		///< remember this, so that if our producer dies, we have a place to circle aimlessly

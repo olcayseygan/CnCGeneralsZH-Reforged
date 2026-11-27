@@ -906,6 +906,7 @@ public:
 		jetAI->friend_setTakeoffInProgress(!m_landing);
 		jetAI->friend_setLandingInProgress(m_landing);
 		jetAI->friend_setOnFinal(false);
+		jetAI->friend_setTurnRoundSide(0);
 		jetAI->friend_setAllowAirLoco(true);
 		jetAI->chooseLocomotorSet(LOCOMOTORSET_NORMAL);
 		Locomotor* loco = jetAI->getCurLocomotor();
@@ -1202,15 +1203,25 @@ private:
 			Real ahead = along + calcLookAhead(jet, loco);
 			goal.x = touch.x + ux * ahead;
 			goal.y = touch.y + uy * ahead;
+			Int turnRound = 0;
 			if (fabs(offLine) >= PI / 2.0f)
 			{
 				// Heading away, that point is nearly straight behind, and which way the jet came round
 				// was a coin toss: the wrong way took it back inside the turn in and round the circuit
-				// again. Two radii past the centre line, the turn goes towards the runway.
-				Real farSide = (across >= 0.0f) ? -2.0f * radius : 2.0f * radius;
+				// again. Two radii past the centre line, the turn goes towards the runway: away from the
+				// side the jet is on, less the way its nose already swings. The side is picked once and
+				// kept until the nose is round. Picked again every frame from the side the jet was on, a
+				// jet nose away on the centre line itself crossed it with every swing and turned back the
+				// other way: an Aurora home from a strike in line with the runway weaved 7 off the line
+				// out to 677 past the threshold before it came round, and a longer weave took one off the map.
+				turnRound = jetAI->friend_getTurnRoundSide();
+				if (turnRound == 0)
+					turnRound = (across - 2.0f * radius * Sin(offLine) >= 0.0f) ? -1 : 1;
+				Real farSide = 2.0f * radius * turnRound;
 				goal.x -= uy * farSide;
 				goal.y += ux * farSide;
 			}
+			jetAI->friend_setTurnRoundSide(turnRound);
 
 			if (along >= 0.0f)
 			{
@@ -1231,6 +1242,7 @@ private:
 			// The circuit. Its glide is measured as if the final started at turnIn: a circuit run further
 			// out is room to come down, and a glide over the longer way held a high jet level all the way
 			// out, so it turned in as high as it came.
+			jetAI->friend_setTurnRoundSide(0);
 			goal.x = touch.x - ux * turnOut - uy * side;
 			goal.y = touch.y - uy * turnOut + ux * side;
 			Real toTurn = sqrt(sqr(goal.x - pos->x) + sqr(goal.y - pos->y));
@@ -1275,6 +1287,7 @@ public:
 		jetAI->friend_setTakeoffInProgress(false);
 		jetAI->friend_setLandingInProgress(false);
 		jetAI->friend_setOnFinal(false);
+		jetAI->friend_setTurnRoundSide(0);
 		jetAI->friend_enableAfterburners(false);
 
 		// Paranoia checks - sometimes onExit is called when we are 

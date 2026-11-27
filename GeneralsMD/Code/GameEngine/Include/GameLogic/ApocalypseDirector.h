@@ -445,7 +445,7 @@ private:
 	Int spawnOne( UnsignedInt now );		///< one roll: one of the dead, or a whole flock or pack; how many came out
 	Object *makeZombie( Int kind, const Coord3D &pos, UnsignedInt now, Object *made = NULL );
 	Int kindOf( const Object *obj ) const;	///< its row in the roster, -1 for none
-	Int slavesOfTheListed( void ) const;	///< the young the listed hosts keep, counted under the alive cap
+	Int deadOffTheList( void ) const;	///< the dead walking that are not on the list (hosts' young, flocks), counted under the alive cap
 	Int sectorOf( Real x, Real y ) const;
 	Int weakestFront( UnsignedInt now, const char *who ) const;	///< the gate a WEAKFRONT kind comes at, -1 for the wave's own draw
 	void gatherWave( UnsignedInt now );

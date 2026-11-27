@@ -1991,21 +1991,42 @@ void ApocalypseDirector::watchTheKings( UnsignedInt now )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The young the listed hosts keep (a Broodmother's six, a Carrier's eight): they walk and fight but are
-	  their master's slaves, never on the list, so the alive cap counts them here.  Read off the list in
-	  its order each time it is asked, nothing kept.  At night 6 on four seats they had stood 252 over a
-	  cap of 700 (2026-11-26). */
-Int ApocalypseDirector::slavesOfTheListed( void ) const
+/** The dead that walk off the list (a Broodmother's six, a Carrier's eight, a flock's members, anything a
+	  host made that is its master's to move): they walk and fight, so the alive cap counts them here.  The
+	  dead player's objects in its own iteration order, each time it is asked, nothing kept.  At night 6 on
+	  four seats they had stood 252 over a cap of 700, and counting the listed hosts' slaves alone still
+	  left 174 (2026-11-26). */
+struct OffListCount
 {
-	Int slaves = 0;
+	const std::vector<ObjectID> *listed;
+	Int count;
+};
+
+static void countOffList( Object *obj, void *userData )
+{
+	OffListCount *c = (OffListCount *)userData;
+	if( obj->isEffectivelyDead() || obj->getAI() == NULL || obj->isKindOf( KINDOF_STRUCTURE ) || obj->isKindOf( KINDOF_PROJECTILE )
+			|| !obj->getTemplate()->getName().startsWith( "ApocalypseZombie" ) )
+		return;
+	if( !std::binary_search( c->listed->begin(), c->listed->end(), obj->getID() ) )
+		++c->count;
+}
+
+Int ApocalypseDirector::deadOffTheList( void ) const
+{
+	const Player *dead = ThePlayerList->getNthPlayer( m_zombiePlayer );
+	if( dead == NULL )
+		return 0;
+	std::vector<ObjectID> listed;
+	listed.reserve( m_zombies.size() );
 	for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
-	{
-		const Object *obj = TheGameLogic->findObjectByID( m_zombies[ i ].id );
-		const SpawnBehaviorInterface *spawn = obj != NULL && !obj->isEffectivelyDead() ? obj->getSpawnBehaviorInterface() : NULL;
-		if( spawn != NULL )
-			slaves += spawn->getSlaveCount();
-	}
-	return slaves;
+		listed.push_back( m_zombies[ i ].id );
+	std::sort( listed.begin(), listed.end() );
+	OffListCount c;
+	c.listed = &listed;
+	c.count = 0;
+	dead->iterateObjects( countOffList, &c );
+	return c.count;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2018,7 +2039,7 @@ void ApocalypseDirector::watchTheFallen( UnsignedInt now )
 	const Player *zombies = ThePlayerList->getNthPlayer( m_zombiePlayer );
 	const Player *neutral = ThePlayerList->getNeutralPlayer();
 	const PlayerMaskType zombieMask = zombies->getPlayerMask();
-	const Int cap = Apocalypse_phaseRules( m_phase ).aliveCap - ( m_rises.empty() ? 0 : slavesOfTheListed() );
+	const Int cap = Apocalypse_phaseRules( m_phase ).aliveCap - ( m_rises.empty() ? 0 : deadOffTheList() );
 
 	// those due rise; a risen one is kept while his body lies, so it is not noted twice
 	std::vector<Rise> kept;
@@ -2350,7 +2371,7 @@ void ApocalypseDirector::update( void )
 		if( now >= m_nextWaveFrame )
 			sendWave( now );
 	}
-	const Int slaves = m_pending > 0 ? slavesOfTheListed() : 0;
+	const Int slaves = m_pending > 0 ? deadOffTheList() : 0;
 	for( Int out = 0; out < rules.spawnsPerFrame && m_pending > 0 && (Int)m_zombies.size() + slaves < rules.aliveCap; )
 	{
 		const Int made = spawnOne( now );

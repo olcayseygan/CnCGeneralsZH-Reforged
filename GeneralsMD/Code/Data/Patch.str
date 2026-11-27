@@ -8105,7 +8105,7 @@ GUI:GameModeDirectStrikeSolo
 END
 
 GUI:GameModeApocalypseSolo
-"YOU AND UP TO 3 AI"
+"YOU ALONE"
 END
 
 // Menu redesign package 5, the boxes: the in-game menu, the disconnect box, Establish Connections, the
@@ -8388,7 +8388,7 @@ GUI:ApocalypseBossHealth
 END
 
 GUI:ApocalypseOpenSeat
-"Each seat taken adds %d to every wave"
+"Each player who joins adds %d to every wave"
 END
 
 GUI:ApocalypseNights

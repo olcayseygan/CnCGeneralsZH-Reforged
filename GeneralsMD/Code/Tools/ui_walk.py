@@ -827,11 +827,19 @@ class Walk(object):
     def act_list(self, path, cur, tree, before_bad):
         name = cur["n"]
         if (cur.get("sh") or 0) > (cur.get("dh") or 0) + 8:		# a list that really overflows
+            # down first, then up when down does not move it (a list already at its foot cannot go further)
+            back = 3
             self.game.send("uiscroll %s -3" % name)
             after = settle(self.game)
             moved = named(after).get(name, {}).get("sc") != cur.get("sc")
+            if not moved:
+                self.game.send("uiscroll %s 3" % name)
+                after = settle(self.game)
+                moved = named(after).get(name, {}).get("sc") != cur.get("sc")
+                back = -3
             self.judge(leaf(name) + " (wheel)", path, after, diff(tree, after) if moved else [], before_bad)
-            self.game.send("uiscroll %s 3" % name)
+            if moved:
+                self.game.send("uiscroll %s %d" % (name, back))
             tree = settle(self.game)
         else:
             self.record(leaf(name) + " (wheel)", "n/a", "%d rows fit" % (cur.get("rows") or 0), path)

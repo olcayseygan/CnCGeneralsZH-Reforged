@@ -295,7 +295,7 @@ enum
 {
 	LOBBY_ROW_SEAT = 90,				///< a seated row
 	LOBBY_ROW_EMPTY = 52,				///< an open or closed seat: one box
-	LOBBY_ROW_HEAD = 34,				///< a team's head
+	LOBBY_ROW_HEAD = 32,				///< a team's head: a multiple of 8, so the rows' boxes stay on the grid across it (34 left 50 between them)
 	LOBBY_ROW_STRIP = 26,				///< "n SEATS ABOVE" or "BELOW" at the window's edge
 	LOBBY_SEATS_TOP = 160,
 	LOBBY_SEATS_BOTTOM = 952,

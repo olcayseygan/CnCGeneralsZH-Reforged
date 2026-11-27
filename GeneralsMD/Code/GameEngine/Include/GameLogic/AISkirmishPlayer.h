@@ -44,7 +44,12 @@ class SpecialPowerTemplate;
  */
 class AISkirmishPlayer : public AIPlayer
 {
-	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE( AISkirmishPlayer, "AISkirmishPlayer"  )		
+	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE( AISkirmishPlayer, "AISkirmishPlayer"  )
+	// the generals' identities (AIIdentity.h), as in AIPlayer
+	friend class AIIdentityUSA;
+	friend class AIIdentityChina;
+	friend class AIIdentityGLA;
+	friend class AIIdentityTurkiye;
 
 public:	 // AISkirmish specific methods.
 

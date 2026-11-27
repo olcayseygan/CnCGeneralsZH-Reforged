@@ -54,6 +54,7 @@
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/TerrainLogic.h"
+#include "GameLogic/AIIdentity.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/DozerAIUpdate.h"
 #include "GameLogic/Module/RebuildHoleBehavior.h"
@@ -276,8 +277,9 @@ void AISkirmishPlayer::processBaseBuilding( void )
 			const Bool rushThis = rushBigGuns && (IsSuperweaponInMatch(curPlan) || curPlan->isKindOf(KINDOF_FS_ADVANCED_TECH) ||
 				(powerThin && curPlan->isKindOf(KINDOF_FS_POWER) && !curPlan->isKindOf(KINDOF_CASH_GENERATOR)));
 			const AIPurchaseKind planKind = purchaseKindOf(curPlan);
-			const Int planScore = byScore ? aiPurchaseScore(planKind, earlyGame) +
+			const Int sharedScore = byScore ? aiPurchaseScore(planKind, earlyGame) +
 				(m_persona != AIPERSONA_NORMAL ? personaWeights().m_buy[planKind] + personaBuildingScore(curPlan) : 0) : 0;
+			const Int planScore = identityOn() ? m_identity->buildingScore(curPlan, sharedScore) : sharedScore;
 			const Bool couldBePriority = info->isPriorityBuild() &&
 				(!isPriority || (rushThis && !rushTaken) || planScore > bldgScore) && m_player->canBuild(curPlan);
 			const Bool couldBePower = powerPlan==NULL && curPlan->isKindOf(KINDOF_FS_POWER) &&
@@ -925,6 +927,9 @@ void AISkirmishPlayer::buildAIBaseDefenseStructure(const AsciiString &thingName,
 		DEBUG_CRASH(("Couldn't find base defense structure '%s' for side %s", thingName.str(), m_player->getSide().str()));
 		return;
 	}
+	// the general's own placement (AIIdentity::placeDefence)
+	if( identityOn() && m_identity->placeDefence( tTemplate, flank ) )
+		return;
 	do {
 		AsciiString pathLabel;
 		if (flank) {
@@ -1682,6 +1687,9 @@ Object * AISkirmishPlayer::findDozer( const Coord3D *pos )
  */
 Bool AISkirmishPlayer::computeSuperweaponTarget(const SpecialPowerTemplate *power, Coord3D *retPos, Int playerNdx, Real weaponRadius)
 {
+	// the general's own aim first (AIIdentity::powerTarget)
+	if( identityOn() && m_identity->powerTarget( power, playerNdx, weaponRadius, retPos ) )
+		return TRUE;
 
 	// what this AI has seen of the target; EA's sees every building, as retail did
 	const Int observer = runsOwnAI() ? m_player->getPlayerIndex() : -1;

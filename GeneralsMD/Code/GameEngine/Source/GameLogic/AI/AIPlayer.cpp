@@ -73,8 +73,7 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/AutoDepositUpdate.h"	// what an income upgrade adds, for the upgrade buyer
-#include "GameLogic/Module/BattlePlanUpdate.h"	// the Strategy Center's plans, for the USA identity
-#include "GameLogic/Module/SpecialPowerUpdateModule.h"
+#include "GameLogic/AIIdentity.h"	// the general's own moves, at the decision points below
 #include "GameLogic/Module/PropagandaTowerBehavior.h"	// the heal auras a hurt unit is sent to
 #include "GameLogic/Module/DozerAIUpdate.h"
 #include "GameLogic/Module/UpdateModule.h"
@@ -549,11 +548,8 @@ m_role(AIROLE_AGGRESSIVE)
 	m_personaFromRandom = FALSE;
 	m_rushSent = FALSE;
 	m_techDone = FALSE;
-	m_identityMoves = 0;
-	m_identityDrawn = FALSE;
-	m_planWaveFrame = 0;
-	m_planWanted = PLANSTATUS_NONE;
-	m_planSwitchFrame = 0;
+	m_identity = NULL;
+	m_identityStarted = FALSE;
 	m_raidFrame = 0;
 	for( Int r = 0; r < MAX_PERSONA_RAIDERS; ++r )
 		m_raider[ r ] = INVALID_ID;
@@ -695,6 +691,8 @@ m_role(AIROLE_AGGRESSIVE)
 AIPlayer::~AIPlayer()
 {
 	clearTeamsInQueue();
+	delete m_identity;
+	m_identity = NULL;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -5089,6 +5087,8 @@ Bool AIPlayer::selectTeamToBuild( void )
 		}
 		if( !dominant.empty() && !isDefenceTeam && teamCapability( *t, m_player, dominant ).m_answer < HARD_COUNTERED )
 			score -= COUNTER_SPAN;
+		if( identityOn() )
+			score = m_identity->teamScore( *t, score );
 
 		if( !haveBest || score > bestScore )
 		{
@@ -7006,8 +7006,13 @@ void AIPlayer::update( void )
 	// A Direct Strike seat has no base and its units are the director's wave copies, which it alone drives.
 	if( runsOwnAI() && !TheDirectStrikeDirector->isActive() )
 	{
-		if( !m_identityDrawn )
-			drawIdentity();															// Its general's own moves for this match.
+		if( !m_identityStarted )
+		{
+			ensureIdentity();
+			m_identityStarted = TRUE;
+			if( identityOn() )
+				m_identity->onStart();										// Its general's own moves for this match.
+		}
 		AI_PHASE( AIP_SCOUT,   doScouting() );					// Keep one unit looking at the map.
 		AI_PHASE( AIP_RETREAT, doRetreats() );					// Break off the fights we are losing.
 		AI_PHASE( AIP_EXPAND,  doExpansion() );					// Go and take the money that is lying around.
@@ -7021,7 +7026,8 @@ void AIPlayer::update( void )
 		AI_PHASE( AIP_ECONOMY, doSuperweapons() );			// The big guns, as soon as they can be bought.
 		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_OTHER, doParticleBeams() ) );	// ... and the Particle Cannon's beam driven across his base.
 		AI_PHASE( AIP_ECONOMY, doReadySpecialPowers() );	// The powers no script knows to fire, as soon as they are ready.
-		AI_PHASE( AIP_ECONOMY, doBattlePlans() );				// The Strategy Center's plan, by what the army is doing.
+		if( identityOn() )
+			AI_PHASE( AIP_ECONOMY, m_identity->onTick() );	// The general's own standing orders.
 		if( m_lookFrame != TheGameLogic->getFrame() + 1 )
 			AI_PHASE( AIP_WAVE,  rememberEnemies() );			// Write down the enemy army in sight (lookAllSeats did, beside the other seats).
 		AI_PHASE( AIP_WAVE,    answerArmy() );					// Train the answer to the part of it nothing answers.
@@ -10570,112 +10576,16 @@ Bool AIPlayer::mendersHere( void )
 }
 
 /** The owner, 2026-11-26: every general's computer player plays in its own style, under whatever personality the
-	* seat was given.  A general's moves are listed here with the chance a match gets each; a chance under 100 is one
-	* draw from the logic stream at the seat's first turn, so two matches of one general need not play alike.  The
-	* other generals' moves join this table one at a time, each measured before the next. */
-struct AIIdentityMove
+	* seat was given.  The style is the side's AIIdentity (AIIdentity.h), made at the seat's first turn or on a load. */
+void AIPlayer::ensureIdentity( void )
 {
-	const char	*side;			///< the player template's Side
-	UnsignedInt	move;				///< AIPlayer::AIMOVE_*
-	Int					chance;			///< percent of matches that get it
-};
-
-void AIPlayer::drawIdentity( void )
-{
-	static const AIIdentityMove AI_IDENTITY_MOVES[] =
-	{
-		{ "America", AIMOVE_BATTLE_PLANS, 100 },
-	};
-	m_identityDrawn = TRUE;
-	m_identityMoves = 0;
-	const AsciiString &side = m_player->getSide();
-	for( Int i = 0; i < (Int)( sizeof( AI_IDENTITY_MOVES ) / sizeof( AI_IDENTITY_MOVES[ 0 ] ) ); ++i )
-	{
-		const AIIdentityMove &m = AI_IDENTITY_MOVES[ i ];
-		if( side.compareNoCase( m.side ) != 0 )
-			continue;
-		if( m.chance >= 100 || GameLogicRandomValue( 1, 100 ) <= m.chance )
-			m_identityMoves |= m.move;
-	}
-	DEBUG_LOG(("AI IDENTITY frame %d player %d '%s' moves 0x%x%s\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
-		side.str(), m_identityMoves, ( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_IDENTITY ) != 0 ) ? ", off by -aiknobsoff" : ""));
+	if( m_identity == NULL )
+		m_identity = AIIdentity::create( this, m_player->getSide() );
 }
 
-Bool AIPlayer::identityMove( UnsignedInt move ) const
+Bool AIPlayer::identityOn( void ) const
 {
-	return ( m_identityMoves & move ) != 0 && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_IDENTITY ) != 0 );
-}
-
-/** The scripts set Hold the Line once and leave it.  A plan change stuns every unit it covers for five seconds
-	* (BattlePlanChangeParalyzeTime), so the plan moves only on the turns that are quiet anyway: when a wave sets out
-	* (Bombardment's 20% damage when it walks into known guns, Search and Destroy's 20% range and sight otherwise)
-	* and when the pressure turns to defence (Hold the Line's tenth off the damage taken).  Under attack it changes
-	* nothing, and it waits BATTLE_PLAN_SWITCH_FRAMES between two changes. */
-static const UnsignedInt BATTLE_PLAN_CHECK_FRAMES = (UnsignedInt)( 2 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt BATTLE_PLAN_SWITCH_FRAMES = (UnsignedInt)( 45 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt BATTLE_PLAN_WAVE_FRAMES = (UnsignedInt)( 20 * LOGICFRAMES_PER_GAME_SECOND );	///< how long after a send its plan may still be put up
-static const Real BATTLE_PLAN_SIEGE_SHARE = 0.25f;	///< known guns on its road worth this share of the wave make it a siege
-static void collectOwned( Object *obj, void *userData );
-
-void AIPlayer::notePlanWave( Real power )
-{
-	if( !identityMove( AIMOVE_BATTLE_PLANS ) )
-		return;
-	const Bool siege = m_gunHoldSince != 0 || guardedRoad() >= BATTLE_PLAN_SIEGE_SHARE * power;
-	m_planWaveFrame = TheGameLogic->getFrame();
-	m_planWanted = siege ? PLANSTATUS_BOMBARDMENT : PLANSTATUS_SEARCHANDDESTROY;
-}
-
-void AIPlayer::doBattlePlans( void )
-{
-	const UnsignedInt now = TheGameLogic->getFrame();
-	if( now % BATTLE_PLAN_CHECK_FRAMES != 0 || !identityMove( AIMOVE_BATTLE_PLANS ) )
-		return;
-	if( m_planSwitchFrame != 0 && now - m_planSwitchFrame < BATTLE_PLAN_SWITCH_FRAMES )
-		return;
-	Int want = PLANSTATUS_NONE;
-	if( m_planWaveFrame != 0 && now - m_planWaveFrame < BATTLE_PLAN_WAVE_FRAMES )
-		want = m_planWanted;
-	else if( m_pressure == AIPRESSURE_DEFEND && !isBaseUnderAttack() )
-		want = PLANSTATUS_HOLDTHELINE;
-	if( want == PLANSTATUS_NONE )
-		return;
-	const UnsignedInt option = want == PLANSTATUS_BOMBARDMENT ? OPTION_ONE : ( want == PLANSTATUS_HOLDTHELINE ? OPTION_TWO : OPTION_THREE );
-
-	std::vector<Object *> owned;
-	m_player->iterateObjects( collectOwned, &owned );
-	for( size_t o = 0; o < owned.size(); ++o )
-	{
-		Object *center = owned[ o ];
-		if( !center->isKindOf( KINDOF_FS_STRATEGY_CENTER ) || center->isEffectivelyDead() ||
-				center->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || center->testStatus( OBJECT_STATUS_SOLD ) )
-			continue;
-		// the plan it was last told, whoever told it
-		UnsignedInt current = 0;
-		for( BehaviorModule **m = center->getBehaviorModules(); *m; ++m )
-		{
-			SpecialPowerUpdateInterface *sp = (*m)->getSpecialPowerUpdateInterface();
-			if( sp && sp->getCommandOption() != 0 )
-				current = (UnsignedInt)sp->getCommandOption();
-		}
-		if( current == option )
-			continue;
-		const CommandSet *commandSet = TheCommandStore->findCommandSet( center->getCommandSetString() );
-		if( commandSet == NULL )
-			continue;
-		for( Int i = 0; i < MAX_COMMANDS_PER_SET; ++i )
-		{
-			const CommandButton *button = commandSet->getCommandButton( i );
-			if( button == NULL || button->getCommandType() != GUI_COMMAND_SPECIAL_POWER || button->getSpecialPowerTemplate() == NULL ||
-					button->getSpecialPowerTemplate()->getSpecialPowerType() != SPECIAL_CHANGE_BATTLE_PLANS || ( button->getOptions() & option ) == 0 )
-				continue;
-			DEBUG_LOG(("AI PLAN frame %d player %d sets plan %d (was option %d)%s\n", now, m_player->getPlayerIndex(), want, current,
-				want == PLANSTATUS_HOLDTHELINE ? ", outmatched" : ( want == PLANSTATUS_BOMBARDMENT ? ", wave into guns" : ", wave out" )));
-			center->doCommandButton( button, CMD_FROM_AI );
-			m_planSwitchFrame = now;
-			break;
-		}
-	}
+	return m_identity != NULL && const_cast<AIPlayer *>( this )->runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_IDENTITY ) != 0 );
 }
 
 /** The owner, 2026-11-23: players beat even the hardest level easily, and every level should press them
@@ -13575,13 +13485,15 @@ Bool AIPlayer::waveGoes( Real power, UnsignedInt heldFrames )
 
 Real AIPlayer::wavePower( void ) const
 {
-	return m_persona == AIPERSONA_NORMAL ? WAVE_POWER : WAVE_POWER * personaWeights().m_wavePower;
+	const Real shared = m_persona == AIPERSONA_NORMAL ? WAVE_POWER : WAVE_POWER * personaWeights().m_wavePower;
+	return identityOn() ? m_identity->wavePower( shared ) : shared;
 }
 
 UnsignedInt AIPlayer::waveMaxHoldFrames( void ) const
 {
-	return m_persona == AIPERSONA_NORMAL ? WAVE_MAX_HOLD_FRAMES
+	const UnsignedInt shared = m_persona == AIPERSONA_NORMAL ? WAVE_MAX_HOLD_FRAMES
 																			 : (UnsignedInt)( INT_TO_REAL( WAVE_MAX_HOLD_FRAMES ) * personaWeights().m_waveHold );
+	return identityOn() ? m_identity->waveMaxHoldFrames( shared ) : shared;
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -14933,7 +14845,8 @@ void AIPlayer::sendWave( AIGroup *wave, const AsciiString &approach, Int pathSuf
 	}
 	DEBUG_LOG(("AI WAVE frame %d player %d sends %d teams, %d units, %.0f power, after %d s, down %s; %d ranked out mending, %.0f of %.0f army power\n", TheGameLogic->getFrame(),
 		m_player->getPlayerIndex(), teams, wave->getCount(), power, heldFrames / LOGICFRAMES_PER_GAME_SECOND, pathLabel.str(), rankedOut, rankedOutPower, armyPower));
-	notePlanWave( power );
+	if( identityOn() )
+		m_identity->onWaveSent( wave, power );
 	// an attack went: the guns' clock starts again with the next one they hold
 	if( m_gunHoldSince != 0 )
 	{
@@ -18278,8 +18191,9 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 	{
 		Object *obj = objIter.cur();
 		const Int rank = (Int)obj->getVeterancyLevel();
+		const Real unitDearHealth = identityOn() ? m_identity->pullHealth( obj, dearHealth ) : dearHealth;
 		// a dozer or a gatherer has a job of its own, and pulled it stopped building: 18 of the first 60 sent
-		const Bool dear = rank <= LEVEL_REGULAR && dearHealth > 0.0f && !obj->isKindOf( KINDOF_DOZER ) && !obj->isKindOf( KINDOF_HARVESTER ) &&
+		const Bool dear = rank <= LEVEL_REGULAR && unitDearHealth > 0.0f && !obj->isKindOf( KINDOF_DOZER ) && !obj->isKindOf( KINDOF_HARVESTER ) &&
 			obj->getTemplate()->calcCostToBuild( m_player ) >= DEAR_UNIT_COST;
 		if( (rank <= LEVEL_REGULAR && !dear) || obj->isEffectivelyDead() || obj->isContained() || !retreatCanOrderHome( obj ) ||
 				obj->getBodyModule() == NULL || obj->getAI()->hasTunnelTrip() )
@@ -18299,7 +18213,7 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 		if( state == AI_DOCK || state == AI_ENTER || state >= 1000 )
 			continue;
 		const Real health = obj->getBodyModule()->getHealth() / obj->getBodyModule()->getMaxHealth();
-		if( dear ? health >= dearHealth : !AIRetreat_rankPullsOut( rank, health, inFight, ratio, getSkillProfile()->m_retreatTtkRatio ) )
+		if( dear ? health >= unitDearHealth : !AIRetreat_rankPullsOut( rank, health, inFight, ratio, getSkillProfile()->m_retreatTtkRatio ) )
 			continue;
 		// one standing inside a reach the map shows for its class fights on where it is, and goes once it is clear.
 		// Walked out hurt, it died on the way: in eight Hard Air Force against China matches on Tournament Desert
@@ -26000,7 +25914,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 46;		// 46: the general's identity and the battle plan clock  45: the dozer's search  44: the rating on Elo  43: the loss map and the guns' hold  42: the rating  41: a strike route kept once struck  40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
+	XferVersion currentVersion = 47;		// 47: the general's identity (AIIdentity::xfer)  46: the USA identity's moves and battle plan clock on the AIPlayer  45: the dozer's search  44: the rating on Elo  43: the loss map and the guns' hold  42: the rating  41: a strike route kept once struck  40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -26695,23 +26609,37 @@ void AIPlayer::xfer( Xfer *xfer )
 		m_buildSearchPlan = NULL;
 	}
 
-	// the general's moves drawn for this match, and the Strategy Center's plan clock; an older save draws
-	// them again at its first turn
-	if( version >= 46 )
+	// version 46 only: the USA identity's moves and plan clock, kept on the AIPlayer for one commit; read and
+	// dropped, and the identity starts afresh at the next turn
+	if( version == 46 )
 	{
-		xfer->xferUnsignedInt( &m_identityMoves );
-		xfer->xferBool( &m_identityDrawn );
-		xfer->xferUnsignedInt( &m_planWaveFrame );
-		xfer->xferInt( &m_planWanted );
-		xfer->xferUnsignedInt( &m_planSwitchFrame );
+		UnsignedInt moves = 0, waveFrame = 0, switchFrame = 0;
+		Bool drawn = FALSE;
+		Int wanted = 0;
+		xfer->xferUnsignedInt( &moves );
+		xfer->xferBool( &drawn );
+		xfer->xferUnsignedInt( &waveFrame );
+		xfer->xferInt( &wanted );
+		xfer->xferUnsignedInt( &switchFrame );
+	}
+	// the general's identity, which saves its own state under its own version; an older save makes it afresh
+	if( version >= 47 )
+	{
+		xfer->xferBool( &m_identityStarted );
+		Bool has = m_identity != NULL;
+		xfer->xferBool( &has );
+		if( has )
+		{
+			if( xfer->getXferMode() == XFER_LOAD )
+				ensureIdentity();
+			m_identity->xfer( xfer );
+		}
 	}
 	else if( xfer->getXferMode() == XFER_LOAD )
 	{
-		m_identityMoves = 0;
-		m_identityDrawn = FALSE;
-		m_planWaveFrame = 0;
-		m_planWanted = PLANSTATUS_NONE;
-		m_planSwitchFrame = 0;
+		delete m_identity;
+		m_identity = NULL;
+		m_identityStarted = FALSE;
 	}
 
 }  // end xfer

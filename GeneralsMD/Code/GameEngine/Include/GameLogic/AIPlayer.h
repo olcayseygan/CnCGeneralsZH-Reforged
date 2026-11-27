@@ -41,6 +41,7 @@
 
 enum { INVALID_SKILLSET_SELECTION = -1 };
 
+class AIIdentity;
 class BuildListInfo;
 // this header used to compile only behind whoever happened to include Team.h first
 class TeamPrototype;
@@ -278,6 +279,11 @@ class AIPlayer : public MemoryPoolObject,
 	// the two rules whose AI-only extras read the seat's map and its foreign-tech wish
 	friend Bool AIAbility_shot(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim, Int rung);
 	friend Bool AIAbility_area(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim, Int rung);
+	// the generals' identities (AIIdentity.h) read and order through the shared AI's members from their own files
+	friend class AIIdentityUSA;
+	friend class AIIdentityChina;
+	friend class AIIdentityGLA;
+	friend class AIIdentityTurkiye;
 
 public:
 
@@ -837,20 +843,11 @@ protected:
 	Int						m_personaShared;
 	UnsignedInt		m_superweaponFrame;
 
-	// the general's identity: moves only one general makes, drawn once a match, under any personality
-	enum
-	{
-		AIMOVE_BATTLE_PLANS = 1,	///< USA: the Strategy Center's plan follows the war (doBattlePlans)
-	};
-	void drawIdentity(void);											///< which of its general's moves this match gets, once, at its first turn
-	Bool identityMove(UnsignedInt move) const;		///< that move was drawn and -aiknobsoff identity is not on this seat
-	void doBattlePlans(void);											///< Search and Destroy or Bombardment with a wave, Hold the Line when outmatched
-	void notePlanWave(Real power);								///< a wave of that power went: the plan it wants
-	UnsignedInt		m_identityMoves;			///< AIMOVE_* bits drawn for this match
-	Bool					m_identityDrawn;
-	UnsignedInt		m_planWaveFrame;			///< the last wave sent, 0 for none
-	Int						m_planWanted;					///< the plan (PLANSTATUS_*) that wave wants
-	UnsignedInt		m_planSwitchFrame;		///< the last plan change ordered, 0 for none
+	// the general's identity (AIIdentity.h): moves only one general makes, under any personality
+	void ensureIdentity(void);										///< the identity of this seat's side, made once
+	Bool identityOn(void) const;									///< it has one and -aiknobsoff identity is not on this seat: the hooks run
+	AIIdentity		*m_identity;					///< NULL until the seat's first turn (or a load)
+	Bool					m_identityStarted;		///< its onStart has run
 
 	enum { MAX_AI_SCOUTS = 2 };				///< the ladder's maxScouts never asks for more than this
 	ObjectID	m_scoutID[ MAX_AI_SCOUTS ];	///< the units currently touring the map for us

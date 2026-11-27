@@ -2219,6 +2219,7 @@ GameEngine/Include/GameLogic/AI.h
 GameEngine/Include/GameLogic/AIDock.h
 GameEngine/Include/GameLogic/AIGuard.h
 GameEngine/Include/GameLogic/AIGuardRetaliate.h
+GameEngine/Include/GameLogic/AIIdentity.h
 GameEngine/Include/GameLogic/AIInfluenceMap.h
 GameEngine/Include/GameLogic/AIPathfind.h
 GameEngine/Include/GameLogic/AIPlayer.h
@@ -2910,6 +2911,11 @@ GameEngine/Source/GameLogic/AI/AIDock.cpp
 GameEngine/Source/GameLogic/AI/AIGroup.cpp
 GameEngine/Source/GameLogic/AI/AIGuard.cpp
 GameEngine/Source/GameLogic/AI/AIGuardRetaliate.cpp
+GameEngine/Source/GameLogic/AI/AIIdentity.cpp
+GameEngine/Source/GameLogic/AI/AIIdentityChina.cpp
+GameEngine/Source/GameLogic/AI/AIIdentityGLA.cpp
+GameEngine/Source/GameLogic/AI/AIIdentityTurkiye.cpp
+GameEngine/Source/GameLogic/AI/AIIdentityUSA.cpp
 GameEngine/Source/GameLogic/AI/AIInfluenceMap.cpp
 GameEngine/Source/GameLogic/AI/AIPathfind.cpp
 GameEngine/Source/GameLogic/AI/AIPlayer.cpp

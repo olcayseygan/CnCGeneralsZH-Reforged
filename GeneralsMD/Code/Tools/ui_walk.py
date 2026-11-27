@@ -4,6 +4,7 @@
     python ui_walk.py classic         the skirmish room (-skirmishlobby)
     python ui_walk.py ds              the Direct Strike lobby (Solo Play, Mods, Direct Strike)
     python ui_walk.py lan             the LAN lobby (-lanlobby)
+    python ui_walk.py directconnect   Direct Connect (the LAN lobby's DIRECT CONNECT)
     python ui_walk.py options         the options screen (-optionsmenu)
     python ui_walk.py online          the online login against a server nobody answers
     python ui_walk.py observer        a match watched as an observer, its HUD
@@ -12,11 +13,13 @@
     python ui_walk.py all             every screen above, one launch after another (or main,options,...)
 
     --res 1280x720   --lang turkish   --only <name part>   --rows <n>   --json <file>
-    --no-lock (the caller already holds C:\\zhr-proofs\\build.lock)   --port <n>   --keep (do not kill)
+    --no-lock (the caller already holds the build lock)   --port <n>   --keep (do not kill)
 
-One game at a time, started under the build lock (and never while C:\\zhr-proofs\\build.next exists),
-in a user data folder of its own with the Reforged picture, killed by its own PID in a finally.  The
-screen is reached by switches and the -control socket, never by the Windows pointer.
+One game at a time.  Where several sessions share one tree, each launch waits for the build lock: a
+directory made with mkdir and removed afterwards, named by ZHR_BUILD_LOCK_DIR or else by the first
+line of tools/build-lock.txt in the checkout's parent folder, and never taken while a build.next file
+stands beside it.  With neither, the walk runs without a lock.  The game gets a user data folder of
+its own with the Reforged picture and is killed by its own PID in a finally.  The screen is reached by switches and the -control socket, never by the Windows pointer.
 
 For each enabled visible control it clicks through the game's own input path (uiclick: the press goes
 down the message stream, so a modal box, a captured pointer or an open drop-down takes it as it would
@@ -59,8 +62,22 @@ from control_client import Control, ControlError  # noqa: E402
 
 SRC = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
 RUN = os.path.join(SRC, "GeneralsMD", "Run")
-LOCK = r"C:\zhr-proofs\build.lock"
-NEXT = r"C:\zhr-proofs\build.next"
+
+
+def lock_dir():
+    """The shared build lock's directory, or None: the environment first, then the private checkout beside
+    this one (tools/build-lock.txt), the way vendor.ps1 finds the release channel."""
+    named = os.environ.get("ZHR_BUILD_LOCK_DIR")
+    if not named:
+        config = os.path.join(os.path.dirname(SRC), "tools", "build-lock.txt")
+        if os.path.exists(config):
+            with open(config, encoding="utf-8") as f:
+                named = f.readline().strip()
+    return named or None
+
+
+LOCK = lock_dir()
+NEXT = os.path.join(os.path.dirname(LOCK), "build.next") if LOCK else None
 WORK = os.environ.get("ZHR_UI_WALK_DIR", os.path.join(os.environ.get("TEMP", RUN), "zhr-ui-walk"))
 
 INPUT_KINDS = ("button", "check", "radio", "hslider", "vslider", "list", "entry", "combo", "tab")
@@ -102,13 +119,14 @@ SCREENS = {
     "ds": dict(args=[], nav=["MainMenu.wnd:ButtonSinglePlayer", "MainMenu.wnd:ButtonMods",
                              "MainMenu.wnd:ButtonModeDirectStrike"], parts=DS_PARTS, probe=DS_PROBE),
     "lan": dict(args=["-lanlobby"], nav=[]),
+    "directconnect": dict(args=["-lanlobby"], nav=["LanLobbyMenu.wnd:ButtonDirectConnect"]),
     # persist: (page tab, control) pairs set, accepted, and read back once the screen is opened again
     "options": dict(args=["-optionsmenu"], nav=[], reopen="MainMenu.wnd:ButtonOptions",
                     accept="OptionsMenu.wnd:ButtonAccept",
                     persist=[("OptionsMenu.wnd:TabControls", "OptionsMenu.wnd:CheckCameraShake"),
                              ("OptionsMenu.wnd:TabControls", "OptionsMenu.wnd:CheckGridBuild"),
                              ("OptionsMenu.wnd:TabInterface", "OptionsMenu.wnd:ComboBoxHealthBars"),
-                             ("OptionsMenu.wnd:TabAudio", "OptionsMenu.wnd:FaderMusicVolume")]),
+                             ("OptionsMenu.wnd:TabControls", "OptionsMenu.wnd:SliderScrollSpeed")]),
     "online": dict(args=["-online", "127.0.0.1:1", "-onlinelogin"], nav=[]),
     "observer": dict(args=["-autoskirmish", "2", "-observer", "-seed", "1", "-map",
                            r"Maps\Tournament Desert\Tournament Desert.map"], nav=[], match=True),
@@ -131,7 +149,7 @@ class Crashed(RuntimeError):
 
 class BuildLock(object):
     def __init__(self, tag, use=True):
-        self.tag, self.use, self.held = tag, use, False
+        self.tag, self.use, self.held = tag, use and LOCK is not None, False
 
     def __enter__(self):
         if not self.use:
@@ -147,7 +165,7 @@ class BuildLock(object):
             if not said:
                 print("waiting for the build lock (%s)" % LOCK, flush=True)
                 said = True
-            time.sleep(30)
+            time.sleep(2)
         self.held = True
         with open(os.path.join(LOCK, "owner.txt"), "w") as f:
             f.write("ui_walk %s %s\n" % (self.tag, time.strftime("%Y-%m-%dT%H:%M:%S")))
@@ -578,7 +596,7 @@ class Walk(object):
         if kind == "entry":
             self.game.send("uiclick " + name)
             settle(self.game, minimum=0.3)
-            typed = self.game.send("uitype zq")
+            typed = self.game.send("uitype 12")		# digits: a port box takes nothing else
             after = settle(self.game)
             change = diff(tree, after)
             if not typed.get("ok"):
@@ -588,6 +606,21 @@ class Walk(object):
             for _ in range(2):
                 self.game.send("key KEY_BACKSPACE")
             self.judge(leaf(name), path, after, change, before_bad)
+            return None
+
+        if leaf(name).startswith("Fader"):
+            # a fader is dragged: down its middle from a quarter to three quarters and back up
+            # judged by the hidden slider behind it too: its readout is a static the tree cannot read
+            x, y, ww, hh = cur["r"]
+            hb = self.game.tree(hidden=True)
+            self.game.send("uidrag %s %d %d %d %d" % (name, ww // 2, hh // 4, ww // 2, hh * 3 // 4))
+            mid = settle(self.game)
+            hm = self.game.tree(hidden=True)
+            change = diff(tree, mid) + hidden_diff(hb, hm)
+            self.game.send("uidrag %s %d %d %d %d" % (name, ww // 2, hh * 3 // 4, ww // 2, hh // 4))
+            after = settle(self.game)
+            change += diff(mid, after) + hidden_diff(hm, self.game.tree(hidden=True))
+            self.judge(leaf(name) + " (drag)", path, after, change, before_bad)
             return None
 
         self.game.send("uiclick " + name)
@@ -898,7 +931,7 @@ def main():
     ap.add_argument("screen", help="one of %s, several joined by commas, or all" % ", ".join(sorted(SCREENS)))
     ap.add_argument("--res", default="1920x1080")
     ap.add_argument("--lang", default="english")
-    ap.add_argument("--port", type=int, default=8871)
+    ap.add_argument("--port", type=int, default=8871, help="two walkers on one machine want two ports")
     ap.add_argument("--only", default="")
     ap.add_argument("--rows", type=int, default=5, help="combo rows picked per box (Open, Closed and the AIs fit in 5)")
     ap.add_argument("--json", default="")

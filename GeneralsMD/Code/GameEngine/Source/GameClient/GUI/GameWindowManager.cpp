@@ -867,6 +867,24 @@ WinInputReturnCode GameWindowManager::winProcessKey( UnsignedByte key,
 //-------------------------------------------------------------------------------------------------
 Bool OpenWindowOwnsPoint( Bool isOpen, Int originX, Int originY, Int width, Int height, Int x, Int y );
 
+/* The lone window is asked for a point before the windows over it only while it has something
+	 open.  A combo box stays the lone window after a pick from its list, closed, until a press lands
+	 elsewhere; asked first all that time, it took the wheel and the clicks over its box from whatever
+	 had come up over it since (the skirmish room's presets list over a seat's colour box scrolled
+	 nothing: the wheel went to the closed box under it).  A closed combo is found by the plain
+	 search like any window, when nothing covers it. */
+static Bool loneWindowOpen( GameWindow *lone )
+{
+	if( lone == NULL || lone->winIsHidden() )
+		return FALSE;
+	if( BitTest( lone->winGetStyle(), GWS_COMBO_BOX ) )
+	{
+		GameWindow *list = GadgetComboBoxGetListBox( lone );
+		return list != NULL && !list->winIsHidden();
+	}
+	return TRUE;
+}
+
 WinInputReturnCode GameWindowManager::winProcessMouseEvent( GameWindowMessage msg,
 																														ICoord2D *mousePos,
 																														void *data )
@@ -1052,7 +1070,7 @@ WinInputReturnCode GameWindowManager::winProcessMouseEvent( GameWindowMessage ms
 				ICoord2D origin, size;
 				m_loneWindow->winGetScreenPosition( &origin.x, &origin.y );
 				m_loneWindow->winGetSize( &size.x, &size.y );
-				if( OpenWindowOwnsPoint( !m_loneWindow->winIsHidden(), origin.x, origin.y,
+				if( OpenWindowOwnsPoint( loneWindowOpen( m_loneWindow ), origin.x, origin.y,
 																 size.x, size.y, mousePos->x, mousePos->y ) )
 					window = m_loneWindow->winPointInChild( mousePos->x, mousePos->y, FALSE, FALSE, allowDisabledCancel );
 			}
@@ -3827,7 +3845,7 @@ GameWindow *GameWindowManager::getWindowUnderCursor( Int x, Int y, Bool ignoreEn
 		ICoord2D origin, size;
 		m_loneWindow->winGetScreenPosition( &origin.x, &origin.y );
 		m_loneWindow->winGetSize( &size.x, &size.y );
-		if( OpenWindowOwnsPoint( !m_loneWindow->winIsHidden(), origin.x, origin.y,
+		if( OpenWindowOwnsPoint( loneWindowOpen( m_loneWindow ), origin.x, origin.y,
 														 size.x, size.y, x, y ) )
 			return m_loneWindow->winPointInChild( x, y, ignoreEnabled );
 	}

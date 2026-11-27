@@ -10842,6 +10842,159 @@ static void roadPoints( Waypoint *way, std::vector<Real> *xs, std::vector<Real> 
 	}
 }
 
+/** Flank routes (-aiknobsoff flank).  chooseApproachLabel picks among a map's three authored roads, and a road
+	* all three of which run under the guns still walks under them.  On Hard's map, a search over the influence
+	* grid from the wave to its road's end, each cell costing its length times one plus FLANK_DANGER_WEIGHT times
+	* its danger (the still guns and the kill zone, each by its own largest cell), gives the wave three turn points
+	* and the road's end when that way meets under FLANK_SHARE of the road's danger and is no longer than
+	* FLANK_LONGEST times it.  The target stays the road's end: B4's dearest-cell attack doubled the losses. */
+static const Real FLANK_DANGER_WEIGHT = 20.0f;
+static const Real FLANK_SHARE = 0.5f;
+static const Real FLANK_LONGEST = 1.6f;
+static const Real FLANK_LEAST_DANGER = 1.0f;		///< a road quieter than one fully gunned cell is walked as it is
+
+struct FlankOpen
+{
+	Real cost;
+	Int cell;
+};
+static Bool flankLater( const FlankOpen &a, const FlankOpen &b )
+{
+	return a.cost != b.cost ? a.cost > b.cost : a.cell > b.cell;		// a min-heap, ties to the lower cell
+}
+
+Bool AIPlayer::flankRoute( const Coord3D *from, Waypoint *way, std::vector<Coord3D> *route )
+{
+	if( way == NULL || from == NULL || !hasTacticalMap() || measuringWithoutTactics() ||
+			( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_FLANK ) != 0 ) )
+		return FALSE;
+	ensureInfluence();
+	const Int cols = m_influence.getCols();
+	const Int rows = m_influence.getRows();
+	if( cols <= 0 || rows <= 0 )
+		return FALSE;
+	std::vector<Real> xs, ys;
+	roadPoints( way, &xs, &ys );
+	if( xs.size() < 2 )
+		return FALSE;
+	const Real size = m_influence.getCellSize();
+	const Real ox = m_influence.getOriginX();
+	const Real oy = m_influence.getOriginY();
+	const Int cells = cols * rows;
+	std::vector<Real> danger( cells, 0.0f );
+	std::vector<Real> lost( cells, 0.0f );
+	Real stillMost = 0.0f, lostMost = 0.0f;
+	for( Int i = 0; i < cells; ++i )
+	{
+		Coord3D at;
+		m_influence.cellCenter( i % cols, i / cols, &at.x, &at.y );
+		at.z = 0.0f;
+		danger[ i ] = m_influence.staticAt( at.x, at.y, AITHREAT_GROUND_MIX );
+		lost[ i ] = killZoneAt( &at );
+		stillMost = max( stillMost, danger[ i ] );
+		lostMost = max( lostMost, lost[ i ] );
+	}
+	if( stillMost <= 0.0f && lostMost <= 0.0f )
+		return FALSE;
+	for( Int i = 0; i < cells; ++i )
+		danger[ i ] = ( stillMost > 0.0f ? danger[ i ] / stillMost : 0.0f ) + ( lostMost > 0.0f ? lost[ i ] / lostMost : 0.0f );
+	#define FLANK_CELL( x, y ) ( max( 0, min( rows - 1, REAL_TO_INT_FLOOR( ( (y) - oy ) / size ) ) ) * cols + \
+		max( 0, min( cols - 1, REAL_TO_INT_FLOOR( ( (x) - ox ) / size ) ) ) )
+	Real roadDanger = 0.0f, roadLength = 0.0f;
+	for( size_t p = 0; p < xs.size(); ++p )
+	{
+		roadDanger += danger[ FLANK_CELL( xs[ p ], ys[ p ] ) ];
+		if( p > 0 )
+			roadLength += (Real)sqrt( sqr( xs[ p ] - xs[ p - 1 ] ) + sqr( ys[ p ] - ys[ p - 1 ] ) );
+	}
+	if( roadDanger < FLANK_LEAST_DANGER )
+		return FALSE;
+	const Int start = FLANK_CELL( from->x, from->y );
+	const Int goal = FLANK_CELL( xs.back(), ys.back() );
+	#undef FLANK_CELL
+	if( start == goal )
+		return FALSE;
+	// Dijkstra over the grid, eight ways; a cell under water is no way
+	std::vector<Real> best( cells, -1.0f );
+	std::vector<Int> cameFrom( cells, -1 );
+	std::vector<FlankOpen> open;
+	FlankOpen first = { 0.0f, start };
+	open.push_back( first );
+	best[ start ] = 0.0f;
+	static const Int DC[ 8 ] = { 1, -1, 0, 0, 1, 1, -1, -1 };
+	static const Int DR[ 8 ] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+	while( !open.empty() )
+	{
+		std::pop_heap( open.begin(), open.end(), flankLater );
+		const FlankOpen here = open.back();
+		open.pop_back();
+		if( here.cost > best[ here.cell ] )
+			continue;
+		if( here.cell == goal )
+			break;
+		const Int c = here.cell % cols;
+		const Int r = here.cell / cols;
+		for( Int d = 0; d < 8; ++d )
+		{
+			const Int nc = c + DC[ d ];
+			const Int nr = r + DR[ d ];
+			if( nc < 0 || nr < 0 || nc >= cols || nr >= rows )
+				continue;
+			const Int next = nr * cols + nc;
+			Real x, y;
+			m_influence.cellCenter( nc, nr, &x, &y );
+			if( next != goal && TheTerrainLogic->isUnderwater( x, y ) )
+				continue;
+			const Real step = ( d < 4 ? 1.0f : 1.41421356f ) * size;
+			const Real cost = here.cost + step * ( 1.0f + FLANK_DANGER_WEIGHT * danger[ next ] );
+			if( best[ next ] >= 0.0f && cost >= best[ next ] )
+				continue;
+			best[ next ] = cost;
+			cameFrom[ next ] = here.cell;
+			FlankOpen entry = { cost, next };
+			open.push_back( entry );
+			std::push_heap( open.begin(), open.end(), flankLater );
+		}
+	}
+	if( best[ goal ] < 0.0f )
+		return FALSE;
+	std::vector<Int> path;
+	for( Int at = goal; at >= 0 && (Int)path.size() <= cells; at = cameFrom[ at ] )
+		path.push_back( at );
+	std::reverse( path.begin(), path.end() );
+	Real flankDanger = 0.0f, flankLength = 0.0f;
+	for( size_t p = 0; p < path.size(); ++p )
+	{
+		flankDanger += danger[ path[ p ] ];
+		if( p > 0 )
+		{
+			const Int dc = path[ p ] % cols - path[ p - 1 ] % cols;
+			const Int dr = path[ p ] / cols - path[ p - 1 ] / cols;
+			flankLength += ( dc != 0 && dr != 0 ? 1.41421356f : 1.0f ) * size;
+		}
+	}
+	if( flankDanger >= FLANK_SHARE * roadDanger || flankLength > FLANK_LONGEST * roadLength || path.size() < 4 )
+		return FALSE;
+	route->clear();
+	for( Int q = 1; q <= 3; ++q )
+	{
+		Coord3D turn;
+		const Int at = path[ ( path.size() * q ) / 4 ];
+		m_influence.cellCenter( at % cols, at / cols, &turn.x, &turn.y );
+		turn.z = TheTerrainLogic->getGroundHeight( turn.x, turn.y );
+		route->push_back( turn );
+	}
+	// and the road's own end, where the wave would have gone
+	Waypoint *end = way;
+	for( Int i = 0; i < APPROACH_MAX_WAYPOINTS && end->getNumLinks() > 0; ++i )
+		end = end->getLink( 0 );
+	route->push_back( *end->getLocation() );
+	DEBUG_LOG(("AI FLANK frame %d player %d goes round: danger %.1f against %.1f on the road, %.0f long against %.0f, via (%.0f,%.0f) (%.0f,%.0f) (%.0f,%.0f)\n",
+		TheGameLogic->getFrame(), m_player->getPlayerIndex(), flankDanger, roadDanger, flankLength, roadLength,
+		(*route)[ 0 ].x, (*route)[ 0 ].y, (*route)[ 1 ].x, (*route)[ 1 ].y, (*route)[ 2 ].x, (*route)[ 2 ].y));
+	return TRUE;
+}
+
 /** What this AI has lost along a road, each cell once, unweighed. */
 static Real lossAlongRoad( const AILossMap &losses, Waypoint *way )
 {
@@ -15126,7 +15279,12 @@ void AIPlayer::sendWave( AIGroup *wave, const AsciiString &approach, Int pathSuf
 	}
 	if( m_persona == AIPERSONA_INFANTRY )
 		sendPersonaTransports( wave );
-	wave->groupFollowWaypointPathAsTeam( way, CMD_FROM_AI );
+	// round the guns on the grid when the road runs under them (flankRoute), else down the road
+	std::vector<Coord3D> flank;
+	if( flankRoute( &center, way, &flank ) )
+		wave->groupFollowPath( &flank, NULL, CMD_FROM_AI );
+	else
+		wave->groupFollowWaypointPathAsTeam( way, CMD_FROM_AI );
 	sendWaveThroughTunnels( wave, &center, way );
 }
 

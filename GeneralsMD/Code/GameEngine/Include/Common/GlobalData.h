@@ -138,6 +138,7 @@ enum
 	AIKNOB_HARASS				= 16777216,	///< only the Raider raids, and its raiders never withdraw, as before 2026-11-27
 	AIKNOB_GARRISON			= 33554432,	///< no unit is sent to clear an enemy-held building, as before 2026-11-27
 	AIKNOB_ATTENTION		= 67108864,	///< no attention budget: the micro looks at every unit on every turn, as before 2026-11-27
+	AIKNOB_FLANK				= 134217728,	///< a wave walks its authored road however gunned, as before 2026-11-27
 };
 
 //-------------------------------------------------------------------------------------------------

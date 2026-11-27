@@ -57,6 +57,8 @@ class ParticleSystemManager;
 class Drawable;
 class Object;
 struct FieldParse;
+struct ParticleGpuSpawn;
+struct ParticleGpuSystemEntry;
 class INI;
 class DebugWindowDialog;		// really ParticleEditorDialog
 class RenderInfoClass;			// ick
@@ -272,6 +274,10 @@ protected:
 public:
 	Bool							m_inSystemList;
 	Bool							m_inOverallList;
+
+	/// -gpuparticlecheck: this particle is the CPU twin of a GPU spawn, whose birth record this is.  NULL
+	/// for every other particle; client-only, never saved, so a load makes its twins plain particles.
+	ParticleGpuSpawn *	m_gpuTwin;
 
 	union
 	{
@@ -972,6 +978,25 @@ protected:
 	Bool finishUpdate( const ParticleShadowBlob *blob );	///< the ground blob and the lifetime, after the particles
 	void addGpuSamplesToShadowBlob( ParticleShadowBlob *blob ) const;	///< the GPU particles' share of the ground blob, from the samples
 	Bool spawnOnGpu( const ParticleInfo *info );	///< hand one spawn to the manager's GPU path; TRUE if it took it
+
+public:
+	/** -gpuparticlecheck.  Every spawn the GPU takes also gets a CPU twin, a real Particle, and each
+		* update sets the twin against particleClosedFormEvaluate at the same k: the largest differences
+		* of this update, folded into the manager's GPUPARTICLECHECK line by finishUpdate.  Alpha and
+		* colour inside the fade window go apart, because the closed form only caps there. */
+	struct GpuCheckErrors
+	{
+		Real					pos, size, angle, alpha, color, fadeAlpha, fadeColor;
+		UnsignedInt		compared;					///< twin updates set against the closed form
+		UnsignedInt		cpuDiedFirst;			///< the twin died on an update the closed form says it lives through
+		UnsignedInt		closedDiedFirst;	///< the closed form says dead and the twin lives
+		UnsignedInt		grounded;					///< twins that touched the ground (ground collision) and left the position check
+	};
+protected:
+	void makeGpuTwin( const ParticleInfo *info );	///< the CPU twin of a spawn the GPU just took
+	/// one twin after its update; entry is built on the first twin of the update
+	void checkGpuTwin( Particle *p, Bool alive, ParticleGpuSystemEntry *entry, Bool *entryBuilt );
+	GpuCheckErrors		m_gpuCheck;														///< this update's, job-safe as only this system's job writes it
 
 	ParticleShadowBlob	m_pendingShadowBlob;				///< the survivors' footprint, gathered by updateParticlesMark
 	Bool								m_pendingCastsGroundShadow;	///< decided by updateEmission, where update() always decided it

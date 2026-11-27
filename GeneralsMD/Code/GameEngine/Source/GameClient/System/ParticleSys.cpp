@@ -52,6 +52,7 @@
 #include "GameClient/GameClient.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/ParticleSys.h"
+#include "GameClient/ParticleClosedForm.h"
 #include "GameClient/Shadow.h"
 #include "GameClient/Snow.h"
 
@@ -391,6 +392,7 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 
 	m_inSystemList = m_inOverallList = FALSE;
 	m_systemPrev = m_systemNext = m_overallPrev = m_overallNext = NULL;
+	m_gpuTwin = NULL;
 
 	// add this particle to the global list, retaining particle creation order
 	TheParticleSystemManager->addParticle(this, system->getPriority() );
@@ -419,6 +421,9 @@ Particle::~Particle()
 
 	// remove from the global list
 	TheParticleSystemManager->removeParticle(this);
+
+	delete m_gpuTwin;
+	m_gpuTwin = NULL;
 
 	//DEBUG_ASSERTLOG(!(totalParticleCount % 100 == 0), ( "TotalParticleCount = %d\n", m_totalParticleCount ));
 }
@@ -1627,6 +1632,7 @@ ParticleSystem::ParticleSystem( const ParticleSystemTemplate *sysTemplate,
 	m_gpuEligible = TheParticleSystemManager->acceptsGpuParticles() && sysTemplate->isGpuEligible();
 	m_gpuSpawnTotal = 0;
 	m_gpuLastDeathFrame = 0;
+	memset( &m_gpuCheck, 0, sizeof( m_gpuCheck ) );
 
 	// A system logic makes inside a tick is built after it (LOGIC-THREAD.md M5).  The load path's
 	// systems have no id yet and are never made in a tick.
@@ -2249,7 +2255,11 @@ Particle *ParticleSystem::createParticle( const ParticleInfo *info,
 				// this NULL from a refusal by getGpuSpawnTotal.  A player who set no particles at all
 				// gets none there either.
 				if (m_gpuEligible && TheGlobalData->m_maxParticleCount != 0 && spawnOnGpu( info ))
+				{
+					if (TheGlobalData->m_gpuParticleCheck)
+						makeGpuTwin( info );
 					return NULL;
+				}
 
 				if( TheParticleSystemManager->removeOldestParticles((UnsignedInt) numInExcess, priority) != numInExcess )
 					return NULL;  // could not remove enough particles, don't create new stuff
@@ -2291,6 +2301,92 @@ Bool ParticleSystem::spawnOnGpu( const ParticleInfo *info )
 		m_gpuLastDeathFrame = death;
 	return TRUE;
 }
+
+// ------------------------------------------------------------------------------------------------
+/** -gpuparticlecheck's twin: a real Particle past the cap, drawn and counted like any other, with
+	* the spawn record the GPU was handed. */
+// ------------------------------------------------------------------------------------------------
+void ParticleSystem::makeGpuTwin( const ParticleInfo *info )
+{
+	Particle *p = newInstance(Particle)( this, info );
+	p->m_gpuTwin = new ParticleGpuSpawn;
+	particleGpuSpawnPack( *info, ParticleSystemManager::getParticleFrame(), 0, 0, p->m_gpuTwin );
+}
+
+// ------------------------------------------------------------------------------------------------
+/** A twin after its update k, against the closed form at the same k as the device takes it.  The
+	* entry is the system's as the manager builds it for its slot, drift with the weather and all.
+	* A system with ground collision (its INI, or the ParticleBounce option on every template) bounces
+	* on the CPU where the device clamps, and the closed form models neither, so a twin's position
+	* leaves the comparison for good once it has touched the ground: the record's unused m_pad marks it. */
+// ------------------------------------------------------------------------------------------------
+void ParticleSystem::checkGpuTwin( Particle *p, Bool alive, ParticleGpuSystemEntry *entry, Bool *entryBuilt )
+{
+	if (!*entryBuilt)
+	{
+		particleGpuSystemEntryBuild( *this, entry );
+		const Coord3D drift = getDriftWithWeather();
+		entry->m_drift[ 0 ] = drift.x;
+		entry->m_drift[ 1 ] = drift.y;
+		*entryBuilt = TRUE;
+	}
+
+	ParticleGpuSpawn &spawn = *p->m_gpuTwin;
+	const Real k = (Real)( ParticleSystemManager::getParticleFrame() - spawn.m_birthFrame + 1 );
+	ParticleClosedFormState state;
+	particleClosedFormEvaluate( spawn, *entry, k, &state );
+
+	GpuCheckErrors &e = m_gpuCheck;
+	if (!alive)
+	{
+		if (!state.m_dead)
+			++e.cpuDiedFirst;
+		return;
+	}
+	++e.compared;
+	if (state.m_dead)
+		++e.closedDiedFirst;
+
+	const Coord3D *pos = p->getPosition();
+	if (spawn.m_pad == 0 && m_groundCollision && TheTerrainLogic != NULL
+			&& pos->z <= TheTerrainLogic->getGroundHeight( pos->x, pos->y ) + 0.01f)
+	{
+		spawn.m_pad = 1;
+		++e.grounded;
+	}
+	if (spawn.m_pad == 0)
+	{
+		const Real dx = pos->x - state.m_pos.x, dy = pos->y - state.m_pos.y, dz = pos->z - state.m_pos.z;
+		e.pos = max( e.pos, sqrtf( dx * dx + dy * dy + dz * dz ) );
+	}
+	e.size = max( e.size, fabsf( p->getSize() - state.m_size ) );
+	e.angle = max( e.angle, fabsf( p->getAngle() - state.m_angleZ ) );
+
+	const RGBColor *color = p->getColor();
+	const Real colorError = max( fabsf( color->red - state.m_color.red ),
+		max( fabsf( color->green - state.m_color.green ), fabsf( color->blue - state.m_color.blue ) ) );
+	const Real alphaError = fabsf( p->getAlpha() - state.m_alpha );
+
+	UnsignedInt fadeFrames = (UnsignedInt)spawn.m_lifetime / PARTICLE_CLOSED_FORM_FADE_LIFETIME_DIVISOR;
+	if (fadeFrames > PARTICLE_CLOSED_FORM_FADE_MAX_FRAMES)
+		fadeFrames = PARTICLE_CLOSED_FORM_FADE_MAX_FRAMES;
+	else if (fadeFrames == 0)
+		fadeFrames = 1;
+	if (p->getLifetimeLeft() <= fadeFrames)
+	{
+		e.fadeAlpha = max( e.fadeAlpha, alphaError );
+		e.fadeColor = max( e.fadeColor, colorError );
+	}
+	else
+	{
+		e.alpha = max( e.alpha, alphaError );
+		e.color = max( e.color, colorError );
+	}
+}
+
+/// every system's GpuCheckErrors since the last GPUPARTICLECHECK line, and the template of the worst position
+static ParticleSystem::GpuCheckErrors s_gpuCheckTotal;
+static const ParticleSystemTemplate *s_gpuCheckWorstPos = NULL;		///< templates live as long as the manager
 
 // ------------------------------------------------------------------------------------------------
 /** Generate a new, random set of ParticleInfo
@@ -2734,11 +2830,16 @@ Bool ParticleSystem::update( Int localPlayerIndex )
 	ParticleUpdateContext context;
 	makeUpdateContext( &context );
 
+	ParticleGpuSystemEntry checkEntry;
+	Bool checkEntryBuilt = FALSE;
 	Particle *p = m_systemParticlesHead;
 	Particle *oldParticle;
 	while (p)
 	{
-		if (p->update( context ) == false)
+		const Bool alive = p->update( context );
+		if (p->m_gpuTwin)
+			checkGpuTwin( p, alive, &checkEntry, &checkEntryBuilt );
+		if (alive == false)
 		{
 			oldParticle = p;
 			p = p->m_systemNext;
@@ -2781,10 +2882,14 @@ void ParticleSystem::updateParticlesMark( void )
 	makeUpdateContext( &context );
 	particleShadowBlobReset( &m_pendingShadowBlob );
 	m_pendingDeaths = 0;
+	ParticleGpuSystemEntry checkEntry;
+	Bool checkEntryBuilt = FALSE;
 
 	for (Particle *p = m_systemParticlesHead; p; p = p->m_systemNext)
 	{
 		const Bool alive = p->update( context );
+		if (p->m_gpuTwin)
+			checkGpuTwin( p, alive, &checkEntry, &checkEntryBuilt );
 		p->setDiesThisUpdate( !alive );
 		if (!alive)
 			++m_pendingDeaths;
@@ -2827,6 +2932,25 @@ Bool ParticleSystem::reapAndFinishUpdate( void )
 // ------------------------------------------------------------------------------------------------
 Bool ParticleSystem::finishUpdate( const ParticleShadowBlob *blob )
 {
+	if (m_gpuCheck.compared || m_gpuCheck.cpuDiedFirst)
+	{
+		GpuCheckErrors &t = s_gpuCheckTotal;
+		if (m_gpuCheck.pos > t.pos)
+			s_gpuCheckWorstPos = m_template;
+		t.pos = max( t.pos, m_gpuCheck.pos );
+		t.size = max( t.size, m_gpuCheck.size );
+		t.angle = max( t.angle, m_gpuCheck.angle );
+		t.alpha = max( t.alpha, m_gpuCheck.alpha );
+		t.color = max( t.color, m_gpuCheck.color );
+		t.fadeAlpha = max( t.fadeAlpha, m_gpuCheck.fadeAlpha );
+		t.fadeColor = max( t.fadeColor, m_gpuCheck.fadeColor );
+		t.compared += m_gpuCheck.compared;
+		t.cpuDiedFirst += m_gpuCheck.cpuDiedFirst;
+		t.closedDiedFirst += m_gpuCheck.closedDiedFirst;
+		t.grounded += m_gpuCheck.grounded;
+		memset( &m_gpuCheck, 0, sizeof( m_gpuCheck ) );
+	}
+
 	if (m_pendingCastsGroundShadow)
 	{
 		ParticleShadowBlob footprint = *blob;
@@ -4248,6 +4372,20 @@ void ParticleSystemManager::update( void )
 		DEBUG_LOG(("PARTICLES frame %d: %d particles in %d systems, %d ground shadows\n",
 							 m_lastLogicFrameUpdate, m_particleCount, m_particleSystemCount,
 							 m_groundShadowCount));
+
+		// -gpuparticlecheck: the closed form the GPU ages its ring with, against the CPU twins over the
+		// last REPORT_INTERVAL frames.  "fade" is the last quarter of a life, where the closed form only
+		// caps; "died first" counts updates on which the two disagree about whether the particle lives.
+		if (TheGlobalData->m_gpuParticleCheck)
+		{
+			const ParticleSystem::GpuCheckErrors &t = s_gpuCheckTotal;
+			DEBUG_LOG(("GPUPARTICLECHECK frame %d: %u twin updates, largest error pos %.5f size %.5f angle %.5f alpha %.5f colour %.5f;"
+								 " in the fade alpha %.5f colour %.5f; died first: twin %u, closed form %u; %u grounded; worst pos in %s\n",
+								 m_lastLogicFrameUpdate, t.compared, t.pos, t.size, t.angle, t.alpha, t.color, t.fadeAlpha, t.fadeColor,
+								 t.cpuDiedFirst, t.closedDiedFirst, t.grounded, s_gpuCheckWorstPos ? s_gpuCheckWorstPos->getName().str() : "none"));
+			memset( &s_gpuCheckTotal, 0, sizeof( s_gpuCheckTotal ) );
+			s_gpuCheckWorstPos = NULL;
+		}
 	}
 }
 

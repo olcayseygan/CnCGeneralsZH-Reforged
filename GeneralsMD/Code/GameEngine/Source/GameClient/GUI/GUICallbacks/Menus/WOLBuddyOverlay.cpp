@@ -114,6 +114,23 @@ static void insertChat( BuddyMessage msg );
 static Bool onlineFriends( void );
 static const OnlineFriend *friendRow( Int id );
 static void addInviteEntry( GameWindow *menu );
+
+/// Team vs AI: a party invite can go to this friend (the service takes them, he is not in our party, it is not full)
+static Bool partyHasSeatFor( Int id )
+{
+	if( !OnlineTeamAIAvailable() )
+		return FALSE;
+	std::vector<OnlinePartyMember> party;
+	OnlineGetParty( party );
+	if( (Int)party.size() >= ONLINE_TEAM_SEATS )
+		return FALSE;
+	for( size_t each = 0; each < party.size(); each++ )
+	{
+		if( party[ each ].id == id )
+			return FALSE;
+	}
+	return TRUE;
+}
 // RightClick pointers ---------------------------------------------------------------------
 static GameWindow *rcMenu = NULL;
 static WindowLayout *noticeLayout = NULL;
@@ -251,11 +268,12 @@ WindowMsgHandledType BuddyControlSystem( GameWindow *window, UnsignedInt msg,
 					rcMenu->winBringToTop();
 					rcMenu->winHide(FALSE);
 
-					// -online: a friend signed in and not in a match is invited from here while we sit in a room
+					// -online: a friend signed in and not in a match is invited from here, into the room we sit in,
+					// or outside one into our Team vs AI party while it has a seat for him
 					const OnlineFriend *row = onlineFriends() ? friendRow( (Int)profileID ) : NULL;
 					if (row && itemType == ITEM_BUDDY && row->status == ONLINE_FRIEND_ACCEPTED
 						&& row->presence != ONLINE_PRESENCE_OFFLINE && row->presence != ONLINE_PRESENCE_MATCH
-						&& TheGameSpyInfo->getCurrentStagingRoomID() != 0)
+						&& (TheGameSpyInfo->getCurrentStagingRoomID() != 0 || partyHasSeatFor( row->id )))
 						addInviteEntry( rcMenu );
 
 					ICoord2D rcSize, rcPos;
@@ -2125,7 +2143,7 @@ static void destroyCorner( void )
 		TheWindowManager->winDestroy( s_toast );
 	s_keyHolder = s_friendsKey = NULL;
 	s_toast = s_toastJoin = s_toastDecline = NULL;
-	s_toastInvite.game = 0;
+	s_toastInvite.from = 0;
 	s_friendsKeyCount = -1;
 }
 
@@ -2168,7 +2186,7 @@ static void drawNothing( GameWindow *, WinInstanceData * )
 /// the toast: who, the room and its mode, JOIN lit and DECLINE, the invite's 120 s as a bar along the foot
 static void toastDraw( GameWindow *window, WinInstanceData * )
 {
-	if( s_toastInvite.game == 0 )
+	if( s_toastInvite.from == 0 )
 		return;
 	const IRegion2D r = MenuBox::windowRect( window );
 	MenuBox::fill( r, GameMakeColor( 4, 6, 12, 236 ) );
@@ -2263,6 +2281,8 @@ static UnicodeString modeWords( const AsciiString &mode )
 		return TheGameText->fetch( "GUI:GameModeDirectStrike" );
 	if( mode.compareNoCase( "apocalypse" ) == 0 )
 		return TheGameText->fetch( "GUI:GameModeApocalypse" );
+	if( mode.compareNoCase( "teamai" ) == 0 )
+		return TheGameText->fetch( "GUI:GameModeTeamAI" );		// a party invite: no room, game 0
 	return TheGameText->fetch( "GUI:GameModeClassic" );
 }
 
@@ -2283,7 +2303,7 @@ static void updateToast( GameWindow *parent )
 		if( s_toast )
 			TheWindowManager->winDestroy( s_toast );
 		s_toast = s_toastJoin = s_toastDecline = NULL;
-		s_toastInvite.game = 0;
+		s_toastInvite.from = 0;
 		return;
 	}
 	if( s_toast == NULL )
@@ -2291,7 +2311,7 @@ static void updateToast( GameWindow *parent )
 		s_toast = makeHolder( parent, "FriendsCorner.wnd:InviteToast", toastDraw );
 		s_toastJoin = makeCornerKey( s_toast, "FriendsCorner.wnd:ButtonJoin", UIStyle::capitals( TheGameText->fetch( "GUI:FriendJoin" ) ), TRUE );
 		s_toastDecline = makeCornerKey( s_toast, "FriendsCorner.wnd:ButtonDecline", UIStyle::capitals( TheGameText->fetch( "GUI:FriendDecline" ) ), FALSE );
-		s_toastInvite.game = 0;
+		s_toastInvite.from = 0;
 		if( s_toast == NULL )
 			return;
 		s_toast->winBringToTop();
@@ -2333,8 +2353,16 @@ static void leaveRoomNo( void )
 
 static void joinInvite( void )
 {
-	if( s_toastInvite.game == 0 )
+	if( s_toastInvite.from == 0 )
 		return;
+	if( s_toastInvite.game == 0 )
+	{
+		// a Team vs AI party's invite: taken where it stands, the hub shows the party
+		DEBUG_LOG(("ONLINE INVITE screen joins the party of %d\n", s_toastInvite.from));
+		OnlineAnswerInvite( s_toastInvite.from, 0, TRUE );
+		s_toastInvite.from = 0;
+		return;
+	}
 	s_join.from = s_toastInvite.from;
 	s_join.game = s_toastInvite.game;
 	s_join.until = Clock_Milliseconds() + JOIN_WAIT_MS;
@@ -2350,11 +2378,11 @@ static void joinInvite( void )
 
 static void declineInvite( void )
 {
-	if( s_toastInvite.game == 0 )
+	if( s_toastInvite.from == 0 )
 		return;
 	DEBUG_LOG(("ONLINE INVITE screen decline from=%d game=%d\n", s_toastInvite.from, s_toastInvite.game));
 	OnlineAnswerInvite( s_toastInvite.from, s_toastInvite.game, FALSE );
-	s_toastInvite.game = 0;
+	s_toastInvite.from = 0;
 }
 
 /// a screen's own key pressed as a click on it presses it, if it shows and takes clicks

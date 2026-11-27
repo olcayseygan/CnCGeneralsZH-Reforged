@@ -10387,3 +10387,34 @@ END
 GUI:FactionPickHintTick_Short
 "Click to tick · Esc goes back"
 END
+
+// Team vs AI on the hub's Play vs AI card: the Team fact, the search, the party and its LEAVE, the mode's word on
+// a party invite's toast
+
+GUI:OnlineHubTeamLabel
+"Team"
+END
+
+GUI:OnlineHubFindTeam
+"Find team"
+END
+
+GUI:OnlineHubCancelSearch
+"Cancel"
+END
+
+GUI:OnlineHubFindingTeam
+"Finding a team · %s · %d:%02d"
+END
+
+GUI:OnlineHubParty
+"Party"
+END
+
+GUI:OnlineHubLeaveParty
+"Leave"
+END
+
+GUI:GameModeTeamAI
+"TEAM VS AI"
+END

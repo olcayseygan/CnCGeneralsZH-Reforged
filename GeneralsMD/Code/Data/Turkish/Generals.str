@@ -24563,3 +24563,34 @@ END
 GUI:FactionPickHintTick_Short
 "Tıkla işaretle · Esc geri"
 END
+
+// Team vs AI on the hub's Play vs AI card: the Team fact, the search, the party and its LEAVE, the mode's word on
+// a party invite's toast
+
+GUI:OnlineHubTeamLabel
+"Takım"
+END
+
+GUI:OnlineHubFindTeam
+"Takım bul"
+END
+
+GUI:OnlineHubCancelSearch
+"Vazgeç"
+END
+
+GUI:OnlineHubFindingTeam
+"Takım aranıyor · %s · %d:%02d"
+END
+
+GUI:OnlineHubParty
+"Grup"
+END
+
+GUI:OnlineHubLeaveParty
+"Ayrıl"
+END
+
+GUI:GameModeTeamAI
+"BİLGİSAYARA KARŞI TAKIM"
+END

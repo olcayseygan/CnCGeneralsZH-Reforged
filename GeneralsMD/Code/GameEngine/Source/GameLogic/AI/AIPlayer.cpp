@@ -10983,10 +10983,16 @@ Bool AIPlayer::takeAttention( void )
 	return TRUE;
 }
 
+/** The harass parties and the raiders' withdraw rule lost rating where they were measured (2026-11-27, exe
+	* 2b8373f87): a Hard mirror went 11 to 18 against the seat without them, 2200 against 1800 15 to 17, and on
+	* the turtle bench the parties drove into the guns, losses to defences rising from 35.1k to 40.9k at 1800 and
+	* 31.2k to 49.0k at 2800.  Off until a version of them wins; the code and the knob stay for that. */
+static const Bool HARASS_PLAYS = FALSE;
+
 Bool AIPlayer::harassHere( void )
 {
 	// an Apocalypse seat fights the director's night, with no economy of the enemy's to raid
-	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_HARASS ) != 0 ) &&
+	return HARASS_PLAYS && runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_HARASS ) != 0 ) &&
 		!( TheApocalypseDirector != NULL && TheApocalypseDirector->isActive() );
 }
 

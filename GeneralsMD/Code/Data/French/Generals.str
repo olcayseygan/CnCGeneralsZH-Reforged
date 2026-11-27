@@ -17758,7 +17758,7 @@ GUI:AIPersonaTooltipAir
 END
 
 GUI:AIPersonaTooltipRusher
-"Jette tout dans une seule attaque, à trois minutes en Difficile et quatre et demie en Facile, avec presque aucune défense. Ensuite, il joue comme un Attaquant."
+"Jette tout dans une seule attaque, à trois minutes en Difficile et quatre et demie en Facile, avec presque aucune défense. Ensuite, il continue d'attaquer tôt et souvent."
 END
 
 GUI:AIPersonaTooltipRaider
@@ -17794,7 +17794,7 @@ GUI:AIPersonaTooltipCounter
 END
 
 GUI:AIPersonaTooltipRandom
-"Une des personnalités ci-dessus, tirée au début de la partie. Jamais Normal."
+"Un Fonceur, un Économiste ou une Tortue, tiré au début de la partie selon le général."
 END
 
 GUI:AIPersona

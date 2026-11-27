@@ -18590,11 +18590,11 @@ GUI:AIPersonaTooltipRaider
 END
 
 GUI:AIPersonaTooltipRandom
-"Einer der Charaktere oben, ausgelost beim Start der Partie. Nie Normal."
+"Rusher, Ökonom oder Igel, beim Start der Partie je nach General ausgelost."
 END
 
 GUI:AIPersonaTooltipRusher
-"Wirft alles in einen einzigen Angriff, auf Schwer nach drei Minuten, auf Leicht nach viereinhalb, fast ohne Verteidigung. Danach spielt er als Angreifer."
+"Wirft alles in einen einzigen Angriff, auf Schwer nach drei Minuten, auf Leicht nach viereinhalb, fast ohne Verteidigung. Danach greift er weiter früh und oft an."
 END
 
 GUI:AIPersonaTooltipSneaky

@@ -312,6 +312,12 @@ enum AIPersonality
 const char *aiPersonalityName( AIPersonality persona );
 AIPersonality aiPersonalityFromName( const char *name );
 
+/** The personality the lobby list shows for this one.  The list offers Normal, Rusher, Turtle,
+	* Economist, Infantry, Sneaky and Random, the five that play apart from Normal without losing to it
+	* (2026-11-28, 40 games each at 1800 Elo); the others still play as themselves from an old replay,
+	* save or -aipersona, and a lobby shows them as the nearest one it offers. */
+AIPersonality aiPersonalityOffered( AIPersonality persona );
+
 //-------------------------------------------------------------------------------------------------
 /** One rung of the ladder.  Every new AI behaviour adds a field here rather than a
 	* switch(difficulty) somewhere, so the whole ladder can be read, tuned and measured in one place.

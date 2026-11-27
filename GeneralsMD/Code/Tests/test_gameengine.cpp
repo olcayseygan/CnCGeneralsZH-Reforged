@@ -21414,6 +21414,24 @@ TEST(ai_persona_names_round_trip)
 	CHECK_EQ( (Int)aiPersonalityFromName( "nobody" ), (Int)AIPERSONA_NORMAL );
 }
 
+/** The lobby offers Normal, five personalities and Random; every other one shows as one of those. */
+TEST(ai_persona_lobby_offers_seven)
+{
+	Int offered = 0;
+	for( Int i = 0; i < AIPERSONA_COUNT; ++i )
+	{
+		const AIPersonality shown = aiPersonalityOffered( (AIPersonality)i );
+		CHECK_EQ( (Int)aiPersonalityOffered( shown ), (Int)shown );
+		if( shown == i )
+			++offered;
+	}
+	CHECK_EQ( offered, 7 );
+	CHECK_EQ( (Int)aiPersonalityOffered( AIPERSONA_NORMAL ), (Int)AIPERSONA_NORMAL );
+	CHECK_EQ( (Int)aiPersonalityOffered( AIPERSONA_RANDOM ), (Int)AIPERSONA_RANDOM );
+	CHECK_EQ( (Int)aiPersonalityOffered( AIPERSONA_ATTACKER ), (Int)AIPERSONA_RUSHER );
+	CHECK_EQ( (Int)aiPersonalityOffered( AIPERSONA_COUNTER ), (Int)AIPERSONA_NORMAL );
+}
+
 TEST(ai_persona_leans_the_way_its_name_says)
 {
 	const AIPersonaWeights &attacker = aiPersonaWeights( AIPERSONA_ATTACKER );

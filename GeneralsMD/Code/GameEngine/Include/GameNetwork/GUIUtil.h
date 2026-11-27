@@ -137,8 +137,8 @@ void InitLobbyTabs(GameWindow *parent, const char *layoutFilename,
 Bool LobbyTabClicked(NameKeyType controlID);
 void ShutdownLobbyTabs(void);
 
-// The personality column: one combo box a seat, one entry per AIPersonality in enum order with the
-// value as item data, shown only on a computer player's seat and changed only by the host; on any
+// The personality column: one combo box a seat, one entry per personality aiPersonalityOffered keeps,
+// in enum order with the value as item data, shown only on a computer player's seat and changed only by the host; on any
 // other seat UpdateAIPersonaComboBoxes widens the player box over the empty column.  The
 // layout in a stale Run/Window may not have the column, so a box that is not there stays NULL and
 // its seat plays Normal.  HandleAIPersonaSelection answers TRUE when the click was one of the boxes

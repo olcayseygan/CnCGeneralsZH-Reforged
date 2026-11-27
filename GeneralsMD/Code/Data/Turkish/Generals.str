@@ -17680,7 +17680,7 @@ GUI:AIPersonaTooltipAir
 END
 
 GUI:AIPersonaTooltipRusher
-"Her şeyini tek bir saldırıya koyar, Zor'da üçüncü, Kolay'da dördüncü buçuk dakikada, neredeyse hiç savunma kurmadan. Sonrasında Saldırgan gibi oynar."
+"Her şeyini tek bir saldırıya koyar, Zor'da üçüncü, Kolay'da dördüncü buçuk dakikada, neredeyse hiç savunma kurmadan. Sonrasında erken ve sık saldırmaya devam eder."
 END
 
 GUI:AIPersonaTooltipRaider
@@ -17716,7 +17716,7 @@ GUI:AIPersonaTooltipCounter
 END
 
 GUI:AIPersonaTooltipRandom
-"Yukarıdaki kişiliklerden biri, maç başlarken çekilir. Normal asla çıkmaz."
+"Baskıncı, Ekonomist ya da Kaplumbağa, maç başlarken generale göre çekilir."
 END
 
 GUI:AIPersona

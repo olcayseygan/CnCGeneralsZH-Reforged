@@ -1022,6 +1022,16 @@ static void personaListTooltip(GameWindow *listBox, WinInstanceData *, UnsignedI
 	TheMouse->setCursorTooltip(personaTooltip((Int)(intptr_t)GadgetListBoxGetItemData(listBox, row, col)), 0);
 }
 
+// the line that shows a seat's personality; one the list does not offer shows as its nearest
+static Int personaComboPos(GameWindow *combo, Int persona)
+{
+	const Int shown = aiPersonalityOffered((AIPersonality)persona);
+	for (Int pos = GadgetComboBoxGetLength(combo) - 1; pos > 0; --pos)
+		if ((Int)(intptr_t)GadgetComboBoxGetItemData(combo, pos) == shown)
+			return pos;
+	return 0;	// Normal heads the list
+}
+
 void InitAIPersonaComboBoxes(GameWindow *parent, const char *layoutFilename,
 														 GameWindow *comboPersona[], NameKeyType comboPersonaID[])
 {
@@ -1052,12 +1062,14 @@ void InitAIPersonaComboBoxes(GameWindow *parent, const char *layoutFilename,
 		const Color color = comboPersona[i]->winGetEnabledTextColor();
 		for (Int p = 0; p < AIPERSONA_COUNT; ++p)
 		{
+			if (aiPersonalityOffered((AIPersonality)p) != p)
+				continue;
 			AsciiString label;
 			label.format("GUI:AIPersona%s", aiPersonalityName((AIPersonality)p));
 			Int index = GadgetComboBoxAddEntry(comboPersona[i], TheGameText->fetch(label), color);
 			GadgetComboBoxSetItemData(comboPersona[i], index, (void *)(intptr_t)p);
 		}
-		GadgetComboBoxSetSelectedPos(comboPersona[i], AIPERSONA_NORMAL, TRUE);
+		GadgetComboBoxSetSelectedPos(comboPersona[i], 0, TRUE);	// Normal
 	}
 }
 
@@ -1083,8 +1095,9 @@ void UpdateAIPersonaComboBoxes(GameInfo *myGame, GameWindow *comboPersona[])
 		comboPersona[i]->winEnable(myGame->amIHost());
 		Int pos = -1;
 		GadgetComboBoxGetSelectedPos(comboPersona[i], &pos);
-		if (pos != slot->getAIPersonality())
-			GadgetComboBoxSetSelectedPos(comboPersona[i], slot->getAIPersonality(), TRUE);
+		const Int want = personaComboPos(comboPersona[i], slot->getAIPersonality());
+		if (pos != want)
+			GadgetComboBoxSetSelectedPos(comboPersona[i], want, TRUE);
 	}
 }
 
@@ -1109,7 +1122,7 @@ Bool HandleAIPersonaSelection(GameInfo *myGame, GameWindow *comboPersona[], Name
 		if (GameInfoToAsciiString(myGame).isEmpty())
 		{
 			slot->setAIPersonality(was);
-			GadgetComboBoxSetSelectedPos(comboPersona[i], was, TRUE);	// entries are in enum order
+			GadgetComboBoxSetSelectedPos(comboPersona[i], personaComboPos(comboPersona[i], was), TRUE);
 			return FALSE;
 		}
 		return TRUE;

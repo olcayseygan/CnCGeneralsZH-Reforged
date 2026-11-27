@@ -3041,7 +3041,7 @@ GUI:AIPersonaTooltipAir
 END
 
 GUI:AIPersonaTooltipRusher
-"Throws everything into one attack, three minutes in on Hard and four and a half on Easy, with almost no defences. After it, it plays as an Attacker."
+"Throws everything into one attack, three minutes in on Hard and four and a half on Easy, with almost no defences. After it, it keeps attacking early and often."
 END
 
 GUI:AIPersonaTooltipRaider
@@ -3077,7 +3077,7 @@ GUI:AIPersonaTooltipCounter
 END
 
 GUI:AIPersonaTooltipRandom
-"One of the personalities above, drawn when the match starts. Never Normal."
+"A Rusher, an Economist or a Turtle, drawn when the match starts, leaning by the general."
 END
 
 GUI:AIPersona

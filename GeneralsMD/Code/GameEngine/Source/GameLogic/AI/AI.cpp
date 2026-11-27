@@ -2784,6 +2784,20 @@ AIPersonality aiPersonalityFromName( const char *name )
 	return AIPERSONA_NORMAL;
 }
 
+AIPersonality aiPersonalityOffered( AIPersonality persona )
+{
+	switch( persona )
+	{
+		case AIPERSONA_RUSHER: case AIPERSONA_TURTLE: case AIPERSONA_ECONOMIST: case AIPERSONA_INFANTRY:
+		case AIPERSONA_SNEAKY: case AIPERSONA_RANDOM:
+			return persona;
+		case AIPERSONA_ATTACKER: return AIPERSONA_RUSHER;	// the Rusher plays the Attacker's row once its rush is out
+		case AIPERSONA_TECH: return AIPERSONA_TURTLE;			// behind its guns until the superweapon stands
+		case AIPERSONA_RAIDER: return AIPERSONA_SNEAKY;		// around the army, at the soft spots
+		default: return AIPERSONA_NORMAL;		// Air, Armor, Opportunist, Supporter, Counter: Normal's play with a lean
+	}
+}
+
 //-------------------------------------------------------------------------------------------------
 /** The personalities, one row each in AIPersonality's order.  The buy columns are aiPurchaseScore's
 	* kinds: power, dozer, economy, base, superweapon, defence, army, upgrade, emergency.  The Rusher's

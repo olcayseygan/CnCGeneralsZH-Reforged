@@ -952,7 +952,11 @@ class Walk(object):
             elif depth < 2 and after.get("screen") == before.get("screen") and not after.get("modal") \
                     and w["n"] not in self.game.spec.get("nodescend", []):
                 fresh = [c for c in controls(after, self.area) if c["n"] not in self.done and c["n"] not in named(before)]
-                if fresh:
+                if fresh and (w["t"] == "tab" or leaf(w["n"]).startswith("Tab")):
+                    # a tab's page is reached from the root by that tab alone, not through the tab before it, so
+                    # eight tabs do not use up the depth on the way
+                    self.walk([w["n"]], 1)
+                elif fresh:
                     self.walk(path + [w["n"]], depth + 1)
         disabled = [w for w in controls(tree, self.area) if not w["e"]]
         if disabled and depth == 0 and not path:

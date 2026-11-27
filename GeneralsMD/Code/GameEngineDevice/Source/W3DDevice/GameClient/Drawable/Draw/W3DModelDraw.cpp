@@ -1874,6 +1874,7 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	memset(&m_quad, 0, sizeof(m_quad));
 	m_ragdoll = NULL;
 	m_ragdollRefused = FALSE;
+	m_ragdollDying = FALSE;
 	m_ragdollSaved = NULL;
 	m_ragdollWanted =getDrawable() != NULL && W3DRagdoll::wants(getDrawable()->getTemplate());
 	if (m_ragdollWanted)
@@ -2652,28 +2653,19 @@ void W3DModelDraw::reactToImpact( const Coord3D &pos, Real radius, const Coord3D
 }
 
 //-------------------------------------------------------------------------------------------------
-static Bool stateIsDying(const ModelConditionInfo* state)
-{
-	if (state == NULL)
-		return FALSE;
-	for (size_t i = 0; i < state->m_conditionsYesVec.size(); ++i)
-		if (state->m_conditionsYesVec[i].test(MODELCONDITION_DYING))
-			return TRUE;
-	return FALSE;
-}
-
-//-------------------------------------------------------------------------------------------------
 /** The Ragdoll option, every draw of an infantry model once the drawable's transform is on it.  It goes
-	by the state this module last applied, never the object, which the tick may be writing beside the
-	render.  The option is asked only before a ragdoll starts, so one switched off mid-match lies down
-	as it was going to. */
+	by the flags this module last applied, never the object, which the tick may be writing beside the
+	render.  Not by the state those flags chose: the retail paratrooper's and rappeller's states list
+	PARACHUTING DYING, FREEFALL DYING and RAPPELLING DYING among their aliases, so every Ranger under
+	a chute went limp alive and lay on the ground as a body once he landed.  The option is asked only
+	before a ragdoll starts, so one switched off mid-match lies down as it was going to. */
 void W3DModelDraw::updateRagdoll()
 {
 	if (m_renderObject == NULL || m_ragdollRefused)
 		return;
 	if (m_ragdoll == NULL)
 	{
-		if (!W3DRagdoll::enabled() || (!stateIsDying(m_curState) && !stateIsDying(m_nextState)))
+		if (!W3DRagdoll::enabled() || !m_ragdollDying)
 			return;
 		m_ragdoll = W3DRagdoll::create(m_renderObject, m_ragdollImpact, getDrawable()->getTemplate());
 		// a loaded save's body lies where it lay, not where the death clip's first frame stands
@@ -4447,6 +4439,7 @@ void W3DModelDraw::setModelState(const ModelConditionInfo* newState)
 void W3DModelDraw::replaceModelConditionState(const ModelConditionFlags& c)
 {
 	m_hideHeadlights = c.test(MODELCONDITION_NIGHT) ? false : true;
+	m_ragdollDying = c.test(MODELCONDITION_DYING);
 
 	const ModelConditionInfo* info = findBestInfo(c);
 	if (info)

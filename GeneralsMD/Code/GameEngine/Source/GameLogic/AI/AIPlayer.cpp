@@ -18119,6 +18119,7 @@ static const AIRungReal RANK_PULL_WAITS_FOR_CLEAR = { { 0.0f, 1.0f, 1.0f }, AIKN
 static const Int DEAR_UNIT_COST = 1000;
 static const AIRungReal DEAR_PULL_HEALTH = { { 0.0f, 0.25f, 0.3f }, AIKNOB_GATED };
 static const Real DEAR_PULL_HEALTH_MOST = 0.4f;
+static const Real DEAR_STAYS_WINNING = 2.0f;	///< a team's fight this far in its favour keeps its dear units (-aiknobsoff dearstay)
 
 Bool AIRetreat_rankPullsOut( Int rank, Real healthFraction, Bool inFight, Real ratio, Real retreatRatio )
 {
@@ -18214,6 +18215,11 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 			continue;
 		const Real health = obj->getBodyModule()->getHealth() / obj->getBodyModule()->getMaxHealth();
 		if( dear ? health >= unitDearHealth : !AIRetreat_rankPullsOut( rank, health, inFight, ratio, getSkillProfile()->m_retreatTtkRatio ) )
+			continue;
+		// a dear one in a fight its team is winning stays in it: walked out alone it died on the way, two Overlords
+		// of an 8-seat Twilight Flame match pulled at 19 and 26 to 1, 900 and 1,150 from their War Factory, one
+		// to a Tomahawk 1.6 s later.  The fight is over soon and the team round it is its cover
+		if( dear && inFight && ratio >= DEAR_STAYS_WINNING && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_DEAR_STAY ) != 0 ) )
 			continue;
 		// one standing inside a reach the map shows for its class fights on where it is, and goes once it is clear.
 		// Walked out hurt, it died on the way: in eight Hard Air Force against China matches on Tournament Desert

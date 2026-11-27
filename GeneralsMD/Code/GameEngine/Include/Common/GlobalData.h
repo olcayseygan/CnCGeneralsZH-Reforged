@@ -127,8 +127,10 @@ enum
 	AIKNOB_TEAM_PLAY		= 8192,	///< a Normal seat neither joins an ally's attack nor sends its home units into an ally's hit base, as before 2026-11-27
 	AIKNOB_DEAR_PULL		= 16384,	///< a hurt unit at rank 0 fights on however dear it was, as before 2026-11-27
 	AIKNOB_HOME_STRETCH	= 32768,	///< a plan entry moved off an unsafe spot looks inside the base only, never on the stretched edge behind it, as before 2026-11-27
-	AIKNOB_IDENTITY			= 65536,	///< no general's own moves (AIMOVE_* in AIPlayer.h): every general plays the shared AI, as before 2026-11-27
+	AIKNOB_IDENTITY			= 65536,	///< no general's own moves (AIIdentity.h): every general plays the shared AI, as before 2026-11-27
 	AIKNOB_MENDERS			= 131072,	///< a hurt unit pulled out is sent to a repair or heal dock only, never into a heal aura or a tunnel, as before 2026-11-27
+	AIKNOB_BIB_GAP			= 262144,	///< the AI's three-cell building margin counted twice on the other building's short side, EA's sum, as before 2026-11-27
+	AIKNOB_DEAR_STAY		= 524288,	///< a hurt dear unit is pulled out of a fight its team is winning too, as before 2026-11-27
 };
 
 //-------------------------------------------------------------------------------------------------

@@ -138,6 +138,8 @@ static UnsignedInt s_lastPressTime = 0;
 static Bool s_pressedHere = FALSE;		///< the left press that this release ends came to the screen
 static Bool s_sinking = FALSE;			///< closed: the window eats input, unseen, until the next frame
 static UnsignedInt s_sinkFrame = 0;
+static GameWindow *s_room = NULL;		///< the room's top window, disabled while the screen is up
+static Bool s_roomWasEnabled = FALSE;
 
 static IRegion2D s_tabBox[ 2 ], s_backBox, s_confirmBox;
 
@@ -1023,11 +1025,15 @@ static void removeWindow( void )
 {
 	if( s_window == NULL )
 		return;
+	// hiding the modal window pops it off the modal stack itself; a second unset only logs a complaint
 	s_window->winHide( TRUE );
-	TheWindowManager->winUnsetModal( s_window );
 	TheWindowManager->winDestroy( s_window );
 	s_window = NULL;
 	s_sinking = FALSE;
+	// the room takes clicks again, unless it is the one going away
+	if( s_room && s_roomWasEnabled && !BitTest( s_room->winGetStatus(), WIN_STATUS_DESTROYED ) )
+		s_room->winSetStatus( WIN_STATUS_ENABLED );
+	s_room = NULL;
 }
 
 /** The screen closes.  Its window stays modal, drawing nothing, until the next frame (drawPicker takes
@@ -1213,6 +1219,7 @@ static WindowMsgHandledType pickerInput( GameWindow *window, UnsignedInt msg, Wi
 			s_pressedHere = TRUE;
 			break;
 		case GWM_LEFT_UP:
+			DEBUG_LOG(( "FACTIONPICKER release at %d,%d, its press %s\n", x, y, s_pressedHere ? "here" : "elsewhere" ));
 			// only the release of a press the screen took acts: the click that opened it ended on the box
 			if( s_pressedHere )
 				releaseAt( x, y );
@@ -1246,6 +1253,18 @@ static void openPicker( GameWindow *combo )
 	GadgetComboBoxHideList( combo );
 	if( TheWindowManager->winGetLoneWindow() == combo )
 		TheWindowManager->winSetLoneWindow( NULL );
+	/* The room under the screen takes no click while it is up, whatever way a click looks for a window:
+		 in the UI walk a click on CONFIRM reached the room's Play Game, standing on the same rectangle,
+		 and started the match without the screen ever confirming.  Its top window is disabled, which no
+		 child under it survives (the window list skips a top window that is not enabled), and enabled
+		 again once the screen has gone.  Only its own flag: winEnable would set every child's too, and
+		 enabling them again would wake keys the room keeps off (Reset, a joiner's boxes). */
+	s_room = combo;
+	while( s_room->winGetParent() )
+		s_room = s_room->winGetParent();
+	s_roomWasEnabled = BitTest( s_room->winGetStatus(), WIN_STATUS_ENABLED );
+	if( s_roomWasEnabled )
+		s_room->winClearStatus( WIN_STATUS_ENABLED );
 	buildCells();
 
 	// the box's Random line remembers the seat's last pool, so a seat on an army keeps it too

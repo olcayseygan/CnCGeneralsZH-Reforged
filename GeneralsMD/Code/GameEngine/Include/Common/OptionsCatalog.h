@@ -266,10 +266,6 @@ extern const GraphicsQualityRow *findGraphicsQualityRow( const char *control );
 	* Graphics is ticked the slider and the presets move only EA's, and unticking it fills these in. */
 extern Bool graphicsQualityRowIsReforged( const GraphicsQualityRow &row );
 
-/** The options screen's 0 to 3 mark for a measured price (SETTINGS-PLAN.md's cost column): 0 nothing
-	* measurable, 1 under 0.3 ms, 2 up to 1 ms, 3 above.  A negative cost is one never measured. */
-extern Int optionCostMark( Real costMs );
-
 //-----------------------------------------------------------------------------
 // One page of the options screen laid out down its column (menu package 8): group heads and rows one
 // under the other, a gap before every head but the first, Audio's faders taking what the rest leave,

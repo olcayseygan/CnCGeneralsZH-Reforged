@@ -8726,8 +8726,8 @@ END
 
 // Menu redesign package 8, the options screen: the rail's tabs and groups, Look and Quality, the fold,
 // the badges and their legend, the reasons a row is greyed, the merged lists, the pane's blocks and
-// every row's OPTIONTIP:<Stem>, the two sentences the pane says about it.  OPTIONCOST:<Stem><entry> is a
-// list entry's measured price where one was measured.  OptionsMenu.cpp, optionsmenu_layout.py.
+// every row's OPTIONTIP:<Stem>, the two sentences the pane says about it: what the row changes on the
+// screen.  OptionsMenu.cpp, optionsmenu_layout.py.
 GUI:OptionsTabSystem
 "System"
 END
@@ -8804,38 +8804,6 @@ GUI:OptionsLegendNextMap
 "from the next map"
 END
 
-GUI:OptionsCost
-"Cost"
-END
-
-GUI:OptionsCostMs
-"About %s ms a frame"
-END
-
-GUI:OptionsCostZero
-"No measurable cost"
-END
-
-GUI:OptionsCostUnmeasured
-"Cost not measured yet"
-END
-
-GUI:OptionsCostRig
-"RTX 2060, 1080p"
-END
-
-GUI:OptionsCostWaterStyle
-"3 to 6 ms Classic, 11 to 45 ms Modern on a sea map"
-END
-
-GUI:OptionsTabCost
-"Measured cost of this tab"
-END
-
-GUI:OptionsTabCostUnit
-"a frame, RTX 2060 at 1080p"
-END
-
 GUI:OptionsNeeds
 "Needs"
 END
@@ -8848,16 +8816,8 @@ GUI:OptionsChoices
 "Choices"
 END
 
-GUI:OptionsGroupCost
-"%s · cost a frame"
-END
-
 GUI:OptionsGroupAsSet
 "%s · as set"
-END
-
-GUI:OptionsNotMeasured
-"not measured"
 END
 
 GUI:OptionsNot
@@ -9100,40 +9060,8 @@ GUI:HotkeysAlsoOnKey
 "Also on this key"
 END
 
-OPTIONCOST:ShadowQuality2
-"about 0.25 ms"
-END
-
-OPTIONCOST:ShadowQuality3
-"up to 1.6 ms"
-END
-
-OPTIONCOST:MSAA2
-"about 0.4 ms"
-END
-
-OPTIONCOST:SunShafts1
-"half of High"
-END
-
-OPTIONCOST:SunShafts2
-"about 0.4 ms"
-END
-
-OPTIONCOST:WaterStyle0
-"3 to 6 ms on a sea map"
-END
-
-OPTIONCOST:WaterStyle1
-"11 to 45 ms on a sea map"
-END
-
-OPTIONCOST:Smoke2
-"about 0.75 ms"
-END
-
 OPTIONTIP:Resolution
-"How many pixels the game draws. Your monitor's own size is the sharpest; a smaller one runs faster and looks softer."
+"How many pixels the game draws. Your monitor's own size is the sharpest; a smaller one looks softer."
 END
 
 OPTIONTIP:WindowMode
@@ -9189,15 +9117,15 @@ OPTIONTIP:ConnectionTest
 END
 
 OPTIONTIP:CastShadows
-"Units, buildings and trees throw shadows on the ground and each other. The heaviest box here: turn it off first if big fights stutter."
+"Units, buildings and trees throw shadows on the ground and on each other."
 END
 
 OPTIONTIP:ShadowQuality
-"How sharp shadow edges are. Ray Traced keeps them crisp at any zoom but costs the most; Low frees video memory on a weak card."
+"How sharp shadow edges are. Low draws them soft and blocky; Ray Traced keeps them crisp at any zoom."
 END
 
 OPTIONTIP:FlatShadows
-"A flat dark patch under units that have no real shadow. Costs nothing."
+"A flat dark patch under units that have no real shadow."
 END
 
 OPTIONTIP:InfantryShadows
@@ -9209,11 +9137,11 @@ OPTIONTIP:ProjectileShadows
 END
 
 OPTIONTIP:PropShadows
-"Fences, rubbish and shrubs cast shadows too. Small cost on maps full of props."
+"Fences, rubbish and shrubs cast shadows too."
 END
 
 OPTIONTIP:ParticleShadows
-"Big smoke and dust clouds lay a soft shadow on the ground. Small cost in heavy fighting."
+"Big smoke and dust clouds lay a soft shadow on the ground."
 END
 
 OPTIONTIP:VolumetricSmoke
@@ -9221,19 +9149,19 @@ OPTIONTIP:VolumetricSmoke
 END
 
 OPTIONTIP:CloudShadows
-"Shadows of passing clouds drift over the ground. Costs nothing."
+"Shadows of passing clouds drift over the ground."
 END
 
 OPTIONTIP:TextureResolution
-"How sharp textures are up close. Lower it only on a card with little video memory."
+"How sharp textures are up close. Low blurs walls, vehicles and the ground."
 END
 
 OPTIONTIP:MSAA
-"Smooths the jagged steps along model edges. 2x or 4x is enough; higher costs frame rate for little gain."
+"Smooths the jagged steps along model edges. Past 4x the edges barely change."
 END
 
 OPTIONTIP:HDTextures
-"Every texture and ground tile at twice the detail. Turn it off if your card is short of video memory."
+"Every texture and ground tile at twice the detail."
 END
 
 OPTIONTIP:DetailedModels
@@ -9241,7 +9169,7 @@ OPTIONTIP:DetailedModels
 END
 
 OPTIONTIP:TextureFiltering
-"Keeps distant ground sharp instead of blurred and shimmering. Anisotropic 16x costs almost nothing on any recent card."
+"Keeps distant ground sharp instead of blurred and shimmering. Anisotropic 16x is the sharpest."
 END
 
 OPTIONTIP:KeepDetail
@@ -9249,7 +9177,7 @@ OPTIONTIP:KeepDetail
 END
 
 OPTIONTIP:FullDetailAtDistance
-"Units and buildings far from the camera keep their full detail instead of a lighter model. Small cost, seen mostly when zoomed out."
+"Units and buildings far from the camera keep their full detail instead of a lighter model. Seen mostly when zoomed out."
 END
 
 OPTIONTIP:LightingStyle
@@ -9265,7 +9193,7 @@ OPTIONTIP:MapLight
 END
 
 OPTIONTIP:SunShafts
-"Sunlight falls in beams through dust between buildings and trees, strongest at dawn and dusk. Low costs half of High."
+"Sunlight falls in beams through dust between buildings and trees, strongest at dawn and dusk. High draws smoother beams than Low."
 END
 
 OPTIONTIP:AmbientOcclusion
@@ -9301,7 +9229,7 @@ OPTIONTIP:GroundFoliage
 END
 
 OPTIONTIP:GroundLighting
-"A faint light and dark pattern on the ground hides its repeating tiles. Costs nothing."
+"A faint light and dark pattern on the ground hides its repeating tiles."
 END
 
 OPTIONTIP:TreeSway
@@ -9309,7 +9237,7 @@ OPTIONTIP:TreeSway
 END
 
 OPTIONTIP:WaterStyle
-"Modern adds waves, shore detail and foam behind ships. It is heavy on sea maps; keep Classic on a weak card."
+"Modern adds waves, shore detail and foam behind ships. Classic is the original flat water."
 END
 
 OPTIONTIP:SmoothWater
@@ -9321,15 +9249,15 @@ OPTIONTIP:WaterFoam
 END
 
 OPTIONTIP:WaterSplashes
-"Shells and falling bodies splash and send rings across water. Classic water only; small cost under heavy shelling."
+"Shells and falling bodies splash and send rings across water. Classic water only."
 END
 
 OPTIONTIP:WaterFftResolution
-"Fine ripples on Modern water waves. Low is faster."
+"Fine ripples on Modern water waves. High draws the finest."
 END
 
 OPTIONTIP:WaterRefractionQuality
-"Full bends the view under the surface, Simple keeps it clear, Off makes the water opaque and fastest."
+"Full bends the view under the surface, Simple keeps it clear, Off makes the water opaque."
 END
 
 OPTIONTIP:MapAwareWaveHeading
@@ -9341,19 +9269,19 @@ OPTIONTIP:UnderwaterClarity
 END
 
 OPTIONTIP:Reflections
-"What the water reflects. Off keeps only the sky and sun glint and is fastest; Hybrid looks best."
+"What the water reflects. Off keeps only the sky and sun glint; Hybrid shows the most."
 END
 
 OPTIONTIP:WaterReflectionDetail
-"How sharp the reflections are. Low is faster."
+"How sharp the reflections are."
 END
 
 OPTIONTIP:ParticleCap
-"How many sparks, smoke puffs and flames can exist at once. The second heaviest setting: lower it if explosions slow the game."
+"How many sparks, smoke puffs and flames can exist at once. Low thins out big explosions."
 END
 
 OPTIONTIP:Smoke
-"How long smoke hangs and how thick it looks. Very Thick hides more of the battlefield and costs frame rate over burning bases."
+"How long smoke hangs and how thick it looks. Very Thick hides more of the battlefield."
 END
 
 OPTIONTIP:DebrisTrails
@@ -9365,7 +9293,7 @@ OPTIONTIP:ParticleBounce
 END
 
 OPTIONTIP:Firelight
-"Fires and explosions throw flickering orange light on the ground, walls and units, most of all at night. Turn it off if night battles stutter."
+"Fires and explosions throw flickering orange light on the ground, walls and units, most of all at night."
 END
 
 OPTIONTIP:HeatHaze
@@ -9373,7 +9301,7 @@ OPTIONTIP:HeatHaze
 END
 
 OPTIONTIP:SmokeFireLighting
-"Smoke next to a fire picks up its orange light. Costs nothing."
+"Smoke next to a fire picks up its orange light."
 END
 
 OPTIONTIP:CloudStyle
@@ -9385,7 +9313,7 @@ OPTIONTIP:GroundMarks
 END
 
 OPTIONTIP:StructureCollapse
-"A destroyed building sinks into the ground instead of vanishing at once. Looks only; turn it off if the moment a base falls stutters."
+"A destroyed building sinks into the ground instead of vanishing at once."
 END
 
 OPTIONTIP:Ragdoll

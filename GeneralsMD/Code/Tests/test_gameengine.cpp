@@ -29613,6 +29613,7 @@ TEST(reforged_archives_wanted_by_options_and_the_skins_always)
 		CHECK( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "ReforgedSkins.big" ), classic, hd, detailed ) );
 		CHECK( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "C:\\Run\\reforgedskins.BIG" ), classic, hd, detailed ) );
 		CHECK( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "ReforgedFracture.big" ), classic, hd, detailed ) );
+		CHECK( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "ReforgedOptionPreviews.big" ), classic, hd, detailed ) );
 		CHECK_EQ( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "ReforgedTextures.big" ), classic, hd, detailed ), !classic && hd );
 		CHECK_EQ( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "ReforgedUSA.big" ), classic, hd, detailed ), !classic && detailed );
 		CHECK_EQ( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "ReforgedSkinsExtra.big" ), classic, hd, detailed ), !classic && detailed );
@@ -30006,6 +30007,7 @@ TEST(a_retail_texture_comes_only_from_the_games_own_sources)
 	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedNeutralG.big" ) ) );
 	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedTextures.big" ) ) );
 	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedTerrain.big" ) ) );
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedOptionPreviews.big" ) ) );
 	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedZSkins.big" ) ) );
 	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedNeutral.big" ) ) );
 	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedNeutralAB.big" ) ) );

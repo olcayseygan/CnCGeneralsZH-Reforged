@@ -59,6 +59,7 @@
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetComboBox.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameClient/GadgetRadioButton.h"
 #include "GameClient/GadgetSlider.h"
 #include "GameClient/HeaderTemplate.h"
@@ -3485,6 +3486,17 @@ static Bool lookViewPicked( GameWindow *control )
 	return FALSE;
 }
 
+/// Look's two boxes hold the choice as their pushed state, the picked one pushed, so the gadgets
+/// say what the screen shows (ui_walk.py reads it)
+static void lookShowLook( void )
+{
+	const Bool classic = lookClassicPicked();
+	if( s_lookClassic && BitTest( s_lookClassic->winGetStatus(), WIN_STATUS_CHECK_LIKE ) )
+		GadgetCheckLikeButtonSetVisualCheck( s_lookClassic, classic );
+	if( s_lookReforged && BitTest( s_lookReforged->winGetStatus(), WIN_STATUS_CHECK_LIKE ) )
+		GadgetCheckLikeButtonSetVisualCheck( s_lookReforged, !classic );
+}
+
 /// Look's two boxes stand for the hidden Classic Graphics box
 static void lookPickLook( Bool classic )
 {
@@ -3820,6 +3832,8 @@ static void lookTabDraw( GameWindow *window, WinInstanceData *instData )
 static void lookLookDraw( GameWindow *window, WinInstanceData *instData )
 {
 	const Bool picked = ( window == s_lookClassic ) == lookClassicPicked();
+	// Defaults and the page's own Classic box move the choice too; the boxes follow it here
+	lookShowLook();
 	UIStyle::menuTab( lookWindowRect( window ), instData->getTextDisplayString(), picked,
 		BitTest( instData->getState(), WIN_STATE_HILITED ) );
 }
@@ -4304,8 +4318,8 @@ static void lookFrameDraw( GameWindow *window, WinInstanceData *instData )
 		if( ( item.kind == LOOK_ROW || item.kind == LOOK_FADER ) && !item.window->winIsHidden() && item.window->winPointInWindow( mouse.x, mouse.y ) )
 			hit = i;
 	}
-	const IRegion2D look = lookRect( LOOK_RAIL_LEFT, 776, LOOK_RAIL_RIGHT, 842 );
-	const IRegion2D quality = lookRect( LOOK_RAIL_LEFT, 856, LOOK_RAIL_RIGHT, 924 );
+	const IRegion2D look = lookRect( LOOK_RAIL_LEFT, 774, LOOK_RAIL_RIGHT, 840 );
+	const IRegion2D quality = lookRect( LOOK_RAIL_LEFT, 858, LOOK_RAIL_RIGHT, 926 );
 	const Bool inLook = mouse.x >= look.lo.x && mouse.x < look.hi.x && mouse.y >= look.lo.y && mouse.y < look.hi.y;
 	const Bool inQuality = mouse.x >= quality.lo.x && mouse.x < quality.hi.x && mouse.y >= quality.lo.y && mouse.y < quality.hi.y;
 	if( inLook || inQuality )
@@ -4329,14 +4343,14 @@ static void lookFrameDraw( GameWindow *window, WinInstanceData *instData )
 
 	// Look, with its badge; Quality with its word, its notch words, and LOCKED IN A MATCH in one
 	Int x = lookX( LOOK_RAIL_LEFT );
-	x += lookCaps( TheGameText->fetch( "GUI:OptionsLook" ), x, lookY( 786 ), UIStyle::MUTED ) + lookPx( 12.0f );
-	lookBadges( ROW_RESTART, x, lookY( 786 ) );
-	lookCaps( TheGameText->fetch( "GUI:OptionsQuality" ), lookX( LOOK_RAIL_LEFT ), lookY( 866 ), UIStyle::MUTED );
+	x += lookCaps( TheGameText->fetch( "GUI:OptionsLook" ), x, lookY( 784 ), UIStyle::MUTED ) + lookPx( 12.0f );
+	lookBadges( ROW_RESTART, x, lookY( 784 ) );
+	lookCaps( TheGameText->fetch( "GUI:OptionsQuality" ), lookX( LOOK_RAIL_LEFT ), lookY( 868 ), UIStyle::MUTED );
 	Int detail = CUSTOMDETAIL;
 	if( comboBoxDetail )
 		GadgetComboBoxGetSelectedPos( comboBoxDetail, &detail );
 	lookCaps( TheGameText->fetch( detail >= ULTRADETAIL && detail < CUSTOMDETAIL ? TheDetailCaptions[ detail ] : "GUI:Custom" ),
-		lookX( LOOK_RAIL_RIGHT ), lookY( 866 ), UIStyle::INK, 2 );
+		lookX( LOOK_RAIL_RIGHT ), lookY( 868 ), UIStyle::INK, 2 );
 	if( s_lookQuality )
 	{
 		const IRegion2D r = lookWindowRect( s_lookQuality );
@@ -4363,10 +4377,10 @@ static void lookFrameDraw( GameWindow *window, WinInstanceData *instData )
 		const Int dropped = rights[ 1 ] > lefts[ 2 ] - lookPx( 4.0f ) ? ( lit == 1 ? 2 : 1 ) : -1;
 		for( Int level = 0; level < 4; ++level )
 			if( level != dropped )
-				lookCaps( TheGameText->fetch( steps[ level ] ), lefts[ level ], lookY( 912 ), level == lit ? UIStyle::ACTIVE : UIStyle::MUTED );
+				lookCaps( TheGameText->fetch( steps[ level ] ), lefts[ level ], lookY( 914 ), level == lit ? UIStyle::ACTIVE : UIStyle::MUTED );
 	}
 	if( s_lookInMatch )
-		lookCaps( TheGameText->fetch( "GUI:OptionsLocked" ), lookX( LOOK_RAIL_LEFT ), lookY( 936 ), UIStyle::MUTED );
+		lookCaps( TheGameText->fetch( "GUI:OptionsLocked" ), lookX( LOOK_RAIL_LEFT ), lookY( 938 ), UIStyle::MUTED );
 
 	// the foot: a faint rule, the badges' legend beside the keys
 	const IRegion2D foot = lookRect( UIStyle::MENU_PANEL_LEFT + 2, LOOK_FOOT_RULE, UIStyle::MENU_PANEL_RIGHT - 2, LOOK_FOOT_RULE + 1 );
@@ -4429,10 +4443,14 @@ static void lookStyle( void )
 		if( GameWindow *thumb = GadgetSliderGetThumb( s_lookQuality ) )
 			thumb->winSetDrawFunc( lookNothingDraw );
 	}
-	if( s_lookClassic )
-		s_lookClassic->winSetDrawFunc( lookLookDraw );
-	if( s_lookReforged )
-		s_lookReforged->winSetDrawFunc( lookLookDraw );
+	GameWindow *looks[] = { s_lookClassic, s_lookReforged };
+	for( Int i = 0; i < ARRAY_SIZE( looks ); ++i )
+		if( looks[ i ] )
+		{
+			looks[ i ]->winSetDrawFunc( lookLookDraw );
+			GadgetButtonEnableCheckLike( looks[ i ], TRUE, FALSE );
+		}
+	lookShowLook();
 	static const char *const keys[] = { "ButtonDefaults", "ButtonBack", "ButtonFirewallRefresh", "ButtonHotkeyChange", "ButtonHotkeyClear", "ButtonHotkeyDefault" };
 	for( Int i = 0; i < ARRAY_SIZE( keys ); ++i )
 		UIStyle::setMenuKey( lookFind( keys[ i ] ), FALSE );
@@ -4566,7 +4584,9 @@ static Bool lookClicked( GameWindow *control )
 		}
 	if( control == s_lookClassic || control == s_lookReforged )
 	{
+		// the press flipped the box's pushed state; the choice puts both back where they belong
 		lookPickLook( control == s_lookClassic );
+		lookShowLook();
 		return TRUE;
 	}
 	return FALSE;
@@ -4616,6 +4636,8 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	checkSendDelay				 = TheWindowManager->winGetWindowFromId( NULL, checkSendDelayID);
 	buttonFirewallRefreshID	= TheNameKeyGenerator->nameToKey( AsciiString( "OptionsMenu.wnd:ButtonFirewallRefresh" ) );
 	buttonFirewallRefresh		= TheWindowManager->winGetWindowFromId( NULL, buttonFirewallRefreshID);
+	if( buttonFirewallRefresh && s_lookTested )
+		buttonFirewallRefresh->winEnable( FALSE );
 	checkDrawAnchorID       = TheNameKeyGenerator->nameToKey( AsciiString( "OptionsMenu.wnd:CheckBoxDrawAnchor" ) );
 	checkDrawAnchor				 = TheWindowManager->winGetWindowFromId( NULL, checkDrawAnchorID);
 	checkMoveAnchorID       = TheNameKeyGenerator->nameToKey( AsciiString( "OptionsMenu.wnd:CheckBoxMoveAnchor" ) );
@@ -5490,6 +5512,8 @@ WindowMsgHandledType OptionsMenuSystem( GameWindow *window, UnsignedInt msg,
 				numstr = num;
 				(*pref)["FirewallBehavior"] = numstr;
 				s_lookTested = TRUE;
+				// asked once is asked: the key greys and its row says the test waits for the sign-in
+				buttonFirewallRefresh->winEnable( FALSE );
 			}
 			break;
 

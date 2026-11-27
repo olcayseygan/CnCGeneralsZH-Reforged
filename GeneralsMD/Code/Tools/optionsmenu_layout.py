@@ -52,9 +52,11 @@ RULE = (34, 110, 1886, 112)
 BODY_TOP, BODY_BOTTOM = 132, 954
 RAIL_LEFT, RAIL_RIGHT = 60, 340
 TAB_HEIGHT, TAB_PITCH = 72, 80
-LOOK_TOP, LOOK_BOTTOM = 806, 842
+# 40 under the last tab and 40 again to the quality track, Look's and Quality's captions in that air,
+# so every gap in the rail is on the 8 px grid
+LOOK_TOP, LOOK_BOTTOM = 804, 840
 LOOK_BOXES = ((60, 196), (204, 340))
-QUALITY_SLIDER = (60, 878, 340, 902)
+QUALITY_SLIDER = (60, 880, 340, 904)
 ROWS_LEFT, ROWS_RIGHT = 372, 1124
 LABEL_LEFT, LABEL_RIGHT = 388, 816
 CONTROL_LEFT, CONTROL_RIGHT = 824, 1114
@@ -345,18 +347,19 @@ BUTTON_ROW_KEYS = {"ConnectionTest": "GUI:OptionsConnectionTest"}
 # Its lists are cloned from the LAN lobby's chat list.  OptionsMenuHotkeys.cpp fills all of it in.
 #   (name, left, top, right, bottom)
 HOTKEY_LIST_SOURCE = "ListboxChatWindowLanGame"
-HOTKEY_COMMANDS = ("ListboxHotkeyCommands", 372, 168, 1100, 906)
-HOTKEY_FACTION = ("ComboBoxHotkeyFaction", 1132, 168, 1860, 204)
-HOTKEY_OBJECT = ("ComboBoxHotkeyObject", 1132, 220, 1860, 256)
-HOTKEY_BUTTONS = ("ListboxHotkeyButtons", 1132, 272, 1860, 646)
-HOTKEY_PICKED = ("HotkeyPicked", 1132, 724, 1860, 906)
+# 8 under the heads (BODY_TOP + HEAD_HEIGHT), 16 between the right column's parts, 8 between the keys
+HOTKEY_COMMANDS = ("ListboxHotkeyCommands", 372, 174, 1100, 906)
+HOTKEY_FACTION = ("ComboBoxHotkeyFaction", 1132, 174, 1860, 210)
+HOTKEY_OBJECT = ("ComboBoxHotkeyObject", 1132, 226, 1860, 262)
+HOTKEY_BUTTONS = ("ListboxHotkeyButtons", 1132, 278, 1860, 652)
+HOTKEY_PICKED = ("HotkeyPicked", 1132, 730, 1860, 906)
 HOTKEY_NOTE = ("HotkeyNote", 372, 914, 1860, 950)
 HOTKEY_HEADINGS = [("GUI:HotkeysCommands", 372, 1100), ("GUI:HotkeysCommandBar", 1132, 1860)]
 #   (name, caption key, left, right)
-HOTKEY_BUTTON_ROW = [("ButtonHotkeyChange", "GUI:HotkeysChange", 1132, 1368),
-                     ("ButtonHotkeyClear", "GUI:HotkeysClear", 1378, 1614),
-                     ("ButtonHotkeyDefault", "GUI:HotkeysDefault", 1624, 1860)]
-HOTKEY_BUTTON_TOP, HOTKEY_BUTTON_BOTTOM = 662, 708
+HOTKEY_BUTTON_ROW = [("ButtonHotkeyChange", "GUI:HotkeysChange", 1132, 1369),
+                     ("ButtonHotkeyClear", "GUI:HotkeysClear", 1377, 1615),
+                     ("ButtonHotkeyDefault", "GUI:HotkeysDefault", 1623, 1860)]
+HOTKEY_BUTTON_TOP, HOTKEY_BUTTON_BOTTOM = 668, 714
 HOTKEY_COMMAND_COLUMNS = (68, 32)
 HOTKEY_BUTTON_COLUMNS = (8, 70, 22)
 HOTKEY_STRINGS = ["GUI:HotkeysNone", "GUI:HotkeysPressKey", "GUI:HotkeysPressLetter",

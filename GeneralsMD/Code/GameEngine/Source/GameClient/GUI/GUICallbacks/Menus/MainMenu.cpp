@@ -638,6 +638,25 @@ static Bool panelRect( Rect &r )
 	return FALSE;
 }
 
+/// a check-like button's pushed state, the open side's and the picked mission's
+static void setPicked( GameWindow *window, Bool picked )
+{
+	if( window && BitTest( window->winGetStatus(), WIN_STATUS_CHECK_LIKE ) )
+		GadgetCheckLikeButtonSetVisualCheck( window, picked );
+}
+
+/** The side buttons and the mission tiles hold their choice as their pushed state, so what the
+	* panel shows is the gadgets' own state and not only a picture (ui_walk.py reads it). */
+static void showPicked( void )
+{
+	GameWindow *open = railOpen();
+	GameWindow *sides[] = { buttonUSA, buttonGLA, buttonChina, buttonChallenge, buttonMods };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( sides ); ++i )
+		setPicked( sides[ i ], sides[ i ] == open );
+	for( Int m = 0; m < MISSION_BUTTONS; ++m )
+		setPicked( buttonMission[ m ], railPanel == PANEL_CAMPAIGN && m == missionPicked && m < missionCount );
+}
+
 /// every window where the rail and its panel put it, the rest hidden
 static void layOutMenu( void )
 {
@@ -712,6 +731,7 @@ static void layOutMenu( void )
 		place( buttonModeDirectStrike, a );
 		place( buttonModeApocalypse, b );
 	}
+	showPicked();
 }
 
 /// the campaign the manager is on, its missions into the tiles; the first one picked
@@ -1271,8 +1291,15 @@ static void dressMenu( void )
 			GadgetButtonSetText( button, UIStyle::capitals( button->winGetText() ) );
 		}
 	}
+	// a side and a mission tile stay pushed while picked (showPicked); they answer on the press
+	GameWindow *picks[] = { buttonUSA, buttonGLA, buttonChina, buttonChallenge, buttonMods };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( picks ); ++i )
+		GadgetButtonEnableCheckLike( picks[ i ], TRUE, FALSE );
 	buttonCampaignGenerals->winSetDrawFunc( drawCampaignTab );
 	buttonCampaignZH->winSetDrawFunc( drawCampaignTab );
+	// the tabs' words in the font menuTab draws them in, so the window measures what is drawn
+	buttonCampaignGenerals->winSetFont( UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL + 2, TRUE ) );
+	buttonCampaignZH->winSetFont( UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL + 2, TRUE ) );
 	GadgetButtonSetText( buttonCampaignGenerals, UIStyle::capitals( TheGameText->fetch( "GUI:CampaignGenerals" ) ) );
 	GadgetButtonSetText( buttonCampaignZH, UIStyle::capitals( TheGameText->fetch( "GUI:CampaignZeroHour" ) ) );
 	for( Int m = 0; m < MISSION_BUTTONS; ++m )
@@ -1282,6 +1309,7 @@ static void dressMenu( void )
 		GadgetButtonSetText( buttonMission[ m ], number );
 		buttonMission[ m ]->winSetDrawFunc( drawMissionTile );
 		buttonMission[ m ]->winEnable( TRUE );
+		GadgetButtonEnableCheckLike( buttonMission[ m ], TRUE, FALSE );
 	}
 	UIStyle::setMenuKey( buttonEasy, FALSE );
 	UIStyle::setMenuKey( buttonMedium, TRUE );
@@ -1861,18 +1889,16 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 			}
 			else if( control == buttonExit )
 			{
-				// a windowed game quits at once, as it always has; a fullscreen one asks first, with
-				// keys of its own (QuitMenu's "EXIT?" is about leaving a match)
-				if (TheGlobalData->m_windowed)
-					quitCallback();
-				else
-					QuitMessageBoxYesNo(TheGameText->fetch("GUI:MainMenuExitTitle"), TheGameText->fetch("GUI:MainMenuExitMessage"), quitCallback, NULL);
+				// every game asks first, windowed or not, with keys of its own (QuitMenu's "EXIT?" is
+				// about leaving a match)
+				QuitMessageBoxYesNo(TheGameText->fetch("GUI:MainMenuExitTitle"), TheGameText->fetch("GUI:MainMenuExitMessage"), quitCallback, NULL);
 			}  // end else if
 			else
 			{
 				for( Int m = 0; m < missionCount; ++m )
 					if( control == buttonMission[ m ] )
 						missionPicked = m;
+				showPicked();
 			}
 
 			break;

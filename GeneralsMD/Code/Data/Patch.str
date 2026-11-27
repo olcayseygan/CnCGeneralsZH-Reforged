@@ -1946,7 +1946,7 @@ GUI:CampaignMission
 END
 
 GUI:CampaignZeroHour
-"GENERALS ZERO HOUR"
+"ZERO HOUR"
 END
 
 GUI:CampaignGenerals

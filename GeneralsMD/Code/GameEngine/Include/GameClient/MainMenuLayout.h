@@ -50,7 +50,7 @@ namespace MainMenuLayout
 	const Int HEADER_RULE = 156;									///< 2 tall
 	const Int LIST_TOP = 180;											///< a sub-list's caption, or the first button
 	const Int CAPTION_STEP = 34;
-	const Int BUTTON_HEIGHT = 62;
+	const Int BUTTON_HEIGHT = 64;									///< 8 apart: every gap on the screen is on the 8 px grid
 	const Int BUTTON_STEP = 72;
 	const Int SPLIT = 24;													///< the air before the leaving button
 	const Int RAIL_FOOT = 28;											///< under the leaving button
@@ -65,11 +65,12 @@ namespace MainMenuLayout
 	const Int CAMPAIGN_WIDTH = 472;
 	const Int CAMPAIGN_LEFT = PANEL_RIGHT - CAMPAIGN_WIDTH;
 	const Int TAB_HEIGHT = 44;
-	const Int TAB_GAP = 10;
-	const Int LABEL_STEP = 28;										///< MISSION, DIFFICULTY: the label and its air
+	const Int TAB_GAP = 8;
+	const Int LABEL_STEP = 32;										///< MISSION, DIFFICULTY: the label and its air
 	const Int TILE_HEIGHT = 72;
-	const Int SECTION_GAP = 26;
-	const Int KEY_GAP = 10;
+	const Int TILE_GAP = 8;
+	const Int SECTION_GAP = 24;
+	const Int KEY_GAP = 8;
 
 	const Int CARD_WIDTH = 340;
 	const Int CARD_HEIGHT = 304;
@@ -156,16 +157,15 @@ namespace MainMenuLayout
 		return index == 0 ? rect( left, top, left + half, top + TAB_HEIGHT ) : rect( right - half, top, right, top + TAB_HEIGHT );
 	}
 
-	/// mission tile index of count in one row: 12 apart up to five, 8 apart past that
+	/// mission tile index of count in one row, 8 apart
 	inline Rect missionTile( Int index, Int count, Int top )
 	{
 		const Int left = CAMPAIGN_LEFT + PANEL_PAD, right = PANEL_RIGHT - PANEL_PAD;
 		if( count < 1 )
 			count = 1;
-		const Int gap = count <= 5 ? 12 : 8;
-		const Real width = ( right - left - gap * ( count - 1 ) ) / (Real)count;
-		const Int x0 = left + (Int)( index * ( width + gap ) + 0.5f );
-		const Int x1 = left + (Int)( index * ( width + gap ) + width + 0.5f );
+		const Real width = ( right - left - TILE_GAP * ( count - 1 ) ) / (Real)count;
+		const Int x0 = left + (Int)( index * ( width + TILE_GAP ) + 0.5f );
+		const Int x1 = left + (Int)( index * ( width + TILE_GAP ) + width + 0.5f );
 		return rect( x0, top, x1, top + TILE_HEIGHT );
 	}
 

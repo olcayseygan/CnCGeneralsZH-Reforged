@@ -493,7 +493,7 @@ namespace UIStyle
 	const Int BOX_FOOT = 84;				///< the key band under the faint rule
 	const Int BOX_LINE = 28;				///< a body line; the box grows a line at a time
 	const Int BOX_KEY_WIDTH = 170;	///< three keys fit a question box
-	const Int BOX_KEY_GAP = 12;
+	const Int BOX_KEY_GAP = 16;			///< the 8 px grid, as MENU_KEY_GAP
 	const Int BOX_KEY_HEIGHT = 48;
 	const Int BOX_BAR_TOP = 832;		///< the command bar's highest plate: a box over a match ends 44 over it
 	const Int BOX_TOP_MIN = 56;

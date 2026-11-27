@@ -6,12 +6,16 @@
 
 TEST( online_self_ladder_rows_fit_the_table_pinned_or_not )
 {
-	// README: 20 rows of 33 from 262; pinned, 20 of 30, a 20 gap and his 48 row, all inside the box's 946
-	CHECK_EQ( (Int)( ONLINE_LADDER_ROWS_TOP + 20 * OnlineLadderRowHeight( FALSE ) ), 922 );
-	const Real pinnedEnd = ONLINE_LADDER_ROWS_TOP + 20 * OnlineLadderRowHeight( TRUE ) + ONLINE_LADDER_PINNED_GAP
+	// 20 rows of 32 from 256, then an 8 gap and his 32 row, all inside the box's 946, every edge on the 8 grid
+	// (the walker's lint: the README's 33 and 30 high rows and 20 gap read as off-grid gaps)
+	CHECK_EQ( (Int)( ONLINE_LADDER_ROWS_TOP + 20 * ONLINE_LADDER_ROW_HEIGHT ), 896 );
+	const Real pinnedEnd = ONLINE_LADDER_ROWS_TOP + 20 * ONLINE_LADDER_ROW_HEIGHT + ONLINE_LADDER_PINNED_GAP
 		+ ONLINE_LADDER_PINNED_HEIGHT;
-	CHECK_EQ( (Int)pinnedEnd, 930 );
+	CHECK_EQ( (Int)pinnedEnd, 936 );
 	CHECK( pinnedEnd <= ONLINE_LADDER_BOX_BOTTOM - 8.0f );
+	CHECK_EQ( (Int)ONLINE_LADDER_ROW_HEIGHT % 8, 0 );
+	CHECK_EQ( (Int)ONLINE_LADDER_PINNED_GAP % 8, 0 );
+	CHECK_EQ( (Int)ONLINE_LADDER_ROWS_TOP % 8, 0 );
 }
 
 /// the cards of count laid in the skins page's 832 by 668: per row, and every card checked

@@ -361,7 +361,7 @@ static const Real BOX_TOP = 182.0f, BOX_BOTTOM = 946.0f, PLACE_BOTTOM = 516.0f, 
 /// the columns at 1080 (README-online-self.md): right edges of the figures, the left of the words
 static const Real COL_RANK_RIGHT = 112.0f, COL_PLAYER = 128.0f, COL_PLAYER_END = 520.0f, COL_TIER = 540.0f,
 	COL_TIER_END = 760.0f, COL_ELO = 970.0f, COL_WINS = 1080.0f, COL_LOSSES = 1190.0f, COL_PCT = 1280.0f;
-static const Real HEAD_TOP = 232.0f, HEAD_RULE = 256.0f, ROWS_TOP = ONLINE_LADDER_ROWS_TOP;
+static const Real HEAD_TOP = 226.0f, HEAD_RULE = 250.0f, ROWS_TOP = ONLINE_LADDER_ROWS_TOP;
 
 /// rated games: a ranked player has his five, whatever the record says
 static Int ladderGames( const OnlineLadderRow &r )
@@ -512,13 +512,13 @@ static void layoutLadderTable( OnlineLadderState state, Int offset, const std::v
 	addCaps( capsFit( "GUI:OnlineLadderWinPct", bp( 82.0f ) ), bx( COL_PCT ), headTop, headBand, UIStyle::MUTED, ALIGN_RIGHT );
 	addPiece( PIECE_LIT, bx( TABLE_LEFT + 8.0f ), by( HEAD_RULE ), bx( TABLE_RIGHT - 8.0f ) - bx( TABLE_LEFT + 8.0f ), 1, UIStyle::FRAME );
 
-	// the rows: 20 of 33, or of 30 when his row is pinned under them; zebra on every second, no hairlines
+	// the rows: 20 of 32, his row pinned under them when the page lacks him; zebra on every second, no hairlines
 	const AsciiString self = localNick();
 	Bool meInPage = FALSE;
 	for (Int i = 0; i < shown; ++i)
 		meInPage = meInPage || ( self.isNotEmpty() && rows[ i ].nick.compareNoCase( self ) == 0 );
 	const Bool pinned = shown > 0 && answerHasMe && !meInPage && s_me.rank > 0;
-	const Real rowHeight = OnlineLadderRowHeight( pinned );
+	const Real rowHeight = ONLINE_LADDER_ROW_HEIGHT;
 	Real best = 1001.0f;
 	for (Int i = 0; i < shown; ++i)
 		if (rows[ i ].hasElo)
@@ -550,10 +550,10 @@ static void layoutLadderTable( OnlineLadderState state, Int offset, const std::v
 
 	if (pinned)
 	{
-		// the ranks skipped between the page and his row, a dotted rule; then his row, 48 high
+		// the ranks skipped between the page and his row, a dotted rule in the 8 gap; then his row
 		const Real gap = ROWS_TOP + LADDER_PAGE * rowHeight;
 		for (Real x = TABLE_LEFT + 28.0f; x < TABLE_RIGHT - 28.0f; x += 12.0f)
-			addPiece( PIECE_FILL, bx( x ), by( gap + 9.0f ), bp( 4.0f ), 1, UIStyle::withAlpha( UIStyle::FRAME, 200 ) );
+			addPiece( PIECE_FILL, bx( x ), by( gap + ONLINE_LADDER_PINNED_GAP / 2.0f ), bp( 4.0f ), 1, UIStyle::withAlpha( UIStyle::FRAME, 200 ) );
 		const Int top = by( gap + ONLINE_LADDER_PINNED_GAP );
 		const Int height = by( gap + ONLINE_LADDER_PINNED_GAP + ONLINE_LADDER_PINNED_HEIGHT ) - top;
 		addRow( rowLeft, top, rowWidth, height, UIStyle::ROW_LOCAL, FALSE );

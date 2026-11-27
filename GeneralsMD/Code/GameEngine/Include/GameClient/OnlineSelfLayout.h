@@ -27,17 +27,13 @@
 #ifndef _ONLINESELFLAYOUT_H_
 #define _ONLINESELFLAYOUT_H_
 
-/// the ladder's table: 20 rows from 262, 33 high, or 30 when the player's own row is pinned under them
-/// after a 20 high dotted gap, 48 high; the table's box ends at 946
-const Real ONLINE_LADDER_ROWS_TOP = 262.0f;
+/// the ladder's table: 20 rows of 32 from 256, on the 8 px grid, and the player's own row pinned under
+/// them after an 8 high dotted gap, 32 high too; the table's box ends at 946
+const Real ONLINE_LADDER_ROWS_TOP = 256.0f;
+const Real ONLINE_LADDER_ROW_HEIGHT = 32.0f;
 const Real ONLINE_LADDER_BOX_BOTTOM = 946.0f;
-const Real ONLINE_LADDER_PINNED_GAP = 20.0f;
-const Real ONLINE_LADDER_PINNED_HEIGHT = 48.0f;
-
-inline Real OnlineLadderRowHeight( Bool pinned )
-{
-	return pinned ? 30.0f : 33.0f;
-}
+const Real ONLINE_LADDER_PINNED_GAP = 8.0f;
+const Real ONLINE_LADDER_PINNED_HEIGHT = 32.0f;
 
 /// the skins page's cards: 12 apart in the middle panel's 832 by 668 under the owned bar
 const Real ONLINE_SKINS_CARD_GAP = 12.0f;

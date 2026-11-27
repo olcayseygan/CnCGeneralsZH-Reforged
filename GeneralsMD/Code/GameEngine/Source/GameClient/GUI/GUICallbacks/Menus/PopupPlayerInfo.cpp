@@ -1993,7 +1993,7 @@ static Bool cardIsLocal( void )
 }
 
 /** ADD FRIEND on another player's card while the service has friends (package F4): Close's look, its
-	* width, 12 left of Profile (of Close when Profile is hidden), "PopupPlayerInfo.wnd:ButtonAddFriend". */
+	* width, BOX_KEY_GAP (16) left of Profile (of Close when Profile is hidden), "PopupPlayerInfo.wnd:ButtonAddFriend". */
 static void makeAddFriendKey( void )
 {
 	s_addFriend = NULL;
@@ -2016,7 +2016,7 @@ static void makeAddFriendKey( void )
 		buttonBuddies->winGetPosition( &profileX, &profileY );
 		right = profileX;
 	}
-	right -= at( 12 );
+	right -= at( (Real)UIStyle::BOX_KEY_GAP );
 	s_addFriend = TheWindowManager->gogoGadgetPushButton( holder, WIN_STATUS_ENABLED, right - closeWidth, closeY,
 		closeWidth, closeHeight, &inst, buttonClose->winGetFont(), FALSE );
 	if( s_addFriend == NULL )

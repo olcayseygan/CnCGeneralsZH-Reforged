@@ -231,11 +231,13 @@ HUB_REJOIN = (HUB_RECENT[0] + HUB_RECENT[2] - 24 - KEY, HUB_RECENT[1] + HUB_RECE
 
 # The player card's two tabs under its head, 164 to 198 down from its top and 28 in; the code sizes each to
 # its words (16 px bold capitals plus 22 a side, 8 apart, PopupPlayerInfo.cpp), these stand them roughly there.
-# Its foot: CLOSE 220 wide at the right (Enter's, lit), PROFILE 380 wide 12 before it, 48 high, 20 over the foot
+# Its foot: CLOSE 220 wide at the right (Enter's, lit), PROFILE 380 wide 16 before it (UIStyle's BOX_KEY_GAP, the
+# 8 px grid; ADD FRIEND is made in code 16 before that), 48 high, 20 over the foot
 CARD_X0, CARD_X1, CARD_Y1 = CARD[0] + 28, CARD[0] + CARD[2] - 28, CARD[1] + CARD[3]
+CARD_KEY_GAP = 16
 CARD_TABS = [(CARD_X0, CARD[1] + 164, 200, 34), (CARD_X0 + 208, CARD[1] + 164, 120, 34)]
 CARD_CLOSE = (CARD_X1 - 220, CARD_Y1 - 68, 220, 48)
-CARD_PROFILE = (CARD_X1 - 232 - 380, CARD_Y1 - 68, 380, 48)
+CARD_PROFILE = (CARD_X1 - 220 - CARD_KEY_GAP - 380, CARD_Y1 - 68, 380, 48)
 
 # The ladder's and the skins page's keys (README-online-self.md): Previous and Next at the foot's right, Save
 # where Next stands (the skins page shows it, the ladder hides it), Jump to my page in Your place, the

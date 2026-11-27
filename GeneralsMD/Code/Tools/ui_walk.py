@@ -751,7 +751,12 @@ class Walk(object):
             state = self.reach(path, name)
             if not state.get("lone"):
                 self.game.send("uiclick " + name)
-                settle(self.game, minimum=0.4)
+                if not settle(self.game, minimum=0.4).get("lone"):
+                    # the box just picked from snaps shut on the release that opens it again (its lone
+                    # pointer is let go with a GGM_CLOSE): a second click opens it
+                    self.record(label, "snaps shut", "reopened right after a pick, the list closed on the release", path)
+                    self.game.send("uiclick " + name)
+                    settle(self.game, minimum=0.4)
             at = self.game.send("uirow %s %d" % (name, row))
             label = "%s = %s" % (leaf(name), at.get("tx", row) if at.get("ok") else row)
             if not at.get("ok"):

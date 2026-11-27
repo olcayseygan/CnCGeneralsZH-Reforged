@@ -426,6 +426,7 @@ private:
 	{
 		ObjectID id;
 		Bool reached;										///< it has stood beside a seat's structure or hit one (hasReachedBases)
+		Int young;											///< a host's slaves at the last look, -1 unknown; for its laying clip alone, not saved
 	};
 
 	struct FogStay
@@ -444,6 +445,7 @@ private:
 	Int spawnOne( UnsignedInt now );		///< one roll: one of the dead, or a whole flock or pack; how many came out
 	Object *makeZombie( Int kind, const Coord3D &pos, UnsignedInt now, Object *made = NULL );
 	Int kindOf( const Object *obj ) const;	///< its row in the roster, -1 for none
+	Int slavesOfTheListed( void ) const;	///< the young the listed hosts keep, counted under the alive cap
 	Int sectorOf( Real x, Real y ) const;
 	Int weakestFront( UnsignedInt now, const char *who ) const;	///< the gate a WEAKFRONT kind comes at, -1 for the wave's own draw
 	void gatherWave( UnsignedInt now );
@@ -482,6 +484,7 @@ private:
 	std::vector<const ThingTemplate *> m_kinds;	///< one a roster row, NULL where the data lacks it; a missing walker spawns nothing, a missing kind walks as a walker
 	Int m_colossusKind;									///< the Colossus's and the Plague King's roster rows, -1 for none
 	Int m_kingKind;
+	Int m_broodKind;																///< the Broodmother's row, -1 for none: her laying clip
 
 	// logic state, saved and in the CRC
 	Int m_phase;												///< ApocalypsePhase

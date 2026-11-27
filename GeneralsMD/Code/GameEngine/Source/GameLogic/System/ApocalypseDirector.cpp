@@ -50,6 +50,7 @@
 #include "GameLogic/LogicRandomValue.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/CreateModule.h"
+#include "GameLogic/Module/SpawnBehavior.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/PolygonTrigger.h"
@@ -867,13 +868,18 @@ static void tint( RGBColor &out, const RGBColor &base, const Real *day, const Re
 	  (HeightMap.cpp) and the vertex light the -d3d9 ground bakes in staticLightingChanged.  Tinting the
 	  table alone left the ground at noon under red units, so the copies are written here too, the
 	  hour itself untouched (the logic reads m_timeOfDay). */
-static void apocalypseApplyLight( Int level, Bool relight, Bool lightsOn )
+static void apocalypseApplyLight( Int level, Bool relight, Bool lightsOn, Bool bloodMoon )
 {
 	if( relight && theBaseLightKept )
 	{
 		static const Real HAZE[ 3 ] = { 1.03f, 0.99f, 0.93f };
-		static const Real NIGHT_AMBIENT[ 3 ] = { 1.10f, 0.62f, 0.60f };
-		static const Real NIGHT_DIFFUSE[ 3 ] = { 0.70f, 0.32f, 0.28f };
+		static const Real PLAIN_AMBIENT[ 3 ] = { 1.10f, 0.62f, 0.60f };
+		static const Real PLAIN_DIFFUSE[ 3 ] = { 0.70f, 0.32f, 0.28f };
+		// a Blood Moon's night: the same red, so it sums no further past white, over less of the rest
+		static const Real BLOOD_AMBIENT[ 3 ] = { 1.10f, 0.46f, 0.42f };
+		static const Real BLOOD_DIFFUSE[ 3 ] = { 0.72f, 0.19f, 0.15f };
+		const Real *NIGHT_AMBIENT = bloodMoon ? BLOOD_AMBIENT : PLAIN_AMBIENT;
+		const Real *NIGHT_DIFFUSE = bloodMoon ? BLOOD_DIFFUSE : PLAIN_DIFFUSE;
 		const Real amount = (Real)level / (Real)APOCALYPSE_LIGHT_STEPS;
 		const Int tod = TheGlobalData->m_timeOfDay;
 		for( Int k = 0; k < MAX_GLOBAL_LIGHTS; ++k )
@@ -1070,6 +1076,7 @@ void ApocalypseDirector::reset( void )
 	m_waveShapeLogged = 100;
 	m_colossusKind = -1;
 	m_kingKind = -1;
+	m_broodKind = -1;
 	m_straysLogged = 0;
 	m_kingRaisesLogged = 0;
 	m_waveSectors = 0;
@@ -1150,6 +1157,7 @@ void ApocalypseDirector::newMap( Bool loadingSaveGame )
 	}
 	m_colossusKind = kindNamed( "ApocalypseZombieColossus" );
 	m_kingKind = kindNamed( "ApocalypseZombiePlagueKing" );
+	m_broodKind = kindNamed( "ApocalypseZombieBroodmother" );
 
 	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 		if( isSeat( ThePlayerList->getNthPlayer( i ) ) )
@@ -1520,6 +1528,7 @@ Object *ApocalypseDirector::makeZombie( Int kind, const Coord3D &pos, UnsignedIn
 	Zombie z;
 	z.id = obj->getID();
 	z.reached = FALSE;
+	z.young = -1;
 	m_zombies.push_back( z );
 	++m_spawned;
 	if( m_spawned == 1 )
@@ -1924,7 +1933,7 @@ void ApocalypseDirector::watchTheKings( UnsignedInt now )
 {
 	if( m_kingKind < 0 || m_kinds[ m_kingKind ] == NULL )
 		return;
-	std::vector<const Object *> kings;
+	std::vector<Object *> kings;
 	for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
 	{
 		Object *obj = TheGameLogic->findObjectByID( m_zombies[ i ].id );
@@ -1933,6 +1942,8 @@ void ApocalypseDirector::watchTheKings( UnsignedInt now )
 		kings.push_back( obj );
 		if( obj->isDisabledByType( DISABLED_HELD ) && obj->getDisabledUntil( DISABLED_HELD ) >= FOREVER )
 		{
+			// the raising's staff-up (SPECIAL_CHEERING, ZBKING_ATB) gives way to his fall
+			obj->clearSpecialModelConditionStates();
 			const UnsignedInt stands = now + APOCALYPSE_KING_RISE_SECONDS * gameSecond();
 			obj->setDisabledUntil( DISABLED_HELD, stands );
 			scaleBoss( obj );
@@ -1951,13 +1962,14 @@ void ApocalypseDirector::watchTheKings( UnsignedInt now )
 		const Int kind = kindOf( obj );
 		if( kind >= 0 && ( Apocalypse_kind( kind ).flags & APOCALYPSE_KIND_BOSS ) )
 			continue;
-		Bool byKing = FALSE;
-		for( UnsignedInt k = 0; k < kings.size() && !byKing; ++k )
+		Object *byKing = NULL;
+		for( UnsignedInt k = 0; k < kings.size() && byKing == NULL; ++k )
 		{
 			const Real dx = obj->getPosition()->x - kings[ k ]->getPosition()->x, dy = obj->getPosition()->y - kings[ k ]->getPosition()->y;
-			byKing = dx * dx + dy * dy <= reach2;
+			if( dx * dx + dy * dy <= reach2 )
+				byKing = kings[ k ];
 		}
-		if( !byKing )
+		if( byKing == NULL )
 			continue;
 		Rise r;
 		r.victim = obj->getID();
@@ -1968,11 +1980,32 @@ void ApocalypseDirector::watchTheKings( UnsignedInt now )
 		r.where = *obj->getPosition();
 		r.frame = now + APOCALYPSE_INFECT_SECONDS * gameSecond();
 		m_rises.insert( at, r );
+		// he raises it, staff up (ZBKING_ATB), until it stands; held in his fall he does not
+		if( !byKing->isDisabledByType( DISABLED_HELD ) )
+			byKing->setSpecialModelConditionState( MODELCONDITION_SPECIAL_CHEERING, r.frame - now );
 		++m_kingRaisesLogged;
 		if( m_kingRaisesLogged <= 10 || m_kingRaisesLogged % 50 == 0 )
 			DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u '%s' %d fell near the Plague King and rises at frame %u, %u so far\n", now,
 									obj->getTemplate()->getName().str(), (Int)r.victim, r.frame, m_kingRaisesLogged ));
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The young the listed hosts keep (a Broodmother's six, a Carrier's eight): they walk and fight but are
+	  their master's slaves, never on the list, so the alive cap counts them here.  Read off the list in
+	  its order each time it is asked, nothing kept.  At night 6 on four seats they had stood 252 over a
+	  cap of 700 (2026-11-26). */
+Int ApocalypseDirector::slavesOfTheListed( void ) const
+{
+	Int slaves = 0;
+	for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
+	{
+		const Object *obj = TheGameLogic->findObjectByID( m_zombies[ i ].id );
+		const SpawnBehaviorInterface *spawn = obj != NULL && !obj->isEffectivelyDead() ? obj->getSpawnBehaviorInterface() : NULL;
+		if( spawn != NULL )
+			slaves += spawn->getSlaveCount();
+	}
+	return slaves;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1985,7 +2018,7 @@ void ApocalypseDirector::watchTheFallen( UnsignedInt now )
 	const Player *zombies = ThePlayerList->getNthPlayer( m_zombiePlayer );
 	const Player *neutral = ThePlayerList->getNeutralPlayer();
 	const PlayerMaskType zombieMask = zombies->getPlayerMask();
-	const Int cap = Apocalypse_phaseRules( m_phase ).aliveCap;
+	const Int cap = Apocalypse_phaseRules( m_phase ).aliveCap - ( m_rises.empty() ? 0 : slavesOfTheListed() );
 
 	// those due rise; a risen one is kept while his body lies, so it is not noted twice
 	std::vector<Rise> kept;
@@ -2037,6 +2070,7 @@ void ApocalypseDirector::watchTheFallen( UnsignedInt now )
 			Zombie z;
 			z.id = obj->getID();
 			z.reached = FALSE;
+			z.young = -1;
 			m_zombies.push_back( z );
 			++m_straysLogged;
 			if( m_straysLogged <= 10 || m_straysLogged % 50 == 0 )
@@ -2245,7 +2279,9 @@ void ApocalypseDirector::handLight( UnsignedInt now )
 		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u lights %s\n", now, lightsOn ? "on" : "off" ));
 	m_lightLevel = level;
 	m_lightsOn = lightsOn;
-	LogicThread::callAfterTick( [level, relight, lightsOn]() { apocalypseApplyLight( level, relight, lightsOn ); } );
+	// the fog's rule: a Blood Moon's whole cycle, its dusk deepening and its dawn fading back (0 by day)
+	const Bool bloodMoon = ( m_cycle + 1 ) % APOCALYPSE_BLOOD_MOON_EVERY == 0;
+	LogicThread::callAfterTick( [level, relight, lightsOn, bloodMoon]() { apocalypseApplyLight( level, relight, lightsOn, bloodMoon ); } );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2262,6 +2298,24 @@ void ApocalypseDirector::update( void )
 
 	// the Plague King's fall, and the dead fallen near him noted to rise, before the walk below takes them off the list
 	watchTheKings( now );
+
+	/* A Broodmother lays: one more young than at the last look plays her laying clip (SPECIAL_CHEERING,
+		 ZBBROD_SPA, 45 frames).  The count lives on her list entry and is not saved; after a load the first
+		 look takes it as it finds it, so no clip plays for young laid before the save. */
+	if( m_broodKind >= 0 && m_kinds[ m_broodKind ] != NULL )
+	{
+		for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
+		{
+			Object *obj = TheGameLogic->findObjectByID( m_zombies[ i ].id );
+			if( obj == NULL || obj->isEffectivelyDead() || !obj->getTemplate()->isEquivalentTo( m_kinds[ m_broodKind ] ) )
+				continue;
+			const SpawnBehaviorInterface *spawn = obj->getSpawnBehaviorInterface();
+			const Int young = spawn != NULL ? spawn->getSlaveCount() : 0;
+			if( m_zombies[ i ].young >= 0 && young > m_zombies[ i ].young )
+				obj->setSpecialModelConditionState( MODELCONDITION_SPECIAL_CHEERING, 45 );
+			m_zombies[ i ].young = young;
+		}
+	}
 
 	// the dead come off the list, the living are checked for the middle and, now and then, sent on
 	const UnsignedInt retarget = APOCALYPSE_RETARGET_SECONDS * second;
@@ -2296,7 +2350,8 @@ void ApocalypseDirector::update( void )
 		if( now >= m_nextWaveFrame )
 			sendWave( now );
 	}
-	for( Int out = 0; out < rules.spawnsPerFrame && m_pending > 0 && (Int)m_zombies.size() < rules.aliveCap; )
+	const Int slaves = m_pending > 0 ? slavesOfTheListed() : 0;
+	for( Int out = 0; out < rules.spawnsPerFrame && m_pending > 0 && (Int)m_zombies.size() + slaves < rules.aliveCap; )
 	{
 		const Int made = spawnOne( now );
 		out += made > 0 ? made : 1;
@@ -2754,6 +2809,8 @@ void ApocalypseDirector::xfer( Xfer *xfer )
 	{
 		xfer->xferObjectID( &m_zombies[ i ].id );
 		xfer->xferBool( &m_zombies[ i ].reached );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_zombies[ i ].young = -1;		// not saved: the first look after a load takes the count as it finds it
 	}
 
 	if( version >= 2 )

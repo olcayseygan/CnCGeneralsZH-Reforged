@@ -1870,6 +1870,8 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 					scripts[i]->deleteInstance();
 				}
 			}
+			else
+				DEBUG_LOG(("startNewGame: no %s, so this match has no end window and no end timer\n", path.str()));
 		}
 
 		/*

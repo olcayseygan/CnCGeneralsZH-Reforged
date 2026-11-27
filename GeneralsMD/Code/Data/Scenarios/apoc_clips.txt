@@ -1,0 +1,35 @@
+# Apocalypse: the Plague King's raising clip (ZBKING_ATB) and the Broodmother's laying clip
+# (ZBBROD_SPA), the director's SPECIAL_CHEERING on each (2026-11-26, TODO Apocalypse Roster batches 14).
+#
+#   generals.exe -quickstart -noshellmap -observer -multiInstance -win -xres 1920 -yres 1080
+#     -randommap 3 2 normal apocalypse -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 3 -scenario apoc_clips
+#     -camera <x> <y> -video <from> <to> <name>
+#
+# Headless (add -headless, drop -video) the log shows 'fell near the Plague King and rises' while the
+# walkers fall round him, and the Broodmother's Broodlings dying and coming again (the tallies).
+#
+# A: seat 1's north, the Plague King at 30% with eight walkers before ten Red Guards and four
+#    Overlords; the walkers fall, he raises them staff up, the guns then bring him down: his fall is
+#    SPA, not ATB.
+# B: seat 0's west, a Broodmother and her six against four aggressive Rangers that shoot her young;
+#    each one she lays again (SpawnReplaceDelay 15 s) plays her laying clip.
+
+10    spawn      1         ChinaInfantryRedguard        10  start1:60:120     10
+10    spawn      1         ChinaTankOverlord            4   start1:0:150      35
+10    spawn      civilian  ApocalypseZombiePlagueKing   1   start1:0:330
+10    spawn      civilian  ApocalypseZombie             8   start1:0:280      10
+30    health     civilian  ApocalypseZombiePlagueKing   30
+20    stance     1         *                            defensive
+
+10    spawn      0         AmericaInfantryRanger        4   start0:-150:0     12
+10    spawn      civilian  ApocalypseZombieBroodmother  1   start0:-330:0
+20    stance     0         *                            aggressive
+
+300   tally      civilian  ApocalypseZombieBroodling
+600   tally      civilian  ApocalypseZombieBroodling
+900   tally      civilian  ApocalypseZombieBroodling
+1200  tally      civilian  ApocalypseZombieBroodling
+1200  tally      civilian  ApocalypseZombieBroodmother
+1200  tally      civilian  ApocalypseZombiePlagueKing
+1200  tally      1         ChinaInfantryRedguard

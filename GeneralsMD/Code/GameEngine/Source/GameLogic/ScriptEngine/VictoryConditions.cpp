@@ -197,6 +197,7 @@ void VictoryConditions::update( void )
 		{
 			m_singleAllianceRemaining = true; // don't check again
 			m_endFrame = TheGameLogic->getFrame();
+			DEBUG_LOG(("VICTORY: frame %u the match is decided, local slot %d, observer %d\n", m_endFrame, m_localSlotNum, (Int)m_isObserver));
 			// the score screen shows the match as it was decided, not what the winner did during the victory window
 			TheGameLogic->enableScoring(FALSE);
 		}

@@ -277,19 +277,23 @@ static AsciiString mirrorKey( const ThingTemplate *thing )
 	return AsciiString( out.c_str() );
 }
 
-/** A transport's seat with nobody in it: EA shows the exit button disabled on the empty-seat picture
-	* (populateCommand).  Key Grid's riders are the passengers alone, so an empty seat takes no place and
-	* stands hidden (arrangeKeyGrid); the next populate shows it again for a passenger who boards. */
-static Bool emptySeat( GameWindow *window )
-{
-	const CommandButton *command = (const CommandButton *)GadgetButtonGetData( window );
-	return command != NULL && command->getCommandType() == GUI_COMMAND_EXIT_CONTAINER
-		&& !BitTest( window->winGetStatus(), WIN_STATUS_ENABLED );
-}
-
 //-------------------------------------------------------------------------------------------------
 Bool ControlBar::getKeyGridPlaces( Int *places ) const
 {
+	// A transport's seat with nobody in it: EA shows every seat's exit button, the empty ones on the
+	// empty-seat picture, and updateContextCommand enables them all each frame, so the window's state
+	// says nothing.  A passenger is a window doTransportInventoryUI wrote into m_containData; the rest
+	// are empty seats, which take no place under Key Grid and fold away (arrangeKeyGrid)
+	auto emptySeat = [ & ]( GameWindow *window ) -> Bool
+	{
+		const CommandButton *command = (const CommandButton *)GadgetButtonGetData( window );
+		if( command == NULL || command->getCommandType() != GUI_COMMAND_EXIT_CONTAINER )
+			return FALSE;
+		for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+			if( m_containData[ i ].control == window && m_containData[ i ].objectID != INVALID_ID )
+				return FALSE;
+		return TRUE;
+	};
 	const Bool groupShown = !m_contextParent[ CP_COMMAND ]->winIsHidden();
 	const CommandButton *commands[ MAX_COMMANDS_PER_SET ];
 	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
@@ -663,6 +667,7 @@ void ControlBar::arrangeKeyGrid( void )
 	Int places[ MAX_COMMANDS_PER_SET ];
 	getKeyGridPlaces( places );
 	const Bool lettered = TheGlobalData->m_hotkeyScheme == HOTKEY_SCHEME_GRID;
+	const Bool tray = keyGridTrayView();
 	const Bool standIn = m_standInBuilderID != INVALID_DRAWABLE_ID && m_currentSelectedDrawable
 		&& m_currentSelectedDrawable->getID() == m_standInBuilderID;
 	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
@@ -671,10 +676,11 @@ void ControlBar::arrangeKeyGrid( void )
 		if( win == NULL )
 			continue;
 		const Int place = places[ slot ];
-		if( place < 0 )
+		if( place < 0 || tray )
 		{
-			// a shown window with no place (an empty seat) folds to nothing at the deck's corner, where it
-			// neither draws nor takes a click; it opens on its cell the frame it gets a place
+			// a shown window with no place (an empty seat), or any while the squad's tray has the deck,
+			// folds to nothing at the deck's corner, where it neither draws nor takes a click; it opens on
+			// its cell the frame it gets a place back
 			if( !BitTest( win->winGetStatus(), WIN_STATUS_HIDDEN ) )
 				placeWindowAt( win, folded( moved( kg.deck, d ) ) );
 			continue;

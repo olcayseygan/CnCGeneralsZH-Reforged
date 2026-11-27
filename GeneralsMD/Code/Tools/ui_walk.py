@@ -650,11 +650,41 @@ class Walk(object):
         self.rows.append(dict(control=label, result=result, change=change, path=where))
         print("  %-44s %-12s %s" % (label[:44], result, change[:120]), flush=True)
 
+    def scroll_into_view(self, tree, name):
+        """A row below a scrolling page's fold (options' Controls): turn the wheel over the page until a click
+        at the row's centre reaches it, six notches a turn, eight turns at most."""
+        ws = windows(tree)
+        by_index = {w["i"]: w for w in ws}
+        w = named(tree).get(name)
+        page = None
+        while w is not None and w["p"] >= 0:
+            w = by_index.get(w["p"])
+            if w is not None and w["n"] and leaf(w["n"]).startswith("Page"):
+                page = w["n"]
+                break
+        if page is None:
+            return False
+        for _ in range(8):
+            target = named(self.game.tree()).get(name)
+            if target is None:
+                return False
+            x, y = centre(target)
+            hit = self.game.send("uihit %d %d" % (x, y))["hits"][0]
+            if name in hit["chain"]:
+                return True
+            dh = (tree.get("display") or [0, 1080])[1]
+            self.game.send("uiscroll %s %d" % (page, -6 if y > dh // 2 else 6))
+            settle(self.game, minimum=0.3)
+        return False
+
     def act(self, path, w):
         """Click one control (and its rows, its wheel, its text) in the state at the end of path."""
         name, kind = w["n"], w["t"]
         tree = self.reach(path, name)
         before_bad = unreachable(self.game, tree, self.area)
+        if name in before_bad and self.scroll_into_view(tree, name):
+            tree = settle(self.game)
+            before_bad = unreachable(self.game, tree, self.area)
         if name in before_bad:
             self.record(leaf(name), "blocked", "covered by %s" % leaf(before_bad[name]), path)
             return None

@@ -48,6 +48,7 @@
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
 #include "GameClient/FactionPicker.h"
+#include "GameClient/GameClient.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetComboBox.h"
 #include "GameClient/GadgetListBox.h"
@@ -134,6 +135,9 @@ static Bool s_custom = FALSE;
 static UnsignedInt s_mask = 0;
 static Int s_lastPressCell = -1;
 static UnsignedInt s_lastPressTime = 0;
+static Bool s_pressedHere = FALSE;		///< the left press that this release ends came to the screen
+static Bool s_sinking = FALSE;			///< closed: the window eats input, unseen, until the next frame
+static UnsignedInt s_sinkFrame = 0;
 
 static IRegion2D s_tabBox[ 2 ], s_backBox, s_confirmBox;
 
@@ -942,8 +946,17 @@ static void drawKey( Int key, const IRegion2D &box, const UnicodeString &words, 
 	UIStyle::menuKey( box, label, state, primary );
 }
 
+static void removeWindow( void );
+
 static void drawPicker( GameWindow *window, WinInstanceData *instData )
 {
+	// a closed screen draws nothing, and the frame after it closed it goes (closePicker says why)
+	if( s_sinking )
+	{
+		if( TheGameClient == NULL || TheGameClient->getFrame() != s_sinkFrame )
+			removeWindow();
+		return;
+	}
 	// the room stays up underneath for its updates, so the screen frosts all of its panel over it
 	const IRegion2D panel = board( PANEL_LEFT, PANEL_TOP, PANEL_RIGHT, PANEL_BOTTOM );
 	UIStyle::glass( panel, 230 );
@@ -1005,16 +1018,40 @@ static void drawPicker( GameWindow *window, WinInstanceData *instData )
 }
 
 //-------------------------------------------------------------------------------------------------
-static void closePicker( Bool restoreFocus )
+/// the screen's window goes, and the room under it has the mouse and the keys again
+static void removeWindow( void )
 {
+	if( s_window == NULL )
+		return;
 	s_window->winHide( TRUE );
 	TheWindowManager->winUnsetModal( s_window );
 	TheWindowManager->winDestroy( s_window );
 	s_window = NULL;
+	s_sinking = FALSE;
+}
+
+/** The screen closes.  Its window stays modal, drawing nothing, until the next frame (drawPicker takes
+	* it away): BACK and CONFIRM stand on Play Game's rectangle, and the room's key under them is not to
+	* see a single message of the click or the key that closed the screen, whatever else of it the same
+	* frame still carries.  now takes it away at once, for the room going away under it. */
+static void closePicker( Bool restoreFocus, Bool now = FALSE )
+{
+	if( s_window == NULL || s_sinking )
+	{
+		if( now )
+			removeWindow();
+		return;
+	}
+	s_sinking = TRUE;
+	s_sinkFrame = TheGameClient ? TheGameClient->getFrame() : 0;
+	if( now )
+		removeWindow();
 	if( restoreFocus )
 		TheWindowManager->winSetFocus( s_oldFocus );
 	s_oldFocus = NULL;
 
+	s_focus = -1;
+	s_pressedHere = FALSE;
 	s_cells.clear();
 	s_groups.clear();
 	for( Int k = 0; k < TEXT_COUNT; k++ )
@@ -1158,6 +1195,9 @@ static WindowMsgHandledType pickerInput( GameWindow *window, UnsignedInt msg, Wi
 {
 	const Int x = (Int)( mData1 & 0xFFFF );
 	const Int y = (Int)( ( mData1 >> 16 ) & 0xFFFF );
+	// closed and waiting for the next frame: whatever still comes is the room's no more than before
+	if( s_sinking )
+		return MSG_HANDLED;
 	switch( msg )
 	{
 		case GWM_CHAR:
@@ -1169,8 +1209,14 @@ static WindowMsgHandledType pickerInput( GameWindow *window, UnsignedInt msg, Wi
 					confirm();
 			}
 			break;
+		case GWM_LEFT_DOWN:
+			s_pressedHere = TRUE;
+			break;
 		case GWM_LEFT_UP:
-			releaseAt( x, y );
+			// only the release of a press the screen took acts: the click that opened it ended on the box
+			if( s_pressedHere )
+				releaseAt( x, y );
+			s_pressedHere = FALSE;
 			break;
 	}
 	// nothing under the screen sees the mouse or the keys while it is up
@@ -1196,6 +1242,10 @@ static void openPicker( GameWindow *combo )
 	if( s_window )
 		return;
 	s_combo = combo;
+	// the box's own list never shows under the screen, nor holds the window manager's open window
+	GadgetComboBoxHideList( combo );
+	if( TheWindowManager->winGetLoneWindow() == combo )
+		TheWindowManager->winSetLoneWindow( NULL );
 	buildCells();
 
 	// the box's Random line remembers the seat's last pool, so a seat on an army keeps it too
@@ -1215,6 +1265,7 @@ static void openPicker( GameWindow *combo )
 	s_custom = current < PLAYERTEMPLATE_RANDOM_POOL;
 	s_focus = -1;
 	s_lastPressCell = -1;
+	s_pressedHere = FALSE;
 	for( size_t each = 0; each < s_cells.size(); each++ )
 	{
 		if( s_cells[ each ].pick == current )
@@ -1237,6 +1288,9 @@ static void openPicker( GameWindow *combo )
 // the seat's box: a click on it or on its arrow opens the screen instead of the list
 static WindowMsgHandledType comboInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
 {
+	// the press is the box's own, so its release comes back here and nowhere in the room
+	if( msg == GWM_LEFT_DOWN )
+		return MSG_HANDLED;
 	if( msg == GWM_LEFT_UP )
 	{
 		click();
@@ -1291,7 +1345,7 @@ void FactionPickerAttach( GameWindow *parent, const char *layoutFilename )
 void FactionPickerDetach( void )
 {
 	if( s_window )
-		closePicker( FALSE );
+		closePicker( FALSE, TRUE );
 	s_combo = NULL;
 }
 

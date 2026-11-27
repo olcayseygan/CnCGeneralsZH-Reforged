@@ -105,6 +105,7 @@ struct PickerGrid
 	Int pressRow;
 	UnsignedInt pressTime;
 	Int grab;						///< board pixels between the pointer and the thumb's top while it is dragged, -1 none
+	Bool pressed;				///< the left press this release ends came to the grid
 	std::vector< PickerRow > rows;
 };
 
@@ -1134,6 +1135,7 @@ static WindowMsgHandledType gridInput( GameWindow *window, UnsignedInt msg, Wind
 
 		case GWM_LEFT_DOWN:
 		{
+			g->pressed = TRUE;
 			// the groove: a press on the thumb takes it, one beside it moves a window's worth
 			const IRegion2D groove = board( PICK_GROOVE_LEFT - 6, top, PICK_RIGHT, PICK_BOTTOM );
 			if( allRows > shape.rows && inside( groove, x, y ) )
@@ -1161,11 +1163,17 @@ static WindowMsgHandledType gridInput( GameWindow *window, UnsignedInt msg, Wind
 
 		case GWM_LEFT_UP:
 		{
+			// only the release of a press the grid took picks: a click that began on another window
+			// (the room's Select Map, a key) ends here without picking or accepting
+			const Bool pressed = g->pressed;
+			g->pressed = FALSE;
 			if( g->grab >= 0 )
 			{
 				g->grab = -1;
 				return MSG_HANDLED;
 			}
+			if( !pressed )
+				return MSG_HANDLED;
 			for( Int k = 0; k < (Int)cells.size(); k++ )
 			{
 				const PickerCell &c = cells[ k ];
@@ -1211,6 +1219,7 @@ static void attachGrid( Int which, GameWindow *listbox )
 	g.pressRow = -1;
 	g.pressTime = 0;
 	g.grab = -1;
+	g.pressed = FALSE;
 	g.rows.clear();
 	if( listbox == NULL )
 		return;

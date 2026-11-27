@@ -1006,10 +1006,9 @@ void MetaMap::keepArrowsForCamera()
 		// Key Grid's deck between the commands and the chosen squad's build tray, in every scheme so the
 		// Grid Keys box clear still has it; Ctrl+Tab, which no shipped file binds (Tab is diplomacy)
 		{ GameMessage::MSG_META_TOGGLE_KEY_GRID_TRAY, MK_TAB, CTRL },
-		// the smoke signals on Alt with Z, X and C, the launcher's own default (HotKey.cpp's
-		// LAUNCHER_DEFAULTS), which it leaves out of Hotkeys.ini as no change of the player's: without
-		// these a game run with no launcher-written file had the signals on no key at all, and the
-		// signal keys' tooltips named none
+		// the smoke signals on Alt with Z, X and C, which Hotkeys_commandRows shows as the game's own:
+		// without these a game run with no launcher-written file had the signals on no key at all, and
+		// the signal keys' tooltips named none
 		{ GameMessage::MSG_META_SIGNAL_ATTACK, MK_Z, ALT },
 		{ GameMessage::MSG_META_SIGNAL_DEFEND, MK_X, ALT },
 		{ GameMessage::MSG_META_SIGNAL_ATTENTION, MK_C, ALT },

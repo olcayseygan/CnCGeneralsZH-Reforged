@@ -1022,13 +1022,16 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 		unbound.push_back( commandRow( SELECTION[ each ], "SELECTION" ) );
 	unbound.push_back( commandRow( "TOGGLE_PAUSE", "INTERFACE" ) );
 	unbound.push_back( commandRow( "TOGGLE_PURCHASE_SCIENCE", "INTERFACE" ) );
-	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_BUILDINGS", "INTERFACE" ) );
-	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_GROUND", "INTERFACE" ) );
-	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_AIRCRAFT", "INTERFACE" ) );
-	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_DEFENSE", "INTERFACE" ) );
-	unbound.push_back( commandRow( "SIGNAL_ATTACK", "INFORMATION" ) );
-	unbound.push_back( commandRow( "SIGNAL_DEFEND", "INFORMATION" ) );
-	unbound.push_back( commandRow( "SIGNAL_ATTENTION", "INFORMATION" ) );
+	// the bar's command tabs on Ctrl with Q, W, E and R, and the signals to the allies on Alt with Z, X
+	// and C: the game's own keys (MetaMap::keepArrowsForCamera puts them on with no file). Request money
+	// has no key: Alt+V is evacuate in place.
+	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_BUILDINGS", "INTERFACE", "KEY_Q", "CTRL" ) );
+	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_GROUND", "INTERFACE", "KEY_W", "CTRL" ) );
+	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_AIRCRAFT", "INTERFACE", "KEY_E", "CTRL" ) );
+	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_DEFENSE", "INTERFACE", "KEY_R", "CTRL" ) );
+	unbound.push_back( commandRow( "SIGNAL_ATTACK", "INFORMATION", "KEY_Z", "ALT" ) );
+	unbound.push_back( commandRow( "SIGNAL_DEFEND", "INFORMATION", "KEY_X", "ALT" ) );
+	unbound.push_back( commandRow( "SIGNAL_ATTENTION", "INFORMATION", "KEY_C", "ALT" ) );
 	unbound.push_back( commandRow( "REQUEST_MONEY", "INFORMATION" ) );
 	unbound.push_back( commandRow( "AUTO_GARRISON", "CONTROL" ) );
 	unbound.push_back( commandRow( "AUTO_REPAIR", "CONTROL" ) );
@@ -1059,15 +1062,9 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 		{ "OBSERVER_TOGGLE_STANDINGS", "KEY_S" }, { "OBSERVER_VISION_CYCLE", "KEY_V" } };
 	for( size_t each = 0; each < sizeof( OBSERVER ) / sizeof( OBSERVER[ 0 ] ); each++ )
 		unbound.push_back( commandRow( OBSERVER[ each ][ 0 ], "OBSERVER", OBSERVER[ each ][ 1 ], "ALT" ) );
-	// LAUNCHER_DEFAULTS: I, free in the shipped map, for the next idle worker, and Alt with Z, X and C,
-	// which nothing in the shipped map holds, for the signals to the allies. Request money has no key:
-	// Alt+V is evacuate in place. Ctrl with Q, W and E, free too, for the bar's command tabs, and Ctrl+R
-	// for the sidebar's fourth tab; the game puts all of these on (MetaMap::keepArrowsForCamera), so a
-	// file naming them names no change.
-	static const char *const DEFAULTS[][ 3 ] = { { "SELECT_NEXT_IDLE_WORKER", "KEY_I", "NONE" },
-		{ "SIGNAL_ATTACK", "KEY_Z", "ALT" }, { "SIGNAL_DEFEND", "KEY_X", "ALT" }, { "SIGNAL_ATTENTION", "KEY_C", "ALT" },
-		{ "TOGGLE_COMMAND_TAB_BUILDINGS", "KEY_Q", "CTRL" }, { "TOGGLE_COMMAND_TAB_GROUND", "KEY_W", "CTRL" },
-		{ "TOGGLE_COMMAND_TAB_AIRCRAFT", "KEY_E", "CTRL" }, { "TOGGLE_COMMAND_TAB_DEFENSE", "KEY_R", "CTRL" } };
+	// LAUNCHER_DEFAULTS: I, free in the shipped map, for the next idle worker. The game does not put it
+	// on, so it reaches a match only from the launcher's part of Hotkeys.ini.
+	static const char *const DEFAULTS[][ 3 ] = { { "SELECT_NEXT_IDLE_WORKER", "KEY_I", "NONE" } };
 	for( size_t each = 0; each < unbound.size(); each++ )
 		for( size_t row = 0; row < sizeof( DEFAULTS ) / sizeof( DEFAULTS[ 0 ] ); row++ )
 			if( unbound[ each ].id == DEFAULTS[ row ][ 0 ] )

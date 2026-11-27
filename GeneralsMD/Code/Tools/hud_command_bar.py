@@ -812,7 +812,9 @@ GROWN_RUNS = {"America": 5, "China": 5, "Gla": 4, "Turkiye": 6}           # the 
 # the outline or a fitting changes along it (the top across, three tiles; the right lip down), the outline is
 # straight along every run (a ragged edge or a jog stays in the corners and the ledge), so a run cut anywhere still
 # meets its corner on the same rim, and the grain is laid periodic along each run and in phase with both its
-# corners (GrownTiling).  Each edge piece is cut from a tile clear of both corners (grown_cuts).
+# corners, its coarse part constant along the run (GrownTiling).  Each edge piece is cut from a tile clear of both
+# corners (grown_cuts).  Nothing crosses a run but what a cut can halve unseen (a rivet, a tick): a line or a raised
+# patch across the lip every period read as the tiles' joins (GLA's welded patches, America's seams, 2026-11-27).
 
 
 def grown_ref(side_name):
@@ -863,9 +865,13 @@ class GrownTiling:
 
     @staticmethod
     def field(rng, shape_, sigma, block, axis):
-        """A unit field of shape_, periodic along axis (0 down, 1 across), its grain sigma, in blocks."""
+        """A unit field of shape_, periodic along axis (0 down, 1 across), its grain sigma, in blocks.  A grain two
+        texels or coarser along the run is laid constant along it: the code cuts a run's tile at any length, and
+        a cut tile's end meets the next tile's start (or a short run's end meets its corner) at an arbitrary phase,
+        where a mottle stepped visibly; a fine grain or a scratch cut there does not show."""
         n = [-(-s // block) for s in shape_]
-        n[axis] = max(1, round(shape_[axis] / block))
+        along = sigma[axis] if isinstance(sigma, tuple) else sigma
+        n[axis] = 1 if along * block >= 2 * SS else max(1, round(shape_[axis] / block))
         mode = ["reflect", "reflect"]
         mode[axis] = "wrap"
         f = ndimage.gaussian_filter(rng.standard_normal(n).astype(np.float32), sigma, mode=mode)
@@ -949,7 +955,9 @@ def grown_frame_ref(side_name, glass=None):
     p.recess([L(plate(0, yT - 5, xR + 5, 1080, tr=corner))], None, 3.0, 2.0)
     p.sink([L(plate(*grow(glass, 2)))], 5, 2)
     if build == "machined":
-        p.inlay([L(plate(Rx - 12, y + 38, Rx, y + 39)) for y in lip] + [L(plate(x, ltop + 3, x + 1, ltop + 25)) for x in (30, 120)], INKM, 0.8)
+        # no seam across the lip: the code cuts a tile at any length, so a line every period went uneven and read
+        # as the tiles' joins
+        p.inlay([L(plate(x, ltop + 3, x + 1, ltop + 25)) for x in (30, 120)], INKM, 0.8)
         p.inlay([L(plate(40, ltop + 9, 200, ltop + 11))], ACCENT, 0.5)
         p.stud(Rx - 7, 1066 - y0, 2.6)
     elif build == "terraced":
@@ -959,11 +967,10 @@ def grown_frame_ref(side_name, glass=None):
                 p.rivet(Rx - 6, y + 13 + k - y0, 2.2)
         p.rivet(Rx - 6, 1068 - y0, 2.2)
     elif build == "scavenged":
-        for i, y in enumerate(lip):
-            sh = sheet(Rx - 16, y + 30, Rx, y + 90, 3)
-            p.bump([L(sh)], 1.4, 0.8, STEEL)
-            for e0, e1 in zip(sh, sh[1:] + sh[:1]):
-                p.weld((e0[0], e0[1] - y0), (e1[0], e1[1] - y0), seed=31 + int(e0[0]) + 7 * (y % P), r=1.2)
+        # the lip welded on down its length, the same bead every period: a patch a period, welded and raised
+        # across the lip, read as the tiles' joins, and the code's cut tile halved it
+        for y in lip:
+            p.weld((Rx - 9, y - y0), (Rx - 9, y + P - y0), seed=31, r=1.1)
         sh = sheet(60, ltop, 120, ltop + 18, -3)
         p.bump([L(sh)], 1.4, 0.8, STEEL)
         for i, (x, y) in enumerate(((Rx - 7, 1066), (10, 1068), (90, ltop + 10))):

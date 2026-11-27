@@ -131,6 +131,7 @@ enum
 	AIKNOB_MENDERS			= 131072,	///< a hurt unit pulled out is sent to a repair or heal dock only, never into a heal aura or a tunnel, as before 2026-11-27
 	AIKNOB_BIB_GAP			= 262144,	///< the AI's three-cell building margin counted twice on the other building's short side, EA's sum, as before 2026-11-27
 	AIKNOB_DEAR_STAY		= 524288,	///< a hurt dear unit is pulled out of a fight its team is winning too, as before 2026-11-27
+	AIKNOB_ROUTE_HOME		= 1048576,	///< a hurt unit pulled out to a dock or tunnel walks there straight, through what the map shows, as before 2026-11-27
 };
 
 //-------------------------------------------------------------------------------------------------

@@ -1402,7 +1402,7 @@ Int parseNoTactics(char *args[], int num)
 	return 2;
 }
 
-/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit,basewatch,strikedodge,defensequeue,costmap,abilities,maplayers,foreigntech,secondbase,killzones,pressure,teamplay,dearpull,homestretch,identity,menders,bibgap,dearstay: those slots keep their rung with these knobs
+/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit,basewatch,strikedodge,defensequeue,costmap,abilities,maplayers,foreigntech,secondbase,killzones,pressure,teamplay,dearpull,homestretch,identity,menders,bibgap,dearstay,routehome: those slots keep their rung with these knobs
 	* of its profile off, so a batch can play Hard against Hard without them, or a scenario against the AI
 	* as it was.  A measuring aid like -notactics: read only in a single-player skirmish, never in a
 	* network game, and a replay made with it is played back with it given again. */
@@ -1435,6 +1435,7 @@ Int parseAIKnobsOff(char *args[], int num)
 		if (strstr(names.str(), "menders")) mask |= AIKNOB_MENDERS;
 		if (strstr(names.str(), "bibgap")) mask |= AIKNOB_BIB_GAP;
 		if (strstr(names.str(), "dearstay")) mask |= AIKNOB_DEAR_STAY;
+		if (strstr(names.str(), "routehome")) mask |= AIKNOB_ROUTE_HOME;
 		TheWritableGlobalData->m_aiKnobsOffMask = mask;
 	}
 	return 3;

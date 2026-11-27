@@ -1062,6 +1062,7 @@ protected:
 		* teamplay takes it off a seat. */
 	Bool teamPlayHere(void);
 	Bool mendersHere(void);	///< heal auras and tunnels mend what it pulls out
+	Bool routeHomeHere(void);	///< a unit pulled out to a dock walks round what the map shows first, and docks when it stands there
 	Real killZoneWeight(void) const;							///< how much of the loss record a reading counts, 0 when off
 	Real killZoneAt(const Coord3D *at) const;			///< ... the losses round one spot, weighed
 	Real gunOdds(void) const;											///< what an attack has to be worth against the guns it meets, 0 when off
@@ -1259,7 +1260,7 @@ protected:
 	void pullOutRanked(Team *team, Bool inFight, Real ratio);	///< veterans and up leave earlier than the team, to a repair or heal pad
 	void releaseMended(void);		///< pulled-out veterans and let-out patients standing idle again become recruitable
 	void stepCalmly(Object *obj, TacticalStep *step, const Coord3D *spot, const Coord3D *via = NULL);	///< a move the unit's mood cannot turn into an attack move, through via first when given
-	void walkCalmlyRound(Object *obj, TacticalStep *step, const Coord3D *spot);	///< stepCalmly, round the enemy reach the straight walk would cross
+	Bool walkCalmlyRound(Object *obj, TacticalStep *step, const Coord3D *spot, Bool onlyRound = FALSE);	///< stepCalmly, round the enemy reach the straight walk would cross; TRUE when it went round.  onlyRound: no walk at all when the straight one is clear
 	Bool turnBackMended(Object *obj, TacticalStep *step);	///< one pulled out hurt and mended on the way goes back to its team
 	void restoreMood(Object *obj, TacticalStep *step);
 	Bool pickTacticalSpot(const Object *obj, const Coord3D *from, const Coord3D *awayFrom, Real distance,

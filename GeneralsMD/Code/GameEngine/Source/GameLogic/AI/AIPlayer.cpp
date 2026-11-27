@@ -10582,6 +10582,11 @@ Bool AIPlayer::mendersHere( void )
 	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_MENDERS ) != 0 );
 }
 
+Bool AIPlayer::routeHomeHere( void )
+{
+	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_ROUTE_HOME ) != 0 );
+}
+
 /** The owner, 2026-11-26: every general's computer player plays in its own style, under whatever personality the
 	* seat was given.  The style is the side's AIIdentity (AIIdentity.h), made at the seat's first turn or on a load. */
 void AIPlayer::ensureIdentity( void )
@@ -18167,6 +18172,21 @@ static Bool tunnelMends( const Object *unit, const Object *building, CommandSour
 		TheActionManager->canEnterObject( unit, building, cmdSource, CHECK_CAPACITY );
 }
 
+/** The order into a dock that repairs or heals it, or into a tunnel; FALSE when the mender takes it neither way
+	* (a heal aura, which it stands in). */
+static Bool sendToMender( Object *unit, Object *mender )
+{
+	if( TheActionManager->canGetRepairedAt( unit, mender, CMD_FROM_AI ) )
+		unit->getAI()->aiGetRepaired( mender, CMD_FROM_SCRIPT );
+	else if( TheActionManager->canGetHealedAt( unit, mender, CMD_FROM_AI ) )
+		unit->getAI()->aiGetHealed( mender, CMD_FROM_SCRIPT );
+	else if( tunnelMends( unit, mender, CMD_FROM_AI ) )
+		unit->getAI()->aiEnter( mender, CMD_FROM_SCRIPT );
+	else
+		return FALSE;
+	return TRUE;
+}
+
 /** Ties go to the first in the object list.  With auras, a heal aura (stood in) and a tunnel (ridden) count
 	* too: before them a hurt GLA vehicle had nowhere to go and a China one only its War Factory. */
 Object *aiFindMender( Player *player, Object *unit, CommandSourceType cmdSource, Bool auras )
@@ -18273,16 +18293,16 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 		step->fallbackFrame = now;
 		step->hurtAt = health;
 		step->hurtTeam = team != m_player->getDefaultTeam() ? team->getID() : TEAM_ID_INVALID;
-		if( docks || tunnel )
+		// to a dock or a tunnel it walks round the reach the map shows first and is sent in once it stands there
+		// (releaseMended).  Sent in at once, the dock's own path went straight through it: in 12 Elo 4200
+		// Twilight Flame 4v4 games Overlords and Emperors died on the walk home from losing fights 38 times
+		const Bool roundFirst = ( docks || tunnel ) && routeHomeHere() && walkCalmlyRound( obj, step, to, TRUE );
+		if( !roundFirst && ( docks || tunnel ) )
 			stepCalmly( obj, step, to );		// the dock or enter order below takes the walk over
-		else
+		else if( !roundFirst )
 			walkCalmlyRound( obj, step, to );		// home, or into a heal aura, where it stands (releaseMended)
-		if( docks && TheActionManager->canGetRepairedAt( obj, mender, CMD_FROM_AI ) )
-			obj->getAI()->aiGetRepaired( mender, CMD_FROM_SCRIPT );
-		else if( docks )
-			obj->getAI()->aiGetHealed( mender, CMD_FROM_SCRIPT );
-		else if( tunnel )
-			obj->getAI()->aiEnter( mender, CMD_FROM_SCRIPT );
+		if( !roundFirst && ( docks || tunnel ) )
+			sendToMender( obj, mender );
 		DEBUG_LOG(("AI VETERAN frame %d player %d pulls '%s' %d rank %d out at %.0f%% health, fight %.2f%s, state %d, %.0f from %s, now state %d\n", now,
 			m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), obj->getID(), rank, health * 100.0f,
 			inFight ? ratio : 0.0f, inFight ? "" : " (none)", (Int)state,
@@ -18304,6 +18324,8 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 	* marks such a unit unrecruitable would see it undone. */
 Bool AIRetreat_mendedEnough( Real healthFraction, Real hurtAt );
 static const Real TUNNEL_MENDED_HEALTH = 0.99f;	///< a rider mended this far leaves the tunnel it was sent into
+static const Real MEND_DOCK_REACH = 300.0f;	///< one that walked round to its mender is sent in when it stands this near
+static const UnsignedInt MEND_WALK_FRAMES = 120 * LOGICFRAMES_PER_GAME_SECOND;	///< ... and no later after the pull: a dock that will not take it frees it
 
 /** Within the reach of a heal aura of this player's. */
 static Bool standsInMendAura( Player *player, const Object *obj )
@@ -18359,6 +18381,19 @@ void AIPlayer::releaseMended( void )
 		// standing in a heal aura short of mended: a while yet
 		if( mendersHere() && !AIRetreat_mendedEnough( health, row ? row->hurtAt : 0.0f ) && standsInMendAura( m_player, obj ) )
 			continue;
+		// walked round to a dock or a tunnel short of mended (pullOutRanked): sent in now, while the pull is fresh
+		if( row && row->hurtAt > 0.0f && row->fallbackFrame != 0 && TheGameLogic->getFrame() - row->fallbackFrame < MEND_WALK_FRAMES &&
+				!AIRetreat_mendedEnough( health, row->hurtAt ) && routeHomeHere() )
+		{
+			Object *mender = aiFindMender( m_player, obj, CMD_FROM_AI, mendersHere() );
+			if( mender && sqr( mender->getPosition()->x - obj->getPosition()->x ) + sqr( mender->getPosition()->y - obj->getPosition()->y ) <= sqr( MEND_DOCK_REACH ) &&
+					sendToMender( obj, mender ) )
+			{
+				DEBUG_LOG(("AI VETERAN frame %d player %d sends '%s' %d into '%s' %d after the walk round, %.0f%% health\n", TheGameLogic->getFrame(),
+					m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), obj->getID(), mender->getTemplate()->getName().str(), mender->getID(), health * 100.0f));
+				continue;
+			}
+		}
 		ai->setIsRecruitable( TRUE );
 		DEBUG_LOG(("AI VETERAN frame %d player %d frees '%s' %d at %.0f%% health\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
 			obj->getTemplate()->getName().str(), obj->getID(), health * 100.0f));
@@ -20281,7 +20316,7 @@ void AIPlayer::stepCalmly( Object *obj, TacticalStep *step, const Coord3D *spot,
 /** The walk out of a fight or home from one, round what the map shows on the straight line (aiDetourWaypoint)
 	* and read with the walker's own class.  Straight, the walk home of a unit with the enemy between it and home
 	* went through the enemy.  -notactics walks straight, as its map is never drawn. */
-void AIPlayer::walkCalmlyRound( Object *obj, TacticalStep *step, const Coord3D *spot )
+Bool AIPlayer::walkCalmlyRound( Object *obj, TacticalStep *step, const Coord3D *spot, Bool onlyRound )
 {
 	const Coord3D *pos = obj->getPosition();
 	Coord3D via;
@@ -20303,7 +20338,9 @@ void AIPlayer::walkCalmlyRound( Object *obj, TacticalStep *step, const Coord3D *
 			TheGameLogic->getFrame(), m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), obj->getID(),
 			pos->x, pos->y, spot->x, spot->y, via.x, via.y, straight, round));
 	}
-	stepCalmly( obj, step, spot, detour ? &via : NULL );
+	if( detour || !onlyRound )
+		stepCalmly( obj, step, spot, detour ? &via : NULL );
+	return detour;
 }
 
 void AIPlayer::restoreMood( Object *obj, TacticalStep *step )

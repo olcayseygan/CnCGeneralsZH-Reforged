@@ -27,6 +27,7 @@ found and fixed, EA's own, not port damage.**
 - A hurt dear unit pulled out to be mended had only repair docks to go to, so a GLA vehicle drove home and stood there. It now also goes to stand in a Propaganda Tower's aura, or into a GLA tunnel, which mends it whole in five seconds, and comes out by the same mouth. A mended unit without a rank was never taken back into the army; it is now.
 - A computer on a small map often had no room for its barracks or War Factory, and lost without ever building one. EA's spacing check counted the computer's three-cell margin twice on one side of every neighbouring building, so nine in ten of the spots its dozer turned down had nothing on them. It now counts that margin once, and a player's own placement is checked exactly as before. On the seed that showed it, the USA barracks goes up at 40 seconds of play where it took three minutes or never came. Over 40 matches at Elo 1800 the computer with the fix won 18 to 10.
 - A dear unit at low health was pulled out of a fight its side was winning by nineteen to one, then drove a thousand paces home alone and died on the road. It now stays in a fight that is going its way.
+- A hurt unit sent back for repair took the repair bay's own road, straight across whatever stood between, and Overlords died on the way home. When the computer knows guns or an army on that road, the unit now walks round them first and drives into the bay once it is there.
 - Replays with a computer player recorded before this change will not play back.
 
 ## Huge battles run lighter

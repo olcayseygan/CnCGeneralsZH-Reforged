@@ -118,6 +118,7 @@ static GameWindow *buttonBack = NULL;
 static GameWindow *buttonQuickMatch = NULL;
 static GameWindow *buttonLobby = NULL;
 static GameWindow *buttonPlayAI = NULL;
+static GameWindow *buttonTeamSize = NULL;		///< Team vs AI's size, made in code (makeTeamKeys)
 static GameWindow *comboBoxAISpeed = NULL;		///< the speed ai.start asks for
 static GameWindow *listboxInfo = NULL;
 
@@ -429,7 +430,16 @@ Bool WOLPlayVsAIUpdate( void )
 	if (state == ONLINE_AI_READY)
 	{
 		if (startAIMatch( ai ))
+		{
+			// the match is loading: no hub key (FIND TEAM, Back, Esc) answers until the next init clears
+			// buttonPushed; PLAY and Team greyed meanwhile, the next update after it wakes them
+			buttonPushed = TRUE;
+			if (buttonPlayAI)
+				buttonPlayAI->winEnable( FALSE );
+			if (buttonTeamSize)
+				buttonTeamSize->winEnable( FALSE );
 			return FALSE;
+		}
 		OnlineDropAIMatch();
 		DEBUG_LOG(("ONLINE AI START map=%s missing\n", ai.map.str()));
 		UnicodeString map;
@@ -477,7 +487,6 @@ void WOLWelcomeMenuStartPlayVsAIOnEntry( void )
 // (FIND TEAM) or leaves the queue (CANCEL).  Friends join the party from the friends box's INVITE.
 //-------------------------------------------------------------------------------------------------
 static Int s_teamSize = 1;								///< humans a side; 1 is the 1v1
-static GameWindow *buttonTeamSize = NULL;
 static GameWindow *buttonLeaveParty = NULL;
 static UnicodeString s_teamLine;					///< the search or the party, on the status row when no refusal is up
 static UnicodeString s_playWords;					///< PLAY as the master words it
@@ -2052,9 +2061,10 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 			if (buttonPlayAI)
 			{
 				const Bool answerAwaited = WOLPlayVsAIUpdate();
-				buttonPlayAI->winEnable( !answerAwaited && !s_joiningRoom );
+				buttonPlayAI->winEnable( !answerAwaited && !s_joiningRoom && !buttonPushed );		// pushed: a match loads
 			}
-			updateTeam( s_cards[ CARD_AI ].window );
+			if (!buttonPushed)
+				updateTeam( s_cards[ CARD_AI ].window );
 			applyControls();
 			refreshCards();
 			refreshRecent();

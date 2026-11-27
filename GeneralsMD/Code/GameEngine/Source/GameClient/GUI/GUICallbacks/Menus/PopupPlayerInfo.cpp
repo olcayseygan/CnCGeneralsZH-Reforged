@@ -1325,6 +1325,8 @@ static Int s_addFriendState = -1;				///< what it shows: AddFriendState, -1 befo
 enum AddFriendState { ADD_FRIEND_HIDDEN, ADD_FRIEND_OFFER, ADD_FRIEND_SENT };
 static GameWindow *s_inviteParty = NULL;	///< INVITE TO PARTY left of ADD FRIEND (Team vs AI), made in code
 static Int s_invitePartyState = -1;
+static Int s_invitePartyFriend = 0;					///< his account id when he is our friend, for an older server's invite{to}
+static UnsignedInt s_invitePartyError = 0;	///< OnlinePeekFriendError's serial when the invite went
 enum InvitePartyState { INVITE_PARTY_HIDDEN, INVITE_PARTY_OFFER, INVITE_PARTY_FULL, INVITE_PARTY_SENT };
 
 struct CardWords { DisplayString *words; Int x, y; Color color; Bool tracked; };
@@ -2081,10 +2083,30 @@ static void updateInvitePartyKey( void )
 		if( ( lookAtPlayerID > 0 && party[ each ].id == lookAtPlayerID ) || party[ each ].nick.compareNoCase( lookAtPlayerName.c_str() ) == 0 )
 			state = INVITE_PARTY_HIDDEN;
 	}
+	// an older server (no partyNick) takes a party invite only to a friend, by id: the key shows on a friend's card alone
+	s_invitePartyFriend = 0;
+	std::vector<OnlineFriend> rows;
+	OnlineGetFriends( rows );
+	for( size_t each = 0; each < rows.size() && s_invitePartyFriend == 0; ++each )
+	{
+		const OnlineFriend &row = rows[ each ];
+		if( row.status == ONLINE_FRIEND_ACCEPTED
+			&& ( ( lookAtPlayerID > 0 && row.id == lookAtPlayerID ) || row.nick.compareNoCase( lookAtPlayerName.c_str() ) == 0 ) )
+			s_invitePartyFriend = row.id;
+	}
+	if( !OnlineInviteByNickAvailable() && s_invitePartyFriend == 0 )
+		state = INVITE_PARTY_HIDDEN;
 	if( state == INVITE_PARTY_OFFER && (Int)party.size() >= ONLINE_TEAM_SEATS )
 		state = INVITE_PARTY_FULL;
 	if( state == INVITE_PARTY_OFFER && s_invitePartyState == INVITE_PARTY_SENT )
-		state = INVITE_PARTY_SENT;
+	{
+		// SENT holds until he answers, unless the server refused the invite (not_found, offline, rate...)
+		AsciiString forWhat;
+		const UnsignedInt serial = OnlinePeekFriendError( forWhat );
+		if( serial == s_invitePartyError || forWhat != "invite" )
+			state = INVITE_PARTY_SENT;
+		s_invitePartyError = serial;
+	}
 	if( state != s_invitePartyState )
 	{
 		s_invitePartyState = state;
@@ -2434,7 +2456,12 @@ WindowMsgHandledType GameSpyPlayerInfoOverlaySystem( GameWindow *window, Unsigne
 				else if (s_inviteParty != NULL && control == s_inviteParty)
 				{
 					// -online Team vs AI: into our party by nick, friend or not; SENT until he answers
-					OnlineInviteToParty( AsciiString( lookAtPlayerName.c_str() ) );
+					AsciiString forWhat;
+					s_invitePartyError = OnlinePeekFriendError( forWhat );
+					if (OnlineInviteByNickAvailable())
+						OnlineInviteToParty( AsciiString( lookAtPlayerName.c_str() ) );
+					else
+						OnlineInviteFriend( s_invitePartyFriend );		// an older server: a friend, by id
 					s_invitePartyState = INVITE_PARTY_SENT;
 					s_inviteParty->winEnable( FALSE );
 					GadgetButtonSetText( s_inviteParty, UIStyle::capitals( TheGameText->fetch( "GUI:FriendRequestSent" ) ) );

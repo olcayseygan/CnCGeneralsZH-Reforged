@@ -154,8 +154,8 @@ OnlineSession &OnlineSession::get()
 OnlineSession::OnlineSession() :
 	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ), failRetry( 0 ),
 	noticeSerial( 0 ), maintenanceRefused( FALSE ), relayTicketFresh( FALSE ), rejoinSerial( 0 ), cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), historySerial( 0 ), revealing( FALSE ),
-	revealSerial( 0 ), aiSpeed( 100 ), aiVerdictSerial( 0 ), friendsOn( FALSE ), friendsSerial( 0 ), invitesSerial( 0 ),
-	teamOn( FALSE ), partyLeader( 0 ), partySerial( 0 ), teamReady( FALSE ), teamQueueSize( 0 ), partyScriptInvited( FALSE ), partyScriptStarted( FALSE ), peer( NULL ), buddy( NULL ), ps( NULL )
+	revealSerial( 0 ), aiSpeed( 100 ), aiVerdictSerial( 0 ), friendsOn( FALSE ), friendsSerial( 0 ), invitesSerial( 0 ), friendErrorSerial( 0 ),
+	teamOn( FALSE ), partyNickOn( FALSE ), partyLeader( 0 ), partySerial( 0 ), teamReady( FALSE ), teamQueueSize( 0 ), partyScriptInvited( FALSE ), partyScriptStarted( FALSE ), peer( NULL ), buddy( NULL ), ps( NULL )
 {
 	connectionGone();
 	forgetAccount();
@@ -173,6 +173,7 @@ void OnlineSession::connectionGone()
 	pingRefused = FALSE;
 	friendsOn = FALSE;		// the next welcome says it again
 	teamOn = FALSE;
+	partyNickOn = FALSE;
 	if (!noticeKind.empty())
 		++noticeSerial;
 	noticeKind.clear();
@@ -856,6 +857,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		accountUrl = m.getString( "accountUrl" );
 		friendsOn = m.getInt( "friends" ) == 1;		// an older server: no friends, everything as before them
 		teamOn = friendsOn && m.getInt( "teamai" ) == 1;		// a party needs the invite
+		partyNickOn = teamOn && m.getInt( "partyNick" ) == 1;	// older: party invites to friends only, by id
 		m.getObject( "counts", counts );		// none from an older server: cleared
 		hasServerInfo = m.getObject( "server", serverInfo );
 		status = ONLINE_WELCOMED;
@@ -2593,6 +2595,11 @@ Bool OnlineTeamAIAvailable( void )
 {
 	const OnlineSession &s = OnlineSession::get();
 	return s.teamOn && s.friendsOn && s.authed;
+}
+
+Bool OnlineInviteByNickAvailable( void )
+{
+	return OnlineTeamAIAvailable() && OnlineSession::get().partyNickOn;
 }
 
 UnsignedInt OnlineGetParty( std::vector<OnlinePartyMember> &out )

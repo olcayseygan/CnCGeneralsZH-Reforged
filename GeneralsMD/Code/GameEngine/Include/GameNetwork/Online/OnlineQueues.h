@@ -641,6 +641,10 @@ struct OnlineInvite
 };
 UnsignedInt OnlineGetInvites( std::vector<OnlineInvite> &out );	///< oldest first; a serial as OnlineGetFriends'
 void OnlineInviteToParty( const AsciiString &nick );	///< invite{nick} into our Team vs AI party, friend or not; outside a room only
+/// the welcome said partyNick:1: OnlineInviteToParty reaches anyone; an older server takes a friend's invite{to} only
+Bool OnlineInviteByNickAvailable( void );
+/// the serial of the last refused friend or invite request (moves on with each, whoever takes it) and its for
+UnsignedInt OnlinePeekFriendError( AsciiString &forWhat );
 void OnlineInviteFriend( Int to );					///< invite{to,game} from the staging room we sit in, invite{to} into our Team vs AI party outside one
 /* Answers an invite and forgets it.  ok joins that room as a game.join does, the password waived: the
 	 answers are game.join's (PEERRESPONSE_JOINSTAGINGROOM, a refusal as its failure), so the screen that

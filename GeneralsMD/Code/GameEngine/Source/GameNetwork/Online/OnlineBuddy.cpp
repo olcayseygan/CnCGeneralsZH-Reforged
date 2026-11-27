@@ -258,6 +258,8 @@ Bool OnlineSession::friendLine( const OnlineMessage &m )
 			friendsOn = FALSE;		// a server that does not know them after all: as one that never said friends:1
 		friendErrorFor = what;
 		friendErrorCode = code;
+		friendErrorLastFor = what;
+		++friendErrorSerial;
 		return TRUE;
 	}
 	if (t != "friends" && t != "friend" && t != "friend.request" && t != "invite" && t != "invite.gone")
@@ -521,6 +523,13 @@ void OnlineInviteFriend( Int to )
 		return;		// outside a room only a server with Team vs AI takes it: into our party
 	s.sendFriend( m );
 	DEBUG_LOG(("ONLINE INVITE to=%d game=%lld\n", to, s.gameId));
+}
+
+UnsignedInt OnlinePeekFriendError( AsciiString &forWhat )
+{
+	const OnlineSession &s = OnlineSession::get();
+	forWhat = s.friendErrorLastFor.c_str();
+	return s.friendErrorSerial;
 }
 
 void OnlineInviteToParty( const AsciiString &nick )

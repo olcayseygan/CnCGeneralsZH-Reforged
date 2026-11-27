@@ -326,10 +326,13 @@ struct OnlineSession
 	std::deque<OnlineInviteEntry> invites;		///< oldest first, one per inviter and game
 	UnsignedInt invitesSerial;
 	std::string friendErrorFor, friendErrorCode;	///< the last error{for} of a friend or invite request, until taken
+	UnsignedInt friendErrorSerial;		///< moves on with every such error, taken or not (OnlinePeekFriendError)
+	std::string friendErrorLastFor;		///< the last one's for, kept after the take
 	std::map<long long, std::string> nicksById;	///< every id and nick a room or game told us: ADDBUDDY names an id, friend.add a nick
 
 	// Team vs AI (TEAM-VS-AI.md), only once the welcome said teamai:1: the party and the ask of a member's ai.start
 	Bool teamOn;						///< welcome.teamai
+	Bool partyNickOn;				///< welcome.partyNick: a party invite may name anyone by nick
 	long long partyLeader;	///< 0 out of a party
 	std::vector< std::pair<long long, std::string> > party;	///< id and nick, the leader first
 	UnsignedInt partySerial;

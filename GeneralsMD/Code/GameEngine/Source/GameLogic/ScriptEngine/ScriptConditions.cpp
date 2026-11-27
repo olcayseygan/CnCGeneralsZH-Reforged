@@ -41,6 +41,7 @@
 #include "Common/Team.h"
 #include "Common/Player.h"
 #include "Common/ObjectStatusTypes.h"
+#include "Common/Xfer.h"
 
 #include "GameClient/ControlBar.h"
 #include "GameClient/Drawable.h"
@@ -113,6 +114,44 @@ TransportStatus::~TransportStatus()
 
 //-------------------------------------------------------------------------------------------------
 static TransportStatus *s_transportStatuses;
+
+//-------------------------------------------------------------------------------------------------
+/** The UNIT_EMPTIED memory, saved by ScriptEngine::xfer (version 10), whose reset clears it.  A
+	transport seen full on the last frame before a save and empty on the first after its load emptied,
+	and a load that forgot the list began counting afresh and missed it.  Kept in the saved order. */
+//-------------------------------------------------------------------------------------------------
+void ScriptConditions_xferTransportStatuses( Xfer *xfer )
+{
+	UnsignedShort count = 0;
+	for( TransportStatus *s = s_transportStatuses; s; s = s->m_nextStatus )
+		++count;
+	xfer->xferUnsignedShort( &count );
+
+	if( xfer->getXferMode() != XFER_LOAD )
+	{
+		for( TransportStatus *s = s_transportStatuses; s; s = s->m_nextStatus )
+		{
+			xfer->xferObjectID( &s->m_objID );
+			xfer->xferUnsignedInt( &s->m_frameNumber );
+			xfer->xferInt( &s->m_unitCount );
+		}
+		return;
+	}
+
+	if( s_transportStatuses )
+		s_transportStatuses->deleteInstance();
+	s_transportStatuses = NULL;
+	TransportStatus **tail = &s_transportStatuses;
+	for( UnsignedShort i = 0; i < count; ++i )
+	{
+		TransportStatus *s = newInstance(TransportStatus);
+		*tail = s;
+		tail = &s->m_nextStatus;
+		xfer->xferObjectID( &s->m_objID );
+		xfer->xferUnsignedInt( &s->m_frameNumber );
+		xfer->xferInt( &s->m_unitCount );
+	}
+}
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------

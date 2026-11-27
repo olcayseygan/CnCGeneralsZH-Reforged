@@ -60,6 +60,10 @@ public:
 };  // end class ScriptConditionsInterface
 extern ScriptConditionsInterface *TheScriptConditions;   ///< singleton definition
 
+class Xfer;
+/// the UNIT_EMPTIED condition's memory of each transport's last count, saved with the script engine
+void ScriptConditions_xferTransportStatuses( Xfer *xfer );
+
 
 //-----------------------------------------------------------------------------
 // ScriptConditions

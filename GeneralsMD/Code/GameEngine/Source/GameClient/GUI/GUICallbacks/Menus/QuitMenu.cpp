@@ -157,13 +157,15 @@ UnicodeString MatchFactsLine( void )
 	UnsignedInt frame = TheVictoryConditions && TheVictoryConditions->getEndFrame() ? TheVictoryConditions->getEndFrame()
 																																							 : TheGameLogic->getFrame();
 	const UnsignedInt seconds = frame / LOGICFRAMES_PER_SECOND;
-	// the dot as ·: this file has no BOM, so the compiler reads it in the machine's code page and a
-	// literal dot came out as its two UTF-8 bytes, "Tournament Desert Ã· 0:08"
+	// the middle dot by its number: this file has no BOM, so the compiler reads it in the machine's code
+	// page and a dot typed into the literal came out as its two UTF-8 bytes ("Tournament Desert" then A
+	// tilde and the dot); LoadScreen.cpp's BOARD_DOT is the same fix
+	static const WideChar DOT[] = { ' ', ' ', 0x00B7, ' ', ' ', 0 };
 	UnicodeString line;
 	if( seconds >= 3600 )
-		line.format( u"%ls  ·  %d:%02d:%02d", map.str(), seconds / 3600, seconds / 60 % 60, seconds % 60 );
+		line.format( u"%ls%ls%d:%02d:%02d", map.str(), DOT, seconds / 3600, seconds / 60 % 60, seconds % 60 );
 	else
-		line.format( u"%ls  ·  %d:%02d", map.str(), seconds / 60, seconds % 60 );
+		line.format( u"%ls%ls%d:%02d", map.str(), DOT, seconds / 60, seconds % 60 );
 	return line;
 }
 

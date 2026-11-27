@@ -828,11 +828,13 @@ namespace
 		}
 		UnicodeString size, line;
 		size.format( TheGameText->fetch( "GUI:DirectStrikeTeamSize" ), teamSize( 0 ), teamSize( 1 ) );
-		// ·, not the dot itself: the file is read in the machine's code page
-		line.format( u"%ls  ·  %ls", room.str(), size.str() );
+		// the middle dot by its number: the file is read in the machine's code page, where a typed dot
+		// becomes its two UTF-8 bytes
+		static const WideChar DOT[] = { ' ', ' ', 0x00B7, ' ', ' ', 0 };
+		line.format( u"%ls%ls%ls", room.str(), DOT, size.str() );
 		if( !extra.isEmpty() )
 		{
-			line.concat( u"  ·  " );
+			line.concat( DOT );
 			line.concat( extra );
 		}
 		return line;

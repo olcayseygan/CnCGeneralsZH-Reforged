@@ -872,13 +872,15 @@ void StateMachine::crc( Xfer *xfer )
 	* Version Info
 	* 1: Initial version
 	* 2: what each state other than the current one keeps for its next turn (State::xferIdle)
+	* 3: more of it: an attack's approach and pursuit keep their first-approach flag, a move the goal
+	*    of its last path (AIStates.cpp)
 	*/
 // ------------------------------------------------------------------------------------------------
 void StateMachine::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -964,7 +966,7 @@ void StateMachine::xfer( Xfer *xfer )
 			if (id != i->first)
 				throw SC_INVALID_DATA;
 			if (i->second != NULL && i->second != m_currentState)
-				i->second->xferIdle(xfer);
+				i->second->xferIdle(xfer, version);
 		}
 	}
 }  // end xfer

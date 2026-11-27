@@ -271,7 +271,7 @@ public:
 	virtual StateReturnType onEnter();
 	virtual void onExit( StateExitType status );
 	virtual StateReturnType update();
-	virtual void xferIdle( Xfer *xfer );	///< m_adjustDestinations, which onEnter reads before it sets it
+	virtual void xferIdle( Xfer *xfer, XferVersion version );	///< m_adjustDestinations, which onEnter reads before it sets it, and m_pathGoalPosition
 
 protected:
 
@@ -468,14 +468,15 @@ public:
 		m_isAttackingObject(attackingObject),
 		m_isInitialApproach(true),
 		m_isForceAttacking(forceAttacking)
-	{ 
-		// we're setting m_isInitialApproach to true in the constructor because we want the first pass 
+	{
+		// we're setting m_isInitialApproach to true in the constructor because we want the first pass
 		// through this state to allow a unit to attack incidental targets (if it is turreted)
 	}
 	virtual Bool isAttack() const { return TRUE; }
 	virtual StateReturnType onEnter();
 	virtual void onExit( StateExitType status );
 	virtual StateReturnType update();
+	virtual void xferIdle( Xfer *xfer, XferVersion version );	///< and m_isInitialApproach, which onExit clears and onEnter never sets
 protected:
 	virtual Bool computePath();												///< compute the path
 
@@ -519,14 +520,15 @@ public:
 		m_isForceAttacking(forceAttacking),
 		m_approachTimestamp(0),
 		m_stopIfInRange(false)
-	{ 
-		// we're setting m_isInitialApproach to true in the constructor because we want the first pass 
+	{
+		// we're setting m_isInitialApproach to true in the constructor because we want the first pass
 		// through this state to allow a unit to attack incidental targets (if it is turreted)
 	}
 	virtual Bool isAttack() const { return TRUE; }
 	virtual StateReturnType onEnter();
 	virtual void onExit( StateExitType status );
 	virtual StateReturnType update();
+	virtual void xferIdle( Xfer *xfer, XferVersion version );	///< and m_isInitialApproach, which onExit clears and onEnter never sets
 protected:
 	virtual Bool computePath();												///< compute the path
 

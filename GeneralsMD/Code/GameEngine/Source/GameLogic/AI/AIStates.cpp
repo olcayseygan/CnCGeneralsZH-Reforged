@@ -1651,9 +1651,13 @@ void AIInternalMoveToState::xfer( Xfer *xfer )
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------
-void AIInternalMoveToState::xferIdle( Xfer *xfer )
+void AIInternalMoveToState::xferIdle( Xfer *xfer, XferVersion version )
 {
 	xfer->xferBool(&m_adjustDestinations);
+	// an attack move that fails before its new path comes back measures its retry from this
+	// (AIAttackMoveToState::update), so a load must not zero it
+	if (version >= 3)
+		xfer->xferCoord3D(&m_pathGoalPosition);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2683,6 +2687,19 @@ void AIAttackApproachTargetState::xfer( Xfer *xfer )
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------
+/** The first approach is the only one that may turn the turret on whatever passes, and once it is
+	* over it stays over for the attack machine's life: onExit clears the flag and onEnter never sets it.
+	* Loaded back as the constructor's TRUE, a unit that had chased once scanned again on its next
+	* approach and drew the mood check's random offset, which split a loaded game from the one saved
+	* within a few hundred frames. */
+void AIAttackApproachTargetState::xferIdle( Xfer *xfer, XferVersion version )
+{
+	AIInternalMoveToState::xferIdle( xfer, version );
+	if (version >= 3)
+		xfer->xferBool(&m_isInitialApproach);
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Load post process */
 // ------------------------------------------------------------------------------------------------
 void AIAttackApproachTargetState::loadPostProcess( void )
@@ -3096,6 +3113,15 @@ void AIAttackPursueTargetState::xfer( Xfer *xfer )
 	xfer->xferBool(&m_stopIfInRange);
 	xfer->xferBool(&m_isInitialApproach);
 }  // end xfer
+
+// ------------------------------------------------------------------------------------------------
+/** As AIAttackApproachTargetState::xferIdle: the first pursuit's flag, which only onExit touches. */
+void AIAttackPursueTargetState::xferIdle( Xfer *xfer, XferVersion version )
+{
+	AIInternalMoveToState::xferIdle( xfer, version );
+	if (version >= 3)
+		xfer->xferBool(&m_isInitialApproach);
+}
 
 // ------------------------------------------------------------------------------------------------
 /** Load post process */

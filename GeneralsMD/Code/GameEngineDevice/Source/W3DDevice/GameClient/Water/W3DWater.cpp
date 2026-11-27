@@ -2429,6 +2429,10 @@ void WaterRenderObjClass::ReleaseResources(void)
 
 	REF_PTR_RELEASE(m_pReflectionTexture);
 	m_reflectionTargetRequestSize = 0;
+	if (m_skyBlendTexture != NULL && m_settings[TIME_OF_DAY_INVALID].skyTexture == m_skyBlendTexture)
+		REF_PTR_SET(m_settings[TIME_OF_DAY_INVALID].skyTexture, m_settings[m_skyBlendDay].skyTexture);	// until the next step makes a new one
+	REF_PTR_RELEASE(m_skyBlendTexture);
+	m_skyBlendDirty = FALSE;
 	SAFE_RELEASE(m_vertexBufferD3D);
 	SAFE_RELEASE(m_indexBufferD3D);
 	releaseWaterTwins();
@@ -2648,6 +2652,8 @@ void WaterRenderObjClass::ReAcquireResources(void)
 		surface->DrawPixel(0,0,0xffffffff);
 		REF_PTR_RELEASE(surface);
 	}
+	if (m_tod == TIME_OF_DAY_INVALID)
+		setTimeOfDayBlend(m_skyBlendDay, m_skyBlendNight);	// a reset mid-handover: the sky mix again
 }
 
 void WaterRenderObjClass::load(void)
@@ -3056,8 +3062,10 @@ static UnsignedInt blendColor(UnsignedInt a, UnsignedInt b, Real t)
 //-------------------------------------------------------------------------------------------------
 /** The day and night cycle's water: at the turn of the dusk and the dawn it moves from the day's
 	setting to the night's over a few seconds instead of in one picture.  The blend is built in the
-	setting slot no hour uses (TIME_OF_DAY_INVALID) and drawn from there, the colours mixed and the
-	textures and their scroll the day's; at either end it is the plain hour again. */
+	setting slot no hour uses (TIME_OF_DAY_INVALID) and drawn from there, the colours mixed, the sky
+	the two skies mixed into a texture of its own (renderSkyBlend) and the scroll the day's; at either
+	end it is the plain hour again.  The sky plane, the moon and the Atmosphere option's sky all read
+	the mix, so none of them changes in one picture. */
 //-------------------------------------------------------------------------------------------------
 void WaterRenderObjClass::setTimeOfDayBlend(TimeOfDay day, Real night)
 {
@@ -3073,11 +3081,32 @@ void WaterRenderObjClass::setTimeOfDayBlend(TimeOfDay day, Real night)
 	}
 	const Setting &a = m_settings[day];
 	const Setting &b = m_settings[TIME_OF_DAY_NIGHT];
-	// the textures cannot blend: the day's until the colours are fully the night's, so they change
-	// where the water is darkest, at the end of the dusk's ease and the start of the dawn's
 	const Setting &nearer = a;
 	Setting &mix = m_settings[TIME_OF_DAY_INVALID];
-	REF_PTR_SET(mix.skyTexture, nearer.skyTexture);
+	TextureClass *sky = nearer.skyTexture;
+	m_skyBlendNight = night;	// the moon's fade too
+	if (a.skyTexture != NULL && b.skyTexture != NULL && a.skyTexture != b.skyTexture)
+	{
+		if (m_skyBlendTexture == NULL)
+		{	// no larger than 512 nor the screen: under -d3d9 the target shares the screen's depth buffer
+			SurfaceClass::SurfaceDescription desc;
+			a.skyTexture->Get_Level_Description(desc, 0);
+			Int size = (desc.Width >= 512) ? 512 : 256;
+			int screenWidth = 0, screenHeight = 0, screenBits = 0;
+			bool screenWindowed = true;
+			WW3D::Get_Device_Resolution(screenWidth, screenHeight, screenBits, screenWindowed);
+			while (size > 64 && size > screenHeight)
+				size /= 2;
+			m_skyBlendTexture = DX8Wrapper::Create_Render_Target(size, size);
+		}
+		if (m_skyBlendTexture != NULL)
+		{	// with no device for a target (headless) the day's sky stays until the night's, as it was
+			sky = m_skyBlendTexture;
+			m_skyBlendDay = day;
+			m_skyBlendDirty = TRUE;
+		}
+	}
+	REF_PTR_SET(mix.skyTexture, sky);
 	REF_PTR_SET(mix.waterTexture, nearer.waterTexture);
 	mix.waterRepeatCount = nearer.waterRepeatCount;
 	mix.skyTexelsPerUnit = nearer.skyTexelsPerUnit;
@@ -3235,6 +3264,8 @@ void WaterRenderObjClass::updateRenderTargetTextures(CameraClass *cam)
 #if ZH_MODERN_WATER
 	synchronizeWaterReflection();
 #endif
+	if (m_skyBlendDirty)
+		renderSkyBlend();	// before the mirror below and the frame read the mix
 	if (!cam || !TheTerrainRenderObject || !TheTerrainRenderObject->getMap())
 		return;
 
@@ -3444,8 +3475,8 @@ void WaterRenderObjClass::renderMirror(CameraClass *cam, Real level)
 	if (m_waterType == WATER_TYPE_2_PVSHADER)
 	{
 		renderSky();
-		if (m_tod == TIME_OF_DAY_NIGHT)
-			renderSkyBody(&reflectedTransform);
+		if (m_tod == TIME_OF_DAY_NIGHT || (m_tod == TIME_OF_DAY_INVALID && m_skyBlendNight > 0.0f))
+			renderSkyBody(&reflectedTransform);	// the moon fades in with the handover (its diffuse's alpha)
 	}
 
 	// The mirrored camera sits under the water, so everything under the water is in front of it.
@@ -4304,6 +4335,9 @@ void WaterRenderObjClass::renderSkyBody(Matrix3D *mat)
 
 	DX8Wrapper::Set_Texture(0,m_alphaClippingTexture);
 
+	const Real fade = (m_tod == TIME_OF_DAY_INVALID) ? m_skyBlendNight : 1.0f;
+	const UnsignedInt diffuse = ((UnsignedInt)(fade * 255.0f + 0.5f) << 24) | 0x00ffffff;
+
 	//draw an infinite sky plane
 	DynamicVBAccessClass vb_access(BUFFER_TYPE_DYNAMIC_DX8,dynamic_fvf_type,4);
 	{
@@ -4316,28 +4350,28 @@ void WaterRenderObjClass::renderSkyBody(Matrix3D *mat)
 			verts[0].z=0;
 			verts[0].u2=0;
 			verts[0].v2=1;
-			verts[0].diffuse=0xffffffff;
+			verts[0].diffuse=diffuse;
 
 			verts[1].x=SKYBODY_SIZE;
 			verts[1].y=SKYBODY_SIZE;
 			verts[1].z=0;
 			verts[1].u2=1;
 			verts[1].v2=1;
-			verts[1].diffuse=0xffffffff;
+			verts[1].diffuse=diffuse;
 
 			verts[2].x=SKYBODY_SIZE;
 			verts[2].y=-SKYBODY_SIZE;
 			verts[2].z=0;
 			verts[2].u2=1;
 			verts[2].v2=0;
-			verts[2].diffuse=0xffffffff;
+			verts[2].diffuse=diffuse;
 
 			verts[3].x=-SKYBODY_SIZE;
 			verts[3].y=-SKYBODY_SIZE;
 			verts[3].z=0;
 			verts[3].u2=0;
 			verts[3].v2=0;
-			verts[3].diffuse=0xffffffff;
+			verts[3].diffuse=diffuse;
 		}
 	}
 
@@ -4345,6 +4379,87 @@ void WaterRenderObjClass::renderSkyBody(Matrix3D *mat)
 	DX8Wrapper::Set_Vertex_Buffer(vb_access);
 
 	DX8Wrapper::Draw_Triangles(	0,2, 0,	4);	//draw a quad, 2 triangles, 4 verts
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The handover's sky: the day's sky times (1 - night) drawn opaque into m_skyBlendTexture, the
+	night's times night added over it, so the mix is a plain cross fade and neither texture's alpha
+	counts.  Drawn once per step of the night look (setTimeOfDayBlend), before any view reads it.
+	The target has one level, so the Atmosphere option's blurred horizon reads it sharp until the
+	handover ends. */
+//-------------------------------------------------------------------------------------------------
+void WaterRenderObjClass::renderSkyBlend(void)
+{
+	m_skyBlendDirty = FALSE;
+	TextureClass *day = m_settings[m_skyBlendDay].skyTexture;
+	TextureClass *night = m_settings[TIME_OF_DAY_NIGHT].skyTexture;
+	if (m_skyBlendTexture == NULL || day == NULL || night == NULL)
+		return;
+
+	Matrix4x4 oldView, oldProjection;
+	DX8Wrapper::Get_Transform(D3DTS_VIEW, oldView);
+	DX8Wrapper::Get_Transform(D3DTS_PROJECTION, oldProjection);
+
+	DX8Wrapper::Set_Render_Target_With_Z(m_skyBlendTexture);
+	WW3D::Begin_Render(true, false, Vector3(0,0,0));
+
+	// clip space straight through: the quad is the whole target
+	const Matrix3D identity(1);
+	DX8Wrapper::Set_Transform(D3DTS_WORLD, identity);
+	DX8Wrapper::Set_Transform(D3DTS_VIEW, identity);
+	DX8Wrapper::Set_Transform(D3DTS_PROJECTION, Matrix4x4(true));
+
+	VertexMaterialClass *vmat=VertexMaterialClass::Get_Preset(VertexMaterialClass::PRELIT_DIFFUSE);
+	DX8Wrapper::Set_Material(vmat);
+	REF_PTR_RELEASE(vmat);
+
+	for (Int pass = 0; pass < 2; ++pass)
+	{
+		ShaderClass shader = (pass == 0) ? ShaderClass::_PresetOpaqueShader : ShaderClass::_PresetAdditiveShader;
+		shader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+		shader.Set_Depth_Compare(ShaderClass::PASS_ALWAYS);
+		shader.Set_Depth_Mask(ShaderClass::DEPTH_WRITE_DISABLE);
+		DX8Wrapper::Set_Shader(shader);
+		DX8Wrapper::Set_Texture(0, (pass == 0) ? day : night);
+
+		const Real weight = (pass == 0) ? 1.0f - m_skyBlendNight : m_skyBlendNight;
+		const UnsignedInt grey = (UnsignedInt)(weight * 255.0f + 0.5f);
+		const UnsignedInt diffuse = 0xff000000 | (grey << 16) | (grey << 8) | grey;
+
+		DynamicVBAccessClass vb_access(BUFFER_TYPE_DYNAMIC_DX8,dynamic_fvf_type,4);
+		{
+			DynamicVBAccessClass::WriteLockClass lock(&vb_access);
+			VertexFormatXYZNDUV2* verts=lock.Get_Formatted_Vertex_Array();
+			if (verts)
+			{
+				static const Real corner[4][4] = {	// x, y, u, v
+					{ -1.0f,  1.0f, 0.0f, 0.0f }, { 1.0f,  1.0f, 1.0f, 0.0f },
+					{  1.0f, -1.0f, 1.0f, 1.0f }, { -1.0f, -1.0f, 0.0f, 1.0f } };
+				for (Int i = 0; i < 4; ++i)
+				{
+					verts[i].x = corner[i][0];
+					verts[i].y = corner[i][1];
+					verts[i].z = 0.5f;
+					verts[i].u1 = corner[i][2];
+					verts[i].v1 = corner[i][3];
+					verts[i].diffuse = diffuse;
+				}
+			}
+		}
+		DX8Wrapper::Set_Index_Buffer(m_indexBuffer,0);
+		DX8Wrapper::Set_Vertex_Buffer(vb_access);
+		DX8Wrapper::Draw_Triangles(0,2, 0,4);
+	}
+
+	WW3D::End_Render(false);
+	DX8Wrapper::Set_Render_Target((IDirect3DSurface9 *)NULL);
+	DX8Wrapper::Set_Texture(0, NULL);
+	DEBUG_LOG(("WATER SKY BLEND night %.4f, %s %.4f with %s %.4f into %d\n", m_skyBlendNight,
+		day->Get_Texture_Name().Peek_Buffer(), 1.0f - m_skyBlendNight, night->Get_Texture_Name().Peek_Buffer(), m_skyBlendNight,
+		m_skyBlendTexture->Get_Width()));
+	ShaderClass::Invalidate();
+	DX8Wrapper::Set_Transform(D3DTS_VIEW, oldView);
+	DX8Wrapper::Set_Transform(D3DTS_PROJECTION, oldProjection);
 }
 
 //Defines for procedural water animation.

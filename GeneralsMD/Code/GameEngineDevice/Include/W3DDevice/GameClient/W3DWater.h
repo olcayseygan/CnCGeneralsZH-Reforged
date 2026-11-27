@@ -136,7 +136,7 @@ public:
 	void enableWaterGrid(Bool state);	///< used to active custom water for special maps. (i.e DAM).  The grid is TerrainLogic's WaterGrid; this builds its buffers
 	void updateMapOverrides(void);	///< used to update any map specific map overrides for water appearance.
 	void setTimeOfDay(TimeOfDay tod); ///<change sky/water for time of day
-	/// between `day`'s setting and the night's, `night` 0 to 1: the colours blended, the textures the day's until 1
+	/// between `day`'s setting and the night's, `night` 0 to 1: the colours and the two skies blended
 	void setTimeOfDayBlend(TimeOfDay day, Real night);
 	void toggleCloudLayer(Bool state)	{	m_useCloudLayer=state;}	///<enables/disables the cloud layer
 	void updateRenderTargetTextures(CameraClass *cam);	///< renders into any required textures.	
@@ -212,6 +212,10 @@ protected:
 	Int m_reflectionTargetRequestSize = 0;
 	WaterScreenReflection::Mode m_waterReflectionMode = WaterScreenReflection::Mirror;
 	TextureClass * m_pReflectionTexture;	///<render target for reflection
+	TextureClass * m_skyBlendTexture = NULL;	///<the day's and the night's sky mixed, drawn while the handover runs
+	TimeOfDay m_skyBlendDay = TIME_OF_DAY_AFTERNOON;	///<the hour whose sky the mix starts from
+	Real m_skyBlendNight = 0.0f;	///<how much of the night's sky is in it
+	Bool m_skyBlendDirty = FALSE;	///<the mix is to be drawn again before the next frame uses it
 	Real m_reflectionLevel;	///<height of the water plane the reflection texture was rendered for
 	Vector2 m_reflectionAreaMin;	///<lower left of the screen area the reflection texture covers, -1 to 1
 	Vector2 m_reflectionAreaMax;	///<upper right of the same area
@@ -415,6 +419,7 @@ protected:
 	void drawTrapezoidWater(Vector3 points[4]);
 	void loadSetting ( Setting *skySetting, TimeOfDay timeOfDay );	///<init sky/water settings from GDF
 	void renderSky(void);	///<draw the sky layer (clouds, stars, etc.)
+	void renderSkyBlend(void);	///<draw the handover's sky mix into m_skyBlendTexture
 	void testCurvedWater(void);	///<draw the sky layer (clouds, stars, etc.)
 	void renderSkyBody(Matrix3D *mat);	///<draw the sky body (sun, moon, etc.)
 	void renderWaterMesh(void);			///<draw the water surface mesh (deformed 3d mesh).

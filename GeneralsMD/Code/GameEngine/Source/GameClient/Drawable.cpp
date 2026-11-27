@@ -2019,8 +2019,9 @@ void Drawable::updateDrawable( void )
 
 	// Hit Flash: the body stamps the frame it last took damage (healing does not stamp it), and a new
 	// stamp lights the drawable through the selection flash's envelope.  Read here, outside the render
-	// window, like the dead check above; the logic never sees the option.
-	if( TheGlobalData->m_hitFlash && obj )
+	// window, like the dead check above; the logic never sees the option.  Skipped when the tick runs
+	// this (StealthUpdate's disguise), as Damage Numbers is: the next client walk takes the stamp.
+	if( TheGlobalData->m_hitFlash && obj && !LogicThread::t_isLogicThread && !LogicThread::t_isLogicWorker )
 	{
 		const BodyModuleInterface *body = obj->getBodyModule();
 		const UnsignedInt hitFrame = body ? body->getLastDamageTimestamp() : 0xffffffff;

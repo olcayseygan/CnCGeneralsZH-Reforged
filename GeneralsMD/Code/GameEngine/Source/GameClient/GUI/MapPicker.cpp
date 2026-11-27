@@ -78,6 +78,13 @@ static const Int PICK_TIP_WIDTH = 440;
 enum { GRID_MAPS, GRID_TYPES, GRID_COUNT };
 enum { CELL_TILE, CELL_TENANT, CELL_ADD };
 
+/* The grid's own types live in an unnamed namespace.  At namespace scope FactionPicker.cpp's PickerCell
+	 (a struct of UnicodeStrings) and this file's (plain ints) were one name with two layouts, and the
+	 linker kept one std::vector<PickerCell> growth path for both: the first push_back past capacity in
+	 layoutCells copied this file's ints as UnicodeStrings and the game fell over on Select Map. */
+namespace
+{
+
 /// a row's tile as it was last measured: its picture and its name broken into lines for a width
 struct PickerRow
 {
@@ -109,6 +116,8 @@ struct PickerCell
 	Int index;
 	Int picture;				///< the picture's side at 1080
 };
+
+}	// namespace
 
 static PickerGrid thePickerGrids[ GRID_COUNT ];
 static GameWindow *thePickerPreview = NULL;
@@ -404,6 +413,38 @@ static void takeRows( PickerGrid &g, const MapPickerShape &shape )
 	g.pressRow = -1;
 }
 
+/// the tiles of rows firstRow to lastRow, the screen's first tile at the area's top left
+static void placeTiles( std::vector< PickerCell > &cells, const MapPickerShape &shape, Int top, Int firstRow, Int lastRow )
+{
+	const Int step = shape.tileWidth + MAP_PICKER_GAP;
+	const Int pitch = shape.tileHeight + MAP_PICKER_GAP;
+	const Int picture = shape.tileWidth - 2 * MAP_PICKER_INSET;
+	for( Int row = firstRow; row < lastRow; row++ )
+	{
+		const Int at = row - firstRow;
+		const Int left = PICK_LEFT + ( at % shape.columns ) * step;
+		const Int y = top + ( at / shape.columns ) * pitch;
+		PickerCell c = { left, y, left + shape.tileWidth, y + shape.tileHeight, CELL_TILE, row, picture };
+		cells.push_back( c );
+	}
+}
+
+void MapPickerPlaceTiles( Int total, Int first, Int top, Int startColumns, std::vector< MapPickerTile > &tiles )
+{
+	// through the grid's own cells, growing its vector as layoutCells does
+	const MapPickerShape shape = MapPickerGridShape( PICK_LEFT, PICK_GRID_RIGHT, top, PICK_BOTTOM, startColumns );
+	const Int allRows = ( total + shape.columns - 1 ) / shape.columns;
+	first = max( 0, min( first, allRows - shape.rows ) );
+	std::vector< PickerCell > cells;
+	placeTiles( cells, shape, top, first * shape.columns, min( total, ( first + shape.rows ) * shape.columns ) );
+	tiles.clear();
+	for( size_t k = 0; k < cells.size(); k++ )
+	{
+		MapPickerTile tile = { cells[ k ].left, cells[ k ].top, cells[ k ].right, cells[ k ].bottom, cells[ k ].index };
+		tiles.push_back( tile );
+	}
+}
+
 /** The cells of the grid's area on the board.  Past a row's worth of maps the tiles keep their shape and
 	* scroll, the last row's empty places going to the tenants (one place each, the last stretched over
 	* what is left).  A map list shorter than a row shares that one row with its tenants and an ADD YOUR
@@ -463,15 +504,7 @@ static void layoutCells( PickerGrid &g, std::vector< PickerCell > &cells, MapPic
 	const Int lastRow = min( total, ( g.first + shape.rows ) * shape.columns );
 	const Int step = shape.tileWidth + MAP_PICKER_GAP;
 	const Int pitch = shape.tileHeight + MAP_PICKER_GAP;
-	const Int picture = shape.tileWidth - 2 * MAP_PICKER_INSET;
-	for( Int row = firstRow; row < lastRow; row++ )
-	{
-		const Int at = row - firstRow;
-		const Int left = PICK_LEFT + ( at % shape.columns ) * step;
-		const Int y = top + ( at / shape.columns ) * pitch;
-		PickerCell c = { left, y, left + shape.tileWidth, y + shape.tileHeight, CELL_TILE, row, picture };
-		cells.push_back( c );
-	}
+	placeTiles( cells, shape, top, firstRow, lastRow );
 	// the last row on screen and short: its empty places are the tenants'
 	const Int spare = lastRow == total ? ( g.first + shape.rows ) * shape.columns - total : 0;
 	const Int onLastRow = total % shape.columns == 0 ? 0 : shape.columns - total % shape.columns;

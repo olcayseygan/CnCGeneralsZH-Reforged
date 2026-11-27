@@ -37,6 +37,36 @@ TEST( map_picker_grid_fills_its_height )
 	CHECK_EQ( low.tileHeight, 52 );
 }
 
+TEST( map_picker_places_a_screen_of_tiles_twice )
+{
+	/* Select Map crashed in the grid's first push_back past its vector's capacity: FactionPicker.cpp had a
+		 PickerCell of UnicodeStrings at namespace scope, MapPicker.cpp one of ints, and the linker kept one
+		 growth path for both.  This runs the grid's own cell vector through every growth of a full screen,
+		 twice over, and reads every tile back. */
+	std::vector< MapPickerTile > tiles;
+	for( Int pass = 0; pass < 2; pass++ )
+	{
+		const Int first = pass == 0 ? 0 : 3;
+		MapPickerPlaceTiles( 200, first, 182, 8, tiles );
+		const MapPickerShape shape = MapPickerGridShape( 60, 1276, 182, 952, 8 );
+		CHECK_EQ( (Int)tiles.size(), shape.columns * shape.rows );
+		for( Int k = 0; k < (Int)tiles.size(); k++ )
+		{
+			CHECK_EQ( tiles[ k ].row, first * shape.columns + k );
+			CHECK_EQ( tiles[ k ].left, 60 + ( k % shape.columns ) * ( shape.tileWidth + MAP_PICKER_GAP ) );
+			CHECK_EQ( tiles[ k ].top, 182 + ( k / shape.columns ) * ( shape.tileHeight + MAP_PICKER_GAP ) );
+			CHECK_EQ( tiles[ k ].right - tiles[ k ].left, shape.tileWidth );
+			CHECK_EQ( tiles[ k ].bottom - tiles[ k ].top, shape.tileHeight );
+		}
+	}
+	// the end of a list: the last screen holds the rows left, a first past it is pulled back
+	MapPickerPlaceTiles( 62, 99, 182, 8, tiles );
+	CHECK_EQ( (Int)tiles.size(), 62 - 4 * 8 );
+	CHECK_EQ( tiles.back().row, 61 );
+	MapPickerPlaceTiles( 0, 0, 182, 8, tiles );
+	CHECK_EQ( (Int)tiles.size(), 0 );
+}
+
 TEST( map_picker_opens_on_the_picked_row )
 {
 	// 62 maps, 8 columns, 4 rows on screen: eight rows in all, the last first row is 4

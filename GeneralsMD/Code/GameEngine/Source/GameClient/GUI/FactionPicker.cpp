@@ -91,6 +91,10 @@ static const Int PORTRAIT = 380;
 static const Int STRIP_PICTURE = 52;
 static const Int TIP_WIDTH = 560;
 
+// the screen's own types, unnamed: MapPicker.cpp has a PickerCell of its own (MapPicker.cpp says why)
+namespace
+{
+
 struct PickerCell
 {
 	Int pick;							///< the box's item data: a template or PLAYERTEMPLATE_OBSERVER
@@ -113,6 +117,8 @@ struct PickerGroup
 	Int top, bottom;			///< its row on the board
 	std::vector<Int> cells;
 };
+
+}	// namespace
 
 static Bool s_openOnStart = FALSE;
 static Bool s_openOnStartCustom = FALSE;

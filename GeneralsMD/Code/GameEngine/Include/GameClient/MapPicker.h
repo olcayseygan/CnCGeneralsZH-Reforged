@@ -34,6 +34,8 @@
 #include "Lib/BaseType.h"
 #include "Common/AsciiString.h"
 
+#include <vector>
+
 class GameWindow;
 class GameInfo;
 class WinInstanceData;
@@ -71,6 +73,15 @@ const Int MAP_PICKER_NAME_ROOM = 50;	///< two lines of name under the picture
 MapPickerShape MapPickerGridShape( Int left, Int right, Int top, Int bottom, Int startColumns );
 /// the first row on screen as a list opens: the picked row's row the last one shown, or the top
 Int MapPickerFirstRow( Int picked, Int columns, Int rows, Int total );
+/// a tile on the 1080 board and the list row it shows
+struct MapPickerTile
+{
+	Int left, top, right, bottom;
+	Int row;
+};
+/** The tiles on screen of a list of total rows from its first row of tiles, the grid's area from top to
+	* the seat column's foot: the cells the grid draws and clicks, through its own placing. */
+void MapPickerPlaceTiles( Int total, Int first, Int top, Int startColumns, std::vector< MapPickerTile > &tiles );
 
 // The Random tab's state for the grid, kept in GUIUtil.cpp with the tab
 Bool RandomMapTabIsOpen( void );

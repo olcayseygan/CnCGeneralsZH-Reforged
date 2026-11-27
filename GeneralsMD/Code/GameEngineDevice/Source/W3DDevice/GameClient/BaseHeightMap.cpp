@@ -3441,6 +3441,42 @@ void BaseHeightMapRenderObjClass::loadPostProcess( void )
 static const Int SKIRT_CHUNK = 32;
 static const Int SKIRT_CHUNK_QUADS = SKIRT_CHUNK*SKIRT_CHUNK*(TerrainSkirt::MOST_LAYERS - 1);
 
+/// Whether the even-grid skirt quad at (qx, qy) lies wholly over a w by h map, and so goes under its ground (TerrainSkirt::SINK).
+static Bool skirtQuadSunk(Int qx, Int qy, Int w, Int h)
+{
+	return qx >= 0 && qx+2 <= w-1 && qy >= 0 && qy+2 <= h-1;
+}
+
+/// The lowest map sample within one of (x, y), world z.
+static Real skirtLowest(const UnsignedByte *data, Int x, Int y, Int w, Int h)
+{
+	Int lowest = 255;
+	for (Int j = max(0, y-1); j <= min(h-1, y+1); j++)
+		for (Int i = max(0, x-1); i <= min(w-1, x+1); i++)
+			lowest = min(lowest, (Int)data[j*w + i]);
+	return lowest*MAP_HEIGHT_SCALE;
+}
+
+/** Where corner (x, y) of the even-grid skirt quad at (qx, qy) is drawn; height(x, y, sink) is skirtHeight.
+A quad wholly over the map goes under it by TerrainSkirt::SINK.  One reaching past it puts a corner on the
+edge at the lowest sample round it, which keeps its two-cell chord under the odd sample between, and a corner
+a cell in from the edge (the far edges of a map whose last sample is odd) on the line from its partner two
+cells out down through that, at least 1 under it, so the cell over the map stays under the map's own ground
+without the two fighting, and the chord crosses the edge half a unit under it at most. */
+template <class Height>
+static Real skirtCornerZ(const UnsignedByte *data, Int x, Int y, Int qx, Int qy, Int w, Int h, const Height &height)
+{
+	if (skirtQuadSunk(qx, qy, w, h))
+		return height(x, y, TRUE);
+	if (x < 0 || y < 0 || x > w-1 || y > h-1)
+		return height(x, y, FALSE);
+	const Int dx = (x < w-1 && qx+2 > w-1) ? 1 : 0, dy = (y < h-1 && qy+2 > h-1) ? 1 : 0;
+	const Real edgeZ = skirtLowest(data, x+dx, y+dy, w, h);
+	if (dx == 0 && dy == 0)
+		return edgeZ;
+	return min(2.0f*edgeZ - height(x+2*dx, y+2*dy, FALSE), edgeZ - 1.0f);
+}
+
 void BaseHeightMapRenderObjClass::freeSkirt(void)
 {
 	for (size_t i = 0; i < m_skirtChunks.size(); i++) {
@@ -3623,8 +3659,9 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 	blendVerts.reserve(SKIRT_CHUNK_QUADS*4);
 	Int totalQuads = 0, totalBlendQuads = 0;
 
+	auto height = [&](Int x, Int y, Bool sink) { return skirtHeight(x, y, edge, sink); };
 	// a layer's corners in whichever texture the skirt draws from
-	auto layerUV = [&](const WorldHeightMap::SkirtLayer &layer, float u[4], float v[4]) {
+	auto layerUV =[&](const WorldHeightMap::SkirtLayer &layer, float u[4], float v[4]) {
 		if (atlas) {
 			m_map->getSkirtLayerUV(layer, u, v);
 			return;
@@ -3674,7 +3711,7 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 						VERTEX_FORMAT v;
 						v.x = (x - border)*MAP_XY_FACTOR;
 						v.y = (y - border)*MAP_XY_FACTOR;
-						v.z = skirtHeight(x, y, edge, TRUE);
+						v.z = skirtCornerZ(data, x, y, qx, qy, w, h, height);
 						const Vector3 l2r(2*MAP_XY_FACTOR, 0, skirtHeight(x+1, y, edge, FALSE) - skirtHeight(x-1, y, edge, FALSE));
 						const Vector3 n2f(0, 2*MAP_XY_FACTOR, skirtHeight(x, y+1, edge, FALSE) - skirtHeight(x, y-1, edge, FALSE));
 						Vector3 normal;
@@ -3767,13 +3804,18 @@ Real BaseHeightMapRenderObjClass::skirtGroundAt(Real x, Real y)
 	const Real sx = x/MAP_XY_FACTOR + border, sy = y/MAP_XY_FACTOR + border;
 	const Int qx = 2*(Int)floorf(sx*0.5f), qy = 2*(Int)floorf(sy*0.5f);
 	const Real u = (sx - qx)*0.5f, v = (sy - qy)*0.5f;
-	const Real z0 = skirtHeight(qx, qy, m_skirtEdge, TRUE);
-	const Real z2 = skirtHeight(qx+2, qy+2, m_skirtEdge, TRUE);
+	const Int w = m_map->getXExtent(), h = m_map->getYExtent();
+	const UnsignedByte *data = m_map->getDataPtr();
+	// as buildSkirt lays the quad's corners
+	auto height = [&](Int cx, Int cy, Bool sink) { return skirtHeight(cx, cy, m_skirtEdge, sink); };
+	auto corner = [&](Int cx, Int cy) { return skirtCornerZ(data, cx, cy, qx, qy, w, h, height); };
+	const Real z0 = corner(qx, qy);
+	const Real z2 = corner(qx+2, qy+2);
 	if (v > u) {
-		const Real z3 = skirtHeight(qx, qy+2, m_skirtEdge, TRUE);
+		const Real z3 = corner(qx, qy+2);
 		return z0 + u*(z2 - z3) + v*(z3 - z0);
 	}
-	const Real z1 = skirtHeight(qx+2, qy, m_skirtEdge, TRUE);
+	const Real z1 = corner(qx+2, qy);
 	return z0 + u*(z1 - z0) + v*(z2 - z1);
 }
 

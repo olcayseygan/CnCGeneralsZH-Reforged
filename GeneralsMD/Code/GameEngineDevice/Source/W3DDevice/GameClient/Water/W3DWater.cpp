@@ -1584,6 +1584,14 @@ void WaterRenderObjClass::setupModernWaterShader(Bool river, Bool heightCorrecti
 	DX8Wrapper::Set_DX8_Texture_Stage_State(2, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
 	DX8Wrapper::Set_DX8_Texture_Stage_State(2, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
 	DX8Wrapper::Set_DX8_Texture_Stage_State(2, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+	// The optical field covers the heightmap; the sea past its edge (addSkirtSeas) reads the edge's texels
+	// on, as Direct3D 11's linear clamp sampler gives them.  Direct3D 9 left the stage on its wrap, which laid
+	// the far side's field over it, and on the device's point filter.
+	DX8Wrapper::Set_DX8_Texture_Stage_State(4, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+	DX8Wrapper::Set_DX8_Texture_Stage_State(4, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+	DX8Wrapper::Set_DX8_Texture_Stage_State(4, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+	DX8Wrapper::Set_DX8_Texture_Stage_State(4, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+	DX8Wrapper::Set_DX8_Texture_Stage_State(4, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
 #endif
 }
 

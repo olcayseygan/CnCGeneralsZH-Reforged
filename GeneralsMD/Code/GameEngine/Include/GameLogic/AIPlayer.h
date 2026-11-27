@@ -41,6 +41,7 @@
 
 enum { INVALID_SKILLSET_SELECTION = -1 };
 
+class AIIdentity;
 class BuildListInfo;
 // this header used to compile only behind whoever happened to include Team.h first
 class TeamPrototype;
@@ -278,6 +279,11 @@ class AIPlayer : public MemoryPoolObject,
 	// the two rules whose AI-only extras read the seat's map and its foreign-tech wish
 	friend Bool AIAbility_shot(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim, Int rung);
 	friend Bool AIAbility_area(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim, Int rung);
+	// the generals' identities (AIIdentity.h) read and order through the shared AI's members from their own files
+	friend class AIIdentityUSA;
+	friend class AIIdentityChina;
+	friend class AIIdentityGLA;
+	friend class AIIdentityTurkiye;
 
 public:
 
@@ -600,6 +606,7 @@ protected:
 	Int moneyUnitRoom(void) const;	///< how many more money units this player's army and internet centers carry
 	Bool hasEnoughMoneyUnitsFor(TeamPrototype *proto) const;	///< this team is all hackers and there is no room for more
 	Bool placeNear(const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward, Coord3D *spotOnly = NULL, Bool homeOnly = FALSE, Real homeReachScale = 1.0f);	///< the nearest legal, safe spot by the ground from center, queued for a dozer, or only written to spotOnly. walkOutward keeps searching further out as the near ground fills; homeOnly holds any building to the base's edge as staysHome holds its own; homeReachScale over 1 stretches that edge and its rings, past the base only on the side away from the enemy
+	Bool homeSpotFor(const ThingTemplate *tmpl, Coord3D *spot);	///< a safe spot inside the base for a plan entry whose own spot is unsafe, then on the stretched edge behind it
 	Bool queueExtraFactory(Object *dozer, KindOfType kind, Bool doctrine = FALSE);	///< one more of this factory, beside a held expansion or around the base, once the ones standing fall behind their queues; the doctrine's without waiting for that
 	Bool holdsExtraFactory(const ThingTemplate *tmpl);	///< a factory of a kind already standing or going up, while the ones standing keep up with their queues
 	const ThingTemplate *nextBaseDefense(Object *dozer);	///< the base defence off this dozer's buttons that the base has fewest of, NULL for none
@@ -812,6 +819,7 @@ protected:
 	Bool pressureHere(void) const;								///< -aiknobsoff pressure is not on this seat
 	void defendAlly(void);												///< Supporter: idle units at home go to an ally's base when it is hit
 	void postTeamRequests(void);									///< what this AI asks of its allies, every wave tick
+	void readHumanAllyAttacks(void);							///< a person ally's attack, read off his army, noted as his posted attack
 	void answerTeamRequests(void);								///< Air, Attacker and Rusher answer an ally's call for help
 	const AITeamRequest *freshRequest(AITeamRequestKind kind, UnsignedInt within) const;	///< the request of that kind posted inside within frames, NULL for none
 	void coopChat(const char *trigger);					///< one line to the team when answering, GUI:AICoop<trigger>
@@ -836,9 +844,18 @@ protected:
 	Int						m_personaShared;
 	UnsignedInt		m_superweaponFrame;
 
+	// the general's identity (AIIdentity.h): moves only one general makes, under any personality
+	void ensureIdentity(void);										///< the identity of this seat's side, made once
+	Bool identityOn(void) const;									///< it has one and -aiknobsoff identity is not on this seat: the hooks run
+	AIIdentity		*m_identity;					///< NULL until the seat's first turn (or a load)
+	Bool					m_identityStarted;		///< its onStart has run
+
 	enum { MAX_AI_SCOUTS = 2 };				///< the ladder's maxScouts never asks for more than this
 	ObjectID	m_scoutID[ MAX_AI_SCOUTS ];	///< the units currently touring the map for us
 	Int				m_scoutTargetFor[ MAX_AI_SCOUTS ];	///< which start position each one is walking to
+	Coord3D		m_scoutExtraAt[ MAX_AI_SCOUTS ];		///< the last spot off the start positions each one was sent to look at
+	UnsignedInt m_scoutExtraFrame[ MAX_AI_SCOUTS ];	///< ... and when; 0 for never
+	Bool			extraScoutTarget(Int slot, const Coord3D *from, UnsignedInt fresh, Coord3D *pos);	///< off the start positions: the army's last seen place, then a supply pile in our fog
 	Int				m_scoutTimer;						///< frames until the next scouting check
 	UnsignedInt m_scoutSeenFrame[ MAX_PLAYER_COUNT ];	///< when each start position was last looked at; 0 == never
 	Bool			m_startChecked[ MAX_PLAYER_COUNT ];	///< start positions we have looked at, or deduced without looking
@@ -1045,6 +1062,32 @@ protected:
 	/** Kill zones: where this AI's own units died (m_lossMap), and the guns it knows on the road an attack takes.
 		* -aiknobsoff ... killzones takes all of it off a seat. */
 	Bool killZonesHere(void) const;
+	/** A Normal seat plays with its allies: joins an ally's attack and helps an ally's hit base.  -aiknobsoff ...
+		* teamplay takes it off a seat. */
+	Bool teamPlayHere(void);
+	Bool mendersHere(void);	///< heal auras and tunnels mend what it pulls out
+	Bool routeHomeHere(void);	///< a unit pulled out to a dock walks round what the map shows first, and docks when it stands there
+	Bool rockveeHere(void);		///< a transport kites at the reach of the riders who shoot out of it, and the vehicle-killers board first
+	Bool scoutingHere(void);	///< scouts look past the start positions, reveal powers fire on a stale ledger, a crippled enemy is one seen so
+	Bool powerHoldHere(void);	///< a ready strike waits for a target worth a rated floor, and takes the fight its wave is in
+	Bool harassHere(void);		///< every personality raids the enemy's economy, smaller than the Raider, and raiders withdraw when hurt or outgunned
+	Int raidPartySize(void);	///< how many go on a raid: the Raider's party, any other personality's harass party, under 2 for none
+	void clearGarrisons(void);	///< units whose weapons clear a garrison go at a known enemy-held building near them (-aiknobsoff garrison)
+	Bool waitsForCenter(const ThingTemplate *plan);	///< broke with a supply center asked for: this other plan entry waits (-aiknobsoff brokecenter)
+	Bool ambushHere(void);					///< GLA's tunnel ambush beside the enemy's gatherer road (-aiknobsoff ambush)
+	Object *ambushSupplyCenter(void);		///< the known enemy supply center nearest our base, NULL for none
+	Bool ambushSpot(Coord3D *spot);			///< where the ambush tunnel goes, off that center's road to its pile, clear of known guns
+	Object *ambushTunnel(void);					///< the ambush tunnel standing, NULL for none
+	Bool doTunnelAmbush(Int keep);			///< the raiders wait in the network and spring at a gatherer near the ambush; TRUE when it took their turn
+	Bool flankRoute(const Coord3D *from, Waypoint *way, std::vector<Coord3D> *route);	///< three turn points and the road's end round the guns on the influence grid, when the road runs under them (-aiknobsoff flank)
+	/** The attention budget (-aiknobsoff attention): a rated count of unit looks a game second, banked up to a few
+		* seconds' worth, spent by the tactics, the answers to fire, the units' buttons and the hurt pull-outs.  A unit
+		* the bank cannot pay for keeps its last order.  Build, wave and expansion orders never spend it. */
+	Bool takeAttention(void);
+	void refillAttention(void);
+	Real					m_attention;					///< looks in the bank, saved
+	Int						m_attentionRefused;		///< looks refused since the last AI ATTENTION line; log only, not saved
+	UnsignedInt		m_attentionLogFrame;	///< when that line was written; log only, not saved
 	Real killZoneWeight(void) const;							///< how much of the loss record a reading counts, 0 when off
 	Real killZoneAt(const Coord3D *at) const;			///< ... the losses round one spot, weighed
 	Real gunOdds(void) const;											///< what an attack has to be worth against the guns it meets, 0 when off
@@ -1242,7 +1285,7 @@ protected:
 	void pullOutRanked(Team *team, Bool inFight, Real ratio);	///< veterans and up leave earlier than the team, to a repair or heal pad
 	void releaseMended(void);		///< pulled-out veterans and let-out patients standing idle again become recruitable
 	void stepCalmly(Object *obj, TacticalStep *step, const Coord3D *spot, const Coord3D *via = NULL);	///< a move the unit's mood cannot turn into an attack move, through via first when given
-	void walkCalmlyRound(Object *obj, TacticalStep *step, const Coord3D *spot);	///< stepCalmly, round the enemy reach the straight walk would cross
+	Bool walkCalmlyRound(Object *obj, TacticalStep *step, const Coord3D *spot, Bool onlyRound = FALSE);	///< stepCalmly, round the enemy reach the straight walk would cross; TRUE when it went round.  onlyRound: no walk at all when the straight one is clear
 	Bool turnBackMended(Object *obj, TacticalStep *step);	///< one pulled out hurt and mended on the way goes back to its team
 	void restoreMood(Object *obj, TacticalStep *step);
 	Bool pickTacticalSpot(const Object *obj, const Coord3D *from, const Coord3D *awayFrom, Real distance,

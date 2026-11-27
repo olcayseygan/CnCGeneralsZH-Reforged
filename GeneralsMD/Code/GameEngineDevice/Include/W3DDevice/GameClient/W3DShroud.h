@@ -99,13 +99,16 @@ public:
 	Int	 getTextureWidth(void)		{return m_dstTextureWidth;}	///<internal use by the shader system.
 	Int	 getTextureHeight(void)		{return m_dstTextureHeight;}
 	W3DShroudLevel getShroudLevel(Int x, Int y);
+	W3DShroudLevel getTexelLevel(Int x, Int y);	///<a cell's level, or off the cells the border's ring's, as the clamped texture holds it
 	void setShroudLevel(Int x, Int y, W3DShroudLevel,Bool textureOnly=FALSE);
 	void setShroudFilter(Bool enable);	///<turns on bilinear filtering of shroud cells.
 	void setBorderShroudLevel(W3DShroudLevel level);	///<color that will appear in unused border terrain.
 	static W3DShroudLevel defaultBorderShroudLevel(void);	///< the border's level at a map's start: half dark, not black
 	W3DShroudLevel getBorderShroudLevel(void) const { return m_boderShroudLevel; }	///<the level setBorderShroudLevel last set
-	Real	getDrawOriginX(void)	{return m_drawOriginX;}	///<returns ws origin of first pixel in shroud texture.			
-	Real	getDrawOriginY(void)	{return m_drawOriginY;}	///<returns ws origin of first pixel in shroud texture.			
+	/// What a projection maps the texture by: world origin less a cell is texel 0's.  Not the cells'
+	/// origin, which is the world's (cell x at x / getCellWidth()): the border's ring sits before them.
+	Real	getDrawOriginX(void)	{return m_drawOriginX;}
+	Real	getDrawOriginY(void)	{return m_drawOriginY;}
 
 protected:
 	Int m_numCellsX;						///<number of cells covering entire map
@@ -131,8 +134,11 @@ protected:
 	W3DShroudLevel *m_currentFogData;		///<copy of intermediate logical shroud while it's interpolated.
 	void interpolateFogLevels(RenderRect *rect);		///<fade current fog levels to actual logic side levels.
 	void fillBorderShroudData(W3DShroudLevel level, SurfaceClass* pDestSurface);	///<fill the destination texture with a known value
+	void fillBorderRamp(void);					///<the border's ring round the cells, edge cell to border level
 	Bool m_cellsWritten = TRUE;					///<a cell was written since render last copied them up
 	Int m_fogCellCount = 0;						///<cells whose texel is not clear white, kept where a texel is written
+	Int m_logicCellsX = 0;						///<cells logic has written across, its partition's; nought before the first
+	Int m_logicCellsY = 0;
 	UnsignedInt m_lastPushMs = 0;				///<wall clock of the last pushDirect3D11, nought before the first
 	void pushDirect3D11(Bool written);			///<the soft, eased shroud on Direct3D 11 outside Classic
 };

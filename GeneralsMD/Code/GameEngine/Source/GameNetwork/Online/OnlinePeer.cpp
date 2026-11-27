@@ -37,9 +37,12 @@
 #include "Common/MessageStream.h"
 #include "Common/RandomValue.h"
 #include "Common/Recorder.h"
+#include "GameClient/GUICallbacks.h"
+#include "GameClient/MapUtil.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/GameInfo.h"
+#include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/StagingRoomGameInfo.h"
 #include "GameNetwork/GUIUtil.h"
 #include "GameNetwork/GameSpy/ThreadUtils.h"
@@ -151,7 +154,8 @@ OnlineSession &OnlineSession::get()
 OnlineSession::OnlineSession() :
 	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ), failRetry( 0 ),
 	noticeSerial( 0 ), maintenanceRefused( FALSE ), relayTicketFresh( FALSE ), rejoinSerial( 0 ), cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), historySerial( 0 ), revealing( FALSE ),
-	revealSerial( 0 ), aiSpeed( 100 ), aiVerdictSerial( 0 ), friendsOn( FALSE ), friendsSerial( 0 ), invitesSerial( 0 ), peer( NULL ), buddy( NULL ), ps( NULL )
+	revealSerial( 0 ), aiSpeed( 100 ), aiVerdictSerial( 0 ), friendsOn( FALSE ), friendsSerial( 0 ), invitesSerial( 0 ),
+	teamOn( FALSE ), partyLeader( 0 ), partySerial( 0 ), teamReady( FALSE ), teamQueueSize( 0 ), partyScriptInvited( FALSE ), partyScriptStarted( FALSE ), peer( NULL ), buddy( NULL ), ps( NULL )
 {
 	connectionGone();
 	forgetAccount();
@@ -168,6 +172,7 @@ void OnlineSession::connectionGone()
 	pingSmoothedMs = -1;
 	pingRefused = FALSE;
 	friendsOn = FALSE;		// the next welcome says it again
+	teamOn = FALSE;
 	if (!noticeKind.empty())
 		++noticeSerial;
 	noticeKind.clear();
@@ -345,6 +350,7 @@ OnlineMessage OnlineHelloLine( UnsignedInt exe, UnsignedInt ini, const char *ver
 	hello.setInt( "notice", 1 );	// the server's notices and maintenance, after the welcome and on every change
 	hello.setInt( "speedask", 1 );	// a Quick Match's faster pick may be put to us (qm.matched speedAsk)
 	hello.setInt( "friends", 1 );		// friends, presence and invites; a server that has them echoes it in the welcome
+	hello.setInt( "teamai", 1 );		// Team vs AI: a party by invite, ai.team.ask and a team's ai.ready; echoed the same way
 	return hello;
 }
 
@@ -849,6 +855,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		resetUrl = m.getString( "resetUrl" );
 		accountUrl = m.getString( "accountUrl" );
 		friendsOn = m.getInt( "friends" ) == 1;		// an older server: no friends, everything as before them
+		teamOn = friendsOn && m.getInt( "teamai" ) == 1;		// a party needs the invite
 		m.getObject( "counts", counts );		// none from an older server: cleared
 		hasServerInfo = m.getObject( "server", serverInfo );
 		status = ONLINE_WELCOMED;
@@ -1344,19 +1351,43 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			send( stats );
 		}
 	}
-	else if (t == "ai.ready" && aiState == ONLINE_AI_WAITING)
+	else if (t == "ai.ready" && (aiState == ONLINE_AI_WAITING || (teamOn && m.getInt( "team" ) == 1)))
 	{
-		// what the hub needs to start the match; one that names no match or no map cannot be played
+		// what the hub needs to start the match; one that names no match or no map cannot be played.  A team
+		// match's comes to every member, the one who pressed Play and the others alike: a network match on the
+		// relay, whose report goes up as a custom match's (OnlineSendReport), so it is the match id that one sends
+		const Bool team = m.getInt( "team" ) == 1;
 		if (m.getString( "matchId" ).empty() || m.getString( "map" ).empty())
 		{
-			aiState = ONLINE_AI_REFUSED;
-			aiRefusal = "unknown";
+			if (aiState == ONLINE_AI_WAITING)
+			{
+				aiState = ONLINE_AI_REFUSED;
+				aiRefusal = "unknown";
+			}
 		}
 		else
 		{
 			aiReady = m;
 			aiState = ONLINE_AI_READY;
 			aiReadyMs = aiTickMs = OnlineNowMs();
+			if (team)
+			{
+				teamReady = TRUE;
+				teamAsk.clear();
+				teamQueueSize = 0;		// a queued team's match: out of the queue
+				matchId = m.getString( "matchId" );
+				teamMatch = matchId;
+				// a rated one's replay goes up as a Quick Match's does, for an admin to look at a judged win
+				if (m.getBool( "rated" ))
+					quickMatch = matchId;
+				else
+					quickMatch.clear();
+				hostLeftGame = 0;
+				hostLeftPumps = 0;
+				gameId = 0;
+				hosting = FALSE;
+				rememberVips( *this, m );
+			}
 		}
 		const OnlineValue *rating = m.find( "aiRating" ), *botElo = m.find( "botElo" );
 		DEBUG_LOG(("ONLINE AI READY match=%s botElo=%s aiRating=%s map=%s seed=%lld\n", m.getString( "matchId" ).c_str(),
@@ -1369,6 +1400,42 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		if (aiRefusal == "maintenance")
 			noteMaintenance( m );
 		DEBUG_LOG(("ONLINE AI REFUSED reason=%s\n", aiRefusal.c_str()));
+	}
+	else if (t == "party" && teamOn)
+	{
+		// party{leader, members: [{id, nick}]}: the whole party at each change, leader 0 and no members once out
+		partyLeader = m.getInt( "leader" );
+		party.clear();
+		const std::vector<OnlineMessage> members = m.getObjects( "members" );
+		std::string names;
+		for (size_t i = 0; i < members.size(); ++i)
+		{
+			party.push_back( std::make_pair( members[i].getInt( "id" ), members[i].getString( "nick" ) ) );
+			nicksById[members[i].getInt( "id" )] = members[i].getString( "nick" );
+			names += (i ? "," : "") + members[i].getString( "nick" );
+		}
+		if (party.empty())
+			partyLeader = 0;
+		++partySerial;
+		DEBUG_LOG(("ONLINE PARTY leader=%lld members=%s\n", partyLeader, names.c_str()));
+	}
+	else if (t == "ai.team.ask" && teamOn)
+	{
+		// a member pressed Play: the hub answers with the army it plays (OnlineTakeTeamAsk), or the start goes off
+		teamAsk = m.getString( "matchId" );
+		teamAskNick = m.getString( "nick" );
+		DEBUG_LOG(("ONLINE AI TEAM ASK match=%s from=%s\n", teamAsk.c_str(), teamAskNick.c_str()));
+	}
+	else if (t == "ai.team.queued" && teamOn)
+	{
+		teamQueueSize = (Int)m.getInt( "size" );
+		DEBUG_LOG(("ONLINE AI TEAM QUEUE size=%d members=%lld reason=%s\n", teamQueueSize, m.getInt( "members" ), m.getString( "reason" ).c_str()));
+	}
+	else if (t == "ai.team.off" && teamOn)
+	{
+		if (m.getString( "matchId" ) == teamAsk)
+			teamAsk.clear();
+		DEBUG_LOG(("ONLINE AI TEAM OFF match=%s reason=%s\n", m.getString( "matchId" ).c_str(), m.getString( "reason" ).c_str()));
 	}
 	else if (t == "match.hold" || t == "match.resume")
 	{
@@ -1803,11 +1870,54 @@ void OnlineUpdate( void )
 		OnlineSession::get().pump();
 }
 
+/* -onlineparty and -onlinepartyjoin (CommandLine.cpp): a Team vs AI party's clicks, each once.  The leader
+	 invites that friend once the friend reads online and presses Play vs AI once the party has two; the other
+	 takes the invite from that nick.  The hub (WOLPlayVsAIUpdate) does the rest as for a player. */
+static void onlinePartyScript( OnlineSession &s )
+{
+	if (!TheGlobalData || !s.authed || !s.teamOn || !s.friendsOn)
+		return;
+	const AsciiString &lead = TheGlobalData->m_onlineParty, &join = TheGlobalData->m_onlinePartyJoin;
+	if (!join.isEmpty())
+	{
+		const std::string key = OnlineNickKey( join.str() );
+		for (std::deque<OnlineInviteEntry>::const_iterator it = s.invites.begin(); it != s.invites.end(); ++it)
+			if (it->game == 0 && it->mode == "teamai" && OnlineNickKey( it->nick ) == key)
+			{
+				const Int from = (Int)it->from;
+				OnlineAnswerInvite( from, 0, TRUE );		// takes it off the list
+				break;
+			}
+	}
+	if (lead.isEmpty())
+		return;
+	if (!s.partyScriptInvited)
+	{
+		const std::string key = OnlineNickKey( lead.str() );
+		for (std::map<long long, OnlineFriendRow>::const_iterator it = s.friendRows.begin(); it != s.friendRows.end(); ++it)
+			if (it->second.status == "accepted" && it->second.presence != "offline" && OnlineNickKey( it->second.nick ) == key)
+			{
+				s.partyScriptInvited = TRUE;
+				OnlineInviteFriend( (Int)it->first );
+				break;
+			}
+	}
+	else if (!s.partyScriptStarted && s.party.size() >= 2)
+	{
+		s.partyScriptStarted = TRUE;
+		DEBUG_LOG(("ONLINE PARTY script presses Play vs AI\n"));
+		WOLPlayVsAI();
+	}
+}
+
 void OnlinePumpIfConnected( void )
 {
 	OnlineSession &s = OnlineSession::get();
 	if (s.connection && !s.capture && s.status != ONLINE_OFF && OnlineIsEnabled())
+	{
 		s.pump();
+		onlinePartyScript( s );
+	}
 }
 
 OnlineStatus OnlineGetStatus( void )
@@ -2398,7 +2508,40 @@ OnlineAIMatchState OnlineGetAIMatch( OnlineAIMatch &out )
 	out.seed = 0;
 	out.speed = RETAIL_GAME_SPEED_PERCENT;
 	out.reason.clear();
-	if (state == ONLINE_AI_READY)
+	out.humans = 1;
+	out.bots = 1;
+	for (Int i = 0; i < ONLINE_TEAM_SEATS; ++i)
+	{
+		out.nick[i].clear();
+		out.vip[i] = 0;
+		out.army[i].clear();
+	}
+	if (state == ONLINE_AI_READY && s.teamReady)
+	{
+		// a team match: the relay match's report carries it (matchId, set as ai.ready came), not ai.result
+		s.teamReady = FALSE;
+		out.match = s.aiReady.getString( "matchId" ).c_str();
+		const std::vector<std::string> nicks = s.aiReady.getStrings( "nicks" ), armies = s.aiReady.getStrings( "armies" );
+		const std::vector<long long> vips = s.aiReady.getInts( "vips" );
+		out.humans = 0;
+		for (size_t i = 0; i < nicks.size() && i < (size_t)ONLINE_TEAM_SEATS; ++i)
+		{
+			out.nick[i] = nicks[i].c_str();
+			out.vip[i] = i < vips.size() ? (UnsignedInt)vips[i] : 0;
+			out.army[i] = i < armies.size() ? armies[i].c_str() : "Random";
+			++out.humans;
+		}
+		out.bots = (Int)s.aiReady.getInt( "bots", out.humans );
+		if (out.bots < 1 || out.bots > ONLINE_TEAM_SEATS)
+			out.bots = out.humans;
+		if (!onlineAIElo( s.aiReady, "botElo", "aiRating", out.aiRating ))
+			out.aiRating = AI_RATING_MEDIUM;
+		out.map = s.aiReady.getString( "map" ).c_str();
+		out.seed = (Int)(UnsignedInt)s.aiReady.getInt( "seed" );
+		out.speed = OnlineMatchSpeed( s.aiReady.getInt( "speed", RETAIL_GAME_SPEED_PERCENT ) );
+		s.aiReady.clear();
+	}
+	else if (state == ONLINE_AI_READY)
 	{
 		s.aiMatch = s.aiReady.getString( "matchId" );
 		s.aiWonMatch.clear();
@@ -2429,15 +2572,187 @@ void OnlineDropAIMatch( void )
 	OnlineSession::get().aiMatch.clear();
 }
 
+Bool OnlineIsTeamAIMatchReady( void )
+{
+	const OnlineSession &s = OnlineSession::get();
+	return s.teamReady && s.aiState == ONLINE_AI_READY;
+}
+
+Bool OnlineIsTeamAIMatch( void )
+{
+	const OnlineSession &s = OnlineSession::get();
+	return !s.teamMatch.empty() && s.teamMatch == s.matchId;
+}
+
+void OnlineEndTeamAIMatch( void )
+{
+	OnlineSession::get().teamMatch.clear();
+}
+
+Bool OnlineTeamAIAvailable( void )
+{
+	const OnlineSession &s = OnlineSession::get();
+	return s.teamOn && s.friendsOn && s.authed;
+}
+
+UnsignedInt OnlineGetParty( std::vector<OnlinePartyMember> &out )
+{
+	const OnlineSession &s = OnlineSession::get();
+	out.clear();
+	for (size_t i = 0; i < s.party.size(); ++i)
+	{
+		OnlinePartyMember p;
+		p.id = (Int)s.party[i].first;
+		p.nick = s.party[i].second.c_str();
+		out.push_back( p );
+	}
+	return s.partySerial;
+}
+
+void OnlineLeaveParty( void )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!OnlineTeamAIAvailable() || s.party.empty())
+		return;
+	OnlineMessage m;
+	m.setString( "t", "party.leave" );
+	s.send( m );
+}
+
+Bool OnlineTakeTeamAsk( AsciiString &match, AsciiString &fromNick )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (s.teamAsk.empty() || !OnlineTeamAIAvailable())
+		return FALSE;
+	match = s.teamAsk.c_str();
+	fromNick = s.teamAskNick.c_str();
+	s.teamAsk.clear();
+	return TRUE;
+}
+
+void OnlineAnswerTeamAsk( const AsciiString &match, const AsciiString &army )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!OnlineTeamAIAvailable())
+		return;
+	OnlineMessage m;
+	m.setString( "t", "ai.team.ok" ).setString( "matchId", match.str() ).setString( "army", army.str() );
+	s.send( m );
+	DEBUG_LOG(("ONLINE AI TEAM OK match=%s army=%s\n", match.str(), army.str()));
+}
+
+void OnlineQueueTeamAI( Int size, const AsciiString &army, Int speed )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!OnlineTeamAIAvailable())
+		return;
+	OnlineMessage m;
+	m.setString( "t", "ai.team.queue" ).setInt( "size", size ).setString( "army", army.str() );
+	m.setInt( "exe", TheGlobalData ? TheGlobalData->m_exeCRC : 0 ).setInt( "ini", TheGlobalData ? TheGlobalData->m_iniCRC : 0 );
+	m.setInt( "speed", OnlineMatchSpeed( speed ) );
+	s.send( m );
+	DEBUG_LOG(("ONLINE AI TEAM QUEUE asked size=%d army=%s\n", size, army.str()));
+}
+
+void OnlineLeaveTeamAIQueue( void )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!OnlineTeamAIAvailable() || !s.teamQueueSize)
+		return;
+	OnlineMessage m;
+	m.setString( "t", "ai.team.unqueue" );
+	s.send( m );
+}
+
+Int OnlineGetTeamAIQueue( void )
+{
+	return OnlineSession::get().teamQueueSize;
+}
+
+/* The party's network match: the humans in the server's order on team 0 at the relay addresses it gave, each
+	 in the army that member picked, then the bots on team 1 at the rung nearest the bots' Elo as -airating seats
+	 them, colours and start spots drawn from the seed.  Every member builds the same slot list from the same
+	 ai.ready, which is all the agreement a network match needs; the map is a shipped one, so no map check.
+	 Skins: the local seat's own, the others stock, since they are drawing only and the logic never reads them. */
+Bool OnlineStartTeamAIMatch( const OnlineAIMatch &ai )
+{
+	const MapMetaData *md = TheMapCache ? TheMapCache->findMap( ai.map ) : NULL;
+	const Int seats = ai.humans + ai.bots;
+	if (md == NULL || !md->m_isMultiplayer || md->m_numPlayers < seats || seats > MAX_SLOTS || !TheGameSpyGame || !TheGameSpyInfo)
+		return FALSE;
+	const OnlineSession &s = OnlineSession::get();
+	Int local = -1;
+	for (Int i = 0; i < ai.humans; ++i)
+		if (ai.vip[i] != 0 && ai.vip[i] == s.vip)
+			local = i;
+	if (local < 0)
+	{
+		DEBUG_LOG(("ONLINE AI TEAM START no seat at vip %u\n", s.vip));
+		return FALSE;
+	}
+
+	TheGameSpyGame->enterGame();
+	TheGameSpyGame->setSeed( ai.seed );
+	TheGameSpyGame->setGameSpeedPercent( ai.speed );		// after enterGame, whose reset puts back the native speed
+	TheGameSpyGame->setLadderIP( "localhost" );
+	TheGameSpyGame->setLadderPort( 0 );
+	TheGameSpyGame->setMap( md->m_fileName );
+	TheGameSpyGame->setMapCRC( md->m_CRC );
+	TheGameSpyGame->setMapSize( md->m_filesize );
+
+	static const SlotState RUNG_STATES[ AISKILL_COUNT ] = { SLOT_EASY_AI, SLOT_MED_AI, SLOT_BRUTAL_AI };
+	const AISkillLevel rung = aiSkillOfRating( ai.aiRating );
+	Int rating = aiRatingToHundredths( ai.aiRating );
+	if (rating == aiRatingToHundredths( aiRatingOfSkill( rung ) ))
+		rating = AI_RATING_NONE;		// a rung's own anchor is written as the rung alone
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		GameSpyGameSlot *slot = TheGameSpyGame->getGameSpySlot( i );
+		if (i < ai.humans)
+		{
+			UnicodeString name;
+			name.translate( ai.nick[i] );
+			slot->setState( SLOT_PLAYER, name, ai.vip[i] );
+			const Int army = ThePlayerTemplateStore ? ThePlayerTemplateStore->getTemplateNumByName( ai.army[i] ) : -1;
+			slot->setPlayerTemplate( army >= 0 ? army : PLAYERTEMPLATE_RANDOM );
+			slot->setNATBehavior( (FirewallHelperClass::FirewallBehaviorType)ONLINE_NAT_SIMPLE );
+			slot->setSkins( i == local ? TankSkin_localLoadout() : 0 );
+			slot->setLocale( "" );
+			if (i == 0)
+				TheGameSpyGame->setGameName( name );
+		}
+		else if (i < seats)
+		{
+			slot->setState( RUNG_STATES[ rung ] );
+			slot->setAIRating( rating );		// after setState, which drops a rating on a change of state
+			slot->setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+		}
+		else
+		{
+			slot->setState( SLOT_CLOSED );
+			continue;
+		}
+		slot->setColor( -1 );
+		slot->setStartPos( -1 );
+		slot->setTeamNumber( i < ai.humans ? 0 : 1 );
+	}
+	DEBUG_LOG(("ONLINE AI TEAM START match=%s map=%s seed=%d humans=%d bots=%d aiRating=%.2f rung=%d seat=%d speed=%d\n",
+		ai.match.str(), md->m_fileName.str(), ai.seed, ai.humans, ai.bots, ai.aiRating, (Int)rung, local, ai.speed));
+	TheGameSpyGame->startGame( 0 );
+	return TRUE;
+}
+
 void OnlineSendAITick( Int frame )
 {
 	OnlineSession &s = OnlineSession::get();
 	const long long now = OnlineNowMs();
-	if (s.aiMatch.empty() || now - s.aiTickMs < ONLINE_AI_TICK_SECONDS * 1000LL)
+	// a Play vs AI match, else a Team vs AI one: the server judges either's win on these
+	const std::string &match = !s.aiMatch.empty() ? s.aiMatch : OnlineIsTeamAIMatch() ? s.teamMatch : s.aiMatch;
+	if (match.empty() || now - s.aiTickMs < ONLINE_AI_TICK_SECONDS * 1000LL)
 		return;
 	s.aiTickMs = now;
 	OnlineMessage m;
-	m.setString( "t", "ai.tick" ).setString( "matchId", s.aiMatch ).setInt( "frame", frame );
+	m.setString( "t", "ai.tick" ).setString( "matchId", match ).setInt( "frame", frame );
 	s.send( m );
 }
 

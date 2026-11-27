@@ -15657,6 +15657,49 @@ TEST(map_size_is_chosen_and_then_grows_with_the_players)
 	CHECK_EQ( theRMGParse.m_boundaryX, settings.m_playableCells );
 }
 
+/* The AI ladder's duels, seeds 300-339 at each of ai-batch's 96, 128 and 160 cells: no two starts may
+	stand closer than the floor every seat placement holds (2 * 13 cells + 6). Seeds 300, 307, 312 and
+	315 had their starts 3 to 19 cells apart, and those games were decided in a few minutes by who
+	found whom. */
+TEST(a_generated_duel_keeps_its_starts_apart)
+{
+	CHECK( bootOnce() );
+
+	const Int cells[ 3 ] = { 96, 128, 160 };
+	for( Int run = 0; run < 180; run++ )
+	{
+		// the ladder's 300-339 and the economy batches' 400-419
+		const Int seed = run < 120 ? 300 + run / 3 : 400 + ( run - 120 ) / 3;
+		RandomMapSettings settings;
+		settings.m_seed = seed;
+		settings.m_numPlayers = 2;
+		settings.m_playableCells = cells[ run % 3 ];
+		RandomMapGenerator::clampSettings( settings );
+
+		std::vector<char> bytes;
+		RandomMapGenerator::generate( settings, bytes );
+		parseGeneratedMap( bytes );
+
+		Coord3D starts[ 2 ];
+		Int found = 0;
+		for( size_t i = 0; i < theRMGParse.m_waypointNames.size(); i++ )
+		{
+			Int seat = 0;
+			if( sscanf( theRMGParse.m_waypointNames[i].str(), "Player_%d_Start", &seat ) == 1 && seat >= 1 && seat <= 2 )
+			{
+				starts[ seat - 1 ] = theRMGParse.m_waypointPositions[i];
+				found++;
+			}
+		}
+		CHECK_EQ( found, 2 );
+		const Real dx = starts[0].x - starts[1].x, dy = starts[0].y - starts[1].y;
+		const Real apart = sqrtf( dx * dx + dy * dy );
+		if( apart < 32.0f * MAP_XY_FACTOR )
+			printf( "  seed %d cells %d starts %.0f apart\n", seed, settings.m_playableCells, apart );
+		CHECK( apart >= 32.0f * MAP_XY_FACTOR );
+	}
+}
+
 /* The headless benchmark seats up to 32 AIs on a generated map: every one needs its own start, apart
 	from the others, and the approach paths may not grow with the square of the seats, since the
 	engine links each path waypoint by walking every waypoint on the map. */
@@ -16306,15 +16349,15 @@ TEST(the_generator_still_turns_a_seed_into_the_bytes_it_used_to)
 {
 	CHECK( bootOnce() );
 
-	CHECK_EQ( RANDOM_MAP_GENERATOR_VERSION, 22 );
+	CHECK_EQ( RANDOM_MAP_GENERATOR_VERSION, 23 );
 
 	struct RMGFingerprint { Int m_seed, m_players, m_cells, m_style; UnsignedInt m_crc; };
 	static const RMGFingerprint theFingerprints[] =
 	{
-		{ 0, 2, 64, 0, 0xE9E74CA7 },
-		{ 12345, 4, 96, 0, 0xCEF6ECA4 },
-		{ 7, 8, 128, 0, 0x9385A3BC },
-		{ 7, 4, 200, 1, 0xBFE61284 },
+		{ 0, 2, 64, 0, 0xE9E74D27 },
+		{ 12345, 4, 96, 0, 0xCEFEECA4 },
+		{ 7, 8, 128, 0, 0x7F8DCF89 },
+		{ 7, 4, 200, 1, 0xBFE612A4 },
 	};
 	const Int numFingerprints = sizeof(theFingerprints) / sizeof(theFingerprints[0]);
 
@@ -16618,7 +16661,7 @@ TEST(a_template_map_comes_out_the_same_twice_and_every_start_walks_to_every_othe
 	RandomMapGenerator::generate( exemplarSettings, exemplar );
 
 	// the bytes themselves, pinned like the generator's: a change here is a change to every template map's name
-	static const UnsignedInt theTemplateFingerprints[2] = { 0xCB55DF24u, 0x64B83250u };
+	static const UnsignedInt theTemplateFingerprints[2] = { 0xCB55DF25u, 0x64B83258u };
 	for( Int players = 2; players <= 8; players += 6 )
 	{
 		RandomMapSettings settings;
@@ -30863,9 +30906,10 @@ TEST(script_countdown_timer_snapshot_preserves_phase_and_loads_older_saves)
 		}
 	}
 	GameSpeed_set(125);
-	// v7 appends only the subframe byte to the v6 snapshot, and v8 adds nothing here while no
-	// sequential script runs. A v6 save deterministically starts with phase zero; an invalid v7 or
-	// v8 phase is rejected rather than stopping every timer forever.
+	// v7 appends only the subframe byte to the v6 snapshot, v8 adds nothing here while no
+	// sequential script runs, and v9 appends the four bytes of m_frameObjectCountChanged after it.
+	// A v6 save deterministically starts with phase zero; an invalid v7, v8 or v9 phase is rejected
+	// rather than stopping every timer forever.
 	FILE *file = fopen(path, "rb");
 	CHECK(file != NULL);
 	if (!file) return;
@@ -30875,16 +30919,18 @@ TEST(script_countdown_timer_snapshot_preserves_phase_and_loads_older_saves)
 	std::vector<UnsignedByte> bytes(size);
 	CHECK_EQ(fread(bytes.data(), 1, bytes.size(), file), bytes.size());
 	fclose(file);
-	CHECK(bytes.size() > 2 && bytes.front() == 8);
-	for (Int version = 8; version >= 6; --version)
+	CHECK(bytes.size() > 6 && bytes.front() == 9);
+	if (bytes.size() <= 6) return;
+	const size_t timerAt = bytes.size() - 1 - sizeof(UnsignedInt);
+	for (Int version = 9; version >= 6; --version)
 	{
 		const Bool legacy = version == 6;
 		bytes.front() = (UnsignedByte)version;
-		bytes.back() = 100 * LOGICFRAMES_PER_RETAIL_FRAME;
+		bytes[timerAt] = 100 * LOGICFRAMES_PER_RETAIL_FRAME;
 		file = fopen(path, "wb");
 		CHECK(file != NULL);
 		if (!file) return;
-		const size_t length = bytes.size() - (legacy ? 1 : 0);
+		const size_t length = version >= 9 ? bytes.size() : version >= 7 ? timerAt + 1 : timerAt;
 		CHECK_EQ(fwrite(bytes.data(), 1, length, file), length);
 		fclose(file);
 		CountdownTestEngine restored;

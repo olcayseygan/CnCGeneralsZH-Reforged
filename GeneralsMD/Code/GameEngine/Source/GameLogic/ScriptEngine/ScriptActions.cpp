@@ -284,6 +284,7 @@ void ScriptActions::doDefeat( void )
 	// as doVictory
 	if (TheDirectStrikeDirector->isActive())
 		return;
+	DEBUG_LOG(("SCRIPT END: frame %u doDefeat, the end window and the end timer\n", TheGameLogic->getFrame()));
 	closeWindows(FALSE);
 	TheGameLogic->closeWindows();
 	doDisableInput();

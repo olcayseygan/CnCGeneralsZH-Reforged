@@ -29,9 +29,11 @@
 10    spawn      0         AmericaVehicleComanche       4   start0:-150:150   30
 10    spawn      civilian  ApocalypseZombieSpitter      6   start0:-150:320   12
 
-# B: seat 0's south-east corner, three Crusaders and four Spitters
-10    spawn      0         AmericaTankCrusader          3   start0:150:-150   30
-10    spawn      civilian  ApocalypseZombieSpitter      4   start0:150:-320   12
+# B: seat 0's south-east corner, three Crusaders and four Spitters. Not at 150:-150: seed 3 has an
+# obstacle there that refused all three tanks, and B's Spitters, left with nothing, walked on into C's
+# Rangers (2026-11-26).
+10    spawn      0         AmericaTankCrusader          3   start0:250:-150   30
+10    spawn      civilian  ApocalypseZombieSpitter      4   start0:250:-320   12
 
 # C: seat 0's north-east corner, six Rangers; a Bloater with four walkers at its side
 10    spawn      0         AmericaInfantryRanger        6   start0:150:150    12

@@ -57,6 +57,9 @@
 
 #include "GameClient/Color.h"
 #include "GameClient/CameraBoundary.h"
+#include "Common/OptionsCatalog.h"
+#include "GameClient/ControlBar.h"
+#include "GameClient/Display.h"
 #include "GameClient/CinemaDirector.h"
 #include "GameClient/ObserverCamera.h"
 #include "GameClient/CommandXlat.h"
@@ -247,6 +250,7 @@ W3DView::W3DView()
 	m_cameraConstraint.lo.x = m_cameraConstraint.lo.y = 0.0f;
 	m_cameraConstraint.hi.x = m_cameraConstraint.hi.y = 0.0f;
 	m_cameraConstraintValid = false;
+	m_cameraConstraintOpen.lo.x = m_cameraConstraintOpen.lo.y = m_cameraConstraintOpen.hi.x = m_cameraConstraintOpen.hi.y = 0;
 
 	//Enhancements from CNC3 WST 4/15/2003. JSC Integrated 5/20/03.
 	m_CameraArrivedAtWaypointOnPathFlag = false;	// Scripts for polling camera reached targets
@@ -268,6 +272,7 @@ W3DView::W3DView()
 	m_freeCameraHeading = 0.0f;
 	m_freeCameraTilt = 0.0f;
 	m_freeCameraRoll = 0.0f;
+	m_freeCameraFov = 0.0f;
 	m_freeCameraScripted = FALSE;
 	m_freeCameraKeys = 0;
 	m_freeCameraLastStep = 0;
@@ -685,6 +690,41 @@ void W3DView::buildCameraTransform( Matrix3D *transform, CameraTransformSource s
 	* threw it away.  The draw does this every frame; the observer camera does it as soon as it has
 	* moved the view, to know where the draw will put it. */
 //-------------------------------------------------------------------------------------------------
+/** The part of a view the interface leaves open, in screen pixels: the whole view less the command
+	* bar's window along the bottom under Classic (wherever its stage put it), or the Red Alert style
+	* sidebar and the strip under it (HudLayoutForScreen, every HudWidth).  A hidden bar covers nothing. */
+static IRegion2D cameraOpenView( Int originX, Int originY, Int width, Int height )
+{
+	IRegion2D open;
+	open.lo.x = originX;
+	open.lo.y = originY;
+	open.hi.x = originX + width;
+	open.hi.y = originY + height;
+	// ControlBarParent reads hidden in a match while the Classic panels draw (they are laid out on
+	// their own), so the hidden HUD is asked of the hide-HUD switch, and the frame's top is the bar's
+	GameWindow *bar = TheControlBar ? TheControlBar->getMasterParent() : NULL;
+	if (bar == NULL || CinemaDirector_isHudHidden() || TheDisplay == NULL)
+		return open;
+
+	if (TheControlBar->isSidebarLayout())
+	{
+		HudLayoutRects r;
+		HudLayoutForScreen( TheDisplay->getWidth(), TheDisplay->getHeight(), HUD_LAYOUT_SIDEBAR, TheGlobalData->m_hudWidth, &r );
+		if (r.sidebar.lo.x > open.lo.x)
+			open.hi.x = min( open.hi.x, r.sidebar.lo.x );
+		if (r.strip.lo.y > open.lo.y)
+			open.hi.y = min( open.hi.y, r.strip.lo.y );
+	}
+	else
+	{
+		Int x, y;
+		bar->winGetScreenPosition( &x, &y );
+		if (y > open.lo.y)
+			open.hi.y = min( open.hi.y, y );
+	}
+	return open;
+}
+
 void W3DView::applyCameraConstraint( void )
 {
 	// the freecam owns the camera and is held to no constraint, as in setCameraTransform
@@ -763,26 +803,61 @@ void W3DView::calcCameraConstraints()
  		bottom.x = Vector3::Find_X_At_Z(maxEdgeZ, rayStart, rayEnd);
 		bottom.y = Vector3::Find_Y_At_Z(maxEdgeZ, rayStart, rayEnd);
 		bottom.z = maxEdgeZ;
-		center.x -= bottom.x;
-		center.y -= bottom.y;
+		Coord3D retailOffset = center;
+		retailOffset.x -= bottom.x;
+		retailOffset.y -= bottom.y;
 
-		Real offset = center.length();
+		Real offset = retailOffset.length();
 
 		if (TheGlobalData->m_debugAI) {
 			offset = -1000; // push out the constraints so we can look at staging areas.
 		}
 
-		m_cameraConstraint.lo.x = mapRegion.lo.x + offset;
-		m_cameraConstraint.hi.x = mapRegion.hi.x - offset;
-		// this looks inverted, but is correct
-		m_cameraConstraint.lo.y = mapRegion.lo.y + offset;
-		m_cameraConstraint.hi.y = mapRegion.hi.y - offset;
+		/* Retail held every side of the world to that one distance, so the bar over the bottom of the
+			 screen hid the map's last rows at the bottom edge, and the Red Alert style sidebar a strip at
+			 the right one: only hiding the interface showed them.  Each side now goes as far as the part
+			 of the view the interface leaves open needs to bring the map's edge up to it, the same 5%
+			 short of that edge as retail stops short of the screen's, and never less far than retail did.
+			 The open view's edges are measured on the ground through their midpoints and taken along the
+			 world's axes, so a turned camera gets the same. */
+		Region2D reach;
+		reach.lo.x = reach.hi.x = reach.lo.y = reach.hi.y = offset;
+		const IRegion2D open = cameraOpenView( m_originX, m_originY, getWidth(), getHeight() );
+		const Int inset = REAL_TO_INT( 0.05f * getHeight() );
+		const Int midX = ( open.lo.x + open.hi.x ) / 2;
+		const Int midY = ( open.lo.y + open.hi.y ) / 2;
+		const ICoord2D edges[ 4 ] = {
+			{ midX, open.hi.y - inset }, { midX, open.lo.y + inset }, { open.lo.x + inset, midY }, { open.hi.x - inset, midY } };
+		Region2D openReach;
+		openReach.lo.x = openReach.hi.x = openReach.lo.y = openReach.hi.y = 0.0f;
+		Bool measured = TRUE;
+		for (Int i = 0; i < 4; ++i)
+		{
+			screen = edges[ i ];
+			getPickRay(&screen,&rayStart,&rayEnd);
+			if (!(rayStart.Z > maxEdgeZ && rayEnd.Z < maxEdgeZ))
+			{
+				measured = FALSE;	// a ray that never comes down to the ground measures nothing
+				break;
+			}
+			const Real dx = Vector3::Find_X_At_Z(maxEdgeZ, rayStart, rayEnd) - center.x;
+			const Real dy = Vector3::Find_Y_At_Z(maxEdgeZ, rayStart, rayEnd) - center.y;
+			openReach.lo.x = max( openReach.lo.x, -dx );
+			openReach.hi.x = max( openReach.hi.x, dx );
+			openReach.lo.y = max( openReach.lo.y, -dy );
+			openReach.hi.y = max( openReach.hi.y, dy );
+		}
+		if (measured)
+		{
+			reach.lo.x = min( reach.lo.x, openReach.lo.x );
+			reach.hi.x = min( reach.hi.x, openReach.hi.x );
+			reach.lo.y = min( reach.lo.y, openReach.lo.y );
+			reach.hi.y = min( reach.hi.y, openReach.hi.y );
+		}
+		m_cameraConstraintOpen = open;
 
-		// a map smaller than twice the offset cannot satisfy both sides - center on it
-		if (m_cameraConstraint.lo.x > m_cameraConstraint.hi.x)
-			m_cameraConstraint.lo.x = m_cameraConstraint.hi.x = 0.5f * (mapRegion.lo.x + mapRegion.hi.x);
-		if (m_cameraConstraint.lo.y > m_cameraConstraint.hi.y)
-			m_cameraConstraint.lo.y = m_cameraConstraint.hi.y = 0.5f * (mapRegion.lo.y + mapRegion.hi.y);
+		// a map smaller than the view on an axis centres on it
+		m_cameraConstraint = cameraBoundaryFromReach( mapRegion, reach );
 		m_cameraConstraintValid = true;
 	}
 }
@@ -1135,6 +1210,9 @@ static const Real FREECAM_FAST = 4.0f;
 static const Real FREECAM_TURN_PER_PIXEL = 0.0025f;				///< radians of heading or tilt per pixel of mouse
 // Look_At has no up straight up or straight down; half a degree short of either is the only limit
 static const Real FREECAM_STEEPEST = DEG_TO_RADF( 89.5f );
+// the wheel's lens, horizontal: a long lens for a face in the crowd, a wide one for a whole base up close
+static const Real FREECAM_FOV_NARROWEST = DEG_TO_RADF( 10.0f );
+static const Real FREECAM_FOV_WIDEST = DEG_TO_RADF( 120.0f );
 
 static Real freeCameraTilt( Real tilt )
 {
@@ -1153,6 +1231,7 @@ void W3DView::setFreeCamera( Bool on )
 	if (on == m_freeCamera)
 		return;
 
+	const Real flownFov = getFreeCameraFov();
 	if (on)
 	{
 		// take off from where the player's camera is, looking where it looks (a W3D camera looks down -Z)
@@ -1169,14 +1248,23 @@ void W3DView::setFreeCamera( Bool on )
 	}
 
 	m_freeCamera = on;
+	// every flight starts on the player's lens, and landing gives it back
+	m_freeCameraFov = 0.0f;
 	// landing ends whatever flew it; a shot list that wants it again says so after taking off
 	if (!on)
 		m_freeCameraScripted = FALSE;
 	m_freeCameraKeys = 0;
 	m_freeCameraMouseValid = FALSE;
 	m_freeCameraLastStep = Clock_Milliseconds();
+	// the wheel's lens stays in the camera until something sets it again, and only the isometric
+	// switch does: landing puts the player's lens back itself
+	if (!on)
+		m_3DCamera->Set_View_Plane( perspectiveHorizontalFov( getWidth() ), -1 );
 	// leaving, the player's camera is rebuilt from its look point, which never moved
 	setCameraTransform();
+	DEBUG_LOG(( "FREECAM: %s at %.0f %.0f %.0f %.1f %.1f, flown on %.1f deg, the camera's lens now %.1f deg\n", on ? "up" : "landed",
+		m_freeCameraEye.X, m_freeCameraEye.Y, m_freeCameraEye.Z, m_freeCameraHeading * 180.0f / PI, m_freeCameraTilt * 180.0f / PI,
+		flownFov * 180.0f / PI, m_3DCamera->Get_Horizontal_FOV() * 180.0f / PI ));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1196,6 +1284,20 @@ void W3DView::getFreeCameraPose( Coord3D *eye, Real *heading, Real *tilt ) const
 	eye->set( m_freeCameraEye.X, m_freeCameraEye.Y, m_freeCameraEye.Z );
 	*heading = m_freeCameraHeading;
 	*tilt = m_freeCameraTilt;
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DView::setFreeCameraFov( Real angle )
+{
+	m_freeCameraFov = WWMath::Clamp( angle, FREECAM_FOV_NARROWEST, FREECAM_FOV_WIDEST );
+	if (m_freeCamera)
+		setFreeCameraTransform();
+}
+
+//-------------------------------------------------------------------------------------------------
+Real W3DView::getFreeCameraFov( void ) const
+{
+	return m_freeCameraFov > 0.0f ? m_freeCameraFov : perspectiveHorizontalFov( m_width );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1271,7 +1373,7 @@ void W3DView::setFreeCameraTransform( void )
 	if (TheTerrainRenderObject)
 		farthest = drawnTerrainReach( m_freeCameraEye, &lowest );
 	m_3DCamera->Set_Clip_Planes( MAP_XY_FACTOR, farthest + TERRAIN_REACH_MARGIN );
-	m_3DCamera->Set_View_Plane( perspectiveHorizontalFov( getWidth() ), -1 );
+	m_3DCamera->Set_View_Plane( getFreeCameraFov(), -1 );
 	m_isometricApplied = false;
 	m_3DCamera->Set_Transform( transform );
 
@@ -1352,9 +1454,11 @@ void W3DView::reset( void )
 		m_freeCamera = FALSE;
 		m_freeCameraScripted = FALSE;
 		m_freeCameraRoll = 0.0f;
+		m_freeCameraFov = 0.0f;
 		m_freeCameraKeys = 0;
 		if (TheMouse)
 			TheMouse->setVisibility( TRUE );
+		m_3DCamera->Set_View_Plane( perspectiveHorizontalFov( getWidth() ), -1 );
 	}
 
 	// Just in case...
@@ -1814,6 +1918,20 @@ void W3DView::update(void)
 	// The camera transform is rebuilt once, here, rather than at every setter that dirtied it.
 	// Setting angle, pitch and zoom in one breath used to build it three times.
 	captureCinematicCameraEligibility(CinematicCameraModeForClientUpdate());
+
+	// the bar coming, going, dropping low or changing layout moves the open view's edges, and the
+	// camera's limits with them
+	if (m_cameraConstraintValid && !m_freeCamera && TheGlobalData->m_useCameraConstraints && TheGlobalData->m_cameraBoundaryMargin <= 0)
+	{
+		const IRegion2D open = cameraOpenView( m_originX, m_originY, getWidth(), getHeight() );
+		if (open.lo.x != m_cameraConstraintOpen.lo.x || open.lo.y != m_cameraConstraintOpen.lo.y
+				|| open.hi.x != m_cameraConstraintOpen.hi.x || open.hi.y != m_cameraConstraintOpen.hi.y)
+		{
+			m_cameraConstraintValid = false;
+			m_recalcCamera = true;
+		}
+	}
+
 	Bool recalcCamera = m_recalcCamera;
 	Bool didScriptedMovement = false;
 #ifdef LOG_FRAME_TIMES

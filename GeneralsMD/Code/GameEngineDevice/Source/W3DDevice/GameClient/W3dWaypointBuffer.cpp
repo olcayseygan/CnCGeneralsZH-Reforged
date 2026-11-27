@@ -1614,9 +1614,9 @@ static Real shroudLight( Real x, Real y )
 	const Int lastY = shroud->getNumShroudCellsY() - 1;
 	if( lastX < 0 || lastY < 0 || shroud->getCellWidth() <= 0.0f || shroud->getCellHeight() <= 0.0f )
 		return 1.0f;
-	// cell centres at a half, the cell's texel a border texel in (ShroudTextureShader::set)
-	const Real fx = ( x - shroud->getDrawOriginX() ) / shroud->getCellWidth() - 0.5f;
-	const Real fy = ( y - shroud->getDrawOriginY() ) / shroud->getCellHeight() - 0.5f;
+	// cell centres at a half, the cells from the world's origin (W3DShroud::getDrawOriginX)
+	const Real fx = x / shroud->getCellWidth() - 0.5f;
+	const Real fy = y / shroud->getCellHeight() - 0.5f;
 	const Int baseX = REAL_TO_INT_FLOOR( fx ), baseY = REAL_TO_INT_FLOOR( fy );
 	const Real s = fx - (Real)baseX, t = fy - (Real)baseY;
 	Real across[ 4 ], down[ 4 ];
@@ -1643,22 +1643,15 @@ static Real shroudLight( Real x, Real y )
 		first = 0;
 		taps = 2;
 	}
-	// a tap off the cells reads the texture's border texels, as the soften pass's clamp and the
-	// sampler's do: the border level, written as setShroudLevel writes a cell (floored at the shroud's
-	// alpha, through the shroud colour's green, which getShroudLevel reads back)
-	const Real borderLevel = (Real)MAX( (Int)shroud->getBorderShroudLevel(), (Int)TheGlobalData->m_shroudAlpha ) *
-		(Real)( ( TheGlobalData->m_shroudColor.getAsInt() >> 8 ) & 0xFF ) / 255.0f;
+	// a tap off the cells reads the border's ring round them and past it the ring's outer texel, as the
+	// soften pass's clamp and the sampler's do (W3DShroud::fillBorderRamp)
 	Real sum = 0.0f;
 	for( Int j = 0; j < taps; ++j )
 	{
 		const Int cy = baseY + first + j;
 		Real row = 0.0f;
 		for( Int i = 0; i < taps; ++i )
-		{
-			const Int cx = baseX + first + i;
-			const Bool inside = cx >= 0 && cy >= 0 && cx <= lastX && cy <= lastY;
-			row += across[ i ] * ( inside ? (Real)shroud->getShroudLevel( cx, cy ) : borderLevel );
-		}
+			row += across[ i ] * (Real)shroud->getTexelLevel( baseX + first + i, cy );
 		sum += down[ j ] * row;
 	}
 	return MAX( 0.0f, MIN( 1.0f, sum / 255.0f ) );

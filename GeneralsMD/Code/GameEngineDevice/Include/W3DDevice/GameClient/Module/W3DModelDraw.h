@@ -624,6 +624,8 @@ private:
 	RagdollImpact									m_ragdollImpact;		///< the last hit, for the push
 	Bool													m_ragdollWanted;		///< the template is infantry, so its death may go limp
 	Bool													m_ragdollRefused;		///< tried and fell back to the animation; never again for this drawable
+	Bool													m_ragdollDying;			///< the condition flags this module last applied hold DYING
+	W3DRagdoll::SavedPose*				m_ragdollSaved;			///< a loaded save's body, put on the ragdoll that is made for it, or NULL
 };
 
 #endif // __W3DModelDraw_H_

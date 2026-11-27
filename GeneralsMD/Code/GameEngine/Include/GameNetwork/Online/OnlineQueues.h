@@ -503,7 +503,7 @@ enum OnlineAIMatchState
 	ONLINE_AI_READY,
 	ONLINE_AI_REFUSED,
 };
-enum { ONLINE_AI_TICK_SECONDS = 30 };
+enum { ONLINE_AI_TICK_SECONDS = 30, ONLINE_TEAM_SEATS = 4 };	///< ONLINE_TEAM_SEATS: the humans of a 4v4
 struct OnlineAIMatch
 {
 	AsciiString match;
@@ -512,9 +512,46 @@ struct OnlineAIMatch
 	Int seed;
 	Int speed;						///< the speed ai.ready echoed, 100 from an older server
 	AsciiString reason;		///< REFUSED only
+	/// Team vs AI: humans > 1, every human seat's nick, relay address and army (a player template name or
+	/// Random) in the server's order, all on one team, and bots seats after them on the other at aiRating
+	Int humans, bots;
+	AsciiString nick[ ONLINE_TEAM_SEATS ];
+	UnsignedInt vip[ ONLINE_TEAM_SEATS ];
+	AsciiString army[ ONLINE_TEAM_SEATS ];
 };
 void OnlineRequestAIMatch( const AsciiString &army, Int speed = 100 );
+/* READY or REFUSED is handed out once.  A Team vs AI match's READY comes to every member of the party, the
+	 one who pressed Play and the others alike, so the hub reads it whether it asked or not. */
 OnlineAIMatchState OnlineGetAIMatch( OnlineAIMatch &out );
+Bool OnlineIsTeamAIMatchReady( void );		///< a team match's ai.ready waits: the hub of a member who did not press Play takes it too
+/* Team vs AI (TEAM-VS-AI.md).  A party is made by OnlineInviteFriend from outside a room (an invite of mode
+	 teamai and game 0, answered by OnlineAnswerInvite as any), and lasts while two members are signed in.
+	 OnlineGetParty gives its members, the leader first (empty out of one), and a serial as OnlineGetFriends'.
+	 While in one, Play vs AI (OnlineRequestAIMatch) starts the party against as many bots: the server asks
+	 every other member's hub first, which OnlineTakeTeamAsk reads once and OnlineAnswerTeamAsk answers with
+	 the army that seat plays.  OnlineStartTeamAIMatch builds and launches the network match of a READY with
+	 humans > 1; FALSE, with nothing started, when the map is not in this game. */
+struct OnlinePartyMember
+{
+	Int id;
+	AsciiString nick;
+};
+Bool OnlineTeamAIAvailable( void );
+/* The match is a team's from a team ai.ready, until OnlineEndTeamAIMatch: the score screen sends no report for
+	 a match with computer seats (EA's rule), so GameClient's updateOnline sends a leaver's itself. */
+Bool OnlineIsTeamAIMatch( void );
+void OnlineEndTeamAIMatch( void );
+UnsignedInt OnlineGetParty( std::vector<OnlinePartyMember> &out );
+void OnlineLeaveParty( void );
+Bool OnlineTakeTeamAsk( AsciiString &match, AsciiString &fromNick );
+void OnlineAnswerTeamAsk( const AsciiString &match, const AsciiString &army );
+Bool OnlineStartTeamAIMatch( const OnlineAIMatch &ai );
+/* The Team vs AI queue: ai.team.queue{size 2..4, army, exe, ini, speed} queues us, our whole party with us,
+	 for a team of size humans the server builds by team-AI Elo; its match's READY comes to the hub as a party's
+	 does.  OnlineGetTeamAIQueue is the size we wait for, 0 out of the queue (ai.team.queued{size}). */
+void OnlineQueueTeamAI( Int size, const AsciiString &army, Int speed );
+void OnlineLeaveTeamAIQueue( void );
+Int OnlineGetTeamAIQueue( void );
 Bool OnlineIsAIMatchLive( void );
 void OnlineDropAIMatch( void );
 void OnlineSendAITick( Int frame );
@@ -603,7 +640,7 @@ struct OnlineInvite
 	Int msLeft;
 };
 UnsignedInt OnlineGetInvites( std::vector<OnlineInvite> &out );	///< oldest first; a serial as OnlineGetFriends'
-void OnlineInviteFriend( Int to );					///< invite{to,game} from the staging room we sit in
+void OnlineInviteFriend( Int to );					///< invite{to,game} from the staging room we sit in, invite{to} into our Team vs AI party outside one
 /* Answers an invite and forgets it.  ok joins that room as a game.join does, the password waived: the
 	 answers are game.join's (PEERRESPONSE_JOINSTAGINGROOM, a refusal as its failure), so the screen that
 	 accepts leaves its own room first, as before any join.  An invite already gone answers invite.gone. */

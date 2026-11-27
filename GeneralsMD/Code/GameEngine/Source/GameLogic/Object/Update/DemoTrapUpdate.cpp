@@ -146,6 +146,15 @@ UpdateSleepTime DemoTrapUpdate::update()
 		return UPDATE_SLEEP_NONE;
 	}
 
+	/* A dozer's disarm destroys the trap, and the object goes at the end of the frame.  The dozer's
+		 attack ends on that same shot, so when its update ran before this one the trap found an enemy
+		 dozer beside it that was no longer disarming anything, and went off on its way out: the last
+		 barrels of a cluster killed the dozer that had just made them safe. */
+	if( me->isDestroyed() )
+	{
+		return UPDATE_SLEEP_NONE;
+	}
+
 	if( me->isEffectivelyDead() )
 	{
 		if( data->m_detonateWhenKilled )

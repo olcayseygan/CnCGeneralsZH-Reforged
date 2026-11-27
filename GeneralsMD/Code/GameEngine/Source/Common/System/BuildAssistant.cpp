@@ -55,6 +55,7 @@
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/DozerAIUpdate.h"
+#include "GameLogic/AIPlayer.h"	// the skirmish AI's knobs, for its building margin
 #include "GameLogic/Module/BehaviorModule.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/CreateModule.h"
@@ -859,6 +860,14 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 
 	Real myFactoryExitWidth = build->getFactoryExitWidth();
 	Real myExtraWidth = build->getFactoryExtraBibWidth();
+	/* EA grew the other building's box on its short side by this building's margin, not its own.  For a
+		 person that is a factory's bib and nearly always 0; for the skirmish AI it is the three cells below,
+		 counted twice on that side, and a 96-cell America base found no spot for a barracks or a War Factory:
+		 on ladder seed 306 nine in ten of its dozer's refusals had nothing on the footprint.  The AI's own
+		 buildings now keep its three cells plus the other's own margin; a person's check is EA's. */
+	AIPlayer *placingAI = thePlayer ? thePlayer->getAIPlayer() : NULL;
+	const Bool ownMarginOnly = thePlayer && thePlayer->isSkirmishAIPlayer() && placingAI &&
+		!(placingAI->knobsOffHere() && (TheGlobalData->m_aiKnobsOffMask & AIKNOB_BIB_GAP) != 0);
 
 	if (thePlayer && thePlayer->isSkirmishAIPlayer()) {
 		// Skirmish ai adds a little extra around the edges so it doesn't build itself into a corner.
@@ -927,7 +936,7 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 		if (hisBounds.getGeomType() != GEOMETRY_BOX) {
 			hisBounds.set(GEOMETRY_BOX, false, 40, hisBounds.getMajorRadius(), hisBounds.getMajorRadius());
 		} else {
-			hisBounds.setMinorRadius(hisBounds.getMinorRadius()+myExtraWidth);
+			hisBounds.setMinorRadius(hisBounds.getMinorRadius()+(ownMarginOnly ? hisExtraWidth : myExtraWidth));
 		}
 		GeometryInfo hisGeom = them->getGeometryInfo();
 		hisGeom.setMajorRadius(themFactoryExitWidth/2.0f);

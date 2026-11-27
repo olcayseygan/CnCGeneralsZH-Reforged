@@ -527,18 +527,25 @@ void GenerateMinefieldBehavior::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: UpdateModule's own data, the next call frame.  Version 1 skipped past UpdateModule to
+	*    BehaviorModule, so a load left the update due on the load's frame where the game that was
+	*    saved had it asleep until an upgrade; it ran once more on every load, a heap entry the saved
+	*    game did not have. */
 // ------------------------------------------------------------------------------------------------
 void GenerateMinefieldBehavior::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
 	// base class
-	BehaviorModule::xfer( xfer );
+	if( version >= 2 )
+		UpdateModule::xfer( xfer );
+	else
+		BehaviorModule::xfer( xfer );
 
 	// mux "base class"
 	UpgradeMux::upgradeMuxXfer( xfer );

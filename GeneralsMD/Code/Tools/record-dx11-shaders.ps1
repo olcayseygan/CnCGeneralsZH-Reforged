@@ -156,6 +156,22 @@ $ringArgs = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-n
 	"-scenario", "gpu1m_battle", "-cinema", "gpu1m_battle")
 $runs += , @{ Name = "gpuring"; Minutes = $TimeoutMinutes; Frames = 3300; Args = $ringArgs }
 $runs += , @{ Name = "gpuring-ultra"; Minutes = $TimeoutMinutes; Frames = 3300; Ultra = $true; Args = $ringArgs }
+# The land past the map edge: Cinema\recedge.txt flies the drone out over Alpine Assault's four corners (the
+# skirt, its fade into the horizon, the backdrop over the void, the blended patch layers, the Atmosphere
+# program) and then cuts back over the field. Classic, High and Ultra draw it differently.
+$edgeArgs = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-map", "`"Maps\Alpine Assault\Alpine Assault.map`"",
+	"-autoskirmish", 2, "-aidiff", "hard", "-seed", 0, "-observer", "-cinema", "recedge")
+$runs += , @{ Name = "edge"; Args = $edgeArgs; Minutes = $TimeoutMinutes }
+$runs += , @{ Name = "edge-classic"; Args = $edgeArgs; Minutes = $TimeoutMinutes; Classic = $true }
+$runs += , @{ Name = "edge-ultra"; Args = $edgeArgs; Minutes = $TimeoutMinutes; Ultra = $true }
+# The Ray Traced level, at MSAA 0 and 4: a played match (the capture per vertex program, the grid, the
+# shadowed lights) and the edge flight.
+foreach ($rt in @("rt0", "rt4")) {
+	$rtMatch = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-randommap", 0, 2,
+		"-autoskirmish", 2, "-aidiff", "hard", "-seed", 0, "-observer")
+	$runs += , @{ Name = "$rt-seed0"; Args = $rtMatch; Minutes = $TimeoutMinutes; Rt = $rt }
+	$runs += , @{ Name = "$rt-edge"; Args = $edgeArgs; Minutes = $TimeoutMinutes; Rt = $rt }
+}
 # The main menu's shell map, the first thing a player sees: the intro movies, then the menu, which runs until
 # it is killed.  The cache is written while the game runs, so the kill loses nothing.
 $runs += , @{ Name = "shellmap"; Args = @("-multiInstance", "-noFPSLimit"); Minutes = 5 }
@@ -173,8 +189,19 @@ $ultraRows = [ordered]@{ StaticGameLOD = "Ultra"; GraphicsQuality = 10; MSAA = 3
 	Firelight = "yes"; HemiAmbient = "yes"; AmbientOcclusion = "yes"; InternalHdr = "yes"; Weather = "yes"; WaterSplashes = "yes";
 	Atmosphere = "yes"; StructureCollapse = "yes"; GroundMarks = "yes"; GroundFoliage = "yes"; HeatHaze = "yes"; SunShafts = 2 }
 foreach ($row in $UltraOverride.Keys) { $ultraRows[$row] = $UltraOverride[$row] }
-$ultraIni = @(Get-Content (Join-Path $repoRoot "reforged-look.ini") | Where-Object { $_ -notmatch "^\s*($($ultraRows.Keys -join '|'))\s*=" }) +
-	@($ultraRows.GetEnumerator() | ForEach-Object { "$($_.Key) = $($_.Value)" })
+function New-UltraIni([hashtable] $over) {
+	$rows = [ordered]@{}
+	foreach ($key in $ultraRows.Keys) { $rows[$key] = $ultraRows[$key] }
+	foreach ($key in $over.Keys) { $rows[$key] = $over[$key] }
+	return @(Get-Content (Join-Path $repoRoot "reforged-look.ini") | Where-Object { $_ -notmatch "^\s*($($rows.Keys -join '|'))\s*=" }) +
+		@($rows.GetEnumerator() | ForEach-Object { "$($_.Key) = $($_.Value)" })
+}
+$ultraIni = New-UltraIni @{}
+# The Ray Traced lighting level (ShadowQuality 3, SHADOW_QUALITY_RAY_TRACED) is Ultra's rows with the sun's
+# shadows traced: the capture and its cut variants, the grid, the occlusion, the shadowed lights and, under
+# MSAA, raysamples. Played at MSAA 0 and at 4x (level 2); Ambient Occlusion, Firelight and Ground Foliage
+# are on in the Ultra rows already.
+$rtRows = @{ "rt0" = @{ ShadowQuality = 3; MSAA = 0 }; "rt4" = @{ ShadowQuality = 3; MSAA = 2 } }
 
 if ($Only.Count -gt 0) { $runs = @($runs | Where-Object { $name = $_.Name; @($Only | Where-Object { $name -like $_ }).Count -gt 0 }) }
 
@@ -199,6 +226,7 @@ try {
 		New-Farm $zh $farm
 		$options = Join-Path $UserData "Options.ini"
 		if ($run.Classic) { Remove-Item -LiteralPath $options -Force -ErrorAction SilentlyContinue }
+		elseif ($run.Rt) { Set-Content -LiteralPath $options -Value (New-UltraIni $rtRows[$run.Rt]) -Encoding ASCII }
 		elseif ($run.Ultra) { Set-Content -LiteralPath $options -Value $ultraIni -Encoding ASCII }
 		else { Copy-Item (Join-Path $repoRoot "reforged-look.ini") $options -Force }
 		$shipped = Join-Path $farm "dx11shaders.shipped"

@@ -52,6 +52,7 @@
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
 #include "Common/GameLOD.h"
+#include "GameClient/AircraftEffects.h"
 #include "GameClient/Anim2D.h"
 #include "GameClient/CampaignManager.h"
 #include "GameClient/ChallengeGenerals.h"
@@ -101,6 +102,7 @@
 #include "GameLogic/ScriptEngine.h"		// For TheScriptEngine - jkmcd
 #include "GameLogic/VictoryConditions.h"
 #include "GameNetwork/GameSpy/StagingRoomGameInfo.h"
+#include "GameNetwork/NetworkInterface.h"
 #include "GameNetwork/Online/OnlineQueues.h"
 #include "GameNetwork/Transport.h"
 #ifdef _INTERNAL
@@ -552,6 +554,9 @@ void GameClient::reset( void )
 	// last frame's health bars belong to the map we are leaving
 	m_healthBarPickList.clear();
 
+	// and so do the aircraft effects' drawable and particle system ids
+	AircraftEffects_reset();
+
 	// and so does the colour table: it is built out of a roster and a set of alliances that the
 	// next map will not have
 	invalidatePlayerColorScheme();
@@ -633,7 +638,8 @@ void GameClient::registerDrawable( Drawable *draw )
 }  // end registerDrawable
 
 /* A Play vs AI match as this pass sees it, for its ai.result: the armies after random was resolved, and
-	 the player's numbers as the score screen shows them. */
+	 the player's numbers as the score screen shows them.  The AI army is the first computer seat's, never a
+	 human's: a match with a second human seat (Team vs AI) has its partner before the bots. */
 static void readAIMatch( Player *me, OnlineAIResult &out )
 {
 	out.endFrame = (Int)TheGameLogic->getFrame();
@@ -644,7 +650,7 @@ static void readAIMatch( Player *me, OnlineAIResult &out )
 		AsciiString seat;
 		seat.format( "player%d", i );
 		const Player *p = ThePlayerList->findPlayerWithNameKey( NAMEKEY( seat ) );
-		if (p && p != me && p->getPlayerTemplate())
+		if (p && p != me && p->getPlayerType() == PLAYER_COMPUTER && p->getPlayerTemplate())
 		{
 			out.aiArmy = p->getPlayerTemplate()->getName();
 			break;
@@ -704,6 +710,39 @@ static void updateOnline( void )
 	}
 	if (!OnlineIsAIMatchLive())
 		s_aiPlaying = FALSE;
+
+	/* Team vs AI: the score screen sends no report for a match with computer seats (EA's "no stats for any AI"),
+		 so a member who left before the victory conditions decided it would never be heard and the server would
+		 wait on its line.  Once the match is gone without one, its report goes from here: no winner, the last
+		 frame it played, which the server counts as leaving, or a desync when the network saw one (void if most
+		 members say so).  OnlineSendReport drops it after an endframe one.  While it plays, Play vs AI's ai.tick
+		 every half minute: the server judges a team win on each member's ticks. */
+	static Int s_teamFrame = 0;
+	static Bool s_teamDesync = FALSE;
+	if (OnlineIsTeamAIMatch())
+	{
+		if (TheGameLogic->isInGame() && TheGameLogic->getGameMode() == GAME_INTERNET && !TheGameLogic->isLoadingMap())
+		{
+			s_teamFrame = (Int)TheGameLogic->getFrame();
+			s_teamDesync = TheNetwork && TheNetwork->sawCRCMismatch();
+			OnlineSendAITick( s_teamFrame );
+		}
+		else if (s_teamFrame > 0)
+		{
+			OnlineReport left;
+			left.seed = TheGameSpyGame ? TheGameSpyGame->getSeed() : 0;
+			left.endFrame = left.duration = s_teamFrame;
+			left.winningTeam = -1;
+			left.sawGameEnd = FALSE;
+			left.sawDesync = s_teamDesync;
+			left.speed = TheGameSpyGame ? TheGameSpyGame->getGameSpeedPercent() : RETAIL_GAME_SPEED_PERCENT;
+			left.map = TheGameSpyGame ? TheGameSpyGame->getMap() : AsciiString::TheEmptyString;
+			if (OnlineSendReport( left ))
+				DEBUG_LOG(("ONLINE REPORT sent from=teamleft endFrame=%d\n", s_teamFrame));
+			OnlineEndTeamAIMatch();
+			s_teamFrame = 0;
+		}
+	}
 
 	static Bool s_reported = FALSE;
 	if (!TheGameLogic->isInGame() || TheGameLogic->getGameMode() != GAME_INTERNET
@@ -1024,6 +1063,9 @@ void GameClient::update( void )
 		}
 	}
 	GameEngine_notePark( PARK_DRAWABLES, parkStart );
+
+	// the aircraft's speed-, turn- and ground-keyed effects, once a logic frame (Reforged look only)
+	AircraftEffects_update();
 
 	// LOGIC-THREAD.md phase 3: what the draw below asks of the shroud, asked here, on every pass and
 	// frozen time included, as the draw asked it.  The walk above has filled the cache for this player,

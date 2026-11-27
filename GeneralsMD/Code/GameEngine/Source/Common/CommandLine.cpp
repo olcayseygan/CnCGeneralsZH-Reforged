@@ -1402,7 +1402,7 @@ Int parseNoTactics(char *args[], int num)
 	return 2;
 }
 
-/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit,basewatch,strikedodge,defensequeue,costmap,abilities,maplayers,foreigntech,secondbase,killzones,pressure: those slots keep their rung with these knobs
+/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit,basewatch,strikedodge,defensequeue,costmap,abilities,maplayers,foreigntech,secondbase,killzones,pressure,teamplay,dearpull,homestretch,identity,menders,bibgap,dearstay,routehome,rockvee,scouting,powerhold,harass,garrison,attention,flank,siegelead,plans,ambush,brokecenter: those slots keep their rung with these knobs
 	* of its profile off, so a batch can play Hard against Hard without them, or a scenario against the AI
 	* as it was.  A measuring aid like -notactics: read only in a single-player skirmish, never in a
 	* network game, and a replay made with it is played back with it given again. */
@@ -1428,7 +1428,28 @@ Int parseAIKnobsOff(char *args[], int num)
 		if (strstr(names.str(), "secondbase")) mask |= AIKNOB_SECOND_BASE;
 		if (strstr(names.str(), "killzones")) mask |= AIKNOB_KILL_ZONES;
 		if (strstr(names.str(), "pressure")) mask |= AIKNOB_PRESSURE;
+		if (strstr(names.str(), "teamplay")) mask |= AIKNOB_TEAM_PLAY;
+		if (strstr(names.str(), "dearpull")) mask |= AIKNOB_DEAR_PULL;
+		if (strstr(names.str(), "homestretch")) mask |= AIKNOB_HOME_STRETCH;
+		if (strstr(names.str(), "identity")) mask |= AIKNOB_IDENTITY;
+		if (strstr(names.str(), "menders")) mask |= AIKNOB_MENDERS;
+		if (strstr(names.str(), "bibgap")) mask |= AIKNOB_BIB_GAP;
+		if (strstr(names.str(), "dearstay")) mask |= AIKNOB_DEAR_STAY;
+		if (strstr(names.str(), "routehome")) mask |= AIKNOB_ROUTE_HOME;
+		if (strstr(names.str(), "rockvee")) mask |= AIKNOB_ROCKVEE;
+		if (strstr(names.str(), "scouting")) mask |= AIKNOB_SCOUTING;
+		if (strstr(names.str(), "powerhold")) mask |= AIKNOB_POWER_HOLD;
+		if (strstr(names.str(), "harass")) mask |= AIKNOB_HARASS;
+		if (strstr(names.str(), "garrison")) mask |= AIKNOB_GARRISON;
+		if (strstr(names.str(), "attention")) mask |= AIKNOB_ATTENTION;
+		if (strstr(names.str(), "flank")) mask |= AIKNOB_FLANK;
+		if (strstr(names.str(), "siegelead")) mask |= AIKNOB_SIEGE_LEAD;
+		if (strstr(names.str(), "plans")) mask |= AIKNOB_PLANS;
+		if (strstr(names.str(), "ambush")) mask |= AIKNOB_AMBUSH;
 		TheWritableGlobalData->m_aiKnobsOffMask = mask;
+		Int mask2 = 0;
+		if (strstr(names.str(), "brokecenter")) mask2 |= AIKNOB2_BROKE_CENTER;
+		TheWritableGlobalData->m_aiKnobsOffMask2 = mask2;
 	}
 	return 3;
 }
@@ -2726,6 +2747,11 @@ Int parseOnlineUser(char *args[], int num)
 Int parseOnlinePass(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlinePass ); }
 Int parseOnlineHostGame(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlineHostGame ); }
 Int parseOnlineJoin(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlineJoinGame ); }
+/* -onlineparty <nick> and -onlinepartyjoin <nick>: a Team vs AI party scripted between two copies (OnlinePeer.cpp,
+	 onlinePartyScript): the first invites that friend once it is online and presses Play vs AI once it is in, the
+	 second takes that friend's invite.  Test switches like -onlinehost: what a player clicks, nothing more. */
+Int parseOnlineParty(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlineParty ); }
+Int parseOnlinePartyJoin(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlinePartyJoin ); }
 /* -onlinesay is chat, kept as UTF-8 like every line the service carries.  Windows hands the switch over in
 	 the ANSI code page, which on a Turkish machine made "ı" a lone 0xFD byte. */
 Int parseOnlineSay(char *args[], int num)
@@ -3181,6 +3207,8 @@ static CommandLineParam params[] =
 	{ "-onlinehost", parseOnlineHostGame },
 	{ "-onlinejoin", parseOnlineJoin },
 	{ "-onlinesay", parseOnlineSay },
+	{ "-onlineparty", parseOnlineParty },
+	{ "-onlinepartyjoin", parseOnlinePartyJoin },
 	{ "-onlinemap", parseOnlineMap },
 	{ "-onlineoptions", parseOnlineOptions },
 	{ "-onlinestart", parseOnlineStart },

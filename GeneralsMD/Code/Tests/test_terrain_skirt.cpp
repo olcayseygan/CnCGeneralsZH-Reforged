@@ -45,6 +45,22 @@ TEST(past_a_sea_edge_it_stays_under_the_water)
 	}
 	CHECK_NEAR(seaHeight(12.0f, 35.0f, waterZ, 0.0f), 12.0f, 1e-4f);
 	CHECK_NEAR(seaHeight(12.0f, 35.0f, waterZ, REACH), waterZ - SEA_MARGIN, 1e-4f);
+	// a flat shallow sea (Tournament Island: floor 0, water 4) keeps the map's own depth out to the rim
+	for (int i = 0; i <= 160; ++i)
+		CHECK_NEAR(seaHeight(0.0f, 0.0f, 4.0f, 10.0f * i), 0.0f, 1e-4f);
+	// the floor follows the blur's depth with no step, from a beach (the whole margin) to deep water
+	float last = seaHeight(5.0f, 25.0f, waterZ, REACH);
+	CHECK_NEAR(last, waterZ - SEA_MARGIN, 1e-4f);
+	for (int i = 1; i <= 300; ++i)
+	{
+		const float blurred = 25.0f - 0.1f * i;
+		const float z = seaHeight(5.0f, blurred, waterZ, REACH);
+		CHECK(fabsf(z - last) < 0.25f);
+		CHECK(z <= waterZ - SEA_MARGIN_LEAST + 1e-4f);
+		last = z;
+	}
+	// a rock on a shallow edge does not carry its own depth out: the blur round it sets the floor
+	CHECK_NEAR(seaHeight(3.5f, 0.0f, 4.0f, REACH), seaHeight(0.0f, 0.0f, 4.0f, REACH), 1e-4f);
 }
 
 TEST(a_coast_mixes_land_and_sea_by_the_sea_share)
@@ -137,7 +153,7 @@ TEST(a_tile_past_the_edge_takes_its_texture_from_its_patch)
 	// cell it reads changes from patch to patch, and a patch reads one cell, along the edge and never
 	// deeper in than PATCH_SHIFT
 	unsigned lastPatch = 0;
-	int lastX = -1, lastY = -1, patches = 0, moved = 0;
+	int lastX = -1, lastY = -1, patches = 0, moved = 0, regrained = 0;
 	for (int s = -4; s >= -80; --s)
 	{
 		const PatchLayer base = mainLayer(30, s, w, h);
@@ -154,6 +170,8 @@ TEST(a_tile_past_the_edge_takes_its_texture_from_its_patch)
 			patches++;
 			if (base.cellX != lastX)
 				moved++;
+			else if (base.cellY == lastY)
+				regrained++;	// the same class, another grain: the block turned again inside the patch
 		}
 		lastPatch = base.patch;
 		lastX = base.cellX;
@@ -161,6 +179,7 @@ TEST(a_tile_past_the_edge_takes_its_texture_from_its_patch)
 	}
 	CHECK(patches >= 4);
 	CHECK(moved >= 3);
+	CHECK(regrained >= 4);
 }
 
 // The weight of `patch` at corner k of a tile, 0 if it wears none of it.

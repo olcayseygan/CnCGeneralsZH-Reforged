@@ -6419,6 +6419,13 @@ StateReturnType AIAttackFireWeaponState::update()
 				{
 					getMachine()->setGoalObject(victim);
 					m_att->notifyNewVictimChosen(victim);
+					/* A dozer that goes to clear a mine on its own is given one shot (DozerAIUpdate's bored
+						 look), so the attack ended on the first mine of a field even with the next one picked
+						 here, and the dozer stood idle beside it.  A Demo Trap spares a dozer only while it is
+						 attacking with its disarm tools, so the next barrels of the cluster went off under it.
+						 The mine it moves on to gets its shot too. */
+					if (weapon->getMaxShotCount() <= 0)
+						weapon->setMaxShotCount(1);
 				}
 			}
 		}

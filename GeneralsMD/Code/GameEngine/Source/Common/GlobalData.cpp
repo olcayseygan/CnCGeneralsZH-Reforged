@@ -757,6 +757,7 @@ GlobalData::GlobalData()
 	m_noTacticsSlotParity = -1;
 	m_aiKnobsOffParity = -1;
 	m_aiKnobsOffMask = 0;
+	m_aiKnobsOffMask2 = 0;
 	m_autoSkirmishTeams = 0;				// 0 = not set: every slot fights every other slot
 	m_peaceTime = 0;								// no truce unless -peacetime asks for one
 	m_unitLimit = FALSE;						// no unit limit unless -unitlimit asks for one
@@ -832,6 +833,8 @@ GlobalData::GlobalData()
 	m_onlineHostGame.clear();
 	m_onlineJoinGame.clear();
 	m_onlineSay.clear();
+	m_onlineParty.clear();
+	m_onlinePartyJoin.clear();
 	m_onlineMap.clear();
 	m_onlineOptions.clear();
 	m_onlineStart = 0;

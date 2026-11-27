@@ -7,7 +7,10 @@
 #     -scenario apoc_b2 -logPrefix apoc_b2_
 #
 # As apoc_b1: game frames, the first wave at 1800, every zombie a civilian spawn the director adopts
-# as a stray and sends at the nearest enemy; one fight a corner.
+# as a stray and sends at the nearest enemy; one fight a corner. The seats stand aggressive: on
+# defensive the Rangers held their ground under the Spine Lancers' 175 reach and the Juggernauts
+# lived on beside them, so no fight closed (2026-11-26). C's Crusaders stand at 250:-150, since seed 3
+# has an obstacle at 150:-150 that refused all four.
 #
 # Read: the HEADLESS TALLY lines and the director's 10 s 'alive by kind' line. Pass:
 #   A 20 Rangers vs one Juggernaut: the Rangers' 1700 tally under 5 with a Juggernaut still alive
@@ -29,15 +32,15 @@
 10    spawn      civilian  ApocalypseZombieJuggernaut   1   start0:-150:330
 10    spawn      0         AmericaTankCrusader          3   start0:150:150    30
 10    spawn      civilian  ApocalypseZombieJuggernaut   1   start0:150:330
-10    spawn      0         AmericaTankCrusader          4   start0:150:-150   30
-10    spawn      civilian  ApocalypseZombieSpineLancer  4   start0:150:-330   12
+10    spawn      0         AmericaTankCrusader          4   start0:250:-150   30
+10    spawn      civilian  ApocalypseZombieSpineLancer  4   start0:250:-330   12
 10    spawn      0         AmericaInfantryRanger        8   start0:-150:-150  12
 10    spawn      civilian  ApocalypseZombieSpineLancer  3   start0:-150:-330  12
 10    spawn      0         AmericaTankPaladin           2   start0:-300:0     30
 10    spawn      civilian  ApocalypseZombieShieldBearer 1   start0:-470:0
 10    spawn      0         AmericaTankPaladin           4   start0:300:0      30
 10    spawn      civilian  ApocalypseZombieSiegeRam     1   start0:470:0
-20    stance     0         *                            defensive
+20    stance     0         *                            aggressive
 
 # seat 1, China (and the Tank Hunters it builds)
 10    spawn      1         ChinaInfantryTankHunter      6   start1:0:150      12
@@ -49,7 +52,7 @@
 910   attackmove 1         ChinaTankGattling            start1:-480:0
 10    spawn      1         ChinaWall                    4   start1:0:-200     20
 10    spawn      civilian  ApocalypseZombieSiegeRam     1   start1:0:-360
-20    stance     1         *                            defensive
+20    stance     1         *                            aggressive
 
 10    tally      1         ChinaGattlingCannon          1
 900   tally      1         ChinaGattlingCannon          1

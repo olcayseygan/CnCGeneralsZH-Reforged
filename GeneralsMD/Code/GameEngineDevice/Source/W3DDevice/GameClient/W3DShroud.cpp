@@ -76,6 +76,15 @@
 #define DEFAULT_TERRAIN_SIZE 1024 //assumed size of largest terrain possible (in vertices)
 #define DEFAULT_VISIBLE_TERRAIN 96	//assumed size of visible terrain cells.
 
+// The texture's ring round the playable cells, in cells a side.  EA's was one texel of the border's
+// level, so the light fell from the edge cell to the border's across a single cell and drew a ruler
+// line along the map's edge, across the sea too.  Each ring texel now goes from its nearest edge
+// cell's texel to the border's by its distance out of the cells, smoothstepped, and reaches the
+// border's at the ring's outer texel, which the clamp carries on over the ground past the map.
+// Rounded round the corners.  The projections take the ring through getDrawOriginX, which sits
+// SHROUD_BORDER_RAMP - 1 cells before the first cell, so their "a cell for the border" still holds.
+#define SHROUD_BORDER_RAMP	4
+
 //-----------------------------------------------------------------------------
 W3DShroud::W3DShroud(void)
 {
@@ -157,20 +166,21 @@ void W3DShroud::init(WorldHeightMap *pMap, Real worldCellSizeX, Real worldCellSi
 		dstTextureWidth = m_numCellsX;
 		dstTextureHeight = m_numCellsY; 
 		
-		dstTextureWidth += 2;	//enlarge by 2 pixels so we can have a border color all the way around.
+		dstTextureWidth += 2*SHROUD_BORDER_RAMP;	//enlarge so we can have the border's ring all the way around.
 		unsigned int depth = 1;
-		dstTextureHeight += 2;	//enlarge by 2 pixels so we can have border color all the way around.
+		dstTextureHeight += 2*SHROUD_BORDER_RAMP;	//enlarge so we can have the border's ring all the way around.
 		TextureLoader::Validate_Texture_Size((unsigned int &)dstTextureWidth,(unsigned int &)dstTextureHeight, depth);
 	}
 
 
 	UnsignedInt srcWidth,srcHeight;
 
-	srcWidth=m_numCellsX;
+	// the cells with the border's ring round them, as the destination holds them
+	srcWidth=m_numCellsX + 2*SHROUD_BORDER_RAMP;
 	//vertical size is larger by 1 pixel so that we have some unused pixels to use in clearing the video texture.
 	//To clear the video texture, I will copy pixels from this unused area.  There is no other way to clear a video
   //memory texture to a known value because you can't lock it - only copy into it.
-	srcHeight=m_numCellsY;
+	srcHeight=m_numCellsY + 2*SHROUD_BORDER_RAMP;
 	srcHeight += 1;
 
 #ifdef DO_FOG_INTERPOLATION
@@ -204,11 +214,13 @@ void W3DShroud::init(WorldHeightMap *pMap, Real worldCellSizeX, Real worldCellSi
 	DEBUG_ASSERTCRASH( res == D3D_OK, ("Failed to lock shroud src surface"));
 	res = 0;// just to avoid compiler warnings
 
-	m_srcTextureData=rect.pBits;
 	m_srcTexturePitch=rect.Pitch;
-
 	//clear entire texture to black
-	memset(m_srcTextureData,0,m_srcTexturePitch*srcHeight);
+	memset(rect.pBits,0,m_srcTexturePitch*srcHeight);
+	// cell 0,0 sits the ring in, so a cell's address is what it always was
+	m_srcTextureData=(Byte *)rect.pBits + SHROUD_BORDER_RAMP*m_srcTexturePitch + SHROUD_BORDER_RAMP*2;
+	m_drawOriginX = -(Real)(SHROUD_BORDER_RAMP - 1) * m_cellWidth;
+	m_drawOriginY = -(Real)(SHROUD_BORDER_RAMP - 1) * m_cellHeight;
 	m_cellsWritten = TRUE;
 	m_fogCellCount = m_numCellsX*m_numCellsY;
 
@@ -252,6 +264,8 @@ void W3DShroud::reset()
 	m_srcTexturePitch=0;
 	m_numCellsX=0;
 	m_numCellsY=0;
+	m_logicCellsX=0;
+	m_logicCellsY=0;
 	m_fogCellCount=0;
 	if (m_finalFogData)
 		delete [] m_finalFogData;
@@ -313,19 +327,31 @@ W3DShroudLevel W3DShroud::getShroudLevel(Int x, Int y)
 	// the upper bound was checked and the lower was not, so a negative cell - which is what a
 	// position just off the edge of the map gives - read backwards out of the shroud texture
 	if (m_srcTextureData != NULL && x >= 0 && y >= 0 && x < m_numCellsX && y < m_numCellsY)
-	{
-		UnsignedShort pixel=*(UnsignedShort *)((Byte *)m_srcTextureData + x*2 + y*m_srcTexturePitch);
-		
-#if defined(_DEBUG) || defined(_INTERNAL)
-		if (TheGlobalData && TheGlobalData->m_fogOfWarOn)
-			//in this mode, alpha channel holds intensity
-			return (W3DShroudLevel)((1.0f-((Real)(pixel >> 12)/15.0f))*255.0f);
-		else
-#endif
-			//in this mode, green has the best precision at 6 bits.
-			return (W3DShroudLevel)((Real)((pixel >> 5)&0x3f)/63.0f*255.0f);
-	}
+		return getTexelLevel(x, y);
 	return 0;
+}
+
+//-----------------------------------------------------------------------------
+/** Any cell index, on the grid or off it: off it the ring fillBorderRamp last wrote, and past the ring
+its outer texel, the border's level, as the texture's clamp carries it on. */
+W3DShroudLevel W3DShroud::getTexelLevel(Int x, Int y)
+{
+	if (m_srcTextureData == NULL || m_numCellsX <= 0 || m_numCellsY <= 0)
+		return 0;
+	const Int ramp = SHROUD_BORDER_RAMP;
+	x = (x < -ramp) ? -ramp : ((x >= m_numCellsX + ramp) ? m_numCellsX + ramp - 1 : x);
+	y = (y < -ramp) ? -ramp : ((y >= m_numCellsY + ramp) ? m_numCellsY + ramp - 1 : y);
+	// signed: a ring row above the cells is a negative one, which the unsigned pitch would wrap
+	UnsignedShort pixel=*(UnsignedShort *)((Byte *)m_srcTextureData + x*2 + y*(Int)m_srcTexturePitch);
+
+#if defined(_DEBUG) || defined(_INTERNAL)
+	if (TheGlobalData && TheGlobalData->m_fogOfWarOn)
+		//in this mode, alpha channel holds intensity
+		return (W3DShroudLevel)((1.0f-((Real)(pixel >> 12)/15.0f))*255.0f);
+	else
+#endif
+		//in this mode, green has the best precision at 6 bits.
+		return (W3DShroudLevel)((Real)((pixel >> 5)&0x3f)/63.0f*255.0f);
 }
 
 //-----------------------------------------------------------------------------
@@ -345,6 +371,11 @@ void W3DShroud::setShroudLevel(Int x, Int y, W3DShroudLevel level, Bool textureO
 			level = TheGlobalData->m_shroudAlpha;
 
 		m_cellsWritten = TRUE;
+		// logic writes the cells its partition covers, and the ring starts past them (fillBorderRamp)
+		if (x >= m_logicCellsX)
+			m_logicCellsX = x + 1;
+		if (y >= m_logicCellsY)
+			m_logicCellsY = y + 1;
 
 #if defined(_DEBUG) || defined(_INTERNAL)
 		if (TheGlobalData && TheGlobalData->m_fogOfWarOn)
@@ -512,11 +543,12 @@ void W3DShroud::fillBorderShroudData(W3DShroudLevel level, SurfaceClass* pDestSu
 		pixel=( ((bluepixel&0xf8) >> 3) | ((greenpixel&0xfc)<<3) | ((redpixel&0xf8)<<8));
 	}
 
-	//Skip to unused texels within the shroud data
-	UnsignedShort *ptr=(UnsignedShort *)m_srcTextureData + m_numCellsY*(m_srcTexturePitch >> 1);
+	//Skip to unused texels within the shroud data, the row under the ring's bottom
+	const Int fullWidth = m_numCellsX + 2*SHROUD_BORDER_RAMP;
+	UnsignedShort *ptr=(UnsignedShort *)m_srcTextureData + (m_numCellsY + SHROUD_BORDER_RAMP)*(m_srcTexturePitch >> 1) - SHROUD_BORDER_RAMP;
 
 	//Fill unused texels with border color
-	for (x=0; x<m_numCellsX; x++)
+	for (x=0; x<fullWidth; x++)
 			ptr[x]=pixel;
 
 	//Fill destination texture with border color
@@ -526,9 +558,9 @@ void W3DShroud::fillBorderShroudData(W3DShroudLevel level, SurfaceClass* pDestSu
 	//create a rectangle enclosing bottom row of unused pixels long enough
 	//to cover destination width.
 	srcRect.left=0;
-	srcRect.top=m_numCellsY;
-	srcRect.right= m_numCellsX;
-	srcRect.bottom= m_numCellsY+1;
+	srcRect.top=m_numCellsY + 2*SHROUD_BORDER_RAMP;
+	srcRect.right= fullWidth;
+	srcRect.bottom= srcRect.top+1;
 
 	RenderPoint	dstPoint={0,0};
 
@@ -564,7 +596,71 @@ void W3DShroud::fillBorderShroudData(W3DShroudLevel level, SurfaceClass* pDestSu
 			srcRect.right = oldVal;
 		}
 	}
-	
+
+}
+
+/** Writes the border's ring round the cells logic owns in the source surface (SHROUD_BORDER_RAMP): each
+texel past them the mix of its nearest owned edge cell's texel and the border's (the unused row's, so
+after fillBorderShroudData), by its distance out over the ring's width, smoothstepped.  A channel at a
+time, 5:6:5 or the debug fog of war's 4:4:4:4.
+
+Logic owns fewer cells than the grid holds on a map whose playable boundary is smaller than its
+heightmap less the border: the partition covers the active boundary, the grid the heightmap.  Nothing
+ever wrote the rest, so it stayed the black the surface was cleared to, a band of it beside the border's
+lit floor; Twilight Flame's grid is 123 by 123 and logic's 122 by 118, so its north edge drew five cells
+of black and its east edge one.  They are border now, from logic's edge out, and logic takes them back
+when a script's boundary grows over them. */
+void W3DShroud::fillBorderRamp(void)
+{
+	const Int ramp = SHROUD_BORDER_RAMP;
+	const Int pitch = m_srcTexturePitch >> 1;
+	UnsignedShort *cells = (UnsignedShort *)m_srcTextureData;
+	const UnsignedShort border = cells[(m_numCellsY + ramp) * pitch - ramp];
+	// before logic's first write the whole grid is its, black as it was
+	const Int ownedX = (m_logicCellsX > 0) ? m_logicCellsX : m_numCellsX;
+	const Int ownedY = (m_logicCellsY > 0) ? m_logicCellsY : m_numCellsY;
+
+	Int shifts[4] = { 11, 5, 0, 0 };
+	Int masks[4] = { 0x1f, 0x3f, 0x1f, 0 };
+#if defined(_DEBUG) || defined(_INTERNAL)
+	if (TheGlobalData && TheGlobalData->m_fogOfWarOn)
+	{
+		const Int shifts4[4] = { 12, 8, 4, 0 };
+		for (Int c = 0; c < 4; ++c) { shifts[c] = shifts4[c]; masks[c] = 0xf; }
+	}
+#endif
+
+	for (Int y = -ramp; y < m_numCellsY + ramp; ++y)
+	{
+		const Int cy = (y < 0) ? 0 : ((y >= ownedY) ? ownedY - 1 : y);
+		const Real dy = (Real)(y - cy);
+		const UnsignedShort *edgeRow = cells + cy * pitch;
+		UnsignedShort *row = cells + y * pitch;
+		// a row through the owned cells has its ring texels at its two ends only
+		const Bool throughCells = (y == cy);
+		for (Int x = -ramp; x < m_numCellsX + ramp; ++x)
+		{
+			if (throughCells && x == 0)
+				x = ownedX;
+			const Int cx = (x < 0) ? 0 : ((x >= ownedX) ? ownedX - 1 : x);
+			const Real dx = (Real)(x - cx);
+			Real t = sqrtf(dx * dx + dy * dy) / (Real)ramp;
+			if (t > 1.0f)
+				t = 1.0f;
+			t = t * t * (3.0f - 2.0f * t);
+			const UnsignedShort edge = edgeRow[cx];
+			UnsignedShort mixed = 0;
+			for (Int c = 0; c < 4; ++c)
+			{
+				if (masks[c] == 0)
+					continue;
+				const Real from = (Real)((edge >> shifts[c]) & masks[c]);
+				const Real to = (Real)((border >> shifts[c]) & masks[c]);
+				mixed |= (UnsignedShort)(REAL_TO_INT_FLOOR(from + (to - from) * t + 0.5f) << shifts[c]);
+			}
+			row[x] = mixed;
+		}
+	}
 }
 
 /** The border's level at a map's start.  It was the shroud's black.  It is lit a little now, darker
@@ -731,8 +827,9 @@ void W3DShroud::render(CameraClass *cam)
 		visEndY = m_numCellsY;
 	}
 
-	m_drawOriginX = (Real)visStartX * m_cellWidth;
-	m_drawOriginY	= (Real)visStartY * m_cellHeight;
+	// the projections add a cell for the border, and the ring is SHROUD_BORDER_RAMP of them
+	m_drawOriginX = (Real)(visStartX - (SHROUD_BORDER_RAMP - 1)) * m_cellWidth;
+	m_drawOriginY	= (Real)(visStartY - (SHROUD_BORDER_RAMP - 1)) * m_cellHeight;
 
 	//If system memory usage becomes too large, we should store shroud as Bytes.  Update
 	//a system memory texture with data.  Then copy this to video memory.  For now we're
@@ -761,13 +858,14 @@ void W3DShroud::render(CameraClass *cam)
 		m_pDstTexture->Get_Filter().Set_Min_Filter(m_shroudFilter);
 	}
 
+	// the cells and the border's ring round them, which fillBorderRamp writes, one copy
 	RenderRect	srcRect;
-	RenderPoint	dstPoint={1,1};	//first row/column is reserved for border.
+	RenderPoint	dstPoint={0,0};
 
 	srcRect.left=visStartX;
 	srcRect.top=visStartY;
-	srcRect.right=visEndX;
-	srcRect.bottom=visEndY;
+	srcRect.right=visEndX + 2*SHROUD_BORDER_RAMP;
+	srcRect.bottom=visEndY + 2*SHROUD_BORDER_RAMP;
 
 #ifdef DO_FOG_INTERPOLATION
 	//interpolate current shroud state to the final one
@@ -798,6 +896,7 @@ void W3DShroud::render(CameraClass *cam)
 
 		fillBorderShroudData(m_boderShroudLevel, pDestSurface);
 	}
+	fillBorderRamp();
 
 	{
 		USE_PERF_TIMER(shroudCopy)

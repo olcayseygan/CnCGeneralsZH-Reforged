@@ -7,7 +7,7 @@
 #   generals.exe ... -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica
 #     -side 1 FactionChina -seed 1 -scenario piecetowerfilm
 #
-# On this map (rmg_v22_3_6p_642c_lane) the lane runs along y 1805: A's tower at 2544,1805, B's at
+# On this map (rmg_v23_3_6p_642c_lane) the lane runs along y 1805: A's tower at 2544,1805, B's at
 # 3876,1805, both 225 reach. The trucks cross the lane 106 east of A's tower.
 # Frames here are this file's 30 a game second; the log's logic frames are two thirds of them at 1.5x.
 

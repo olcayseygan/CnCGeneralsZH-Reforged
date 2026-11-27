@@ -73,9 +73,14 @@ namespace TerrainSkirt
 	const float PATCH_WOBBLE_SIZE = 3.0f;
 	/** The skirt starts a cell inside the map and goes under it there, edge samples included, by this
 		much, world units, so the subdivided ground's edge, which bends between its samples, never opens
-		a crack onto the clear colour and the skirt's long quads never poke up through the first cell. */
+		a crack onto the clear colour and the skirt's long quads never poke up through the first cell.
+		Only the quads wholly over the map.  One reaching past it takes its corners on the map at the
+		lowest of their samples and those round them, which keeps its two-cell chord under the odd sample
+		between; whatever the ground's bend opens over it looks onto the sunk quads, not the clear colour.
+		Sunk by SINK it dug a trench a quad wide along every edge, which under shallow water read as a
+		dark line, and a lip of 1 under the samples still drew one a pixel wide. */
 	const float SINK = 4.0f;
-	/// Past an edge under water the sea floor stays at least this far below the water, world units.
+	/// Past an edge under water the sea floor stays this far below the water, world units, or as far as the edge sample lies if less (seaHeight).
 	const float SEA_MARGIN = 6.0f;
 	/** How many cells out from an edge sample the sea past it is asked for: past the side of a polygon
 		drawn a little outside the heightmap.  One cell fell short of Tournament Island's west side at
@@ -128,7 +133,7 @@ namespace TerrainSkirt
 
 	/** One texture layer of a skirt tile: the map cell (lower left, on a width by height heightmap) its
 		texture class comes from, and its patch, 0 for the map's own order from the nearest cell and
-		otherwise a hash that is the same over the whole patch. */
+		otherwise a hash that is the same over one grain of a patch (grainHash). */
 	struct PatchLayer
 	{
 		unsigned patch;
@@ -175,13 +180,51 @@ namespace TerrainSkirt
 	/// The most layers one point of the skirt mixes (pointShares).
 	const int POINT_LAYERS = 3;
 	/** The most layers one skirt tile wears, each laid over those before it: its corners' together.  A
-		tile that dropped one its neighbour kept would cut a seam between them. */
-	const int MOST_LAYERS = 6;
+		tile that dropped one its neighbour kept would cut a seam between them.  Six held the patches
+		alone; with the grains about 1.5% of tiles want seven or more. */
+	const int MOST_LAYERS = 10;
 
 	inline unsigned siteHash(const PatchSite &site)
 	{
 		const unsigned patch = (unsigned)site.i * 2654435761u ^ (unsigned)site.j * 40503u;
 		return patch == 0 ? 1u : patch;
+	}
+
+	/** Inside one patch its class's block is laid again every class width (four or eight tiles), so a
+		patch of twelve laid the same rock ridges in rows of three however the patch turned it.  Each patch
+		is cut again into grains about GRAIN_TILES across, the tiles nearest each of a second jittered grid
+		of centres, each laying the patch's class moved and turned its own way, crossfading over
+		2 GRAIN_BLEND tiles along straight borders (wobbled like the patches' they cost more layers, and
+		the class on both sides is the same).  The grains are the same everywhere; only which patch's class
+		they lay comes from the patches.  It costs blend quads: 2.1 a skirt tile became 3.0. */
+	const float GRAIN_TILES = 7.0f;
+	const float GRAIN_BLEND = 0.5f;
+	/// The most grains one point mixes.
+	const int GRAIN_LAYERS = 2;
+	/// Grid cells either way searched: a grain three off is past any nearest grain plus the blend.
+	const int GRAIN_SEARCH = 2;
+	const int GRAIN_COUNT = (2 * GRAIN_SEARCH + 1) * (2 * GRAIN_SEARCH + 1);
+
+	inline PatchSite grainSite(int i, int j)
+	{
+		PatchSite site;
+		site.i = i;
+		site.j = j;
+		site.x = (i + lattice(i + 71, j - 53)) * GRAIN_TILES;
+		site.y = (j + lattice(i - 29, j + 83)) * GRAIN_TILES;
+		return site;
+	}
+
+	/// The layer a patch's grain lays: never 0, the band's, and well mixed, since scatterTile reads its bits.
+	inline unsigned grainHash(unsigned patch, const PatchSite &grain)
+	{
+		unsigned h = patch ^ ((unsigned)grain.i * 0x8da6b343u + (unsigned)grain.j * 0xd8163841u);
+		h ^= h >> 15;
+		h *= 0x2c1b3c6du;
+		h ^= h >> 12;
+		h *= 0x297a2d39u;
+		h ^= h >> 15;
+		return h == 0 ? 1u : h;
 	}
 
 	/** The cell a patch reads: from the edge its centre lies past (or, over the map, nearest), a little
@@ -222,49 +265,122 @@ namespace TerrainSkirt
 		wander.  Then every share gives up the POINT_LAYERS + 1st largest, so no point mixes more than
 		POINT_LAYERS and none jumps.  The point alone decides, so every tile round a corner takes the same
 		mix there and three patches meet as softly as two. */
-	inline void pointShares(float x, float y, int width, int height, const PatchSite *sites, int count, float *shares)
+	/// The point (x, y), in tiles, moved by up to PATCH_WOBBLE so the borders wander.
+	inline void wobble(float x, float y, float *movedX, float *movedY)
 	{
-		const float band = 1.0f - smooth(0.5f + 0.5f * bandField(x, y, width, height) / PATCH_BLEND)
-			* smooth(tilesOutside(x, y, width, height));
-		const float movedX = x + (valueNoise(x / PATCH_WOBBLE_SIZE + 7.1f, y / PATCH_WOBBLE_SIZE - 3.3f) - 0.5f) * 2.0f * PATCH_WOBBLE;
-		const float movedY = y + (valueNoise(x / PATCH_WOBBLE_SIZE - 5.7f, y / PATCH_WOBBLE_SIZE + 2.9f) - 0.5f) * 2.0f * PATCH_WOBBLE;
+		*movedX = x + (valueNoise(x / PATCH_WOBBLE_SIZE + 7.1f, y / PATCH_WOBBLE_SIZE - 3.3f) - 0.5f) * 2.0f * PATCH_WOBBLE;
+		*movedY = y + (valueNoise(x / PATCH_WOBBLE_SIZE - 5.7f, y / PATCH_WOBBLE_SIZE + 2.9f) - 0.5f) * 2.0f * PATCH_WOBBLE;
+	}
+
+	/// Each of `count` centres' share at a point, more the nearer it is to the nearest one, nothing once 2 `blend` further; they sum to one.
+	inline void nearestShares(float x, float y, const PatchSite *sites, int count, float blend, float *shares)
+	{
 		float nearest = 1.0e30f;
 		for (int s = 0; s < count; ++s)
 		{
-			const float dx = sites[s].x - movedX, dy = sites[s].y - movedY;
+			const float dx = sites[s].x - x, dy = sites[s].y - y;
 			shares[s] = sqrtf(dx * dx + dy * dy);
 			nearest = shares[s] < nearest ? shares[s] : nearest;
 		}
 		float sum = 0.0f;
 		for (int s = 0; s < count; ++s)
 		{
-			shares[s] = 1.0f - smooth((shares[s] - nearest) / (2.0f * PATCH_BLEND));
+			shares[s] = 1.0f - smooth((shares[s] - nearest) / (2.0f * blend));
 			sum += shares[s];
 		}
 		for (int s = 0; s < count; ++s)
-			shares[s] *= (1.0f - band) / sum;
-		shares[count] = band;
+			shares[s] /= sum;
+	}
+
+	/** Every one of `count` shares gives up the `keep` + 1st largest and the rest sum to one again, so no
+		point mixes more than `keep` (up to POINT_LAYERS) and none jumps as one leaves. */
+	inline void keepLargest(float *shares, int count, int keep = POINT_LAYERS)
+	{
 		float largest[POINT_LAYERS + 1];
-		for (int l = 0; l <= POINT_LAYERS; ++l)
+		for (int l = 0; l <= keep; ++l)
 			largest[l] = 0.0f;
-		for (int s = 0; s <= count; ++s)
-			for (int l = 0; l <= POINT_LAYERS; ++l)
+		for (int s = 0; s < count; ++s)
+			for (int l = 0; l <= keep; ++l)
 				if (shares[s] > largest[l])
 				{
-					for (int m = POINT_LAYERS; m > l; --m)
+					for (int m = keep; m > l; --m)
 						largest[m] = largest[m - 1];
 					largest[l] = shares[s];
 					break;
 				}
-		const float cut = largest[POINT_LAYERS];
-		sum = 0.0f;
-		for (int s = 0; s <= count; ++s)
+		const float cut = largest[keep];
+		float sum = 0.0f;
+		for (int s = 0; s < count; ++s)
 		{
 			shares[s] = shares[s] > cut ? shares[s] - cut : 0.0f;
 			sum += shares[s];
 		}
-		for (int s = 0; s <= count; ++s)
+		for (int s = 0; s < count; ++s)
 			shares[s] /= sum;
+	}
+
+	inline void pointShares(float x, float y, int width, int height, const PatchSite *sites, int count, float *shares)
+	{
+		const float band = 1.0f - smooth(0.5f + 0.5f * bandField(x, y, width, height) / PATCH_BLEND)
+			* smooth(tilesOutside(x, y, width, height));
+		float movedX, movedY;
+		wobble(x, y, &movedX, &movedY);
+		nearestShares(movedX, movedY, sites, count, PATCH_BLEND, shares);
+		for (int s = 0; s < count; ++s)
+			shares[s] *= 1.0f - band;
+		shares[count] = band;
+		keepLargest(shares, count + 1);
+	}
+
+	/// One layer's share at a point: the band (patch < 0), or patch `patch`'s grain `grain`.
+	struct GrainShare
+	{
+		int patch, grain;
+		float share;
+	};
+
+	/** The layers at point (x, y) once the patches are cut into grains: each patch's share split over the
+		grains by theirs (nearestShares over GRAIN_BLEND, at most GRAIN_LAYERS), the band whole, then
+		at most POINT_LAYERS kept.  Returns how many in `out`, every one above nought. */
+	inline int grainShares(float x, float y, int width, int height, const PatchSite *sites, int count,
+		const PatchSite *grains, int grainCount, GrainShare out[POINT_LAYERS + 1])
+	{
+		float patchShares[SITE_COUNT + 1];
+		pointShares(x, y, width, height, sites, count, patchShares);
+		float grainShare[GRAIN_COUNT];
+		nearestShares(x, y, grains, grainCount, GRAIN_BLEND, grainShare);
+		keepLargest(grainShare, grainCount, GRAIN_LAYERS);
+		GrainShare all[POINT_LAYERS * GRAIN_LAYERS + 1];
+		float shares[POINT_LAYERS * GRAIN_LAYERS + 1];
+		int n = 0;
+		for (int s = 0; s <= count; ++s)
+		{
+			if (patchShares[s] <= 0.0f)
+				continue;
+			if (s == count)
+			{
+				all[n].patch = -1;
+				all[n].grain = -1;
+				shares[n++] = patchShares[s];
+				continue;
+			}
+			for (int g = 0; g < grainCount; ++g)
+				if (grainShare[g] > 0.0f)
+				{
+					all[n].patch = s;
+					all[n].grain = g;
+					shares[n++] = patchShares[s] * grainShare[g];
+				}
+		}
+		keepLargest(shares, n);
+		int kept = 0;
+		for (int k = 0; k < n; ++k)
+			if (shares[k] > 0.0f)
+			{
+				out[kept] = all[k];
+				out[kept++].share = shares[k];
+			}
+		return kept;
 	}
 
 	/** The texture past the edge: the layers a tile wears, the first under the rest, and how much of
@@ -272,7 +388,8 @@ namespace TerrainSkirt
 		(x, y+1).  Beside the edge a band PATCH_NEAR tiles deep give or take half carries the edge on as it
 		is; past it the ground is patches about PATCH_TILES tiles across, the tiles nearest each of a grid
 		of centres jittered by a hash, each one texture class, blending into one another over a few tiles
-		(pointShares) as the map's own blend tiles do.  Two layers a tile cut a hard edge wherever a third
+		(pointShares) as the map's own blend tiles do, and each cut into grains that lay the class turned
+		their own way (grainShares).  Two layers a tile cut a hard edge wherever a third
 		patch came near, as grass rectangles with stair-step corners in the rock.  The layers go in one
 		order every tile keeps, the band then by patch, so two tiles laying different sets agree along
 		the side they share.  Returns how many, the band alone on the map. */
@@ -294,22 +411,46 @@ namespace TerrainSkirt
 		for (int j = cellJ - SITE_SEARCH; j <= cellJ + SITE_SEARCH; ++j)
 			for (int i = cellI - SITE_SEARCH; i <= cellI + SITE_SEARCH; ++i)
 				sites[count++] = patchSite(i, j);
-		// the band's share last, after the centres'
+		PatchSite grains[GRAIN_COUNT];
+		const int grainI = (int)floorf(centreX / GRAIN_TILES), grainJ = (int)floorf(centreY / GRAIN_TILES);
+		int grainCount = 0;
+		for (int j = grainJ - GRAIN_SEARCH; j <= grainJ + GRAIN_SEARCH; ++j)
+			for (int i = grainI - GRAIN_SEARCH; i <= grainI + GRAIN_SEARCH; ++i)
+				grains[grainCount++] = grainSite(i, j);
 		const float cornerX[4] = { (float)tileX, tileX + 1.0f, tileX + 1.0f, (float)tileX };
 		const float cornerY[4] = { (float)tileY, (float)tileY, tileY + 1.0f, tileY + 1.0f };
-		float shares[4][SITE_COUNT + 1];
-		float most[SITE_COUNT + 1] = {};
+		// every layer any corner takes, keyed by its hash (the band's 0), and its share at each corner
+		const int MOST_TAKEN = 4 * (POINT_LAYERS + 1);
+		GrainShare taken[MOST_TAKEN];
+		unsigned order[MOST_TAKEN];
+		float shares[MOST_TAKEN][4];
+		float most[MOST_TAKEN];
+		int layerCount = 0;
 		for (int k = 0; k < 4; ++k)
 		{
-			pointShares(cornerX[k], cornerY[k], width, height, sites, count, shares[k]);
-			for (int s = 0; s <= SITE_COUNT; ++s)
-				most[s] = shares[k][s] > most[s] ? shares[k][s] : most[s];
+			GrainShare point[POINT_LAYERS + 1];
+			const int n = grainShares(cornerX[k], cornerY[k], width, height, sites, count, grains, grainCount, point);
+			for (int p = 0; p < n; ++p)
+			{
+				const unsigned key = point[p].patch < 0 ? 0u : grainHash(siteHash(sites[point[p].patch]), grains[point[p].grain]);
+				int l = 0;
+				while (l < layerCount && order[l] != key)
+					++l;
+				if (l == layerCount)
+				{
+					taken[l] = point[p];
+					order[l] = key;
+					shares[l][0] = shares[l][1] = shares[l][2] = shares[l][3] = 0.0f;
+					most[l] = 0.0f;
+					++layerCount;
+				}
+				shares[l][k] = point[p].share;
+				most[l] = point[p].share > most[l] ? point[p].share : most[l];
+			}
 		}
-		int chosen[SITE_COUNT + 1];
-		int layerCount = 0;
-		for (int s = 0; s <= SITE_COUNT; ++s)
-			if (most[s] > 0.0f)
-				chosen[layerCount++] = s;
+		int chosen[MOST_TAKEN];
+		for (int l = 0; l < layerCount; ++l)
+			chosen[l] = l;
 		while (layerCount > MOST_LAYERS)	// the least taken goes
 		{
 			int least = 0;
@@ -317,15 +458,10 @@ namespace TerrainSkirt
 				least = most[chosen[l]] < most[chosen[least]] ? l : least;
 			chosen[least] = chosen[--layerCount];
 		}
-		unsigned order[SITE_COUNT + 1];
-		for (int l = 0; l < layerCount; ++l)
-			order[l] = chosen[l] == SITE_COUNT ? 0u : siteHash(sites[chosen[l]]);
+		// the band then by hash, the order every tile keeps
 		for (int l = 1; l < layerCount; ++l)
-			for (int m = l; m > 0 && order[m] < order[m - 1]; --m)
+			for (int m = l; m > 0 && order[chosen[m]] < order[chosen[m - 1]]; --m)
 			{
-				const unsigned key = order[m];
-				order[m] = order[m - 1];
-				order[m - 1] = key;
 				const int index = chosen[m];
 				chosen[m] = chosen[m - 1];
 				chosen[m - 1] = index;
@@ -334,10 +470,17 @@ namespace TerrainSkirt
 		float below[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 		for (int l = 0; l < layerCount; ++l)
 		{
-			layers[l] = chosen[l] == SITE_COUNT ? band : siteLayer(sites[chosen[l]], width, height);
+			const GrainShare &layer = taken[chosen[l]];
+			if (layer.patch < 0)
+				layers[l] = band;
+			else
+			{
+				layers[l] = siteLayer(sites[layer.patch], width, height);
+				layers[l].patch = order[chosen[l]];
+			}
 			for (int k = 0; k < 4; ++k)
 			{
-				const float share = shares[k][chosen[l]];
+				const float share = shares[chosen[l]][k];
 				below[k] += share;
 				alpha[l][k] = below[k] > 0.0f ? share / below[k] : 1.0f;
 			}
@@ -461,12 +604,23 @@ namespace TerrainSkirt
 		return base + HILL_HEIGHT * hills(worldX, worldY) * smooth(outside / HILL_RAMP);
 	}
 
+	/// The least a sea floor past the edge keeps under the water, world units (seaHeight).
+	const float SEA_MARGIN_LEAST = 2.0f;
+
 	/** Past an edge under water: the edge sample sliding to the blurred edge as on land, but held under
 		the water and with no hills and no pull to the land's mean, so a sea map's skirt stays sea floor
-		where it would otherwise climb out as a beach. */
+		where it would otherwise climb out as a beach.  Held as deep as the blurred edge lies under the
+		water, down to SEA_MARGIN_LEAST and no deeper than SEA_MARGIN: Tournament Island's sea floor is 4
+		under its water, and dropped to SEA_MARGIN past the edge it stood as a darker sea round a lighter
+		square of the map's own.  The blur, not the sample, or every rock on the edge ran out to the rim
+		as a ridge.  A blur that comes up out of the water (a beach along the edge) goes back to the whole
+		SEA_MARGIN over the last SEA_MARGIN_LEAST of depth, so the floor never steps along the ring. */
 	inline float seaHeight(float edge, float blurred, float waterZ, float outside)
 	{
-		const float floorZ = blurred < waterZ - SEA_MARGIN ? blurred : waterZ - SEA_MARGIN;
+		const float depth = waterZ - blurred;
+		const float margin = depth >= SEA_MARGIN_LEAST ? (depth < SEA_MARGIN ? depth : SEA_MARGIN)
+			: (depth <= 0.0f ? SEA_MARGIN : SEA_MARGIN - (SEA_MARGIN - SEA_MARGIN_LEAST) * depth / SEA_MARGIN_LEAST);
+		const float floorZ = blurred < waterZ - margin ? blurred : waterZ - margin;
 		return edge + (floorZ - edge) * smooth(outside / PROFILE_RAMP);
 	}
 

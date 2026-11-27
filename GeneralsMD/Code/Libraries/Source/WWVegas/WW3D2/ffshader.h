@@ -241,6 +241,31 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"    float gap = max(sun.z - blocker_depth, 0.0) * ShadowSoftness.z;\n" \
 	"    float radius = clamp(narrowest + gap * ShadowSoftness.y, narrowest, widest);\n" \
 	"\n" \
+	"    float blocked = 0.0;\n" \
+	"    // The turned grid below reads like a square 1.25 radii to a side of the pixel (five taps\n" \
+	"    // half a radius apart, each standing for half a radius), so the narrow filter is that same\n" \
+	"    // square and the two meet without a seam where the radius crosses 1.6.\n" \
+	"    float half_side = radius * 1.25;\n" \
+	"    if (half_side <= 2.0) {\n" \
+	"        // A narrow filter weighs each texel the square touches by how much of it lies inside.\n" \
+	"        // Point taps inside one texel all read the same answer, so a big caster's edge stepped\n" \
+	"        // in whole texels as soon as the fitted box made a texel wider than the filter; weighed\n" \
+	"        // by area the edge slides smoothly across them.  At two texels a side the five by five\n" \
+	"        // window holds the whole square.\n" \
+	"        float2 centre = map / texel;\n" \
+	"        float2 first = floor(centre) - 2.0;\n" \
+	"        for (int y = 0; y < 5; ++y) {\n" \
+	"            float row = first.y + y;\n" \
+	"            float weight_y = saturate(min(row + 1.0, centre.y + half_side) - max(row, centre.y - half_side));\n" \
+	"            for (int x = 0; x < 5; ++x) {\n" \
+	"                float column = first.x + x;\n" \
+	"                float weight_x = saturate(min(column + 1.0, centre.x + half_side) - max(column, centre.x - half_side));\n" \
+	"                float depth = ShadowMap.SampleLevel(ShadowSampler, (float2(column, row) + 0.5) * texel, 0).r;\n" \
+	"                blocked += (depth + bias < sun.z) ? weight_x * weight_y : 0.0;\n" \
+	"            }\n" \
+	"        }\n" \
+	"        blocked *= 25.0 / (4.0 * half_side * half_side);\n" \
+	"    } else {\n" \
 	"    // Five by five rather than three by three: opened up to nine texels, nine taps stand so\n" \
 	"    // far apart that a body as narrow as a helicopter's falls between them and casts nothing.\n" \
 	"    // The grid is turned by an angle, which trades the steps a fixed grid leaves across a wide\n" \
@@ -249,7 +274,6 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"    // as the camera moves, and a shadow that stands still shimmers.\n" \
 	"    float turn = frac(sin(dot(map * 4096.0, float2(12.9898, 78.233))) * 43758.5453) * 6.2831853;\n" \
 	"    float2 turn_cos_sin = float2(cos(turn), sin(turn));\n" \
-	"    float blocked = 0.0;\n" \
 	"    for (int y = -2; y <= 2; ++y) {\n" \
 	"        for (int x = -2; x <= 2; ++x) {\n" \
 	"            float2 step = float2(x, y) * 0.5;\n" \
@@ -259,6 +283,7 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"            float depth = ShadowMap.SampleLevel(ShadowSampler, at, 0).r;\n" \
 	"            blocked += (depth + bias < sun.z) ? 1.0 : 0.0;\n" \
 	"        }\n" \
+	"    }\n" \
 	"    }\n" \
 	"\n" \
 	"    // The sky is the other light in the scene and it fills a shadow back in the further its\n" \

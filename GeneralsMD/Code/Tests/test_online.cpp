@@ -3665,3 +3665,108 @@ TEST(online_friends_invites_and_room_passwords)
 		&& r[0].joinStagingRoom.id == 4 );
 	CHECK_EQ( OnlineSession::get().joiningGame, 0ll );
 }
+
+// Team vs AI (TEAM-VS-AI.md phase 1): hello says teamai, a party by invite outside a room, the ask answered,
+// and the team ai.ready read by a member who never pressed Play
+TEST(online_team_ai_party_ask_and_ready)
+{
+	CHECK_EQ( OnlineHelloLine( 1, 2, "4.1.0" ).getInt( "teamai" ), 1ll );
+
+	AdapterRig rig;
+	rig.feed( "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094,\"friends\":1,\"teamai\":1}" );
+	rig.login();
+	CHECK( OnlineTeamAIAvailable() );
+
+	// outside a room an invite is a party's, with no game
+	OnlineInviteFriend( 9 );
+	CHECK( rig.sent.size() == 1 && rig.sentType( 0 ) == "invite" && rig.sent[0].getInt( "to" ) == 9 && !rig.sent[0].has( "game" ) );
+	rig.sent.clear();
+
+	// a party invite to us is listed as game 0, mode teamai, and its answer joins no room
+	rig.feed( "{\"t\":\"invite\",\"from\":8,\"nick\":\"Amy\",\"game\":0,\"name\":\"\",\"mode\":\"teamai\",\"map\":\"\"}" );
+	std::vector<OnlineInvite> invites;
+	OnlineGetInvites( invites );
+	CHECK( invites.size() == 1 && invites[0].game == 0 && invites[0].mode == "teamai" );
+	OnlineAnswerInvite( 8, 0, TRUE );
+	CHECK( rig.sent.size() == 1 && rig.sentType( 0 ) == "invite.answer" && rig.sent[0].getInt( "game" ) == 0 && rig.sent[0].getBool( "ok" ) );
+	CHECK_EQ( OnlineSession::get().joiningGame, 0ll );
+	rig.sent.clear();
+
+	rig.feed( "{\"t\":\"party\",\"leader\":8,\"members\":[{\"id\":8,\"nick\":\"Amy\"},{\"id\":7,\"nick\":\"Tank\"}]}" );
+	std::vector<OnlinePartyMember> party;
+	const UnsignedInt serial = OnlineGetParty( party );
+	CHECK( serial != 0 && party.size() == 2 && party[0].id == 8 && party[0].nick == "Amy" && party[1].id == 7 );
+
+	// Amy pressed Play: the hub reads the ask once and answers it
+	rig.feed( "{\"t\":\"ai.team.ask\",\"matchId\":\"m1\",\"from\":8,\"nick\":\"Amy\"}" );
+	AsciiString match, from;
+	CHECK( OnlineTakeTeamAsk( match, from ) && match == "m1" && from == "Amy" );
+	CHECK( !OnlineTakeTeamAsk( match, from ) );
+	OnlineAnswerTeamAsk( match, "FactionGLA" );
+	CHECK( rig.sent.size() == 1 && rig.sentType( 0 ) == "ai.team.ok" && rig.sent[0].getString( "matchId" ) == "m1"
+		&& rig.sent[0].getString( "army" ) == "FactionGLA" );
+
+	// the team's ai.ready comes unasked; the report of that network match carries its id
+	CHECK( !OnlineIsTeamAIMatchReady() );
+	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m1\",\"team\":1,\"map\":\"maps\\\\t4\\\\t4.map\",\"seed\":77,\"speed\":150,\"botElo\":1450,"
+		"\"bots\":2,\"ids\":[8,7],\"nicks\":[\"Amy\",\"Tank\"],\"vips\":[167772164,167772163],\"armies\":[\"3\",\"FactionGLA\"]}" );
+	CHECK( OnlineIsTeamAIMatchReady() );
+	OnlineAIMatch ai;
+	CHECK_EQ( (Int)OnlineGetAIMatch( ai ), (Int)ONLINE_AI_READY );
+	CHECK( ai.match == "m1" && ai.humans == 2 && ai.bots == 2 && ai.seed == 77 && ai.speed == 150 );
+	CHECK( ai.aiRating > 1449.0f && ai.aiRating < 1451.0f );
+	CHECK( ai.nick[0] == "Amy" && ai.nick[1] == "Tank" && ai.vip[1] == 167772163u && ai.army[1] == "FactionGLA" );
+	CHECK( !OnlineIsTeamAIMatchReady() && !OnlineIsAIMatchLive() );		// no ai.result for it: the relay match's report
+	CHECK( OnlineSession::get().matchId == "m1" );
+	CHECK( OnlineSession::get().quickMatch.empty() );		// unrated: its replay stays home
+
+	// its ai.tick goes under the team match, every half minute as Play vs AI's
+	rig.sent.clear();
+	OnlineSendAITick( 30 );
+	CHECK( rig.sent.empty() );
+	OnlineSession::get().aiTickMs -= ONLINE_AI_TICK_SECONDS * 1000 + 1;
+	OnlineSendAITick( 900 );
+	CHECK( rig.sent.size() == 1 && rig.sentType( 0 ) == "ai.tick" && rig.sent[0].getString( "matchId" ) == "m1" && rig.sent[0].getInt( "frame" ) == 900 );
+
+	// a rated one's replay goes up under its id
+	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m3\",\"team\":1,\"rated\":true,\"map\":\"m\",\"seed\":3,\"ids\":[8,7],\"nicks\":[\"Amy\",\"Tank\"],"
+		"\"vips\":[1,167772163],\"bots\":2}" );
+	CHECK_EQ( (Int)OnlineGetAIMatch( ai ), (Int)ONLINE_AI_READY );
+	CHECK( OnlineSession::get().quickMatch == "m3" );
+
+	// out of the party
+	rig.feed( "{\"t\":\"party\",\"leader\":0,\"members\":[]}" );
+	OnlineGetParty( party );
+	CHECK( party.empty() );
+
+	// the queue: asked with size and army, its state off ai.team.queued, out again by a team's ai.ready
+	rig.sent.clear();
+	OnlineQueueTeamAI( 3, "FactionChina", 150 );
+	CHECK( rig.sent.size() == 1 && rig.sentType( 0 ) == "ai.team.queue" && rig.sent[0].getInt( "size" ) == 3
+		&& rig.sent[0].getString( "army" ) == "FactionChina" && rig.sent[0].getInt( "speed" ) == 150 );
+	CHECK_EQ( OnlineGetTeamAIQueue(), 0 );
+	rig.feed( "{\"t\":\"ai.team.queued\",\"size\":3,\"members\":1}" );
+	CHECK_EQ( OnlineGetTeamAIQueue(), 3 );
+	OnlineLeaveTeamAIQueue();
+	CHECK( rig.sent.size() == 2 && rig.sentType( 1 ) == "ai.team.unqueue" );
+	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m2\",\"team\":1,\"map\":\"m\",\"seed\":2,\"ids\":[8,7,9],\"nicks\":[\"Amy\",\"Tank\",\"Zed\"],"
+		"\"vips\":[1,167772163,3],\"bots\":3}" );
+	CHECK_EQ( OnlineGetTeamAIQueue(), 0 );
+	CHECK_EQ( (Int)OnlineGetAIMatch( ai ), (Int)ONLINE_AI_READY );
+	CHECK( ai.humans == 3 && ai.bots == 3 && ai.army[2] == "Random" );
+}
+
+TEST(online_team_ai_needs_the_welcome)
+{
+	AdapterRig rig;
+	friendsLogin( rig, true );		// friends:1, no teamai
+	CHECK( !OnlineTeamAIAvailable() );
+	OnlineInviteFriend( 9 );		// outside a room: nothing to send to this server
+	CHECK_EQ( rig.sent.size(), (size_t)0 );
+	rig.feed( "{\"t\":\"invite\",\"from\":8,\"nick\":\"Amy\",\"game\":0,\"name\":\"\",\"mode\":\"teamai\",\"map\":\"\"}" );
+	std::vector<OnlineInvite> invites;
+	OnlineGetInvites( invites );
+	CHECK( invites.empty() );
+	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m1\",\"team\":1,\"map\":\"m\",\"seed\":1,\"ids\":[8,7],\"nicks\":[\"Amy\",\"Tank\"],\"vips\":[1,2]}" );
+	CHECK( !OnlineIsTeamAIMatchReady() );
+}

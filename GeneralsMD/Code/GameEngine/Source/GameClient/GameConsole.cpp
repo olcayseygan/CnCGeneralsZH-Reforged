@@ -157,8 +157,8 @@ static const ConsoleHelpLine CONSOLE_HELP[] =
 	{ TRUE,		"speed [n]     game speed in percent of retail, 100 125 150 200, 'reset' the native one" },
 	{ TRUE,		"freecam       photo mode: fly the camera anywhere, the whole map drawn, no interface." },
 	{ TRUE,		"              W/S forward and back, A/D left and right, R up, F down, mouse turns," },
-	{ TRUE,		"              Shift faster; Esc or 'freecam' again lands.  'freecam x y z heading tilt'" },
-	{ TRUE,		"              flies to a pose, angles in degrees" },
+	{ TRUE,		"              wheel narrows and widens the lens, Shift faster; Esc or 'freecam' again" },
+	{ TRUE,		"              lands.  'freecam x y z heading tilt [fov]' flies to a pose, angles in degrees" },
 	{ TRUE,		"director      observer: the director camera on, again gives the camera back" },
 	{ TRUE,		"pause, resume open and close the Esc menu, single player only" },
 	{ TRUE,		"hidehud       the interface off, again brings it back; showmap=true keeps the radar" },
@@ -310,7 +310,7 @@ static AsciiString runSetOption( AsciiString arguments )
 	* logic, so it is offered in every match, network games and replays included. */
 //-------------------------------------------------------------------------------------------------
 static const char *const FREECAM_HELP =
-	"freecam on: W/S forward and back, A/D left and right, R up, F down, mouse turns, Shift faster; Esc or 'freecam' lands";
+	"freecam on: W/S forward and back, A/D left and right, R up, F down, mouse turns, wheel zooms the lens, Shift faster; Esc or 'freecam' lands";
 static const UnsignedInt FREECAM_STARTUP_FRAME = 2;	///< -freecam waits for the map's own opening view to land
 
 static AsciiString theStartupFreeCamera;		///< -freecam's console line, run once the match is up
@@ -326,7 +326,8 @@ static AsciiString describeFreeCameraPose( void )
 	Real heading, tilt;
 	TheTacticalView->getFreeCameraPose( &eye, &heading, &tilt );
 	AsciiString result;
-	result.format( "%.0f %.0f %.0f %.1f %.1f", eye.x, eye.y, eye.z, heading * 180.0f / PI, tilt * 180.0f / PI );
+	result.format( "%.0f %.0f %.0f %.1f %.1f %.1f", eye.x, eye.y, eye.z, heading * 180.0f / PI, tilt * 180.0f / PI,
+		TheTacticalView->getFreeCameraFov() * 180.0f / PI );
 	return result;
 }
 
@@ -421,21 +422,23 @@ static AsciiString runFreeCamera( AsciiString arguments )
 		return result;
 	}
 
-	Real pose[ 5 ];
+	Real pose[ 6 ];
 	const Int given = arguments.isEmpty() ? 0
-		: sscanf( arguments.str(), "%f %f %f %f %f", &pose[ 0 ], &pose[ 1 ], &pose[ 2 ], &pose[ 3 ], &pose[ 4 ] );
-	if( !arguments.isEmpty() && given != 5 )
+		: sscanf( arguments.str(), "%f %f %f %f %f %f", &pose[ 0 ], &pose[ 1 ], &pose[ 2 ], &pose[ 3 ], &pose[ 4 ], &pose[ 5 ] );
+	if( !arguments.isEmpty() && given != 5 && given != 6 )
 	{
-		result = "freecam: takes nothing, or x y z heading tilt with the angles in degrees";
+		result = "freecam: takes nothing, or x y z heading tilt [fov] with the angles in degrees";
 		return result;
 	}
 
-	if( given == 5 )
+	if( given >= 5 )
 	{
 		TheTacticalView->setFreeCamera( TRUE );
 		Coord3D eye;
 		eye.set( pose[ 0 ], pose[ 1 ], pose[ 2 ] );
 		TheTacticalView->setFreeCameraPose( &eye, pose[ 3 ] * PI / 180.0f, pose[ 4 ] * PI / 180.0f );
+		if( given == 6 )
+			TheTacticalView->setFreeCameraFov( pose[ 5 ] * PI / 180.0f );
 	}
 	else if( TheTacticalView->isFreeCamera() )
 	{
@@ -1400,10 +1403,20 @@ GameMessageDisposition GameConsoleTranslator::translateGameMessage( const GameMe
 			return KEEP_MESSAGE;
 		}
 
-		// the wheel carries no position, and the cursor's moves are everybody's
+		// the cursor's moves are everybody's
 		case GameMessage::MSG_RAW_MOUSE_POSITION:
-		case GameMessage::MSG_RAW_MOUSE_WHEEL:
 			return freeCamera ? DESTROY_MESSAGE : KEEP_MESSAGE;
+
+		// in the freecam the wheel is the lens: up narrows it, a notch an eighth tighter, down widens it
+		case GameMessage::MSG_RAW_MOUSE_WHEEL:
+			if( !freeCamera )
+				return KEEP_MESSAGE;
+			if( !TheGameConsole->isOpen() )
+			{
+				const Real notches = msg->getArgument( 1 )->real;
+				TheTacticalView->setFreeCameraFov( TheTacticalView->getFreeCameraFov() * powf( 0.88f, notches ) );
+			}
+			return DESTROY_MESSAGE;
 	}
 
 	// the freecam's mouse only turns the view (W3DView reads the pointer itself): no click selects,

@@ -4239,7 +4239,9 @@ void RMGLayout::ringStarts( const std::vector<RMGStartCandidate>& candidates, Re
 			}
 		}
 
-		if( !anyUnused )
+		// a ring with no site clear of the floor seats nobody, as one that ran out of sites: ladder seed
+		// 312's river ring put its two seats 3 cells apart, and the search after it keeps the floor
+		if( !anyUnused || ( !m_starts.empty() && !foundClear ) )
 			break;
 
 		used[best] = 1;
@@ -4307,6 +4309,20 @@ void RMGLayout::searchStarts( const std::vector<RMGStartCandidate>& candidates )
 				bestScore = score;
 				bestCandidate = i;
 				foundClearOne = clearOfTheFloor;
+			}
+		}
+
+		/* Every candidate left inside the floor: the flat sites can all sit in one patch of ground (two
+			starts 3 cells apart on ladder seeds 312 and 315), so the seat goes to the dry cell furthest
+			from the others, which flattenBases levels, when that one clears the floor. */
+		if( foundAny && !foundClearOne && addDryStart() )
+		{
+			const RMGPoint dry = m_starts.back();
+			m_starts.pop_back();
+			if( distanceToNearestStart( dry.m_cellX, dry.m_cellY ) >= hardFloor )
+			{
+				m_starts.push_back( dry );
+				continue;
 			}
 		}
 

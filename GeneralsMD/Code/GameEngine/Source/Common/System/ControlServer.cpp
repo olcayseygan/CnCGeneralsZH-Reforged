@@ -1982,6 +1982,25 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
+	/* wheel <notches>
+		 The mouse wheel turned that many notches, up positive, as Mouse.cpp sends it: the zoom, the
+		 freecam's lens and a list box's scroll all read it.  Fractions are a touchpad's small turns. */
+	if (strncmp( command.str(), "wheel ", 6 ) == 0)
+	{
+		Real notches = 0.0f;
+		if (sscanf( command.str() + 6, "%f", &notches ) != 1 || TheMouse == NULL)
+		{
+			replyError( "wheel wants a number of notches, up positive" );
+			return;
+		}
+		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_WHEEL );
+		msg->appendPixelArgument( TheMouse->getMouseStatus()->pos );
+		msg->appendRealArgument( notches );
+		msg->appendIntegerArgument( KEY_STATE_NONE );
+		replyOk( "\"wheeled\":true" );
+		return;
+	}
+
 	/* spectator <action>
 		 One of the spectator's actions by name: camera:director, follow:3, fog, flip:camera and the
 		 rest that InGameUI::runSpectatorAction knows. */

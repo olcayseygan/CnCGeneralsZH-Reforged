@@ -1,0 +1,29 @@
+# Apocalypse: every seat on one lobby team falls, and the match ends (2026-11-26, TODO Apocalypse
+# Roster batches 17 and 18). Before, a room whose seats all sat on one team never loaded the
+# multiplayer victory and defeat scripts (GameLogic::startNewGame counted one team), so the last seat
+# falling brought no end window, no end timer and no score screen.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 2 normal apocalypse -autoskirmish 2 -takeover -team 0 0 -team 1 0
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 3 -maxframes 6000
+#     -scenario apoc_fall -logPrefix apoc_fall_
+#
+# Drawn (to see the end screen, SURVIVED m:ss and no Defeat): the same without -headless and
+# -observer, with -win -xres 1920 -yres 1080.
+#
+# Read: 'the multiplayer victory and defeat scripts go in (1 lobby teams)' at the start, then
+# 'HEADLESS APOCALYPSE: ... every seat has fallen' and both seats out. Pass: the scripts line is there,
+# both seats fall before frame 6000, and the run ends on the end timer before -maxframes.
+
+# a horde on each start, before the first wave; the director adopts them as strays
+10    spawn      civilian  ApocalypseZombieJuggernaut   6   start0:0:160      20
+10    spawn      civilian  ApocalypseZombieBrute        12  start0:160:0      15
+10    spawn      civilian  ApocalypseZombieJuggernaut   6   start1:0:160      20
+10    spawn      civilian  ApocalypseZombieBrute        12  start1:160:0      15
+20    stance     0         *                            defensive
+20    stance     1         *                            defensive
+
+300   tally      0         *
+300   tally      1         *
+1200  tally      0         *
+1200  tally      1         *

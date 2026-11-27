@@ -394,6 +394,13 @@ static const HeatLook HEAT_LOOKS[ 2 ] =
 	{ HEAT_EXHAUST_MIN_RADIUS, HEAT_EXHAUST_MAX_RADIUS, 0.0f, 1.0f, HEAT_EXHAUST_AMPLITUDE, HEAT_EXHAUST_MAX_SHIFT, HEAT_EXHAUST_FULL, HEAT_EXHAUST_GROWN, HEAT_EXHAUST_CLEARANCE }
 };
 
+// A heat source that draws nothing (HeatHaze on a blended template: a gun's barrels after a long
+// burst). It bends a sleeve round the barrels wider than a missile trail's 3 to 7, rising a little,
+// and over twice as hard as a fire: at a fire's strength the Comanche's burst only softened the
+// ground under its nose in a still (2026-11-27).
+static const HeatLook HEAT_BARREL_LOOK =
+	{ 12.0f, 18.0f, 0.5f, 1.4f, 0.5f, 0.013f, 6.0f, 0.0f, 12.0f };
+
 // A glowing laser's air (W3DLaserDraw::gatherHeat). No depth to hide behind, so the beam is kept
 // still by a band along it instead; HEAT_HAZE_CLEARANCE still keeps the unit it hits.
 static const Real HEAT_BEAM_RADIUS_SCALE = 0.5f;	///< a splat's radius over the halo's whole width: 5 to 11 for EA's lasers
@@ -427,9 +434,11 @@ static void gatherHeatHaze( CameraClass &camera, const std::vector<ParticleSyste
 	for (Int kind = 0; kind < 2; ++kind)
 	for (size_t i = 0; i < ( kind ? exhausts : fires ).size() && count < (Int)DIRECT3D11_HEAT_SPLAT_LIMIT; ++i)
 	{
-		const HeatLook &look = HEAT_LOOKS[ kind ];
+		ParticleSystem *sys = ( kind ? exhausts : fires )[ i ];
+		const HeatLook &look = ( kind && sys->getTemplate()->isHeatHaze() && sys->getShaderType() != ParticleSystemInfo::ADDITIVE )
+			? HEAT_BARREL_LOOK : HEAT_LOOKS[ kind ];
 		FireLights::Flames flames;
-		sumFlames( ( kind ? exhausts : fires )[ i ], flames );
+		sumFlames( sys, flames );
 		if (flames.w <= 0.0f)
 			continue;
 		Real strength = flames.w * ( kind ? exhaustFades : fireFades )[ i ] / look.full;
@@ -438,7 +447,9 @@ static void gatherHeatHaze( CameraClass &camera, const std::vector<ParticleSyste
 		const Vector3 centre( flames.x / flames.w, flames.y / flames.w, flames.z / flames.w );
 		const Real spread = flames.sq / flames.w - centre.Length2();
 		Real radius = spread > 0.0f ? WWMath::Sqrt( spread ) : 0.0f;
-		if (look.grown > 0.0f && radius < look.grown)
+		// a HeatHaze source riding a drawable (a hot barrel) sits still and small: it is not a trail
+		// that has to grow away from its launcher first
+		if (look.grown > 0.0f && radius < look.grown && !( sys->getTemplate()->isHeatHaze() && !sys->hasRiddenObject() ))
 			strength *= radius / look.grown;
 		radius = radius < look.minRadius ? look.minRadius : radius > look.maxRadius ? look.maxRadius : radius;
 
@@ -2407,6 +2418,15 @@ void W3DParticleSystemManager::refreshFrameView( void )
 			view.owner = sys->getAttachedDrawableObjectForDraw();
 		else view.owner = sys->getAttachedObject();
 #endif
+		// a heat source that draws nothing (HeatHaze on a blended template, a hot gun barrel) is heat
+		// only: its near-transparent cards stacked into a grey smudge and cast into the smoke map when
+		// drawn, so it never joins the view and only the haze reads it
+		if (sys->getTemplate()->isHeatHaze() && sys->getShaderType() != ParticleSystemInfo::ADDITIVE)
+		{
+			m_frameExhausts.push_back( sys );
+			m_frameExhaustFades.push_back( fade );
+			continue;
+		}
 		m_frameView.push_back( view );
 		if (sys->getTemplate()->isFireLook()
 				&& (sys->getShaderType() == ParticleSystemInfo::ADDITIVE || sys->getTemplate()->isEmissive()))
@@ -2419,8 +2439,9 @@ void W3DParticleSystemManager::refreshFrameView( void )
 		// flame (MissileExhaust, the Stinger's, the Raptor's); the smoke trails (Scud, Tomahawk, TOW)
 		// blend, and laser flares are placed rather than attached to an object. hasRiddenObject stays
 		// set once the missile has hit, so the trail's haze fades with it instead of going in a frame.
-		else if (sys->getPriority() == WEAPON_TRAIL && sys->getShaderType() == ParticleSystemInfo::ADDITIVE
-				&& sys->hasRiddenObject())
+		// A template marked HeatHaze (an afterburner, a hot gun barrel) joins them whatever it is.
+		else if ((sys->getPriority() == WEAPON_TRAIL && sys->getShaderType() == ParticleSystemInfo::ADDITIVE
+				&& sys->hasRiddenObject()) || sys->getTemplate()->isHeatHaze())
 		{
 			m_frameExhausts.push_back( sys );
 			m_frameExhaustFades.push_back( fade );

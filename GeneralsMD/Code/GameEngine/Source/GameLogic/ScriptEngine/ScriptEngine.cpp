@@ -497,6 +497,7 @@ m_fade(FADE_NONE),
 m_freezeByScript(FALSE),
 m_inputHeldByScript(FALSE),
 m_frameObjectCountChanged(0),
+m_frameObjectCountChangedFromSave(0),
 //Added By Sadullah Nader
 //Initializations inserted
 m_closeWindowTimer(0),
@@ -5344,6 +5345,7 @@ void ScriptEngine::reset( void )
 	m_currentPlayer = NULL;
 	m_skirmishHumanPlayer = NULL;
 	m_frameObjectCountChanged = 0;
+	m_frameObjectCountChangedFromSave = 0;
 
 	m_shownMPLocalDefeatWindow = FALSE;
 
@@ -9207,6 +9209,7 @@ void ScriptEngine::setGlobalDifficulty( GameDifficulty difficulty )
 	* 6: m_inputHeldByScript (fork)
 	* 7: countdown timers' retail-tick phase, kept through a world freeze (fork)
 	* 8: the scripts queued behind each sequential script (m_nextScriptInSequence) (fork)
+	* 9: m_frameObjectCountChanged (fork)
 	*/
 // ------------------------------------------------------------------------------------------------
 void ScriptEngine::xfer( Xfer *xfer )
@@ -9214,7 +9217,7 @@ void ScriptEngine::xfer( Xfer *xfer )
 	Int i;
 
 	// version
-	const XferVersion currentVersion = 8;
+	const XferVersion currentVersion = 9;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -9731,6 +9734,13 @@ void ScriptEngine::xfer( Xfer *xfer )
 		m_countdownTimerFrame = 0;
 	}
 
+	// The last frame an object was made or destroyed, which the conditions that count objects check
+	// their cached answers against.  Making every object stamps the load's frame on it, so the save's
+	// goes back in loadPostProcess; a save from before version 9 keeps that stamp.
+	m_frameObjectCountChangedFromSave = m_frameObjectCountChanged;
+	if (version >= 9)
+		xfer->xferUnsignedInt(&m_frameObjectCountChangedFromSave);
+
 	if( xfer->getXferMode() == XFER_LOAD ) {
 		// We are doing a load.  If there is no fade active, do a black fade in to start.
 		if (m_fade == FADE_NONE) {
@@ -9755,6 +9765,8 @@ void ScriptEngine::loadPostProcess( void )
 	// Now that we've loaded everything, go through and set them all back in sync with what we
 	// currently think they should be.
 	TheScriptActions->doEnableOrDisableObjectDifficultyBonuses(m_objectsShouldReceiveDifficultyBonus);
+
+	m_frameObjectCountChanged = m_frameObjectCountChangedFromSave;
 
 	if (m_currentTrackName.isNotEmpty())
 	{

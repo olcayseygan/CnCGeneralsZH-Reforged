@@ -15,8 +15,9 @@
 # 'alive by kind' line. Pass:
 #   A Crawlers 560 out from start 0 on four sides, outside the basin's wall: at least one 'the dead:'
 #     line before logic frame 1200 says 1 or more on a cliff (they climb the wall, no pass needed).
-#   B 3 Humvees vs 2 Gasbags: a civilian PoisonFieldSmall tally of 1 or more at one of 300, 600, 900
-#     or 1200 (the cloud stays where one died), the Humvees' 1700 tally at least 2.
+#   B 3 Humvees vs 2 Gasbags: a civilian ApocalypsePoisonField tally of 1 or more at one of 300, 600,
+#     900 or 1200 (the cloud stays where one died; since 2026-11-26 it spares the dead), the Humvees'
+#     1700 tally at least 2.
 #   C 4 Rangers vs 3 Burners: the Rangers' 1700 tally at most 1 (they burn), a civilian
 #     FireFieldSmall tally of 1 or more at one of 600, 900 or 1200 once a Burner fell;
 #     D 2 Humvees (the Air Force General's, a template apart so its tally is D's alone) vs 2 Burners:
@@ -58,13 +59,14 @@
 10    spawn      1         StanSmallRetail01            1   start1:-150:150
 10    spawn      1         ChinaInfantryRedguard        5   start1:-150:220   10
 40    enter      1         ChinaInfantryRedguard        1   StanSmallRetail01
-150   spawn      civilian  ApocalypseZombieBileLobber   2   start1:-150:430   15
+# (start1:-150:430 is a cliff cell on seed 3 and refused the spawn, 2026-11-24)
+150   spawn      civilian  ApocalypseZombieBileLobber   2   start1:-150:330   15
 20    stance     1         *                            defensive
 
-300   tally      civilian  PoisonFieldSmall
-600   tally      civilian  PoisonFieldSmall
-900   tally      civilian  PoisonFieldSmall
-1200  tally      civilian  PoisonFieldSmall
+300   tally      civilian  ApocalypsePoisonField
+600   tally      civilian  ApocalypsePoisonField
+900   tally      civilian  ApocalypsePoisonField
+1200  tally      civilian  ApocalypsePoisonField
 600   tally      civilian  FireFieldSmall
 900   tally      civilian  FireFieldSmall
 1200  tally      civilian  FireFieldSmall

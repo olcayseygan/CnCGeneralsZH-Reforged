@@ -98,6 +98,13 @@ public:
 	// of our effect on people.  We don't say "Be affected for n frames", we toggle people.  We need to process
 	// so we can toggle everyone off.
 	virtual DisabledMaskType getDisabledTypesToProcess() const { return DISABLEDMASK_ALL; }
+
+	/// how far it mends, 0 for a tower that only cheers (Turkiye's Siper): what a computer player sends a hurt unit to
+	Real getMendRadius() const
+	{
+		const PropagandaTowerBehaviorModuleData *d = getPropagandaTowerBehaviorModuleData();
+		return ( d->m_autoHealPercentPerSecond > 0.0f || d->m_upgradedAutoHealPercentPerSecond > 0.0f ) ? d->m_scanRadius : 0.0f;
+	}
 	
 	// our own public module methods
 

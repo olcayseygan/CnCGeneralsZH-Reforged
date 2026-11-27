@@ -4407,6 +4407,36 @@ GUI:SuperweaponTurkiyeKarguSwarm
 "Kargu Swarm"
 END
 
+// The superweapon countdowns' names, written across the top of each cameo in the top right
+// (InGameUI's superweapon tray), where the whole name is wider than the picture
+GUI:SuperweaponParticleUplinkCannon_Short
+"Particle"
+END
+
+GUI:SupW_SuperweaponParticleUplinkCannon_Short
+"Particle"
+END
+
+GUI:Lazr_SuperweaponParticleUplinkCannon_Short
+"Particle"
+END
+
+GUI:SuperweaponNeutronMissile_Short
+"Nuke"
+END
+
+GUI:Nuke_SuperweaponNeutronMissile_Short
+"Nuke"
+END
+
+GUI:SuperweaponScudStorm_Short
+"Scud"
+END
+
+GUI:SuperweaponTurkiyeKarguSwarm_Short
+"Kargu"
+END
+
 GUI:RandomMapTemplate
 "Map type"
 END
@@ -5214,6 +5244,18 @@ GUI:OnlineAIRefused_build
 "Your game files differ from the release. Update the game from the launcher, then try again."
 END
 
+GUI:OnlineAIRefused_partner
+"Your party partner did not answer. Both of you need to be on the online home screen."
+END
+
+GUI:OnlineAIRefused_partnerbuild
+"Your party partner's game files differ from the release. They need to update from the launcher."
+END
+
+GUI:OnlineAIRefused_partnerbusy
+"Your party partner is in another match or search."
+END
+
 GUI:OnlineAIRefused_pending
 "Your last match against the AI is still being rated. Try again in a moment."
 END
@@ -5361,6 +5403,10 @@ END
 
 GUI:OnlineUnrated_custom
 "Custom games are not rated."
+END
+
+GUI:OnlineUnrated_teamai
+"Team vs AI matches are not rated yet."
 END
 
 GUI:OnlineUnrated_desync

@@ -124,6 +124,30 @@ enum
 	AIKNOB_SECOND_BASE	= 1024,	///< a base away from home is a war factory on the rung's timer, as before it was a Command Center founded once home is full
 	AIKNOB_KILL_ZONES		= 2048,	///< no loss map, no hold on attacks that do not beat the known guns, no regrouping instead of a lone hunt, the enemy's defences not in the pressure, as before them
 	AIKNOB_PRESSURE			= 4096,	///< no spare guards sent from home, the gun hold a flat 180 game seconds and the smallest attack rising past Hard, as before 2026-11-23
+	AIKNOB_TEAM_PLAY		= 8192,	///< a Normal seat neither joins an ally's attack nor sends its home units into an ally's hit base, as before 2026-11-27
+	AIKNOB_DEAR_PULL		= 16384,	///< a hurt unit at rank 0 fights on however dear it was, as before 2026-11-27
+	AIKNOB_HOME_STRETCH	= 32768,	///< a plan entry moved off an unsafe spot looks inside the base only, never on the stretched edge behind it, as before 2026-11-27
+	AIKNOB_IDENTITY			= 65536,	///< no general's own moves (AIIdentity.h): every general plays the shared AI, as before 2026-11-27
+	AIKNOB_MENDERS			= 131072,	///< a hurt unit pulled out is sent to a repair or heal dock only, never into a heal aura or a tunnel, as before 2026-11-27
+	AIKNOB_BIB_GAP			= 262144,	///< the AI's three-cell building margin counted twice on the other building's short side, EA's sum, as before 2026-11-27
+	AIKNOB_DEAR_STAY		= 524288,	///< a hurt dear unit is pulled out of a fight its team is winning too, as before 2026-11-27
+	AIKNOB_ROUTE_HOME		= 1048576,	///< a hurt unit pulled out to a dock or tunnel walks there straight, through what the map shows, as before 2026-11-27
+	AIKNOB_ROCKVEE			= 2097152,	///< a transport kites at its own gun's reach, and riders board in the order they were found, as before 2026-11-27
+	AIKNOB_SCOUTING			= 4194304,	///< scouts walk the start positions only, reveal powers wait for the scripts, and an enemy's shape is read through the fog, as before 2026-11-27
+	AIKNOB_POWER_HOLD		= 8388608,	///< a ready strike fires at once on whatever it finds, as before 2026-11-27
+	AIKNOB_HARASS				= 16777216,	///< only the Raider raids, and its raiders never withdraw, as before 2026-11-27
+	AIKNOB_GARRISON			= 33554432,	///< no unit is sent to clear an enemy-held building, as before 2026-11-27
+	AIKNOB_ATTENTION		= 67108864,	///< no attention budget: the micro looks at every unit on every turn, as before 2026-11-27
+	AIKNOB_FLANK				= 134217728,	///< a wave walks its authored road however gunned, as before 2026-11-27
+	AIKNOB_SIEGE_LEAD		= 268435456,	///< a siege gun out with a wave walks SHELL_WALK for a defence at every rating, as before 2026-11-27
+	AIKNOB_PLANS				= 536870912,	///< a Random seat draws any of thirteen personalities alike, as before 2026-11-27
+	AIKNOB_AMBUSH				= 1073741824,	///< no ambush tunnel, and the raiders never wait in the network, as before 2026-11-27; the last bit an Int mask holds
+};
+
+/** ... and the knobs past the first mask's 31 bits, in m_aiKnobsOffMask2, by the same -aiknobsoff names. */
+enum AIKnobsOff2
+{
+	AIKNOB2_BROKE_CENTER	= 1,	///< a broke seat with a supply center asked for rebuilds its other buildings first, as before 2026-11-27
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -519,6 +543,7 @@ public:
 	Int m_noTacticsSlotParity;			///< -notactics even|odd: those slots of a skirmish fight without Hard's unit tactics; -1 none
 	Int m_aiKnobsOffParity;				///< -aiknobsoff even|odd|all <names>: those slots of a skirmish play with these profile knobs off; -1 none, 2 all
 	Int m_aiKnobsOffMask;					///< ... which knobs: AIKNOB_* bits
+	Int m_aiKnobsOffMask2;				///< ... and AIKNOB2_* bits
 	Int m_autoSkirmishTeams;				///< -teams <n>: split the auto-skirmish slots into n allied teams (0 or 1 = free-for-all)
 	Int m_peaceTime;								///< -peacetime <n>: the lobby's peace time, in minutes, for an -autoskirmish run
 	Bool m_unitLimit;								///< -unitlimit: the lobby's unit limit for an -autoskirmish run
@@ -594,6 +619,8 @@ public:
 	AsciiString m_onlineHostGame;			///< -onlinehost <name>: host a custom game of this name once in the lobby
 	AsciiString m_onlineJoinGame;			///< -onlinejoin <name>: join the custom game of this name once it is listed
 	AsciiString m_onlineSay;					///< -onlinesay <text>: say this in the lobby and again in the staging room
+	AsciiString m_onlineParty;				///< -onlineparty <nick>: invite this friend to a Team vs AI party, then press Play vs AI once it is in
+	AsciiString m_onlinePartyJoin;		///< -onlinepartyjoin <nick>: take this friend's party invite
 	AsciiString m_onlineMap;					///< -onlinemap <map>: the map -onlinehost sets
 	AsciiString m_onlineOptions;			///< -onlineoptions <list>: the staging room controls the -onlinehost host works (prorules,turbo,unitlimit,randommap)
 	Int m_onlineStart;								///< -onlinestart [N]: the -onlinehost host starts the game at N players (0 = never, bare = 2)

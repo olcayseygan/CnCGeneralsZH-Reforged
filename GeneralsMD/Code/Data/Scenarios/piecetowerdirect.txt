@@ -11,7 +11,7 @@
 #     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
 #     -seed 1 -maxframes 9000 -scenario piecetowerdirect -logPrefix piecetowerdirect_
 #
-# Team B's tower stands at 3876,1805 on this map (rmg_v22_3_6p_642c_lane); the tanks start west of
+# Team B's tower stands at 3876,1805 on this map (rmg_v23_3_6p_642c_lane); the tanks start west of
 # it, out of its reach (225).
 # Tally frames are this file's 30 Hz frames; the log's are logic frames (two thirds of them at 1.5x).
 

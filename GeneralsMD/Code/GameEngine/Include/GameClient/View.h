@@ -291,6 +291,9 @@ public:
 	/// a shot list sets the pose every frame: the keys and the mouse fly nothing and the pointer is left alone
 	virtual void setFreeCameraScripted( Bool scripted ) { }
 	virtual void getFreeCameraPose( Coord3D *eye, Real *heading, Real *tilt ) const { }
+	/// the freecam's own horizontal field of view in radians, clamped; landing gives the player's lens back
+	virtual void setFreeCameraFov( Real angle ) { }
+	virtual Real getFreeCameraFov( void ) const { return 0.0f; }
 	/// which of the FreeCameraKeys are held
 	virtual void setFreeCameraKeys( UnsignedInt keys ) { }
 

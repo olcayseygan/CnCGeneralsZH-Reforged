@@ -10,7 +10,7 @@
 # Passes on: the Crusaders' health lost to the Nuke Cannon (tallies 30 to 600) about 60 percent of
 # what it was before; the Red Guards: before, every Pathfinder shot a kill (KILLXP killer=
 # AmericaInfantryPathfinder two seconds apart), after, two shots a kill; team A's tower losing the same
-# to a shell before and after. On this map (rmg_v22_3_6p_642c_lane) the middle is x 3210, team A's tower
+# to a shell before and after. On this map (rmg_v23_3_6p_642c_lane) the middle is x 3210, team A's tower
 # 2544,1805 and team B's 3876,1805, each reaching 225.
 
 30    spawn   0  AmericaTankCrusader       4  3000  1805  30

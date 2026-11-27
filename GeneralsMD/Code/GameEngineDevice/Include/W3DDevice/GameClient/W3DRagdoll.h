@@ -73,6 +73,22 @@ public:
 		render object it took over (a model swap): the caller deletes it and the animation takes over. */
 	Bool update( RenderObjClass *robj );
 
+	enum { MAX_SAVED_BONES = 64 };
+	/** The body's shape as a save keeps it: every bone's world position, and the drawable's height at
+		death that the sink is measured from.  Positions are world ones: a dead soldier's drawable does not
+		move but to sink.  The bones' turns are not kept: they are relative to the pose the ragdoll was
+		made from, which at load is another one, so they are found again from the positions. */
+	struct SavedPose
+	{
+		Int numBones;
+		Vector3 x[ MAX_SAVED_BONES ];
+		Real height0;
+	};
+	void savePose( SavedPose &out ) const;
+	/** A save's shape put on a ragdoll just made from the same model at load; FALSE when the skeleton
+		differs, and the ragdoll then falls from the pose it was made from. */
+	Bool restorePose( const SavedPose &in );
+
 private:
 	enum { MAX_BONES = 64, MAX_NEIGHBORS = 8, MAX_CONSTRAINTS = 192, MAX_OBSTACLES = 8, STOWED = -2 };
 
@@ -132,6 +148,7 @@ private:
 	void addConstraint( Int a, Int b, Real minD, Real maxD );
 	void step( Real dt, Bool gravity, Real sinkOffset );
 	Real worstStretch( Int *which ) const;	///< how far the constraint furthest out is, and which one
+	Bool fitTrunk( Int passes, Bool carryVelocity );	///< the trunk put back in its shape at death, turned to fit; FALSE with no trunk
 	void gatherObstacles( const Vector3 &at );	///< the vehicles and buildings the body could fall into
 	void collide( Vector3 &x );						///< a particle pushed out of them
 	void pose( RenderObjClass *robj, Real sinkOffset );
@@ -157,6 +174,7 @@ private:
 	Real m_height0;						///< the drawable's height over the drawn ground at death, when below it; the sink is measured from there
 	Int m_stillSteps;
 	Int m_heldAwake;					///< times it came to rest with its constraints still out
+	Bool m_rigidTrunk;				///< held awake once: the trunk is kept in its shape every constraint round from then on
 	Bool m_asleep;
 };
 

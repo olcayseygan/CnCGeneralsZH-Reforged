@@ -26,7 +26,7 @@
 // near zero length one, which rides on its parent.  Whatever else hangs off the mover is carried:
 // each bone off it, with everything under it, rides on the particle nearest any of its bones at death,
 // so the Ranger's BONE-GUN and MUZZLE01 stay in his hand and the Missile Defender's BONE_PACK on his
-// back.  A carried thing LONG_CARRIED or longer is drawn level and turned only about the vertical,
+// back; a shorter one never rides a leg, so his BONE_SIDEBAG stays on the hip.  A carried thing LONG_CARRIED or longer is drawn level and turned only about the vertical,
 // held where the hand held it and kept off the ground: following the hand's whole turn, a launcher
 // on the shoulder of a man who fell on his back stood upright out of him.  Such a thing is held by
 // an arm, never a toe; a bone of it far off its length (a ghillie flap under the Pathfinder's rifle)
@@ -229,6 +229,7 @@ W3DRagdoll::W3DRagdoll() :
 	m_height0( 0.0f ),
 	m_stillSteps( 0 ),
 	m_heldAwake( 0 ),
+	m_rigidTrunk( FALSE ),
 	m_asleep( FALSE )
 {
 }
@@ -413,6 +414,22 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 		arm[ i ] = up == shoulders;
 		numArm += arm[ i ] ? 1 : 0;
 	}
+	// the spine, from the body to the shoulders, and the legs: what hangs off it below the shoulders
+	Bool spine[ MAX_BONES ];
+	Bool leg[ MAX_BONES ];
+	for( Int i = 0; i < n; ++i )
+		spine[ i ] = leg[ i ] = FALSE;
+	for( Int s = shoulders; s >= 0; s = m_bone[ s ].simParent )
+		spine[ s ] = TRUE;
+	for( Int i = 0; i < n; ++i )
+	{
+		if( shoulders < 0 || m_bone[ i ].role != ROLE_PARTICLE || attach[ i ] || spine[ i ] )
+			continue;
+		Int up = i;
+		while( up >= 0 && !spine[ up ] )
+			up = m_bone[ up ].simParent;
+		leg[ i ] = up >= 0 && up != shoulders;
+	}
 
 	// a bone of a carried thing far off its first bone's length is something hanging from it (the
 	// Pathfinder's rifle holds a ghillie flap ten units below it): it rides along, but the thing is
@@ -444,7 +461,9 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 		// a long thing (a rifle, a launcher) is drawn level, held where the hand held it: riding the hand's
 		// turn, a launcher shouldered by a soldier lying on his back points at the sky
 		Bool level = extent >= LONG_CARRIED;
-		// held by the particle nearest any of its bones at death; a long one by an arm
+		// held by the particle nearest any of its bones at death; a long one by an arm, a short one never
+		// by a leg: the Missile Defender's BONE_SIDEBAG on the belt went with the thigh's swing and twist
+		// and lay through the hip, a brown corner out of the body
 		Real nearest = 1.0e9f;
 		for( Int k = r; k < n; ++k )
 		{
@@ -452,7 +471,7 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 				continue;
 			const Vector3 xk = w0[ k ].Get_Translation();
 			for( Int p = 1; p < n; ++p )
-				if( m_bone[ p ].role == ROLE_PARTICLE && !attach[ p ] && ( !level || numArm == 0 || arm[ p ] )
+				if( m_bone[ p ].role == ROLE_PARTICLE && !attach[ p ] && ( !level || numArm == 0 || arm[ p ] ) && ( level || !leg[ p ] )
 						&& ( xk - w0[ p ].Get_Translation() ).Length() < nearest )
 				{
 					nearest = ( xk - w0[ p ].Get_Translation() ).Length();
@@ -736,6 +755,11 @@ void W3DRagdoll::step( Real dt, Bool gravity, Real sinkOffset )
 			xa += corr;
 			xb -= corr;
 		}
+		// lengths alone hold a trunk that is nearly flat (a hunched back, the shoulders) only along its
+		// own plane: lying down, gravity pressed it into the ground's plane, where no correction can lift
+		// it again (HomelessGuy slept 0.09 out, SPINE1 to SPINE).  Once held awake it stays rigid.
+		if( m_rigidTrunk )
+			fitTrunk( 1, FALSE );
 		for( Int i = 1; i < m_numBones; ++i )
 		{
 			if( m_bone[ i ].role != ROLE_PARTICLE )
@@ -775,50 +799,25 @@ void W3DRagdoll::step( Real dt, Bool gravity, Real sinkOffset )
 	// its shape at death, turned the way that best fits where it lies, lifted clear of the ground, and
 	// left to settle again from there.
 	const Constraint &w = m_constraint[ worst ];
-	DEBUG_LOG(( "RAGDOLL: %s held awake, constraints %.3f out at worst, %.2f and %.2f over the floor\n", m_name, stretch,
-		m_bone[ w.a ].x.Z - floorZ[ w.a ], m_bone[ w.b ].x.Z - floorZ[ w.b ] ));
+	DEBUG_LOG(( "RAGDOLL: %s held awake, constraints %.3f out at worst, %.2f and %.2f over the floor (bones %d and %d, %s)\n", m_name, stretch,
+		m_bone[ w.a ].x.Z - floorZ[ w.a ], m_bone[ w.b ].x.Z - floorZ[ w.b ], w.a, w.b,
+		m_bone[ w.a ].trunk && m_bone[ w.b ].trunk ? "both trunk" : m_bone[ w.a ].trunk || m_bone[ w.b ].trunk ? "one trunk" : "neither trunk" ));
 	++m_heldAwake;
 	m_stillSteps = 0;
-	Vector3 centre( 0.0f, 0.0f, 0.0f );
-	Vector3 centre0( 0.0f, 0.0f, 0.0f );
-	Int count = 0;
-	for( Int i = 1; i < m_numBones; ++i )
+	// the warm start: how the trunk's first bone has turned, unless the trunk is already kept in shape
+	for( Int i = 1; i < m_numBones && !m_rigidTrunk; ++i )
 		if( m_bone[ i ].role == ROLE_PARTICLE && m_bone[ i ].trunk )
 		{
-			if( count == 0 )
-				m_trunkQ = m_bone[ i ].q;	// the warm start: how the trunk's first bone has turned
-			centre += m_bone[ i ].x;
-			centre0 += m_bone[ i ].x0;
-			++count;
+			m_trunkQ = m_bone[ i ].q;
+			break;
 		}
-	if( count < 3 )
+	if( !fitTrunk( 4, TRUE ) )
 		return;
-	centre /= (Real)count;
-	centre0 /= (Real)count;
-	Matrix3x3 A( Vector3( 0.0f, 0.0f, 0.0f ), Vector3( 0.0f, 0.0f, 0.0f ), Vector3( 0.0f, 0.0f, 0.0f ) );
-	for( Int i = 1; i < m_numBones; ++i )
-		if( m_bone[ i ].role == ROLE_PARTICLE && m_bone[ i ].trunk )
-		{
-			const Vector3 p = m_bone[ i ].x - centre;
-			const Vector3 q = m_bone[ i ].x0 - centre0;
-			for( Int r = 0; r < 3; ++r )
-				for( Int c = 0; c < 3; ++c )
-					A[ r ][ c ] += p[ r ] * q[ c ];
-		}
-	for( Int pass = 0; pass < 4; ++pass )
-		extractRotation( A, m_trunkQ );
-	const Matrix3x3 R( m_trunkQ );
+	m_rigidTrunk = TRUE;
 	Real under = 0.0f;
 	for( Int i = 1; i < m_numBones; ++i )
-	{
-		Bone &b = m_bone[ i ];
-		if( b.role != ROLE_PARTICLE || !b.trunk )
-			continue;
-		const Vector3 move = centre + R * ( b.x0 - centre0 ) - b.x;
-		b.x += move;
-		b.xPrev += move;
-		under = WWMath::Max( under, floorZ[ i ] - b.x.Z );
-	}
+		if( m_bone[ i ].role == ROLE_PARTICLE && m_bone[ i ].trunk )
+			under = WWMath::Max( under, floorZ[ i ] - m_bone[ i ].x.Z );
 	if( under > 0.0f )
 		for( Int i = 1; i < m_numBones; ++i )
 			if( m_bone[ i ].role == ROLE_PARTICLE && m_bone[ i ].trunk )
@@ -935,6 +934,52 @@ Real W3DRagdoll::worstStretch( Int *which ) const
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The trunk's particles put back in their shape at death, turned the way that best fits where they
+	are (shape matching, warm started from m_trunkQ).  carryVelocity moves the previous positions too, so
+	the move is a jump and not a push. */
+Bool W3DRagdoll::fitTrunk( Int passes, Bool carryVelocity )
+{
+	Vector3 centre( 0.0f, 0.0f, 0.0f );
+	Vector3 centre0( 0.0f, 0.0f, 0.0f );
+	Int count = 0;
+	for( Int i = 1; i < m_numBones; ++i )
+		if( m_bone[ i ].role == ROLE_PARTICLE && m_bone[ i ].trunk )
+		{
+			centre += m_bone[ i ].x;
+			centre0 += m_bone[ i ].x0;
+			++count;
+		}
+	if( count < 3 )
+		return FALSE;
+	centre /= (Real)count;
+	centre0 /= (Real)count;
+	Matrix3x3 A( Vector3( 0.0f, 0.0f, 0.0f ), Vector3( 0.0f, 0.0f, 0.0f ), Vector3( 0.0f, 0.0f, 0.0f ) );
+	for( Int i = 1; i < m_numBones; ++i )
+		if( m_bone[ i ].role == ROLE_PARTICLE && m_bone[ i ].trunk )
+		{
+			const Vector3 p = m_bone[ i ].x - centre;
+			const Vector3 q = m_bone[ i ].x0 - centre0;
+			for( Int r = 0; r < 3; ++r )
+				for( Int c = 0; c < 3; ++c )
+					A[ r ][ c ] += p[ r ] * q[ c ];
+		}
+	for( Int pass = 0; pass < passes; ++pass )
+		extractRotation( A, m_trunkQ );
+	const Matrix3x3 R( m_trunkQ );
+	for( Int i = 1; i < m_numBones; ++i )
+	{
+		Bone &b = m_bone[ i ];
+		if( b.role != ROLE_PARTICLE || !b.trunk )
+			continue;
+		const Vector3 move = centre + R * ( b.x0 - centre0 ) - b.x;
+		b.x += move;
+		if( carryVelocity )
+			b.xPrev += move;
+	}
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
 void W3DRagdoll::logPose( RenderObjClass *robj, const char *when, Real sinkOffset )
 {
 	Real worst = 0.0f;
@@ -1004,10 +1049,24 @@ void W3DRagdoll::logPose( RenderObjClass *robj, const char *when, Real sinkOffse
 			tree->Get_Bone_Name( m_gun ), m_gunHandTilt, (Real)asin( WWMath::Clamp( (Real)fabs( drawnAxis.Z ), 0.0f, 1.0f ) ) * 57.29578f,
 			gunLow, ( grip - hand ).Length(), tree->Get_Bone_Name( g.anchor ) );
 	}
-	DEBUG_LOG(( "RAGDOLL: %s %s: particles %.2f to %.2f (%s) over the ground, constraints %.3f out at worst (%s to %s); drawn bones %.3f off their particles, %.2f to %.2f over the ground, lengths %.3f off at worst (%s); %d pushes out of vehicles and buildings%s\n",
+	// what else is carried (a pack, a bag): where its first bone is drawn against the particle it rides,
+	// straight up 1 (on a back that faces the sky), straight down -1 (under the body)
+	char carried[ 384 ] = "";
+	for( Int r = 1; r < m_numBones; ++r )
+	{
+		const Bone &b = m_bone[ r ];
+		if( b.role != ROLE_FOLLOW || m_bone[ b.parent ].role != ROLE_KINEMATIC || b.carrier == STOWED || r == m_gun || b.anchor <= 0 )
+			continue;
+		const Vector3 off = robj->Get_Bone_Transform( r ).Get_Translation() - robj->Get_Bone_Transform( b.anchor ).Get_Translation();
+		const Real len = off.Length();
+		const size_t used = strlen( carried );
+		snprintf( carried + used, sizeof( carried ) - used, ", %s %.2f from %s pointing %.2f up", tree->Get_Bone_Name( r ), len,
+			tree->Get_Bone_Name( b.anchor ), len > 1.0e-3f ? off.Z / len : 0.0f );
+	}
+	DEBUG_LOG(( "RAGDOLL: %s %s: particles %.2f to %.2f (%s) over the ground, constraints %.3f out at worst (%s to %s); drawn bones %.3f off their particles, %.2f to %.2f over the ground, lengths %.3f off at worst (%s); %d pushes out of vehicles and buildings%s%s\n",
 		m_name, when, low, top, tree->Get_Bone_Name( highest ), stretch, tree->Get_Bone_Name( m_constraint[ worstConstraint ].a ),
 		tree->Get_Bone_Name( m_constraint[ worstConstraint ].b ), worst, drawnLow, drawnTop, drawnStretch, tree->Get_Bone_Name( drawnWorst ),
-		m_pushes, gun ));
+		m_pushes, gun, carried ));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1097,6 +1156,54 @@ void W3DRagdoll::pose( RenderObjClass *robj, Real sinkOffset )
 		const Matrix3D cap = mul( b.baseLocalInv, mul( orthoInverse( world[ b.parent ] ), world[ i ] ) );
 		robj->Control_Bone( i, cap );
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DRagdoll::savePose( SavedPose &out ) const
+{
+	static_assert( (Int)MAX_SAVED_BONES == (Int)MAX_BONES, "a saved pose holds every bone a ragdoll can have" );
+	out.numBones = m_numBones;
+	for( Int i = 0; i < m_numBones; ++i )
+		out.x[ i ] = m_bone[ i ].x;
+	out.height0 = m_height0;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool W3DRagdoll::restorePose( const SavedPose &in )
+{
+	if( in.numBones != m_numBones )
+	{
+		DEBUG_LOG(( "RAGDOLL: %s saved with %d bones, the model has %d: it falls again\n", m_name, in.numBones, m_numBones ));
+		return FALSE;
+	}
+	for( Int i = 1; i < m_numBones; ++i )
+	{
+		Bone &b = m_bone[ i ];
+		if( b.role != ROLE_PARTICLE )
+			continue;
+		b.x = in.x[ i ];
+		b.xPrev = in.x[ i ];
+	}
+	// the sink goes on from where it was, not from the sunk height the drawable loaded at
+	m_height0 = in.height0;
+	// awake until it has been still a moment, so the poses find the bones' turns again from where the
+	// particles lie (a sleeping body keeps its last ones); then it sleeps as it is, no more tries
+	m_asleep = FALSE;
+	m_stillSteps = 0;
+	m_heldAwake = MAX_HELD_AWAKE;
+	// no try is left to make the trunk rigid, so it is from here: settling again, a hunched back would
+	// be pressed flat (the turn is found from the trunk's first bone, as a held awake body's is)
+	for( Int i = 1; i < m_numBones; ++i )
+		if( m_bone[ i ].role == ROLE_PARTICLE && m_bone[ i ].trunk )
+		{
+			m_trunkQ = m_bone[ i ].q;
+			break;
+		}
+	m_rigidTrunk = fitTrunk( 8, TRUE );
+	// the body had been down a while: its gun lies level from the first pose, as it did when saved
+	m_startSync = WW3D::Get_Sync_Time() - (UnsignedInt)LEVEL_MS - 1;
+	DEBUG_LOG(( "RAGDOLL: %s restored from a save\n", m_name ));
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------

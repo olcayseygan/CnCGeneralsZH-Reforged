@@ -731,6 +731,7 @@ Data/Art/W3D/ZBBLOT_WKA.W3D
 Data/Art/W3D/ZBBRCH.W3D
 Data/Art/W3D/ZBBROD_MVA.W3D
 Data/Art/W3D/ZBBROD_SKN.W3D
+Data/Art/W3D/ZBBROD_SPA.W3D
 Data/Art/W3D/ZBBRUT_ATA.W3D
 Data/Art/W3D/ZBBRUT_SKN.W3D
 Data/Art/W3D/ZBBURN_ATA.W3D
@@ -778,6 +779,7 @@ Data/Art/W3D/ZBJUGG_ATA.W3D
 Data/Art/W3D/ZBJUGG_SKN.W3D
 Data/Art/W3D/ZBJUGG_WKA.W3D
 Data/Art/W3D/ZBKING_ATA.W3D
+Data/Art/W3D/ZBKING_ATB.W3D
 Data/Art/W3D/ZBKING_DIA.W3D
 Data/Art/W3D/ZBKING_FLA.W3D
 Data/Art/W3D/ZBKING_SKL.W3D
@@ -1281,6 +1283,7 @@ Data/Cinema/nukefade.txt
 Data/Cinema/nukewarp.txt
 Data/Cinema/reachhills.txt
 Data/Cinema/readme_water.txt
+Data/Cinema/recedge.txt
 Data/Cinema/rf_ai.txt
 Data/Cinema/rf_ai_wave.txt
 Data/Cinema/rf_beach.txt
@@ -1513,8 +1516,10 @@ Data/Scenarios/apoc_b3.txt
 Data/Scenarios/apoc_b4.txt
 Data/Scenarios/apoc_b5.txt
 Data/Scenarios/apoc_b6.txt
+Data/Scenarios/apoc_clips.txt
 Data/Scenarios/apoc_discord2.txt
 Data/Scenarios/apoc_discord4.txt
+Data/Scenarios/apoc_fall.txt
 Data/Scenarios/apoc_look.txt
 Data/Scenarios/apoc_ranksdrop.txt
 Data/Scenarios/artillery.txt
@@ -1584,6 +1589,7 @@ Data/Scenarios/directstrike_towerbounty.txt
 Data/Scenarios/directstrike_towerheal.txt
 Data/Scenarios/directstrike_tricks.txt
 Data/Scenarios/dozerloss.txt
+Data/Scenarios/dozertrap.txt
 Data/Scenarios/dragonfirewall.txt
 Data/Scenarios/dragonflame.txt
 Data/Scenarios/drawlooks.txt
@@ -2077,6 +2083,7 @@ GameEngine/Include/Common/simpleplayer.h
 GameEngine/Include/Common/string.h
 GameEngine/Include/Common/urllaunch.h
 GameEngine/Include/Common/version.h
+GameEngine/Include/GameClient/AircraftEffects.h
 GameEngine/Include/GameClient/AirliftPanel.h
 GameEngine/Include/GameClient/Anim2D.h
 GameEngine/Include/GameClient/AnimateWindowManager.h
@@ -2215,6 +2222,7 @@ GameEngine/Include/GameLogic/AI.h
 GameEngine/Include/GameLogic/AIDock.h
 GameEngine/Include/GameLogic/AIGuard.h
 GameEngine/Include/GameLogic/AIGuardRetaliate.h
+GameEngine/Include/GameLogic/AIIdentity.h
 GameEngine/Include/GameLogic/AIInfluenceMap.h
 GameEngine/Include/GameLogic/AIPathfind.h
 GameEngine/Include/GameLogic/AIPlayer.h
@@ -2733,6 +2741,7 @@ GameEngine/Source/Common/UserPreferences.cpp
 GameEngine/Source/Common/WellKnownKeys.cpp
 GameEngine/Source/Common/crc.cpp
 GameEngine/Source/Common/version.cpp
+GameEngine/Source/GameClient/AircraftEffects.cpp
 GameEngine/Source/GameClient/AirliftPanel.cpp
 GameEngine/Source/GameClient/ChromaKeyboard.cpp
 GameEngine/Source/GameClient/CinemaDirector.cpp
@@ -2906,6 +2915,11 @@ GameEngine/Source/GameLogic/AI/AIDock.cpp
 GameEngine/Source/GameLogic/AI/AIGroup.cpp
 GameEngine/Source/GameLogic/AI/AIGuard.cpp
 GameEngine/Source/GameLogic/AI/AIGuardRetaliate.cpp
+GameEngine/Source/GameLogic/AI/AIIdentity.cpp
+GameEngine/Source/GameLogic/AI/AIIdentityChina.cpp
+GameEngine/Source/GameLogic/AI/AIIdentityGLA.cpp
+GameEngine/Source/GameLogic/AI/AIIdentityTurkiye.cpp
+GameEngine/Source/GameLogic/AI/AIIdentityUSA.cpp
 GameEngine/Source/GameLogic/AI/AIInfluenceMap.cpp
 GameEngine/Source/GameLogic/AI/AIPathfind.cpp
 GameEngine/Source/GameLogic/AI/AIPlayer.cpp

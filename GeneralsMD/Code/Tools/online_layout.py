@@ -106,12 +106,12 @@ BOX_DRAWN = (CLEAR, CLEAR)
 # the popups: the player card (README-online-self.md, "Player card": 1240 by 900, centred, the code draws its
 # glass and frame A and shrinks it while the history waits); Host Game and Join Game are boxes of the message
 # box's pattern, 760 wide and centred (README-game-lists.md: 454 and 320 high), fields 32 in, keys 220 by 48,
-# 12 apart at the foot's right, 20 over its foot
+# 16 apart (UIStyle's BOX_KEY_GAP, the 8 px grid) at the foot's right, 20 over its foot
 CARD = (340, 90, 1240, 900)
 HOST_CARD = (580, 313, 760, 454)
 JOIN_CARD = (580, 380, 760, 320)
 BOX_X0, BOX_W = 612, 696
-BOX_KEY_W, BOX_KEY_H, BOX_KEY_GAP = 220, 48, 12
+BOX_KEY_W, BOX_KEY_H, BOX_KEY_GAP = 220, 48, 16
 
 
 def box_key(box, index):
@@ -234,7 +234,7 @@ HUB_REJOIN = (HUB_RECENT[0] + HUB_RECENT[2] - 24 - KEY, HUB_RECENT[1] + HUB_RECE
 # Its foot: CLOSE 220 wide at the right (Enter's, lit), PROFILE 380 wide 16 before it (UIStyle's BOX_KEY_GAP, the
 # 8 px grid; ADD FRIEND is made in code 16 before that), 48 high, 20 over the foot
 CARD_X0, CARD_X1, CARD_Y1 = CARD[0] + 28, CARD[0] + CARD[2] - 28, CARD[1] + CARD[3]
-CARD_KEY_GAP = 16
+CARD_KEY_GAP = BOX_KEY_GAP
 CARD_TABS = [(CARD_X0, CARD[1] + 164, 200, 34), (CARD_X0 + 208, CARD[1] + 164, 120, 34)]
 CARD_CLOSE = (CARD_X1 - 220, CARD_Y1 - 68, 220, 48)
 CARD_PROFILE = (CARD_X1 - 220 - CARD_KEY_GAP - 380, CARD_Y1 - 68, 380, 48)

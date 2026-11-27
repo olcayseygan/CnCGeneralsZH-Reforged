@@ -4778,6 +4778,7 @@ Tests/shader_cases.h
 Tests/terrain_golden.txt
 Tests/terrain_grid.h
 Tests/terrain_oracle.cpp
+Tests/test_apocalypse_room.inc
 Tests/test_audio_mix_policy.cpp
 Tests/test_baseline_weather.cpp
 Tests/test_bigfile_extract.py

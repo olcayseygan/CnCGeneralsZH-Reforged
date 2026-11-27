@@ -8360,6 +8360,172 @@ GUI:QMMatchHead
 "Match"
 END
 
+// Menu redesign package 3b, the Apocalypse room: the survivors' head, THE NIGHTS band, the generated map's
+// key and the rules the mode sets itself.
+GUI:ApocalypseSurvivors
+"SURVIVORS"
+END
+
+GUI:ApocalypseAllied
+"ALLIED"
+END
+
+GUI:ApocalypseAlliedNote
+"everyone, vs the dead"
+END
+
+GUI:ApocalypseWaves
+"WAVES"
+END
+
+GUI:ApocalypseWavesNote
+"sized for %d"
+END
+
+GUI:ApocalypseBossHealth
+"BOSS HEALTH"
+END
+
+GUI:ApocalypseOpenSeat
+"Each seat taken adds %d to every wave"
+END
+
+GUI:ApocalypseNights
+"THE NIGHTS"
+END
+
+GUI:ApocalypseClockAt
+"clock at %ls, from the start"
+END
+
+GUI:ApocalypseBloodMoon
+"BLOOD MOON"
+END
+
+GUI:ApocalypseBloodMoonNote
+"every third night, a boss"
+END
+
+GUI:ApocalypseOneDay
+"ONE DAY"
+END
+
+GUI:ApocalypseDay
+"DAY"
+END
+
+GUI:ApocalypseDusk
+"DUSK"
+END
+
+GUI:ApocalypseNight
+"NIGHT"
+END
+
+GUI:ApocalypseDawn
+"DAWN"
+END
+
+GUI:ApocalypseFirstWave
+"FIRST WAVE"
+END
+
+GUI:ApocalypseFallsAt
+"FALLS AT"
+END
+
+GUI:ApocalypseNewDead
+"NEW DEAD"
+END
+
+GUI:ApocalypseBoss
+"BOSS"
+END
+
+GUI:ApocalypseKinds
+"%d kinds"
+END
+
+GUI:ApocalypseKind
+"1 kind"
+END
+
+GUI:ApocalypseBossPair
+"2 of the 3"
+END
+
+GUI:ApocalypseDayOne
+"DAY 1"
+END
+
+GUI:ApocalypseRandom
+"Random"
+END
+
+GUI:ApocalypseStarts
+"%d starts"
+END
+
+GUI:ApocalypseStart
+"1 start"
+END
+
+GUI:ApocalypseNewEveryMatch
+"New every match"
+END
+
+GUI:ApocalypseKeyStart
+"Start = seat number"
+END
+
+GUI:ApocalypseKeyBasin
+"Basin: a lobe a seat"
+END
+
+GUI:ApocalypseKeyWild
+"Wilderness: they walk in"
+END
+
+GUI:ApocalypseKeyFog
+"Red edge: fog, deadly"
+END
+
+GUI:ApocalypseModeSet
+"SET BY THE MODE"
+END
+
+GUI:ApocalypseOff
+"Off"
+END
+
+GUI:ApocalypseNone
+"None"
+END
+
+GUI:ApocalypseItsOwn
+"Its own"
+END
+
+GUI:ApocalypseTeams
+"Teams"
+END
+
+GUI:ApocalypseAllAllied
+"All allied"
+END
+
+GUI:ApocalypseDifficulty
+"Difficulty"
+END
+
+GUI:ApocalypseAdapts
+"Adapts"
+END
+
+GUI:ApocalypseScore
+"No win, no loss: you are scored by how long you hold out"
+END
+
 // Menu redesign package 13, the end screens: the Summary's places, totals and foot, the build order's
 // axis and frames, the Direct Strike results' head, rows and timeline.
 GUI:ScorePlace

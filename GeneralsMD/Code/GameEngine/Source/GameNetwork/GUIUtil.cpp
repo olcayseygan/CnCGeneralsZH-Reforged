@@ -68,6 +68,9 @@
 #include "Common/RandomMapTemplate.h"
 #include "Common/UserPreferences.h"
 #include "GameClient/GadgetRadioButton.h"
+#include "GameLogic/ApocalypseDirector.h"	// the Apocalypse room's nights and roster, read only
+#include "Common/ThingFactory.h"
+#include "Common/ThingTemplate.h"
 #include <algorithm>
 
 #ifdef _INTERNAL
@@ -1891,6 +1894,53 @@ Bool FitApocalypseRoom(GameInfo *game)
 	return changed;
 }
 
+Int ApocalypseNightFallsAt(Int night)
+{
+	// the phases run day, dusk, night, dawn from the start (Apocalypse_phaseAt)
+	const Int cycle = APOCALYPSE_DAY_SECONDS + APOCALYPSE_DUSK_SECONDS + APOCALYPSE_NIGHT_SECONDS + APOCALYPSE_DAWN_SECONDS;
+	return APOCALYPSE_DAY_SECONDS + APOCALYPSE_DUSK_SECONDS + max(0, night - 1) * cycle;
+}
+
+Int ApocalypseWallSeconds(Int gameSeconds, Int speedPercent)
+{
+	return speedPercent > 0 ? (gameSeconds * 100 + speedPercent / 2) / speedPercent : gameSeconds;
+}
+
+Int ApocalypseNewKindsOfNight(Int night, Int kinds[], Int most)
+{
+	Int count = 0;
+	for (Int k = 0; k < Apocalypse_kindCount(); ++k)
+	{
+		const ApocalypseKind &kind = Apocalypse_kind(k);
+		Bool rolled = FALSE;
+		for (Int phase = 0; phase < APOCALYPSE_PHASES; ++phase)
+			rolled = rolled || kind.weight[phase] > 0;
+		if (!rolled || (kind.flags & APOCALYPSE_KIND_BOSS) || kind.firstNight != night)
+			continue;
+		if (count < most)
+			kinds[count] = k;
+		++count;
+	}
+	return count;
+}
+
+void ApocalypsePlanRoom(Int count, Int mostShown, LobbyRoomPlan &plan)
+{
+	count = max(0, min(min(count, (Int)APOCALYPSE_SEATS), mostShown));
+	const LobbyRoomItem head = { TRUE, LOBBY_GROUP_ALONE, -1, count, 0, LOBBY_ROW_HEAD };
+	plan.items[0] = head;
+	plan.itemCount = 1;
+	for (Int i = 0; i < count; ++i)
+	{
+		const LobbyRoomItem row = { FALSE, LOBBY_GROUP_ALONE, i, 1, LOBBY_ROW_HEAD + i * LOBBY_ROW_SEAT, LOBBY_ROW_SEAT };
+		plan.items[plan.itemCount++] = row;
+		plan.order[i] = i;
+	}
+	plan.orderCount = count;
+	plan.scroll = plan.maxScroll = 0;
+	plan.above = plan.below = 0;
+}
+
 UnicodeString ModeNameWithVersion(const char *nameKey, const char *versionKey)
 {
 	UnicodeString name = TheGameText->fetch(nameKey);
@@ -2527,13 +2577,42 @@ namespace
 	const Int ROOM_COLUMN_LEFT = 1318;
 	const Int ROOM_RIGHT = 1860;
 	const Int ROOM_LEFT = 60;
+	const char *theRoomLayout = NULL;
+	GameWinDrawFunc theRoomMapDraw = NULL;		///< the map window's own draw, under the Apocalypse fog edge
+
+	// The Apocalypse room (README-apocalypse-room.md): the nights band under the seats, the chat under it
+	// in a network room, the rules the mode pins read only in the right column's foot
+	const Int APOC_CELL_LEFT = 152;
+	const Int APOC_RIGHT = 1270;							///< the seat rows' and the band's right edge
+	const Color APOC_BLOOD_TEXT = GameMakeColor(236, 92, 78, 255);	///< the Blood Moon's red lifted for words on the glass
+	const Int APOC_NIGHT_CELLS = 10;					///< nights 1 to 9, then the twelfth and on
+	const Int APOC_NIGHTS_TOP = 566;
+	const Int APOC_DAY_TOP = 606, APOC_DAY_BOTTOM = 648;
+	const Int APOC_TABLE_TOP = 664;
+	const Int APOC_CHAT_TOP = 784;
+	const Int APOC_RULES_TOP = 542;
+	const Int APOC_MODE_TOP = 804;
+	const Color APOC_BLOOD = GameMakeColor(184, 38, 31, 255);	///< BRAND.md's red, the Blood Moon's only
 
 	// one display string a place on the screen, so a string's texture is rebuilt only when its words change
 	enum
 	{
 		TEXT_HEADS = 0, TEXT_TITLE = 8, TEXT_SUBTITLE, TEXT_TENANT, TEXT_TENANT_NAME, TEXT_TENANT_SEATS,
 		TEXT_FOOT = 16, TEXT_STRIPS = 28, TEXT_MAP = 32, TEXT_TAB = 36, TEXT_GROUPS = 40, TEXT_ROWS = 120,
-		TEXT_COUNT = TEXT_ROWS + 4 * MAX_SLOTS
+		TEXT_APOCALYPSE = TEXT_ROWS + 4 * MAX_SLOTS,
+		// the Apocalypse room's own words, from TEXT_APOCALYPSE on
+		APOC_HEAD = 0,				///< survivors, their count, then three facts as a word and a note each
+		APOC_OPEN_SEAT = 8,		///< one a row
+		APOC_NIGHTS = 12,			///< the band's head, the clock's speed, the Blood Moon's key and note
+		APOC_DAY = 16,				///< ONE DAY, then four phase words, four lengths, the first wave and its time
+		APOC_LABELS = 28,			///< the table's row words, DAY 1 and the walker
+		APOC_CELLS = 36,			///< night numbers, falls at, new dead, boss: ten cells each
+		APOC_NAMES = 76,			///< the skirmish table's names, six a cell
+		APOC_MAP = 136,				///< the map's two facts and its four key lines
+		APOC_MODE = 142,			///< SET BY THE MODE, its eight pairs
+		APOC_FOOT = 159,			///< what the mode counts, the RULES head
+		APOC_COUNT = 162,
+		TEXT_COUNT = TEXT_APOCALYPSE + APOC_COUNT
 	};
 	DisplayString *theRoomTexts[TEXT_COUNT];
 
@@ -2963,6 +3042,383 @@ namespace
 		}
 	}
 
+	// ---- the Apocalypse room's own parts (README-apocalypse-room.md) ----
+
+	GameWindow *roomWindow(const char *layoutFilename, const char *name);
+
+	Bool roomApocalypse(void)
+	{
+		return theRoomGame != NULL && IsApocalypseMap(theRoomGame->getMap());
+	}
+
+	/// words from a screen x, centred on board y; their width on screen
+	Int roomDrawAt(Int key, const UnicodeString &text, GameFont *font, Int screenX, Int middle, Color color)
+	{
+		DisplayString *s = roomText(key, text, font);
+		if (s == NULL || text.isEmpty())
+			return 0;
+		Int w, h;
+		s->getSize(&w, &h);
+		s->draw(screenX, roomY(middle) - h / 2, color, GameMakeColor(0, 0, 0, 160));
+		return w;
+	}
+
+	Int roomTextWidth(Int key, const UnicodeString &text, GameFont *font)
+	{
+		DisplayString *s = roomText(key, text, font);
+		Int w = 0, h = 0;
+		if (s && !text.isEmpty())
+			s->getSize(&w, &h);
+		return w;
+	}
+
+	void roomFrame(Int l, Int t, Int r, Int b, Color color)
+	{
+		const IRegion2D box = UIStyle::boardRect(l, t, r, b);
+		TheDisplay->drawOpenRect(box.lo.x, box.lo.y, max(1, box.hi.x - box.lo.x), max(1, box.hi.y - box.lo.y), 1.0f, color);
+	}
+
+	/// the seats the waves size for: humans and computers, the watchers left out
+	Int apocSeated(void)
+	{
+		Int seated = 0;
+		for (Int i = 0; i < MAX_SLOTS; ++i)
+		{
+			const GameSlot *slot = theRoomGame->getConstSlot(i);
+			if (slot && slot->isOccupied() && slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
+				++seated;
+		}
+		return seated;
+	}
+
+	/// game seconds as the room's speed plays them on the wall, m:ss
+	UnicodeString apocClock(Int gameSeconds)
+	{
+		Int speed = theRoomGame->getGameSpeedPercent();
+		if (speed <= 0)
+			speed = theRoomGame->getDefaultGameSpeedPercent();
+		const Int wall = ApocalypseWallSeconds(gameSeconds, speed);
+		UnicodeString clock;
+		clock.format(u"%d:%02d", wall / 60, wall % 60);
+		return clock;
+	}
+
+	/// a roster row's name as the game's strings give it, its template's name without one
+	UnicodeString apocKindName(Int kind)
+	{
+		const ApocalypseKind &row = Apocalypse_kind(kind);
+		const ThingTemplate *thing = TheThingFactory ? TheThingFactory->findTemplate(AsciiString(row.name), FALSE) : NULL;
+		if (thing && !thing->getDisplayName().isEmpty())
+			return thing->getDisplayName();
+		UnicodeString name;
+		name.translate(AsciiString(row.name));
+		return name;
+	}
+
+	/// capitals tracked as the designs set them (14 px labels at 1.2), from a screen x, centred on board y; their width
+	Int apocCaps(const UnicodeString &text, Int screenX, Int middle, Color color, Int px1080 = UIStyle::MENU_TEXT_LABEL,
+		Real tracking = UIStyle::MENU_LABEL_TRACKING)
+	{
+		if (text.isEmpty())
+			return 0;
+		GameFont *font = UIStyle::menuFont(px1080, TRUE);
+		const Int h = TheWindowManager->winFontHeight(font);
+		return UIStyle::drawTracked(text, font, screenX, roomY(middle) - h / 2, color, tracking);
+	}
+
+	Int apocCapsWidth(const UnicodeString &text, Int px1080 = UIStyle::MENU_TEXT_LABEL, Real tracking = UIStyle::MENU_LABEL_TRACKING)
+	{
+		return text.isEmpty() ? 0 : UIStyle::trackedWidth(text, UIStyle::menuFont(px1080, TRUE), tracking);
+	}
+
+	/// a section's mark: the short lit bar before its head
+	void apocMark(Int middle, Int height)
+	{
+		roomFill(ROOM_LEFT + 6, middle - height / 2, ROOM_LEFT + 9, middle + height / 2, UIStyle::EDGE);
+	}
+
+	/// SURVIVORS n / 4, then what the seats change, right-aligned on the rows' edge
+	void drawApocalypseHead(Int top)
+	{
+		const Int middle = top + LOBBY_ROW_HEAD / 2 + 2;
+		const Int key = TEXT_APOCALYPSE + APOC_HEAD;
+		GameFont *note = UIStyle::menuFont(UIStyle::MENU_TEXT_HINT);
+		const Int seated = apocSeated();
+		apocMark(middle, 16);
+		const Int nameW = apocCaps(TheGameText->fetch("GUI:ApocalypseSurvivors"), roomX(ROOM_LEFT + 24), middle, UIStyle::INK);
+		UnicodeString count;
+		count.format(u"%d / %d", seated, (Int)APOCALYPSE_SEATS);
+		const Int countX = roomX(ROOM_LEFT + 24) + nameW + roomPx(12);
+		const Int countW = roomDrawAt(key + 1, count, UIStyle::menuFont(UIStyle::MENU_TEXT_BODY), countX, middle, UIStyle::INK);
+		const Int health = Apocalypse_bossHealthPercent(max(1, seated));
+		UnicodeString times;
+		times.format(u"\x00D7%d.%d", health / 100, (health % 100) / 10);
+		const UnicodeString words[3] = { TheGameText->fetch("GUI:ApocalypseAllied"), TheGameText->fetch("GUI:ApocalypseWaves"),
+			TheGameText->fetch("GUI:ApocalypseBossHealth") };
+		const UnicodeString notes[3] = { TheGameText->fetch("GUI:ApocalypseAlliedNote"),
+			roomCountText("GUI:ApocalypseWavesNote", max(1, seated)), times };
+		Int x = roomX(APOC_RIGHT);
+		for (Int f = 2; f >= 0; --f)
+		{
+			x -= roomTextWidth(key + 3 + 2 * f, notes[f], note);
+			roomDrawAt(key + 3 + 2 * f, notes[f], note, x, middle, UIStyle::INK);
+			x -= roomPx(8) + apocCapsWidth(words[f]);
+			apocCaps(words[f], x, middle, UIStyle::MUTED);
+			x -= roomPx(26);
+		}
+		const Int ruleX = countX + countW + roomPx(16);
+		if (x > ruleX)
+			TheDisplay->drawFillRect(ruleX, roomY(middle), x - ruleX, 1, UIStyle::withAlpha(UIStyle::FRAME, 110));
+	}
+
+	/// THE NIGHTS: one day to scale, then nights 1 to 9 and the twelfth on, each with its clock, the
+	/// kinds it adds and its boss; the skirmish room, with no chat, names every kind
+	void drawApocalypseNights(Bool named)
+	{
+		const Int key = TEXT_APOCALYPSE;
+		GameFont *hint = UIStyle::menuFont(UIStyle::MENU_TEXT_HINT);
+		GameFont *figure = UIStyle::menuFont(UIStyle::MENU_TEXT_ROW_FIGURE);
+		const Int span = APOC_RIGHT - 2 - APOC_CELL_LEFT;
+
+		// the head, the speed every clock here is read at, the Blood Moon's key at the right
+		const Int headMiddle = APOC_NIGHTS_TOP + 15;
+		apocMark(headMiddle, 22);
+		const Int headW = apocCaps(TheGameText->fetch("GUI:ApocalypseNights"), roomX(ROOM_LEFT + 16), headMiddle, UIStyle::INK, 20, 2.4f);
+		Int speed = theRoomGame->getGameSpeedPercent();
+		if (speed <= 0)
+			speed = theRoomGame->getDefaultGameSpeedPercent();
+		UnicodeString clockAt;
+		clockAt.format(TheGameText->fetch("GUI:ApocalypseClockAt").str(), GameSpeedText(speed).str());
+		roomDrawAt(key + APOC_NIGHTS + 1, clockAt, hint, roomX(ROOM_LEFT + 16) + headW + roomPx(14), headMiddle, UIStyle::MUTED);
+		Int x = roomX(APOC_RIGHT);
+		const UnicodeString moonNote = TheGameText->fetch("GUI:ApocalypseBloodMoonNote");
+		const UnicodeString moon = TheGameText->fetch("GUI:ApocalypseBloodMoon");
+		x -= roomTextWidth(key + APOC_NIGHTS + 3, moonNote, hint);
+		roomDrawAt(key + APOC_NIGHTS + 3, moonNote, hint, x, headMiddle, UIStyle::MUTED);
+		x -= roomPx(10) + apocCapsWidth(moon);
+		apocCaps(moon, x, headMiddle, APOC_BLOOD_TEXT);
+		const Int dash = roomPx(16);
+		x -= roomPx(12) + dash;
+		TheDisplay->drawFillRect(x, roomY(headMiddle), dash, max(1, roomPx(2)), APOC_BLOOD_TEXT);
+
+		// one day to scale, the first wave's tick on it
+		const Int dayMiddle = (APOC_DAY_TOP + APOC_DAY_BOTTOM) / 2;
+		apocCaps(TheGameText->fetch("GUI:ApocalypseOneDay"), roomX(ROOM_LEFT), dayMiddle, UIStyle::MUTED);
+		static const Int seconds[APOCALYPSE_PHASES] = { APOCALYPSE_DAY_SECONDS, APOCALYPSE_DUSK_SECONDS, APOCALYPSE_NIGHT_SECONDS, APOCALYPSE_DAWN_SECONDS };
+		static const char *const phases[APOCALYPSE_PHASES] = { "GUI:ApocalypseDay", "GUI:ApocalypseDusk", "GUI:ApocalypseNight", "GUI:ApocalypseDawn" };
+		const Color fills[APOCALYPSE_PHASES] = { GameMakeColor(96, 84, 44, 190), GameMakeColor(112, 52, 34, 200),
+			GameMakeColor(22, 28, 64, 220), GameMakeColor(64, 70, 86, 190) };
+		const Int cycle = seconds[0] + seconds[1] + seconds[2] + seconds[3];
+		Int at = 0;
+		for (Int p = 0; p < APOCALYPSE_PHASES; ++p)
+		{
+			const Int l = APOC_CELL_LEFT + span * at / cycle;
+			at += seconds[p];
+			const Int r = APOC_CELL_LEFT + span * at / cycle;
+			roomFill(l, APOC_DAY_TOP, r, APOC_DAY_BOTTOM, fills[p]);
+			apocCaps(TheGameText->fetch(phases[p]), roomX(l + 8), APOC_DAY_TOP + 11, UIStyle::INK);
+			roomDraw(key + APOC_DAY + 5 + p, apocClock(seconds[p]), hint, l + 8, APOC_DAY_TOP + 29, UIStyle::INK);
+		}
+		const Int tick = APOC_CELL_LEFT + span * APOCALYPSE_FIRST_WAVE_SECONDS / cycle;
+		roomFill(tick, APOC_DAY_TOP - 2, tick + 2, APOC_DAY_BOTTOM + 2, UIStyle::INK);
+		apocCaps(TheGameText->fetch("GUI:ApocalypseFirstWave"), roomX(tick + 8), APOC_DAY_TOP + 11, UIStyle::INK);
+		roomDraw(key + APOC_DAY + 10, apocClock(APOCALYPSE_FIRST_WAVE_SECONDS), hint, tick + 8, APOC_DAY_TOP + 29, UIStyle::INK);
+
+		// the table: a row's word at the left, a night a cell; the skirmish room, with no chat, names
+		// every kind in a column under its night (README-apocalypse-room.md)
+		const Int nightMiddle = APOC_TABLE_TOP + (named ? 17 : 15);
+		const Int fallsMiddle = APOC_TABLE_TOP + (named ? 50 : 42);
+		const Int deadMiddle = APOC_TABLE_TOP + (named ? 110 : 66);
+		const Int bossMiddle = APOC_TABLE_TOP + (named ? 78 : 90);
+		const Int tableTop = APOC_TABLE_TOP - 4;
+		const Int tableBottom = named ? LOBBY_SEATS_BOTTOM : APOC_TABLE_TOP + 104;
+		static const char *const rows[4] = { "GUI:ApocalypseNight", "GUI:ApocalypseFallsAt", "GUI:ApocalypseNewDead", "GUI:ApocalypseBoss" };
+		const Int rowMiddles[4] = { nightMiddle, fallsMiddle, deadMiddle, bossMiddle };
+		for (Int r = 0; r < 4; ++r)
+			apocCaps(TheGameText->fetch(rows[r]), roomX(ROOM_LEFT), rowMiddles[r], UIStyle::MUTED);
+		Int walker[1] = { APOCALYPSE_KIND_WALKER };
+		if (named && ApocalypseNewKindsOfNight(0, walker, 1) > 0)
+		{
+			// day one sends the walker alone, under the row's word
+			apocCaps(TheGameText->fetch("GUI:ApocalypseDayOne"), roomX(ROOM_LEFT), deadMiddle + 27, UIStyle::MUTED);
+			roomDraw(key + APOC_LABELS + 5, UIStyle::fitName(apocKindName(walker[0]), hint, roomPx(APOC_CELL_LEFT - ROOM_LEFT - 8)), hint,
+				ROOM_LEFT, deadMiddle + 48, UIStyle::INK);
+		}
+		const UnicodeString none(u"\x2013");
+		for (Int i = 0; i < APOC_NIGHT_CELLS; ++i)
+		{
+			const Bool tail = i == APOC_NIGHT_CELLS - 1;
+			const Int night = tail ? (Int)APOCALYPSE_BOSS_PAIR_NIGHT : i + 1;
+			const Int l = APOC_CELL_LEFT + span * i / APOC_NIGHT_CELLS;
+			const Int r = APOC_CELL_LEFT + span * (i + 1) / APOC_NIGHT_CELLS;
+			const Int textX = l + 10;
+			const Int cellW = roomPx(r - l - 14);
+			if (night % APOCALYPSE_BLOOD_MOON_EVERY == 0)
+			{
+				roomFill(l + 1, tableTop, r - 1, tableBottom, UIStyle::withAlpha(APOC_BLOOD, 44));
+				roomFill(l + 1, tableTop, r - 1, tableTop + 2, APOC_BLOOD);
+			}
+			if (i > 0)
+				roomFill(l, tableTop, l + 1, tableBottom, UIStyle::withAlpha(UIStyle::FRAME, 90));
+			UnicodeString number;
+			if (tail)
+				number.format(u"%d, %d\x2026", night, night + APOCALYPSE_BLOOD_MOON_EVERY);	// every Blood Moon from the pair on
+			else
+				number.format(u"%d", night);
+			roomDraw(key + APOC_CELLS + i, number, figure, textX, nightMiddle, UIStyle::INK);
+			roomDraw(key + APOC_CELLS + 10 + i, apocClock(ApocalypseNightFallsAt(night)), hint, textX, fallsMiddle, UIStyle::INK);
+			Int kinds[8];
+			const Int count = ApocalypseNewKindsOfNight(night, kinds, (Int)ARRAY_SIZE(kinds));
+			if (count == 0)
+				roomDraw(key + APOC_CELLS + 20 + i, none, hint, textX, deadMiddle, UIStyle::MUTED);
+			else if (named)
+			{
+				for (Int k = 0; k < min(count, 6); ++k)
+					roomDraw(key + APOC_NAMES + 6 * i + k, UIStyle::fitName(apocKindName(kinds[k]), hint, cellW), hint, textX,
+						deadMiddle + 26 * k, UIStyle::INK);
+			}
+			else
+				roomDraw(key + APOC_CELLS + 20 + i, count == 1 ? TheGameText->fetch("GUI:ApocalypseKind") : roomCountText("GUI:ApocalypseKinds", count),
+					hint, textX, deadMiddle, UIStyle::INK);
+			Int bosses[2];
+			const Int bossCount = Apocalypse_bossesOfNight((UnsignedInt)night, 0, bosses);
+			if (bossCount > 0)
+				roomDraw(key + APOC_CELLS + 30 + i, bossCount > 1 ? TheGameText->fetch("GUI:ApocalypseBossPair")
+					: UIStyle::fitName(apocKindName(bosses[0]), hint, cellW), hint, textX, bossMiddle, APOC_BLOOD_TEXT);
+		}
+	}
+
+	/// the generated map's facts beside its preview, and what its marks mean
+	void drawApocalypseMapFacts(const MapMetaData *md)
+	{
+		const Int key = TEXT_APOCALYPSE + APOC_MAP;
+		GameFont *hint = UIStyle::menuFont(UIStyle::MENU_TEXT_HINT);
+		const Int left = ROOM_COLUMN_LEFT + 344;
+		const Int starts = md ? md->m_numPlayers : apocSeated();
+		UnicodeString facts = TheGameText->fetch("GUI:ApocalypseRandom");
+		facts.concat(UIStyle::HEADER_JOINER);
+		facts.concat(starts == 1 ? TheGameText->fetch("GUI:ApocalypseStart") : roomCountText("GUI:ApocalypseStarts", starts));
+		roomDraw(key, facts, hint, left, 201, UIStyle::MUTED);
+		roomDraw(key + 1, TheGameText->fetch("GUI:ApocalypseNewEveryMatch"), hint, left, 223, UIStyle::MUTED);
+		// the key: a start in its seat's ring, the basin's floor, the wilderness, the fog's red edge
+		static const char *const lines[4] = { "GUI:ApocalypseKeyStart", "GUI:ApocalypseKeyBasin", "GUI:ApocalypseKeyWild", "GUI:ApocalypseKeyFog" };
+		const Color marks[4] = { GameMakeColor(40, 150, 64, 255), GameMakeColor(112, 104, 96, 255), GameMakeColor(206, 186, 146, 255), APOC_BLOOD };
+		const Int mark = roomPx(16);
+		for (Int i = 0; i < 4; ++i)
+		{
+			const Int middle = 274 + 32 * i;
+			const Int mx = roomX(left + 2), my = roomY(middle) - mark / 2;
+			TheDisplay->drawFillRect(mx, my, mark, mark, marks[i]);
+			TheDisplay->drawOpenRect(mx, my, mark, mark, 1.0f, GameMakeColor(0, 0, 0, 200));
+			roomDraw(key + 2 + i, UIStyle::fitKey(lines[i], hint, roomPx(ROOM_RIGHT - left - 28)), hint, left + 28, middle, UIStyle::INK);
+		}
+	}
+
+	/// what the mode pins, read only: eight pairs, two to a line
+	void drawApocalypseModeSet(void)
+	{
+		const Int key = TEXT_APOCALYPSE + APOC_MODE;
+		GameFont *hint = UIStyle::menuFont(UIStyle::MENU_TEXT_HINT);
+		apocCaps(TheGameText->fetch("GUI:ApocalypseModeSet"), roomX(ROOM_COLUMN_LEFT + 2), APOC_MODE_TOP + 11, UIStyle::MUTED);
+		roomFill(ROOM_COLUMN_LEFT, APOC_MODE_TOP + 26, ROOM_RIGHT, APOC_MODE_TOP + 27, UIStyle::withAlpha(UIStyle::FRAME, 150));
+		static const char *const names[8] = { "GUI:ApocalypseDifficulty", "GUI:ApocalypseTeams", "GUI:DayNight", "GUI:PeaceTimeLabel",
+			"GUI:UnitLimit", "GUI:SupplyPileLimit", "GUI:TechRespawn", "GUI:ProRules" };
+		static const char *const values[8] = { "GUI:ApocalypseAdapts", "GUI:ApocalypseAllAllied", "GUI:ApocalypseItsOwn", "GUI:ApocalypseNone",
+			"GUI:ApocalypseOff", "GUI:SupplyPileLimitOff", "GUI:TechRespawnOff", "GUI:ApocalypseOff" };
+		// two columns 259 wide with a gap of 24: the word at a column's left, its value against its right
+		const Int columnW = 259;
+		for (Int i = 0; i < 8; ++i)
+		{
+			const Int l = ROOM_COLUMN_LEFT + (i % 2) * (columnW + 24);
+			const Int middle = APOC_MODE_TOP + 47 + 28 * (i / 2);
+			const UnicodeString value = UIStyle::fitKey(values[i], hint, roomPx(columnW / 2));
+			const Int valueW = roomDraw(key + 2 + 2 * i, value, hint, l + columnW, middle, UIStyle::INK, 2);
+			roomDraw(key + 1 + 2 * i, UIStyle::fitKey(names[i], hint, roomPx(columnW) - valueW - roomPx(12)), hint, l, middle, UIStyle::MUTED);
+		}
+	}
+
+	/// the preview with the fog ring's deadly red round its edge
+	void drawRoomMap(GameWindow *window, WinInstanceData *instData)
+	{
+		if (theRoomMapDraw)
+			theRoomMapDraw(window, instData);
+		if (!theRoomClassic || !roomApocalypse())
+			return;
+		Int x, y, w, h;
+		window->winGetScreenPosition(&x, &y);
+		window->winGetSize(&w, &h);
+		const Int band = max(4, roomPx(16));
+		const Int step = max(1, band / 4);
+		for (Int i = 0; i < 4; ++i)
+		{
+			const Color red = UIStyle::withAlpha(APOC_BLOOD, 150 - 35 * i);
+			const Int in = i * step;
+			TheDisplay->drawFillRect(x + in, y + in, max(1, w - 2 * in), step, red);
+			TheDisplay->drawFillRect(x + in, y + h - in - step, max(1, w - 2 * in), step, red);
+			TheDisplay->drawFillRect(x + in, y + in + step, step, max(1, h - 2 * in - 2 * step), red);
+			TheDisplay->drawFillRect(x + w - in - step, y + in + step, step, max(1, h - 2 * in - 2 * step), red);
+		}
+	}
+
+	/// the windows where the Apocalypse room's design puts them: the rules the mode pins and the map's
+	/// choice parked (SET BY THE MODE says them), the four the host sets from the RULES head down, the
+	/// chat always open under the nights in a network room, no tabs
+	void placeApocalypseRoom(void)
+	{
+		if (theRoomLayout == NULL)
+			return;
+		static const char *const pinned[] = { "LabelPeaceTime", "ComboBoxPeaceTime", "LabelSupplyPileLimit", "ComboBoxSupplyPileLimit",
+			"LabelTechRespawn", "ComboBoxTechRespawn", "CheckBoxUnitLimit", "CheckBoxProRules", "CheckBoxDayNight", "TabLobbySettings", "TabChat" };
+		for (Int i = 0; i < (Int)ARRAY_SIZE(pinned); ++i)
+			roomPark(roomWindow(theRoomLayout, pinned[i]));
+		roomPark(theRoomSelectMap);
+		roomPark(theRoomPresets);
+
+		static const char *const rules[4][2] = { { "LabelGameSpeed", "ComboBoxGameSpeed" }, { "StartingCashLabel", "ComboBoxStartingCash" },
+			{ "LabelSuperweapons", "ComboBoxSuperweapons" }, { "LabelIncomeSharing", "ComboBoxIncomeSharing" } };
+		// the online room's two rules it pins itself (Record Stats, Original Armies) keep a line at the foot
+		GameWindow *checks[2] = { roomWindow(theRoomLayout, "CheckBoxUseStats"), roomWindow(theRoomLayout, "CheckBoxLimitArmies") };
+		const Int checksTop = APOC_MODE_TOP - 14 - 34;
+		const Int pitch = checks[0] || checks[1] ? min(60, (checksTop - 4 - APOC_RULES_TOP) / 4) : 60;
+		Bool moved = FALSE;
+		for (Int r = 0; r < 4; ++r)
+		{
+			const Int top = APOC_RULES_TOP + r * pitch;
+			GameWindow *combo = roomWindow(theRoomLayout, rules[r][1]);
+			Int was = 0, wasY = 0;
+			if (combo)
+				combo->winGetScreenPosition(&was, &wasY);
+			roomPlace(roomWindow(theRoomLayout, rules[r][0]), ROOM_COLUMN_LEFT, top, ROOM_COLUMN_LEFT + 160, top + 44);
+			roomPlace(combo, ROOM_COLUMN_LEFT + 160, top, ROOM_RIGHT, top + 44);
+			Int now = 0, nowY = 0;
+			if (combo)
+				combo->winGetScreenPosition(&now, &nowY);
+			moved = moved || nowY != wasY;
+		}
+		const Int checkW = (ROOM_RIGHT - ROOM_COLUMN_LEFT - 16) / 3;
+		for (Int c = 0; c < 2; ++c)
+			roomPlace(checks[c], ROOM_COLUMN_LEFT + c * (checkW + 8), checksTop, ROOM_COLUMN_LEFT + c * (checkW + 8) + checkW, checksTop + 34);
+		if (moved && theRoomParent)
+			SnapLobbyRulesLists(theRoomParent, theRoomLayout);	// the lists end on the rows where they now stand
+		if (GameWindow *page = roomWindow(theRoomLayout, "PageLobbySettings"))
+			if (page->winIsHidden())
+				page->winHide(FALSE);
+
+		if (theRoomChat == NULL)
+			return;
+		// the chat box 60,784 to 1270,952: its lines, then the line to write in and SEND 8 in from its edges
+		const Int entryTop = LOBBY_SEATS_BOTTOM - 8 - 38;
+		roomPlace(theRoomChat, ROOM_LEFT + 8, APOC_CHAT_TOP + 6, APOC_RIGHT - 8, entryTop - 8);
+		GameWindow *entry = roomWindow(theRoomLayout, "TextEntryChat");
+		GameWindow *send = roomWindow(theRoomLayout, "ButtonEmote");
+		roomPlace(entry, ROOM_LEFT + 8, entryTop, APOC_RIGHT - 8 - 122 - 10, entryTop + 38);
+		roomPlace(send, APOC_RIGHT - 8 - 122, entryTop, APOC_RIGHT - 8, entryTop + 38);
+		GameWindow *shown[] = { theRoomChat, entry, send };
+		for (Int i = 0; i < (Int)ARRAY_SIZE(shown); ++i)
+			if (shown[i] && shown[i]->winIsHidden())
+				shown[i]->winHide(FALSE);
+	}
+
 	/// the room's own look, on its container under every window it holds
 	void drawRoom(GameWindow *window, WinInstanceData *)
 	{
@@ -2978,8 +3434,17 @@ namespace
 			title = UIStyle::capitals(title);
 		UnicodeString subtitle;
 		const MapMetaData *md = TheMapCache ? TheMapCache->findMap(theRoomGame->getMap()) : NULL;
-		if (md)
+		const Bool apocalypse = roomApocalypse();
+		if (apocalypse)
+		{
+			// the Create Game card's two lines: what the mode is, who plays it
+			subtitle = TheGameText->fetch("GUI:GameModeApocalypseFact");
+			subtitle.concat(UIStyle::HEADER_JOINER);
+			subtitle.concat(TheGameText->fetch("GUI:GameModeApocalypseSeats"));
+		}
+		else if (md)
 			subtitle = md->m_displayName;
+		if (!apocalypse)
 		{
 			// the format: each team's seated count, a player with no team on his own
 			Int sizes[MAX_SLOTS], teams[MAX_SLOTS], groups = 0;
@@ -3026,7 +3491,7 @@ namespace
 		GameFont *label = UIStyle::menuFont(UIStyle::MENU_TEXT_LABEL, TRUE);
 		if (theRoomKind == ROOM_SKIRMISH)
 		{
-			if (theRoomPresets && !theRoomPresets->winIsHidden())
+			if (theRoomPresets && !theRoomPresets->winIsHidden() && !apocalypse)
 				roomDraw(TEXT_TENANT, TheGameText->fetch("GUI:RoomPreset"), label, 1486, 71, UIStyle::MUTED, 2);
 		}
 		else
@@ -3053,10 +3518,16 @@ namespace
 		// the column heads and the rule under them
 		static const char *const heads[] = { "GUI:RoomPlayer", "GUI:RoomArmy", "GUI:RoomColour", "GUI:RoomTeamHead", "GUI:RoomHandicap", "GUI:RoomMap" };
 		static const Int headX[] = { 186, 462, 798, 994, 1122, ROOM_COLUMN_LEFT + 2 };
+		// the Apocalypse room has no team column (the director allies every seat); its army and colour grow
+		static const char *const apocalypseHeads[] = { "GUI:RoomPlayer", "GUI:RoomArmy", "GUI:RoomColour", "GUI:RoomHandicap", "GUI:RoomMap" };
+		static const Int apocalypseHeadX[] = { 186, 462, 874, 1122, ROOM_COLUMN_LEFT + 2 };
+		const char *const *headKeys = apocalypse ? apocalypseHeads : heads;
+		const Int *headAt = apocalypse ? apocalypseHeadX : headX;
+		const Int headCount = apocalypse ? (Int)ARRAY_SIZE(apocalypseHeads) : (Int)ARRAY_SIZE(heads);
 		// a map picker over the seats has the seat column to itself
-		for (Int h = theSeatsUnderPicker ? (Int)ARRAY_SIZE(heads) - 1 : 0; h < (Int)ARRAY_SIZE(heads); ++h)
+		for (Int h = theSeatsUnderPicker ? headCount - 1 : 0; h < headCount; ++h)
 		{
-			UIStyle::columnHeadAt(roomText(TEXT_HEADS + h, TheGameText->fetch(heads[h]), label), roomX(headX[h]), roomY(137), UIStyle::INK);
+			UIStyle::columnHeadAt(roomText(TEXT_HEADS + h, TheGameText->fetch(headKeys[h]), label), roomX(headAt[h]), roomY(137), UIStyle::INK);
 		}
 		roomFill(ROOM_COLUMN_LEFT, 152, ROOM_RIGHT, 153, UIStyle::withAlpha(UIStyle::FRAME, 150));
 
@@ -3068,11 +3539,34 @@ namespace
 		{
 			const LobbyRoomItem &item = theRoomPlan.items[i];
 			const Int top = LOBBY_SEATS_TOP + item.top;
-			if (item.head)
+			if (item.head && apocalypse)
+				drawApocalypseHead(top);
+			else if (item.head)
 				drawRoomHead(min(headIndex++, (Int)(TEXT_ROWS - TEXT_GROUPS) / 2 - 1), item, top);
 			else
+			{
 				drawRoomSeat(seatIndex++, item, top);
+				const GameSlot *slot = roomSlot(item.slot);
+				if (apocalypse && slot && !slot->isOccupied())
+				{
+					// an empty seat keeps its picture's place, dark, so the four rows read as four seats
+					const Int middle = top + item.height / 2;
+					roomFill(96, middle - 38, 172, middle + 38, GameMakeColor(0, 0, 0, 150));
+					roomFrame(96, middle - 38, 172, middle + 38, UIStyle::withAlpha(UIStyle::FRAME, 120));
+					if (slot->isOpen())
+						roomDraw(TEXT_APOCALYPSE + APOC_OPEN_SEAT + item.slot % 4, roomCountText("GUI:ApocalypseOpenSeat", APOCALYPSE_WAVE_PER_SEAT),
+							UIStyle::menuFont(UIStyle::MENU_TEXT_HINT), 470, middle, UIStyle::MUTED);
+				}
+			}
 		}
+		if (apocalypse && !theSeatsUnderPicker)
+		{
+			drawApocalypseNights(theRoomChat == NULL);
+			if (theRoomChat)
+				roomFrame(ROOM_LEFT, APOC_CHAT_TOP, APOC_RIGHT, LOBBY_SEATS_BOTTOM, UIStyle::withAlpha(UIStyle::FRAME, 160));
+		}
+		if (apocalypse)
+			drawApocalypseModeSet();
 		if (theRoomPlan.above > 0 && !theSeatsUnderPicker)
 		{
 			drawRoomChevrons(ROOM_LEFT + 12, LOBBY_SEATS_TOP + 13, TRUE);
@@ -3102,7 +3596,9 @@ namespace
 		}
 
 		// the map's facts under its name; a joiner reads who picks it
-		if (md && theRoomMapName)
+		if (apocalypse)
+			drawApocalypseMapFacts(md);
+		else if (md && theRoomMapName)
 		{
 			Int x, y, w, h;
 			theRoomMapName->winGetScreenPosition(&x, &y);
@@ -3114,7 +3610,7 @@ namespace
 			s->getSize(&sw, &sh);
 			s->draw(x, y + h + roomPx(2), UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
 		}
-		if (theRoomSelectMap && theRoomSelectMap->winIsHidden())
+		if (theRoomSelectMap && theRoomSelectMap->winIsHidden() && !apocalypse)
 		{
 			Int x, y, w, h;
 			theRoomSelectMap->winGetScreenPosition(&x, &y);
@@ -3124,7 +3620,8 @@ namespace
 			s->getSize(&sw, &sh);
 			s->draw(x + w - sw, y + (h - sh) / 2, UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
 		}
-		if (theRoomKind == ROOM_SKIRMISH)
+		// the network rooms' RULES is a tab, but in an Apocalypse room the chat is always open under the nights
+		if (theRoomKind == ROOM_SKIRMISH || apocalypse)
 		{
 			UIStyle::columnHeadAt(roomText(TEXT_MAP + 2, TheGameText->fetch("GUI:RoomRules"), label), roomX(ROOM_COLUMN_LEFT + 2), roomY(517), UIStyle::INK);
 			roomFill(ROOM_COLUMN_LEFT, 532, ROOM_RIGHT, 533, UIStyle::withAlpha(UIStyle::FRAME, 150));
@@ -3133,7 +3630,15 @@ namespace
 		// the foot: its rule, then the record (skirmish) or who is ready (network) beside the keys
 		roomFill(ROOM_LEFT, 962, ROOM_RIGHT, 963, UIStyle::withAlpha(UIStyle::FRAME, 110));
 		GameFont *figure = UIStyle::menuFont(UIStyle::MENU_TEXT_ROW_FIGURE);
-		if (theRoomKind == ROOM_SKIRMISH)
+		if (apocalypse)
+		{
+			// Apocalypse never counts a win or a loss (ScoreScreen.cpp); the foot says what it counts instead,
+			// after the second key (the rows say who is ready)
+			GameFont *hint = UIStyle::menuFont(UIStyle::MENU_TEXT_HINT);
+			roomDraw(TEXT_APOCALYPSE + APOC_FOOT, UIStyle::fitKey("GUI:ApocalypseScore", hint, roomPx(ROOM_COLUMN_LEFT - 20 - 580)), hint,
+				580, 1002, UIStyle::MUTED);
+		}
+		else if (theRoomKind == ROOM_SKIRMISH)
 		{
 			static const char *const words[] = { "GUI:RoomWins", "GUI:RoomLosses", "GUI:RoomStreak", "GUI:RoomBestStreak" };
 			static const Int at[] = { 588, 765, 940, 1116 };
@@ -3182,9 +3687,14 @@ namespace
 		const Bool seated = slot->isOccupied();
 		const Bool computer = slot->isAI();
 		const Bool network = theRoomKind != ROOM_SKIRMISH;
+		const Bool apocalypse = roomApocalypse();
 		if (!seated)
 		{
-			roomPlace(w.player, 184, top + 4, 444, top + 48);
+			// an Apocalypse row is a seat's height whoever sits there, its box on the row's middle
+			if (apocalypse)
+				roomPlace(w.player, 184, top + 23, 444, top + 67);
+			else
+				roomPlace(w.player, 184, top + 4, 444, top + 48);
 			roomFont(w.player, UIStyle::MENU_TEXT_BODY);
 			GameWindow *rest[] = { w.persona, w.army, w.colour, w.team, w.handicap, w.ping };
 			for (Int i = 0; i < (Int)ARRAY_SIZE(rest); ++i)
@@ -3210,6 +3720,15 @@ namespace
 			roomPlace(w.ping, 184, top + 56, 208, top + 80);
 		else
 			roomPark(w.ping);
+		if (apocalypse)
+		{
+			// no team box: the director allies every seat whatever it says (README-apocalypse-room.md, A)
+			roomPlace(w.army, 460, top + 23, 856, top + 67);
+			roomPlace(w.colour, 872, top + 23, 1104, top + 67);
+			roomPark(w.team);
+			roomPlace(w.handicap, 1120, top + 23, 1262, top + 67);
+			return;
+		}
 		roomPlace(w.army, 460, top + 23, 780, top + 67);
 		roomPlace(w.colour, 796, top + 23, 976, top + 67);
 		roomPlace(w.team, 992, top + 23, 1104, top + 67);
@@ -3284,7 +3803,16 @@ namespace
 		// one seat's team change is followed and lit; a preset or a host's options that move many are not
 		if (movedCount != 1)
 			moved = -1;
-		LobbyPlanRoom(seats, count, theRoomScroll, height, mostShown, theRoomPlan);
+		const Bool apocalypse = IsApocalypseMap(theRoomGame->getMap());
+		if (apocalypse)
+		{
+			// four seats in seat order under the survivors' head: there are no teams to group by
+			ApocalypsePlanRoom(count, mostShown, theRoomPlan);
+			moved = -1;
+			placeApocalypseRoom();
+		}
+		else
+			LobbyPlanRoom(seats, count, theRoomScroll, height, mostShown, theRoomPlan);
 		if (moved >= 0)
 		{
 			Bool shown = FALSE;
@@ -3355,7 +3883,14 @@ namespace
 		static const char *const containers[] = { "SubParent", "GadgetParent", "FadeParent" };
 		theRoomContainer = roomWindow(layoutFilename, containers[theRoomKind - ROOM_SKIRMISH]);
 		theRoomTitle = roomWindow(layoutFilename, theRoomKind == ROOM_ONLINE ? "StaticTextGameName" : "StaticTextTitle");
+		theRoomLayout = layoutFilename;
 		theRoomMap = roomWindow(layoutFilename, "MapWindow");
+		// the Apocalypse room's fog edge goes over the preview; a second init finds the map hooked already
+		if (theRoomMap && theRoomMap->winGetDrawFunc() != drawRoomMap)
+		{
+			theRoomMapDraw = theRoomMap->winGetDrawFunc();
+			theRoomMap->winSetDrawFunc(drawRoomMap);
+		}
 		theRoomMapName = roomWindow(layoutFilename, "TextEntryMapDisplay");
 		theRoomSelectMap = roomWindow(layoutFilename, "ButtonSelectMap");
 		theRoomPresets = theRoomKind == ROOM_SKIRMISH ? roomWindow(layoutFilename, "ButtonPresets") : NULL;
@@ -3474,6 +4009,7 @@ namespace
 		}
 		theRoomParent = theRoomContainer = theRoomTitle = theRoomMap = theRoomMapName = theRoomSelectMap = theRoomPresets = NULL;
 		theRoomChat = NULL;
+		theRoomLayout = NULL;
 		for (Int i = 0; i < 4; ++i)
 			theRoomStats[i] = NULL;
 		theRoomRowCount = 0;
@@ -3538,6 +4074,8 @@ Bool LobbyRoomInput(UnsignedInt msg, UnsignedIntPtr mData1)
 	}
 	if (step == 0)
 		return FALSE;
+	// an open list goes with the scroll: its box moves to another seat's row or off the board
+	TheWindowManager->winSetLoneWindow(NULL);
 	theRoomScroll = max(0, min(theRoomPlan.maxScroll, theRoomScroll + step));
 	roomRefresh();
 	return TRUE;
@@ -3572,6 +4110,9 @@ void FitLobbyRoomMap(GameWindow *mapWindow, const MapMetaData *map)
 		roomPlace(theRoomMapName, ROOM_COLUMN_LEFT + 344, LOBBY_SEATS_TOP, ROOM_RIGHT, LOBBY_SEATS_TOP + 64);
 		roomPlace(theRoomSelectMap, ROOM_RIGHT - 200, LOBBY_SEATS_TOP + 278, ROOM_RIGHT, LOBBY_SEATS_TOP + 324);
 	}
+	// an Apocalypse room's map is the mode's: its choice stays parked (placeApocalypseRoom)
+	if (roomApocalypse())
+		roomPark(theRoomSelectMap);
 }
 
 void InitLobbySeatVisuals(GameWindow *parent, const char *layoutFilename)

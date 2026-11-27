@@ -22548,6 +22548,171 @@ GUI:QMMatchHead
 "Maç"
 END
 
+// Menu redesign package 3b, the Apocalypse room.
+GUI:ApocalypseSurvivors
+"SAĞ KALANLAR"
+END
+
+GUI:ApocalypseAllied
+"MÜTTEFİK"
+END
+
+GUI:ApocalypseAlliedNote
+"herkes, ölülere karşı"
+END
+
+GUI:ApocalypseWaves
+"DALGA"
+END
+
+GUI:ApocalypseWavesNote
+"%d kişilik"
+END
+
+GUI:ApocalypseBossHealth
+"BOSS CANI"
+END
+
+GUI:ApocalypseOpenSeat
+"Dolu her yer her dalgaya %d puan ekler"
+END
+
+GUI:ApocalypseNights
+"GECELER"
+END
+
+GUI:ApocalypseClockAt
+"saat %ls hızda, baştan"
+END
+
+GUI:ApocalypseBloodMoon
+"KAN AYI"
+END
+
+GUI:ApocalypseBloodMoonNote
+"her üç gecede bir, boss"
+END
+
+GUI:ApocalypseOneDay
+"BİR GÜN"
+END
+
+GUI:ApocalypseDay
+"GÜNDÜZ"
+END
+
+GUI:ApocalypseDusk
+"AKŞAM"
+END
+
+GUI:ApocalypseNight
+"GECE"
+END
+
+GUI:ApocalypseDawn
+"ŞAFAK"
+END
+
+GUI:ApocalypseFirstWave
+"İLK DALGA"
+END
+
+GUI:ApocalypseFallsAt
+"BAŞLAR"
+END
+
+GUI:ApocalypseNewDead
+"YENİ ÖLÜ"
+END
+
+GUI:ApocalypseBoss
+"BOSS"
+END
+
+GUI:ApocalypseKinds
+"%d tür"
+END
+
+GUI:ApocalypseKind
+"1 tür"
+END
+
+GUI:ApocalypseBossPair
+"3'ten 2'si"
+END
+
+GUI:ApocalypseDayOne
+"1. GÜN"
+END
+
+GUI:ApocalypseRandom
+"Rastgele"
+END
+
+GUI:ApocalypseStarts
+"%d başlangıç"
+END
+
+GUI:ApocalypseStart
+"1 başlangıç"
+END
+
+GUI:ApocalypseNewEveryMatch
+"Her maçta yeni"
+END
+
+GUI:ApocalypseKeyStart
+"Başlangıç = yer no."
+END
+
+GUI:ApocalypseKeyBasin
+"Havza: yer başı bir lob"
+END
+
+GUI:ApocalypseKeyWild
+"Yaban: ölüler gelir"
+END
+
+GUI:ApocalypseKeyFog
+"Kırmızı kenar: sis, öldürür"
+END
+
+GUI:ApocalypseModeSet
+"MODUN KURALLARI"
+END
+
+GUI:ApocalypseOff
+"Kapalı"
+END
+
+GUI:ApocalypseNone
+"Yok"
+END
+
+GUI:ApocalypseItsOwn
+"Modun kendi"
+END
+
+GUI:ApocalypseTeams
+"Takımlar"
+END
+
+GUI:ApocalypseAllAllied
+"Hepsi müttefik"
+END
+
+GUI:ApocalypseDifficulty
+"Zorluk"
+END
+
+GUI:ApocalypseAdapts
+"Kendini ayarlar"
+END
+
+GUI:ApocalypseScore
+"Galibiyet de mağlubiyet de yok: ne kadar dayandığın sayılır"
+END
+
 // Menu redesign package 13, the end screens.
 GUI:ScorePlace
 "Sıra"

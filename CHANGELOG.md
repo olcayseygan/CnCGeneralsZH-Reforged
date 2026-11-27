@@ -25,6 +25,14 @@ found and fixed, EA's own, not port damage.**
 - The map keeps its own shape: a wide map like Iron Dragon fills the column 542 by 278 with its name under it, a squarer one stands at the left with its name beside it. A joiner reads "The host picks the map" where Select Map would be.
 - The mode question behind the Mods buttons is a box in the same look: a card a mode with its picture, a line on what it plays and how many seats it takes, the default lit, Esc to cancel and Enter for the lit card.
 
+## The Apocalypse room in the new menu look
+
+- The Apocalypse room was the Classic room cut to four rows, and it lied: Team, Unit Limit, Peace Time, Tech Respawn, Pile Limit, Pro Rules and Day/Night all looked like live boxes, and changing one made it jump straight back, because the mode sets them itself. They now stand read only under SET BY THE MODE, with Teams: All allied and Difficulty: Adapts beside them, and RULES holds only what the host really picks: speed, starting cash, superweapons and shared income.
+- The four seats stand under a SURVIVORS head that says what each one costs: the waves sized for the seats taken and boss health at x1.5 for two survivors, x2.5 for four. An open seat says how much every wave grows if someone takes it.
+- Under the seats, THE NIGHTS draws one day to scale with the first wave's tick on it, then nights 1 to 9 and the twelfth on: when each falls at the room's speed (night 1 at 3:10 at 1.5x, 4:45 at 1.0x), how many new kinds of the dead it brings, and the Blood Moon boss on nights 3, 6 and 9. The skirmish room, with no chat to fit, names every kind. Every figure is read from the mode itself, so the room cannot drift from the match.
+- The map column says what you get, a basin made new every match with a start for each seat, with a key for its marks and the deadly fog's red round the preview. In a LAN or online room the chat stays open under the nights, and the skirmish foot says how you are scored in place of a win and loss record the mode never counts.
+- In every room the mouse wheel scrolls the seats with the pointer over a drop-down as well. The boxes cover most of a seat row and swallowed the wheel without doing anything with it, so the list only scrolled with the pointer over a portrait or a gap.
+
 ## The Direct Strike lobby in the new menu look
 
 - The Direct Strike room was a steel console 804 pixels tall in the middle of a 1080 screen, bare backdrop above and below it and every plate and key a picture. It now fills the same lit frame as the other rooms: the two teams in wings at the sides, the army pictures 226 pixels square where they were 128, and one START key 640 wide under the island. The title, the room's facts and BACK sit along the top as on the end screen.

@@ -355,6 +355,7 @@ extern void ShowInGameChat( Bool immediate = TRUE );
 void ResetInGameChat( void );
 void SetInGameChatType( InGameChatType chatType );
 Bool IsInGameChatActive();
+Bool IsInGameChatAvailable();		///< FALSE in a replay and in a game with nobody to talk to (skirmish, campaign)
 Bool GetInGameChatEntry( UnicodeString &typed, UnicodeString &audience, Int x, Int y, Int width, Int height );
 
 

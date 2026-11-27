@@ -122,6 +122,14 @@ WindowMsgHandledType GadgetTextEntryInput( GameWindow *window, UnsignedInt msg,
 				return MSG_HANDLED;
 			};
 
+			// A control character is no letter.  Backspace takes the last one off, as its key does; every other
+			// one stays out of the text, where the font drew it as a box.  IMEManager keeps them from the keyboard,
+			// but a character sent another way (the -control socket's uitype) came straight in.
+			if( ch == u'\b' )
+				return GadgetTextEntryInput( window, GWM_CHAR, KEY_BACKSPACE, KEY_STATE_DOWN );
+			if( ch < 32 || ch == 127 )
+				return MSG_HANDLED;
+
 			if( ch )
 			{
 				// Constrain keys based on rules for entry box.

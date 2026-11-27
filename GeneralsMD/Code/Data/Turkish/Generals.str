@@ -24161,6 +24161,10 @@ GUI:SPHintEscEnterSaves
 "Esc vazgeçer, Enter kaydeder"
 END
 
+GUI:ReplayBadName
+"Bu ad dosya adı olamaz. / \\ : * ? \" < > | işaretlerini çıkarın."
+END
+
 // Menu redesign package 11, online self: the ladder's side column, the short column heads, the player
 // card's foot hint and its short heads
 

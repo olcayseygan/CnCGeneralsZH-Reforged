@@ -9980,6 +9980,10 @@ GUI:SPHintEscEnterSaves
 "Esc cancels, Enter saves"
 END
 
+GUI:ReplayBadName
+"That name can't be a file name. Remove / \\ : * ? \" < > |"
+END
+
 // Menu redesign package 11, online self: the ladder's side column, the short column heads, the player
 // card's foot hint and its short heads
 

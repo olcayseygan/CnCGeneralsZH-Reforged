@@ -480,6 +480,9 @@ m_role(AIROLE_AGGRESSIVE)
 		m_scoutExtraAt[scoutSlot].zero();
 		m_scoutExtraFrame[scoutSlot] = 0;
 	}
+	m_attention = 0.0f;
+	m_attentionRefused = 0;
+	m_attentionLogFrame = 0;
 	for (Int startNdx = 0; startNdx < MAX_PLAYER_COUNT; ++startNdx) {
 		m_scoutSeenFrame[startNdx] = 0;		// 0 == never seen, which outranks every real age below
 		m_startChecked[startNdx] = FALSE;
@@ -7018,6 +7021,7 @@ void AIPlayer::update( void )
 			if( identityOn() )
 				m_identity->onStart();										// Its general's own moves for this match.
 		}
+		refillAttention();															// This frame's share of the unit looks the micro may spend.
 		AI_PHASE( AIP_SCOUT,   doScouting() );					// Keep one unit looking at the map.
 		AI_PHASE( AIP_RETREAT, doRetreats() );					// Break off the fights we are losing.
 		AI_PHASE( AIP_EXPAND,  doExpansion() );					// Go and take the money that is lying around.
@@ -10729,6 +10733,43 @@ Bool AIPlayer::scoutingHere( void )
 Bool AIPlayer::powerHoldHere( void )
 {
 	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_POWER_HOLD ) != 0 );
+}
+
+/** Unit looks a game second the attention budget pays for, rising past Hard, and how many seconds of them it banks.
+	* Hard's 400 is meant to sit over what its biggest fights spend (130 units in contact at three looks a second), so
+	* the cap bites below Hard and Insane loses nothing; unmeasured, the AI ATTENTION line says whether it does.
+	* ponytail: paid first come first served in each turn's ID order, not the hottest fight first; focus points
+	* placed by measureFight if the refused looks turn out to land on the fights that mattered. */
+static const AIRungReal ATTENTION_PER_SECOND = { { 30.0f, 120.0f, 400.0f }, AIKNOB_OPEN };
+static const Real ATTENTION_BANK_SECONDS = 3.0f;
+
+void AIPlayer::refillAttention( void )
+{
+	if( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_ATTENTION ) != 0 )
+		return;
+	const Real rate = aiRatingLerp( m_rating, ATTENTION_PER_SECOND );
+	m_attention = min( m_attention + rate / LOGICFRAMES_PER_GAME_SECOND_REAL, rate * ATTENTION_BANK_SECONDS );
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if( m_attentionRefused > 0 && now - m_attentionLogFrame >= 30 * LOGICFRAMES_PER_GAME_SECOND )
+	{
+		DEBUG_LOG(("AI ATTENTION frame %d player %d refused %d unit looks in %d s, %.0f a second\n", now, m_player->getPlayerIndex(),
+			m_attentionRefused, (Int)( ( now - m_attentionLogFrame ) / LOGICFRAMES_PER_GAME_SECOND ), rate));
+		m_attentionRefused = 0;
+		m_attentionLogFrame = now;
+	}
+}
+
+Bool AIPlayer::takeAttention( void )
+{
+	if( !runsOwnAI() || ( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_ATTENTION ) != 0 ) )
+		return TRUE;
+	if( m_attention < 1.0f )
+	{
+		++m_attentionRefused;
+		return FALSE;
+	}
+	m_attention -= 1.0f;
+	return TRUE;
 }
 
 Bool AIPlayer::harassHere( void )
@@ -18466,6 +18507,8 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 		const Coord3D *goal = obj->getAI()->getGoalPosition();
 		if( obj->getAI()->isMoving() && goal && sqr( goal->x - to->x ) + sqr( goal->y - to->y ) < sqr( RANK_GOAL_SLACK ) )
 			continue;
+		if( !takeAttention() )
+			continue;		// no attention left for it this turn: the next pass pulls it
 		leaveTacticsAlone( obj->getID() );
 		TacticalStep *step = tacticalStepFor( obj->getID() );
 		step->fallingBack = FALSE;
@@ -22172,6 +22215,8 @@ void AIPlayer::doAbilities( void )
 		const std::vector<AIAbilityButton> buttons = AIAbility_buttonsOf( obj );
 		if( buttons.empty() || abilityUnitBusy( obj ) )
 			continue;
+		if( !takeAttention() )
+			break;		// the seat's attention is spent: the rest wait for their next turn
 		++scans;
 		Object *victim = obj->getAI()->getCurrentVictim();
 		if( victim && (victim->isEffectivelyDead() || m_player->getRelationship( victim->getTeam() ) != ENEMIES || !observerKnowsAbout( victim, me )) )
@@ -22629,6 +22674,9 @@ void AIPlayer::tacticsFor( Object *obj )
 	TacticalStep *step = tacticalStepFor( obj->getID() );
 	step->lastSeenFrame = now;
 	if( now < step->leaveAloneUntil )
+		return;
+	// a unit the seat has no attention for this turn keeps its last order (takeAttention)
+	if( !takeAttention() )
 		return;
 	// home from a lost fight: its own mood again once the walk is over, and not before, or the mood turns
 	// what is left of the walk into an attack move.  One holding at a safe spot stays calm until it is sent
@@ -23297,7 +23345,9 @@ void AIPlayer::answerFire( const std::vector<Object *> *turn )
 		const size_t known = m_gunReadings.size();
 		const Object *victim = obj->getAI()->getCurrentVictim();
 		const Bool onTheGun = victim == gun || victim == shooter;
-		answerHit( obj, shooter, gun );
+		// heard and read either way; answered only with attention left this turn (takeAttention)
+		if( takeAttention() )
+			answerHit( obj, shooter, gun );
 		// one already shooting the gun has no need of a reading, and went alone for want of one
 		if( onTheGun )
 			readGun( obj, gun );
@@ -23307,7 +23357,7 @@ void AIPlayer::answerFire( const std::vector<Object *> *turn )
 		std::vector<Object *> fighters;
 		fightersNear( obj->getPosition(), profile->m_fireWordRadius, &fighters );
 		for( size_t f = 0; f < fighters.size(); ++f )
-			if( fighters[ f ] != obj )
+			if( fighters[ f ] != obj && takeAttention() )
 				answerHit( fighters[ f ], shooter, gun );
 	}
 }
@@ -26486,7 +26536,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 48;		// 48: the scouts' spots off the start positions  47: the general's identity (AIIdentity::xfer)  46: the USA identity's moves and battle plan clock on the AIPlayer  45: the dozer's search  44: the rating on Elo  43: the loss map and the guns' hold  42: the rating  41: a strike route kept once struck  40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
+	XferVersion currentVersion = 49;		// 49: the attention bank  48: the scouts' spots off the start positions  47: the general's identity (AIIdentity::xfer)  46: the USA identity's moves and battle plan clock on the AIPlayer  45: the dozer's search  44: the rating on Elo  43: the loss map and the guns' hold  42: the rating  41: a strike route kept once struck  40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -27232,6 +27282,12 @@ void AIPlayer::xfer( Xfer *xfer )
 		}
 	}
 
+	// the attention bank; an older save starts it empty, filled in a few seconds
+	if( version >= 49 )
+		xfer->xferReal( &m_attention );
+	else if( xfer->getXferMode() == XFER_LOAD )
+		m_attention = 0.0f;
+
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------
@@ -27747,6 +27803,7 @@ static const AIRatingTable s_ratingTables[] =
 	AI_TABLE_REAL( POWER_VALUE_FLOOR ),
 	AI_TABLE_INT( HARASS_PARTY ),
 	AI_TABLE_INT( HARASS_EVERY_SECONDS ),
+	AI_TABLE_REAL( ATTENTION_PER_SECOND ),
 	AI_TABLE_INT( RUSH_SECONDS ),
 	AI_TABLE_INT( RAID_EVERY_SECONDS ),
 	AI_TABLE_INT( SHARE_CAP ),

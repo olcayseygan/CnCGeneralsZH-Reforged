@@ -1073,6 +1073,14 @@ protected:
 	Bool harassHere(void);		///< every personality raids the enemy's economy, smaller than the Raider, and raiders withdraw when hurt or outgunned
 	Int raidPartySize(void);	///< how many go on a raid: the Raider's party, any other personality's harass party, under 2 for none
 	void clearGarrisons(void);	///< units whose weapons clear a garrison go at a known enemy-held building near them (-aiknobsoff garrison)
+	/** The attention budget (-aiknobsoff attention): a rated count of unit looks a game second, banked up to a few
+		* seconds' worth, spent by the tactics, the answers to fire, the units' buttons and the hurt pull-outs.  A unit
+		* the bank cannot pay for keeps its last order.  Build, wave and expansion orders never spend it. */
+	Bool takeAttention(void);
+	void refillAttention(void);
+	Real					m_attention;					///< looks in the bank, saved
+	Int						m_attentionRefused;		///< looks refused since the last AI ATTENTION line; log only, not saved
+	UnsignedInt		m_attentionLogFrame;	///< when that line was written; log only, not saved
 	Real killZoneWeight(void) const;							///< how much of the loss record a reading counts, 0 when off
 	Real killZoneAt(const Coord3D *at) const;			///< ... the losses round one spot, weighed
 	Real gunOdds(void) const;											///< what an attack has to be worth against the guns it meets, 0 when off

@@ -74,13 +74,14 @@ static const Int MAX_GRID_SIDE = 161;
 static const Real NO_WATER = -1.0e30f;
 // A move or attack click is the mouse cursor's own mark laid on the ground (cursors.py Move, Attack),
 // measured in the cursor's 48 unit frame: a unit is CLICK_UNIT times GROUND_MARKS_ZOOM world units at every
-// zoom (owner, 2026-11-26: drawn the same near and far), about 7 world units across at rest
-static const Real CLICK_UNIT = 0.35f;
+// zoom (owner, 2026-11-26: drawn the same near and far), about 14 world units across at rest
+// (owner, 2026-11-27: twice the 0.35 before, which could not be seen)
+static const Real CLICK_UNIT = 0.7f;
 static const Real CLICK_SHAPE = 16.0f;					///< a shape's quad: MarkerShapeDart's 18 of 24 is the cursor's 12 unit arrowhead
 static const Real CLICK_TIP_START = 14.0f;			///< the tips' distance from the point as they close in
 static const Real CLICK_TIP_REST = 4.0f;
-static const Real TARGET_TIP_START = 54.0f;			///< an attack on a unit closes on its hull instead, resting 15 world units out
-static const Real TARGET_TIP_REST = 43.0f;			///< at least (times CLICK_UNIT): closed on the point they lay under the model and never showed
+static const Real TARGET_TIP_START = 32.5f;			///< an attack on a unit closes on its hull instead, resting 15 world units out
+static const Real TARGET_TIP_REST = 21.5f;			///< at least (times CLICK_UNIT): closed on the point they lay under the model and never showed
 static const Real TARGET_HULL_MARGIN = 3.0f;		///< world units the tips rest outside the target's bounding circle, a building's or a big vehicle's
 static const Real CLICK_PIP = 8.6f;							///< MarkerOrderDot's quad: its diamond is the cursor's 2.5 unit pip
 static const Real SHAPE_REACH = 1.125f * CLICK_SHAPE + 2.0f;	///< a shape's far corner past its tip, 0.42 + 0.71 of its side, and a margin
@@ -1791,7 +1792,7 @@ static void emit( Int piece, const Real *x, const Real *y, const Real *pu, const
 static const Real HAIR_THIN = 0.7f;
 static const Real HAIR_ALPHA = 0.85f;
 static const Real CHEVRON_SCALE = 0.55f;		///< MarkerChevron's quad, of the size a caller names (quadPiece)
-static const Real CHEVRON_ALPHA = 0.65f;
+static const Real CHEVRON_ALPHA = 0.85f;		///< 0.65 lost the far and shaded ones on grass (2026-11-27)
 
 static Bool isHair( Int piece )
 {

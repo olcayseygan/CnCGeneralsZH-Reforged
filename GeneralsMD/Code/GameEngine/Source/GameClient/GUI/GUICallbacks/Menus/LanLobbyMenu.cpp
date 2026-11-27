@@ -485,7 +485,7 @@ static void drawLanPanel( GameWindow *window, WinInstanceData *instData )
 static void placeLanPlayers( Bool picked )
 {
 	s_playersTop = picked ? 752 : 130;
-	LobbyPlaceOnBoard( listboxPlayers, 1334, s_playersTop + 34, 1860, 946 );
+	LobbyPlaceOnBoard( listboxPlayers, 1334, s_playersTop + 34, 1860, 944 );		// 32 over the foot's keys at 976
 }
 
 /* Each frame: the first game is picked while games exist and none is; the picked block follows the pick; Join
@@ -701,6 +701,10 @@ void LanLobbyMenuInit( WindowLayout *layout, void *userData )
 	//TheWindowManager->winSetFocus( parentLanLobby );
 	TheWindowManager->winSetFocus( textEntryChat );
 	CreateLANGameInfoWindow(staticTextGameInfo);
+	/* EA's placeholder only gives the picked game its rect.  Shown, it is a NOINPUT window over the right
+		 column, and with nothing picked the players' list grows up under it, so a click there reached nobody. */
+	if (staticTextGameInfo)
+		staticTextGameInfo->winHide(TRUE);
 
 	//TheShell->showShellMap(FALSE);
 	//shellmapOn = FALSE;

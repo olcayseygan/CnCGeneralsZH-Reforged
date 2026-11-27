@@ -1022,6 +1022,8 @@ static Int s_lineRoom = -1;							///< the room the nick was fitted to
 static const Image *s_linePortrait = NULL;
 static Int s_placeRoom = -1;						///< the room the server's name was fitted to
 static UnicodeString s_placeShown;
+static Int s_friendsKeyWidth = 0;				///< the friends key's width at 1080, 0 for none
+static IRegion2D s_friendsKeyRect;			///< where the last header stood it, empty when it did not
 static Bool s_noticeShown = FALSE;			///< the notice's words are laid out for s_noticeSerial and s_noticeRoom
 static UnsignedInt s_noticeSerial = 0;
 static Int s_noticeRoom = -1;
@@ -1048,6 +1050,7 @@ static void freeHeader( void )
 			TheDisplayStringManager->freeDisplayString( s_header[ each ] );
 		s_header[ each ] = NULL;
 	}
+	s_friendsKeyRect.lo.x = s_friendsKeyRect.hi.x = 0;		// no head, no key
 }
 
 /// a tab in the menu language: the open one green and lit, the hovered one cyan
@@ -1252,18 +1255,42 @@ static void drawServerRow( Int left, Int right, Int middle )
 		TheDisplay->drawImage( light, x, middle - size / 2, x + size, middle - size / 2 + size );
 		x -= menuPx( 10.0f );
 	}
-	if( x - left != s_placeRoom || place.compare( s_placeShown ) != 0 )
+	// the friends key keeps its width and 24 of air at the left of the server's words
+	const Int keyWidth = s_friendsKeyWidth > 0 ? menuPx( (Real)s_friendsKeyWidth ) : 0;
+	const Int keyGap = s_friendsKeyWidth > 0 ? menuPx( 24.0f ) : 0;
+	const Int room = x - left - keyWidth - keyGap;
+	if( room != s_placeRoom || place.compare( s_placeShown ) != 0 )
 	{
-		s_placeRoom = x - left;
+		s_placeRoom = room;
 		s_placeShown = place;
 		t[ HEADER_PLACE ]->setText( s_placeRoom > 0 ? fitName( place, t[ HEADER_PLACE ]->getFont(), s_placeRoom ) : UnicodeString::TheEmptyString );
 	}
+	Int wordsLeft = x;
 	if( t[ HEADER_PLACE ]->getTextLength() > 0 )
 	{
 		Int w, h;
 		t[ HEADER_PLACE ]->getSize( &w, &h );
 		t[ HEADER_PLACE ]->draw( x - w, middle - h / 2, INK, black( 160 ) );
+		wordsLeft = x - w;
 	}
+	if( keyWidth > 0 )
+	{
+		const Int half = menuPx( 18.0f );
+		s_friendsKeyRect.lo.x = max( left, wordsLeft - keyGap - keyWidth );
+		s_friendsKeyRect.hi.x = s_friendsKeyRect.lo.x + keyWidth;
+		s_friendsKeyRect.lo.y = middle - half;
+		s_friendsKeyRect.hi.y = middle + half;
+	}
+}
+
+void onlineReserveFriendsKey( Int width1080 )
+{
+	s_friendsKeyWidth = max( 0, width1080 );
+}
+
+IRegion2D onlineFriendsKeyRect( void )
+{
+	return s_friendsKeyRect;
 }
 
 void onlinePageInit( GameWindow *parent, const char *layout, OnlineTab open )
@@ -1356,6 +1383,8 @@ void onlineHeader( const UnicodeString &title, const UnicodeString &subtitle )
 	if( t[ HEADER_TITLE ] == NULL )
 		return;		// no page, or between a page's shutdown and the next one's init
 
+	s_friendsKeyRect.lo.x = s_friendsKeyRect.hi.x = 0;		// stood again by drawServerRow
+	s_friendsKeyRect.lo.y = s_friendsKeyRect.hi.y = 0;
 	const Bool signedOut = s_openTab == ONLINE_TAB_NONE;
 	const IRegion2D panel = onlinePanel();
 	glass( panel );
@@ -1553,6 +1582,8 @@ static void drawCentred( DisplayString *words, GameFont *font, const IRegion2D &
 void veil( Int alpha )
 {
 	TheDisplay->drawFillRect( 0, 0, TheDisplay->getWidth(), TheDisplay->getHeight(), black( alpha ) );
+	// a box drawn after this frosts the veiled screen, not the world under it
+	TheDisplay->staleBackdrop();
 }
 
 Bool backdropBlurs( void )
@@ -1566,6 +1597,8 @@ void glass( const IRegion2D &panel, Int alpha )
 {
 	TheDisplay->drawBackdropBlur( panel.lo.x, panel.lo.y, panel.hi.x, panel.hi.y );
 	fill( panel, black( alpha ) );
+	// a panel stacked on this one frosts this one, not the world under both
+	TheDisplay->staleBackdrop();
 }
 
 void dimOutside( const IRegion2D &panel, Int alpha )

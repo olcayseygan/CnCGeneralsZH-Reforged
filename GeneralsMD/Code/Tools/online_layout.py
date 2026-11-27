@@ -10,13 +10,14 @@ wrapper): the panel on frame A at 32,28 to 1888,1052, content from x 60 to 1860,
 title), five tabs on the row 126 to 162 (TabHome, TabQuickMatch, TabCustom, TabLadder, TabSkins,
 which the code sizes to their words), content from 182, the foot rule at 962 and the keys at 976 to
 1028, 300 wide and 16 apart. The login is a dialog on 340,241 to 1580,839 with the same head offset
-from its corner and no tabs. The two popups are cards of their own, solid GROUND under a FRAME
-edge, centred on the board.
+from its corner and no tabs. The popups are boxes centred on the board, clear here: the code draws
+their glass and frame A.
 
 Package 9 (login, hub, Quick Match) authored the board and its own three screens; package 10 the
 Custom games lobby (README-game-lists.md in screens/game-lists) and the Host Game and Join Game boxes,
-PopupJoinGame a master of its own since; the ladder and the player card keep their windows on the
-board's columns (main 60 to 1236, side 1260 to 1860) until package 11 lays them out.
+PopupJoinGame a master of its own since; package 11 the ladder's and the skins page's keys and the
+player card (README-online-self.md in screens/online-self). The ladder's rows, the skins page's units,
+looks and filters are buttons the code makes, as many as the data asks for.
 
 Nothing EA named goes. A window the design drops is kept HIDDEN, so every lookup the callbacks make
 still finds it; the windows this script adds are boxes the code draws in (Panel*, Card*), static
@@ -90,8 +91,6 @@ TABS = [("TabHome", "GUI:OnlineTabHome", 108), ("TabQuickMatch", "GUI:OnlineTabQ
         ("TabCustom", "GUI:OnlineTabCustom", 196), ("TabLadder", "GUI:OnlineLadderButton", 124),
         ("TabSkins", "GUI:OnlineSkinsButton", 112)]
 
-# the popups keep the old row's height until package 10 and 11 lay them out
-POPUP_ROW_HEIGHT, POPUP_TAB_HEIGHT = 56, 32
 # the open tab is the disabled button, its label ACTIVE as the options screen's (optionsmenu_layout.py)
 TAB_CAPTION_COLOR = ("ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255, "
                      "DISABLED: 186 255 12 255, DISABLEDBORDER: 0 2 0 255, "
@@ -99,17 +98,16 @@ TAB_CAPTION_COLOR = ("ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255, "
 BODY_FONT = 'NAME: "Arial", SIZE: 10, BOLD: 0'
 
 # UIStyle's tokens
-PANEL, FRAME_COLOR = room.PANEL, room.FRAME_COLOR
-GROUND = (5, 7, 12, 255)
+FRAME_COLOR = room.FRAME_COLOR
 CLEAR = (0, 0, 0, 0)
-# the boxes the code draws in: clear on the converted screens, the old look's on the lobby until package 10
+# the boxes the code draws in, clear
 BOX_DRAWN = (CLEAR, CLEAR)
-BOX_OLD = (PANEL, FRAME_COLOR)
 
-# the popups: the player card as mocked (card.html); Host Game and Join Game are boxes of the message box's
-# pattern, 760 wide and centred (README-game-lists.md: 454 and 320 high), fields 32 in, keys 220 by 48, 12
-# apart at the foot's right, 20 over its foot
-CARD = (360, 96, 1200, 896)
+# the popups: the player card (README-online-self.md, "Player card": 1240 by 900, centred, the code draws its
+# glass and frame A and shrinks it while the history waits); Host Game and Join Game are boxes of the message
+# box's pattern, 760 wide and centred (README-game-lists.md: 454 and 320 high), fields 32 in, keys 220 by 48,
+# 12 apart at the foot's right, 20 over its foot
+CARD = (340, 90, 1240, 900)
 HOST_CARD = (580, 313, 760, 454)
 JOIN_CARD = (580, 380, 760, 320)
 BOX_X0, BOX_W = 612, 696
@@ -231,9 +229,19 @@ QM_SPEED = (SIDE[0] + SIDE[1] - 24 - 120, 566 + 5 * 52 + 10, 120, 32)
 HUB_REJOIN = (HUB_RECENT[0] + HUB_RECENT[2] - 24 - KEY, HUB_RECENT[1] + HUB_RECENT[3] - 76, KEY, ROW_HEIGHT)
 
 
-# The player card's two tabs under its head, a page tab's look: QUICK MATCH 147 / HIZLI MAC 105 and
-# VS AI 54 / BILGISAYARA KARSI 208 in Arial at 21 px, plus 22 each side
-CARD_TABS = [(CARD[0] + 24, CARD[1] + 158, 192, POPUP_TAB_HEIGHT), (CARD[0] + 224, CARD[1] + 158, 252, POPUP_TAB_HEIGHT)]
+# The player card's two tabs under its head, 164 to 198 down from its top and 28 in; the code sizes each to
+# its words (16 px bold capitals plus 22 a side, 8 apart, PopupPlayerInfo.cpp), these stand them roughly there.
+# Its foot: CLOSE 220 wide at the right (Enter's, lit), PROFILE 380 wide 12 before it, 48 high, 20 over the foot
+CARD_X0, CARD_X1, CARD_Y1 = CARD[0] + 28, CARD[0] + CARD[2] - 28, CARD[1] + CARD[3]
+CARD_TABS = [(CARD_X0, CARD[1] + 164, 200, 34), (CARD_X0 + 208, CARD[1] + 164, 120, 34)]
+CARD_CLOSE = (CARD_X1 - 220, CARD_Y1 - 68, 220, 48)
+CARD_PROFILE = (CARD_X1 - 232 - 380, CARD_Y1 - 68, 380, 48)
+
+# The ladder's and the skins page's keys (README-online-self.md): Previous and Next at the foot's right, Save
+# where Next stands (the skins page shows it, the ladder hides it), Jump to my page in Your place, the
+# platform's one key under the look's name
+LADDER_JUMP = (1344, 452, 492, 46)
+SKINS_ACTION = (1364, 860, 472, 54)
 
 
 def card_tab(name, label, rect):
@@ -269,15 +277,17 @@ SCREENS = {
               text("StaticTextMOTD", "StaticTextPassword", (LOGIN_X0, LOGIN_FIELDS + 162, 560, 70)),
               text("StaticTextSignIn", "StaticTextPassword", (LOGIN_SIGN_X, LOGIN_TOP, LOGIN_SIGN_W, 20), body=False,
                    label="GUI:OnlineLoginHeading"),
-              text("StaticTextStatus", "StaticTextPassword", (LOGIN_SIGN_X, LOGIN_FIELDS + 358, LOGIN_SIGN_W, 22))],
+              # 8 under the two half keys, so more than the grid's 64 under Sign In, its sibling
+              text("StaticTextStatus", "StaticTextPassword", (LOGIN_SIGN_X, LOGIN_FIELDS + 356, LOGIN_SIGN_W, 22))],
+        # a label 8 over its field, 16 between a field and the next label, the keep check 8 under the password
         place={"StaticTextEmail": (LOGIN_SIGN_X, LOGIN_FIELDS + 16, LOGIN_SIGN_W, 18),
-               "ComboBoxEmail": (LOGIN_SIGN_X, LOGIN_FIELDS + 40, LOGIN_SIGN_W, 48),
-               "StaticTextPassword": (LOGIN_SIGN_X, LOGIN_FIELDS + 108, LOGIN_SIGN_W, 18),
+               "ComboBoxEmail": (LOGIN_SIGN_X, LOGIN_FIELDS + 42, LOGIN_SIGN_W, 48),
+               "StaticTextPassword": (LOGIN_SIGN_X, LOGIN_FIELDS + 106, LOGIN_SIGN_W, 18),
                "TextEntryPassword": (LOGIN_SIGN_X, LOGIN_FIELDS + 132, LOGIN_SIGN_W, 48),
-               "CheckBoxRememberInfo": (LOGIN_SIGN_X, LOGIN_FIELDS + 196, LOGIN_SIGN_W, 32),
-               "ButtonLogin": (LOGIN_SIGN_X, LOGIN_FIELDS + 244, LOGIN_SIGN_W, ROW_HEIGHT),
-               "ButtonCreateAccount": (LOGIN_SIGN_X, LOGIN_FIELDS + 312, LOGIN_HALF, 44),
-               "ButtonTOS": (LOGIN_X1 - LOGIN_HALF, LOGIN_FIELDS + 312, LOGIN_HALF, 44),
+               "CheckBoxRememberInfo": (LOGIN_SIGN_X, LOGIN_FIELDS + 188, LOGIN_SIGN_W, 32),
+               "ButtonLogin": (LOGIN_SIGN_X, LOGIN_FIELDS + 236, LOGIN_SIGN_W, ROW_HEIGHT),
+               "ButtonCreateAccount": (LOGIN_SIGN_X, LOGIN_FIELDS + 304, LOGIN_HALF, 44),
+               "ButtonTOS": (LOGIN_X1 - LOGIN_HALF, LOGIN_FIELDS + 304, LOGIN_HALF, 44),
                "ButtonBack": (LOGIN_X0, LOGIN_ROW_TOP, KEY, ROW_HEIGHT)},
         aligned=["StaticTextEmail", "StaticTextPassword"],
         keys=["ButtonBack"],
@@ -359,13 +369,19 @@ SCREENS = {
     "WOLLadderScreen": dict(
         panel="WindowLadder", home=None, title="StaticTextTitle", title_text="GUI:OnlineLadderButton",
         rule="HeaderRule", tabs=True,
-        names=[], boxes=[], framed=[], adds=[],
+        names=[], boxes=[], framed=[],
+        adds=[button("ButtonPrev", "ButtonBack", SECOND_RIGHT, "GUI:OnlineLadderPrev"),
+              button("ButtonNext", "ButtonBack", RIGHT, "GUI:OnlineLadderNext"),
+              button("ButtonSave", "ButtonBack", RIGHT, "GUI:OnlineSkinsSave"),
+              button("ButtonJump", "ButtonBack", LADDER_JUMP, "GUI:OnlineLadderJump"),
+              button("ButtonAction", "ButtonBack", SKINS_ACTION, "GUI:OnlineSkinsWear")],
         # EA's Back came before the panel, which drew over it once it covered the screen
         above=[("ButtonBack", "WindowLadder")],
         place={"ButtonBack": BACK},
         aligned=[],
-        keys=["ButtonBack"],
-        hide=[]),
+        keys=["ButtonBack", "ButtonPrev", "ButtonNext", "ButtonSave"],
+        # the master opens as the ladder; the skins page swaps the keys over (WOLLadderScreen.cpp)
+        hide=["ButtonSave", "ButtonAction"]),
 
     # the card's head, figures, boxes and last matches are drawn in code over PopupParentOld
     # (PopupPlayerInfo.cpp), so EA's nick, rank picture and rating line go with its statistics
@@ -374,11 +390,10 @@ SCREENS = {
         labels={"ButtonCommunicator": "GUI:OnlineCardProfile"},
         names=[("StaticTextBattleHonors", ("text", "GUI:BattleHonors"))],
         reparent=[], boxes=[],
-        framed=[("PopupParentOld", CARD, GROUND, FRAME_COLOR)],
+        framed=[("PopupParentOld", CARD, CLEAR, CLEAR)],
         adds=[card_tab("TabQuickMatch", "GUI:OnlineTabQuickMatch", CARD_TABS[0]),
               card_tab("TabAI", "GUI:OnlineCardTabAI", CARD_TABS[1])],
-        place={"PopupParent": CARD,
-               "ButtonClose": (384, 912, 300, POPUP_ROW_HEIGHT), "ButtonCommunicator": (1096, 912, 440, POPUP_ROW_HEIGHT)},
+        place={"PopupParent": CARD, "ButtonClose": CARD_CLOSE, "ButtonCommunicator": CARD_PROFILE},
         aligned=[],
         hide=["PlayerInfoParent", "ListboxInfo", "StaticTextBattleHonors", "CheckBoxAsianText",
               "CheckBoxNonAsianText", "ButtonDeleteAccount", "ButtonSetLocale", "StaticTextPlayerStatisticsLabel",

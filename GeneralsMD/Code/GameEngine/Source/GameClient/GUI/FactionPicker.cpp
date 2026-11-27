@@ -18,13 +18,16 @@
 
 // FILE: FactionPicker.cpp ////////////////////////////////////////////////////////////////////////
 //
-// The staging rooms' army screen (FactionPicker.h).  One window drawn in code over the whole room,
-// modal while it is up, in the front end's look (UIStyle.h): the armies on the left under their
-// sides' headings with Random All and Custom Selection over them, the focused army's portrait, name
-// and description on the right, Back and Confirm in the room's button row.  It reads the armies from
-// the seat's own box, so whatever the box lists (the sides, the generals, Observer where the room
-// has one) is what the screen offers, and it hands the pick back through the box.  Every tile is one
-// size whatever the box lists; a list taller than its place scrolls, with the wheel and a bar.
+// The staging rooms' army screen (FactionPicker.h), in the menu language (MENU-REDESIGN.md package 7,
+// experiments/proofs/2026-11-24/screens/pickers/README-pickers.md).  One window drawn in code over the
+// whole room, modal while it is up: frame A on the room's panel, Random All and Custom Selection as
+// tabs, one row a side (its tick box, its name, how many of its armies are in the draw, a RANDOM
+// <SIDE> key, then its armies as named tiles), and on the right THE DRAW (the count, every army that
+// can be drawn, the ones in it with the game's words for each) or, with one army picked, its large
+// portrait, its words and features and the other armies of its side.  BACK and CONFIRM stand in the
+// room's foot, CONFIRM on Play Game's rect.  It reads the armies from the seat's own box, so whatever
+// the box lists (the sides, the generals, Observer where the room has one) is what the screen offers,
+// and it hands the pick back through the box.
 //
 // Custom Selection ticks the Random pool.  A ticked pool goes into the seat's faction number
 // (EncodeRandomPool, GameInfo.h), which every room already sends to the host and the host to every
@@ -60,32 +63,37 @@
 
 #include <vector>
 
-// the screen on the 1920x1080 board, inside the staging room's panel
-static const Real LEFT = UIStyle::ROOM_INSET;
-static const Real RIGHT = 1920.0f - UIStyle::ROOM_INSET;
-static const Real GRID_RIGHT = 760.0f;
-static const Real DETAIL_LEFT = 792.0f;
-static const Real TOP = 168.0f;
-static const Real TAB_HEIGHT = 44.0f;
-static const Real TAB_GAP = 12.0f;
-static const Real GRID_TOP = 232.0f;
-static const Real GRID_BOTTOM = 916.0f;
-static const Real HEADING_HEIGHT = 34.0f;
-static const Real GROUP_GAP = 10.0f;
-static const Real CELL = 112.0f;
-static const Real CELL_GAP = 12.0f;
-static const Real BAR_WIDTH = 20.0f;			// in the 28 left over beside five columns of tiles
-static const Real BAR_MIN_THUMB = 48.0f;
-static const Real PORTRAIT_BOTTOM = 440.0f;
-static const Real BANNER_BOTTOM = 504.0f;
-static const Real DESCRIPTION_TOP = 516.0f;
-static const Real PAD = 16.0f;
-static const Real POOL_ICON = 96.0f;
-static const Real SIDE_TICK = 26.0f;
-static const Real SIDE_TICK_GAP = 14.0f;
-static const Real MAX_PORTRAIT_SCALE = 4.0f;	// a 120 px Command Center portrait blown up past this is only blur
-static const Int POOL_DIM_ALPHA = 190;
-static const Int HOVER_ALPHA = 80;				///< the EDGE blue over a tile or the scroll thumb under the mouse
+// the screen on the 1920x1080 board (README-pickers.md)
+static const Int PANEL_LEFT = UIStyle::MENU_PANEL_LEFT;
+static const Int PANEL_TOP = UIStyle::MENU_PANEL_TOP;
+static const Int PANEL_RIGHT = UIStyle::MENU_PANEL_RIGHT;
+static const Int PANEL_BOTTOM = UIStyle::MENU_PANEL_BOTTOM;
+static const Int LEFT = 60;
+static const Int RIGHT = 1860;
+static const Int TABS_TOP = 126;
+static const Int TABS_BOTTOM = 166;
+static const Int LIST_RIGHT = 860;				///< the side rows' right edge
+static const Int ROWS_TOP = 182;
+static const Int BODY_BOTTOM = 952;
+static const Int GAP = 8;
+static const Int HEAD_WIDTH = 196;				///< a row's side head, 60 to 256
+static const Int TICK = 24;
+static const Int KEY_HEIGHT = 34;
+static const Int DIVIDER = 876;
+static const Int DETAIL_LEFT = 892;
+static const Int FOOT_RULE = 962;
+static const Int KEYS_TOP = 976;
+static const Int KEYS_BOTTOM = 1028;
+static const Int BACK_RIGHT = 270;
+static const Int CONFIRM_LEFT = 1318;			///< the room's Play Game
+static const Int FOOT_MIDDLE = 1002;
+static const Int PORTRAIT = 380;
+static const Int STRIP_PICTURE = 52;
+static const Int TIP_WIDTH = 560;
+
+// the screen's own types, unnamed: MapPicker.cpp has a PickerCell of its own (MapPicker.cpp says why)
+namespace
+{
 
 struct PickerCell
 {
@@ -96,21 +104,21 @@ struct PickerCell
 	const Image *portrait;
 	UnicodeString strategy;
 	UnicodeString features;
-	DisplayString *label;	///< the name in the cell, only for an army with no picture
-	IRegion2D box;
+	IRegion2D box;				///< its tile on the screen
 };
 
 struct PickerGroup
 {
 	AsciiString leadSide;
 	UnicodeString name;
-	DisplayString *heading;
-	ICoord2D at;
-	IRegion2D nameBox;		///< a click on the name narrows the pool to the side
 	IRegion2D tickBox;		///< Custom Selection's box for the whole side
+	IRegion2D keyBox;			///< RANDOM <SIDE>: that side alone in the draw
 	UnsignedInt mask;			///< the side's pool bits, 0 for Observer
+	Int top, bottom;			///< its row on the board
 	std::vector<Int> cells;
 };
+
+}	// namespace
 
 static Bool s_openOnStart = FALSE;
 static Bool s_openOnStartCustom = FALSE;
@@ -124,58 +132,121 @@ static std::vector<PickerGroup> s_groups;
 static Int s_focus = -1;					///< a cell, or -1 for Random
 static Bool s_custom = FALSE;
 static UnsignedInt s_mask = 0;
-static UnicodeString s_leftOut;		///< the listed armies a plain Random never draws
 static Int s_lastPressCell = -1;
 static UnsignedInt s_lastPressTime = 0;
 
-static DisplayString *s_title = NULL;
-static DisplayString *s_tabText[ 2 ] = { NULL, NULL };
-static DisplayString *s_backText = NULL;
-static DisplayString *s_confirmText = NULL;
-static DisplayString *s_nameText = NULL;
-static DisplayString *s_strategyText = NULL;
-static DisplayString *s_randomMark = NULL;
-static std::vector<DisplayString *> s_featureText;
+static IRegion2D s_tabBox[ 2 ], s_backBox, s_confirmBox;
 
-static IRegion2D s_panelBox, s_tabBox[ 2 ], s_backBox, s_confirmBox, s_portraitBox, s_bannerBox, s_descriptionBox;
-static IRegion2D s_gridBox, s_barBox;
-static Int s_scroll = 0;					///< pixels of the list above the grid's top
-static Int s_scrollMax = 0;				///< 0 when the whole list fits, and then there is no bar
-static Int s_thumbGrab = -1;			///< how far down the thumb the mouse holds it, -1 when it does not
+// one display string a place on the screen, so a string's texture is rebuilt only when its words change
+enum
+{
+	TEXT_TITLE = 0, TEXT_TABS = 1, TEXT_BACK = 3, TEXT_CONFIRM, TEXT_HINT,
+	TEXT_GROUPS = 8,				///< eight a group: name, count, key, two line words, three side line rows
+	GROUP_TEXTS = 8,
+	TEXT_CELLS = TEXT_GROUPS + GROUP_TEXTS * 8,	///< two a cell: its name's lines
+	TEXT_DETAIL = TEXT_CELLS + 2 * 48,					///< the right column's words
+	DETAIL_TEXTS = 96,
+	TEXT_TIP = TEXT_DETAIL + DETAIL_TEXTS,
+	TEXT_COUNT = TEXT_TIP + 8
+};
+static DisplayString *s_texts[ TEXT_COUNT ];
+static DisplayString *s_measure = NULL;
 
 //-------------------------------------------------------------------------------------------------
-static DisplayString *newText( const UnicodeString &text, GameFont *font )
+static DisplayString *text( Int key, const UnicodeString &words, GameFont *font )
 {
-	DisplayString *string = TheDisplayStringManager->newDisplayString();
-	string->setFont( font );
-	string->setText( text );
-	return string;
+	if( key < 0 || key >= TEXT_COUNT )
+		return NULL;
+	DisplayString *&s = s_texts[ key ];
+	if( s == NULL )
+		s = TheDisplayStringManager->newDisplayString();
+	if( s->getFont() != font )
+		s->setFont( font );
+	if( s->getText().compare( words ) != 0 )
+		s->setText( words );
+	return s;
 }
 
-static void freeText( DisplayString *&string )
+static Int measureIn( const UnicodeString &words, void *font )
 {
-	if( string )
-		TheDisplayStringManager->freeDisplayString( string );
-	string = NULL;
+	if( s_measure == NULL )
+		s_measure = TheDisplayStringManager->newDisplayString();
+	if( s_measure->getFont() != (GameFont *)font )
+		s_measure->setFont( (GameFont *)font );
+	s_measure->setText( words );
+	return s_measure->getWidth( -1 );
 }
 
-static IRegion2D boardBox( Real x0, Real y0, Real x1, Real y1 )
+static Int heightOf( GameFont *font )
 {
-	IRegion2D box;
-	box.lo.x = UIStyle::boardX( x0 );
-	box.lo.y = UIStyle::boardY( y0 );
-	box.hi.x = UIStyle::boardX( x1 );
-	box.hi.y = UIStyle::boardY( y1 );
-	return box;
+	if( s_measure == NULL )
+		s_measure = TheDisplayStringManager->newDisplayString();
+	s_measure->setFont( font );
+	s_measure->setText( UnicodeString( u"Ag" ) );
+	Int w = 0, h = 0;
+	s_measure->getSize( &w, &h );
+	return h;
 }
+
+static Int fpx( Int length ) { return UIStyle::pxOn( (Real)length, TheDisplay->getWidth(), TheDisplay->getHeight() ); }
+static IRegion2D board( Int l, Int t, Int r, Int b ) { return UIStyle::boardRect( l, t, r, b ); }
+static Int boxWidth( const IRegion2D &box ) { return box.hi.x - box.lo.x; }
+static Int boxHeight( const IRegion2D &box ) { return box.hi.y - box.lo.y; }
+static const Color SHADE = GameMakeColor( 0, 0, 0, 160 );
 
 static Bool isInside( const IRegion2D &box, Int x, Int y )
 {
 	return x >= box.lo.x && x < box.hi.x && y >= box.lo.y && y < box.hi.y;
 }
 
-static Int boxWidth( const IRegion2D &box ) { return box.hi.x - box.lo.x; }
-static Int boxHeight( const IRegion2D &box ) { return box.hi.y - box.lo.y; }
+static void fillBox( const IRegion2D &b, Color color )
+{
+	if( boxWidth( b ) > 0 && boxHeight( b ) > 0 )
+		TheDisplay->drawFillRect( b.lo.x, b.lo.y, boxWidth( b ), boxHeight( b ), color );
+}
+
+static void frameBox( const IRegion2D &b, Color color )
+{
+	TheDisplay->drawOpenRect( b.lo.x, b.lo.y, boxWidth( b ), boxHeight( b ), 1.0f, color );
+}
+
+/// words in a screen box: across centres them, else from its left; down they are centred
+static void drawIn( Int key, const UnicodeString &words, GameFont *font, const IRegion2D &b, Color color, Bool across = FALSE )
+{
+	DisplayString *s = text( key, words, font );
+	if( s == NULL || words.isEmpty() )
+		return;
+	Int w = 0, h = 0;
+	s->getSize( &w, &h );
+	s->draw( across ? ( b.lo.x + b.hi.x - w ) / 2 : b.lo.x, ( b.lo.y + b.hi.y - h ) / 2, color, SHADE );
+}
+
+/// words wrapped to a board column from y, pitch apart, at most lines of them (the last cut with an
+/// ellipsis at a word); the y under them
+static Int drawWrapped( Int key, const UnicodeString &words, GameFont *font, Int left, Int y, Int right, Int pitch, Int lines, Color color )
+{
+	std::vector<UnicodeString> wrapped;
+	UIStyle::wrapLines( words, fpx( right - left ), measureIn, font, wrapped );
+	const Int count = min( lines, (Int)wrapped.size() );
+	for( Int k = 0; k < count; k++ )
+	{
+		UnicodeString line = wrapped[ k ];
+		if( k == count - 1 && count < (Int)wrapped.size() )
+		{
+			line.concat( u" " );
+			line.concat( wrapped[ k + 1 ] );
+			line = UIStyle::fitText( line, font, fpx( right - left ) );
+		}
+		drawIn( key + k, line, font, board( left, y, right, y + pitch ), color );
+		y += pitch;
+	}
+	return y;
+}
+
+static void tracked( const UnicodeString &words, GameFont *font, Int x, Int y, Color color, Real tracking )
+{
+	UIStyle::drawTracked( words, font, x, y, color, tracking );
+}
 
 static void click( void )
 {
@@ -183,33 +254,16 @@ static void click( void )
 	TheAudio->addAudioEvent( &sound );
 }
 
-static void drawCentred( DisplayString *string, const IRegion2D &box, Color color )
-{
-	Int width, height;
-	string->getSize( &width, &height );
-	string->draw( box.lo.x + ( boxWidth( box ) - width ) / 2, box.lo.y + ( boxHeight( box ) - height ) / 2, color, UIStyle::SHADOW );
-}
-
-static void drawFitted( const Image *image, const IRegion2D &box, Real maxScale )
-{
-	const Real scale = min( maxScale, min( (Real)boxWidth( box ) / image->getImageWidth(), (Real)boxHeight( box ) / image->getImageHeight() ) );
-	const Int width = REAL_TO_INT( image->getImageWidth() * scale );
-	const Int height = REAL_TO_INT( image->getImageHeight() * scale );
-	const Int x = box.lo.x + ( boxWidth( box ) - width ) / 2;
-	const Int y = box.lo.y + ( boxHeight( box ) - height ) / 2;
-	TheDisplay->drawImage( image, x, y, x + width, y + height );
-}
-
 /** A Features label lists one thing a line. */
-static void splitLines( const UnicodeString &text, std::vector<UnicodeString> &lines )
+static void splitLines( const UnicodeString &words, std::vector<UnicodeString> &lines )
 {
 	lines.clear();
 	UnicodeString line;
-	for( Int each = 0; each <= text.getLength(); each++ )
+	for( Int each = 0; each <= words.getLength(); each++ )
 	{
-		const WideChar c = each < text.getLength() ? text.getCharAt( each ) : u'\n';
+		const WideChar c = each < words.getLength() ? words.getCharAt( each ) : u'\n';
 		// EA's labels carry the break as a real one; a hand-written .str may leave it as the two characters
-		const Bool escaped = c == u'\\' && each + 1 < text.getLength() && text.getCharAt( each + 1 ) == u'n';
+		const Bool escaped = c == u'\\' && each + 1 < words.getLength() && words.getCharAt( each + 1 ) == u'n';
 		if( c != u'\n' && !escaped )
 		{
 			line.concat( c );
@@ -224,6 +278,16 @@ static void splitLines( const UnicodeString &text, std::vector<UnicodeString> &l
 	}
 }
 
+/// an army's line, its strategy with a full stop
+static UnicodeString sentence( const UnicodeString &words )
+{
+	UnicodeString out = words;
+	out.trim();
+	if( !out.isEmpty() && out.getCharAt( out.getLength() - 1 ) != u'.' )
+		out.concat( u'.' );
+	return out;
+}
+
 static Bool isTicked( const PickerCell &cell )
 {
 	return cell.poolBit >= 0 && ( s_mask & ( 1u << cell.poolBit ) ) != 0;
@@ -234,14 +298,6 @@ static Int tickedCount( void )
 	Int count = 0;
 	for( size_t each = 0; each < s_cells.size(); each++ )
 		count += isTicked( s_cells[ each ] ) ? 1 : 0;
-	return count;
-}
-
-static Int tickableCount( void )
-{
-	Int count = 0;
-	for( size_t each = 0; each < s_cells.size(); each++ )
-		count += s_cells[ each ].poolBit >= 0 ? 1 : 0;
 	return count;
 }
 
@@ -267,8 +323,6 @@ static UnsignedInt listedMask( void )
 
 static Int cellAt( Int x, Int y )
 {
-	if( !isInside( s_gridBox, x, y ) )
-		return -1;
 	for( size_t each = 0; each < s_cells.size(); each++ )
 	{
 		if( isInside( s_cells[ each ].box, x, y ) )
@@ -291,14 +345,13 @@ static Int poolSide( void )
 	return -1;
 }
 
+/// a side's tick box (tickBox) or its RANDOM key under the pointer, -1 for none
 static Int sideAt( Int x, Int y, Bool tickBox )
 {
-	if( !isInside( s_gridBox, x, y ) )
-		return -1;
 	for( size_t group = 0; group < s_groups.size(); group++ )
 	{
 		const PickerGroup &g = s_groups[ group ];
-		if( g.mask != 0 && isInside( tickBox ? g.tickBox : g.nameBox, x, y ) )
+		if( g.mask != 0 && isInside( tickBox ? g.tickBox : g.keyBox, x, y ) )
 			return (Int)group;
 	}
 	return -1;
@@ -307,6 +360,23 @@ static Int sideAt( Int x, Int y, Bool tickBox )
 static Bool canConfirm( void )
 {
 	return s_focus >= 0 || !s_custom || tickedCount() > 0;
+}
+
+/// a side with a RANDOM key: two or more armies a Random can be; a lone army a plain Random never
+/// draws (Turkiye) says EXPERIMENTAL instead
+static Bool hasSideKey( const PickerGroup &g )
+{
+	Int drawable = 0;
+	for( size_t each = 0; each < g.cells.size(); each++ )
+		drawable += s_cells[ g.cells[ each ] ].poolBit >= 0 ? 1 : 0;
+	return drawable > 1;
+}
+
+static Bool isExperimental( const PickerGroup &g )
+{
+	if( g.cells.size() != 1 || s_cells[ g.cells[ 0 ] ].pick == PLAYERTEMPLATE_OBSERVER )
+		return FALSE;
+	return ThePlayerTemplateStore->getNthPlayerTemplate( s_cells[ g.cells[ 0 ] ].pick )->isRandomExcluded();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -319,7 +389,6 @@ static void buildCells( void )
 	GetRandomPoolCandidates( candidates );
 
 	GameWindow *listBox = GadgetComboBoxGetListBox( s_combo );
-	GameFont *smallFont = UIStyle::font( UIStyle::TEXT_SMALL );
 	for( Int line = 0; line < GadgetComboBoxGetLength( s_combo ); line++ )
 	{
 		const Int pick = (Int)(intptr_t)GadgetComboBoxGetItemData( s_combo, line );
@@ -332,12 +401,13 @@ static void buildCells( void )
 		cell.name = GadgetListBoxGetText( listBox, line, 0 );
 		cell.icon = NULL;
 		cell.portrait = NULL;
-		cell.label = NULL;
+		cell.box.lo.x = cell.box.lo.y = cell.box.hi.x = cell.box.hi.y = 0;
 
 		AsciiString side = "Observer";
 		if( pick == PLAYERTEMPLATE_OBSERVER )
 		{
 			cell.icon = cell.portrait = TheMappedImageCollection->findImageByName( "GameinfoOBSRVR" );
+			cell.strategy = TheGameText->fetch( "GUI:FactionPickObserverLine" );
 		}
 		else
 		{
@@ -358,17 +428,6 @@ static void buildCells( void )
 				cell.strategy = TheGameText->fetch( pt->getTooltip() );
 			if( !pt->getGeneralFeatures().isEmpty() )
 				cell.features = TheGameText->fetch( pt->getGeneralFeatures() );
-			if( pt->isRandomExcluded() )
-			{
-				if( !s_leftOut.isEmpty() )
-					s_leftOut.concat( u", " );
-				s_leftOut.concat( cell.name );
-			}
-		}
-		if( !cell.icon )
-		{
-			cell.label = newText( cell.name, smallFont );
-			cell.label->setWordWrapCentered( TRUE );
 		}
 
 		size_t group = 0;
@@ -382,8 +441,9 @@ static void buildCells( void )
 			PickerGroup lead;
 			lead.leadSide = side;
 			lead.name = cell.name;
-			lead.heading = newText( lead.name, UIStyle::font( UIStyle::TEXT_HEADING ) );
 			lead.mask = 0;
+			lead.top = lead.bottom = 0;
+			lead.tickBox = lead.keyBox = cell.box;
 			s_groups.push_back( lead );
 		}
 		if( cell.poolBit >= 0 )
@@ -393,420 +453,555 @@ static void buildCells( void )
 	}
 }
 
-/** Places everything with the list at its top; what does not fit under the grid's bottom scrolls. */
+/** One row a side down the left, the rows sharing the height; the tiles of every row one size, as
+	* many columns as the longest side has armies (four at least). */
 static void layout( void )
 {
-	s_panelBox = boardBox( UIStyle::ROOM_PANEL_LEFT, UIStyle::ROOM_PANEL_TOP, UIStyle::ROOM_PANEL_RIGHT, UIStyle::ROOM_PANEL_BOTTOM );
-	const Real tabWidth = ( GRID_RIGHT - LEFT - TAB_GAP ) / 2;
-	s_tabBox[ 0 ] = boardBox( LEFT, TOP, LEFT + tabWidth, TOP + TAB_HEIGHT );
-	s_tabBox[ 1 ] = boardBox( GRID_RIGHT - tabWidth, TOP, GRID_RIGHT, TOP + TAB_HEIGHT );
-	s_gridBox = boardBox( LEFT, GRID_TOP, GRID_RIGHT - BAR_WIDTH, GRID_BOTTOM );
-	s_barBox = boardBox( GRID_RIGHT - BAR_WIDTH, GRID_TOP, GRID_RIGHT, GRID_BOTTOM );
+	const Int tabWidth = ( LIST_RIGHT - LEFT - GAP ) / 2;
+	s_tabBox[ 0 ] = board( LEFT, TABS_TOP, LEFT + tabWidth, TABS_BOTTOM );
+	s_tabBox[ 1 ] = board( LIST_RIGHT - tabWidth, TABS_TOP, LIST_RIGHT, TABS_BOTTOM );
+	s_backBox = board( LEFT, KEYS_TOP, BACK_RIGHT, KEYS_BOTTOM );
+	s_confirmBox = board( CONFIRM_LEFT, KEYS_TOP, RIGHT, KEYS_BOTTOM );
 
-	const Int columns = (Int)( ( GRID_RIGHT - LEFT + CELL_GAP ) / ( CELL + CELL_GAP ) );
-	Real y = GRID_TOP;
+	const Int groups = max( 1, (Int)s_groups.size() );
+	const Int rowHeight = ( BODY_BOTTOM - ROWS_TOP - ( groups - 1 ) * GAP ) / groups;
+	Int columns = 4;
+	for( size_t group = 0; group < s_groups.size(); group++ )
+		columns = max( columns, (Int)s_groups[ group ].cells.size() );
+	const Int tilesLeft = LEFT + HEAD_WIDTH;
+	const Int tileWidth = ( LIST_RIGHT - tilesLeft - ( columns - 1 ) * GAP ) / columns;
 	for( size_t group = 0; group < s_groups.size(); group++ )
 	{
 		PickerGroup &g = s_groups[ group ];
-		g.heading->setClipRegion( &s_gridBox );
-		g.at.x = UIStyle::boardX( LEFT );
-		g.at.y = UIStyle::boardY( y );
-		Int nameWidth, nameHeight;
-		// text shrinks slower than the board, and at 1024x768 the heading's letters ran under the tiles
-		const UIStyle::TextSize headingSizes[] = { UIStyle::TEXT_HEADING, UIStyle::TEXT_STRONG, UIStyle::TEXT_BODY };
-		for( size_t size = 0; size < ARRAY_SIZE( headingSizes ); size++ )
-		{
-			g.heading->setFont( UIStyle::font( headingSizes[ size ] ) );
-			g.heading->getSize( &nameWidth, &nameHeight );
-			if( nameHeight <= UIStyle::px( HEADING_HEIGHT ) )
-				break;
-		}
-		g.nameBox.lo = g.at;
-		g.nameBox.hi.x = g.at.x + nameWidth;
-		g.nameBox.hi.y = g.at.y + nameHeight;
-		const Int tick = UIStyle::px( SIDE_TICK );
-		g.tickBox.lo.x = g.nameBox.hi.x + UIStyle::px( SIDE_TICK_GAP );
-		g.tickBox.lo.y = g.at.y + ( nameHeight - tick ) / 2;
-		g.tickBox.hi.x = g.tickBox.lo.x + tick;
-		g.tickBox.hi.y = g.tickBox.lo.y + tick;
-		y += HEADING_HEIGHT;
+		g.top = ROWS_TOP + (Int)group * ( rowHeight + GAP );
+		g.bottom = g.top + rowHeight;
+		g.tickBox = board( LEFT, g.top + 4, LEFT + TICK, g.top + 4 + TICK );
+		g.keyBox = board( LEFT, g.top + 60, LEFT + HEAD_WIDTH - 16, g.top + 60 + KEY_HEIGHT );
 		for( size_t each = 0; each < g.cells.size(); each++ )
 		{
-			const Real x = LEFT + ( each % columns ) * ( CELL + CELL_GAP );
-			const Real top = y + ( each / columns ) * ( CELL + CELL_GAP );
-			PickerCell &c = s_cells[ g.cells[ each ] ];
-			c.box = boardBox( x, top, x + CELL, top + CELL );
-			c.box.hi.x = c.box.lo.x + UIStyle::px( CELL );	// one size however the board's corners round
-			c.box.hi.y = c.box.lo.y + UIStyle::px( CELL );
-			if( c.label )
-			{
-				c.label->setWordWrap( boxWidth( c.box ) - UIStyle::px( 8 ) );
-				c.label->setClipRegion( &s_gridBox );
-			}
+			const Int left = tilesLeft + (Int)each * ( tileWidth + GAP );
+			s_cells[ g.cells[ each ] ].box = board( left, g.top, left + tileWidth, g.bottom );
 		}
-		y += ( ( (Int)g.cells.size() + columns - 1 ) / columns ) * ( CELL + CELL_GAP ) + GROUP_GAP;
-	}
-	s_scroll = 0;
-	s_scrollMax = max( 0, UIStyle::boardY( y - CELL_GAP - GROUP_GAP ) - s_gridBox.hi.y );
-
-	s_portraitBox = boardBox( DETAIL_LEFT, TOP, RIGHT, PORTRAIT_BOTTOM );
-	s_bannerBox = boardBox( DETAIL_LEFT, PORTRAIT_BOTTOM + 8.0f, RIGHT, BANNER_BOTTOM );
-	s_descriptionBox = boardBox( DETAIL_LEFT, DESCRIPTION_TOP, RIGHT, GRID_BOTTOM );
-	s_backBox = boardBox( LEFT, UIStyle::ROOM_BUTTON_TOP, LEFT + UIStyle::ROOM_BUTTON_WIDTH, UIStyle::ROOM_BUTTON_BOTTOM );
-	s_confirmBox = boardBox( RIGHT - UIStyle::ROOM_WIDE_BUTTON_WIDTH, UIStyle::ROOM_BUTTON_TOP, RIGHT, UIStyle::ROOM_BUTTON_BOTTOM );
-}
-
-/** The boxes stay in screen pixels, so a scroll moves them and drawing and clicks need nothing else. */
-static void setScroll( Int scroll )
-{
-	scroll = max( 0, min( scroll, s_scrollMax ) );
-	const Int shift = s_scroll - scroll;
-	s_scroll = scroll;
-	for( size_t each = 0; each < s_cells.size(); each++ )
-	{
-		s_cells[ each ].box.lo.y += shift;
-		s_cells[ each ].box.hi.y += shift;
-	}
-	for( size_t group = 0; group < s_groups.size(); group++ )
-	{
-		PickerGroup &g = s_groups[ group ];
-		g.at.y += shift;
-		g.nameBox.lo.y += shift;
-		g.nameBox.hi.y += shift;
-		g.tickBox.lo.y += shift;
-		g.tickBox.hi.y += shift;
 	}
 }
 
-static Int thumbHeight( void )
+/// the name the screen shows for the pick as it stands: the army, Random of a side, or Random
+static UnicodeString pickName( void )
 {
-	const Int track = boxHeight( s_barBox );
-	return max( UIStyle::px( BAR_MIN_THUMB ), track * track / ( track + s_scrollMax ) );
-}
-
-static void dragThumb( Int y )
-{
-	setScroll( FactionPickerScrollAtThumb( y - s_barBox.lo.y - s_thumbGrab, s_scrollMax, boxHeight( s_barBox ), thumbHeight() ) );
-}
-
-/// on the thumb the press takes hold of it where it is; on the track the thumb comes to the mouse
-static void pressBar( Int y )
-{
-	const Int top = s_barBox.lo.y + FactionPickerThumbTop( s_scroll, s_scrollMax, boxHeight( s_barBox ), thumbHeight() );
-	const Bool onThumb = y >= top && y < top + thumbHeight();
-	s_thumbGrab = onThumb ? y - top : thumbHeight() / 2;
-	if( !onThumb )
-		dragThumb( y );
-}
-
-/** The name, the description and the Confirm label follow the focus. */
-static void refresh( void )
-{
-	UnicodeString name, strategy, features;
 	if( s_focus >= 0 )
+		return s_cells[ s_focus ].name;
+	const Int side = poolSide();
+	if( side >= 0 )
 	{
-		const PickerCell &cell = s_cells[ s_focus ];
-		name = cell.name;
-		strategy = cell.strategy;
-		features = cell.features;
+		UnicodeString name;
+		name.format( TheGameText->fetch( "GUI:FactionPickRandomSide" ).str(), s_groups[ side ].name.str() );
+		return name;
 	}
-	else
-	{
-		const Int side = poolSide();
-		if( side >= 0 )
-			name.format( TheGameText->fetch( "GUI:FactionPickRandomSide" ), s_groups[ side ].name.str() );
-		else
-			name = TheGameText->fetch( "GUI:Random" );
-		if( s_custom )
-		{
-			strategy.format( TheGameText->fetch( "GUI:FactionPickPool" ), tickedCount(), tickableCount() );
-			strategy.concat( u' ' );
-			strategy.concat( TheGameText->fetch( "GUI:FactionPickSideHint" ) );
-		}
-		else
-		{
-			strategy = TheGameText->fetch( "GUI:FactionPickRandom" );
-			if( !s_leftOut.isEmpty() )
-			{
-				UnicodeString leftOut;
-				leftOut.format( TheGameText->fetch( "GUI:FactionPickLeftOut" ), s_leftOut.str() );
-				strategy.concat( u' ' );
-				strategy.concat( leftOut );
-			}
-			strategy.concat( u' ' );
-			strategy.concat( TheGameText->fetch( "GUI:FactionPickSideNameHint" ) );
-		}
-		// the armies the draw can land on
-		for( size_t each = 0; each < s_cells.size(); each++ )
-		{
-			const PickerCell &cell = s_cells[ each ];
-			if( !isDrawn( cell ) )
-				continue;
-			features.concat( cell.name );
-			features.concat( u'\n' );
-		}
-	}
-
-	s_nameText->setText( UIStyle::capitals( name ) );
-	s_strategyText->setText( strategy );
-
-	for( size_t each = 0; each < s_featureText.size(); each++ )
-		freeText( s_featureText[ each ] );
-	s_featureText.clear();
-	std::vector<UnicodeString> lines;
-	splitLines( features, lines );
-	const Int columnWidth = ( boxWidth( s_descriptionBox ) - UIStyle::px( 3 * PAD ) ) / 2;
-	for( size_t each = 0; each < lines.size(); each++ )
-	{
-		UnicodeString line( u"- " );
-		line.concat( lines[ each ] );
-		DisplayString *text = newText( line, UIStyle::font( UIStyle::TEXT_BODY ) );
-		text->setWordWrap( columnWidth );
-		s_featureText.push_back( text );
-	}
-
-	UnicodeString confirm;
-	confirm.format( TheGameText->fetch( "GUI:FactionPickConfirm" ), name.str() );
-	s_confirmText->setText( UIStyle::capitals( confirm ) );
-	// a long general's name ("USA Superweapon General") is wider than the button in the heading's letters
-	const UIStyle::TextSize sizes[] = { UIStyle::TEXT_HEADING, UIStyle::TEXT_STRONG, UIStyle::TEXT_BODY };
-	for( size_t each = 0; each < ARRAY_SIZE( sizes ); each++ )
-	{
-		s_confirmText->setFont( UIStyle::titleFont( sizes[ each ] ) );
-		Int width, height;
-		s_confirmText->getSize( &width, &height );
-		if( width <= boxWidth( s_confirmBox ) - UIStyle::px( PAD ) )
-			break;
-	}
+	return TheGameText->fetch( "GUI:Random" );
 }
 
 //-------------------------------------------------------------------------------------------------
-static void drawCellPicture( const PickerCell &cell, const IRegion2D &box )
+static void drawTickBox( const IRegion2D &b, Bool ticked, Bool hovered )
 {
-	const Int inset = UIStyle::px( 6 );
-	IRegion2D inner = box;
-	inner.lo.x += inset;
-	inner.lo.y += inset;
-	inner.hi.x -= inset;
-	inner.hi.y -= inset;
-	// square, as the generals' faces are: a Command Center's 5:4 loses its sides (clipIfCut's clip kept)
-	if( cell.icon )
-		UIStyle::coverImage( cell.icon, inner.lo.x, inner.lo.y, boxWidth( inner ), boxHeight( inner ),
-			TheDisplay->isClippingEnabled() ? &s_gridBox : NULL );
+	if( ticked )
+	{
+		fillBox( b, UIStyle::EDGE_LIT );
+		const Int s = boxWidth( b );
+		const Real line = (Real)max( 2, s / 8 );
+		const Color dark = GameMakeColor( 8, 12, 24, 255 );
+		TheDisplay->drawLine( b.lo.x + s * 22 / 100, b.lo.y + s * 52 / 100, b.lo.x + s * 42 / 100, b.lo.y + s * 72 / 100, line, dark );
+		TheDisplay->drawLine( b.lo.x + s * 42 / 100, b.lo.y + s * 72 / 100, b.lo.x + s * 78 / 100, b.lo.y + s * 28 / 100, line, dark );
+	}
 	else
-		drawCentred( cell.label, box, UIStyle::INK );
+	{
+		fillBox( b, GameMakeColor( 0, 0, 0, 170 ) );
+		frameBox( b, hovered ? UIStyle::EDGE_LIT : UIStyle::FRAME );
+	}
 }
 
-/// the clip draws an open box's top and left line a pixel out, so only what the grid's edge cuts takes it
-static void clipIfCut( const IRegion2D &box )
+/// a picture covering its square, a frame round it
+static void drawPicture( const Image *image, const IRegion2D &square )
 {
-	if( box.lo.y < s_gridBox.lo.y || box.hi.y > s_gridBox.hi.y )
-		TheDisplay->setClipRegion( &s_gridBox );
+	fillBox( square, GameMakeColor( 6, 8, 12, 255 ) );
+	if( image )
+		UIStyle::coverImage( image, square.lo.x, square.lo.y, boxWidth( square ), boxHeight( square ) );
+	frameBox( square, UIStyle::withAlpha( UIStyle::FRAME, 200 ) );
+}
+
+/// a tile: its picture square at the top, its name on a line or two under it, its state
+static void drawTile( Int index, Bool hovered )
+{
+	const PickerCell &cell = s_cells[ index ];
+	const IRegion2D &r = cell.box;
+	const Bool picked = index == s_focus;
+	const Bool veiled = s_custom && !isTicked( cell ) && cell.poolBit >= 0;
+	fillBox( r, GameMakeColor( 255, 255, 255, 8 ) );
+	if( picked )
+		fillBox( r, UIStyle::withAlpha( UIStyle::EDGE, 100 ) );
+	else if( hovered )
+		fillBox( r, GameMakeColor( 255, 255, 255, 24 ) );
+
+	const Int side = min( boxWidth( r ) - fpx( 12 ), boxHeight( r ) - fpx( 50 ) );
+	IRegion2D square;
+	square.lo.x = ( r.lo.x + r.hi.x - side ) / 2;
+	square.lo.y = r.lo.y + fpx( 6 );
+	square.hi.x = square.lo.x + side;
+	square.hi.y = square.lo.y + side;
+	drawPicture( cell.icon, square );
+	if( veiled )
+		fillBox( square, GameMakeColor( 4, 6, 10, 170 ) );
+	if( s_custom && cell.poolBit >= 0 )
+	{
+		IRegion2D tick;
+		tick.lo.x = square.hi.x - fpx( 26 );
+		tick.lo.y = square.lo.y + fpx( 6 );
+		tick.hi.x = square.hi.x - fpx( 6 );
+		tick.hi.y = square.lo.y + fpx( 26 );
+		drawTickBox( tick, isTicked( cell ), FALSE );
+	}
+
+	// the name, broken at a space onto two lines when one is too narrow, the last cut at its end
+	GameFont *font = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT + 1 );
+	std::vector<UnicodeString> lines;
+	UIStyle::wrapLines( cell.name, boxWidth( r ) - fpx( 14 ), measureIn, font, lines );
+	if( lines.size() > 2 )
+	{
+		UnicodeString rest;
+		for( size_t k = 1; k < lines.size(); k++ )
+		{
+			if( k > 1 )
+				rest.concat( u" " );
+			rest.concat( lines[ k ] );
+		}
+		lines.resize( 2 );
+		lines[ 1 ] = UIStyle::fitText( rest, font, boxWidth( r ) - fpx( 14 ) );
+	}
+	const Int pitch = heightOf( font ) + fpx( 2 );
+	const Int nameTop = square.hi.y + fpx( 4 );
+	Int y = nameTop + ( r.hi.y - fpx( 3 ) - nameTop - pitch * (Int)lines.size() ) / 2;
+	for( size_t k = 0; k < lines.size(); k++ )
+	{
+		IRegion2D at;
+		at.lo.x = r.lo.x;
+		at.lo.y = y;
+		at.hi.x = r.hi.x;
+		at.hi.y = y + pitch;
+		drawIn( TEXT_CELLS + 2 * min( index, 47 ) + (Int)k, lines[ k ], font, at, veiled ? UIStyle::MUTED : UIStyle::INK, TRUE );
+		y += pitch;
+	}
+
+	if( picked )
+	{
+		const Int line = max( 1, fpx( 2 ) );
+		UIStyle::litLine( r.lo.x, r.lo.y, boxWidth( r ), line, UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.lo.x, r.hi.y - line, boxWidth( r ), line, UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.lo.x, r.lo.y, line, boxHeight( r ), UIStyle::EDGE_LIT );
+		UIStyle::litLine( r.hi.x - line, r.lo.y, line, boxHeight( r ), UIStyle::EDGE_LIT );
+		IRegion2D tick;
+		tick.lo.x = square.hi.x - fpx( 22 );
+		tick.lo.y = square.lo.y;
+		tick.hi.x = square.hi.x;
+		tick.hi.y = square.lo.y + fpx( 22 );
+		drawTickBox( tick, TRUE, FALSE );
+	}
+	else if( hovered )
+		UIStyle::litEdge( r, UIStyle::EDGE_LIT );
 	else
-		TheDisplay->enableClipping( FALSE );
+		frameBox( r, UIStyle::withAlpha( UIStyle::FRAME, 150 ) );
 }
 
-/// the display's clip stops images and open boxes, and a filled box goes round it
-static void fillInGrid( Int x, Int y, Int width, Int height, Color color )
+/// a side's head: its tick box, its name, how many of it are in the draw, its RANDOM key or what it is,
+/// the side's own line under the key
+static void drawGroupHead( Int group, const ICoord2D &mouse )
 {
-	const Int top = max( y, s_gridBox.lo.y );
-	const Int bottom = min( y + height, s_gridBox.hi.y );
-	if( bottom > top )
-		TheDisplay->drawFillRect( x, top, width, bottom - top, color );
+	const PickerGroup &g = s_groups[ group ];
+	const Int key = TEXT_GROUPS + GROUP_TEXTS * min( group, 7 );
+	const Bool observer = g.mask == 0;
+	Int x = LEFT;
+	if( s_custom && !observer )
+	{
+		drawTickBox( g.tickBox, FactionPickerSideTicked( s_mask, g.mask ), isInside( g.tickBox, mouse.x, mouse.y ) );
+		x = LEFT + 34;
+	}
+	GameFont *nameFont = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY, TRUE );
+	const UnicodeString name = UIStyle::capitals( observer ? TheGameText->fetch( "GUI:Observer" ) : g.name );
+	drawIn( key, UIStyle::fitText( name, nameFont, fpx( LEFT + HEAD_WIDTH - 8 - x ) ), nameFont, board( x, g.top + 2, LEFT + HEAD_WIDTH - 8, g.top + 30 ),
+		UIStyle::ACTIVE );
+
+	Int inDraw = 0, drawable = 0;
+	for( size_t each = 0; each < g.cells.size(); each++ )
+	{
+		const PickerCell &cell = s_cells[ g.cells[ each ] ];
+		drawable += cell.poolBit >= 0 ? 1 : 0;
+		inDraw += isDrawn( cell ) ? 1 : 0;
+	}
+	UnicodeString count;
+	if( observer )
+		count = TheGameText->fetch( "GUI:FactionPickObserverHead" );
+	else
+		count.format( TheGameText->fetch( "GUI:FactionPickInDraw" ).str(), inDraw, drawable );
+	GameFont *line = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+	drawIn( key + 1, UIStyle::fitText( count, line, fpx( LEFT + HEAD_WIDTH - 8 - x ) ), line, board( x, g.top + 32, LEFT + HEAD_WIDTH - 8, g.top + 52 ),
+		inDraw > 0 || observer ? UIStyle::INK : UIStyle::MUTED );
+
+	GameFont *caps = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	if( isExperimental( g ) )
+	{
+		const IRegion2D at = board( LEFT, g.top + 60, LEFT + HEAD_WIDTH - 8, g.top + 80 );
+		tracked( TheGameText->fetch( "GUI:FactionPickExperimental" ), caps, at.lo.x, at.lo.y, UIStyle::MUTED, 1.0f );
+	}
+	else if( hasSideKey( g ) )
+	{
+		// what a click on the side's name did before, said on a key: that side alone, at random
+		const Bool lit = s_custom && poolSide() == group;
+		const Bool hovered = isInside( g.keyBox, mouse.x, mouse.y );
+		fillBox( g.keyBox, GameMakeColor( 0, 0, 0, 160 ) );
+		if( lit )
+		{
+			fillBox( g.keyBox, UIStyle::withAlpha( UIStyle::EDGE, 90 ) );
+			UIStyle::litEdge( g.keyBox, UIStyle::EDGE_LIT );
+		}
+		else
+		{
+			if( hovered )
+				fillBox( g.keyBox, GameMakeColor( 255, 255, 255, 14 ) );
+			frameBox( g.keyBox, hovered ? UIStyle::EDGE_LIT : UIStyle::withAlpha( UIStyle::EDGE, 200 ) );
+		}
+		UnicodeString words;
+		words.format( TheGameText->fetch( "GUI:FactionPickRandomSide" ).str(), g.name.str() );
+		words = UIStyle::fitText( UIStyle::capitals( words ), caps, boxWidth( g.keyBox ) - fpx( 12 ) );
+		const Int width = UIStyle::trackedWidth( words, caps, UIStyle::MENU_LABEL_TRACKING );
+		tracked( words, caps, ( g.keyBox.lo.x + g.keyBox.hi.x - width ) / 2, ( g.keyBox.lo.y + g.keyBox.hi.y - heightOf( caps ) ) / 2,
+			UIStyle::INK, UIStyle::MENU_LABEL_TRACKING );
+		// the side's own line from the game in the head's free height
+		const PickerCell &lead = s_cells[ g.cells[ 0 ] ];
+		const Int top = g.top + 60 + KEY_HEIGHT + 10;
+		GameFont *note = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL );
+		const Int lines = max( 0, ( g.bottom - top ) / 19 );
+		if( lines > 0 && !lead.strategy.isEmpty() )
+			drawWrapped( key + 4, sentence( lead.strategy ), note, LEFT, top, LEFT + HEAD_WIDTH - 12, 19, min( 3, lines ), UIStyle::MUTED );
+	}
+
+	// a side of one army uses the row's free width: Turkiye's never drawn by a plain Random, the
+	// Observer what an observer gets
+	if( g.cells.size() == 1 )
+	{
+		const PickerCell &only = s_cells[ g.cells[ 0 ] ];
+		Int fx = 0, fy = 0;
+		{
+			const UIStyle::BoardFit fit = UIStyle::boardFit( TheDisplay->getWidth(), TheDisplay->getHeight() );
+			const Real scale = fit.scale > 0.0f ? fit.scale : 1.0f;
+			fx = REAL_TO_INT( ( only.box.hi.x - fit.x ) / scale + 0.5f ) + 24;
+			fy = g.top + 8;
+		}
+		GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+		const Int lines = max( 1, ( g.bottom - fy ) / 22 );
+		if( observer )
+		{
+			const Int y = drawWrapped( key + 2, TheGameText->fetch( "GUI:FactionPickObserverLine" ), body, fx, fy, LIST_RIGHT, 22, 1, UIStyle::INK );
+			drawWrapped( key + 5, TheGameText->fetch( "GUI:FactionPickObserverMore" ), body, fx, y + 6, LIST_RIGHT, 22, max( 1, min( 3, lines - 2 ) ), UIStyle::MUTED );
+		}
+		else if( isExperimental( g ) )
+		{
+			const Int y = drawWrapped( key + 2, TheGameText->fetch( "GUI:FactionPickTurkiyeLeft" ), body, fx, fy, LIST_RIGHT, 22, 2, UIStyle::MUTED );
+			if( !only.strategy.isEmpty() )
+				drawWrapped( key + 5, sentence( only.strategy ), body, fx, y + 6, LIST_RIGHT, 22, max( 1, min( 3, ( g.bottom - y - 10 ) / 22 ) ), UIStyle::INK );
+		}
+	}
 }
 
-static void panelInGrid( Int x, Int y, Int width, Int height, Color fill )
+/// a section head: 14 px bold capitals in green, a lit rule under it when rule
+static Int drawSectionHead( const UnicodeString &words, Int left, Int top, Int right, Bool rule )
 {
-	fillInGrid( x, y, width, height, fill );
-	TheDisplay->drawOpenRect( x, y, width, height, 1.0f, UIStyle::FRAME );
+	GameFont *caps = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	const IRegion2D at = board( left, top, right, top + 22 );
+	tracked( UIStyle::capitals( words ), caps, at.lo.x, at.lo.y + ( boxHeight( at ) - heightOf( caps ) ) / 2, UIStyle::ACTIVE,
+		UIStyle::MENU_LABEL_TRACKING );
+	if( rule )
+	{
+		const IRegion2D line = board( left, top + 26, right, top + 27 );
+		UIStyle::litLine( line.lo.x, line.lo.y, boxWidth( line ), 1, UIStyle::FRAME );
+	}
+	return top + ( rule ? 34 : 26 );
 }
 
-static void drawTickBox( Int x, Int y, Int size, Bool ticked )
+/** THE DRAW: the count as the figure, every army a Random can be in a strip (in the draw lit, out of it
+	* veiled), the pick's name and one line, then the armies in the draw with the game's words for each. */
+static void drawTheDraw( void )
 {
-	panelInGrid( x, y, size, size, ticked ? UIStyle::ACTIVE : UIStyle::CARD );
-	// the check mark's lines go round the clip too, and half a tick says nothing
-	if( !ticked || y < s_gridBox.lo.y || y + size > s_gridBox.hi.y )
-		return;
-	const Real line = (Real)max( 2, UIStyle::px( 3 ) );
-	TheDisplay->drawLine( x + size / 5, y + size / 2, x + size * 2 / 5, y + size * 3 / 4, line, UIStyle::GROUND );
-	TheDisplay->drawLine( x + size * 2 / 5, y + size * 3 / 4, x + size * 4 / 5, y + size / 4, line, UIStyle::GROUND );
-}
-
-/** Random's preview: every army a Random can be, the ones it can land on lit and the rest dimmed. */
-static void drawPoolPreview( const IRegion2D &area )
-{
-	std::vector<Int> shown;
+	Int key = TEXT_DETAIL;
+	drawSectionHead( TheGameText->fetch( "GUI:FactionPickTheDraw" ), DETAIL_LEFT, TABS_TOP, RIGHT, FALSE );
+	const Int figureTop = TABS_TOP + 26;
+	std::vector<Int> drawable, drawn;
 	for( size_t each = 0; each < s_cells.size(); each++ )
 	{
-		if( s_cells[ each ].poolBit >= 0 )
-			shown.push_back( (Int)each );
+		if( s_cells[ each ].poolBit < 0 )
+			continue;
+		drawable.push_back( (Int)each );
+		if( isDrawn( s_cells[ each ] ) )
+			drawn.push_back( (Int)each );
 	}
-	if( shown.empty() )
-		return;
+	UnicodeString figure;
+	figure.format( u"%d", (Int)drawn.size() );
+	GameFont *figureFont = UIStyle::menuFont( UIStyle::MENU_TEXT_TEAM_FIGURE );
+	DisplayString *s = text( key++, figure, figureFont );
+	const IRegion2D figureAt = board( DETAIL_LEFT, figureTop, DETAIL_LEFT + 120, figureTop + 48 );
+	Int figureW = 0, figureH = 0;
+	s->getSize( &figureW, &figureH );
+	s->draw( figureAt.lo.x, ( figureAt.lo.y + figureAt.hi.y - figureH ) / 2, UIStyle::INK, SHADE );
+	UnicodeString of;
+	of.format( TheGameText->fetch( "GUI:FactionPickOfArmies" ).str(), (Int)drawable.size() );
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	const IRegion2D ofAt = { { figureAt.lo.x + figureW + fpx( 12 ), board( 0, figureTop + 14, 0, 0 ).lo.y }, { board( DETAIL_LEFT + 300, 0, 0, 0 ).lo.x, board( 0, figureTop + 40, 0, 0 ).lo.y } };
+	drawIn( key++, of, body, ofAt, UIStyle::MUTED );
 
-	const Int gap = UIStyle::px( CELL_GAP );
-	const Int count = (Int)shown.size();
-	Int size = UIStyle::px( POOL_ICON );
-	Int columns = 1;
-	Int rows = 1;
-	for( ;; )
+	// the strip, spread over what is left of the row
+	const Int stripLeft = DETAIL_LEFT + 300;
+	const Int count = max( 1, (Int)drawable.size() );
+	const Int step = count > 1 ? min( STRIP_PICTURE + GAP, ( RIGHT - stripLeft - STRIP_PICTURE ) / ( count - 1 ) ) : 0;
+	const Int picture = min( STRIP_PICTURE, max( 16, step > 0 ? step - 4 : STRIP_PICTURE ) );
+	for( Int k = 0; k < (Int)drawable.size(); k++ )
 	{
-		columns = max( 1, ( boxWidth( area ) + gap ) / ( size + gap ) );
-		rows = ( count + columns - 1 ) / columns;
-		if( rows * ( size + gap ) - gap <= boxHeight( area ) || size <= gap )
-			break;
-		size -= gap;
+		const PickerCell &cell = s_cells[ drawable[ k ] ];
+		const IRegion2D pr = board( stripLeft + k * step, figureTop - 2, stripLeft + k * step + picture, figureTop - 2 + picture );
+		if( cell.icon )
+			UIStyle::coverImage( cell.icon, pr.lo.x, pr.lo.y, boxWidth( pr ), boxHeight( pr ) );
+		if( isDrawn( cell ) )
+			UIStyle::litEdge( pr, UIStyle::EDGE_LIT );
+		else
+		{
+			fillBox( pr, GameMakeColor( 4, 6, 10, 180 ) );
+			frameBox( pr, UIStyle::withAlpha( UIStyle::FRAME, 140 ) );
+		}
 	}
-	columns = min( columns, count );
-	const Int left = area.lo.x + ( boxWidth( area ) - ( columns * ( size + gap ) - gap ) ) / 2;
-	const Int top = area.lo.y + ( boxHeight( area ) - ( rows * ( size + gap ) - gap ) ) / 2;
-	for( Int n = 0; n < count; n++ )
+	const IRegion2D rule = board( DETAIL_LEFT, figureTop + 64, RIGHT, figureTop + 65 );
+	UIStyle::litLine( rule.lo.x, rule.lo.y, boxWidth( rule ), 1, UIStyle::FRAME );
+
+	// the pick's name in spaced capitals, and the line that says how the draw goes
+	const Int nameTop = figureTop + 78;
+	GameFont *nameFont = UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE + 8, TRUE );
+	const IRegion2D nameAt = board( DETAIL_LEFT, nameTop, RIGHT, nameTop + 44 );
+	const UnicodeString name = UIStyle::fitText( UIStyle::capitals( pickName() ), nameFont, boxWidth( nameAt ) );
+	tracked( name, nameFont, nameAt.lo.x, nameAt.lo.y + ( boxHeight( nameAt ) - heightOf( nameFont ) ) / 2, UIStyle::INK, 2.0f );
+	drawIn( key++, UIStyle::fitText( TheGameText->fetch( s_custom ? "GUI:FactionPickCustomLine" : "GUI:FactionPickAllLine" ), body,
+		boxWidth( nameAt ) ), body, board( DETAIL_LEFT, nameTop + 48, RIGHT, nameTop + 74 ), UIStyle::INK );
+
+	// the armies in the draw, one column of rows while five fit, else two
+	const Int listTop = drawSectionHead( TheGameText->fetch( "GUI:FactionPickInTheDraw" ), DETAIL_LEFT, nameTop + 90, RIGHT, TRUE );
+	if( drawn.empty() )
+		return;
+	const Int columns = drawn.size() <= 5 ? 1 : 2;
+	const Int perColumn = ( (Int)drawn.size() + columns - 1 ) / columns;
+	const Int rowHeight = min( 120, ( BODY_BOTTOM - listTop ) / perColumn );
+	const Int columnWidth = ( RIGHT - DETAIL_LEFT - ( columns - 1 ) * 20 ) / columns;
+	GameFont *rowName = UIStyle::menuFont( columns == 1 ? UIStyle::MENU_TEXT_ROW_FIGURE : UIStyle::MENU_TEXT_BODY );
+	GameFont *rowLine = UIStyle::menuFont( columns == 1 ? UIStyle::MENU_TEXT_HINT : UIStyle::MENU_TEXT_LABEL );
+	for( Int k = 0; k < (Int)drawn.size() && key < TEXT_DETAIL + DETAIL_TEXTS - 4; k++ )
 	{
-		const PickerCell &cell = s_cells[ shown[ n ] ];
-		// a short last row sits centred under the full ones
-		const Int inRow = min( columns, count - ( n / columns ) * columns );
-		const Int rowShift = ( columns - inRow ) * ( size + gap ) / 2;
-		IRegion2D box;
-		box.lo.x = left + rowShift + ( n % columns ) * ( size + gap );
-		box.lo.y = top + ( n / columns ) * ( size + gap );
-		box.hi.x = box.lo.x + size;
-		box.hi.y = box.lo.y + size;
-		UIStyle::panel( box.lo.x, box.lo.y, size, size, UIStyle::CARD );
-		drawCellPicture( cell, box );
-		if( !isDrawn( cell ) )
-			TheDisplay->drawFillRect( box.lo.x, box.lo.y, size, size, UIStyle::withAlpha( UIStyle::GROUND, POOL_DIM_ALPHA ) );
+		const PickerCell &cell = s_cells[ drawn[ k ] ];
+		const Int column = k / perColumn, row = k % perColumn;
+		const Int x0 = DETAIL_LEFT + column * ( columnWidth + 20 );
+		const Int y = listTop + row * rowHeight;
+		if( row % 2 )
+			fillBox( board( x0, y, x0 + columnWidth, y + rowHeight - 4 ), GameMakeColor( 255, 255, 255, 6 ) );
+		const Int p = rowHeight - 14;
+		drawPicture( cell.icon, board( x0 + 6, y + 5, x0 + 6 + p, y + 5 + p ) );
+		const Int tx = x0 + 6 + p + 16;
+		const Int right = x0 + columnWidth - 8;
+		drawIn( key++, UIStyle::fitText( cell.name, rowName, fpx( right - tx ) ), rowName, board( tx, y + 4, right, y + ( columns == 1 ? 34 : 28 ) ), UIStyle::INK );
+		const Int lineTop = y + ( columns == 1 ? 36 : 30 );
+		if( columns == 1 )
+		{
+			drawIn( key++, UIStyle::fitText( sentence( cell.strategy ), rowLine, fpx( right - tx ) ), rowLine, board( tx, lineTop, right, lineTop + 22 ), UIStyle::INK );
+			std::vector<UnicodeString> features;
+			splitLines( cell.features, features );
+			UnicodeString joined;
+			for( size_t f = 0; f < features.size(); f++ )
+			{
+				if( f > 0 )
+					joined.concat( UIStyle::HEADER_JOINER );
+				joined.concat( features[ f ] );
+			}
+			const Int room = max( 0, ( y + rowHeight - lineTop - 24 ) / 20 );
+			if( room > 0 && !joined.isEmpty() )
+				drawWrapped( key, joined, rowLine, tx, lineTop + 24, right, 20, min( 2, room ), UIStyle::MUTED );
+			key += 2;
+		}
+		else
+		{
+			drawWrapped( key, sentence( cell.strategy ), rowLine, tx, lineTop, right, 18, max( 1, min( 2, ( rowHeight - 40 ) / 18 ) ), UIStyle::MUTED );
+			key += 2;
+		}
 	}
 }
 
-/** Back and Confirm in the art of the room's own buttons beside them: lit and lettered green under the
-	* mouse, and one that cannot be pressed in the disabled art, MUTED, answering nothing. */
-static void drawButton( const IRegion2D &box, DisplayString *text, Bool enabled, const ICoord2D &mouse )
+/** One army picked: its large portrait, its name, the game's line for it and its features; under the
+	* portrait the other armies of its side with their lines, to weigh it against them. */
+static void drawGeneral( void )
 {
-	const Bool lit = enabled && isInside( box, mouse.x, mouse.y );
-	UIStyle::pushButton( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ),
-		!enabled ? UIStyle::BUTTON_DISABLED : ( lit ? UIStyle::BUTTON_LIT : UIStyle::BUTTON_IDLE ) );
-	drawCentred( text, box, !enabled ? UIStyle::MUTED : ( lit ? UIStyle::ACTIVE : UIStyle::INK ) );
+	Int key = TEXT_DETAIL;
+	const PickerCell &cell = s_cells[ s_focus ];
+	drawPicture( cell.portrait ? cell.portrait : cell.icon, board( DETAIL_LEFT, TABS_TOP, DETAIL_LEFT + PORTRAIT, TABS_TOP + PORTRAIT ) );
+	const Int x = DETAIL_LEFT + PORTRAIT + 24;
+	GameFont *nameFont = UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE + 4, TRUE );
+	std::vector<UnicodeString> lines;
+	UIStyle::wrapLines( UIStyle::capitals( cell.name ), fpx( RIGHT - x ), measureIn, nameFont, lines );
+	Int y = TABS_TOP - 4;
+	for( Int k = 0; k < (Int)lines.size() && k < 2; k++ )
+	{
+		const IRegion2D at = board( x, y, RIGHT, y + 36 );
+		tracked( lines[ k ], nameFont, at.lo.x, at.lo.y + ( boxHeight( at ) - heightOf( nameFont ) ) / 2, UIStyle::INK, 1.6f );
+		y += 36;
+	}
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	if( !cell.strategy.isEmpty() )
+	{
+		y = drawWrapped( key, sentence( cell.strategy ), body, x, y + 6, RIGHT, 25, 4, UIStyle::INK ) + 14;
+		key += 4;
+	}
+	std::vector<UnicodeString> features;
+	splitLines( cell.features, features );
+	if( !features.empty() )
+	{
+		y = drawSectionHead( TheGameText->fetch( "GUI:FactionPickFeatures" ), x, y, RIGHT, TRUE ) + 2;
+		const Int rowHeight = max( 20, min( 30, ( TABS_TOP + PORTRAIT - y ) / (Int)features.size() ) );
+		GameFont *featureFont = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT + 1 );
+		for( size_t f = 0; f < features.size() && key < TEXT_DETAIL + 40; f++ )
+		{
+			const IRegion2D dot = board( x + 2, y + rowHeight / 2 - 2, x + 8, y + rowHeight / 2 + 2 );
+			fillBox( dot, UIStyle::EDGE_LIT );
+			drawIn( key++, UIStyle::fitText( features[ f ], featureFont, fpx( RIGHT - x - 20 ) ), featureFont, board( x + 20, y, RIGHT, y + rowHeight ), UIStyle::INK );
+			y += rowHeight;
+		}
+	}
+
+	// the other armies of the side under the portrait
+	const PickerGroup *side = NULL;
+	for( size_t group = 0; group < s_groups.size(); group++ )
+		for( size_t each = 0; each < s_groups[ group ].cells.size(); each++ )
+			if( s_groups[ group ].cells[ each ] == s_focus )
+				side = &s_groups[ group ];
+	if( side == NULL || side->cells.size() < 2 )
+		return;
+	UnicodeString head;
+	head.format( TheGameText->fetch( "GUI:FactionPickOthers" ).str(), side->name.str() );
+	const Int listTop = drawSectionHead( head, DETAIL_LEFT, TABS_TOP + PORTRAIT + 22, RIGHT, TRUE );
+	const Int others = (Int)side->cells.size() - 1;
+	const Int rowHeight = min( 90, ( BODY_BOTTOM - listTop ) / others );
+	GameFont *rowName = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY + 2 );
+	GameFont *rowLine = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+	Int row = 0;
+	key = TEXT_DETAIL + 48;
+	for( size_t each = 0; each < side->cells.size(); each++ )
+	{
+		if( side->cells[ each ] == s_focus )
+			continue;
+		const PickerCell &other = s_cells[ side->cells[ each ] ];
+		const Int top = listTop + row * rowHeight;
+		if( row % 2 )
+			fillBox( board( DETAIL_LEFT, top, RIGHT, top + rowHeight - 4 ), GameMakeColor( 255, 255, 255, 6 ) );
+		const Int p = rowHeight - 14;
+		drawPicture( other.icon, board( DETAIL_LEFT + 6, top + 5, DETAIL_LEFT + 6 + p, top + 5 + p ) );
+		const Int tx = DETAIL_LEFT + p + 24;
+		drawIn( key++, UIStyle::fitText( other.name, rowName, fpx( RIGHT - tx ) ), rowName, board( tx, top + 4, RIGHT, top + 30 ), UIStyle::INK );
+		drawIn( key++, UIStyle::fitText( sentence( other.strategy ), rowLine, fpx( RIGHT - tx ) ), rowLine, board( tx, top + 32, RIGHT, top + 54 ), UIStyle::MUTED );
+		++row;
+	}
+}
+
+/// the hovered tile's tooltip over it: its name and the game's line for it
+static void drawTooltip( Int index )
+{
+	const PickerCell &cell = s_cells[ index ];
+	const UnicodeString words = cell.strategy.isEmpty() ? TheGameText->fetch( "GUI:FactionPickObserverLine" ) : sentence( cell.strategy );
+	GameFont *font = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+	std::vector<UnicodeString> lines;
+	UIStyle::wrapLines( words, fpx( TIP_WIDTH - 28 ), measureIn, font, lines );
+	const Int count = min( 6, (Int)lines.size() );
+	const UIStyle::BoardFit fit = UIStyle::boardFit( TheDisplay->getWidth(), TheDisplay->getHeight() );
+	const Real scale = fit.scale > 0.0f ? fit.scale : 1.0f;
+	const Int tileLeft = REAL_TO_INT( ( cell.box.lo.x - fit.x ) / scale + 0.5f );
+	const Int tileTop = REAL_TO_INT( ( cell.box.lo.y - fit.y ) / scale + 0.5f );
+	const Int tileBottom = REAL_TO_INT( ( cell.box.hi.y - fit.y ) / scale + 0.5f );
+	const Int height = 14 + 26 + 21 * count + 10;
+	const Int x = min( tileLeft, PANEL_RIGHT - 20 - TIP_WIDTH );
+	const Int y = tileTop - height - 8 > TABS_BOTTOM ? tileTop - height - 8 : tileBottom + 8;
+	fillBox( board( x + 6, y + 6, x + TIP_WIDTH + 6, y + height + 6 ), GameMakeColor( 0, 0, 0, 110 ) );
+	const IRegion2D r = board( x, y, x + TIP_WIDTH, y + height );
+	fillBox( r, GameMakeColor( 4, 6, 12, 240 ) );
+	frameBox( r, UIStyle::EDGE );
+	drawIn( TEXT_TIP, cell.name, UIStyle::menuFont( UIStyle::MENU_TEXT_BODY ), board( x + 14, y + 10, x + TIP_WIDTH - 14, y + 36 ), UIStyle::INK );
+	for( Int k = 0; k < count; k++ )
+		drawIn( TEXT_TIP + 1 + k, lines[ k ], font, board( x + 14, y + 40 + k * 21, x + TIP_WIDTH - 14, y + 40 + ( k + 1 ) * 21 ), UIStyle::MUTED );
+}
+
+static void drawKey( Int key, const IRegion2D &box, const UnicodeString &words, Bool enabled, Bool primary, const ICoord2D &mouse )
+{
+	DisplayString *label = text( key, words, UIStyle::menuFont( UIStyle::MENU_TEXT_KEY, TRUE ) );
+	const UIStyle::KeyState state = !enabled ? UIStyle::KEY_DISABLED : ( isInside( box, mouse.x, mouse.y ) ? UIStyle::KEY_HOVER : UIStyle::KEY_NORMAL );
+	UIStyle::menuKey( box, label, state, primary );
 }
 
 static void drawPicker( GameWindow *window, WinInstanceData *instData )
 {
-	// the room stays up underneath for its updates, so the screen paints over every pixel of it
-	UIStyle::shell();
-	UIStyle::panel( s_panelBox.lo.x, s_panelBox.lo.y, boxWidth( s_panelBox ), boxHeight( s_panelBox ), UIStyle::PANEL );
+	// the room stays up underneath for its updates, so the screen frosts all of its panel over it
+	const IRegion2D panel = board( PANEL_LEFT, PANEL_TOP, PANEL_RIGHT, PANEL_BOTTOM );
+	UIStyle::glass( panel, 230 );
+	UIStyle::frameA( panel );
+	UIStyle::menuHeader( text( TEXT_TITLE, UIStyle::capitals( TheGameText->fetch( "GUI:FactionPickTitle" ) ),
+		UIStyle::menuFont( UIStyle::MENU_TEXT_TITLE, TRUE ) ), NULL );
 
-	Int width, height;
-	s_title->getSize( &width, &height );
-	s_title->draw( UIStyle::boardX( UIStyle::ROOM_TITLE_LEFT ), UIStyle::boardY( UIStyle::ROOM_TITLE_MIDDLE ) - height / 2, UIStyle::INK, UIStyle::SHADOW );
-	UIStyle::rule( s_panelBox.lo.x, UIStyle::boardY( UIStyle::ROOM_HEADER_LINE ), boxWidth( s_panelBox ) );
-
-	// everything that takes a click lights under the mouse, as the layouts' buttons do
 	const ICoord2D mouse = TheMouse->getMouseStatus()->pos;
-	const Bool mouseInGrid = isInside( s_gridBox, mouse.x, mouse.y );
+	static const char *const tabs[] = { "GUI:FactionPickRandomAll", "GUI:FactionPickCustom" };
 	const Bool tabOn[ 2 ] = { s_focus < 0 && !s_custom, s_custom };
 	for( Int tab = 0; tab < 2; tab++ )
 	{
-		const IRegion2D &box = s_tabBox[ tab ];
-		const Color ink = UIStyle::tab( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), TRUE, tabOn[ tab ], isInside( box, mouse.x, mouse.y ) );
-		drawCentred( s_tabText[ tab ], box, ink );
+		DisplayString *label = text( TEXT_TABS + tab, UIStyle::capitals( TheGameText->fetch( tabs[ tab ] ) ),
+			UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL + 2, TRUE ) );
+		UIStyle::menuTab( s_tabBox[ tab ], label, tabOn[ tab ], !tabOn[ tab ] && isInside( s_tabBox[ tab ], mouse.x, mouse.y ) );
 	}
 
 	for( size_t group = 0; group < s_groups.size(); group++ )
-	{
-		// the name is a button (that side alone), lit under the mouse; the box is Custom Selection's
-		const PickerGroup &g = s_groups[ group ];
-		const Bool narrows = g.mask != 0;
-		const Bool hovered = narrows && mouseInGrid && isInside( g.nameBox, mouse.x, mouse.y );
-		g.heading->draw( g.at.x, g.at.y, hovered ? UIStyle::EDGE_LIT : UIStyle::ACTIVE, UIStyle::SHADOW );
-		clipIfCut( g.tickBox );
-		if( s_custom && narrows )
-		{
-			drawTickBox( g.tickBox.lo.x, g.tickBox.lo.y, boxWidth( g.tickBox ), FactionPickerSideTicked( s_mask, g.mask ) );
-			if( mouseInGrid && isInside( g.tickBox, mouse.x, mouse.y ) )
-				TheDisplay->drawOpenRect( g.tickBox.lo.x, g.tickBox.lo.y, boxWidth( g.tickBox ), boxHeight( g.tickBox ), 1.0f, UIStyle::EDGE_LIT );
-		}
-	}
+		drawGroupHead( (Int)group, mouse );
+	Int hovered = -1;
 	for( size_t each = 0; each < s_cells.size(); each++ )
 	{
-		const PickerCell &cell = s_cells[ each ];
-		const IRegion2D &box = cell.box;
-		// the display's clip takes a picture wholly under the grid for a turned-over one
-		if( box.hi.y <= s_gridBox.lo.y || box.lo.y >= s_gridBox.hi.y )
-			continue;
-		clipIfCut( box );
-		panelInGrid( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), UIStyle::CARD );
-		drawCellPicture( cell, box );
-		const Int inset = UIStyle::px( 6 );
-
-		if( s_custom )
-		{
-			// out of the pool reads as greyed; an army that cannot go in a pool has no box to tick
-			if( !isTicked( cell ) )
-				fillInGrid( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), UIStyle::withAlpha( UIStyle::GROUND, 150 ) );
-			if( cell.poolBit >= 0 )
-			{
-				const Int size = UIStyle::px( SIDE_TICK );
-				drawTickBox( box.hi.x - size - inset, box.lo.y + inset, size, isTicked( cell ) );
-			}
-		}
-		// a one-pixel cyan line over the card's own frame did not read as a hover, so the tile takes the
-		// blue of a lit button's art too
-		const Bool hovered = mouseInGrid && isInside( box, mouse.x, mouse.y );
-		if( hovered )
-			fillInGrid( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), UIStyle::withAlpha( UIStyle::EDGE, HOVER_ALPHA ) );
-		if( (Int)each == s_focus )
-			UIStyle::edge( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ) );
-		else if( hovered )
-			TheDisplay->drawOpenRect( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), 1.0f, UIStyle::EDGE_LIT );
-	}
-	TheDisplay->enableClipping( FALSE );
-	if( s_scrollMax > 0 )
-	{
-		UIStyle::panel( s_barBox.lo.x, s_barBox.lo.y, boxWidth( s_barBox ), boxHeight( s_barBox ), UIStyle::CARD );
-		const Int top = s_barBox.lo.y + FactionPickerThumbTop( s_scroll, s_scrollMax, boxHeight( s_barBox ), thumbHeight() );
-		const Bool onThumb = isInside( s_barBox, mouse.x, mouse.y ) && mouse.y >= top && mouse.y < top + thumbHeight();
-		UIStyle::button( s_barBox.lo.x, top, boxWidth( s_barBox ), thumbHeight() );
-		if( onThumb || s_thumbGrab >= 0 )
-			TheDisplay->drawFillRect( s_barBox.lo.x, top, boxWidth( s_barBox ), thumbHeight(), UIStyle::withAlpha( UIStyle::EDGE, HOVER_ALPHA ) );
+		const Bool over = isInside( s_cells[ each ].box, mouse.x, mouse.y );
+		drawTile( (Int)each, over );
+		if( over )
+			hovered = (Int)each;
 	}
 
-	UIStyle::panel( s_portraitBox.lo.x, s_portraitBox.lo.y, boxWidth( s_portraitBox ), boxHeight( s_portraitBox ), UIStyle::CARD );
-	IRegion2D portraitInner = s_portraitBox;
-	const Int portraitInset = UIStyle::px( PAD );
-	portraitInner.lo.x += portraitInset;
-	portraitInner.lo.y += portraitInset;
-	portraitInner.hi.x -= portraitInset;
-	portraitInner.hi.y -= portraitInset;
-	if( s_focus < 0 )
-		drawPoolPreview( portraitInner );
-	else if( s_cells[ s_focus ].portrait )
-		drawFitted( s_cells[ s_focus ].portrait, portraitInner, MAX_PORTRAIT_SCALE );
+	const IRegion2D divider = board( DIVIDER, TABS_TOP, DIVIDER + 1, BODY_BOTTOM );
+	fillBox( divider, UIStyle::withAlpha( UIStyle::FRAME, 110 ) );
+	if( s_focus >= 0 )
+		drawGeneral();
 	else
-		drawCentred( s_randomMark, s_portraitBox, UIStyle::MUTED );
+		drawTheDraw();
 
-	UIStyle::panel( s_bannerBox.lo.x, s_bannerBox.lo.y, boxWidth( s_bannerBox ), boxHeight( s_bannerBox ), UIStyle::CARD );
-	UIStyle::stripe( s_bannerBox.lo.x, s_bannerBox.lo.y, boxHeight( s_bannerBox ), UIStyle::GOLD );
-	drawCentred( s_nameText, s_bannerBox, UIStyle::INK );
-
-	const IRegion2D &d = s_descriptionBox;
-	UIStyle::panel( d.lo.x, d.lo.y, boxWidth( d ), boxHeight( d ), UIStyle::CARD );
-	const Int pad = UIStyle::px( PAD );
-	s_strategyText->draw( d.lo.x + pad, d.lo.y + pad, UIStyle::INK, UIStyle::SHADOW );
-	s_strategyText->getSize( &width, &height );
-	const Int featuresTop = d.lo.y + pad + ( height > 0 ? height + pad : 0 );
-	const Int perColumn = ( (Int)s_featureText.size() + 1 ) / 2;
-	Int y = featuresTop;
-	for( size_t each = 0; each < s_featureText.size(); each++ )
+	// the foot: its rule, BACK at the left, CONFIRM lit on Play Game's rect, the keys' hint between
+	const IRegion2D rule = board( LEFT, FOOT_RULE, RIGHT, FOOT_RULE + 1 );
+	fillBox( rule, UIStyle::withAlpha( UIStyle::FRAME, 110 ) );
+	drawKey( TEXT_BACK, s_backBox, UIStyle::capitals( TheGameText->fetch( "GUI:Back" ) ), TRUE, FALSE, mouse );
+	GameFont *keyFont = UIStyle::menuFont( UIStyle::MENU_TEXT_KEY, TRUE );
+	UnicodeString confirm;
+	confirm.format( TheGameText->fetch( "GUI:FactionPickConfirm" ).str(), pickName().str() );
+	confirm = UIStyle::capitals( confirm );
+	if( measureIn( confirm, keyFont ) > boxWidth( s_confirmBox ) - fpx( 24 ) )
 	{
-		if( (Int)each == perColumn )
-			y = featuresTop;
-		const Int x = d.lo.x + pad + ( (Int)each < perColumn ? 0 : ( boxWidth( d ) - pad ) / 2 );
-		s_featureText[ each ]->draw( x, y, UIStyle::MUTED, UIStyle::SHADOW );
-		s_featureText[ each ]->getSize( &width, &height );
-		y += height;
+		// a long general's name: the key says CONFIRM alone, the pick is named over it on the right
+		confirm.format( TheGameText->fetch( "GUI:FactionPickConfirm" ).str(), UnicodeString::TheEmptyString.str() );
+		confirm.trim();
+		confirm = UIStyle::capitals( confirm );
 	}
+	drawKey( TEXT_CONFIRM, s_confirmBox, confirm, canConfirm(), TRUE, mouse );
+	GameFont *hintFont = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+	const Int hintLeft = BACK_RIGHT + 16;
+	drawIn( TEXT_HINT, UIStyle::fitKey( s_custom ? "GUI:FactionPickHintTick" : "GUI:FactionPickHintPlay", hintFont, fpx( CONFIRM_LEFT - 12 - hintLeft ) ),
+		hintFont, board( hintLeft, FOOT_MIDDLE - 12, CONFIRM_LEFT - 12, FOOT_MIDDLE + 12 ), UIStyle::MUTED );
 
-	drawButton( s_backBox, s_backText, TRUE, mouse );
-	drawButton( s_confirmBox, s_confirmText, canConfirm(), mouse );
+	if( hovered >= 0 )
+		drawTooltip( hovered );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -820,24 +1015,17 @@ static void closePicker( Bool restoreFocus )
 		TheWindowManager->winSetFocus( s_oldFocus );
 	s_oldFocus = NULL;
 
-	for( size_t each = 0; each < s_cells.size(); each++ )
-		freeText( s_cells[ each ].label );
-	for( size_t group = 0; group < s_groups.size(); group++ )
-		freeText( s_groups[ group ].heading );
-	for( size_t each = 0; each < s_featureText.size(); each++ )
-		freeText( s_featureText[ each ] );
 	s_cells.clear();
 	s_groups.clear();
-	s_featureText.clear();
-	freeText( s_title );
-	freeText( s_tabText[ 0 ] );
-	freeText( s_tabText[ 1 ] );
-	freeText( s_backText );
-	freeText( s_confirmText );
-	freeText( s_nameText );
-	freeText( s_strategyText );
-	freeText( s_randomMark );
-	s_leftOut.clear();
+	for( Int k = 0; k < TEXT_COUNT; k++ )
+	{
+		if( s_texts[ k ] )
+			TheDisplayStringManager->freeDisplayString( s_texts[ k ] );
+		s_texts[ k ] = NULL;
+	}
+	if( s_measure )
+		TheDisplayStringManager->freeDisplayString( s_measure );
+	s_measure = NULL;
 }
 
 /** The box's Random line carries the seat's pool in its item data and says which in its text, so
@@ -862,7 +1050,7 @@ static void confirm( void )
 	AsciiString pickedName;
 	if( s_focus >= 0 )
 		pickedName.translate( s_cells[ s_focus ].name );
-	DEBUG_LOG(( "FACTIONPICKER confirm pick %d \"%s\" list scrolled %d of %d\n", pick, pickedName.str(), s_scroll, s_scrollMax ));
+	DEBUG_LOG(( "FACTIONPICKER confirm pick %d \"%s\"\n", pick, pickedName.str() ));
 	GameWindow *combo = s_combo;
 	closePicker( TRUE );
 
@@ -883,13 +1071,12 @@ static void confirm( void )
 	}
 }
 
-/// a click on a side's name: Random from that side alone ("USA random")
+/// a side's RANDOM key: Random from that side alone ("Random USA")
 static void narrowToSide( Int side )
 {
 	s_custom = TRUE;
 	s_focus = -1;
 	s_mask = s_groups[ side ].mask;
-	refresh();
 }
 
 static void pressAt( Int x, Int y )
@@ -902,6 +1089,8 @@ static void pressAt( Int x, Int y )
 	}
 	if( isInside( s_confirmBox, x, y ) )
 	{
+		if( !canConfirm() )
+			return;
 		click();
 		confirm();
 		return;
@@ -911,7 +1100,6 @@ static void pressAt( Int x, Int y )
 		click();
 		s_custom = FALSE;
 		s_focus = -1;
-		refresh();
 		return;
 	}
 	if( isInside( s_tabBox[ 1 ], x, y ) )
@@ -919,7 +1107,6 @@ static void pressAt( Int x, Int y )
 		click();
 		s_custom = !s_custom;
 		s_focus = -1;
-		refresh();
 		return;
 	}
 	const Int tickedSide = s_custom ? sideAt( x, y, TRUE ) : -1;
@@ -927,14 +1114,13 @@ static void pressAt( Int x, Int y )
 	{
 		click();
 		s_mask = FactionPickerToggleSide( s_mask & listedMask(), s_groups[ tickedSide ].mask );
-		refresh();
 		return;
 	}
-	const Int namedSide = sideAt( x, y, FALSE );
-	if( namedSide >= 0 )
+	const Int keyedSide = sideAt( x, y, FALSE );
+	if( keyedSide >= 0 && hasSideKey( s_groups[ keyedSide ] ) )
 	{
 		click();
-		narrowToSide( namedSide );
+		narrowToSide( keyedSide );
 		return;
 	}
 	const Int each = cellAt( x, y );
@@ -948,7 +1134,6 @@ static void pressAt( Int x, Int y )
 		s_custom = FALSE;
 		s_focus = each;
 	}
-	refresh();
 }
 
 /** The window manager hands the second press of a double click on as a plain press, so the pair is
@@ -984,26 +1169,8 @@ static WindowMsgHandledType pickerInput( GameWindow *window, UnsignedInt msg, Wi
 					confirm();
 			}
 			break;
-		case GWM_WHEEL_UP:
-			setScroll( s_scroll - UIStyle::px( CELL + CELL_GAP ) );
-			break;
-		case GWM_WHEEL_DOWN:
-			setScroll( s_scroll + UIStyle::px( CELL + CELL_GAP ) );
-			break;
-		case GWM_LEFT_DOWN:
-			if( s_scrollMax > 0 && isInside( s_barBox, x, y ) )
-				pressBar( y );
-			break;
-		case GWM_LEFT_DRAG:
-			if( s_thumbGrab >= 0 )
-				dragThumb( y );
-			break;
 		case GWM_LEFT_UP:
-			// a press that took the thumb ends here wherever the mouse went, on a tile or not
-			if( s_thumbGrab >= 0 )
-				s_thumbGrab = -1;
-			else
-				releaseAt( x, y );
+			releaseAt( x, y );
 			break;
 	}
 	// nothing under the screen sees the mouse or the keys while it is up
@@ -1020,6 +1187,9 @@ static WindowMsgHandledType pickerSystem( GameWindow *window, UnsignedInt msg, W
 	}
 	return GameWinDefaultSystem( window, msg, mData1, mData2 );
 }
+
+/// the screen's name, which the window tree (ControlServer's uitree) shows and finds it by
+static const char *const PICKER_WINDOW_NAME = "FactionPicker.wnd:FactionPicker";
 
 static void openPicker( GameWindow *combo )
 {
@@ -1045,29 +1215,17 @@ static void openPicker( GameWindow *combo )
 	s_custom = current < PLAYERTEMPLATE_RANDOM_POOL;
 	s_focus = -1;
 	s_lastPressCell = -1;
-	s_thumbGrab = -1;
 	for( size_t each = 0; each < s_cells.size(); each++ )
 	{
 		if( s_cells[ each ].pick == current )
 			s_focus = (Int)each;
 	}
-
-	s_title = newText( UIStyle::capitals( TheGameText->fetch( "GUI:FactionPickTitle" ) ), UIStyle::titleFont( UIStyle::TEXT_TITLE ) );
-	s_tabText[ 0 ] = newText( TheGameText->fetch( "GUI:FactionPickRandomAll" ), UIStyle::font( UIStyle::TEXT_BODY ) );
-	s_tabText[ 1 ] = newText( TheGameText->fetch( "GUI:FactionPickCustom" ), UIStyle::font( UIStyle::TEXT_BODY ) );
-	s_backText = newText( UIStyle::capitals( TheGameText->fetch( "GUI:Back" ) ), UIStyle::titleFont( UIStyle::TEXT_HEADING ) );
-	s_confirmText = newText( UnicodeString::TheEmptyString, UIStyle::titleFont( UIStyle::TEXT_HEADING ) );
-	s_nameText = newText( UnicodeString::TheEmptyString, UIStyle::titleFont( UIStyle::TEXT_TITLE ) );
-	s_strategyText = newText( UnicodeString::TheEmptyString, UIStyle::font( UIStyle::TEXT_STRONG ) );
-	s_randomMark = newText( UnicodeString( u"?" ), UIStyle::titleFont( UIStyle::TEXT_DISPLAY ) );
 	layout();
-	if( s_focus >= 0 )
-		setScroll( s_cells[ s_focus ].box.hi.y - s_gridBox.hi.y );	// the seat's army in view, at the foot when it has to scroll
-	s_strategyText->setWordWrap( boxWidth( s_descriptionBox ) - UIStyle::px( 2 * PAD ) );
-	refresh();
 
 	s_window = TheWindowManager->winCreate( NULL, WIN_STATUS_ENABLED | WIN_STATUS_ABOVE, 0, 0,
 		TheDisplay->getWidth(), TheDisplay->getHeight(), pickerSystem );
+	s_window->winGetInstanceData()->m_decoratedNameString = PICKER_WINDOW_NAME;
+	s_window->winSetWindowId( NAMEKEY( AsciiString( PICKER_WINDOW_NAME ) ) );
 	s_window->winSetDrawFunc( drawPicker );
 	s_window->winSetInputFunc( pickerInput );
 	s_oldFocus = TheWindowManager->winGetFocus();
@@ -1121,7 +1279,6 @@ void FactionPickerAttach( GameWindow *parent, const char *layoutFilename )
 		{
 			s_custom = TRUE;
 			s_focus = -1;
-			refresh();
 		}
 		for( size_t group = 0; group < s_groups.size(); group++ )
 		{

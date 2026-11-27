@@ -102,7 +102,7 @@ SELECT_MAP_WIDTH, SELECT_MAP_HEIGHT = 200, 46
 MAP_CAPTION_TOP = MAP_TOP + MAP_HEIGHT + 10
 RULES_Y = 506                  # the RULES head or the tabs, whatever the map (the pickers hold it too)
 RULES_TOP = RULES_Y + 36
-RULE_PITCH_MOST = 62
+RULE_PITCH_MOST = 60          # a 44 box and a 16 gap: on the 8 px grid (62 left 18)
 SETTING_HEIGHT = BOX_HEIGHT
 SETTING_LABEL_WIDTH = 160
 CHECK_LINE = 34
@@ -114,7 +114,7 @@ CHAT_ENTRY_HEIGHT, SEND_WIDTH = 40, 122
 FOOT_RULE = 962
 BUTTON_TOP, BUTTON_HEIGHT = 976, 52
 BACK_WIDTH, BUDDIES_WIDTH = 240, 240
-KEY_PITCH = 252
+KEY_PITCH = 256               # 16 between the two left keys, on the grid (252 left 12)
 PRESETS_RECT = (1500, 50, 360, 42)
 STAT_PITCH, STAT_VALUE_WIDTH = 40, 64
 STATS_WIDTH = 372
@@ -530,14 +530,19 @@ def place_rules(layout, rules, checks):
     page.place(COLUMN_LEFT, RULES_TOP, INNER_RIGHT - COLUMN_LEFT, SEATS_BOTTOM - RULES_TOP)
     page.set_prop("STATUS", "ENABLED+NOFOCUS")
     checks_top = SEATS_BOTTOM - len(checks) * CHECK_LINE
-    pitch = min(RULE_PITCH_MOST, (checks_top - 4 - RULES_TOP) // len(rules))
+    # the gap between two boxes stays on the 8 px grid: 16 where the rows have room, else 8 with the
+    # boxes as tall as what is left (the online room's seven rules over two lines of check boxes)
+    room = (checks_top - 4 - RULES_TOP) // len(rules)
+    gap = 16 if room >= RULE_PITCH_MOST else 8
+    height = min(SETTING_HEIGHT, room - gap)
+    pitch = height + gap
     top = RULES_TOP
     for label_name, combo_name in rules:
         label = need(layout, label_name)
-        label.place(COLUMN_LEFT, top, SETTING_LABEL_WIDTH, SETTING_HEIGHT)
+        label.place(COLUMN_LEFT, top, SETTING_LABEL_WIDTH, height)
         left_align(label)
         need(layout, combo_name).place(COLUMN_LEFT + SETTING_LABEL_WIDTH, top,
-                                       INNER_RIGHT - COLUMN_LEFT - SETTING_LABEL_WIDTH, SETTING_HEIGHT)
+                                       INNER_RIGHT - COLUMN_LEFT - SETTING_LABEL_WIDTH, height)
         top += pitch
     width = (INNER_RIGHT - COLUMN_LEFT - 2 * GAP) // 3
     for line, names in enumerate(checks):

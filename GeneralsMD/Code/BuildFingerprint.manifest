@@ -2169,6 +2169,7 @@ GameEngine/Include/GameClient/LoadScreen.h
 GameEngine/Include/GameClient/LoadScreenLayout.h
 GameEngine/Include/GameClient/LookAtXlat.h
 GameEngine/Include/GameClient/MainMenuLayout.h
+GameEngine/Include/GameClient/MapPicker.h
 GameEngine/Include/GameClient/MapUtil.h
 GameEngine/Include/GameClient/MatchClock.h
 GameEngine/Include/GameClient/MenuBoxParts.h
@@ -2180,6 +2181,7 @@ GameEngine/Include/GameClient/Module/SwayClientUpdate.h
 GameEngine/Include/GameClient/Mouse.h
 GameEngine/Include/GameClient/ObserverCamera.h
 GameEngine/Include/GameClient/ObserverHudLayout.h
+GameEngine/Include/GameClient/OnlineSelfLayout.h
 GameEngine/Include/GameClient/ParabolicEase.h
 GameEngine/Include/GameClient/ParticleClosedForm.h
 GameEngine/Include/GameClient/ParticleSys.h
@@ -2851,6 +2853,7 @@ GameEngine/Source/GameClient/GUI/HeaderTemplate.cpp
 GameEngine/Source/GameClient/GUI/IMEManager.cpp
 GameEngine/Source/GameClient/GUI/IMEManagerPosix.cpp
 GameEngine/Source/GameClient/GUI/LoadScreen.cpp
+GameEngine/Source/GameClient/GUI/MapPicker.cpp
 GameEngine/Source/GameClient/GUI/ProcessAnimateWindow.cpp
 GameEngine/Source/GameClient/GUI/Shell/Shell.cpp
 GameEngine/Source/GameClient/GUI/Shell/ShellMenuScheme.cpp
@@ -4791,6 +4794,7 @@ Tests/shader_cases.h
 Tests/terrain_golden.txt
 Tests/terrain_grid.h
 Tests/terrain_oracle.cpp
+Tests/test_apocalypse_room.inc
 Tests/test_audio_mix_policy.cpp
 Tests/test_baseline_weather.cpp
 Tests/test_bigfile_extract.py
@@ -4864,6 +4868,7 @@ Tests/test_macos_app.sh
 Tests/test_main.cpp
 Tests/test_main_menu.inc
 Tests/test_map_ini_rollback.inc
+Tests/test_map_picker.inc
 Tests/test_menu_boxes.inc
 Tests/test_menu_style.inc
 Tests/test_miles_effects.cpp
@@ -4876,6 +4881,7 @@ Tests/test_msvc_float_casts.cpp
 Tests/test_observer_camera.inc
 Tests/test_observerhud.cpp
 Tests/test_online.cpp
+Tests/test_online_self.inc
 Tests/test_options_menu.inc
 Tests/test_partition_collide.inc
 Tests/test_pathfind_slicing.inc

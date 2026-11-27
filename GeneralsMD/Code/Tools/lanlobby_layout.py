@@ -49,16 +49,18 @@ ROW_TOP, ROW_HEIGHT, KEY, KEY_GAP = 976, 52, 300, 16
 SEND_W = 120
 
 # the list: its head from 132, the column words at 168, rows of 40 from 198 (the listbox draws them 4 px in),
-# six of them; the chat's head at 454, its log from 480 to 896, the entry and SEND at 908
+# six of them to 442; the chat's head at 454, its log from 482 to 900 (40 under the list, 8 over the entry),
+# the entry and SEND at 908, 8 apart
 GAMES = (X0, 194, LEFT_RIGHT - X0, 6 * 40 + 8)
-CHAT = (X0, 480, LEFT_RIGHT - X0, 896 - 480)
-ENTRY = (X0, 908, LEFT_RIGHT - X0 - SEND_W - 12, 44)
+CHAT = (X0, 482, LEFT_RIGHT - X0, 900 - 482)
+ENTRY = (X0, 908, LEFT_RIGHT - X0 - SEND_W - 8, 44)
 SEND = (LEFT_RIGHT - SEND_W, 908, SEND_W, 44)
-# the right column: the picked game from 130 to 742, the players' head at 752, their rows from 786
+# the right column: the picked game from 130 to 742, the players' head at 752, their rows from 786 to 944,
+# 32 over the foot's keys (LanLobbyMenu.cpp placeLanPlayers keeps the same foot)
 PICKED = (RIGHT_LEFT, 130, X1 - RIGHT_LEFT, 742 - 130)
-PLAYERS = (RIGHT_LEFT, 786, X1 - RIGHT_LEFT, 946 - 786)
-# the title row's right end: PLAYER NAME's box and CLEAR
-NAME = (1358, 46, 340, 48)
+PLAYERS = (RIGHT_LEFT, 786, X1 - RIGHT_LEFT, 944 - 786)
+# the title row's right end: PLAYER NAME's box and CLEAR, 8 apart
+NAME = (1358, 46, 344, 48)
 CLEAR_KEY = (1710, 46, 150, 48)
 
 

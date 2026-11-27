@@ -15498,6 +15498,27 @@ TOOLTIP:MasterVolume
 "Oyunun tamamını açar ya da kısar: müzik, efektler, konuşmalar, ortam ve videolar. Öteki sürgüler karışımı ayarlar, bu sürgü karışımın ne kadar yüksek çalacağını."
 END
 
+// Ses sayfasının sürgüleri, kısa: bir ad sığmayınca hepsi bunları alır
+GUI:MasterVolume_Short
+"Genel"
+END
+
+GUI:MusicVolume_Short
+"Müzik"
+END
+
+GUI:SFXVolume_Short
+"Efekt"
+END
+
+GUI:VoiceVolume_Short
+"Konuşma"
+END
+
+GUI:AmbientVolume_Short
+"Ortam"
+END
+
 GUI:OptionsGroupMusic
 "Müzik"
 END
@@ -19230,28 +19251,8 @@ GUI:FactionPickConfirm
 "Onayla: %s"
 END
 
-GUI:FactionPickRandom
-"Rastgele, maç başlarken bu ordulardan birini sizin için seçer."
-END
-
-GUI:FactionPickLeftOut
-"Rastgele şunları hiç seçmez: %s. Eklemek için Özel Seçim'den işaretleyin."
-END
-
-GUI:FactionPickPool
-"Rastgele, solda işaretli %d ordudan birini seçer (toplam %d). Bir orduya tıklayarak onu ekleyin ya da çıkarın."
-END
-
 GUI:FactionPickRandomSide
 "Rastgele %s"
-END
-
-GUI:FactionPickSideHint
-"Bir tarafın kutusu o tarafın tamamını işaretler ya da kaldırır; adına tıklamak çekilişte yalnızca o tarafı bırakır."
-END
-
-GUI:FactionPickSideNameHint
-"Bir tarafın rastgele bir ordusuyla oynamak için o tarafın adına tıklayın."
 END
 
 GUI:SocketRedirected
@@ -19467,27 +19468,27 @@ GUI:OnlineSkinsWaiting
 END
 
 GUI:OnlineSkinsNone
-"Hesabında henüz skin yok. Her kart, skinini nasıl alacağını söyler; birini aldıktan sonra bu ekranı yeniden aç."
+"Hesabında henüz skin yok."
 END
 
 GUI:OnlineSkinsSaved
-"Kaydedildi. Bir sonraki oyununda (özel oyun ya da Hızlı Maç) bu skinler görünür."
+"Kaydedildi. Sonraki çevrim içi oyununda görünürler."
 END
 
 GUI:OnlineSkinsSignedOut
-"Giriş yapmadın. Skinlerini seçmek için çevrim içi giriş yap."
+"Skin seçmek için çevrim içi giriş yap."
 END
 
 GUI:OnlineSkinsThrottled
-"Bir dakikada çok fazla kayıt. Biraz bekle, sonra yeniden Kaydet'e bas."
+"Çok fazla kayıt. Biraz bekle."
 END
 
 GUI:OnlineSkinsUnavailable
-"zerohour.gg cevap vermedi. Skinlerin olduğu gibi kaldı; birazdan yeniden dene."
+"zerohour.gg cevap vermedi. Birazdan dene."
 END
 
 GUI:OnlineSkinsRefused
-"zerohour.gg bu seçimi kabul etmedi, skinlerin olduğu gibi kaldı. Hesabında ne olduğunu görmek için bu ekranı yeniden aç."
+"zerohour.gg seçimi kabul etmedi. Bu ekranı yeniden aç."
 END
 
 GUI:OnlineVsAIButton
@@ -22592,6 +22593,179 @@ GUI:QMMatchHead
 "Maç"
 END
 
+// Menu redesign package 3b, the Apocalypse room.
+GUI:ApocalypseSurvivors
+"SAĞ KALANLAR"
+END
+
+GUI:ApocalypseAllied
+"MÜTTEFİK"
+END
+
+GUI:ApocalypseAlliedNote
+"herkes, ölülere karşı"
+END
+
+GUI:ApocalypseWaves
+"DALGA"
+END
+
+GUI:ApocalypseWavesNote
+"%d kişilik"
+END
+
+GUI:ApocalypseBossHealth
+"BOSS CANI"
+END
+
+GUI:ApocalypseOpenSeat
+"Dolu her yer her dalgaya %d puan ekler"
+END
+
+GUI:ApocalypseNights
+"GECELER"
+END
+
+GUI:ApocalypseClockAt
+"saat %ls hızda, baştan"
+END
+
+GUI:ApocalypseBloodMoon
+"KAN AYI"
+END
+
+GUI:ApocalypseBloodMoonNote
+"her üç gecede bir, boss"
+END
+
+GUI:ApocalypseOneDay
+"BİR GÜN"
+END
+
+GUI:ApocalypseDay
+"GÜNDÜZ"
+END
+
+GUI:ApocalypseDusk
+"AKŞAM"
+END
+
+GUI:ApocalypseNight
+"GECE"
+END
+
+GUI:ApocalypseDawn
+"ŞAFAK"
+END
+
+GUI:ApocalypseFirstWave
+"İLK DALGA"
+END
+
+GUI:ApocalypseFallsAt
+"BAŞLAR"
+END
+
+GUI:ApocalypseNewDead
+"YENİ ÖLÜ"
+END
+
+GUI:ApocalypseBoss
+"BOSS"
+END
+
+GUI:ApocalypseKinds
+"%d tür"
+END
+
+GUI:ApocalypseKind
+"1 tür"
+END
+
+GUI:ApocalypseBossPair
+"3'ten 2'si"
+END
+
+GUI:ApocalypseDayOne
+"1. GÜN"
+END
+
+GUI:ApocalypseRandom
+"Rastgele"
+END
+
+GUI:ApocalypseStarts
+"%d başlangıç"
+END
+
+GUI:ApocalypseStart
+"1 başlangıç"
+END
+
+GUI:ApocalypseNewEveryMatch
+"Her maçta yeni"
+END
+
+GUI:ApocalypseKeyStart
+"Başlangıç = yer no."
+END
+
+GUI:ApocalypseKeyBasin
+"Havza: yer başı bir lob"
+END
+
+GUI:ApocalypseKeyWild
+"Yaban: ölüler gelir"
+END
+
+GUI:ApocalypseKeyFog
+"Kırmızı kenar: sis, öldürür"
+END
+
+GUI:ApocalypseModeSet
+"MODUN KURALLARI"
+END
+
+GUI:ApocalypseOff
+"Kapalı"
+END
+
+GUI:ApocalypseNone
+"Yok"
+END
+
+GUI:ApocalypseItsOwn
+"Modun kendi"
+END
+
+GUI:ApocalypseTeams
+"Takımlar"
+END
+
+GUI:ApocalypseAllAllied
+"Hepsi müttefik"
+END
+
+GUI:ApocalypseDifficulty
+"Zorluk"
+END
+
+GUI:ApocalypseAdapts
+"Kendini ayarlar"
+END
+
+GUI:ApocalypseScore
+"Galibiyet de mağlubiyet de yok: ne kadar dayandığın sayılır"
+END
+
+GUI:RoomSeatAbove
+"%d YER YUKARIDA"
+END
+
+GUI:RoomSeatBelow
+"%d YER AŞAĞIDA"
+END
+
 // Menu redesign package 13, the end screens.
 GUI:ScorePlace
 "Sıra"
@@ -23765,6 +23939,10 @@ GUI:AddressHint
 "Bunu arkadaşına ver"
 END
 
+GUI:DirectConnectNoAddress
+"Önce onun adresini yaz"
+END
+
 // Menu redesign package 12, single player: Generals' Challenge, the replay list, Load Game, the Save
 // Replay and Save / Load boxes.
 GUI:SPChallengeTitle
@@ -23968,7 +24146,7 @@ GUI:SPTeam
 END
 
 GUI:SPCopyToDesktop
-"Masaüstüne kopyala"
+"Masaüstüne at"
 END
 
 GUI:SPCopyToDesktop_Short
@@ -24097,4 +24275,359 @@ END
 
 GUI:SPHintEscEnterSaves
 "Esc vazgeçer, Enter kaydeder"
+END
+
+// Menu redesign package 11, online self: the ladder's side column, the short column heads, the player
+// card's foot hint and its short heads
+
+GUI:OnlineLadderNextRank
+"SONRAKİ RÜTBE"
+END
+
+GUI:OnlineLadderNextRank_Short
+"SONRAKİ"
+END
+
+GUI:OnlineLadderNextAt
+"%ls için %ls"
+END
+
+GUI:OnlineLadderToGo
+"%ls kaldı"
+END
+
+GUI:OnlineLadderPlacement
+"YERLEŞTİRME"
+END
+
+GUI:OnlineLadderGamesToGo
+"%d maç kaldı"
+END
+
+GUI:OnlineLadderWins_Short
+"GAL."
+END
+
+GUI:OnlineLadderLosses_Short
+"MAĞ."
+END
+
+GUI:OnlineLadderWinPct_Short
+"KAZ. %%"
+END
+
+GUI:OnlineCardByAI_Short
+"Bot ordusuna göre"
+END
+
+GUI:OnlineCardColAI_Short
+"BOT ELO"
+END
+
+GUI:OnlineCardEsc
+"Esc kapatır"
+END
+
+// Menu redesign package F4, friends on screen: the friends box's rows, its name field's lines, the
+// invite on a friend's menu, the toast and its keys, what the service refuses
+
+GUI:FriendsOnline
+"%d çevrimiçi"
+END
+
+GUI:FriendRequest
+"İSTEK"
+END
+
+GUI:FriendRequestSent
+"Gönderildi"
+END
+
+GUI:InARoom
+"Odada · %s"
+END
+
+GUI:InAMatch
+"Maçta"
+END
+
+GUI:InTheLobby
+"Lobide"
+END
+
+GUI:FriendInvite
+"Davet et"
+END
+
+GUI:FriendRequestSentTo
+"%s adlı oyuncuya arkadaşlık isteği gönderildi."
+END
+
+GUI:FriendInviteSentTo
+"%s davet edildi."
+END
+
+GUI:FriendInvites
+"%s seni davet ediyor"
+END
+
+GUI:FriendJoin
+"Katıl"
+END
+
+GUI:FriendDecline
+"Reddet"
+END
+
+GUI:FriendInviteTitle
+"Davet"
+END
+
+GUI:FriendLeaveRoom
+"Katılmak için bu odadan çıkılsın mı?"
+END
+
+GUI:FriendError
+"İşlem yapılamadı."
+END
+
+GUI:FriendError_not_found
+"Bu adda oyuncu yok."
+END
+
+GUI:FriendError_already
+"Zaten listende."
+END
+
+GUI:FriendError_full
+"Arkadaş listen dolu."
+END
+
+GUI:FriendError_rate
+"Çok fazla istek. Bir dakika sonra dene."
+END
+
+GUI:FriendError_offline
+"Oyuncu çevrimdışı."
+END
+
+GUI:FriendError_inmatch
+"Oyuncu maçta."
+END
+
+GUI:FriendError_nogame
+"Oda kapandı."
+END
+
+GUI:FriendError_unavailable
+"Arkadaşlar şu an kullanılamıyor."
+END
+
+GUI:FriendErrorRoomFull
+"Oda dolu."
+END
+
+GUI:FriendErrorBuild
+"Bu oda oyunun başka bir sürümünü oynuyor."
+END
+
+// Menu redesign package 7, the pickers
+GUI:MapPlayersCount
+"%d oyuncu"
+END
+
+GUI:MapPlayersChip
+"%d OYUNCU"
+END
+
+GUI:MapSupplies
+"%d ikmal"
+END
+
+GUI:MapTech
+"%d teknoloji"
+END
+
+GUI:MapMedalEasy
+"KOLAY"
+END
+
+GUI:MapMedalMedium
+"ORTA"
+END
+
+GUI:MapMedalHard
+"ZOR"
+END
+
+GUI:MapMedalHardMax
+"ZOR x%d"
+END
+
+GUI:MapNotWon
+"HENÜZ KAZANILMADI"
+END
+
+GUI:MapNextEasy
+"Sıradaki: Kolay"
+END
+
+GUI:MapNextMedium
+"Sıradaki: Orta"
+END
+
+GUI:MapNextHard
+"Sıradaki: Zor"
+END
+
+GUI:MapNextHardMax
+"Sıradaki: Zor x%d"
+END
+
+GUI:MapNextAll
+"Bütün madalyalar alındı"
+END
+
+GUI:MapMedalLegend
+"Madalya: en iyi zaferiniz; bir Kolay, Orta ya da Zor rakibe, ya da her koltukta Zor (x7)"
+END
+
+GUI:MapMedalLegend_Short
+"Madalya: en iyi zafer; Kolay, Orta, Zor ya da her koltukta Zor (x7)"
+END
+
+GUI:MapHintAccept
+"Kabul etmek için haritaya çift tıklayın"
+END
+
+GUI:MapHintAccept_Short
+"Kabul için çift tıklayın"
+END
+
+GUI:MapHintAcceptType
+"Kabul etmek için harita türüne çift tıklayın"
+END
+
+GUI:MapHintAcceptType_Short
+"Kabul için çift tıklayın"
+END
+
+GUI:MapStyleTag
+"TARZ"
+END
+
+GUI:RandomMapName
+"Rastgele harita"
+END
+
+GUI:RandomMapStyleOf
+"%s tarzı"
+END
+
+GUI:RandomMapSpots
+"%d başlangıç noktası"
+END
+
+GUI:RandomMapSpotsLine
+"Noktalar harita kurulunca yerleşir; her Kabul yeni bir harita kurar."
+END
+
+GUI:RandomTabStatsOff
+"istatistik kaydında kapalı"
+END
+
+GUI:MapTenantRandom
+"RASTGELE HARİTA"
+END
+
+GUI:MapTenantRandomLine
+"Bu odaya yeni bir harita"
+END
+
+GUI:MapTenantCount
+"%d harita"
+END
+
+GUI:MapTenantCountOne
+"%d harita"
+END
+
+GUI:MapNoneOwn
+"KENDİ HARİTANIZ YOK"
+END
+
+GUI:MapAddOwn
+"KENDİ HARİTANIZI EKLEYİN"
+END
+
+GUI:MapFolderLine
+"Eklediğiniz haritalar buraya gider: %s"
+END
+
+GUI:FactionPickInDraw
+"Kurada %d / %d"
+END
+
+GUI:FactionPickTheDraw
+"KURA"
+END
+
+GUI:FactionPickOfArmies
+"/ %d ordu"
+END
+
+GUI:FactionPickInTheDraw
+"KURADAKİLER"
+END
+
+GUI:FactionPickCustomLine
+"Rastgele, işaretli ordulardan birini oynar."
+END
+
+GUI:FactionPickAllLine
+"Türkiye kuraya girmez; eklemek için Özel Seçim'de işaretleyin."
+END
+
+GUI:FactionPickTurkiyeLeft
+"Düz Rastgele Türkiye'yi hiç seçmez. Eklemek için işaretleyin."
+END
+
+GUI:FactionPickExperimental
+"DENEYSEL"
+END
+
+GUI:FactionPickObserverHead
+"Kurada değil"
+END
+
+GUI:FactionPickObserverLine
+"Maçı oynamadan izle."
+END
+
+GUI:FactionPickObserverMore
+"Gözlemci bütün haritayı ve her oyuncunun ordusunu görür."
+END
+
+GUI:FactionPickFeatures
+"ÖZELLİKLER"
+END
+
+GUI:FactionPickOthers
+"DİĞER %s ORDULARI"
+END
+
+GUI:FactionPickHintPlay
+"Oynamak için orduya çift tıklayın · Enter onaylar · Esc geri döner"
+END
+
+GUI:FactionPickHintPlay_Short
+"Çift tıkla oyna · Esc geri"
+END
+
+GUI:FactionPickHintTick
+"İşaretlemek için orduya tıklayın · Enter onaylar · Esc geri döner"
+END
+
+GUI:FactionPickHintTick_Short
+"Tıkla işaretle · Esc geri"
 END

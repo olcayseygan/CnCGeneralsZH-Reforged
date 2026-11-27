@@ -1011,6 +1011,56 @@ Bool WouldMapTransfer( const AsciiString& mapName )
 	return mapName.startsWithNoCase(TheMapCache->getUserMapDir());
 }
 
+/// the folder a map list lists, lower case: the shipped maps' or the user's
+static AsciiString mapListDir( Bool useSystemMaps )
+{
+	AsciiString mapDir;
+	if (useSystemMaps)
+	{
+		mapDir = TheMapCache->getMapDir();
+	}
+	else
+	{
+		mapDir = TheGlobalData->getPath_UserData();
+		mapDir.concat(TheMapCache->getMapDir());
+	}
+	mapDir.toLower();
+	return mapDir;
+}
+
+/// whether a map list of that folder and kind offers the map
+static Bool mapListOffers( const AsciiString &path, const MapMetaData &md, const AsciiString &mapDir,
+	Bool isMultiplayer, Int minPlayers )
+{
+	//Patch 1.03 -- Purposely filter out these broken maps that exist in Generals.
+	if( !path.compare( "maps\\armored fury\\armored fury.map" ) ||
+		!path.compare( "maps\\scorched earth\\scorched earth.map" ) )
+		return FALSE;
+
+	// a lane map is a Direct Strike room's own, made fresh for each match by that room
+	// (SetDirectStrikeMap); no map list offers one
+	UnsignedInt laneLine, laneEdge;
+	if( LaneGridColours( path, &laneLine, &laneEdge ) )
+		return FALSE;
+
+	return path.startsWithNoCase(mapDir.str()) && isMultiplayer == md.m_isMultiplayer && !md.m_displayName.isEmpty()
+		&& (Int)md.m_numPlayers >= minPlayers;
+}
+
+Int countMapListMaps( Bool useSystemMaps, Bool isMultiplayer, Int minPlayers )
+{
+	if (!TheMapCache)
+		return 0;
+	const AsciiString mapDir = mapListDir(useSystemMaps);
+	Int count = 0;
+	for (MapCache::const_iterator it = TheMapCache->begin(); it != TheMapCache->end(); ++it)
+	{
+		if (mapListOffers(it->first, it->second, mapDir, isMultiplayer, minPlayers))
+			++count;
+	}
+	return count;
+}
+
 //-------------------------------------------------------------------------------------------------
 /** Load the listbox with all the map files available to play */
 //-------------------------------------------------------------------------------------------------
@@ -1052,17 +1102,7 @@ Int populateMapListboxNoReset( GameWindow *listbox, Bool useSystemMaps, Bool isM
 	Int selectionIndex = 0; // always select *something*
 
 	MapCache::iterator it = TheMapCache->begin();
-	AsciiString mapDir;
-	if (useSystemMaps)
-	{
-		mapDir = TheMapCache->getMapDir();
-	}
-	else
-	{
-		mapDir = TheGlobalData->getPath_UserData();
-		mapDir.concat(TheMapCache->getMapDir());
-	}
-	mapDir.toLower();
+	const AsciiString mapDir = mapListDir(useSystemMaps);
 
 typedef std::set<UnicodeString, rts::less_than_nocase<UnicodeString> > MapNameList;
 typedef MapNameList::iterator MapNameListIter;
@@ -1109,26 +1149,9 @@ typedef MapDisplayToFileNameList::iterator MapDisplayToFileNameListIter;
 			}
 			*/
 			
-			//Patch 1.03 -- Purposely filter out these broken maps that exist in Generals.
-			if( !asciiMapName.compare( "maps\\armored fury\\armored fury.map" ) || 
-				!asciiMapName.compare( "maps\\scorched earth\\scorched earth.map" ) )
-			{
-				++tempit;
-				continue;
-			}
-
-			// a lane map is a Direct Strike room's own, made fresh for each match by that room
-			// (SetDirectStrikeMap); no map list offers one
-			UnsignedInt laneLine, laneEdge;
-			if( LaneGridColours( asciiMapName, &laneLine, &laneEdge ) )
-			{
-				++tempit;
-				continue;
-			}
-
 			DEBUG_ASSERTCRASH(it != TheMapCache->end(), ("Map %s not found in map cache.", *tempit));
-			if (it->first.startsWithNoCase(mapDir.str()) && isMultiplayer == it->second.m_isMultiplayer && !it->second.m_displayName.isEmpty()
-				&& (Int)it->second.m_numPlayers >= minPlayers)
+			// the broken maps, the lane maps and the other folder's and kind's stay out (mapListOffers)
+			if (it != TheMapCache->end() && mapListOffers(it->first, it->second, mapDir, isMultiplayer, minPlayers))
 			{
 				/// @todo: mapDisplayName = TheGameText->fetch(it->second.m_displayName.str());
 				mapDisplayName = it->second.m_displayName;

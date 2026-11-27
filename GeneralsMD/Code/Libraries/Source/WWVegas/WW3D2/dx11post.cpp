@@ -2798,29 +2798,27 @@ void DX11PostProcessClass::Release_Backdrop()
 	BackdropBlurred = false;
 }
 
-bool DX11PostProcessClass::Blur_Backdrop(float radius)
+static unsigned half_of(unsigned size)
 {
-	if (BackdropBlurred) {
-		return true;
-	}
+	return (size / 2) > 0 ? (size / 2) : 1;
+}
+
+ID3D11Resource * DX11PostProcessClass::Backdrop_Back()
+{
 	ID3D11RenderTargetView * back_buffer = (Device != NULL) ? Device->Get_Back_Buffer_View() : NULL;
 	if (!ShadersReady || BackdropRefused || BackdropShader == NULL || back_buffer == NULL) {
-		return false;
+		return NULL;
 	}
 
 	ID3D11Resource * back = NULL;
 	back_buffer->GetResource(&back);
 	if (back == NULL) {
-		return false;
+		return NULL;
 	}
 	D3D11_TEXTURE2D_DESC description;
 	static_cast<ID3D11Texture2D *>(back)->GetDesc(&description);
 	const unsigned width = description.Width;
 	const unsigned height = description.Height;
-	const unsigned half_width = (width / 2) > 0 ? (width / 2) : 1;
-	const unsigned half_height = (height / 2) > 0 ? (height / 2) : 1;
-	const unsigned quarter_width = (half_width / 2) > 0 ? (half_width / 2) : 1;
-	const unsigned quarter_height = (half_height / 2) > 0 ? (half_height / 2) : 1;
 
 	// The copy has to be the back buffer's own format for CopyResource; a resize makes all four the
 	// wrong size.
@@ -2833,16 +2831,44 @@ bool DX11PostProcessClass::Blur_Backdrop(float radius)
 	if (!fits) {
 		Release_Backdrop();
 		if (!Create_Target(BackdropCopy, width, height, description.Format)
-				|| !Create_Target(BackdropHalf, half_width, half_height, EIGHT_BIT_FORMAT)
-				|| !Create_Target(BackdropBlur[0], quarter_width, quarter_height, EIGHT_BIT_FORMAT)
-				|| !Create_Target(BackdropBlur[1], quarter_width, quarter_height, EIGHT_BIT_FORMAT)) {
+				|| !Create_Target(BackdropHalf, half_of(width), half_of(height), EIGHT_BIT_FORMAT)
+				|| !Create_Target(BackdropBlur[0], half_of(half_of(width)), half_of(half_of(height)), EIGHT_BIT_FORMAT)
+				|| !Create_Target(BackdropBlur[1], half_of(half_of(width)), half_of(half_of(height)), EIGHT_BIT_FORMAT)) {
 			Release_Backdrop();
 			back->Release();
-			return false;
+			return NULL;
 		}
 		BackdropWidth = width;
 		BackdropHeight = height;
 	}
+	return back;
+}
+
+bool DX11PostProcessClass::Backdrop_Ready()
+{
+	ID3D11Resource * back = Backdrop_Back();
+	if (back == NULL) {
+		return false;
+	}
+	back->Release();
+	return true;
+}
+
+bool DX11PostProcessClass::Blur_Backdrop(float radius)
+{
+	if (BackdropBlurred) {
+		return true;
+	}
+	ID3D11Resource * back = Backdrop_Back();
+	if (back == NULL) {
+		return false;
+	}
+	const unsigned width = BackdropWidth;
+	const unsigned height = BackdropHeight;
+	const unsigned half_width = half_of(width);
+	const unsigned half_height = half_of(height);
+	const unsigned quarter_width = half_of(half_width);
+	const unsigned quarter_height = half_of(half_height);
 	Device->Get_Context()->CopyResource(BackdropCopy.Texture, back);
 	back->Release();
 

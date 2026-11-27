@@ -228,19 +228,12 @@ WindowMsgHandledType GadgetComboBoxInput( GameWindow *window, UnsignedInt msg,
 		}  // end case char
 
 		// ------------------------------------------------------------------------
+		// A closed box does nothing with the wheel, and EA's code still called it handled, so a wheel over
+		// any box died there: a staging room's seats, which are mostly boxes, would not scroll under the
+		// pointer.  The wheel goes on to the box's parents now; an open list scrolls itself, its own window.
 		case GWM_WHEEL_DOWN:
-		{
-
-			break;
-
-		}  // end wheel down
-
-		// ------------------------------------------------------------------------
 		case GWM_WHEEL_UP:
-		{
-			break;
-
-		}  // end wheel up
+			return MSG_IGNORED;
 
 		// ------------------------------------------------------------------------
 		case GWM_LEFT_UP:

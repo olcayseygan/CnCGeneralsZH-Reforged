@@ -1263,7 +1263,8 @@ bool Direct3D11_Draw_Backdrop(int x0, int y0, int x1, int y1, float radius)
 	x0 = (x0 > 0) ? x0 : 0;
 	y0 = (y0 > 0) ? y0 : 0;
 	if (x1 <= x0 || y1 <= y0) {
-		return true;
+		// only asked: the chain's answer, its program and the targets it would blur into
+		return Post.Backdrop_Ready();
 	}
 
 	// The passes bind their own target and viewport; the interface goes on where it was.
@@ -1289,6 +1290,13 @@ bool Direct3D11_Draw_Backdrop(int x0, int y0, int x1, int y1, float radius)
 	}
 	Backend.Forget_Bindings();
 	return drew;
+}
+
+void Direct3D11_Stale_Backdrop()
+{
+	if (Active) {
+		Post.Stale_Backdrop();
+	}
 }
 
 void Direct3D11_Begin_Scene()

@@ -18793,18 +18793,6 @@ GUI:FactionPickCustom
 "Eigene Auswahl"
 END
 
-GUI:FactionPickLeftOut
-"Zufall lost nie aus: %s. Hake es unter Eigene Auswahl an, um es hinzuzufügen."
-END
-
-GUI:FactionPickPool
-"Zufall wählt eine der %d links angehakten Armeen, von %d. Klicke eine Armee an, um sie an- oder abzuhaken."
-END
-
-GUI:FactionPickRandom
-"Zufall wählt beim Start der Partie eine dieser Armeen für dich."
-END
-
 GUI:FactionPickRandomAll
 "Alles zufällig"
 END
@@ -18813,13 +18801,6 @@ GUI:FactionPickRandomSide
 "%s zufällig"
 END
 
-GUI:FactionPickSideHint
-"Das Kästchen einer Seite hakt die ganze Seite an oder ab; ihr Name lässt diese Seite in der Auslosung unberührt."
-END
-
-GUI:FactionPickSideNameHint
-"Klicke auf den Namen einer Seite, um eine zufällige Armee dieser Seite zu spielen."
-END
 
 GUI:FactionPickTitle
 "Armee wählen"
@@ -21087,10 +21068,6 @@ END
 
 TOOLTIP:OnlineKeepSignedIn
 "Angemeldet bleiben. Dein Passwort wird nie gespeichert"
-END
-
-TOOLTIP:OnlineNeedsLauncher
-"Starte das Online-Spiel über den Launcher"
 END
 
 TOOLTIP:StatPerSecond

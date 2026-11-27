@@ -1003,8 +1003,17 @@ static void appendUiState( std::string &out )
 	appendJsonString( out, screen ? screen->getFilename().str() : "" );
 	out += ",\"modal\":";
 	appendJsonString( out, uiWindowName( TheWindowManager->winGetModalWindow() ) );
+	/* the lone window outlives its list: a pick hides the list (HideListBox) and the pointer is let go only
+		 by the next release elsewhere, as in retail, so an open drop-down is a lone combo box whose list shows */
+	GameWindow *lone = TheWindowManager->winGetLoneWindow();
+	if (lone && BitTest( lone->winGetStyle(), GWS_COMBO_BOX ) && lone->winGetUserData())
+	{
+		GameWindow *list = ((ComboBoxData *)lone->winGetUserData())->listBox;
+		if (list == NULL || list->winIsHidden())
+			lone = NULL;
+	}
 	out += ",\"lone\":";
-	appendJsonString( out, uiWindowName( TheWindowManager->winGetLoneWindow() ) );
+	appendJsonString( out, uiWindowName( lone ) );
 	out += ",\"captor\":";
 	appendJsonString( out, uiWindowName( TheWindowManager->winGetCapture() ) );
 	out += ",\"grab\":";
@@ -1196,7 +1205,7 @@ static void appendUiMouseButton( GameMessage::Type type, Int x, Int y, Bool butt
 		msg->appendIntegerArgument( 0 );
 }
 
-/* uitree, uihit, uiclick, uiclickat, uirclick, uihover, uiscroll, uirow and uitype: the shell's windows for a
+/* uitree, uihit, uiclick, uiclickat, uidrag, uirclick, uihover, uiscroll, uirow and uitype: the shell's windows for a
 	 script that clicks every control and checks what happened (Tools/ui_walk.py).  The clicks, the wheel
 	 and the pointer go down the message stream the way Mouse.cpp sends a real one, so a modal box, a
 	 captured pointer or an open drop-down takes them exactly as it would take the player's; uihit asks
@@ -1247,6 +1256,51 @@ static Bool handleUiCommand( const AsciiString &command )
 			replyMembers( FALSE, "uihit", "\"error\":\"uihit <x> <y> [<x> <y> ...]\"" );
 		else
 			sendFrame( WS_OPCODE_TEXT, out.c_str(), (Int)out.size() );
+		return TRUE;
+	}
+
+	/* uidrag <name> <dx0> <dy0> <dx1> <dy1>: press at the first point from the window's top left, drag to the
+		 second in eight steps and let go there, as Mouse.cpp sends a held button moving (a fader, a slider's
+		 thumb, a scroll bar) */
+	if (strncmp( line, "uidrag ", 7 ) == 0)
+	{
+		char name[ 256 ] = "";
+		Int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+		if (sscanf( line + 7, "%255s %d %d %d %d", name, &x0, &y0, &x1, &y1 ) != 5)
+		{
+			replyMembers( FALSE, "uidrag", "\"error\":\"uidrag <name> <dx0> <dy0> <dx1> <dy1> from its top left\"" );
+			return TRUE;
+		}
+		Int left = 0, top = 0;
+		if (uiFindWindow( name, &left, &top, TRUE ) == NULL)
+		{
+			replyMembers( FALSE, "uidrag", "\"error\":\"no such window\"" );
+			return TRUE;
+		}
+		const Int startX = left + x0, startY = top + y0;
+		std::string members( "\"at\":" );
+		appendUiHit( members, startX, startY );
+		appendUiMouseButton( GameMessage::MSG_RAW_MOUSE_POSITION, startX, startY, FALSE );
+		appendUiMouseButton( GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN, startX, startY, TRUE );
+		const Int STEPS = 8;
+		ICoord2D was = { startX, startY };
+		for (Int step = 1; step <= STEPS; ++step)
+		{
+			ICoord2D now, delta;
+			now.x = left + x0 + (x1 - x0) * step / STEPS;
+			now.y = top + y0 + (y1 - y0) * step / STEPS;
+			delta.x = now.x - was.x;
+			delta.y = now.y - was.y;
+			GameMessage *drag = TheMessageStream->appendMessage( GameMessage::MSG_RAW_MOUSE_LEFT_DRAG );
+			drag->appendPixelArgument( now );
+			drag->appendPixelArgument( delta );
+			drag->appendIntegerArgument( KEY_STATE_NONE );
+			was = now;
+		}
+		appendUiMouseButton( GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP, was.x, was.y, TRUE );
+		if (TheMouse)
+			TheMouse->setPosition( was.x, was.y );
+		replyMembers( TRUE, "uidrag", members.c_str() );
 		return TRUE;
 	}
 

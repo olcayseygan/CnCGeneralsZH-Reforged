@@ -327,14 +327,19 @@ static void drawSaveDetails( const AvailableGameInfo *info )
 		}
 	}
 
-	// the mission's map at its shape, NO PREVIEW where it has no picture (Generals' own missions)
+	// the mission's map at its shape, NO PREVIEW where it has no picture (Generals' own missions).  A
+	// listed save's SaveGameInfo carries no map path (only the header block is read for the list), so
+	// the map comes with the extras, read off the save's map block
+	SaveGameExtras extras;
+	const Bool haveExtras = GameState_saveExtras( info->filename, extras );
+	const AsciiString mapPath = !save.pristineMapName.isEmpty() ? save.pristineMapName : haveExtras ? extras.pristineMap : AsciiString();
 	static AsciiString s_previewOf;
 	static Image *s_preview = NULL;
-	const MapMetaData *md = TheMapCache ? TheMapCache->findMap( save.pristineMapName ) : NULL;
-	if( s_previewOf.compareNoCase( save.pristineMapName ) != 0 )
+	const MapMetaData *md = TheMapCache && !mapPath.isEmpty() ? TheMapCache->findMap( mapPath ) : NULL;
+	if( s_previewOf.compareNoCase( mapPath ) != 0 )
 	{
-		s_previewOf = save.pristineMapName;
-		s_preview = md ? getMapPreviewImage( save.pristineMapName ) : NULL;
+		s_previewOf = mapPath;
+		s_preview = md ? getMapPreviewImage( mapPath ) : NULL;
 	}
 	const Real mw = md ? md->m_extent.hi.x - md->m_extent.lo.x : 0.0f;
 	const Real mh = md ? md->m_extent.hi.y - md->m_extent.lo.y : 0.0f;
@@ -376,8 +381,7 @@ static void drawSaveDetails( const AvailableGameInfo *info )
 			SPP::point( 0.0f, (Real)( SPL::SAVE_DIFFICULTY_TOP + 20 ) ).y, x1 - x0, 2, MUTED, SPP::px( 26.0f ) );
 		return;
 	}
-	SaveGameExtras extras;
-	if( !GameState_saveExtras( info->filename, extras ) )
+	if( !haveExtras )
 		return;
 	const Int half = ( SPL::SAVE_DETAILS_LEFT + SPL::RIGHT ) / 2;
 	const char *difficulty = extras.difficulty == DIFFICULTY_EASY ? "GUI:Easy" : extras.difficulty == DIFFICULTY_HARD ? "GUI:Hard" : "GUI:Medium";

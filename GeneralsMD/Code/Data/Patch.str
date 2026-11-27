@@ -727,6 +727,27 @@ TOOLTIP:MasterVolume
 "Turns the whole game up or down: music, effects, voices, ambience and movies. The other sliders keep the mix, this one sets how loud the mix is."
 END
 
+// The Audio page's faders, short: every name under them takes these once one full name does not fit
+GUI:MasterVolume_Short
+"Master"
+END
+
+GUI:MusicVolume_Short
+"Music"
+END
+
+GUI:SFXVolume_Short
+"Sound FX"
+END
+
+GUI:VoiceVolume_Short
+"Voice"
+END
+
+GUI:AmbientVolume_Short
+"Ambient"
+END
+
 GUI:OptionsGroupMusic
 "Music"
 END
@@ -4615,29 +4636,9 @@ GUI:FactionPickConfirm
 "Confirm %s"
 END
 
-GUI:FactionPickRandom
-"Random picks one of these armies for you when the match starts."
-END
-
-GUI:FactionPickLeftOut
-"Random never draws: %s. Tick it under Custom Selection to add it."
-END
-
-GUI:FactionPickPool
-"Random picks one of the %d armies ticked on the left, out of %d. Click an army to tick it or take it out."
-END
-
 // %s is a side's name as its heading reads (USA, China, Turkiye): the pool is that side and nothing else.
 GUI:FactionPickRandomSide
 "Random %s"
-END
-
-GUI:FactionPickSideHint
-"A side's box ticks or clears the whole side; its name leaves that side alone in the draw."
-END
-
-GUI:FactionPickSideNameHint
-"Click a side's name to play a random army of that side."
 END
 
 // the fork's player colours (MultiplayerReforged.ini); EA's eight are in the CSF
@@ -5195,27 +5196,27 @@ GUI:OnlineSkinsWaiting
 END
 
 GUI:OnlineSkinsNone
-"Your account owns no skins yet. Each card says how to get its skin; open this screen again once you have one."
+"Your account has no skins yet."
 END
 
 GUI:OnlineSkinsSaved
-"Saved. Your next game, custom or Quick Match, shows these skins."
+"Saved. Your next online game shows them."
 END
 
 GUI:OnlineSkinsSignedOut
-"You are not signed in. Sign in online to pick your skins."
+"Sign in online to pick skins."
 END
 
 GUI:OnlineSkinsThrottled
-"Too many saves in a minute. Wait a little and press Save again."
+"Too many saves. Wait a moment."
 END
 
 GUI:OnlineSkinsUnavailable
-"zerohour.gg did not answer. Your skins stay as they were; try again in a moment."
+"zerohour.gg did not answer. Try again soon."
 END
 
 GUI:OnlineSkinsRefused
-"zerohour.gg refused that pick, so your skins stay as they were. Open this screen again to see what your account holds."
+"zerohour.gg refused the pick. Open this screen again."
 END
 
 // Play vs AI on the online hub: the button, and why a match did not start
@@ -8406,6 +8407,180 @@ GUI:QMMatchHead
 "Match"
 END
 
+// Menu redesign package 3b, the Apocalypse room: the survivors' head, THE NIGHTS band, the generated map's
+// key and the rules the mode sets itself.
+GUI:ApocalypseSurvivors
+"SURVIVORS"
+END
+
+GUI:ApocalypseAllied
+"ALLIED"
+END
+
+GUI:ApocalypseAlliedNote
+"everyone, vs the dead"
+END
+
+GUI:ApocalypseWaves
+"WAVES"
+END
+
+GUI:ApocalypseWavesNote
+"sized for %d"
+END
+
+GUI:ApocalypseBossHealth
+"BOSS HEALTH"
+END
+
+GUI:ApocalypseOpenSeat
+"Each seat taken adds %d to every wave"
+END
+
+GUI:ApocalypseNights
+"THE NIGHTS"
+END
+
+GUI:ApocalypseClockAt
+"clock at %ls, from the start"
+END
+
+GUI:ApocalypseBloodMoon
+"BLOOD MOON"
+END
+
+GUI:ApocalypseBloodMoonNote
+"every third night, a boss"
+END
+
+GUI:ApocalypseOneDay
+"ONE DAY"
+END
+
+GUI:ApocalypseDay
+"DAY"
+END
+
+GUI:ApocalypseDusk
+"DUSK"
+END
+
+GUI:ApocalypseNight
+"NIGHT"
+END
+
+GUI:ApocalypseDawn
+"DAWN"
+END
+
+GUI:ApocalypseFirstWave
+"FIRST WAVE"
+END
+
+GUI:ApocalypseFallsAt
+"FALLS AT"
+END
+
+GUI:ApocalypseNewDead
+"NEW DEAD"
+END
+
+GUI:ApocalypseBoss
+"BOSS"
+END
+
+GUI:ApocalypseKinds
+"%d kinds"
+END
+
+GUI:ApocalypseKind
+"1 kind"
+END
+
+GUI:ApocalypseBossPair
+"2 of the 3"
+END
+
+GUI:ApocalypseDayOne
+"DAY 1"
+END
+
+GUI:ApocalypseRandom
+"Random"
+END
+
+GUI:ApocalypseStarts
+"%d starts"
+END
+
+GUI:ApocalypseStart
+"1 start"
+END
+
+GUI:ApocalypseNewEveryMatch
+"New every match"
+END
+
+GUI:ApocalypseKeyStart
+"Start = seat number"
+END
+
+GUI:ApocalypseKeyBasin
+"Basin: a lobe a seat"
+END
+
+GUI:ApocalypseKeyWild
+"Wilderness: they walk in"
+END
+
+GUI:ApocalypseKeyFog
+"Red edge: fog, deadly"
+END
+
+GUI:ApocalypseModeSet
+"SET BY THE MODE"
+END
+
+GUI:ApocalypseOff
+"Off"
+END
+
+GUI:ApocalypseNone
+"None"
+END
+
+GUI:ApocalypseItsOwn
+"Its own"
+END
+
+GUI:ApocalypseTeams
+"Teams"
+END
+
+GUI:ApocalypseAllAllied
+"All allied"
+END
+
+GUI:ApocalypseDifficulty
+"Difficulty"
+END
+
+GUI:ApocalypseAdapts
+"Adapts"
+END
+
+GUI:ApocalypseScore
+"No win, no loss: you are scored by how long you hold out"
+END
+
+GUI:RoomSeatAbove
+"%d SEAT ABOVE"
+END
+
+GUI:RoomSeatBelow
+"%d SEAT BELOW"
+END
+
 // Menu redesign package 13, the end screens: the Summary's places, totals and foot, the build order's
 // axis and frames, the Direct Strike results' head, rows and timeline.
 GUI:ScorePlace
@@ -9585,6 +9760,10 @@ GUI:AddressHint
 "Give this to your friend"
 END
 
+GUI:DirectConnectNoAddress
+"Type their address first"
+END
+
 // Menu redesign package 12, single player: Generals' Challenge, the replay list, Load Game, the Save
 // Replay and Save / Load boxes. Army words are drawn in capitals on the cards and the ladder.
 GUI:SPChallengeTitle
@@ -9917,4 +10096,362 @@ END
 
 GUI:SPHintEscEnterSaves
 "Esc cancels, Enter saves"
+END
+
+// Menu redesign package 11, online self: the ladder's side column, the short column heads, the player
+// card's foot hint and its short heads
+
+GUI:OnlineLadderNextRank
+"NEXT RANK"
+END
+
+GUI:OnlineLadderNextRank_Short
+"NEXT"
+END
+
+GUI:OnlineLadderNextAt
+"%ls at %ls"
+END
+
+GUI:OnlineLadderToGo
+"%ls to go"
+END
+
+GUI:OnlineLadderPlacement
+"PLACEMENT"
+END
+
+GUI:OnlineLadderGamesToGo
+"%d games to go"
+END
+
+GUI:OnlineLadderWins_Short
+"W"
+END
+
+GUI:OnlineLadderLosses_Short
+"L"
+END
+
+GUI:OnlineLadderWinPct_Short
+"%%"
+END
+
+GUI:OnlineCardByAI_Short
+"By AI army"
+END
+
+GUI:OnlineCardColAI_Short
+"AI ELO"
+END
+
+GUI:OnlineCardEsc
+"Esc closes"
+END
+
+// Menu redesign package F4, friends on screen: the friends box's rows, its name field's lines, the
+// invite on a friend's menu, the toast and its keys, what the service refuses
+
+GUI:FriendsOnline
+"%d online"
+END
+
+GUI:FriendRequest
+"REQUEST"
+END
+
+GUI:FriendRequestSent
+"Sent"
+END
+
+GUI:InARoom
+"In a room · %s"
+END
+
+GUI:InAMatch
+"In a match"
+END
+
+GUI:InTheLobby
+"In the lobby"
+END
+
+GUI:FriendInvite
+"Invite"
+END
+
+GUI:FriendRequestSentTo
+"Friend request sent to %s."
+END
+
+GUI:FriendInviteSentTo
+"Invite sent to %s."
+END
+
+GUI:FriendInvites
+"%s invites you"
+END
+
+GUI:FriendJoin
+"Join"
+END
+
+GUI:FriendDecline
+"Decline"
+END
+
+GUI:FriendInviteTitle
+"Invite"
+END
+
+GUI:FriendLeaveRoom
+"Leave this room to join?"
+END
+
+GUI:FriendError
+"That did not go through."
+END
+
+GUI:FriendError_not_found
+"No player by that name."
+END
+
+GUI:FriendError_already
+"Already on your list."
+END
+
+GUI:FriendError_full
+"Your friends list is full."
+END
+
+GUI:FriendError_rate
+"Too many at once. Try again in a minute."
+END
+
+GUI:FriendError_offline
+"That player is offline."
+END
+
+GUI:FriendError_inmatch
+"That player is in a match."
+END
+
+GUI:FriendError_nogame
+"That room is gone."
+END
+
+GUI:FriendError_unavailable
+"Friends are not available right now."
+END
+
+GUI:FriendErrorRoomFull
+"That room is full."
+END
+
+GUI:FriendErrorBuild
+"That room plays another version of the game."
+END
+
+// Menu redesign package 7, the pickers: the map grid's chips, the picked map's facts and medals, the
+// tenants that lead to the other tabs, the Random tab's words, the army screen's rows, THE DRAW and
+// the general's page, the foot's hints.  %d is a count; %s a map's or a side's name, or a folder.
+GUI:MapPlayersCount
+"%d players"
+END
+
+GUI:MapPlayersChip
+"%d PLAYERS"
+END
+
+GUI:MapSupplies
+"%d supplies"
+END
+
+GUI:MapTech
+"%d tech"
+END
+
+GUI:MapMedalEasy
+"EASY"
+END
+
+GUI:MapMedalMedium
+"MEDIUM"
+END
+
+GUI:MapMedalHard
+"HARD"
+END
+
+// Hard in every other seat: %d is that many opponents
+GUI:MapMedalHardMax
+"HARD x%d"
+END
+
+GUI:MapNotWon
+"NOT WON YET"
+END
+
+GUI:MapNextEasy
+"Next: Easy"
+END
+
+GUI:MapNextMedium
+"Next: Medium"
+END
+
+GUI:MapNextHard
+"Next: Hard"
+END
+
+GUI:MapNextHardMax
+"Next: Hard x%d"
+END
+
+GUI:MapNextAll
+"Every medal won"
+END
+
+GUI:MapMedalLegend
+"Medal: your best win, against one Easy, Medium or Hard opponent, or Hard in every seat (x7)"
+END
+
+GUI:MapMedalLegend_Short
+"Medal: best win, Easy, Medium, Hard, or Hard in every seat (x7)"
+END
+
+GUI:MapHintAccept
+"Double-click a map to accept it"
+END
+
+GUI:MapHintAccept_Short
+"Double-click to accept"
+END
+
+GUI:MapHintAcceptType
+"Double-click a map type to accept it"
+END
+
+GUI:MapHintAcceptType_Short
+"Double-click to accept"
+END
+
+GUI:MapStyleTag
+"STYLE"
+END
+
+GUI:RandomMapName
+"Random map"
+END
+
+GUI:RandomMapStyleOf
+"Style of %s"
+END
+
+GUI:RandomMapSpots
+"%d start spots"
+END
+
+GUI:RandomMapSpotsLine
+"Spots are placed when the map is built, a new one at every Accept."
+END
+
+GUI:RandomTabStatsOff
+"off while stats record"
+END
+
+GUI:MapTenantRandom
+"RANDOM MAP"
+END
+
+GUI:MapTenantRandomLine
+"A new map for this room"
+END
+
+GUI:MapTenantCount
+"%d maps"
+END
+
+GUI:MapTenantCountOne
+"%d map"
+END
+
+GUI:MapNoneOwn
+"NO MAPS OF YOUR OWN"
+END
+
+GUI:MapAddOwn
+"ADD YOUR OWN"
+END
+
+GUI:MapFolderLine
+"Maps you add go in %s"
+END
+
+GUI:FactionPickInDraw
+"%d of %d in the draw"
+END
+
+GUI:FactionPickTheDraw
+"THE DRAW"
+END
+
+GUI:FactionPickOfArmies
+"of %d armies"
+END
+
+GUI:FactionPickInTheDraw
+"IN THE DRAW"
+END
+
+GUI:FactionPickCustomLine
+"Random plays one of the ticked armies."
+END
+
+GUI:FactionPickAllLine
+"Turkiye is never drawn; tick it under Custom Selection to add it."
+END
+
+GUI:FactionPickTurkiyeLeft
+"A plain Random never draws Turkiye. Tick it to add it."
+END
+
+GUI:FactionPickExperimental
+"EXPERIMENTAL"
+END
+
+GUI:FactionPickObserverHead
+"Not in the draw"
+END
+
+GUI:FactionPickObserverLine
+"Watch the match without playing."
+END
+
+GUI:FactionPickObserverMore
+"An observer sees the whole map and every player's army."
+END
+
+GUI:FactionPickFeatures
+"FEATURES"
+END
+
+GUI:FactionPickOthers
+"THE OTHER %s ARMIES"
+END
+
+GUI:FactionPickHintPlay
+"Double-click an army to play it · Enter confirms · Esc goes back"
+END
+
+GUI:FactionPickHintPlay_Short
+"Double-click to play it · Esc goes back"
+END
+
+GUI:FactionPickHintTick
+"Click an army to tick it · Enter confirms · Esc goes back"
+END
+
+GUI:FactionPickHintTick_Short
+"Click to tick · Esc goes back"
 END

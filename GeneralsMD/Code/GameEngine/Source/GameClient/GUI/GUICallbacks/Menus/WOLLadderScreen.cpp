@@ -44,9 +44,13 @@
 #include "GameClient/DisplayStringManager.h"
 #include "GameClient/GameFont.h"
 #include "GameClient/Image.h"
+#include "GameClient/OnlineSelfLayout.h"
 #include "GameClient/TankSkin.h"
 #include "GameClient/UIStyle.h"
+#include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
+#include "GameNetwork/GameSpy/PersistentStorageDefs.h"
+#include "GameNetwork/GameSpy/BuddyDefs.h"
 #include "GameNetwork/Online/OnlineQueues.h"
 #include "GameNetwork/WOLBrowser/WebBrowser.h"
 
@@ -68,7 +72,11 @@ static GameWindow *windowLadder = NULL;
 /// the screen a tab asked for, pushed over the hub once this one is popped; NULL for Back and Home
 static const char *nextScreen = NULL;
 
-GameWindow *WOLMakeButtonLike( GameWindow *parent, GameWindow *model, Int x, Int y, Int w, Int h, const char *label )
+/** A push button made in code with model's look, or none to be drawn by its own draw function; name (the
+	* layout's "WOLLadderScreen.wnd:..." form) lets a script find it (ui_walk.py, the -control socket's
+	* uitree), NULL for none. */
+static GameWindow *makeButton( GameWindow *parent, GameWindow *model, Int x, Int y, Int w, Int h, const char *label,
+	const char *name )
 {
 	WinInstanceData inst;
 	inst.init();
@@ -86,6 +94,11 @@ GameWindow *WOLMakeButtonLike( GameWindow *parent, GameWindow *model, Int x, Int
 		inst.m_disabledText = look->m_disabledText;
 		inst.m_hiliteText = look->m_hiliteText;
 	}
+	if (name)
+	{
+		inst.m_decoratedNameString = name;
+		inst.m_id = (Int)TheNameKeyGenerator->nameToKey( inst.m_decoratedNameString );
+	}
 	GameWindow *button = TheWindowManager->gogoGadgetPushButton( parent,
 		WIN_STATUS_ENABLED | (look ? WIN_STATUS_IMAGE : 0), x, y, w, h, &inst,
 		model ? model->winGetFont() : NULL, look == NULL );
@@ -94,33 +107,27 @@ GameWindow *WOLMakeButtonLike( GameWindow *parent, GameWindow *model, Int x, Int
 	return button;
 }
 
-/// a length across the content: by the height's scale, so a box holds its words (UIStyle::tallPx)
-static Int across( Real at1080 )
+GameWindow *WOLMakeButtonLike( GameWindow *parent, GameWindow *model, Int x, Int y, Int w, Int h, const char *label )
 {
-	return UIStyle::tallPx( at1080 );
+	return makeButton( parent, model, x, y, w, h, label, NULL );
 }
 
-/// a length down the content: by the board's scale, as the band itself is laid out, so rows and
-/// boxes fit it on every screen shape; the words keep their size and rowFont fits them to a row
-static Int down( Real at1080 )
+/// a master's window under the panel by its short name
+static GameWindow *findChild( const char *name )
 {
-	return UIStyle::px( at1080 );
+	AsciiString full( "WOLLadderScreen.wnd:" );
+	full.concat( name );
+	return TheWindowManager->winGetWindowFromId( parentWindow, TheNameKeyGenerator->nameToKey( full ) );
 }
 
-/// Arial at body size, or smaller down to the readable floor, so a row band holds it: 4:3 and 5:4
-/// squeeze the band while the type keeps 1080's size
-static GameFont *rowFont( Int band, Bool bold = FALSE )
-{
-	GameFont *font = UIStyle::readableFont( UIStyle::TEXT_BODY, bold );
-	for (Int points = UIStyle::TEXT_BODY - 1; font && font->height > band && points >= UIStyle::TEXT_SMALL; --points)
-	{
-		GameFont *smaller = UIStyle::readableFont( points, bold );
-		if (smaller == font)
-			break;		// the readable floor
-		font = smaller;
-	}
-	return font;
-}
+/// the board (README-online-self.md, every number at 1080), letterboxed as the online header is
+static Int bx( Real at1080 ) { return UIStyle::boardX( at1080 ); }
+static Int by( Real at1080 ) { return UIStyle::boardY( at1080 ); }
+static Int bp( Real at1080 ) { return max( 1, UIStyle::px( at1080 ) ); }
+
+static GameFont *body( Bool bold = FALSE ) { return UIStyle::menuFont( UIStyle::MENU_TEXT_BODY, bold ); }
+static GameFont *figureFont( void ) { return UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE ); }
+static GameFont *labelFont( void ) { return UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE ); }
 
 static AsciiString localNick( void )
 {
@@ -134,32 +141,33 @@ static UnicodeString number( Int value )
 	return text;
 }
 
-/// a button on the room's row from board x left, width wide on the board, as tall as Back
-static GameWindow *rowButton( Real left, Real width, const char *label )
+/// a key's words; a key that is a format with no arguments ("Win %%") read as the words it prints
+static UnicodeString words( const char *key )
 {
-	if (!buttonBack)
-		return NULL;
-	Int x, y, w, h;
-	buttonBack->winGetScreenPosition( &x, &y );
-	buttonBack->winGetSize( &w, &h );
-	return WOLMakeButtonLike( parentWindow, buttonBack, UIStyle::boardX( left ), y, UIStyle::px( width ), h, label );
+	UnicodeString text;
+	text.format( TheGameText->fetch( key ) );
+	return text;
 }
 
-/// a small button in a side box (Jump to my page, Open zerohour.gg): the mockups' 40 high, its label 21
-static GameWindow *smallButton( Int x, Int y, Int width, const char *label )
+/// a label's capitals fitted to room as tracked 14 px capitals: the key's short form when the whole does not fit
+static UnicodeString capsFit( const char *key, Int room )
 {
-	GameWindow *button = WOLMakeButtonLike( parentWindow, buttonBack, x, y, width, down( 40.0f ), label );
-	if (button)
-		button->winSetFont( UIStyle::titleFont( 11 ) );
-	return button;
+	UnicodeString text = UIStyle::capitals( words( key ) );
+	if (UIStyle::trackedWidth( text, labelFont(), UIStyle::MENU_LABEL_TRACKING ) <= room)
+		return text;
+	AsciiString shortKey = key;
+	shortKey.concat( "_Short" );
+	if (UIStyle::hasText( shortKey.str() ))
+		return UIStyle::capitals( words( shortKey.str() ) );
+	return text;
 }
 
 //-------------------------------------------------------------------------------------------------
-// What the panel shows (ONLINE-UI-REDESIGN.md "Ladder" and "Skins"): the boxes, rows, pictures and
-// words of the open page, laid out on the online pages' grid whenever its data changes and drawn
-// every frame by drawPanel, the master's WindowLadder draw.  The buttons stay gadgets over it.
+// What the panel shows: the boxes, rows, pictures and words of the open page, laid out whenever its
+// data changes and drawn every frame by drawPanel, the master's WindowLadder draw, after the head.
+// The keys, the ladder's rows and the skins page's units, looks and filters are buttons over it.
 //-------------------------------------------------------------------------------------------------
-enum PieceKind { PIECE_FILL, PIECE_LINE, PIECE_IMAGE, PIECE_WORDS };
+enum PieceKind { PIECE_FILL, PIECE_LINE, PIECE_IMAGE, PIECE_WORDS, PIECE_CAPS, PIECE_BOX, PIECE_ROW, PIECE_LIT, PIECE_CARET };
 struct Piece
 {
 	PieceKind kind;
@@ -167,6 +175,9 @@ struct Piece
 	Color color;
 	const Image *image;
 	DisplayString *words;
+	Int state;								///< PIECE_ROW: a UIStyle::RowState
+	Bool zebra;
+	UnicodeString text;				///< PIECE_CAPS
 };
 static std::vector<Piece> s_pieces;
 
@@ -178,42 +189,55 @@ static void clearPieces( void )
 	s_pieces.clear();
 }
 
-static void addPiece( PieceKind kind, Int x, Int y, Int width, Int height, Color color, const Image *image = NULL, DisplayString *words = NULL )
+static Piece &addPiece( PieceKind kind, Int x, Int y, Int width, Int height, Color color = 0, const Image *image = NULL,
+	DisplayString *words = NULL )
 {
-	Piece piece = { kind, x, y, width, height, color, image, words };
+	Piece piece;
+	piece.kind = kind;
+	piece.x = x;
+	piece.y = y;
+	piece.width = width;
+	piece.height = height;
+	piece.color = color;
+	piece.image = image;
+	piece.words = words;
+	piece.state = UIStyle::ROW_PLAIN;
+	piece.zebra = FALSE;
 	s_pieces.push_back( piece );
+	return s_pieces.back();
 }
 
-/// a box: the panel's black under a FRAME edge, as the master's own panel
-static void addBox( Int x, Int y, Int width, Int height )
+/// a box on the board: black at 70 in a 1 px FRAME edge (UIStyle::onlineBox)
+static void addBox( Real left, Real top, Real right, Real bottom )
 {
-	addPiece( PIECE_FILL, x, y, width, height, UIStyle::PANEL );
-	addPiece( PIECE_LINE, x, y, width, height, UIStyle::FRAME );
+	addPiece( PIECE_BOX, bx( left ), by( top ), bx( right ) - bx( left ), by( bottom ) - by( top ) );
 }
 
-/// a selected row: EDGE at about a fifth under a one-pixel EDGE line, the mockups' own row
-static void addSelection( Int x, Int y, Int width, Int height )
+/// a row's state (UIStyle::menuRow) on the screen
+static void addRow( Int x, Int y, Int width, Int height, UIStyle::RowState state, Bool zebra )
 {
-	addPiece( PIECE_FILL, x, y, width, height, UIStyle::withAlpha( UIStyle::EDGE, 46 ) );
-	addPiece( PIECE_LINE, x, y, width, height, UIStyle::EDGE );
+	Piece &row = addPiece( PIECE_ROW, x, y, width, height );
+	row.state = state;
+	row.zebra = zebra;
 }
 
-/// a picture with the rank portraits' one-pixel FRAME round it; nothing for a missing one
-static void addPicture( const Image *image, Int x, Int y, Int width, Int height )
+/// a picture, framed in FRAME when framed; nothing for a missing one
+static void addPicture( const Image *image, Int x, Int y, Int width, Int height, Bool framed = TRUE )
 {
 	if (!image)
 		return;
 	addPiece( PIECE_IMAGE, x, y, width, height, 0, image );
-	addPiece( PIECE_LINE, x - 1, y - 1, width + 2, height + 2, UIStyle::FRAME );
+	if (framed)
+		addPiece( PIECE_LINE, x - 1, y - 1, width + 2, height + 2, UIStyle::withAlpha( UIStyle::FRAME, 220 ) );
 }
 
-/// UIStyle::track as pieces
-static void addTrack( Int x, Int y, Int width, Int height, Real fraction )
+/// a track: a faint white channel and its share filled, the fill a lit line
+static void addTrack( Int x, Int y, Int width, Int height, Real fraction, Color fill = UIStyle::EDGE )
 {
-	addPiece( PIECE_FILL, x, y, width, height, UIStyle::GRID );
+	addPiece( PIECE_FILL, x, y, width, height, GameMakeColor( 255, 255, 255, 24 ) );
 	const Int filled = REAL_TO_INT( width * max( 0.0f, min( 1.0f, fraction ) ) + 0.5f );
 	if (filled > 0)
-		addPiece( PIECE_FILL, x, y, filled, height, UIStyle::EDGE );
+		addPiece( PIECE_LIT, x, y, max( 2, filled ), height, fill );
 }
 
 static DisplayString *newWords( const UnicodeString &text, GameFont *font, Int wrap = 0 )
@@ -236,13 +260,13 @@ static Int measure( const UnicodeString &text, GameFont *font )
 }
 
 enum { ALIGN_LEFT, ALIGN_RIGHT };
-/** Words on the panel from x, or ending at x (ALIGN_RIGHT), their top at y, or centred on the band
-	* y to y + band when band is not 0; wrapped at wrap when it is not 0.  Returns their width. */
-static Int addWords( const UnicodeString &text, GameFont *font, Int x, Int y, Color color, Int align = ALIGN_LEFT, Int band = 0, Int wrap = 0 )
+/** Words on the panel from x, or ending at x (ALIGN_RIGHT), centred on the band y to y + band (their
+	* top at y when band is 0).  Returns their width. */
+static Int addWords( const UnicodeString &text, GameFont *font, Int x, Int y, Color color, Int align = ALIGN_LEFT, Int band = 0 )
 {
 	if (text.isEmpty())
 		return 0;
-	DisplayString *words = newWords( text, font, wrap );
+	DisplayString *words = newWords( text, font );
 	Int width, height;
 	words->getSize( &width, &height );
 	if (align == ALIGN_RIGHT)
@@ -253,67 +277,91 @@ static Int addWords( const UnicodeString &text, GameFont *font, Int x, Int y, Co
 	return width;
 }
 
-/// a paragraph wrapped at width; returns its height
-static Int addParagraph( const UnicodeString &text, GameFont *font, Int x, Int y, Int width, Color color )
+/// tracked 14 px capitals (the labels, the heads), centred on the band; returns their width
+static Int addCaps( const UnicodeString &text, Int x, Int y, Int band, Color color, Int align = ALIGN_LEFT )
 {
-	addWords( text, font, x, y, color, ALIGN_LEFT, 0, width );
-	return s_pieces.empty() || text.isEmpty() ? 0 : s_pieces.back().height;
+	if (text.isEmpty())
+		return 0;
+	GameFont *font = labelFont();
+	const Int width = UIStyle::trackedWidth( text, font, UIStyle::MENU_LABEL_TRACKING );
+	Piece &caps = addPiece( PIECE_CAPS, align == ALIGN_RIGHT ? x - width : x, y + ( band - font->height ) / 2, width, font->height, color );
+	caps.text = text;
+	return width;
+}
+
+/// a section head in a box: ACTIVE capitals 16 in and 16 down
+static void addSection( const char *key, Real left, Real top, Real right )
+{
+	addCaps( capsFit( key, bx( right ) - bx( left + 16.0f ) ), bx( left + 16.0f ), by( top + 16.0f ), bp( 18.0f ), UIStyle::ACTIVE );
 }
 
 static void drawSkinsHero( void );
 
 static void drawPanel( GameWindow *window, WinInstanceData *instData )
 {
-	Int x, y, width, height;
-	window->winGetScreenPosition( &x, &y );
-	window->winGetSize( &width, &height );
-	UIStyle::panel( x, y, width, height, UIStyle::PANEL );
-	// the master's StaticTextTitle and HeaderRule carry the title and its rule; the server line follows
+	// glass, frame A, the title, the player line, the tabs, the server line and the foot rule; then the page
 	UIStyle::onlineHeader( UnicodeString::TheEmptyString );
+	GameFont *label = labelFont();
 	for (size_t i = 0; i < s_pieces.size(); ++i)
 	{
 		const Piece &p = s_pieces[i];
+		IRegion2D r;
+		r.lo.x = p.x;
+		r.lo.y = p.y;
+		r.hi.x = p.x + p.width;
+		r.hi.y = p.y + p.height;
 		switch (p.kind)
 		{
 			case PIECE_FILL:	TheDisplay->drawFillRect( p.x, p.y, p.width, p.height, p.color ); break;
 			case PIECE_LINE:	TheDisplay->drawOpenRect( p.x, p.y, p.width, p.height, 1.0f, p.color ); break;
 			case PIECE_IMAGE:	TheDisplay->drawImage( p.image, p.x, p.y, p.x + p.width, p.y + p.height ); break;
+			case PIECE_CAPS:	UIStyle::drawTracked( p.text, label, p.x, p.y, p.color, UIStyle::MENU_LABEL_TRACKING ); break;
+			case PIECE_BOX:		UIStyle::onlineBox( r ); break;
+			case PIECE_ROW:		UIStyle::menuRow( r, (UIStyle::RowState)p.state, p.zebra ); break;
+			case PIECE_LIT:		UIStyle::litLine( p.x, p.y, p.width, p.height, p.color ); break;
+			case PIECE_CARET:
+				for (Int row = 0; row < p.height; ++row)
+					TheDisplay->drawFillRect( p.x + row, p.y + row, p.width - 2 * row, 1, p.color );
+				break;
 			default:					p.words->draw( p.x, p.y, p.color, UIStyle::SHADOW ); break;
 		}
 	}
 	drawSkinsHero();
 }
 
+/// a key drawn in the menu language, lit when primary; shown or hidden
+static void showKey( GameWindow *key, Bool shown, Bool primary = FALSE )
+{
+	if (!key)
+		return;
+	UIStyle::setMenuKey( key, primary );
+	key->winHide( !shown );
+}
+
 //-------------------------------------------------------------------------------------------------
 // -online: EA's ladder was a web page on its dead servers.  Here it is a table on the panel, 20 rows
 // a page as the service pages them, the player's own row in the page or pinned under it, and a side
-// column with his place and the ranks.
+// column with his place and the ranks (README-online-self.md, "Ladder").  A row opens its player's card.
 //-------------------------------------------------------------------------------------------------
-enum { LADDER_PAGE = 20 };
+enum { LADDER_PAGE = 20, LADDER_ROWS = LADDER_PAGE + 1 };		///< the page, and the pinned row last
 static GameWindow *buttonPrev = NULL;
 static GameWindow *buttonNext = NULL;
 static GameWindow *buttonJump = NULL;
+static GameWindow *s_rowButton[ LADDER_ROWS ];
+static AsciiString s_rowNick[ LADDER_ROWS ];
+static Bool s_rowMine[ LADDER_ROWS ];
 static Int s_ladderOffset = 0;
 static Int s_ladderShown = -1;			///< the OnlineLadderState last laid out, -1 to lay out again
 static OnlineLadderRow s_me;				///< the player's own row, from the last page that carried it
 static Bool s_hasMe = FALSE;
 
-enum LadderColumn
-{
-	COLUMN_RANK,
-	COLUMN_PLAYER,
-	COLUMN_TIER,
-	COLUMN_RATING,
-	COLUMN_WINS,
-	COLUMN_LOSSES,
-	COLUMN_WIN_PCT,
-	LADDER_COLUMNS
-};
-/// widths at 1080; the player takes what the others leave
-static const Real COLUMN_WIDTH[ LADDER_COLUMNS ] = { 70.0f, 0.0f, 170.0f, 120.0f, 110.0f, 130.0f, 110.0f };
-static const Bool COLUMN_RIGHT[ LADDER_COLUMNS ] = { TRUE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE };
-static Int s_columnX[ LADDER_COLUMNS ];
-static Int s_columnWidth[ LADDER_COLUMNS ];		///< 0 for a column the screen is too narrow for
+/// the table's box and the side column's, at 1080
+static const Real TABLE_LEFT = 60.0f, TABLE_RIGHT = 1296.0f, SIDE_LEFT = 1320.0f, SIDE_RIGHT = 1860.0f;
+static const Real BOX_TOP = 182.0f, BOX_BOTTOM = 946.0f, PLACE_BOTTOM = 516.0f, RANKS_TOP = 532.0f;
+/// the columns at 1080 (README-online-self.md): right edges of the figures, the left of the words
+static const Real COL_RANK_RIGHT = 112.0f, COL_PLAYER = 128.0f, COL_PLAYER_END = 520.0f, COL_TIER = 540.0f,
+	COL_TIER_END = 760.0f, COL_ELO = 970.0f, COL_WINS = 1080.0f, COL_LOSSES = 1190.0f, COL_PCT = 1280.0f;
+static const Real HEAD_TOP = 232.0f, HEAD_RULE = 256.0f, ROWS_TOP = ONLINE_LADDER_ROWS_TOP;
 
 /// rated games: a ranked player has his five, whatever the record says
 static Int ladderGames( const OnlineLadderRow &r )
@@ -356,51 +404,53 @@ static Int myPage( void )
 	return ( s_me.rank - 1 ) / LADDER_PAGE * LADDER_PAGE;
 }
 
-/// the side column's two boxes: Your place over Ranks
-static void ladderSideBoxes( IRegion2D &place, IRegion2D &ranks )
-{
-	IRegion2D table, side;
-	UIStyle::onlineColumns( table, side );
-	place = side;
-	place.hi.y = side.lo.y + down( 340.0f );
-	ranks = side;
-	ranks.lo.y = place.hi.y + down( 16.0f );
-}
-
-/// one cell's words fitted to its column, a name only ever cut, never shortened
-static void addCell( Int column, const UnicodeString &text, GameFont *font, Int y, Int band, Color color )
-{
-	const Int pad = across( 10.0f );
-	const Int room = s_columnWidth[ column ] - 2 * pad;
-	if (room <= 0 || text.isEmpty())
-		return;
-	const UnicodeString fitted = column == COLUMN_PLAYER ? UIStyle::fitName( text, font, room ) : UIStyle::fitText( text, font, room );
-	if (COLUMN_RIGHT[ column ])
-		addWords( fitted, font, s_columnX[ column ] + s_columnWidth[ column ] - pad, y, color, ALIGN_RIGHT, band );
-	else
-		addWords( fitted, font, s_columnX[ column ] + pad, y, color, ALIGN_LEFT, band );
-}
-
-static void addLadderRow( const OnlineLadderRow &r, Int y, Int band, Bool mine )
-{
-	GameFont *body = rowFont( band );
-	const UnicodeString none( u"\x2013" );
-	addCell( COLUMN_RANK, r.rank > 0 ? number( r.rank ) : none, body, y, band, UIStyle::MUTED );
-	UnicodeString nick;
-	nick.translate( r.nick );
-	addCell( COLUMN_PLAYER, nick, mine ? rowFont( band, TRUE ) : body, y, band, UIStyle::INK );
-	addCell( COLUMN_TIER, tierName( rowTier( r ) ), body, y, band, UIStyle::MUTED );
-	addCell( COLUMN_RATING, r.hasRating ? UIStyle::ladderText( r.shown(), r.hasElo ) : none, body, y, band, UIStyle::INK );
-	addCell( COLUMN_WINS, number( r.wins ), body, y, band, UIStyle::INK );
-	addCell( COLUMN_LOSSES, number( r.losses ), body, y, band, UIStyle::INK );
-	const Int games = r.wins + r.losses;
-	addCell( COLUMN_WIN_PCT, games > 0 ? UIStyle::percentText( UIStyle::percent( r.wins, games ) ) : none, body, y, band, UIStyle::MUTED );
-}
-
 /// the side column's scale: the Elo once the server sent the player's, else the old two decimals
 static Bool ladderOnElo( void )
 {
 	return s_hasMe && s_me.hasElo;
+}
+
+/** One row on the screen band top to top + height: place, nick (white bold for his own), the rank's
+	* portrait and word, the ELO at 24 with its inline bar (gold on his own) toward the page's best, the
+	* record.  best is the page's highest ELO, which fills the bar. */
+static void addLadderRow( const OnlineLadderRow &r, Int top, Int height, Bool mine, Real best )
+{
+	GameFont *plain = body();
+	const UnicodeString none( u"\x2013" );
+	addWords( r.rank > 0 ? number( r.rank ) : none, plain, bx( COL_RANK_RIGHT ), top, UIStyle::MUTED, ALIGN_RIGHT, height );
+	UnicodeString nick;
+	nick.translate( r.nick );
+	GameFont *nickFont = mine ? UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE - 2, TRUE ) : plain;
+	addWords( UIStyle::fitName( nick, nickFont, bx( COL_PLAYER_END ) - bx( COL_PLAYER ) ), nickFont, bx( COL_PLAYER ), top, UIStyle::INK,
+		ALIGN_LEFT, height );
+	const Int picture = bp( 24.0f );
+	const UIStyle::RatingTier tier = rowTier( r );
+	addPicture( UIStyle::tierImage( tier, AsciiString::TheEmptyString ), bx( COL_TIER ), top + ( height - picture ) / 2, picture, picture, FALSE );
+	const Int tierLeft = bx( COL_TIER + 34.0f );
+	addWords( UIStyle::fitText( tierName( tier ), plain, bx( COL_TIER_END ) - tierLeft ), plain, tierLeft, top, UIStyle::MUTED, ALIGN_LEFT, height );
+	const Int eloWidth = addWords( r.hasRating ? UIStyle::ladderText( r.shown(), r.hasElo ) : none, figureFont(), bx( COL_ELO ), top,
+		UIStyle::INK, ALIGN_RIGHT, height );
+	if (r.hasRating && r.hasElo && best > 1000.0f)
+	{
+		// the bar from the rank column's end to 14 short of the figure, filled from the figure's side
+		const Int left = bx( COL_TIER_END + 10.0f );
+		const Int right = bx( COL_ELO ) - eloWidth - bp( 14.0f );
+		const Int middle = top + height / 2;
+		if (right > left)
+		{
+			addPiece( PIECE_FILL, left, middle - 1, right - left, max( 2, bp( 3.0f ) ), GameMakeColor( 255, 255, 255, 18 ) );
+			const Real share = max( 0.0f, min( 1.0f, ( r.elo - 1000.0f ) / ( best - 1000.0f ) ) );
+			const Int filled = REAL_TO_INT( ( right - left ) * share + 0.5f );
+			if (filled > 0)
+				addPiece( PIECE_FILL, right - filled, middle - 1, filled, max( 2, bp( 3.0f ) ),
+					UIStyle::withAlpha( mine ? UIStyle::GOLD : UIStyle::EDGE, 170 ) );
+		}
+	}
+	addWords( number( r.wins ), plain, bx( COL_WINS ), top, UIStyle::INK, ALIGN_RIGHT, height );
+	addWords( number( r.losses ), plain, bx( COL_LOSSES ), top, UIStyle::INK, ALIGN_RIGHT, height );
+	const Int games = r.wins + r.losses;
+	addWords( games > 0 ? UIStyle::percentText( UIStyle::percent( r.wins, games ) ) : none, plain, bx( COL_PCT ), top, UIStyle::MUTED,
+		ALIGN_RIGHT, height );
 }
 
 /// a tier's range as the Ranks box lists it: "1350 to 1499", or the old scale's "25.00 to 29.99"
@@ -421,67 +471,72 @@ static UnicodeString tierRange( UIStyle::RatingTier tier )
 	return range;
 }
 
-/// the table: heads, the page or the line that stands for it, and the player's row pinned under it
+/// a row button's place, or hidden
+static void placeRow( Int index, Int x, Int y, Int width, Int height, const AsciiString &nick, Bool mine )
+{
+	GameWindow *row = s_rowButton[ index ];
+	if (!row)
+		return;
+	s_rowNick[ index ] = nick;
+	s_rowMine[ index ] = mine;
+	row->winSetPosition( x, y );
+	row->winSetSize( width, height );
+	row->winHide( nick.isEmpty() );
+}
+
+/// the table: section head and page, the column heads, the page or the line that stands for it, the zebra,
+/// and the player's row pinned under a dotted gap when the page does not hold him
 static void layoutLadderTable( OnlineLadderState state, Int offset, const std::vector<OnlineLadderRow> &rows, Bool answerHasMe )
 {
-	IRegion2D table, side;
-	UIStyle::onlineColumns( table, side );
-	const Int inset = across( 24.0f );
-	const Int tableWidth = table.hi.x - table.lo.x;
-	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	addBox( table.lo.x, table.lo.y, tableWidth, table.hi.y - table.lo.y );
-	const Int shown = min( (Int)rows.size(), (Int)LADDER_PAGE );
-	if (state == ONLINE_LADDER_READY && shown > 0)
+	addBox( TABLE_LEFT, BOX_TOP, TABLE_RIGHT, BOX_BOTTOM );
+	addSection( "GUI:OnlineLadderButton", TABLE_LEFT, BOX_TOP, TABLE_LEFT + 300.0f );
+	const Int shown = state == ONLINE_LADDER_READY ? min( (Int)rows.size(), (Int)LADDER_PAGE ) : 0;
+	if (shown > 0)
 	{
 		UnicodeString page;
 		page.format( TheGameText->fetch( "GUI:OnlineLadderPage" ), offset + 1, offset + shown );
-		addWords( page, body, table.hi.x - inset, table.lo.y + down( 22.0f ), UIStyle::MUTED, ALIGN_RIGHT );
+		addWords( page, body(), bx( TABLE_RIGHT - 16.0f ), by( BOX_TOP + 13.0f ), UIStyle::MUTED, ALIGN_RIGHT, bp( 24.0f ) );
 	}
 
-	// the columns, 14 in from the box's left and ending under the page label's right edge (the
-	// mockup's 1070), so every rule and selected row stops where the Win % column does; 4:3 narrows
-	// the main column, and Losses go, then Win %, before the names get too little room
-	const Int left = table.lo.x + across( 14.0f );
-	const Int width = tableWidth - across( 14.0f ) - inset;
-	Bool open[ LADDER_COLUMNS ];
-	Int fixed = 0;
-	for (Int c = 0; c < LADDER_COLUMNS; ++c)
-	{
-		open[ c ] = TRUE;
-		fixed += across( COLUMN_WIDTH[ c ] );
-	}
-	static const Int DROPPED[] = { COLUMN_LOSSES, COLUMN_WIN_PCT };
-	for (Int d = 0; d < (Int)ARRAY_SIZE( DROPPED ) && width - fixed < across( 220.0f ); ++d)
-	{
-		open[ DROPPED[ d ] ] = FALSE;
-		fixed -= across( COLUMN_WIDTH[ DROPPED[ d ] ] );
-	}
-	Int x = left;
-	for (Int c = 0; c < LADDER_COLUMNS; ++c)
-	{
-		s_columnX[ c ] = x;
-		s_columnWidth[ c ] = !open[ c ] ? 0 : c == COLUMN_PLAYER ? width - fixed : across( COLUMN_WIDTH[ c ] );
-		x += s_columnWidth[ c ];
-	}
+	// the heads: words over their figures, ELO green with its caret, being the order the server pages by
+	const Int headTop = by( HEAD_TOP );
+	const Int headBand = bp( 18.0f );
+	addCaps( capsFit( "GUI:OnlineLadderRank", bp( 52.0f ) ), bx( COL_RANK_RIGHT ), headTop, headBand, UIStyle::MUTED, ALIGN_RIGHT );
+	addCaps( capsFit( "GUI:OnlineLadderPlayer", bp( 392.0f ) ), bx( COL_PLAYER ), headTop, headBand, UIStyle::MUTED );
+	addCaps( capsFit( "GUI:OnlineLadderTier", bp( 220.0f ) ), bx( COL_TIER ), headTop, headBand, UIStyle::MUTED );
+	const Int eloHead = addCaps( capsFit( "GUI:OnlineLadderRating", bp( 110.0f ) ), bx( COL_ELO ), headTop, headBand, UIStyle::ACTIVE, ALIGN_RIGHT );
+	const Int caret = bp( 8.0f );
+	addPiece( PIECE_CARET, bx( COL_ELO ) - eloHead - bp( 10.0f ) - caret, headTop + ( headBand - caret / 2 ) / 2, caret, caret / 2, UIStyle::ACTIVE );
+	addCaps( capsFit( "GUI:OnlineLadderWins", bp( 92.0f ) ), bx( COL_WINS ), headTop, headBand, UIStyle::MUTED, ALIGN_RIGHT );
+	addCaps( capsFit( "GUI:OnlineLadderLosses", bp( 102.0f ) ), bx( COL_LOSSES ), headTop, headBand, UIStyle::MUTED, ALIGN_RIGHT );
+	addCaps( capsFit( "GUI:OnlineLadderWinPct", bp( 82.0f ) ), bx( COL_PCT ), headTop, headBand, UIStyle::MUTED, ALIGN_RIGHT );
+	addPiece( PIECE_LIT, bx( TABLE_LEFT + 8.0f ), by( HEAD_RULE ), bx( TABLE_RIGHT - 8.0f ) - bx( TABLE_LEFT + 8.0f ), 1, UIStyle::FRAME );
 
-	// heads in INK over a FRAME rule; 56 + 36 + 20 rows of 27 + 10 + 40 is 682 of the band's 710
-	const Int headTop = table.lo.y + down( 56.0f );
-	const Int headHeight = down( 36.0f );
-	static const char *const HEAD[ LADDER_COLUMNS ] = { "GUI:OnlineLadderRank", "GUI:OnlineLadderPlayer", "GUI:OnlineLadderTier",
-		"GUI:OnlineLadderRating", "GUI:OnlineLadderWins", "GUI:OnlineLadderLosses", "GUI:OnlineLadderWinPct" };
-	for (Int c = 0; c < LADDER_COLUMNS; ++c)
-	{
-		UnicodeString head;
-		head.format( TheGameText->fetch( HEAD[ c ] ) );		// Win %% is a format
-		addCell( c, head, rowFont( headHeight ), headTop, headHeight, UIStyle::INK );
-	}
-	addPiece( PIECE_FILL, left, headTop + headHeight - 1, width, 1, UIStyle::FRAME );
-
-	// the page, GRID between the rows, the player's own selected
-	const Int rowHeight = down( 27.0f );
-	body = rowFont( rowHeight );
-	Int y = headTop + headHeight;
+	// the rows: 20 of 33, or of 30 when his row is pinned under them; zebra on every second, no hairlines
+	const AsciiString self = localNick();
 	Bool meInPage = FALSE;
+	for (Int i = 0; i < shown; ++i)
+		meInPage = meInPage || ( self.isNotEmpty() && rows[ i ].nick.compareNoCase( self ) == 0 );
+	const Bool pinned = shown > 0 && answerHasMe && !meInPage && s_me.rank > 0;
+	const Real rowHeight = OnlineLadderRowHeight( pinned );
+	Real best = 1001.0f;
+	for (Int i = 0; i < shown; ++i)
+		if (rows[ i ].hasElo)
+			best = max( best, rows[ i ].elo );
+	if (pinned && s_me.hasElo)
+		best = max( best, s_me.elo );
+	const Int rowLeft = bx( TABLE_LEFT + 8.0f );
+	const Int rowWidth = bx( TABLE_RIGHT - 8.0f ) - rowLeft;
+	for (Int i = 0; i < LADDER_PAGE; ++i)
+	{
+		const Int top = by( ROWS_TOP + i * rowHeight );
+		const Int height = by( ROWS_TOP + ( i + 1 ) * rowHeight ) - top;
+		const Bool mine = i < shown && self.isNotEmpty() && rows[ i ].nick.compareNoCase( self ) == 0;
+		addRow( rowLeft, top, rowWidth, height, mine ? UIStyle::ROW_LOCAL : UIStyle::ROW_PLAIN, i % 2 == 1 );
+		if (i < shown)
+			addLadderRow( rows[ i ], top, height, mine, best );
+		placeRow( i, rowLeft, top, rowWidth, height, i < shown ? rows[ i ].nick : AsciiString::TheEmptyString, mine );
+	}
 	const char *line = NULL;
 	if (state == ONLINE_LADDER_WAITING)
 		line = "GUI:OnlineLadderLoading";
@@ -490,107 +545,131 @@ static void layoutLadderTable( OnlineLadderState state, Int offset, const std::v
 	else if (shown == 0)
 		line = "GUI:OnlineLadderEmpty";
 	if (line)
-		addWords( UIStyle::fitText( TheGameText->fetch( line ), body, width - across( 20.0f ) ), body, left + across( 10.0f ), y, UIStyle::MUTED, ALIGN_LEFT, rowHeight );
-	const AsciiString self = localNick();
-	for (Int i = 0; state == ONLINE_LADDER_READY && i < shown; ++i, y += rowHeight)
+		addWords( UIStyle::fitText( TheGameText->fetch( line ), body(), bx( TABLE_RIGHT - 26.0f ) - bx( TABLE_LEFT + 26.0f ) ), body(),
+			bx( TABLE_LEFT + 26.0f ), by( ROWS_TOP ), UIStyle::MUTED, ALIGN_LEFT, bp( rowHeight ) );
+
+	if (pinned)
 	{
-		const Bool mine = self.isNotEmpty() && rows[ i ].nick.compareNoCase( self ) == 0;
-		if (mine)
-			addSelection( left, y, width, rowHeight );
-		else
-			addPiece( PIECE_FILL, left, y + rowHeight - 1, width, 1, UIStyle::GRID );
-		addLadderRow( rows[ i ], y, rowHeight, mine );
-		meInPage = meInPage || mine;
+		// the ranks skipped between the page and his row, a dotted rule; then his row, 48 high
+		const Real gap = ROWS_TOP + LADDER_PAGE * rowHeight;
+		for (Real x = TABLE_LEFT + 28.0f; x < TABLE_RIGHT - 28.0f; x += 12.0f)
+			addPiece( PIECE_FILL, bx( x ), by( gap + 9.0f ), bp( 4.0f ), 1, UIStyle::withAlpha( UIStyle::FRAME, 200 ) );
+		const Int top = by( gap + ONLINE_LADDER_PINNED_GAP );
+		const Int height = by( gap + ONLINE_LADDER_PINNED_GAP + ONLINE_LADDER_PINNED_HEIGHT ) - top;
+		addRow( rowLeft, top, rowWidth, height, UIStyle::ROW_LOCAL, FALSE );
+		addLadderRow( s_me, top, height, TRUE, best );
+		placeRow( LADDER_PAGE, rowLeft, top, rowWidth, height, s_me.nick, TRUE );
 	}
-	if (state == ONLINE_LADDER_READY && answerHasMe && !meInPage)
-	{
-		const Int pinned = headTop + headHeight + LADDER_PAGE * rowHeight + down( 10.0f );
-		addSelection( left, pinned, width, down( 40.0f ) );
-		addLadderRow( s_me, pinned, down( 40.0f ), TRUE );
-	}
+	else
+		placeRow( LADDER_PAGE, 0, 0, 1, 1, AsciiString::TheEmptyString, FALSE );
 }
 
-/// the side column: his place, rating and tier, the next tier, his record; then the ranks
-static void layoutLadderSide( void )
+/// the side column: his place, rating and tier, the next rank, his record, Jump to my page; then the ranks
+static void layoutLadderSide( OnlineLadderState state )
 {
-	IRegion2D place, ranks;
-	ladderSideBoxes( place, ranks );
-	const Int inset = across( 24.0f );
-	const Int sideWidth = place.hi.x - place.lo.x;
-	const Int inner = sideWidth - 2 * inset;
-	const Int x = place.lo.x + inset;
-	GameFont *body = rowFont( down( 30.0f ) );
 	const UnicodeString none( u"\x2013" );
 	const UIStyle::RatingTier tier = myTier();
 	const Int games = s_hasMe ? s_me.wins + s_me.losses : 0;
-
-	addBox( place.lo.x, place.lo.y, sideWidth, place.hi.y - place.lo.y );
-	addWords( TheGameText->fetch( "GUI:OnlineLadderYourPlace" ), UIStyle::sectionFont(), x, place.lo.y + down( 20.0f ), UIStyle::ACTIVE );
-	addPicture( UIStyle::tierImage( tier, AsciiString::TheEmptyString ), x, place.lo.y + down( 60.0f ), down( 96.0f ), down( 96.0f ) );
-
-	// the place as a display figure, the title's size where the box is too short or narrow for it; an
-	// unranked player's games toward his five in its stead
-	UnicodeString figure = none;
-	if (s_hasMe && s_me.rank > 0)
-		figure.format( TheGameText->fetch( "GUI:OnlinePlaceValue" ), s_me.rank );
-	else if (s_hasMe)
-		figure.format( TheGameText->fetch( "GUI:OnlineLadderGamesOf" ), min( games, (Int)UIStyle::RANKED_GAMES ), (Int)UIStyle::RANKED_GAMES );
-	figure = UIStyle::capitals( figure );
-	const Int figureX = place.lo.x + across( 140.0f );
-	const Int figureRoom = place.hi.x - inset - figureX;
-	GameFont *display = UIStyle::titleFont( UIStyle::TEXT_DISPLAY );
-	if (measure( figure, display ) > figureRoom || display->height > down( 130.0f ) - down( 60.0f ))
-		display = UIStyle::titleFont( UIStyle::TEXT_TITLE );
-	addWords( UIStyle::fitText( figure, display, figureRoom ), display, figureX, place.lo.y + down( 60.0f ), UIStyle::INK );
+	const Bool ranked = s_hasMe && s_me.rank > 0;
 	const Bool elo = ladderOnElo();
-	UnicodeString standing = s_hasMe && s_me.hasRating ? UIStyle::ladderText( s_me.shown(), elo ) : none;
-	standing.concat( UIStyle::HEADER_JOINER );
-	standing.concat( tierName( tier ) );
-	addWords( UIStyle::fitText( standing, body, figureRoom ), body, figureX, place.lo.y + down( 130.0f ), UIStyle::INK );
-	addPiece( PIECE_FILL, x, place.lo.y + down( 172.0f ), inner, 1, UIStyle::GRID );
+	const Real left = SIDE_LEFT + 24.0f, right = SIDE_RIGHT - 24.0f;
 
-	// the next tier and how far, or the games still owed before the first
-	UnicodeString next;
+	addBox( SIDE_LEFT, BOX_TOP, SIDE_RIGHT, PLACE_BOTTOM );
+	addSection( "GUI:OnlineLadderYourPlace", SIDE_LEFT + 8.0f, BOX_TOP, SIDE_RIGHT - 24.0f );
+	const Int portrait = bp( 104.0f );
+	addPicture( UIStyle::tierImage( tier, AsciiString::TheEmptyString ), bx( left ), by( 230.0f ), portrait, portrait );
+
+	// the place at 40, an unranked player's games toward his five in its stead; the ELO at 24, its label, the tier
+	const Real figureX = left + 104.0f + 22.0f;
+	const Int figureRoom = bx( right ) - bx( figureX );
+	if (ranked)
+	{
+		UnicodeString place;
+		place.format( TheGameText->fetch( "GUI:OnlinePlaceValue" ), s_me.rank );
+		GameFont *big = UIStyle::menuFont( UIStyle::MENU_TEXT_TITLE, TRUE );
+		addWords( UIStyle::fitText( place, big, figureRoom ), big, bx( figureX ), by( 226.0f ), UIStyle::INK, ALIGN_LEFT, bp( 52.0f ) );
+	}
+	else
+	{
+		UnicodeString count;
+		count.format( TheGameText->fetch( "GUI:OnlineLadderGamesOf" ), min( games, (Int)UIStyle::RANKED_GAMES ), (Int)UIStyle::RANKED_GAMES );
+		GameFont *big = UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE + 4 );
+		addWords( UIStyle::fitText( count, big, figureRoom ), big, bx( figureX ), by( 234.0f ), UIStyle::INK, ALIGN_LEFT, bp( 38.0f ) );
+	}
+	const Int eloTop = by( 284.0f ), eloBand = bp( 32.0f );
+	Int x = bx( figureX );
+	x += addWords( ranked && s_me.hasRating ? UIStyle::ladderText( s_me.shown(), elo ) : none, figureFont(), x, eloTop, UIStyle::INK,
+		ALIGN_LEFT, eloBand ) + bp( 8.0f );
+	x += addCaps( UIStyle::capitals( TheGameText->fetch( "GUI:OnlineLadderShort" ) ), x, eloTop, eloBand, UIStyle::MUTED ) + bp( 14.0f );
+	addWords( UIStyle::fitText( tierName( tier ), body(), bx( right ) - x ), body(), x, eloTop, UIStyle::MUTED, ALIGN_LEFT, eloBand );
+
+	// the next rank and how far, or the games still owed before the first; its track
+	const Int nextTop = by( 350.0f ), nextBand = bp( 26.0f );
 	Real progress = 1.0f;
-	if (tier == UIStyle::TIER_UNRANKED)
-		progress = (Real)games / UIStyle::RANKED_GAMES;
+	if (!ranked || tier == UIStyle::TIER_UNRANKED)
+	{
+		addCaps( capsFit( "GUI:OnlineLadderPlacement", bp( 200.0f ) ), bx( left ), nextTop, nextBand, UIStyle::MUTED );
+		UnicodeString owed;
+		owed.format( TheGameText->fetch( "GUI:OnlineLadderGamesToGo" ), max( 0, (Int)UIStyle::RANKED_GAMES - games ) );
+		addWords( owed, body(), bx( right ), nextTop, UIStyle::INK, ALIGN_RIGHT, nextBand );
+		progress = (Real)min( games, (Int)UIStyle::RANKED_GAMES ) / UIStyle::RANKED_GAMES;
+	}
 	else if (tier < UIStyle::TIER_GENERAL)
 	{
 		const UIStyle::RatingTier up = (UIStyle::RatingTier)( tier + 1 );
 		const Real from = UIStyle::tierStart( tier, elo );
 		const Real to = UIStyle::tierStart( up, elo );
-		next.format( TheGameText->fetch( "GUI:OnlineNextTier" ), tierName( up ).str(), UIStyle::ladderText( to, elo ).str(),
-			UIStyle::ladderText( max( 0.0f, to - s_me.shown() ), elo ).str() );
+		addCaps( capsFit( "GUI:OnlineLadderNextRank", bp( 140.0f ) ), bx( left ), nextTop, nextBand, UIStyle::MUTED );
+		UnicodeString togo;
+		togo.format( TheGameText->fetch( "GUI:OnlineLadderToGo" ), UIStyle::ladderText( max( 0.0f, to - s_me.shown() ), elo ).str() );
+		const Int togoWidth = addWords( togo, body(), bx( right ), nextTop, UIStyle::MUTED, ALIGN_RIGHT, nextBand );
+		UnicodeString at;
+		at.format( TheGameText->fetch( "GUI:OnlineLadderNextAt" ), tierName( up ).str(), UIStyle::ladderText( to, elo ).str() );
+		const Int atLeft = bx( left + 150.0f );
+		addWords( UIStyle::fitText( at, body(), bx( right ) - togoWidth - bp( 12.0f ) - atLeft ), body(), atLeft, nextTop, UIStyle::INK,
+			ALIGN_LEFT, nextBand );
 		// private's Elo track starts where sergeant does (the site's meter): empty, never a divide by nothing
 		progress = to > from ? ( s_me.shown() - from ) / ( to - from ) : 0.0f;
 	}
-	addWords( UIStyle::fitText( next, body, inner ), body, x, place.lo.y + down( 186.0f ), UIStyle::MUTED );
-	addTrack( x, place.lo.y + down( 220.0f ), inner, down( 10.0f ), progress );
-	UnicodeString record;
-	record.format( TheGameText->fetch( "GUI:OnlineLadderRecord" ), s_hasMe ? s_me.wins : 0, s_hasMe ? s_me.losses : 0 );
-	addWords( UIStyle::fitText( record, body, inner ), body, x, place.lo.y + down( 242.0f ), UIStyle::INK );
+	addTrack( bx( left ), by( 384.0f ), bx( right ) - bx( left ), bp( 6.0f ), progress );
 
-	// the ranks with their portraits and ranges, his own selected; 56 + 8 rows of 36 is 344 of 354
-	addBox( ranks.lo.x, ranks.lo.y, sideWidth, ranks.hi.y - ranks.lo.y );
-	addWords( TheGameText->fetch( "GUI:OnlineLadderTiers" ), UIStyle::sectionFont(), x, ranks.lo.y + down( 20.0f ), UIStyle::ACTIVE );
-	const Int rowLeft = ranks.lo.x + across( 14.0f );
-	const Int rowWidth = sideWidth - across( 28.0f );
-	const Int band = down( 36.0f );
-	const Int picture = down( 28.0f );
-	body = rowFont( band );
-	Int rowTop = ranks.lo.y + down( 56.0f );
+	// the record: wins, losses and win rate, a figure and its label in each third
+	const Int cell = ( bx( right ) - bx( left ) ) / 3;
+	const Int recordTop = by( 404.0f ), recordBand = bp( 32.0f );
+	const Int wins = s_hasMe ? s_me.wins : 0, losses = s_hasMe ? s_me.losses : 0;
+	const UnicodeString figures[ 3 ] = { number( wins ), number( losses ),
+		wins + losses > 0 ? UIStyle::percentText( UIStyle::percent( wins, wins + losses ) ) : none };
+	static const char *const RECORD[ 3 ] = { "GUI:OnlineLadderWins", "GUI:OnlineLadderLosses", "GUI:OnlineWinRateLabel" };
+	for (Int c = 0; c < 3; ++c)
+	{
+		const Int cellLeft = bx( left ) + c * cell;
+		const Int figure = addWords( figures[ c ], figureFont(), cellLeft, recordTop, UIStyle::INK, ALIGN_LEFT, recordBand );
+		const Int labelLeft = cellLeft + figure + bp( 10.0f );
+		addCaps( capsFit( RECORD[ c ], cellLeft + cell - bp( 6.0f ) - labelLeft ), labelLeft, recordTop, recordBand, UIStyle::MUTED );
+	}
+
+	// the ranks with their portraits and ranges, his own on the gold edge
+	addBox( SIDE_LEFT, RANKS_TOP, SIDE_RIGHT, BOX_BOTTOM );
+	addSection( "GUI:OnlineLadderTiers", SIDE_LEFT + 8.0f, RANKS_TOP, SIDE_RIGHT - 220.0f );
+	addCaps( UIStyle::capitals( TheGameText->fetch( "GUI:OnlineLadderShort" ) ), bx( right ), by( RANKS_TOP + 16.0f ), bp( 18.0f ), UIStyle::MUTED,
+		ALIGN_RIGHT );
+	const Real ranksTop = RANKS_TOP + 44.0f;
+	const Real band = 45.0f;
+	Real rowTop = ranksTop;
 	for (Int t = UIStyle::TIER_GENERAL; t >= UIStyle::TIER_UNRANKED; --t, rowTop += band)
 	{
 		const UIStyle::RatingTier each = (UIStyle::RatingTier)t;
+		const Int top = by( rowTop );
+		const Int height = by( rowTop + band ) - top;
 		if (s_hasMe && each == tier)
-			addSelection( rowLeft, rowTop, rowWidth, band );
-		addPicture( UIStyle::tierImage( each, AsciiString::TheEmptyString ), rowLeft + across( 10.0f ), rowTop + ( band - picture ) / 2, picture, picture );
-		const Int rangeRight = rowLeft + rowWidth - across( 10.0f );
-		const Int rangeWidth = addWords( tierRange( each ), body, rangeRight, rowTop, UIStyle::MUTED, ALIGN_RIGHT, band );
-		const Int nameX = rowLeft + across( 50.0f );
-		const Int nameRoom = rangeRight - rangeWidth - across( 12.0f ) - nameX;
-		if (nameRoom > 0)
-			addWords( UIStyle::fitText( tierName( each ), body, nameRoom ), body, nameX, rowTop, UIStyle::INK, ALIGN_LEFT, band );
+			addRow( bx( SIDE_LEFT + 10.0f ), top, bx( SIDE_RIGHT - 10.0f ) - bx( SIDE_LEFT + 10.0f ), height, UIStyle::ROW_LOCAL, FALSE );
+		const Int picture = bp( band - 12.0f );
+		addPicture( UIStyle::tierImage( each, AsciiString::TheEmptyString ), bx( left ), top + bp( 6.0f ), picture, picture, FALSE );
+		const Int middle = bx( right - 200.0f );
+		addWords( tierRange( each ), body(), bx( right ), top, UIStyle::MUTED, ALIGN_RIGHT, height );
+		const Int nameLeft = bx( left ) + picture + bp( 16.0f );
+		addWords( UIStyle::fitText( tierName( each ), body(), middle - bp( 8.0f ) - nameLeft ), body(), nameLeft, top, UIStyle::INK,
+			ALIGN_LEFT, height );
 	}
 }
 
@@ -598,25 +677,67 @@ static void layoutLadder( OnlineLadderState state, Int offset, const std::vector
 {
 	clearPieces();
 	layoutLadderTable( state, offset, rows, answerHasMe );
-	layoutLadderSide();
+	layoutLadderSide( state );
+	const Bool nextLive = state == ONLINE_LADDER_READY && (Int)rows.size() >= LADDER_PAGE;
 	if (buttonPrev)
 		buttonPrev->winEnable( state != ONLINE_LADDER_WAITING && s_ladderOffset > 0 );
 	if (buttonNext)
-		buttonNext->winEnable( state == ONLINE_LADDER_READY && (Int)rows.size() >= LADDER_PAGE );
+	{
+		buttonNext->winEnable( nextLive );
+		UIStyle::setMenuKey( buttonNext, nextLive );		// the lit key while there is a next page
+	}
 	if (buttonJump)
 		buttonJump->winEnable( state != ONLINE_LADDER_WAITING && s_hasMe && s_me.rank > 0 && myPage() != s_ladderOffset );
+}
+
+/// a ladder row's button: the white lift and cyan edge under the mouse (his own keeps its gold)
+static void drawLadderRow( GameWindow *window, WinInstanceData *instData )
+{
+	Int index = 0;
+	while (index < LADDER_ROWS && s_rowButton[ index ] != window)
+		++index;
+	if (index == LADDER_ROWS || s_rowMine[ index ] || !BitTest( instData->getState(), WIN_STATE_HILITED ))
+		return;
+	Int x, y, width, height;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &width, &height );
+	IRegion2D r;
+	r.lo.x = x;
+	r.lo.y = y;
+	r.hi.x = x + width;
+	r.hi.y = y + height;
+	UIStyle::menuRow( r, UIStyle::ROW_HOVER );
 }
 
 static void createLadderGadgets( void )
 {
 	if (!parentWindow || !windowLadder)
 		return;
-	buttonPrev = rowButton( 1180.0f, UIStyle::ROOM_BUTTON_WIDTH, "GUI:OnlineLadderPrev" );
-	buttonNext = rowButton( 1496.0f, UIStyle::ROOM_BUTTON_WIDTH, "GUI:OnlineLadderNext" );
-	IRegion2D place, ranks;
-	ladderSideBoxes( place, ranks );
-	const Int inset = across( 24.0f );
-	buttonJump = smallButton( place.lo.x + inset, place.lo.y + down( 284.0f ), place.hi.x - place.lo.x - 2 * inset, "GUI:OnlineLadderJump" );
+	buttonPrev = findChild( "ButtonPrev" );
+	buttonNext = findChild( "ButtonNext" );
+	buttonJump = findChild( "ButtonJump" );
+	showKey( buttonPrev, TRUE );
+	showKey( buttonNext, TRUE, TRUE );
+	showKey( buttonJump, TRUE );
+	showKey( findChild( "ButtonSave" ), FALSE );
+	showKey( findChild( "ButtonAction" ), FALSE );
+	for (Int i = 0; i < LADDER_ROWS; ++i)
+	{
+		char name[ 64 ];
+		if (i < LADDER_PAGE)
+			sprintf( name, "WOLLadderScreen.wnd:LadderRow%d", i );
+		else
+			strcpy( name, "WOLLadderScreen.wnd:LadderRowMine" );
+		s_rowButton[ i ] = makeButton( parentWindow, NULL, 0, 0, 1, 1, "GUI:OnlineLadderPlayer", name );
+		if (s_rowButton[ i ])
+		{
+			GadgetButtonSetText( s_rowButton[ i ], UnicodeString::TheEmptyString );
+			s_rowButton[ i ]->winSetDrawFunc( drawLadderRow );
+			s_rowButton[ i ]->winHide( TRUE );
+		}
+		s_rowNick[ i ].clear();
+		s_rowMine[ i ] = FALSE;
+	}
 
 	// his row until a page carries it: what the server said of him at sign-in
 	s_me = OnlineLadderRow();
@@ -641,11 +762,14 @@ static void createLadderGadgets( void )
 
 static void destroyLadderGadgets( void )
 {
-	GameWindow *made[] = { buttonPrev, buttonNext, buttonJump };
-	for (size_t i = 0; i < ARRAY_SIZE( made ); ++i)
-		if (made[i])
-			TheWindowManager->winDestroy( made[i] );
-	buttonPrev = buttonNext = buttonJump = NULL;
+	for (Int i = 0; i < LADDER_ROWS; ++i)
+	{
+		if (s_rowButton[ i ])
+			TheWindowManager->winDestroy( s_rowButton[ i ] );
+		s_rowButton[ i ] = NULL;
+		s_rowNick[ i ].clear();
+	}
+	buttonPrev = buttonNext = buttonJump = NULL;		// the master's
 }
 
 static void drawLadder( void )
@@ -664,6 +788,8 @@ static void drawLadder( void )
 		s_hasMe = TRUE;
 	}
 	layoutLadder( state, offset, rows, hasMe );
+	DEBUG_LOG(( "LADDER PAGE state=%d offset=%d rows=%d me=%d rank=%d\n", (Int)state, offset, (Int)rows.size(), (Int)hasMe,
+		s_hasMe ? s_me.rank : 0 ));
 }
 
 static void requestLadderPage( Int offset )
@@ -674,17 +800,41 @@ static void requestLadderPage( Int offset )
 	drawLadder();
 }
 
+/** A row clicked: its player's card over the ladder.  The ladder carries no account ids, so another
+	* player's card shows his ratings and record (stats{nick}) and no match history; his own has both. */
+static Bool openRowCard( GameWindow *control )
+{
+	for (Int i = 0; i < LADDER_ROWS; ++i)
+	{
+		if (control != s_rowButton[ i ] || s_rowNick[ i ].isEmpty())
+			continue;
+		Int id = -1;
+		if (s_rowMine[ i ] && TheGameSpyInfo)
+			id = TheGameSpyInfo->getLocalProfileID();
+		else if (TheGameSpyInfo && TheGameSpyInfo->getPlayerInfoMap())
+		{
+			PlayerInfoMap::iterator found = TheGameSpyInfo->getPlayerInfoMap()->find( s_rowNick[ i ] );
+			if (found != TheGameSpyInfo->getPlayerInfoMap()->end() && found->second.m_profileID > 0)
+				id = found->second.m_profileID;
+		}
+		DEBUG_LOG(( "LADDER CARD nick=%s id=%d\n", s_rowNick[ i ].str(), id ));
+		GameSpyCloseOverlay( GSOVERLAY_PLAYERINFO );
+		SetLookAtPlayer( id, s_rowNick[ i ] );
+		GameSpyOpenOverlay( GSOVERLAY_PLAYERINFO );
+		return TRUE;
+	}
+	return FALSE;
+}
+
 //-------------------------------------------------------------------------------------------------
-// The skins page, the Skins tab (ONLINE-UI-REDESIGN.md "Skins", experiments/online-redesign/
-// skinpick.html), three panels.  Left, the units SkinsReforged.ini dresses by side, each with its
-// cameo and how many of its looks the account owns.  Middle, the picked unit's looks as cards, three a
-// line, Default first, each its model drawn live at one fixed angle and its name, a tick on the worn
-// one and a padlock on a locked one, under the owned count's bar and an All, Owned, Locked filter.
-// Right, the look in focus turning on its plate over the whole panel, its name and one button: Wear,
-// Worn (Picked until saved), or for a look the account lacks what earns it, which opens zerohour.gg.
-// Save sends the whole loadout;
-// once the site took it the next room and Quick Match seat it (OnlineSaveSkins).  The ladder's
-// layout, no layout of its own to ship, and no card pictures: the models are the cards.
+// The skins page, the Skins tab (README-online-self.md, "Skins"), three panels.  Left, the units
+// SkinsReforged.ini dresses by side, each with its cameo, how many of its looks the account owns and
+// that count as a bar.  Middle, the picked unit's looks as cards sized to their count, each its model
+// drawn live at one fixed angle and its name, a tick on the worn and the picked one and a padlock on a
+// locked one, under the owned bar and an All, Owned, Locked filter.  Right, the look in focus turning
+// on its plate, its name and one key: Wear, Worn (Picked until saved), or for a look the account lacks
+// what earns it, which opens zerohour.gg.  Save sends the whole loadout; once the site took it the next
+// room and Quick Match seat it (OnlineSaveSkins).
 //-------------------------------------------------------------------------------------------------
 struct SkinChoice
 {
@@ -702,6 +852,7 @@ struct SkinRow
 	GameWindow *tile;				///< the unit's row in the list, a push button
 	Int known;							///< its line in SKIN_UNITS; SKIN_UNKNOWN for a unit missing there
 	DisplayString *count;		///< "owned / looks" at the row's right end
+	Int have;								///< owned looks, Default among them
 };
 enum { FILTER_ALL, FILTER_OWNED, FILTER_LOCKED, FILTER_COUNT };
 static Bool s_skinsPage = FALSE;
@@ -710,7 +861,7 @@ static size_t s_skinUnit = 0;					///< the row whose looks show
 static Int s_skinFocus = 0;						///< the look on the platform, a skin id of that row, 0 Default
 static Int s_skinFilter = FILTER_ALL;
 static GameWindow *buttonSave = NULL;
-static GameWindow *buttonAction = NULL;	///< Wear, Worn, Picked or Open zerohour.gg
+static GameWindow *buttonAction = NULL;	///< Wear, Worn, Picked or what earns a locked look
 static GameWindow *buttonFilter[ FILTER_COUNT ] = { NULL, NULL, NULL };
 static Int s_skinsState = -1;					///< OnlineSkinsState last laid out
 static UnsignedInt64 s_skinsOwnedShown = 0;
@@ -743,20 +894,14 @@ static const Color SKIN_HOUSE = GameMakeColor( 0x2a, 0x6e, 0xd8, 0xff );
 static const Real SKIN_CARD_TURN = 0.06f;
 /// a card's ground, near black, so the model carries it
 static const Color SKIN_CARD_GROUND = GameMakeColor( 0x09, 0x0b, 0x13, 0xff );
-/// a rare look's gold, the score screen's winner (UIStyle::GOLD) between two darker lines, and the
-/// gold a locked one wears
-static const Color SKIN_RARE_DARK = GameMakeColor( 0x8a, 0x66, 0x14, 0xff );
-static const Color SKIN_RARE_LOCKED = GameMakeColor( 0xa8, 0x8a, 0x3a, 0xff );
 
-/// the button edge's three lines in gold round a rare look
-static void rareEdge( Int x, Int y, Int width, Int height )
-{
-	TheDisplay->drawOpenRect( x, y, width, height, 1.0f, SKIN_RARE_DARK );
-	TheDisplay->drawOpenRect( x + 1, y + 1, width - 2, height - 2, 1.0f, UIStyle::GOLD );
-	TheDisplay->drawOpenRect( x + 2, y + 2, width - 4, height - 4, 1.0f, SKIN_RARE_DARK );
-}
+/// the three panels at 1080: the list 360 wide, the platform 520, the cards between, 24 apart
+static const Real LIST_LEFT = 60.0f, LIST_RIGHT = 420.0f, MID_LEFT = 444.0f, MID_RIGHT = 1316.0f,
+	PLATFORM_LEFT = 1340.0f, PLATFORM_RIGHT = 1860.0f;
+static const Real CARDS_TOP = 262.0f, CARDS_BOTTOM = 930.0f;
 
-/// a five-pointed star, its points on a circle of size across centred in the size-square box at x, y
+/// a five-pointed star, its points on a circle of size across centred in the size-square box at x, y:
+/// a rare look's mark, white on the cyan edge (gold is the local player's alone)
 static void drawRareStar( Int x, Int y, Int size, Color color )
 {
 	const Real cx = x + size * 0.5f, cy = y + size * 0.52f, r = size * 0.5f;
@@ -775,63 +920,20 @@ static void drawRareStar( Int x, Int y, Int size, Color color )
 	}
 }
 
+static IRegion2D region( Int x, Int y, Int width, Int height )
+{
+	IRegion2D r;
+	r.lo.x = x;
+	r.lo.y = y;
+	r.hi.x = x + width;
+	r.hi.y = y + height;
+	return r;
+}
+
 void WOLSkinsScreenOpen( void )
 {
 	s_skinsPage = TRUE;
 	TheShell->push( AsciiString( "Menus/WOLLadderScreen.wnd" ) );
-}
-
-/// the three panels across the content band: the list 360 and the platform 520 wide at 16:9,
-/// smaller shares of a squarer band (275 and 388 at 4:3), the cards between
-struct SkinsFrame
-{
-	Int top, bottom;
-	Int listX, listWidth, midX, midWidth, rightX, rightWidth;
-};
-static SkinsFrame skinsFrame( void )
-{
-	IRegion2D main, side;
-	UIStyle::onlineColumns( main, side );
-	SkinsFrame f;
-	const Int gap = across( 24.0f );
-	const Int all = side.hi.x - main.lo.x;
-	f.top = main.lo.y;
-	f.bottom = main.hi.y;
-	f.listX = main.lo.x;
-	f.listWidth = min( across( 360.0f ), all * 22 / 100 );
-	f.rightWidth = min( across( 520.0f ), all * 31 / 100 );
-	f.rightX = side.hi.x - f.rightWidth;
-	f.midX = f.listX + f.listWidth + gap;
-	f.midWidth = f.rightX - gap - f.midX;
-	return f;
-}
-
-/// the cards a line: three, so a card is wide enough for a long hull (227 at 16:9, 159 at 4:3), or two
-/// where three would be narrower than 120
-static Int cardColumns( const SkinsFrame &f )
-{
-	const Int inner = f.midWidth - 2 * across( 20.0f );
-	return inner >= 3 * across( 120.0f ) + 2 * across( 12.0f ) ? 3 : 2;
-}
-
-static Int cardWidth( const SkinsFrame &f )
-{
-	const Int columns = cardColumns( f );
-	return ( f.midWidth - 2 * across( 20.0f ) - ( columns - 1 ) * across( 12.0f ) ) / columns;
-}
-
-/// card slot of shown under the bar: two lines fill the column, more where the shown looks need them
-static void cardPlace( Int slot, Int shown, const SkinsFrame &f, Int &x, Int &y, Int &width, Int &height )
-{
-	const Int columns = cardColumns( f );
-	const Int lines = max( 2, ( shown + columns - 1 ) / columns );
-	const Int top = f.top + down( 88.0f );
-	const Int room = f.bottom - down( 20.0f ) - top;
-	const Int gap = down( 12.0f );
-	width = cardWidth( f );
-	height = ( room - ( lines - 1 ) * gap ) / lines;
-	x = f.midX + across( 20.0f ) + ( slot % columns ) * ( width + across( 12.0f ) );
-	y = top + ( slot / columns ) * ( height + gap );
 }
 
 /// the list's order, SKIN_UNITS', the table's own order within a unit kept
@@ -845,24 +947,47 @@ static Int rowSide( size_t r )
 	return s_skinRows[ r ].known < SKIN_UNKNOWN ? SKIN_UNITS[ s_skinRows[ r ].known ].side : -1;
 }
 
-/// row r's place in the list, a side's heading over its first unit
-static void unitPlace( size_t r, const SkinsFrame &f, Int &x, Int &y, Int &width, Int &height )
+/// the side heads in the list, one over each side's first unit
+static Int sideHeads( void )
 {
-	Int top = f.top + down( 16.0f );
+	Int heads = 0, side = -1;
+	for (size_t r = 0; r < s_skinRows.size(); ++r)
+	{
+		if (rowSide( r ) != side && rowSide( r ) >= 0)
+			++heads;
+		side = rowSide( r );
+	}
+	return heads;
+}
+
+/** Row r's place in the list at 1080: a side's head 30 high over its first unit, the rows sharing the
+	* column out (81 for eight units under three heads), 6 apart; the head's top in headTop when r is a
+	* side's first, else -1. */
+static void unitPlace( size_t r, Real &x, Real &y, Real &width, Real &height, Real &headTop )
+{
+	const Int heads = sideHeads();
+	const Int units = max( 1, (Int)s_skinRows.size() );
+	const Real band = min( 81.0f, (Real)(Int)( ( BOX_BOTTOM - 12.0f - ( BOX_TOP + 10.0f ) - 30.0f * heads ) / units ) );
+	Real top = BOX_TOP + 10.0f;
 	Int side = -1;
+	headTop = -1.0f;
 	for (size_t i = 0; i <= r && i < s_skinRows.size(); ++i)
 	{
 		const Int its = rowSide( i );
 		if (its != side && its >= 0)
-			top += down( 40.0f );
+		{
+			if (i == r)
+				headTop = top;
+			top += 30.0f;
+		}
 		side = its;
 		if (i < r)
-			top += down( 68.0f );
+			top += band;
 	}
-	x = f.listX + across( 12.0f );
+	x = LIST_LEFT + 8.0f;
 	y = top;
-	width = f.listWidth - across( 24.0f );
-	height = down( 60.0f );
+	width = LIST_RIGHT - 8.0f - x;
+	height = band - 6.0f;
 }
 
 /// the look in focus on the shown unit's row, its first when the focus is not one of its own
@@ -874,8 +999,27 @@ static SkinChoice *focusChoice( SkinRow &row )
 	return row.choices.empty() ? NULL : &row.choices[ 0 ];
 }
 
+/// a tick in a size-square box at x, y: a dark well under a box and stroke in color
+static void drawTick( Int x, Int y, Int size, Color color )
+{
+	TheDisplay->drawFillRect( x, y, size, size, GameMakeColor( 0, 0, 0, 170 ) );
+	TheDisplay->drawOpenRect( x, y, size, size, 1.0f, color );
+	const Real stroke = (Real)max( 2, size / 9 );
+	TheDisplay->drawLine( x + size * 22 / 100, y + size * 52 / 100, x + size * 42 / 100, y + size * 74 / 100, stroke, color );
+	TheDisplay->drawLine( x + size * 42 / 100, y + size * 74 / 100, x + size * 80 / 100, y + size * 28 / 100, stroke, color );
+}
+
+/// a padlock in a size-square box at x, y: a shackle over a solid body
+static void drawPadlock( Int x, Int y, Int size, Color color = UIStyle::MUTED )
+{
+	const Real stroke = (Real)max( 2, size / 10 );
+	TheDisplay->drawOpenRect( x + size * 28 / 100, y + size * 8 / 100, size * 44 / 100, size * 52 / 100, stroke, color );
+	TheDisplay->drawFillRect( x + size * 15 / 100, y + size * 45 / 100, size * 70 / 100, size * 50 / 100, color );
+}
+
 /** The look in focus turning on its plate, once a 12 s by the wall clock, from the panel's draw so
-	* the buttons go over it; dimmed for a look the account lacks. */
+	* the keys go over it; dimmed with a padlock for a look the account lacks, a rare one on the cyan
+	* edge with its white star. */
 static void drawSkinsHero( void )
 {
 	if (!s_skinsPage || s_skinUnit >= s_skinRows.size() || s_hero.hi.x <= s_hero.lo.x || s_hero.hi.y <= s_hero.lo.y)
@@ -890,10 +1034,11 @@ static void drawSkinsHero( void )
 		SKIN_UNITS[ row.known ].state );
 	if (TankSkin_isRare( s_skinFocus ))
 	{
-		rareEdge( s_hero.lo.x, s_hero.lo.y, s_hero.hi.x - s_hero.lo.x, s_hero.hi.y - s_hero.lo.y );
-		const Int mark = across( 26.0f );
-		drawRareStar( s_hero.lo.x + across( 12.0f ), s_hero.lo.y + down( 12.0f ), mark, s_heroOwned ? UIStyle::GOLD : SKIN_RARE_LOCKED );
+		UIStyle::litEdge( s_hero, UIStyle::EDGE_LIT );
+		drawRareStar( s_hero.lo.x + bp( 14.0f ), s_hero.lo.y + bp( 14.0f ), bp( 26.0f ), UIStyle::INK );
 	}
+	if (!s_heroOwned)
+		drawPadlock( s_hero.hi.x - bp( 44.0f ), s_hero.lo.y + bp( 14.0f ), bp( 28.0f ) );
 }
 
 static Bool hovered( GameWindow *window, WinInstanceData *instData )
@@ -901,17 +1046,18 @@ static Bool hovered( GameWindow *window, WinInstanceData *instData )
 	return BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ) && BitTest( instData->getState(), WIN_STATE_HILITED );
 }
 
-/// a button's own label in the button's font
-static DisplayString *buttonWords( GameWindow *window, WinInstanceData *instData )
+/// a button's own label in the font asked for
+static DisplayString *buttonWords( WinInstanceData *instData, GameFont *font )
 {
 	DisplayString *words = instData->getTextDisplayString();
-	if (words->getFont() != window->winGetFont())
-		words->setFont( window->winGetFont() );
+	if (words->getFont() != font)
+		words->setFont( font );
 	return words;
 }
 
-/** A unit's row in the list, drawn over its push button: the selected row's EDGE wash and line, a
-	* FRAME line under the mouse; its cameo, its name (ACTIVE under the mouse) and its owned count. */
+/** A unit's row in the list, drawn over its push button: the open one on the EDGE wash with its lit
+	* left edge, a hovered one the white lift; its cameo framed, its name, its owned count and that count
+	* as a 3 px bar under the name. */
 static void drawSkinUnit( GameWindow *window, WinInstanceData *instData )
 {
 	const SkinRow *row = NULL;
@@ -928,68 +1074,56 @@ static void drawSkinUnit( GameWindow *window, WinInstanceData *instData )
 	Int x, y, width, height;
 	window->winGetScreenPosition( &x, &y );
 	window->winGetSize( &width, &height );
-	const Bool lit = hovered( window, instData );
+	const IRegion2D box = region( x, y, width, height );
 	if (r == s_skinUnit)
 	{
-		TheDisplay->drawFillRect( x, y, width, height, UIStyle::withAlpha( UIStyle::EDGE, 46 ) );
-		TheDisplay->drawOpenRect( x, y, width, height, 1.0f, UIStyle::EDGE );
+		TheDisplay->drawFillRect( x, y, width, height, UIStyle::withAlpha( UIStyle::EDGE, 70 ) );
+		UIStyle::litLine( x, y, max( 2, bp( 3.0f ) ), height, UIStyle::EDGE );
 	}
-	else if (lit)
-		TheDisplay->drawOpenRect( x, y, width, height, 1.0f, UIStyle::FRAME );
+	else if (hovered( window, instData ))
+		UIStyle::menuRow( box, UIStyle::ROW_HOVER );
 
-	// the cameo at the retail 5:4, 60 by 48 in a 60 row
-	const Int pictureHeight = height - down( 12.0f );
-	const Int pictureWidth = pictureHeight * 5 / 4;
-	const Int pictureX = x + across( 6.0f );
+	// the cameo at 70 by 56, centred on the row
+	const Int pictureWidth = bp( 70.0f ), pictureHeight = bp( 56.0f );
+	const Int pictureX = x + bp( 12.0f );
 	const Int pictureY = y + ( height - pictureHeight ) / 2;
 	const Image *cameo = row->known < SKIN_UNKNOWN ? TheMappedImageCollection->findImageByName( SKIN_UNITS[ row->known ].cameo ) : NULL;
 	if (cameo)
 	{
 		TheDisplay->drawImage( cameo, pictureX, pictureY, pictureX + pictureWidth, pictureY + pictureHeight );
-		TheDisplay->drawOpenRect( pictureX - 1, pictureY - 1, pictureWidth + 2, pictureHeight + 2, 1.0f, UIStyle::FRAME );
+		TheDisplay->drawOpenRect( pictureX - 1, pictureY - 1, pictureWidth + 2, pictureHeight + 2, 1.0f, UIStyle::withAlpha( UIStyle::FRAME, 220 ) );
 	}
 
-	DisplayString *name = buttonWords( window, instData );
+	const Int textLeft = pictureX + pictureWidth + bp( 14.0f );
+	const Int right = x + width - bp( 10.0f );
+	const Int textTop = y + bp( 8.0f ), textBand = bp( 28.0f );
+	DisplayString *name = buttonWords( instData, body() );
 	Int wordsWidth, wordsHeight;
 	name->getSize( &wordsWidth, &wordsHeight );
-	name->draw( pictureX + pictureWidth + across( 14.0f ), y + ( height - wordsHeight ) / 2, lit ? UIStyle::ACTIVE : UIStyle::INK, UIStyle::SHADOW );
+	name->draw( textLeft, textTop + ( textBand - wordsHeight ) / 2, UIStyle::INK, UIStyle::SHADOW );
 	if (row->count)
 	{
 		row->count->getSize( &wordsWidth, &wordsHeight );
-		row->count->draw( x + width - across( 12.0f ) - wordsWidth, y + ( height - wordsHeight ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
+		row->count->draw( right - wordsWidth, textTop + ( textBand - wordsHeight ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
 	}
-}
-
-/// a tick in a size-square box at x, y: the button edge's chrome, a dark plate under a bright stroke
-static void drawTick( Int x, Int y, Int size, Color color )
-{
-	TheDisplay->drawFillRect( x, y, size, size, UIStyle::PANEL );
-	TheDisplay->drawOpenRect( x, y, size, size, 1.0f, UIStyle::EDGE );
-	const Real stroke = (Real)max( 2, size / 7 );
-	TheDisplay->drawLine( x + size * 2 / 10, y + size * 5 / 10, x + size * 4 / 10, y + size * 3 / 4, stroke, color );
-	TheDisplay->drawLine( x + size * 4 / 10, y + size * 3 / 4, x + size * 8 / 10, y + size * 1 / 4, stroke, color );
-}
-
-/// a padlock in a size-square box at x, y: a shackle over a solid body, in the muted ink
-static void drawPadlock( Int x, Int y, Int size, Color color = UIStyle::MUTED )
-{
-	TheDisplay->drawFillRect( x, y, size, size, UIStyle::PANEL );
-	const Int bodyTop = y + size * 9 / 20;
-	const Int shackle = size / 2;
-	const Real stroke = (Real)max( 2, size / 9 );
-	TheDisplay->drawOpenRect( x + ( size - shackle ) / 2, y + size / 8, shackle, bodyTop - y - size / 8 + 2, stroke, color );
-	TheDisplay->drawFillRect( x + size / 6, bodyTop, size - size / 3, size - ( bodyTop - y ) - size / 10, color );
+	const Int looks = max( 1, (Int)row->choices.size() );
+	const Int track = right - textLeft;
+	const Int trackTop = y + bp( 44.0f );
+	TheDisplay->drawFillRect( textLeft, trackTop, track, bp( 3.0f ), GameMakeColor( 255, 255, 255, 24 ) );
+	const Int filled = track * row->have / looks;
+	if (filled > 0)
+		UIStyle::litLine( textLeft, trackTop, filled, bp( 3.0f ), UIStyle::EDGE );
 }
 
 /** A look's card, drawn over its push button: the model on a near-black ground at a fixed turn,
-	* darkened where the account lacks the look; the three-line edge on the look in focus; a tick or a
-	* padlock in the corner; its name (MUTED when locked, ACTIVE under the mouse) at the foot. */
+	* dimmed where the account lacks the look; the three-line edge on the look in focus, the cyan edge and
+	* white star on a rare one, the white lift under the mouse; a tick or a padlock top right; its name
+	* at the foot, MUTED when locked. */
 static void drawSkinChoice( GameWindow *window, WinInstanceData *instData )
 {
 	const SkinRow *row = NULL;
 	const SkinChoice *choice = NULL;
-	size_t r = 0;
-	for (; r < s_skinRows.size() && !choice; ++r)
+	for (size_t r = 0; r < s_skinRows.size() && !choice; ++r)
 		for (size_t c = 0; c < s_skinRows[r].choices.size(); ++c)
 			if (s_skinRows[r].choices[c].button == window)
 			{
@@ -1003,44 +1137,48 @@ static void drawSkinChoice( GameWindow *window, WinInstanceData *instData )
 	Int x, y, width, height;
 	window->winGetScreenPosition( &x, &y );
 	window->winGetSize( &width, &height );
-	DisplayString *name = buttonWords( window, instData );
-	Int nameWidth, nameHeight;
-	name->getSize( &nameWidth, &nameHeight );
-	const Int picture = height - nameHeight - 2 * down( 8.0f );
+	const IRegion2D box = region( x, y, width, height );
+	const Int picture = height - bp( 40.0f );
 
-	TheDisplay->drawFillRect( x, y, width, height, UIStyle::PANEL );
+	TheDisplay->drawFillRect( x, y, width, height, GameMakeColor( 0, 0, 0, 150 ) );
 	if (picture > 2)
-		TheDisplay->drawFillRect( x + 1, y + 1, width - 2, picture - 1, SKIN_CARD_GROUND );
-	if (picture > down( 24.0f ) && row->known < SKIN_UNKNOWN)
+		TheDisplay->drawFillRect( x + 2, y + 2, width - 4, picture - 2, SKIN_CARD_GROUND );
+	if (picture > bp( 24.0f ) && row->known < SKIN_UNKNOWN)
 		TheDisplay->drawModelPreview( AsciiString( SKIN_UNITS[ row->known ].templateName ), choice->id, SKIN_HOUSE,
-			x + 2, y + 2, width - 4, picture - 3, SKIN_CARD_TURN, !choice->owned, TRUE, SKIN_UNITS[ row->known ].state );
-	// a rare look in gold, the focus's blue edge inside it
+			x + 2, y + 2, width - 4, picture - 2, SKIN_CARD_TURN, !choice->owned, TRUE, SKIN_UNITS[ row->known ].state );
 	const Bool rare = TankSkin_isRare( choice->id );
-	if (rare)
-		rareEdge( x, y, width, height );
 	if (choice->id == s_skinFocus)
-		UIStyle::edge( x + ( rare ? 3 : 0 ), y + ( rare ? 3 : 0 ), width - ( rare ? 6 : 0 ), height - ( rare ? 6 : 0 ) );
-	else if (!rare)
-		TheDisplay->drawOpenRect( x, y, width, height, 1.0f, UIStyle::FRAME );
+		UIStyle::edge( x, y, width, height );
+	else if (rare)
+		UIStyle::litEdge( box, UIStyle::EDGE_LIT );
+	else if (hovered( window, instData ))
+	{
+		TheDisplay->drawFillRect( x, y, width, height, GameMakeColor( 255, 255, 255, 14 ) );
+		UIStyle::litEdge( box, UIStyle::EDGE );
+	}
+	else
+		TheDisplay->drawOpenRect( x, y, width, height, 1.0f, UIStyle::withAlpha( UIStyle::FRAME, 230 ) );
 
-	// the state in the corner: a tick on the look the unit wears (or is picked to), a padlock on one
-	// the account lacks; a rare look's star in the other
-	const Int mark = across( 18.0f );
-	const Int markX = x + width - across( 8.0f ) - mark;
-	const Int markY = y + down( 8.0f );
+	const Int mark = bp( 20.0f );
+	const Int markX = x + width - bp( 30.0f );
+	const Int markY = y + bp( 10.0f );
+	if (rare)
+		drawRareStar( x + bp( 10.0f ), markY, mark, UIStyle::INK );
 	if (choice->id == row->pick)
 		drawTick( markX, markY, mark, row->pick == row->worn ? UIStyle::ACTIVE : UIStyle::EDGE_LIT );
+	else if (choice->id == row->worn)
+		drawTick( markX, markY, mark, UIStyle::MUTED );
 	else if (!choice->owned)
 		drawPadlock( markX, markY, mark );
-	if (rare)
-		drawRareStar( x + across( 8.0f ), markY, mark, choice->owned ? UIStyle::GOLD : SKIN_RARE_LOCKED );
 
-	const Color ink = rare ? ( choice->owned ? UIStyle::GOLD : SKIN_RARE_LOCKED )
-		: !choice->owned ? UIStyle::MUTED : hovered( window, instData ) ? UIStyle::ACTIVE : UIStyle::INK;
-	name->draw( x + across( 10.0f ), y + picture + down( 8.0f ), ink, UIStyle::SHADOW );
+	DisplayString *name = buttonWords( instData, body() );
+	Int nameWidth, nameHeight;
+	name->getSize( &nameWidth, &nameHeight );
+	name->draw( x + bp( 12.0f ), y + picture + ( height - bp( 4.0f ) - picture - nameHeight ) / 2, choice->owned ? UIStyle::INK : UIStyle::MUTED,
+		UIStyle::SHADOW );
 }
 
-/// a filter's box: the three-line edge on the one in force, its label ACTIVE then or under the mouse
+/// a filter, a tab: the one in force open and green
 static void drawSkinFilter( GameWindow *window, WinInstanceData *instData )
 {
 	Int filter = 0;
@@ -1049,17 +1187,8 @@ static void drawSkinFilter( GameWindow *window, WinInstanceData *instData )
 	Int x, y, width, height;
 	window->winGetScreenPosition( &x, &y );
 	window->winGetSize( &width, &height );
-	TheDisplay->drawFillRect( x, y, width, height, UIStyle::PANEL );
-	const Bool on = filter == s_skinFilter;
-	if (on)
-		UIStyle::edge( x, y, width, height );
-	else
-		TheDisplay->drawOpenRect( x, y, width, height, 1.0f, UIStyle::FRAME );
-	DisplayString *label = buttonWords( window, instData );
-	Int wordsWidth, wordsHeight;
-	label->getSize( &wordsWidth, &wordsHeight );
-	label->draw( x + ( width - wordsWidth ) / 2, y + ( height - wordsHeight ) / 2,
-		on || hovered( window, instData ) ? UIStyle::ACTIVE : UIStyle::INK, UIStyle::SHADOW );
+	UIStyle::menuTab( region( x, y, width, height ), instData->getTextDisplayString(), filter == s_skinFilter,
+		filter != s_skinFilter && hovered( window, instData ) );
 }
 
 /* Each row's pick and what it wears, from what the account wears. */
@@ -1116,6 +1245,7 @@ static void createSkinsGadgets( void )
 				if (unit.compareNoCase( SKIN_UNITS[u].unit ) == 0)
 					row.known = u;
 			row.count = NULL;
+			row.have = 1;
 			SkinChoice none = { NULL, 0, TRUE };
 			row.choices.push_back( none );
 			s_skinRows.push_back( row );
@@ -1126,16 +1256,15 @@ static void createSkinsGadgets( void )
 
 	// the list's rows and the cards, push buttons drawn as rows and cards; the cards are placed and
 	// shown by layoutSkins, the shown unit's that pass the filter
-	const SkinsFrame f = skinsFrame();
-	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	GameFont *strong = UIStyle::readableFont( UIStyle::TEXT_BODY, TRUE );
-	const Int cardRoom = cardWidth( f ) - 2 * across( 10.0f );
 	for (size_t r = 0; r < s_skinRows.size(); ++r)
 	{
 		SkinRow &row = s_skinRows[r];
-		Int x, y, width, height;
-		unitPlace( r, f, x, y, width, height );
-		row.tile = WOLMakeButtonLike( parentWindow, buttonBack, x, y, width, height, "GUI:OnlineSkinsDefault" );
+		Real x, y, width, height, headTop;
+		unitPlace( r, x, y, width, height, headTop );
+		char name[ 80 ];
+		sprintf( name, "WOLLadderScreen.wnd:SkinUnit%s", row.unit.str() );
+		row.tile = makeButton( parentWindow, NULL, bx( x ), by( y ), bx( x + width ) - bx( x ), by( y + height ) - by( y ),
+			"GUI:OnlineSkinsDefault", name );
 		if (row.tile)
 		{
 			// the name between the cameo and the widest count the row can show
@@ -1143,10 +1272,8 @@ static void createSkinsGadgets( void )
 			UnicodeString widest = number( looks );
 			widest.concat( u" / " );
 			widest.concat( number( looks ) );
-			const Int room = width - across( 6.0f ) - ( height - down( 12.0f ) ) * 5 / 4 - across( 14.0f )
-				- measure( widest, body ) - across( 22.0f );
-			row.tile->winSetFont( body );
-			GadgetButtonSetText( row.tile, UIStyle::fitName( row.name, body, room ) );		// a name: an ellipsis, never a cut word
+			const Int room = bx( x + width - 10.0f ) - bx( x + 12.0f + 70.0f + 14.0f ) - measure( widest, body() ) - bp( 12.0f );
+			GadgetButtonSetText( row.tile, UIStyle::fitName( row.name, body(), room ) );		// a name: an ellipsis, never a cut word
 			row.tile->winSetDrawFunc( drawSkinUnit );
 		}
 
@@ -1155,12 +1282,11 @@ static void createSkinsGadgets( void )
 			AsciiString unit, unitLabel, label = "GUI:OnlineSkinsDefault";
 			if (row.choices[c].id)
 				TankSkin_describe( row.choices[c].id, unit, unitLabel, label );
-			GameWindow *button = WOLMakeButtonLike( parentWindow, buttonBack, f.midX, f.top, cardWidth( f ), down( 100.0f ),
-				label.isEmpty() ? "GUI:OnlineSkinsDefault" : label.str() );
+			sprintf( name, "WOLLadderScreen.wnd:SkinLook%s%d", row.unit.str(), row.choices[c].id );
+			GameWindow *button = makeButton( parentWindow, NULL, bx( MID_LEFT ), by( CARDS_TOP ), bp( 200.0f ), bp( 100.0f ),
+				label.isEmpty() ? "GUI:OnlineSkinsDefault" : label.str(), name );
 			if (button)
 			{
-				button->winSetFont( strong );
-				GadgetButtonSetText( button, UIStyle::fitText( button->winGetText(), strong, cardRoom ) );
 				button->winSetDrawFunc( drawSkinChoice );
 				button->winHide( TRUE );
 			}
@@ -1168,30 +1294,34 @@ static void createSkinsGadgets( void )
 		}
 	}
 
-	// the filter at the title line's right end: All, Owned, Locked
-	const Int inset = across( 20.0f );
-	const Int filterGap = across( 8.0f );
-	// 260 kept at the left for the unit's name and its count
-	const Int filterWidth = min( across( 130.0f ), ( f.midWidth - 2 * inset - across( 260.0f ) - 2 * filterGap ) / FILTER_COUNT );
+	// the filter at the title line's right end: All, Owned, Locked, tabs sized to their words
 	static const char *const FILTER_KEY[ FILTER_COUNT ] = { "GUI:OnlineSkinsAll", "GUI:OnlineSkinsOwned", "GUI:OnlineSkinsFilterLocked" };
-	for (Int i = 0; i < FILTER_COUNT; ++i)
+	static const char *const FILTER_NAME[ FILTER_COUNT ] = { "WOLLadderScreen.wnd:SkinFilterAll", "WOLLadderScreen.wnd:SkinFilterOwned",
+		"WOLLadderScreen.wnd:SkinFilterLocked" };
+	GameFont *tabFont = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL + 2, TRUE );
+	Int right = bx( MID_RIGHT - 20.0f );
+	for (Int i = FILTER_COUNT - 1; i >= 0; --i)
 	{
-		const Int x = f.midX + f.midWidth - inset - ( FILTER_COUNT - i ) * filterWidth - ( FILTER_COUNT - 1 - i ) * filterGap;
-		buttonFilter[i] = WOLMakeButtonLike( parentWindow, buttonBack, x, f.top + down( 15.0f ), filterWidth, down( 34.0f ), FILTER_KEY[i] );
+		const UnicodeString label = UIStyle::capitals( TheGameText->fetch( FILTER_KEY[i] ) );
+		const Int width = measure( label, tabFont ) + bp( 32.0f );
+		buttonFilter[i] = makeButton( parentWindow, NULL, right - width, by( BOX_TOP + 12.0f ), width, by( BOX_TOP + 44.0f ) - by( BOX_TOP + 12.0f ),
+			FILTER_KEY[i], FILTER_NAME[i] );
 		if (buttonFilter[i])
 		{
-			buttonFilter[i]->winSetFont( body );
-			GadgetButtonSetText( buttonFilter[i], UIStyle::fitText( buttonFilter[i]->winGetText(), body, filterWidth - 2 * filterGap ) );
+			GadgetButtonSetText( buttonFilter[i], label );
 			buttonFilter[i]->winSetDrawFunc( drawSkinFilter );
 		}
+		right -= width + bp( 8.0f );
 	}
 
-	// the platform's one button at its foot, its label set by layoutSkins
-	const Int pad = across( 24.0f );
-	const Int actionHeight = down( 56.0f );
-	buttonAction = WOLMakeButtonLike( parentWindow, buttonBack, f.rightX + pad, f.bottom - down( 24.0f ) - actionHeight,
-		f.rightWidth - 2 * pad, actionHeight, "GUI:OnlineSkinsWear" );
-	buttonSave = rowButton( 1308.0f, UIStyle::ROOM_WIDE_BUTTON_WIDTH, "GUI:OnlineSkinsSave" );
+	// the master's keys: Save where Next stands, the platform's one key; the ladder's go
+	buttonAction = findChild( "ButtonAction" );
+	buttonSave = findChild( "ButtonSave" );
+	showKey( findChild( "ButtonPrev" ), FALSE );
+	showKey( findChild( "ButtonNext" ), FALSE );
+	showKey( findChild( "ButtonJump" ), FALSE );
+	showKey( buttonSave, TRUE );
+	showKey( buttonAction, TRUE );
 
 	s_skinsState = -1;
 	s_skinsDirty = TRUE;
@@ -1227,58 +1357,56 @@ static void destroySkinsGadgets( void )
 	}
 	const Bool hadRows = !s_skinRows.empty();
 	s_skinRows.clear();
-	GameWindow *made[] = { buttonSave, buttonAction, buttonFilter[0], buttonFilter[1], buttonFilter[2] };
-	for (size_t i = 0; i < ARRAY_SIZE( made ); ++i)
-		if (made[i])
-			TheWindowManager->winDestroy( made[i] );
-	buttonSave = buttonAction = NULL;
 	for (Int i = 0; i < FILTER_COUNT; ++i)
+	{
+		if (buttonFilter[i])
+			TheWindowManager->winDestroy( buttonFilter[i] );
 		buttonFilter[i] = NULL;
+	}
+	buttonSave = buttonAction = NULL;		// the master's
 	s_hero.lo.x = s_hero.hi.x = s_hero.lo.y = s_hero.hi.y = 0;
 	if (hadRows && TheDisplay)
 		TheDisplay->freeModelPreviews();		// nothing of the models stays for a match that follows
+}
+
+static Bool passesFilter( const SkinChoice &choice )
+{
+	return s_skinFilter == FILTER_ALL || choice.owned == ( s_skinFilter == FILTER_OWNED );
 }
 
 static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const AsciiString &error )
 {
 	clearPieces();
 	s_hero.lo.x = s_hero.hi.x = s_hero.lo.y = s_hero.hi.y = 0;
-	const SkinsFrame f = skinsFrame();
-	const Int height = f.bottom - f.top;
-	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	GameFont *title = UIStyle::titleFont( 16 );
 
-	addBox( f.listX, f.top, f.listWidth, height );
-	addBox( f.midX, f.top, f.midWidth, height );
-	addBox( f.rightX, f.top, f.rightWidth, height );
+	addBox( LIST_LEFT, BOX_TOP, LIST_RIGHT, BOX_BOTTOM );
+	addBox( MID_LEFT, BOX_TOP, MID_RIGHT, BOX_BOTTOM );
+	addBox( PLATFORM_LEFT, BOX_TOP, PLATFORM_RIGHT, BOX_BOTTOM );
 
-	// every look's state, every unit's count; a side's heading over its first unit
-	Int side = -1;
+	// every look's state, every unit's count; a side's head over its first unit
 	for (size_t r = 0; r < s_skinRows.size(); ++r)
 	{
 		SkinRow &row = s_skinRows[r];
-		Int have = 0;
+		row.have = 0;
 		for (size_t c = 0; c < row.choices.size(); ++c)
 		{
 			SkinChoice &choice = row.choices[c];
 			choice.owned = choice.id == 0 || (owned & ((SkinLoadout)1 << choice.id)) != 0;
-			have += choice.owned ? 1 : 0;
+			row.have += choice.owned ? 1 : 0;
 		}
-		UnicodeString count = number( have );
+		UnicodeString count = number( row.have );
 		count.concat( u" / " );
 		count.concat( number( (Int)row.choices.size() ) );
 		freeWords( row.count );
-		row.count = newWords( count, body );
+		row.count = newWords( count, body() );
 
-		const Int its = rowSide( r );
-		if (its != side && its >= 0)
+		Real x, y, width, height, headTop;
+		unitPlace( r, x, y, width, height, headTop );
+		if (headTop >= 0.0f)
 		{
-			Int x, y, width, rowHeight;
-			unitPlace( r, f, x, y, width, rowHeight );
-			addWords( UIStyle::fitText( TheGameText->fetch( SKIN_SIDE_KEY[ its ] ), UIStyle::sectionFont(), width ),
-				UIStyle::sectionFont(), x + across( 4.0f ), y - down( 40.0f ), UIStyle::ACTIVE, ALIGN_LEFT, down( 40.0f ) );
+			const UnicodeString side = UIStyle::capitals( TheGameText->fetch( SKIN_SIDE_KEY[ rowSide( r ) ] ) );
+			addCaps( side, bx( LIST_LEFT + 16.0f ), by( headTop + 6.0f ), bp( 18.0f ), UIStyle::ACTIVE );
 		}
-		side = its;
 	}
 
 	SkinRow *row = s_skinUnit < s_skinRows.size() ? &s_skinRows[ s_skinUnit ] : NULL;
@@ -1286,39 +1414,30 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 	if (focus)
 		s_skinFocus = focus->id;
 
-	// the middle: the unit's name and its owned count left of the filter, the bar, the cards
-	const Int inset = across( 20.0f );
-	const Int inner = f.midWidth - 2 * inset;
-	const Int midLeft = f.midX + inset;
+	// the middle: the unit's name at 28 and its owned count left of the filter, the owned bar, the cards
+	const Real midLeft = MID_LEFT + 20.0f, midRight = MID_RIGHT - 20.0f;
 	if (row)
 	{
-		Int have = 0;
-		for (size_t c = 0; c < row->choices.size(); ++c)
-			have += row->choices[c].owned ? 1 : 0;
 		const Int looks = (Int)row->choices.size();
-		UnicodeString count = number( have );
+		UnicodeString count = number( row->have );
 		count.concat( u" / " );
 		count.concat( number( looks ) );
-		Int filterLeft = f.midX + f.midWidth - inset, filterTop;
+		Int filterLeft = bx( midRight ), filterTop = 0;
 		if (buttonFilter[0])
 			buttonFilter[0]->winGetScreenPosition( &filterLeft, &filterTop );
-		const Int room = filterLeft - across( 16.0f ) - midLeft - measure( count, body ) - across( 14.0f );
-		const Int titleWidth = addWords( UIStyle::fitName( row->name, title, room ), title, midLeft, f.top + down( 10.0f ), UIStyle::INK, ALIGN_LEFT, down( 44.0f ) );
-		addWords( count, body, midLeft + titleWidth + across( 14.0f ), f.top + down( 10.0f ), UIStyle::MUTED, ALIGN_LEFT, down( 44.0f ) );
-
-		// the bar: a segment a look, the owned ones lit
-		const Int segmentGap = across( 4.0f );
-		const Int segment = ( inner - ( looks - 1 ) * segmentGap ) / max( 1, looks );
-		for (Int i = 0; i < looks; ++i)
-			addPiece( PIECE_FILL, midLeft + i * ( segment + segmentGap ), f.top + down( 64.0f ), segment, max( 2, down( 10.0f ) ),
-				i < have ? UIStyle::EDGE : UIStyle::GRID );
+		GameFont *title = UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE + 4 );
+		const Int room = filterLeft - bp( 16.0f ) - bx( midLeft ) - measure( count, body() ) - bp( 14.0f );
+		const Int titleWidth = addWords( UIStyle::fitName( row->name, title, room ), title, bx( midLeft ), by( BOX_TOP + 8.0f ), UIStyle::INK,
+			ALIGN_LEFT, bp( 36.0f ) );
+		addWords( count, body(), bx( midLeft ) + titleWidth + bp( 14.0f ), by( BOX_TOP + 8.0f ), UIStyle::MUTED, ALIGN_LEFT, bp( 36.0f ) );
+		addTrack( bx( midLeft ), by( BOX_TOP + 58.0f ), bx( midRight ) - bx( midLeft ), bp( 6.0f ), (Real)row->have / max( 1, looks ) );
 	}
 
 	// the cards: the shown unit's looks the filter lets through, Default first, the rest hidden
 	Int shown = 0;
 	if (row)
 		for (size_t c = 0; c < row->choices.size(); ++c)
-			if (s_skinFilter == FILTER_ALL || row->choices[c].owned == ( s_skinFilter == FILTER_OWNED ))
+			if (passesFilter( row->choices[c] ))
 				++shown;
 	for (size_t r = 0; r < s_skinRows.size(); ++r)
 	{
@@ -1328,45 +1447,38 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 			SkinChoice &choice = s_skinRows[r].choices[c];
 			if (!choice.button)
 				continue;
-			const Bool passes = s_skinFilter == FILTER_ALL || choice.owned == ( s_skinFilter == FILTER_OWNED );
-			if (r != s_skinUnit || !passes)
+			if (r != s_skinUnit || !passesFilter( choice ))
 			{
 				choice.button->winHide( TRUE );
 				continue;
 			}
-			Int x, y, width, cardHeight;
-			cardPlace( slot++, shown, f, x, y, width, cardHeight );
-			choice.button->winSetPosition( x, y );
-			choice.button->winSetSize( width, cardHeight );
+			Real x, y, width, height;
+			OnlineSkinsCardPlace( slot++, shown, midRight - midLeft, CARDS_BOTTOM - CARDS_TOP, x, y, width, height );
+			const Int left = bx( midLeft + x ), top = by( CARDS_TOP + y );
+			choice.button->winSetPosition( left, top );
+			choice.button->winSetSize( bx( midLeft + x + width ) - left, by( CARDS_TOP + y + height ) - top );
 			choice.button->winHide( FALSE );
 		}
 	}
 
-	// the platform: the button at its foot, the look's name over it, the model in all the rest
-	const Int pad = across( 24.0f );
-	const Int rightLeft = f.rightX + pad;
-	const Int rightInner = f.rightWidth - 2 * pad;
+	// the platform: the model in all the room the name and the key leave, the look's name at 40, the key
+	const Int pending = unsavedCount();
+	const Bool saveLive = state != ONLINE_SKINS_WAITING && owned != 0 && pending > 0;
 	if (row && focus)
 	{
 		AsciiString unit, unitLabel, label;
 		if (focus->id)
 			TankSkin_describe( focus->id, unit, unitLabel, label );
 		const UnicodeString name = TheGameText->fetch( label.isEmpty() ? "GUI:OnlineSkinsDefault" : label.str() );
-		const Int buttonTop = f.bottom - down( 24.0f ) - down( 56.0f );
-		const Int nameBand = down( 48.0f );
-		const Int nameTop = buttonTop - down( 8.0f ) - nameBand;
-		const Color nameInk = TankSkin_isRare( focus->id ) ? ( focus->owned ? UIStyle::GOLD : SKIN_RARE_LOCKED )
-			: focus->owned ? UIStyle::INK : UIStyle::MUTED;
-		addWords( UIStyle::fitText( name, title, rightInner ), title, rightLeft, nameTop, nameInk, ALIGN_LEFT, nameBand );
-		s_hero.lo.x = f.rightX + across( 8.0f );
-		s_hero.lo.y = f.top + down( 8.0f );
-		s_hero.hi.x = f.rightX + f.rightWidth - across( 8.0f );
-		s_hero.hi.y = nameTop;
+		GameFont *big = UIStyle::menuFont( UIStyle::MENU_TEXT_TITLE );
+		addWords( UIStyle::fitText( name, big, bx( PLATFORM_RIGHT - 24.0f ) - bx( PLATFORM_LEFT + 24.0f ) ), big, bx( PLATFORM_LEFT + 24.0f ),
+			by( 784.0f ), focus->owned ? UIStyle::INK : UIStyle::MUTED, ALIGN_LEFT, bp( 52.0f ) );
+		s_hero = UIStyle::boardRect( (Int)PLATFORM_LEFT + 8, (Int)BOX_TOP + 8, (Int)PLATFORM_RIGHT - 8, 774 );
 		s_heroOwned = focus->owned;
 
 		if (buttonAction)
 		{
-			// a look the account lacks: what earns it, as the button's label; the button opens the site
+			// a look the account lacks: what earns it, as the key's label; the key opens the site
 			const AsciiString earned = TankSkin_earnedBy( focus->id );
 			const char *action;
 			Bool live;
@@ -1385,18 +1497,18 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 				action = "GUI:OnlineSkinsWear";
 				live = state != ONLINE_SKINS_WAITING;		// an ask's answer resets the picks to what the site holds
 			}
-			Int width, buttonHeight;
-			buttonAction->winGetSize( &width, &buttonHeight );
-			GadgetButtonSetText( buttonAction, UIStyle::fitKey( action, buttonAction->winGetFont(), width - 2 * across( 12.0f ) ) );
+			Int width, keyHeight;
+			buttonAction->winGetSize( &width, &keyHeight );
+			GadgetButtonSetText( buttonAction, UIStyle::fitKey( action, UIStyle::menuFont( UIStyle::MENU_TEXT_KEY, TRUE ), width - bp( 24.0f ) ) );
 			buttonAction->winEnable( live );
-			buttonAction->winHide( FALSE );
+			// the lit key whenever Save has nothing to do
+			showKey( buttonAction, TRUE, live && !saveLive );
 		}
 	}
 	else if (buttonAction)
 		buttonAction->winHide( TRUE );
 
-	// between Back and Save: the unsaved picks counted, else how the last ask went
-	const Int pending = unsavedCount();
+	// between Back and Save, ending 24 before Save: the unsaved picks counted, else how the last ask went
 	UnicodeString line;
 	Color lineColor = UIStyle::INK;
 	if (pending == 1)
@@ -1422,18 +1534,18 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 			line = TheGameText->fetch( key );
 		lineColor = state == ONLINE_SKINS_READY && s_skinsSaved ? UIStyle::ACTIVE : state == ONLINE_SKINS_WAITING ? UIStyle::MUTED : UIStyle::INK;
 	}
-	if (!line.isEmpty() && buttonBack)
+	if (!line.isEmpty())
 	{
-		Int backX, backY, backWidth, backHeight;
-		buttonBack->winGetScreenPosition( &backX, &backY );
-		buttonBack->winGetSize( &backWidth, &backHeight );
-		const Int right = UIStyle::boardX( 1308.0f ) - UIStyle::px( 20.0f );
-		const Int room = right - ( backX + backWidth + UIStyle::px( UIStyle::ROOM_BUTTON_GAP ) );
-		if (room > 0)
-			addWords( UIStyle::fitText( line, body, room ), body, right, backY, lineColor, ALIGN_RIGHT, backHeight );
+		const Int right = bx( (Real)( UIStyle::ONLINE_RIGHT - UIStyle::MENU_KEY_WIDTH - 24 ) );
+		const Int left = bx( (Real)( UIStyle::ONLINE_LEFT + UIStyle::MENU_KEY_WIDTH + 24 ) );
+		addWords( UIStyle::fitText( line, body(), right - left ), body(), right, by( (Real)UIStyle::MENU_KEYS_TOP ), lineColor, ALIGN_RIGHT,
+			by( (Real)UIStyle::MENU_KEYS_BOTTOM ) - by( (Real)UIStyle::MENU_KEYS_TOP ) );
 	}
 	if (buttonSave)
-		buttonSave->winEnable( state != ONLINE_SKINS_WAITING && owned != 0 && pending > 0 );
+	{
+		buttonSave->winEnable( saveLive );
+		UIStyle::setMenuKey( buttonSave, saveLive );
+	}
 }
 
 static void drawSkins( void )
@@ -1457,7 +1569,7 @@ static void drawSkins( void )
 }
 
 /* A unit's row clicked: its looks show, the one it wears in focus.  A card clicked: that look in
-	 focus.  A filter: the cards it lets through.  The platform's button: Wear the look in focus, or
+	 focus.  A filter: the cards it lets through.  The platform's key: Wear the look in focus, or
 	 for a look the account lacks the site's account page.  FALSE when the control is none of them. */
 static Bool pickSkin( GameWindow *control )
 {
@@ -1554,10 +1666,10 @@ void WOLLadderScreenInit( WindowLayout *layout, void *userData )
 		UIStyle::onlinePageInit( parentWindow, "WOLLadderScreen.wnd", s_skinsPage ? UIStyle::ONLINE_TAB_SKINS : UIStyle::ONLINE_TAB_LADDER );
 		if (windowLadder)
 			windowLadder->winSetDrawFunc( drawPanel );
+		showKey( buttonBack, TRUE );
 		if (s_skinsPage)
 		{
-			GameWindow *title = TheWindowManager->winGetWindowFromId( parentWindow,
-				TheNameKeyGenerator->nameToKey( AsciiString( "WOLLadderScreen.wnd:StaticTextTitle" ) ) );
+			GameWindow *title = findChild( "StaticTextTitle" );
 			if (title)
 				GadgetStaticTextSetText( title, TheGameText->fetch( "GUI:OnlineSkinsButton" ) );
 			createSkinsGadgets();
@@ -1569,9 +1681,15 @@ void WOLLadderScreenInit( WindowLayout *layout, void *userData )
 			requestLadderPage( 0 );
 		}
 	}
-	else if (TheWebBrowser != NULL)
+	else
 	{
-		TheWebBrowser->createBrowserWindow("MessageBoard", windowLadder);
+		// EA's ladder was a web page; the keys the online pages use stay hidden
+		static const char *const ONLINE_ONLY[] = { "ButtonPrev", "ButtonNext", "ButtonJump", "ButtonSave", "ButtonAction" };
+		for (Int i = 0; i < (Int)ARRAY_SIZE( ONLINE_ONLY ); ++i)
+			if (GameWindow *key = findChild( ONLINE_ONLY[i] ))
+				key->winHide( TRUE );
+		if (TheWebBrowser != NULL)
+			TheWebBrowser->createBrowserWindow("MessageBoard", windowLadder);
 	}
 
 	// show menu
@@ -1588,6 +1706,8 @@ void WOLLadderScreenInit( WindowLayout *layout, void *userData )
 void WOLLadderScreenShutdown( WindowLayout *layout, void *userData )
 {
 
+	if (OnlineIsEnabled() && GameSpyIsOverlayOpen( GSOVERLAY_PLAYERINFO ))
+		GameSpyCloseOverlay( GSOVERLAY_PLAYERINFO );		// a card a row opened goes with the ladder
 	destroyLadderGadgets();
 	destroySkinsGadgets();
 	clearPieces();
@@ -1621,6 +1741,9 @@ void WOLLadderScreenUpdate( WindowLayout *layout, void *userData )
 			drawSkins();
 		else
 			drawLadder();
+		// the FRIENDS key and an invite's toast, as the pages that read the buddy queue have them
+		if (TheShell->isAnimFinished())
+			FriendsCornerUpdate();
 	}
 }  // end ReplayMenuUpdate
 
@@ -1728,23 +1851,23 @@ WindowMsgHandledType WOLLadderScreenSystem( GameWindow *window, UnsignedInt msg,
 				leaveTo( UIStyle::ONLINE_TAB_HOME );
 
 			}  // end else if
-			else if( control == buttonPrev )
+			else if( control == buttonPrev && buttonPrev )
 			{
 				requestLadderPage( s_ladderOffset - LADDER_PAGE );
 			}
-			else if( control == buttonNext )
+			else if( control == buttonNext && buttonNext )
 			{
 				requestLadderPage( s_ladderOffset + LADDER_PAGE );
 			}
-			else if( control == buttonJump )
+			else if( control == buttonJump && buttonJump )
 			{
 				requestLadderPage( myPage() );
 			}
-			else if( control == buttonSave )
+			else if( control == buttonSave && buttonSave )
 			{
 				saveSkins();
 			}
-			else
+			else if( !openRowCard( control ) )
 			{
 				pickSkin( control );
 			}

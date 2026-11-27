@@ -20865,18 +20865,6 @@ GUI:FactionPickCustom
 "Свой выбор"
 END
 
-GUI:FactionPickLeftOut
-"Случайный выбор никогда не берёт: %s. Отметьте в «Свой выбор», чтобы добавить."
-END
-
-GUI:FactionPickPool
-"Случайный выбор берёт одну из %d армий, отмеченных слева, из %d. Щёлкните по армии, чтобы отметить её или убрать."
-END
-
-GUI:FactionPickRandom
-"Случайный выбор назначит вам одну из этих армий в начале матча."
-END
-
 GUI:FactionPickRandomAll
 "Случайно из всех"
 END
@@ -20885,13 +20873,6 @@ GUI:FactionPickRandomSide
 "Случайно: %s"
 END
 
-GUI:FactionPickSideHint
-"Флажок стороны отмечает или снимает всю сторону; её название оставляет эту сторону в розыгрыше как есть."
-END
-
-GUI:FactionPickSideNameHint
-"Щёлкните по названию стороны, чтобы играть случайной армией этой стороны."
-END
 
 GUI:FactionPickTitle
 "Выбор армии"
@@ -22771,8 +22752,4 @@ END
 
 TOOLTIP:OnlineKeepSignedIn
 "Ваш пароль никогда не сохраняется"
-END
-
-TOOLTIP:OnlineNeedsLauncher
-"Запускайте сетевую игру из лаунчера"
 END

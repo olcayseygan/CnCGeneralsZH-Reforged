@@ -3,19 +3,23 @@
 
 EA drew the three pickers at 800x600 as a see-through strip over the top of the room. On the rooms'
 1920x1080 grid (lobbyroom_layout.py) that strip landed over half the seat table and half the map
-column at once. Here the picker swaps panels with the room instead: the map list takes the seat
-table's rectangle, its preview takes the room's own map preview's rectangle, and Accept and Cancel
-take the row the map's name and Select Map stand on. The room hides those while the picker is open
-(the menus' ShowUnderlyingGUIElements lists), so nothing on the right moves or changes size; the
-match rules page under it stays where it is.
+column at once. Here the picker swaps panels with the room instead, in the menu language of
+experiments/proofs/2026-11-24/screens/pickers/README-pickers.md: three tabs over the seat column,
+the map list under them (the code draws it as a grid of map pictures, MapPickerInit in GUIUtil.cpp,
+and keeps the hidden listbox as the model), the preview on the room's own map preview's rectangle,
+and Cancel and Accept in the room's foot, inside the rectangle Play Game stands on, Accept at its
+right end. The room hides those while the picker is open (the menus' ShowUnderlyingGUIElements
+lists), so nothing on the right moves or changes size; the match rules page under it stays where
+it is. EA's unnamed "Select Map" heading and the panel's border stay in the file, hidden: the tabs
+and Accept name the screen, and frame A is the room's.
 
 The geometry is read from the tracked room layouts, so a room laid out again by lobbyroom_layout.py
-only needs this script run after it. Every control keeps its name and EA's art; only rectangles
-move, plus the panel's colours. The Official / Unofficial radio buttons are drawn as UIStyle tabs by
-the menu code (DrawMapListTab in GUIUtil.cpp). A third tab, Random, is cloned in from them, with
-the panel it opens in the list's place: a map type list and a size row (RandomMapTab in
-GUIUtil.cpp). There is no player row, the map takes its player count from the room, and no New Map
-button, since every Accept rolls a fresh seed.
+only needs this script run after it. Every control keeps its name; only rectangles and the hidden
+flags change. The Official / Unofficial radio buttons are drawn as the menu's tabs by the menu code
+(DrawMapListTab in GUIUtil.cpp). A third tab, Random, is cloned in from them, with the panel it
+opens in the list's place: MAP SIZE over a row of five size boxes, MAP TYPE over the type list
+(drawn as the same grid), RandomMapTab in GUIUtil.cpp. There is no player row, the map takes its
+player count from the room, and no New Map button, since every Accept rolls a fresh seed.
 
     python mapselect_layout.py <retail Menus dir> <Menus dir out>
 
@@ -25,8 +29,9 @@ ships them. Running it on its own output changes nothing.
     python mapselect_layout.py selfcheck
 
 checks the tracked pickers: every window the menu code names is there, the script reproduces the
-file byte for byte, everything is authored at 1920x1080, the list stays inside the seat table, and
-the preview and the two buttons sit exactly where the room's own preview and Select Map do.
+file byte for byte, everything is authored at 1920x1080, the list stays inside the seat table, the
+preview sits exactly where the room's own preview does, and Cancel and Accept stand inside the
+room's Play Game rectangle, Cancel at its left end and Accept at its right.
 Run by CTest as mapselect_selfcheck. Layouts are not in the multiplayer INI checksum.
 """
 
@@ -57,11 +62,16 @@ NAMED = ["ButtonOK", "ButtonBack", "ListboxMap", "RadioButtonSystemMaps", "Radio
          "WinMapPreview", "WinGadgetBorder", RANDOM_TAB] + RANDOM_PANEL + [
          "ButtonMapStartPosition%d" % seat for seat in range(room.SEAT_COUNT)]
 
-PADDING = 12
-TITLE_HEIGHT = 32
-TAB_HEIGHT = 36
+TAB_HEIGHT = 40          # the tabs, 126 to 166
+CONTENT_TOP = 182        # the grid, or the Random tab's MAP SIZE head
+HEAD_HEIGHT = 22         # MAP SIZE, MAP TYPE
+SIZE_TOP = 210           # the five size boxes, 44 high
+SIZE_HEIGHT = 44
+TYPE_HEAD_TOP = 274
+TYPE_TOP = 302           # the map type grid
+CANCEL_WIDTH = 200
+KEY_GAP = 16             # Cancel to Accept, UIStyle::MENU_KEY_GAP
 MAP_ROWS = 4096
-LABEL_HEIGHT = 32
 
 
 def box(window):
@@ -71,10 +81,18 @@ def box(window):
 
 
 def room_geometry(room_layout):
-    """The seat table, the map preview and the Select Map button, as the room lays them out."""
+    """The seat table, the map preview and the Play Game button, as the room lays them out."""
     # the seat column as frame A's room has it (the code lays the rows out, so no row window marks its foot)
     table = (room.INNER_LEFT, room.HEADER_TOP, room.SEAT_RIGHT - room.INNER_LEFT, room.SEATS_BOTTOM - room.HEADER_TOP)
-    return table, box(room.need(room_layout, "MapWindow")), box(room.need(room_layout, "ButtonSelectMap"))
+    return table, box(room.need(room_layout, "MapWindow")), box(room.need(room_layout, "ButtonStart"))
+
+
+def foot_keys(play):
+    """Cancel at the left end of Play Game's rectangle, Accept the rest of it, KEY_GAP apart."""
+    left, top, width, height = play
+    cancel = (left, top, CANCEL_WIDTH, height)
+    accept = (left + CANCEL_WIDTH + KEY_GAP, top, width - CANCEL_WIDTH - KEY_GAP, height)
+    return cancel, accept
 
 
 def title_of(layout):
@@ -86,11 +104,11 @@ def title_of(layout):
 
 
 def place_row(windows, left, top, width, height):
-    """Side by side across the width, GAP apart, the last flush with the right edge."""
+    """Side by side across the width, GAP apart, the last taking what the division left."""
     each = (width - room.GAP * (len(windows) - 1)) // len(windows)
     for at, window in enumerate(windows):
-        x = left + width - each if at == len(windows) - 1 else left + at * (each + room.GAP)
-        window.place(x, top, each, height)
+        x = left + at * (each + room.GAP)
+        window.place(x, top, left + width - x if at == len(windows) - 1 else each, height)
 
 
 def add_random_tab(layout):
@@ -102,8 +120,7 @@ def add_random_tab(layout):
     named = lambda name: "%s:%s" % (menu, name)
 
     def hidden(window):
-        status = window.prop("STATUS").split("=", 1)[1].strip().rstrip(";")
-        window.set_prop("STATUS", status + "+HIDDEN")
+        room.hide(window)
         return window
 
     def label(name, text):
@@ -128,27 +145,22 @@ def add_random_tab(layout):
 
 
 def place_random_panel(layout, area):
-    """The map type list down the left half of the list's rectangle; the size row at the top of the
-    right half."""
+    """MAP SIZE over the five size boxes across the seat column, MAP TYPE over the type list under
+    them, down to the list's foot. The code draws the heads in its capitals and the list as tiles."""
     left, top, width, height = area
-    column = (width - 2 * room.GAP) // 2
-    right = left + width - column
     find = lambda name: room.need(layout, name)
 
-    find("StaticTextRandomTemplate").place(left - room.TEXT_NUDGE, top, column, LABEL_HEIGHT)
-    list_top = top + LABEL_HEIGHT + room.GAP
-    find("ListboxRandomTemplate").place(left, list_top, column, top + height - list_top)
-
-    find("StaticTextRandomSize").place(right - room.TEXT_NUDGE, top, column, LABEL_HEIGHT)
+    find("StaticTextRandomSize").place(left, CONTENT_TOP, width, HEAD_HEIGHT)
     place_row([find("RadioButtonRandomSize%d" % size) for size in range(len(RANDOM_SIZES))],
-              right, list_top, column, TAB_HEIGHT)
+              left, SIZE_TOP, width, SIZE_HEIGHT)
+    find("StaticTextRandomTemplate").place(left, TYPE_HEAD_TOP, width, HEAD_HEIGHT)
+    find("ListboxRandomTemplate").place(left, TYPE_TOP, width, top + height - TYPE_TOP)
 
 
 def build(layout, room_layout):
-    table, preview, select = room_geometry(room_layout)
+    table, preview, play = room_geometry(room_layout)
     left, top, width, height = table
-    select_left, select_top, select_width, select_height = select
-    cancel_left = room.COLUMN_LEFT
+    cancel, accept = foot_keys(play)
 
     # every window is placed below; this only moves them onto the 1920x1080 grid first
     sx, sy = room.WIDE[0] / room.OLD[0], room.WIDE[1] / room.OLD[1]
@@ -157,26 +169,23 @@ def build(layout, room_layout):
         if (cw, ch) == room.OLD:
             node.rect = (round(l * sx), round(t * sy), round(r * sx), round(b * sy)) + room.WIDE
 
-    # the parent spans the seat table and the map column down to the buttons; it stays see-through
+    # the parent spans the seat table and the map column down to the foot's keys; it stays see-through
     root = layout.root
-    root.place(left, top, room.INNER_RIGHT - left, max(top + height, select_top + select_height) - top)
+    play_left, play_top, play_width, play_height = play
+    root.place(left, top, room.INNER_RIGHT - left, max(top + height, play_top + play_height) - top)
 
+    # frame A and the glass are the room's; the border and EA's heading stay for the code, hidden
     border = room.need(layout, "WinGadgetBorder")
     border.place(*table)
     border.set_prop("ENABLEDDRAWDATA", room.draw_data(room.CARD, room.FRAME_COLOR))
-
-    inner_left, inner_width = left + PADDING, width - 2 * PADDING
+    room.hide(border)
     title = title_of(layout)
-    title.place(inner_left - room.TEXT_NUDGE, top + PADDING, inner_width // 2, TITLE_HEIGHT)
+    title.place(left, top, width // 2, TAB_HEIGHT)
     room.left_align(title)
-    # a heading inside a panel is ACTIVE, as the record's is
-    title.set_prop("TEXTCOLOR", "ENABLED: %d %d %d %d, ENABLEDBORDER: 0 0 0 255, DISABLED: 192 192 192 255, "
-                   "DISABLEDBORDER: 64 64 64 255, HILITE: 128 128 255 255, HILITEBORDER: 0 0 128 255" % room.ACTIVE)
+    room.hide(title)
 
-    tab_top = top + PADDING + TITLE_HEIGHT + room.GAP
-    list_top = tab_top + TAB_HEIGHT + room.GAP
     listbox = room.need(layout, "ListboxMap")
-    listbox.place(inner_left, list_top, inner_width, top + height - PADDING - list_top)
+    listbox.place(left, CONTENT_TOP, width, top + height - CONTENT_TOP)
     # EA's 100 rows (300 in skirmish) with AUTOPURGE 0 dropped every map past them without a word;
     # the list fills 2-player maps first, so a big Maps folder lost every 6 to 8 player map
     at = listbox.prop_index("LISTBOXDATA")
@@ -188,15 +197,15 @@ def build(layout, room_layout):
     for spot in map_window.children:
         spot.place(preview[0], preview[1], room.SPOT, room.SPOT)
 
-    room.need(layout, "ButtonOK").place(*select)
-    room.need(layout, "ButtonBack").place(cancel_left, select_top, select_width, select_height)
-    if cancel_left + select_width + room.GAP > select_left:
-        raise ValueError("Cancel at %d does not fit beside Accept at %d" % (cancel_left, select_left))
+    room.need(layout, "ButtonOK").place(*accept)
+    room.need(layout, "ButtonBack").place(*cancel)
+    if accept[2] < CANCEL_WIDTH:
+        raise ValueError("Accept is %d wide beside Cancel in Play Game's %d" % (accept[2], play_width))
 
     # cloned last, from controls whose art is final by now; the Random panel takes the list's place
     add_random_tab(layout)
     place_row([room.need(layout, name) for name in ("RadioButtonSystemMaps", "RadioButtonUserMaps", RANDOM_TAB)],
-              inner_left, tab_top, inner_width, TAB_HEIGHT)
+              left, top, width, TAB_HEIGHT)
     place_random_panel(layout, box(listbox))
     return layout
 
@@ -240,14 +249,18 @@ def selfcheck():
             problems.append("%s.wnd no longer builds: %s" % (menu, error))
         if missing:
             continue
-        table, preview, select = room_geometry(load_room(menu))
+        table, preview, play = room_geometry(load_room(menu))
         for name in ["ListboxMap", "RadioButtonSystemMaps", "RadioButtonUserMaps", RANDOM_TAB] + RANDOM_PANEL:
             if not inside(box(layout.find(name)), table):
                 problems.append("%s.wnd: %s runs out of the seat table" % (menu, name))
         if box(layout.find("WinMapPreview")) != preview:
             problems.append("%s.wnd: the preview is not where %s.wnd draws its map" % (menu, PICKERS[menu]))
-        if box(layout.find("ButtonOK")) != select:
-            problems.append("%s.wnd: Accept is not where %s.wnd has Select Map" % (menu, PICKERS[menu]))
+        # the room's lit key and the picker's stand on one rectangle, so opening the picker moves no key
+        accept, cancel = box(layout.find("ButtonOK")), box(layout.find("ButtonBack"))
+        if not inside(accept, play) or accept[0] + accept[2] != play[0] + play[2]:
+            problems.append("%s.wnd: Accept does not end where %s.wnd's Play Game does" % (menu, PICKERS[menu]))
+        if not inside(cancel, play) or cancel[0] != play[0] or cancel[0] + cancel[2] + KEY_GAP != accept[0]:
+            problems.append("%s.wnd: Cancel is not at the left of Play Game, %d before Accept" % (menu, KEY_GAP))
         for child in layout.root.children:
             if not inside(box(child), box(layout.root)):
                 problems.append("%s.wnd: %s lies outside the picker" % (menu, room.short(child) or "(unnamed)"))

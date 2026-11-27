@@ -133,15 +133,18 @@ TEST( single_player_lists_hold_whole_rows_and_their_columns )
 TEST( single_player_boxes_stand_where_the_design_draws_them )
 {
 	using namespace SinglePlayerLayout;
-	singlePlayerCheckRect( REPLAY_BOX, 440, 251, 1480, 829 );
-	singlePlayerCheckRect( REPLAY_BOX_ENTRY, 572, 357, 1448, 405 );
+	singlePlayerCheckRect( REPLAY_BOX, 440, 252, 1480, 828 );
+	singlePlayerCheckRect( REPLAY_BOX_ENTRY, 572, 358, 1448, 406 );
 	CHECK( REPLAY_BOX_LIST.hi.y < REPLAY_BOX.hi.y - 84 );
+	// the text box and the list on the 8 px grid, the box keys 16 apart
+	CHECK_EQ( ( REPLAY_BOX_LIST.lo.y - REPLAY_BOX_ENTRY.hi.y ) % 8, 0 );
+	CHECK_EQ( boxKey( REPLAY_BOX, 0, 170 ).lo.x - boxKey( REPLAY_BOX, 1, 170 ).hi.x, 16 );
 	singlePlayerCheckRect( SAVE_BOX, 440, 124, 1480, 680 );
 	// over a match the box ends 44 over the command bar's highest plate
 	CHECK( SAVE_BOX.hi.y <= 832 - 44 );
 	CHECK( SAVE_BOX_LIST.hi.y < SAVE_BOX.hi.y - 84 );
 	singlePlayerCheckRect( boxKey( SAVE_BOX, 0, SAVE_BOX_KEY_WIDTH ), 1258, 612, 1448, 660 );
-	singlePlayerCheckRect( boxKey( SAVE_BOX, 2, SAVE_BOX_KEY_WIDTH ), 854, 612, 1044, 660 );
+	singlePlayerCheckRect( boxKey( SAVE_BOX, 2, SAVE_BOX_KEY_WIDTH ), 846, 612, 1036, 660 );
 	// the screens' keys on the foot row: BACK, then 12 apart, the primary at the right edge
 	CHECK_EQ( REPLAY_COPY.lo.x - REPLAY_BACK.hi.x, KEY_GAP );
 	CHECK_EQ( REPLAY_DELETE.lo.x - REPLAY_COPY.hi.x, KEY_GAP );

@@ -265,6 +265,15 @@ Bool IsApocalypseMap(const AsciiString &map);
 // An Apocalypse room shows its four seats only: every window of the layout's seat rows from this row on
 // hidden.  A room calls it after each slot list repaint, which would show them again
 void HideLobbySeatRowsFrom(GameWindow *parent, const char *layoutFilename, Int firstHiddenRow);
+// The Apocalypse room's figures (MENU-REDESIGN.md package 3b, README-apocalypse-room.md), read from the
+// director's constants and roster so the room never says what the match does not do.  Game seconds from
+// the start to the fall of night `night` (from 1): day and dusk, then a whole cycle a night
+Int ApocalypseNightFallsAt(Int night);
+/// game seconds as the clock on the wall reads them at that game speed percent (150 plays them 1.5x)
+Int ApocalypseWallSeconds(Int gameSeconds, Int speedPercent);
+/// the roster rows a roll may draw that first come on night `night` (0 for day one), in roster order,
+/// at most `most` into kinds; how many there are.  Bosses and what only a brood leaves are not rolled
+Int ApocalypseNewKindsOfNight(Int night, Int kinds[], Int most);
 
 // The Classic room in the menu language (docs/plans/MENU-REDESIGN.md package 3a in the wrapper, the
 // design README-classic-room.md).  The three rooms keep their layouts' windows; InitLobbySeatVisuals
@@ -315,6 +324,9 @@ void LobbyOrderSeats( const LobbySeatState seats[], Int count, Int order[], Int 
 /// seat's head always (a group the window cuts repeats it), whole rows only, a strip for what is past
 /// either edge
 void LobbyPlanRoom( const LobbySeatState seats[], Int count, Int scroll, Int height, Int mostShown, LobbyRoomPlan &plan );
+/// the Apocalypse room's window instead: the survivors' head, then `count` seats in seat order, every
+/// row a seated row's height (an open seat says what it adds), at most mostShown, no scroll
+void ApocalypsePlanRoom( Int count, Int mostShown, LobbyRoomPlan &plan );
 /// FALSE while a Direct Strike lobby lies over the room, which reads its seats by the layout's rows:
 /// the room then binds rows to seats one to one and lays nothing out.  Each room says it at init and
 /// a network room again once a joiner learns the mode.
@@ -330,8 +342,9 @@ void SetLobbyRowBinder( LobbyRowBinder binder );
 void FitLobbyRoomMap( GameWindow *mapWindow, const MapMetaData *map );
 /// a room's Update: lays the rows out again when a held team change or a scroll is owed
 void LobbyRoomUpdate( void );
-/// a room's Input: the wheel over the seats and a click on a strip or the track scroll them; TRUE
-/// when it took the message
+/// a room's Input: the wheel over the seats and a click on a strip or the track scroll them, a press
+/// on the track's thumb drags it (the room passes its GWM_LEFT_DRAG and GWM_LEFT_UP too); TRUE when
+/// it took the message
 Bool LobbyRoomInput( UnsignedInt msg, UnsignedIntPtr mData1 );
 
 // The mode a host's room is for, the Create Game and Host buttons' question.  Set by the lobby that

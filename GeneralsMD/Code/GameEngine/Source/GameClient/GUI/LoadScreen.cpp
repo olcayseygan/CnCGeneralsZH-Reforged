@@ -652,7 +652,9 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 	// a seat coming back to a match under way sees the sides and colours the match is played with, and no
 	// channel on a row: the others are not loading, they are in the match (the bar carries the catch-up)
 	m_rejoining = TheNetwork && TheNetwork->isRejoining();
-	const Bool realSides = seeAll || m_rejoining;
+	// a mode hides no army: a Direct Strike plot stands in everyone's sight from the first wave, and
+	// Apocalypse seats are all on one side against the dead
+	const Bool realSides = seeAll || m_rejoining || directStrike || apocalypse;
 	const Int localSlot = TheGameLogic->isInReplayGame() ? -1 : game->getLocalSlotNum();
 
 	// a row a player, in the order the lobby lists them.  Someone watching from this screen without a
@@ -710,7 +712,10 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 			}
 		}
 		card.nameWords = slot->getName();
-		lobbyTeam.push_back( slot->getTeamNumber() );
+		// a Direct Strike team is the start's side of the lane, as the director allies them, whatever
+		// team number the seat came with (an -autoskirmish seat has none); the start is dealt by now
+		const Int start = slot->getStartPos();
+		lobbyTeam.push_back( directStrike && start >= 0 ? DirectStrike_teamOfStart( start ) : slot->getTeamNumber() );
 
 		// a computer's level, where its name is not already that, and a personality other than Normal
 		if( slot->isAI() )

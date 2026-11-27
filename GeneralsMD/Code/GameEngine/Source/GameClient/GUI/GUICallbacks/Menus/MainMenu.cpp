@@ -990,8 +990,8 @@ static void drawMenu( GameWindow *, WinInstanceData * )
 	using namespace MainMenuLayout;
 	const Rect rail1080 = railRect();
 	const IRegion2D rail = onScreen( rail1080 );
-	dimNear( rail );
 	UIStyle::glass( rail, 168 );
+	dimNear( rail );
 	railFrame( rail );
 
 	// the game's name: the family line (the version is LabelVersion at its right), the wordmark

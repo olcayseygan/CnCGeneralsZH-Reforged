@@ -367,13 +367,14 @@ namespace SinglePlayerLayout
 	//-----------------------------------------------------------------------------------------------
 	// the boxes (UIStyle's box: head 82, foot 84, inset 32)
 	//-----------------------------------------------------------------------------------------------
-	/// Save Replay over the end screen, 1040 wide: NAME and its text box, the saved replays, CANCEL, SAVE
+	/// Save Replay over the end screen, 1040 wide: NAME and its text box, the saved replays, CANCEL, SAVE;
+	/// the heads 22 under the text box and 34 over the list, so text box and list stand 56 apart (8 px grid)
 	const Int REPLAY_BOX_ROWS = 7;
-	const Int REPLAY_BOX_HEIGHT = 82 + 24 + 48 + 24 + 34 + REPLAY_BOX_ROWS * REPLAY_ROW_HEIGHT + 16 + 84;
-	const IRegion2D REPLAY_BOX = { { 440, 251 }, { 1480, 251 + REPLAY_BOX_HEIGHT } };
-	const IRegion2D REPLAY_BOX_ENTRY = { { 572, 357 }, { 1448, 405 } };
-	const Int REPLAY_BOX_HEADS = 429;
-	const IRegion2D REPLAY_BOX_LIST = { { 472, 463 }, { 1448, 463 + REPLAY_BOX_ROWS * REPLAY_ROW_HEIGHT } };
+	const Int REPLAY_BOX_HEIGHT = 82 + 24 + 48 + 22 + 34 + REPLAY_BOX_ROWS * REPLAY_ROW_HEIGHT + 16 + 84;
+	const IRegion2D REPLAY_BOX = { { 440, 252 }, { 1480, 252 + REPLAY_BOX_HEIGHT } };
+	const IRegion2D REPLAY_BOX_ENTRY = { { 572, 358 }, { 1448, 406 } };
+	const Int REPLAY_BOX_HEADS = 428;
+	const IRegion2D REPLAY_BOX_LIST = { { 472, 462 }, { 1448, 462 + REPLAY_BOX_ROWS * REPLAY_ROW_HEIGHT } };
 	enum ReplayBoxColumn { RBOX_NAME, RBOX_RECORDED, RBOX_MAP, RBOX_LENGTH, RBOX_COLUMNS };
 	inline Column replayBoxColumn( Int which )
 	{
@@ -396,10 +397,10 @@ namespace SinglePlayerLayout
 	/// the save's description, asked in a question box with a text box in it
 	const Int DESC_BOX_HEIGHT = 82 + 24 + 28 + 12 + 48 + 28 + 84;
 
-	/// a box key, slot 0 the rightmost: UIStyle::boxKeyRect1080 at a width of its own
+	/// a box key, slot 0 the rightmost: UIStyle::boxKeyRect1080 at a width of its own, 16 apart (BOX_KEY_GAP)
 	inline IRegion2D boxKey( const IRegion2D &box, Int slot, Int width )
 	{
-		const Int right = box.hi.x - 32 - slot * ( width + 12 );
+		const Int right = box.hi.x - 32 - slot * ( width + 16 );
 		return rect( right - width, box.hi.y - 20 - 48, right, box.hi.y - 20 );
 	}
 

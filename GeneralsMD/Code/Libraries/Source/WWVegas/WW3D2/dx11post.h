@@ -352,12 +352,17 @@ public:
 	// The backdrop behind a menu's glass (package 2b of the menu redesign).  At the first ask in a frame
 	// the swap chain's back buffer as it stands is copied, boxed down to a quarter in two halvings and
 	// blurred there by the bloom's gaussian to radius (a standard deviation of that many pixels at a
-	// height of 1080, scaled with the height); every ask that frame then draws that one blur into the
-	// rectangle given on the back buffer, so a second panel shows the world and not the first panel.
-	// No target is made and nothing drawn until somebody asks; its program compiles with the chain's,
-	// and a refusal there leaves the chain running and this false.  The caller binds its own target
-	// and viewport again, and forgets its bindings, afterwards.  False when it drew nothing.
+	// height of 1080, scaled with the height); every ask after draws that one blur into the rectangle
+	// given on the back buffer, until Stale_Backdrop says the screen under it changed and the next ask
+	// blurs the back buffer again.  No target is made and nothing drawn until somebody asks; its program
+	// compiles with the chain's, and a refusal there leaves the chain running and this false.  The
+	// caller binds its own target and viewport again, and forgets its bindings, afterwards.  False when
+	// it drew nothing.
 	bool Draw_Backdrop(unsigned x0, unsigned y0, unsigned x1, unsigned y1, float radius);
+	// Whether Draw_Backdrop could blur now: its program compiled and its targets made for the back
+	// buffer as it is (made here if they are not).
+	bool Backdrop_Ready();
+	void Stale_Backdrop() { BackdropBlurred = false; }
 
 	// Call once at the very top of a frame, before any scene of it (a mirror's included) begins.
 	// Arms Occlude_Scene and the backdrop's blur again.
@@ -553,11 +558,13 @@ private:
 	ID3D11PixelShader * HeatHazeShader;
 	ID3D11BlendState * HeatBlendState;
 	bool HeatHazeRefused;
-	// The menu backdrop's: the frame's blur made (made once a frame, at the first ask), its program, the
-	// back buffer's copy in its own format, the half size step and the two quarter size targets the blur
-	// goes between, which of the two holds the finished blur, the back buffer's size they were made for,
-	// and a refused program (not tried again).  Released with the other targets.
+	// The menu backdrop's: the blur made (at the first ask of a frame or after a Stale_Backdrop), its
+	// program, the back buffer's copy in its own format, the half size step and the two quarter size
+	// targets the blur goes between, which of the two holds the finished blur, the back buffer's size
+	// they were made for, and a refused program (not tried again).  Released with the other targets.
+	// Backdrop_Back hands back the back buffer (the caller releases it) once the targets fit it.
 	bool Blur_Backdrop(float radius);
+	ID3D11Resource * Backdrop_Back();
 	void Release_Backdrop();
 	ID3D11PixelShader * BackdropShader;
 	Target BackdropCopy;

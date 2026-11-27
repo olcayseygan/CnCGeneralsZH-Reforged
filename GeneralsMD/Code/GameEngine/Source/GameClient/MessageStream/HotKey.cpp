@@ -1149,6 +1149,54 @@ void Hotkeys_launcherKeys( const std::string& launcherPart, std::map< std::strin
 	}
 }
 
+/// The spelling `buttons` has for name, any case; empty when it has none.
+static std::string buttonSpelling( const std::map< std::string, std::string >& buttons, const std::string& name )
+{
+	const std::string lower = lowered( name );
+	for( std::map< std::string, std::string >::const_iterator it = buttons.begin(); it != buttons.end(); ++it )
+		if( lowered( it->first ) == lower )
+			return it->first;
+	return std::string();
+}
+
+static std::string slotName( const std::string& button, Int barSlot )
+{
+	char at[ 16 ];
+	snprintf( at, sizeof( at ), "@%d", barSlot + 1 );
+	return button + at;
+}
+
+std::string Hotkeys_buttonBlock( const HotkeysFile& file, const std::map< std::string, std::string >& launcherButtons,
+	const std::string& button, Int barSlot )
+{
+	const Int passes = barSlot >= 0 ? 2 : 1;
+	for( Int pass = 0; pass < passes; pass++ )
+	{
+		const std::string name = pass == 0 && barSlot >= 0 ? slotName( button, barSlot ) : button;
+		std::string spelled = buttonSpelling( file.buttons, name );
+		if( spelled.empty() )
+			spelled = buttonSpelling( launcherButtons, name );
+		if( !spelled.empty() )
+			return spelled;
+	}
+	return button;
+}
+
+void Hotkeys_resetButton( HotkeysFile *file, const std::string& button, Int barSlot, const std::string& gameLetter )
+{
+	const std::string slot = barSlot >= 0 ? buttonSpelling( file->buttons, slotName( button, barSlot ) ) : std::string();
+	const std::string bare = buttonSpelling( file->buttons, button );
+	if( !slot.empty() )
+	{
+		if( bare.empty() || file->buttons[ bare ] == gameLetter )
+			file->buttons.erase( slot );
+		else
+			file->buttons[ slot ] = gameLetter;
+	}
+	else if( !bare.empty() )
+		file->buttons.erase( bare );
+}
+
 /** Where a character falls in String.localeCompare's root collation: blanks, then punctuation in its
 	* own order, then digits, then letters with case set aside. */
 static Int collationWeight( unsigned char c )

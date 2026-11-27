@@ -1472,8 +1472,11 @@ static void addGameToAvailableList( AsciiString filename, void *userData )
 // ------------------------------------------------------------------------------------------------
 /** The Load Game list's extras, read off the file without touching a subsystem: the campaign
 	* block's first fields (CampaignManager::xfer's order: version, campaign, mission, rank points
-	* from version 2, difficulty from version 3) and the logic block's first two (GameLogic::xfer:
-	* version, frame).  Every other block is skipped by its size. */
+	* from version 2, difficulty from version 3), the map block's first three (GameStateMap::xfer:
+	* version, the save's own copy of the map, the pristine map) and the logic block's first two
+	* (GameLogic::xfer: version, frame).  Every other block is skipped by its size.  The pristine map
+	* is the Load Game preview's: getSaveGameInfoFromFile reads only the header block, which holds no
+	* map path, so a listed save's SaveGameInfo::pristineMapName is always empty. */
 // ------------------------------------------------------------------------------------------------
 static std::map< AsciiString, SaveGameExtras > theSaveExtras;
 
@@ -1482,6 +1485,7 @@ static Bool readSaveExtras( const AsciiString &path, SaveGameExtras &extras )
 	extras.campaign.clear();
 	extras.difficulty = DIFFICULTY_NORMAL;
 	extras.frames = 0;
+	extras.pristineMap.clear();
 	XferLoad xferLoad;
 	Bool campaign = FALSE;
 	try
@@ -1518,6 +1522,17 @@ static Bool readSaveExtras( const AsciiString &path, SaveGameExtras &extras )
 				}
 				campaign = TRUE;
 				xferLoad.skip( blockSize - used );
+			}
+			else if( token.compareNoCase( "CHUNK_GameStateMap" ) == 0 )
+			{
+				UnsignedByte version = 0;
+				xferLoad.xferUnsignedByte( &version );
+				AsciiString ownCopy, pristine;
+				xferLoad.xferAsciiString( &ownCopy );
+				xferLoad.xferAsciiString( &pristine );
+				if( !pristine.isEmpty() )
+					extras.pristineMap = TheGameState->portableMapPathToRealMapPath( pristine );
+				xferLoad.skip( blockSize - ( 1 + 1 + ownCopy.getLength() + 1 + pristine.getLength() ) );
 			}
 			else if( token.compareNoCase( "CHUNK_GameLogic" ) == 0 )
 			{

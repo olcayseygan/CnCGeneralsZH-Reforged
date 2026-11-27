@@ -141,6 +141,7 @@ void Direct3D11_Finish_Scene(bool) {}
 void Direct3D11_Finish_Frame() {}
 // The menu backdrop stays the plain dim here.
 bool Direct3D11_Draw_Backdrop(int, int, int, int, float) { return false; }
+void Direct3D11_Stale_Backdrop() {}
 
 unsigned char * Direct3D11_Capture_Back_Buffer(unsigned & width, unsigned & height, unsigned & pitch)
 {

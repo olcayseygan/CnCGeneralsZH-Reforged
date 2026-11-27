@@ -1006,16 +1006,23 @@ static void trayGone( void )
 // dark under them so the commands beneath do not show through an empty one
 //-------------------------------------------------------------------------------------------------
 static IRegion2D s_deckCells[ COMMAND_PLACE_COUNT ];
+static Int s_deckFilled = 0;					///< the tray's entries on the deck, from Q in reading order
 static Bool s_deckLettered = FALSE;		///< the buttons wear the places' letters, the panel the deck's wells
 
 static void drawDeckWells( GameWindow *window, WinInstanceData *instData )
 {
-	// a gold line round every cell says the keys build into the squad now (no art for it: the owner's
-	// "draw it in code", 2026-11-27)
+	// an entry's cell under its button, with a gold line round it that says the key builds into the
+	// squad now (no art for it: the owner's "draw it in code", 2026-11-27); a place past the tray's end
+	// is the deck's own empty key, its letter dim, as in the commands' view
 	const Color gold = GameMakeColor( 255, 196, 64, 255 );
 	for( Int place = 0; place < COMMAND_PLACE_COUNT; place++ )
 	{
 		const IRegion2D &c = s_deckCells[ place ];
+		if( place >= s_deckFilled )
+		{
+			TheControlBar->drawKeyGridEmptyKey( place, c, FALSE );
+			continue;
+		}
 		const Int w = c.hi.x - c.lo.x, h = c.hi.y - c.lo.y;
 		TheDisplay->drawFillRect( c.lo.x, c.lo.y, w, h, GameMakeColor( 8, 22, 30, 255 ) );
 		TheDisplay->drawFillRect( c.lo.x - 2, c.lo.y - 2, w + 4, 2, gold );
@@ -1063,6 +1070,10 @@ static void layDeckTray( GameWindow *panel )
 
 	const Bool lettered = TheGlobalData->m_hotkeyScheme == HOTKEY_SCHEME_GRID;
 	const Int shown = min( (Int)s_buildables.size(), (Int)MAX_BUTTONS );
+	s_deckFilled = min( shown, (Int)COMMAND_PLACE_COUNT );
+	// the letter in the bar's own badge: the command buttons' font and colours (ControlBar.wnd)
+	static NameKeyType barButtonKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonCommand01" );
+	GameWindow *barButton = TheWindowManager->winGetWindowFromId( NULL, barButtonKey );
 	for( Int i = 0; i < MAX_BUTTONS; i++ )
 	{
 		GameWindow *button = s_buttons[ i ];
@@ -1073,6 +1084,12 @@ static void layDeckTray( GameWindow *panel )
 		{
 			button->winHide( TRUE );
 			continue;
+		}
+		if( barButton != NULL && button->winGetFont() != barButton->winGetFont() )
+		{
+			button->winSetFont( barButton->winGetFont() );
+			button->winSetEnabledTextColors( barButton->winGetEnabledTextColor(), barButton->winGetEnabledTextBorderColor() );
+			button->winSetDisabledTextColors( barButton->winGetDisabledTextColor(), barButton->winGetEnabledTextBorderColor() );
 		}
 		const IRegion2D &cell = s_deckCells[ place ];
 		button->winSetPosition( cell.lo.x - box.lo.x, cell.lo.y - box.lo.y );

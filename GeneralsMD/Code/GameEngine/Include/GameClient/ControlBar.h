@@ -1444,6 +1444,7 @@ public:
 	Bool keyGridTrayView( void ) const;							///< the deck shows the chosen squad's build tray now
 	void toggleKeyGridTray( void );								///< the switch and its key: the squad's tray or the commands
 	void drawKeyGridConsole( void );								///< the console's art under the windows (ControlBarSchemeManager::drawPainting)
+	void drawKeyGridEmptyKey( Int place, const IRegion2D &cell, Bool live ) const;	///< an empty place: KeyEmpty and its letter dim
 	WideChar keyGridLetter( const GameWindow *win ) const;	///< Key Grid's letter on a command window, 0 for none
 protected:
 

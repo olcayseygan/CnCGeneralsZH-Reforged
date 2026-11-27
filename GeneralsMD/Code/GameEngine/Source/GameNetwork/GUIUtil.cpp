@@ -3314,7 +3314,7 @@ namespace
 	{
 		const Int key = TEXT_APOCALYPSE + APOC_MAP;
 		GameFont *hint = UIStyle::menuFont(UIStyle::MENU_TEXT_HINT);
-		const Int left = ROOM_COLUMN_LEFT + 344;
+		const Int left = ROOM_COLUMN_LEFT + 348;
 		const Int starts = md ? md->m_numPlayers : apocSeated();
 		UnicodeString facts = TheGameText->fetch("GUI:ApocalypseRandom");
 		facts.concat(UIStyle::HEADER_JOINER);
@@ -3398,7 +3398,7 @@ namespace
 			 generated basin is square, while the room's map fit reads the shape of the shipped map the
 			 generator borrows its look from (a wide one stretched the basin to twice its width). */
 		roomPlace(theRoomMap, ROOM_COLUMN_LEFT, LOBBY_SEATS_TOP, ROOM_COLUMN_LEFT + 324, LOBBY_SEATS_TOP + 324);
-		roomPlace(theRoomMapName, ROOM_COLUMN_LEFT + 344, LOBBY_SEATS_TOP, ROOM_RIGHT, LOBBY_SEATS_TOP + 30);
+		roomPlace(theRoomMapName, ROOM_COLUMN_LEFT + 348, LOBBY_SEATS_TOP, ROOM_RIGHT, LOBBY_SEATS_TOP + 30);
 		const UnicodeString mode = TheGameText->fetch("GUI:ApocalypseLower");
 		if (theRoomMapName && GadgetStaticTextGetText(theRoomMapName).compare(mode) != 0)
 			GadgetStaticTextSetText(theRoomMapName, mode);
@@ -4201,9 +4201,10 @@ void FitLobbyRoomMap(GameWindow *mapWindow, const MapMetaData *map)
 		// squarer: 324 tall at the left, its name and Select Map beside it
 		const Int width = min(324, REAL_TO_INT(324.0f * ratio + 0.5f));
 		roomPlace(mapWindow, ROOM_COLUMN_LEFT, LOBBY_SEATS_TOP, ROOM_COLUMN_LEFT + width, LOBBY_SEATS_TOP + 324);
-		// two lines for a long name beside the picture
-		roomPlace(theRoomMapName, ROOM_COLUMN_LEFT + 344, LOBBY_SEATS_TOP, ROOM_RIGHT, LOBBY_SEATS_TOP + 64);
-		roomPlace(theRoomSelectMap, ROOM_RIGHT - 200, LOBBY_SEATS_TOP + 278, ROOM_RIGHT, LOBBY_SEATS_TOP + 324);
+		// two lines for a long name beside the picture, Select Map under it on the same left edge, 24
+		// from the 324 square (they stood 2 apart, 1662 and 1660)
+		roomPlace(theRoomMapName, ROOM_COLUMN_LEFT + 348, LOBBY_SEATS_TOP, ROOM_RIGHT, LOBBY_SEATS_TOP + 64);
+		roomPlace(theRoomSelectMap, ROOM_COLUMN_LEFT + 348, LOBBY_SEATS_TOP + 278, ROOM_RIGHT, LOBBY_SEATS_TOP + 324);
 	}
 }
 

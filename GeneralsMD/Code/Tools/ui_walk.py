@@ -887,7 +887,11 @@ class Walk(object):
     # -- boxes -------------------------------------------------------------------------------------
 
     def walk_box(self, path, trigger, tree):
+        # read again once the box has finished coming up: the Exit box's NO was missing from the first read
+        tree = settle(self.game, minimum=1.0)
         box = tree.get("modal") or ""
+        if not box:
+            return
         layout = box.split(":")[0]
         key = (layout, tuple(sorted(w.get("tx", "") for w in windows(tree) if w["n"].startswith(layout))))
         if key in self.boxes:
@@ -897,6 +901,7 @@ class Walk(object):
         print("  box %s: %s" % (layout, " | ".join(texts)[:120]), flush=True)
         self.faults.update("%s: %s" % (layout, f) for f in lint(tree))
         buttons = [w for w in controls(tree, self.area) if w["n"].startswith(layout + ":")]
+        print("    buttons: %s" % (short([b["n"] for b in buttons], 8) or "none"), flush=True)
         for b in buttons:
             if COMMITS.search(leaf(b["n"])):
                 self.record("  [%s] %s" % (layout, leaf(b["n"])), "skipped", "commits", path + [trigger])

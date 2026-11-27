@@ -9210,6 +9210,7 @@ void ScriptEngine::setGlobalDifficulty( GameDifficulty difficulty )
 	* 7: countdown timers' retail-tick phase, kept through a world freeze (fork)
 	* 8: the scripts queued behind each sequential script (m_nextScriptInSequence) (fork)
 	* 9: m_frameObjectCountChanged (fork)
+	* 10: the UNIT_EMPTIED condition's transport counts (ScriptConditions_xferTransportStatuses) (fork)
 	*/
 // ------------------------------------------------------------------------------------------------
 void ScriptEngine::xfer( Xfer *xfer )
@@ -9217,7 +9218,7 @@ void ScriptEngine::xfer( Xfer *xfer )
 	Int i;
 
 	// version
-	const XferVersion currentVersion = 9;
+	const XferVersion currentVersion = 10;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -9740,6 +9741,10 @@ void ScriptEngine::xfer( Xfer *xfer )
 	m_frameObjectCountChangedFromSave = m_frameObjectCountChanged;
 	if (version >= 9)
 		xfer->xferUnsignedInt(&m_frameObjectCountChangedFromSave);
+
+	// a save from before version 10 keeps the empty list the reset left
+	if (version >= 10)
+		ScriptConditions_xferTransportStatuses(xfer);
 
 	if( xfer->getXferMode() == XFER_LOAD ) {
 		// We are doing a load.  If there is no fade active, do a black fade in to start.

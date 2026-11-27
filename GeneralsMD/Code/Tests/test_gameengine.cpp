@@ -30907,8 +30907,9 @@ TEST(script_countdown_timer_snapshot_preserves_phase_and_loads_older_saves)
 	}
 	GameSpeed_set(125);
 	// v7 appends only the subframe byte to the v6 snapshot, v8 adds nothing here while no
-	// sequential script runs, and v9 appends the four bytes of m_frameObjectCountChanged after it.
-	// A v6 save deterministically starts with phase zero; an invalid v7, v8 or v9 phase is rejected
+	// sequential script runs, v9 appends the four bytes of m_frameObjectCountChanged after it, and
+	// v10 the two-byte count of the UNIT_EMPTIED transport list, empty here.
+	// A v6 save deterministically starts with phase zero; an invalid v7 to v10 phase is rejected
 	// rather than stopping every timer forever.
 	FILE *file = fopen(path, "rb");
 	CHECK(file != NULL);
@@ -30919,10 +30920,12 @@ TEST(script_countdown_timer_snapshot_preserves_phase_and_loads_older_saves)
 	std::vector<UnsignedByte> bytes(size);
 	CHECK_EQ(fread(bytes.data(), 1, bytes.size(), file), bytes.size());
 	fclose(file);
-	CHECK(bytes.size() > 6 && bytes.front() == 9);
-	if (bytes.size() <= 6) return;
-	const size_t timerAt = bytes.size() - 1 - sizeof(UnsignedInt);
-	for (Int version = 9; version >= 6; --version)
+	const size_t tail = sizeof(UnsignedInt) + sizeof(UnsignedShort);
+	CHECK(bytes.size() > tail + 2 && bytes.front() == 10);
+	if (bytes.size() <= tail + 2) return;
+	CHECK(bytes[bytes.size() - 2] == 0 && bytes.back() == 0);
+	const size_t timerAt = bytes.size() - 1 - tail;
+	for (Int version = 10; version >= 6; --version)
 	{
 		const Bool legacy = version == 6;
 		bytes.front() = (UnsignedByte)version;
@@ -30930,7 +30933,8 @@ TEST(script_countdown_timer_snapshot_preserves_phase_and_loads_older_saves)
 		file = fopen(path, "wb");
 		CHECK(file != NULL);
 		if (!file) return;
-		const size_t length = version >= 9 ? bytes.size() : version >= 7 ? timerAt + 1 : timerAt;
+		const size_t length = version >= 10 ? bytes.size() : version >= 9 ? timerAt + 1 + sizeof(UnsignedInt)
+			: version >= 7 ? timerAt + 1 : timerAt;
 		CHECK_EQ(fwrite(bytes.data(), 1, length, file), length);
 		fclose(file);
 		CountdownTestEngine restored;

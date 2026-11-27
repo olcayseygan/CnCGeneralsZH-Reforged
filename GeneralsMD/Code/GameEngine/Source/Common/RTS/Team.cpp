@@ -1235,13 +1235,18 @@ void TeamPrototype::crc( Xfer *xfer )
 // ------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: m_attackPriorityName
+	* 3: the prototype's own copies of its production condition and generic scripts (fork).  EA's
+	*    save dropped them, so a load duplicated them afresh from the map on first use: the AI
+	*    evaluated the production condition at once instead of waiting out its delay, and every copy
+	*    lost its cached condition answers and a power-ready condition's next look (Script::xfer). */
 // ------------------------------------------------------------------------
 void TeamPrototype::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1262,6 +1267,50 @@ void TeamPrototype::xfer( Xfer *xfer )
 
 	// team template information
 	xfer->xferSnapshot( &m_teamTemplate );
+
+	// the script copies; a load makes them again from the map, as the first use did, and reads the
+	// saved state into them.  An older save leaves them to be made on first use.
+	if( version >= 3 )
+	{
+		Bool hasProductionScript = m_productionConditionScript != NULL;
+		xfer->xferBool( &hasProductionScript );
+		if( hasProductionScript )
+		{
+			if( xfer->getXferMode() == XFER_LOAD && m_productionConditionScript == NULL )
+			{
+				const Script *script = TheScriptEngine->findScriptByName( m_teamTemplate.m_productionCondition );
+				if( script == NULL )
+				{
+					DEBUG_CRASH(( "TeamPrototype::xfer - production condition '%s' not found\n",
+												m_teamTemplate.m_productionCondition.str() ));
+					throw SC_INVALID_DATA;
+				}
+				m_productionConditionScript = script->duplicate();
+			}
+			xfer->xferSnapshot( m_productionConditionScript );
+		}
+
+		Bool retrievedGenericScripts = m_retrievedGenericScripts;
+		xfer->xferBool( &retrievedGenericScripts );
+		if( retrievedGenericScripts )
+		{
+			if( xfer->getXferMode() == XFER_LOAD )
+				getGenericScript( 0 );	// duplicates every slot at once
+			for( Int i = 0; i < MAX_GENERIC_SCRIPTS; ++i )
+			{
+				Bool hasGenericScript = m_genericScriptsToRun[ i ] != NULL;
+				xfer->xferBool( &hasGenericScript );
+				if( !hasGenericScript )
+					continue;
+				if( m_genericScriptsToRun[ i ] == NULL )
+				{
+					DEBUG_CRASH(( "TeamPrototype::xfer - generic script %d of '%s' not found\n", i, m_name.str() ));
+					throw SC_INVALID_DATA;
+				}
+				xfer->xferSnapshot( m_genericScriptsToRun[ i ] );
+			}
+		}
+	}
 
 	// xfer team instance count
 	UnsignedShort teamInstanceCount = 0;

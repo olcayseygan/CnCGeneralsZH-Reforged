@@ -436,8 +436,34 @@ W3DAnimationInfo::~W3DAnimationInfo()
 }
 
 //-------------------------------------------------------------------------------------------------
+/** ZHR_NIGHT_PRELOAD=0 in the environment leaves the NIGHT states out of the load, for the before half of
+	a measurement of what loading them costs and what the first nightfall reads from disk without them */
+static Bool nightPreloadOff( void )
+{
+	static Int s_off = -1;
+	if( s_off < 0 )
+	{
+		const char *e = getenv( "ZHR_NIGHT_PRELOAD" );
+		s_off = ( e != NULL && e[0] == '0' ) ? 1 : 0;
+		if( s_off )
+			DEBUG_LOG(( "ZHR_NIGHT_PRELOAD=0: NIGHT model states are not preloaded\n" ));
+	}
+	return s_off != 0;
+}
+
+//-------------------------------------------------------------------------------------------------
 void ModelConditionInfo::preloadAssets( TimeOfDay timeOfDay, Real scale )
 {
+	if( nightPreloadOff() && !m_conditionsYesVec.empty() )
+	{
+		Bool nightOnly = TRUE;
+		for( std::vector<ModelConditionFlags>::const_iterator it = m_conditionsYesVec.begin(); it != m_conditionsYesVec.end(); ++it )
+			if( !it->test( MODELCONDITION_NIGHT ) )
+				nightOnly = FALSE;
+		if( nightOnly )
+			return;
+	}
+
 	// load this asset
 	if( m_modelName.isEmpty() == FALSE )
 	{
@@ -1932,11 +1958,14 @@ void W3DModelDraw::buildRenderObjects( Bool madeInTick )
 												TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT,
 												TheGlobalData->m_weather == WEATHER_SNOWY);
 		// ponytail: loads every map object's night and snow models once; validate per object override if memory bites
-		if (loadingMap)
+		if (loadingMap && !nightPreloadOff())
 			getW3DModelDrawModuleData()->validateStuffForTimeAndWeather(getDrawable(), TRUE, TRUE);
+		else if (loadingMap)
+			getW3DModelDrawModuleData()->validateStuffForTimeAndWeather(getDrawable(),
+												TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT, TRUE);
 		// under the day and night cycle every object's lights turn at dusk (DayNight_update), so its night
 		// states load here, with the day's, and not on the first bone query of the night inside a tick
-		else if (DayNight_isOn())
+		else if (DayNight_isOn() && !nightPreloadOff())
 			getW3DModelDrawModuleData()->validateStuffForTimeAndWeather(getDrawable(), TRUE,
 												TheGlobalData->m_weather == WEATHER_SNOWY);
 	}

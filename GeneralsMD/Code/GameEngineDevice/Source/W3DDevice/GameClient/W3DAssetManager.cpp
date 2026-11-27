@@ -75,6 +75,7 @@
 #include "Common/GameCommon.h"
 #include "Common/FileSystem.h"
 #include "GameClient/TankSkin.h"
+#include "GameLogic/GameLogic.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -1180,6 +1181,14 @@ bool W3DAssetManager::Load_3D_Assets( const char * filename )
 	}
 
 	bool result = WW3DAssetManager::Load_3D_Assets(filename);
+
+	// a model read from disk while a match plays is a hitch the load screen should have paid: one line
+	// each, numbered, so a run can count them across any window of frames (the night preload's proof)
+	if (result && TheGameLogic && TheGameLogic->isInGame() && !TheGameLogic->isLoadingMap() && !TheGameLogic->isInShellGame())
+	{
+		static Int s_modelsLoadedInMatch = 0;
+		DEBUG_LOG(("MODELLOAD frame %u #%d: %s\n", TheGameLogic->getFrame(), ++s_modelsLoadedInMatch, filename));
+	}
 
 #if defined(_DEBUG) || defined(_INTERNAL)
 	if (result && TheGlobalData->m_preloadReport)

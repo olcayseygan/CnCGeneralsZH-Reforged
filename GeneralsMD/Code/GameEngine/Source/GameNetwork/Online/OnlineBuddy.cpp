@@ -523,6 +523,17 @@ void OnlineInviteFriend( Int to )
 	DEBUG_LOG(("ONLINE INVITE to=%d game=%lld\n", to, s.gameId));
 }
 
+void OnlineInviteToParty( const AsciiString &nick )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (nick.isEmpty() || s.gameId || !s.teamOn)
+		return;		// a party is asked into from outside a room, on a server with Team vs AI
+	OnlineMessage m;
+	m.setString( "t", "invite" ).setString( "nick", nick.str() );
+	s.sendFriend( m );
+	DEBUG_LOG(("ONLINE INVITE party nick=%s\n", nick.str()));
+}
+
 void OnlineAnswerInvite( Int from, Int game, Bool ok )
 {
 	OnlineSession &s = OnlineSession::get();

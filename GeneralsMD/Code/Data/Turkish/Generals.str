@@ -24618,3 +24618,11 @@ END
 GUI:OnlineAIStillWaiting
 "Sunucu henüz yanıt vermedi, bekleniyor."
 END
+
+GUI:OnlineInviteToParty
+"Gruba davet et"
+END
+
+GUI:OnlineInParty
+"Bir gruptasın. Hızlı maç tek kişilik."
+END

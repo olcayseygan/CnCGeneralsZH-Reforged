@@ -201,6 +201,22 @@ static Int qmLockSeconds( void )
 	return OnlineIsEnabled() ? OnlineGetQuickMatchLockSeconds() : 0;
 }
 
+/// in a Team vs AI party of two or more: Quick Match is one player's, so Search waits until the party ends
+static Bool qmInParty( void )
+{
+	if (!OnlineIsEnabled() || !OnlineTeamAIAvailable())
+		return FALSE;
+	std::vector<OnlinePartyMember> party;
+	OnlineGetParty( party );
+	return party.size() >= 2;
+}
+
+/// Search held back: the abandon lock or a party
+static Bool qmSearchHeld( void )
+{
+	return qmLockSeconds() > 0 || qmInParty();
+}
+
 //-------------------------------------------------------------------------------------------------
 // The speed ask: the slower pick's Yes/No box over the found page, open until an answer, the server's
 // qm.speed or ONLINE_SPEED_ASK_MS, which closes it as a decline.  Another box put up over it (the
@@ -1387,7 +1403,7 @@ static void drawFound( QMWords &words )
 static void drawLockLine( QMWords &words )
 {
 	const Int seconds = qmLockSeconds();
-	if (seconds <= 0 || buttonStart == NULL || buttonBack == NULL)
+	if ((seconds <= 0 && !qmInParty()) || buttonStart == NULL || buttonBack == NULL)
 		return;
 	Int startX, startY, startWidth, startHeight, backX, backY, backWidth, backHeight;
 	buttonStart->winGetScreenPosition( &startX, &startY );
@@ -1396,7 +1412,10 @@ static void drawLockLine( QMWords &words )
 	buttonBack->winGetSize( &backWidth, &backHeight );
 	const Int gap = qpx( 24 );
 	UnicodeString text;
-	text.format( word( "GUI:QMLocked" ), seconds / 60, seconds % 60 );
+	if (seconds > 0)
+		text.format( word( "GUI:QMLocked" ), seconds / 60, seconds % 60 );
+	else
+		text = word( "GUI:OnlineInParty" );		// why Search is greyed in a party
 	DisplayString *line = words.get( bodyFont(), text, startX - backX - backWidth - 2 * gap );
 	putAt( line, startX - gap, startY + startHeight / 2, UIStyle::INK, 2 );
 }
@@ -1434,7 +1453,7 @@ void UpdateStartButton(void)
 	// the abandon lock; ladder or none (comboBoxLadder is NULL without ladders)
 	if (buttonStart && OnlineIsEnabled())
 	{
-		buttonStart->winEnable( qmLockSeconds() == 0 );
+		buttonStart->winEnable( !qmSearchHeld() );
 		return;
 	}
 	if (!comboBoxLadder || !buttonStart || !listboxMapSelect)
@@ -2997,7 +3016,7 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 		}
 #endif // PERF_TEST
 		// Search follows the abandon lock in and out, which counts down here and not in a status
-		if (OnlineIsEnabled() && buttonStart->winGetEnabled() == (qmLockSeconds() > 0))
+		if (OnlineIsEnabled() && buttonStart->winGetEnabled() == qmSearchHeld())
 			UpdateStartButton();
 		showPageState();
 	}
@@ -3186,7 +3205,7 @@ WindowMsgHandledType WOLQuickMatchMenuSystem( GameWindow *window, UnsignedInt ms
 					TheGameSpyPeerMessageQueue->addRequest(req);
 					buttonWiden->winEnable( FALSE );
 				}
-				else if ( controlID == buttonStartID && qmPageState() == QM_PAGE_PICK && qmLockSeconds() == 0 )
+				else if ( controlID == buttonStartID && qmPageState() == QM_PAGE_PICK && !qmSearchHeld() )
 				{
 					PeerRequest req;
 					req.peerRequestType = PeerRequest::PEERREQUEST_STARTQUICKMATCH;

@@ -1323,6 +1323,9 @@ static Int s_cardFullHeight = 0;
 static GameWindow *s_addFriend = NULL;	///< ADD FRIEND left of Profile (package F4), made in code
 static Int s_addFriendState = -1;				///< what it shows: AddFriendState, -1 before
 enum AddFriendState { ADD_FRIEND_HIDDEN, ADD_FRIEND_OFFER, ADD_FRIEND_SENT };
+static GameWindow *s_inviteParty = NULL;	///< INVITE TO PARTY left of ADD FRIEND (Team vs AI), made in code
+static Int s_invitePartyState = -1;
+enum InvitePartyState { INVITE_PARTY_HIDDEN, INVITE_PARTY_OFFER, INVITE_PARTY_FULL, INVITE_PARTY_SENT };
 
 struct CardWords { DisplayString *words; Int x, y; Color color; Bool tracked; };
 struct CardPicture { const Image *image; Int x, y, size; };
@@ -1629,7 +1632,7 @@ static void fitCard( Bool compact )
 	parent->winSetPosition( x, s_cardFullTop + ( s_cardFullHeight - wanted ) / 2 );
 	parent->winSetSize( width, wanted );
 	card->winSetSize( width, wanted );
-	GameWindow *keys[] = { buttonClose, buttonBuddies, s_addFriend };
+	GameWindow *keys[] = { buttonClose, buttonBuddies, s_addFriend, s_inviteParty };
 	for( Int each = 0; each < (Int)ARRAY_SIZE( keys ); each++ )
 	{
 		if( keys[ each ] == NULL )
@@ -1999,18 +2002,32 @@ static Bool cardIsLocal( void )
 
 /** ADD FRIEND on another player's card while the service has friends (package F4): Close's look, its
 	* width, BOX_KEY_GAP (16) left of Profile (of Close when Profile is hidden), "PopupPlayerInfo.wnd:ButtonAddFriend". */
-static void makeAddFriendKey( void )
+/// a key of the card's foot made in code with Close's size, placed by placeCardKeys
+static GameWindow *makeCardKey( const char *name, const char *label )
 {
-	s_addFriend = NULL;
-	s_addFriendState = -1;
-	if( buttonClose == NULL || buttonClose->winGetParent() == NULL || !OnlineFriendsAvailable() || cardIsLocal() )
-		return;
 	GameWindow *holder = buttonClose->winGetParent();
 	WinInstanceData inst;
 	inst.init();
 	BitSet( inst.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK );
-	inst.m_decoratedNameString = "PopupPlayerInfo.wnd:ButtonAddFriend";
+	inst.m_decoratedNameString = name;
 	inst.m_id = (Int)TheNameKeyGenerator->nameToKey( inst.m_decoratedNameString );
+	Int closeWidth, closeHeight;
+	buttonClose->winGetSize( &closeWidth, &closeHeight );
+	GameWindow *key = TheWindowManager->gogoGadgetPushButton( holder, WIN_STATUS_ENABLED, 0, 0,
+		closeWidth, closeHeight, &inst, buttonClose->winGetFont(), FALSE );
+	if( key == NULL )
+		return NULL;
+	GadgetButtonSetText( key, UIStyle::capitals( TheGameText->fetch( label ) ) );
+	UIStyle::setMenuKey( key, FALSE );
+	return key;
+}
+
+/// the foot's keys right to left: Close, Profile where the master stands it, then ADD FRIEND and INVITE TO
+/// PARTY while they show, BOX_KEY_GAP (16) apart, so a hidden one leaves no hole
+static void placeCardKeys( void )
+{
+	if( buttonClose == NULL )
+		return;
 	Int closeX, closeY, closeWidth, closeHeight;
 	buttonClose->winGetPosition( &closeX, &closeY );
 	buttonClose->winGetSize( &closeWidth, &closeHeight );
@@ -2021,13 +2038,61 @@ static void makeAddFriendKey( void )
 		buttonBuddies->winGetPosition( &profileX, &profileY );
 		right = profileX;
 	}
-	right -= at( (Real)UIStyle::BOX_KEY_GAP );
-	s_addFriend = TheWindowManager->gogoGadgetPushButton( holder, WIN_STATUS_ENABLED, right - closeWidth, closeY,
-		closeWidth, closeHeight, &inst, buttonClose->winGetFont(), FALSE );
-	if( s_addFriend == NULL )
+	GameWindow *keys[] = { s_addFriend, s_inviteParty };
+	for( Int each = 0; each < (Int)ARRAY_SIZE( keys ); each++ )
+	{
+		if( keys[ each ] == NULL || keys[ each ]->winIsHidden() )
+			continue;
+		right -= at( (Real)UIStyle::BOX_KEY_GAP ) + closeWidth;
+		keys[ each ]->winSetPosition( right, closeY );
+	}
+}
+
+static void makeAddFriendKey( void )
+{
+	s_addFriend = NULL;
+	s_addFriendState = -1;
+	s_inviteParty = NULL;
+	s_invitePartyState = -1;
+	if( buttonClose == NULL || buttonClose->winGetParent() == NULL || cardIsLocal() )
 		return;
-	GadgetButtonSetText( s_addFriend, UIStyle::capitals( TheGameText->fetch( "GUI:AddFriend" ) ) );
-	UIStyle::setMenuKey( s_addFriend, FALSE );
+	if( OnlineFriendsAvailable() )
+		s_addFriend = makeCardKey( "PopupPlayerInfo.wnd:ButtonAddFriend", "GUI:AddFriend" );
+	// Team vs AI: anyone signed in may be asked into the party, friend or not (the server takes a nick)
+	if( OnlineTeamAIAvailable() )
+		s_inviteParty = makeCardKey( "PopupPlayerInfo.wnd:ButtonInviteParty", "GUI:OnlineInviteToParty" );
+	placeCardKeys();
+}
+
+/** INVITE TO PARTY as the party and the screen allow: hidden in a room (an invite from there is the room's)
+	* and when this player is in our party already; disabled while the party is full; SENT once asked from
+	* here.  Then the keys stand again, so a key that hid leaves no gap. */
+static void updateInvitePartyKey( void )
+{
+	if( s_inviteParty == NULL )
+		return;
+	Int state = INVITE_PARTY_OFFER;
+	std::vector<OnlinePartyMember> party;
+	OnlineGetParty( party );
+	if( !OnlineTeamAIAvailable() || ( TheGameSpyInfo && TheGameSpyInfo->getCurrentStagingRoomID() != 0 ) )
+		state = INVITE_PARTY_HIDDEN;
+	for( size_t each = 0; each < party.size() && state != INVITE_PARTY_HIDDEN; ++each )
+	{
+		if( ( lookAtPlayerID > 0 && party[ each ].id == lookAtPlayerID ) || party[ each ].nick.compareNoCase( lookAtPlayerName.c_str() ) == 0 )
+			state = INVITE_PARTY_HIDDEN;
+	}
+	if( state == INVITE_PARTY_OFFER && (Int)party.size() >= ONLINE_TEAM_SEATS )
+		state = INVITE_PARTY_FULL;
+	if( state == INVITE_PARTY_OFFER && s_invitePartyState == INVITE_PARTY_SENT )
+		state = INVITE_PARTY_SENT;
+	if( state != s_invitePartyState )
+	{
+		s_invitePartyState = state;
+		s_inviteParty->winHide( state == INVITE_PARTY_HIDDEN );
+		s_inviteParty->winEnable( state == INVITE_PARTY_OFFER );
+		GadgetButtonSetText( s_inviteParty, UIStyle::capitals( TheGameText->fetch( state == INVITE_PARTY_SENT ? "GUI:FriendRequestSent" : "GUI:OnlineInviteToParty" ) ) );
+	}
+	placeCardKeys();
 }
 
 /// ADD FRIEND as the service's list has this player: hidden for a friend or a block, SENT while ours waits
@@ -2162,6 +2227,8 @@ void GameSpyPlayerInfoOverlayInit( WindowLayout *layout, void *userData )
 			buttonBuddies->winHide( profileUrl( nick ).isEmpty() );
 		makeAddFriendKey();
 		updateAddFriendKey();
+		updateInvitePartyKey();
+		placeCardKeys();
 	}
 	PopulatePlayerInfoWindows("PopupPlayerInfo.wnd");
 
@@ -2220,8 +2287,10 @@ void GameSpyPlayerInfoOverlayShutdown( WindowLayout *layout, void *userData )
 	s_cardBoxes.clear();
 	for (Int tab = 0; tab < CARD_TAB_COUNT; ++tab)
 		s_cardTabs[tab] = NULL;
-	s_addFriend = NULL;		// a child of the card, destroyed with it
+	s_addFriend = NULL;		// children of the card, destroyed with it
 	s_addFriendState = -1;
+	s_inviteParty = NULL;
+	s_invitePartyState = -1;
 	s_cardDirty = TRUE;
 
 	// our shutdown is complete
@@ -2251,6 +2320,8 @@ void GameSpyPlayerInfoOverlayUpdate( WindowLayout * layout, void *userData)
 		}
 		pollCardHistory();
 		updateAddFriendKey();
+		updateInvitePartyKey();
+		placeCardKeys();
 	}
 }// GameSpyPlayerInfoOverlayUpdate
 
@@ -2359,6 +2430,14 @@ WindowMsgHandledType GameSpyPlayerInfoOverlaySystem( GameWindow *window, Unsigne
 						RefreshGameListBoxes();
 						GameSpyOpenOverlay( GSOVERLAY_BUDDY );
 					}
+				}
+				else if (s_inviteParty != NULL && control == s_inviteParty)
+				{
+					// -online Team vs AI: into our party by nick, friend or not; SENT until he answers
+					OnlineInviteToParty( AsciiString( lookAtPlayerName.c_str() ) );
+					s_invitePartyState = INVITE_PARTY_SENT;
+					s_inviteParty->winEnable( FALSE );
+					GadgetButtonSetText( s_inviteParty, UIStyle::capitals( TheGameText->fetch( "GUI:FriendRequestSent" ) ) );
 				}
 				else if (s_addFriend != NULL && control == s_addFriend)
 				{

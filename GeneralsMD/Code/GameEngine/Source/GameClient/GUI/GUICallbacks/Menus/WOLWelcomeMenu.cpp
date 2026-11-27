@@ -144,11 +144,24 @@ static GameWindow *hubWindow( const char *name, NameKeyType *id = NULL )
 static Bool s_controlsLive = FALSE;		///< Find match and Browse games as the room list and joins allow
 static Bool s_joiningRoom = FALSE;		///< a chat room join is out (Browse games): the hub waits for its answer
 
-/// Find match also waits out the server's lock on a player who left a ranked match
+/// a Team vs AI party of two or more: Quick Match is one player's, so its card and tab wait until it ends
+static Bool inParty( void )
+{
+	if (!OnlineTeamAIAvailable())
+		return FALSE;
+	std::vector<OnlinePartyMember> party;
+	OnlineGetParty( party );
+	return party.size() >= 2;
+}
+
+/// Find match also waits out the server's lock on a player who left a ranked match, and a party
 static void applyControls( void )
 {
+	const Bool party = inParty();
 	if (buttonQuickMatch)
-		buttonQuickMatch->winEnable( s_controlsLive && OnlineGetQuickMatchLockSeconds() == 0 );
+		buttonQuickMatch->winEnable( s_controlsLive && OnlineGetQuickMatchLockSeconds() == 0 && !party );
+	if (GameWindow *tab = hubWindow( "TabQuickMatch" ))
+		tab->winEnable( !party );
 	if (buttonLobby)
 		buttonLobby->winEnable( s_controlsLive );
 }
@@ -1281,6 +1294,8 @@ static void refreshCards( void )
 	text.clear();
 	if (lock > 0)
 		text.format( TheGameText->fetch( "GUI:OnlineHubQuickMatchLocked" ), lock / SECONDS_PER_MINUTE, lock % SECONDS_PER_MINUTE );
+	else if (inParty())
+		text = TheGameText->fetch( "GUI:OnlineInParty" );		// Find match greyed: Quick Match is one player's
 	setCardStatus( qm, text );
 
 	HubCard &custom = s_cards[ CARD_CUSTOM ];

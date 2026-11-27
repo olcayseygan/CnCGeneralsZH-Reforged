@@ -10442,3 +10442,11 @@ END
 GUI:OnlineAIStillWaiting
 "The server has not answered yet. Still waiting."
 END
+
+GUI:OnlineInviteToParty
+"Invite to party"
+END
+
+GUI:OnlineInParty
+"You are in a party. Quick Match is solo."
+END

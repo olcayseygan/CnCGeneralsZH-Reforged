@@ -485,7 +485,7 @@ static void drawLanPanel( GameWindow *window, WinInstanceData *instData )
 static void placeLanPlayers( Bool picked )
 {
 	s_playersTop = picked ? 752 : 130;
-	LobbyPlaceOnBoard( listboxPlayers, 1334, s_playersTop + 34, 1860, 946 );
+	LobbyPlaceOnBoard( listboxPlayers, 1334, s_playersTop + 34, 1860, 944 );		// 32 over the foot's keys at 976
 }
 
 /* Each frame: the first game is picked while games exist and none is; the picked block follows the pick; Join

@@ -2064,14 +2064,14 @@ WindowMsgHandledType GameModeBoxSystem(GameWindow *window, UnsignedInt msg, Wind
 	 mode.py draws it).  GameModeBox.wnd (Tools/gamemode_layout.py) brings the windows: the modal root,
 	 its panel, and four buttons whose clicks GameModeBoxSystem answers.  Nothing of EA's message box is
 	 drawn: the panel is the box (frame A on its glass, the title with its question after it, the lit
-	 rule), the three mode buttons are cards 340 by 304 with a drawn picture, the name and its version
+	 rule), the three mode buttons are cards 340 by 300 (40 over Cancel) with a drawn picture, the name and its version
 	 tag, a line and the seats, the default one lit as Enter's key, and Cancel is a key at the foot's
 	 right with the hint at its left.  Every number is at 1080 on the menu board. */
 namespace
 {
 	enum
 	{
-		PICKER_CARD_W = 340, PICKER_CARD_H = 304, PICKER_GAP = 24, PICKER_PAD = 32, PICKER_CARDS_TOP = 106,
+		PICKER_CARD_W = 340, PICKER_CARD_H = 300, PICKER_GAP = 24, PICKER_PAD = 32, PICKER_CARDS_TOP = 106,
 		PICKER_INSET = 14, PICKER_PICTURE_H = 176, PICKER_KEY_W = 220, PICKER_KEY_H = 48,
 		PICKER_PANEL_H = 514,
 	};

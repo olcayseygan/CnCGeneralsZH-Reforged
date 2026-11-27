@@ -1944,8 +1944,16 @@ void OpenContain::loadPostProcess( void )
 		m_containList.push_back( obj );
 		m_containListSize++;
 
-		// remove this object from the world if we need to
-		if( isEnclosingContainerFor( obj ) )
+		// remove this object from the world if we need to.  A rider we do not enclose goes out too when we
+		// are out of it ourselves: a paratrooper in his parachute inside the cargo plane.  addToContain does
+		// that through addOrRemoveObjFromWorld's walk of our riders, but the plane is loaded before the
+		// parachute, so its walk found our list still empty and the trooper stayed in the partition: every
+		// hunter in reach of the plane picked a rider it could not have seen in the game that was saved.
+		// Our container already ran its post process then and set our m_containedBy; the other way round
+		// it is still unset here and the container's walk finds our list full.
+		const Object *ourContainer = us->getContainedBy();
+		if( isEnclosingContainerFor( obj ) ||
+				( ourContainer && ourContainer->getContain() && ourContainer->getContain()->isEnclosingContainerFor( us ) ) )
 			addOrRemoveObjFromWorld( obj, FALSE );
 
 		// record in the object who we are contained by

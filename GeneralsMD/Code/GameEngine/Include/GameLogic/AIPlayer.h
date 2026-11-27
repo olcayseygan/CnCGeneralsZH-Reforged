@@ -1063,6 +1063,7 @@ protected:
 	Bool teamPlayHere(void);
 	Bool mendersHere(void);	///< heal auras and tunnels mend what it pulls out
 	Bool routeHomeHere(void);	///< a unit pulled out to a dock walks round what the map shows first, and docks when it stands there
+	Bool rockveeHere(void);		///< a transport kites at the reach of the riders who shoot out of it, and the vehicle-killers board first
 	Real killZoneWeight(void) const;							///< how much of the loss record a reading counts, 0 when off
 	Real killZoneAt(const Coord3D *at) const;			///< ... the losses round one spot, weighed
 	Real gunOdds(void) const;											///< what an attack has to be worth against the guns it meets, 0 when off

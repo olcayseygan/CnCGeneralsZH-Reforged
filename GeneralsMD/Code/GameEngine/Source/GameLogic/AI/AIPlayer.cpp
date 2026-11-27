@@ -10587,6 +10587,11 @@ Bool AIPlayer::routeHomeHere( void )
 	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_ROUTE_HOME ) != 0 );
 }
 
+Bool AIPlayer::rockveeHere( void )
+{
+	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_ROCKVEE ) != 0 );
+}
+
 /** The owner, 2026-11-26: every general's computer player plays in its own style, under whatever personality the
 	* seat was given.  The style is the side's AIIdentity (AIIdentity.h), made at the seat's first turn or on a load. */
 void AIPlayer::ensureIdentity( void )
@@ -14155,6 +14160,28 @@ struct GunshipRider
 	const char *from;		///< "wave", "default" or "team"; a "team" rider sits only with his own team
 };
 
+/** An infantryman with a gun for vehicles, by its damage type: the missile men and the rocket troops, found by
+	* data so Turkiye's and a balance change's come along. */
+static Bool hitsVehicles( const Object *obj )
+{
+	for( Int slot = PRIMARY_WEAPON; slot < WEAPONSLOT_COUNT; ++slot )
+	{
+		const Weapon *weapon = obj->getWeaponInWeaponSlot( (WeaponSlotType)slot );
+		if( weapon == NULL || (weapon->getTemplate()->getAntiMask() & WEAPON_ANTI_GROUND) == 0 )
+			continue;
+		const DamageType type = weapon->getDamageType();
+		if( type == DAMAGE_INFANTRY_MISSILE || type == DAMAGE_ARMOR_PIERCING || type == DAMAGE_EXPLOSION || type == DAMAGE_JET_MISSILES )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+/** The vehicle-killers first, for the firing seats; a stable sort, so equals keep the order they were found in. */
+static Bool ridesFirst( const GunshipRider &a, const GunshipRider &b )
+{
+	return hitsVehicles( a.obj ) && !hitsVehicles( b.obj );
+}
+
 Bool AIPlayer::loadGunships( void )
 {
 	if( !runsOwnAI() || !m_baseCenterSet )
@@ -14238,6 +14265,9 @@ Bool AIPlayer::loadGunships( void )
 			}
 		}
 	}
+	// the men with a gun for vehicles take the seats first: a Humvee of riflemen kites nothing (-aiknobsoff rockvee)
+	if( rockveeHere() )
+		std::stable_sort( riders.begin(), riders.end(), ridesFirst );
 
 	for( std::vector<GunshipRider>::const_iterator r = riders.begin(); r != riders.end(); ++r )
 	{
@@ -19002,6 +19032,25 @@ static Real groundAttackRange( const Object *obj )
 	return best;
 }
 
+/** ... and with riders who shoot out of it, the longest of theirs too: a Humvee of missile men reaches as far as
+	* their missiles, past its own gun. */
+static Real groundAttackRangeWithRiders( const Object *obj )
+{
+	Real best = groundAttackRange( obj );
+	const ContainModuleInterface *contain = obj->getContain();
+	if( contain == NULL || contain->getContainCount() == 0 || contain->isGarrisonable() )
+		return best;
+	const ContainedItemsList *riders = contain->getContainedItemsList();
+	if( riders == NULL )
+		return best;
+	for( ContainedItemsList::const_iterator it = riders->begin(); it != riders->end(); ++it )
+	{
+		if( contain->isPassengerAllowedToFire( (*it)->getID() ) )
+			best = max( best, groundAttackRange( *it ) );
+	}
+	return best;
+}
+
 /** ... and the longest that can hit an aircraft, for the influence map's air layer. */
 static Real airAttackRange( const Object *obj )
 {
@@ -22482,7 +22531,9 @@ void AIPlayer::tacticsFor( Object *obj )
 		return;
 	}
 
-	const Real myRange = groundAttackRange( obj );
+	// a transport counts the riders who shoot out of it, so a Humvee of missile men kites at their reach
+	// (-aiknobsoff rockvee), where it kited at its own machine gun's
+	const Real myRange = rockveeHere() ? groundAttackRangeWithRiders( obj ) : groundAttackRange( obj );
 	if( myRange <= 0.0f )
 		return;
 

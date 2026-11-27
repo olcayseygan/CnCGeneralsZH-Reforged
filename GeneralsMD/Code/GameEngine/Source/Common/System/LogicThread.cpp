@@ -28,6 +28,7 @@
 #include "Common/GameAudio.h"
 #include "Common/GameEngine.h"
 #include "Common/MessageStream.h"
+#include "Common/PerfTimer.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
@@ -237,6 +238,10 @@ namespace
 		LogicThread::t_isLogicThread = TRUE;
 		// GameLogic::update sets it again on entry; a new thread starts on the CRT default.
 		setFPMode();
+#ifdef PERF_TIMERS
+		// the tick's scopes in the HEADLESS PERF table, as logic/ rows
+		PerfGather::gatherLogicThread();
+#endif
 
 		for( ;; )
 		{

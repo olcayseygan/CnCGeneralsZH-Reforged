@@ -146,7 +146,7 @@ static char s_buf[256] = "";
 
 __declspec(thread) PerfGather*	PerfGather::m_active[MAX_ACTIVE_STACK] = { 0 };
 __declspec(thread) Int					PerfGather::m_activeDepth = 0;
-__declspec(thread) Bool					PerfGather::m_gatherOnThisThread = FALSE;
+__declspec(thread) Int					PerfGather::m_gatherSlot = PerfGather::GATHER_OFF;
 Int64													PerfGather::s_stopStartOverhead = -1;
 
 
@@ -196,14 +196,7 @@ void PerfGather::removeFromList()
 // parameter every gather is a net-time gather and DECLARE_TOTAL_PERF_TIMER does not link.
 PerfGather::PerfGather(const char *identifier, Bool netOnly) :
 	m_identifier(identifier),
-	m_startTime(0),
-	m_runningTimeGross(0),
-	m_runningTimeNet(0),
-	m_callCount(0),
-	m_totalTimeNet(0),
-	m_totalTimeGross(0),
-	m_totalCallCount(0),
-	m_worstFrameNet(0),
+	m_c(),
 	m_next(0),
 	m_prev(0),
 	m_netTimeOnly(netOnly)
@@ -225,10 +218,19 @@ PerfGather::~PerfGather()
 //-------------------------------------------------------------------------------------------------
 void PerfGather::reset()
 {
-	m_startTime = 0;
-	m_runningTimeGross = 0;
-	m_runningTimeNet = 0;
-	m_callCount = 0;
+	for (Int slot = GATHER_MAIN; slot < GATHER_SLOTS; ++slot)
+	{
+		m_c[slot].startTime = 0;
+		m_c[slot].runningTimeGross = 0;
+		m_c[slot].runningTimeNet = 0;
+		m_c[slot].callCount = 0;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/*static*/ void PerfGather::gatherLogicThread()
+{
+	m_gatherSlot = GATHER_LOGIC;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -243,6 +245,10 @@ void PerfGather::reset()
 //-------------------------------------------------------------------------------------------------
 static UnsignedInt s_framesAccumulated = 0;
 
+// A logic thread row's name in HEADLESS PERF and HEADLESS SPIKE, so the same scope on the two
+// threads reads as two rows; no space, so ai-batch.ps1's (\S+) still takes the whole name.
+static const char LOGIC_ROW_PREFIX[] = "logic/";
+
 /*static*/ void PerfGather::accumulateFrame(Real frameMS)
 {
 	// The first second of a match loads assets and would drown every average that follows,
@@ -250,14 +256,21 @@ static UnsignedInt s_framesAccumulated = 0;
 	if (TheGameLogic && TheGameLogic->getFrame() <= 30)
 		return;
 
+	/* Between passes the tick is parked on LogicThread's lock (runTick and the overlap window both
+		 wait for it to finish before the pass ends), so the logic thread's counters are read here
+		 after the lock published them and before the next tick writes them again. */
 	++s_framesAccumulated;
 	for (PerfGather* head = getHeadPtr(); head != NULL; head = head->m_next)
 	{
-		head->m_totalTimeNet += head->m_runningTimeNet;
-		head->m_totalTimeGross += head->m_runningTimeGross;
-		head->m_totalCallCount += head->m_callCount;
-		if (head->m_runningTimeNet > head->m_worstFrameNet)
-			head->m_worstFrameNet = head->m_runningTimeNet;
+		for (Int slot = GATHER_MAIN; slot < GATHER_SLOTS; ++slot)
+		{
+			Counters& c = head->m_c[slot];
+			c.totalTimeNet += c.runningTimeNet;
+			c.totalTimeGross += c.runningTimeGross;
+			c.totalCallCount += c.callCount;
+			if (c.runningTimeNet > c.worstFrameNet)
+				c.worstFrameNet = c.runningTimeNet;
+		}
 	}
 
 	/* A frame nobody would have noticed needs no report; a frame that dropped a picture needs one
@@ -270,37 +283,44 @@ static UnsignedInt s_framesAccumulated = 0;
 	Int used = sprintf(line, "HEADLESS SPIKE: frame %d took %.1f ms |",
 										 TheGameLogic ? TheGameLogic->getFrame() : 0, frameMS);
 
-	// The four worst scopes of this frame, by net time.  Four because a fifth has never yet been
-	// the answer and the line has to stay one line.
+	// The four worst scopes of this frame, by net time, either thread's.  Four because a fifth has
+	// never yet been the answer and the line has to stay one line.
 	enum { TOP = 4 };
-	const PerfGather* picked[ TOP ] = { 0 };
-	for (Int slot = 0; slot < TOP; ++slot)
+	const Counters* picked[ TOP ] = { 0 };
+	for (Int rank = 0; rank < TOP; ++rank)
 	{
 		const PerfGather* best = NULL;
+		Int bestSlot = GATHER_OFF;
 		Int64 bestTime = 0;
 		for (const PerfGather* head = getHeadPtr(); head != NULL; head = head->m_next)
 		{
-			if (head->m_runningTimeNet <= bestTime)
-				continue;
-			Bool taken = FALSE;
-			for (Int i = 0; i < slot; ++i)
-				if (picked[i] == head) { taken = TRUE; break; }
-			if (!taken)
+			for (Int slot = GATHER_MAIN; slot < GATHER_SLOTS; ++slot)
 			{
-				best = head;
-				bestTime = head->m_runningTimeNet;
+				const Counters& c = head->m_c[slot];
+				if (c.runningTimeNet <= bestTime)
+					continue;
+				Bool taken = FALSE;
+				for (Int i = 0; i < rank; ++i)
+					if (picked[i] == &c) { taken = TRUE; break; }
+				if (!taken)
+				{
+					best = head;
+					bestSlot = slot;
+					bestTime = c.runningTimeNet;
+				}
 			}
 		}
 		if (best == NULL)
 			break;
-		picked[ slot ] = best;
+		picked[ rank ] = &best->m_c[bestSlot];
 		const double ms = (double)bestTime / s_ticksPerUSec / 1000.0;
 		if (ms < 0.05)
 			break;						// nothing left worth naming
 		// The old guard reserved 64 bytes and hoped the name fitted in them.  snprintf says how
 		// much it wanted, so a name that does not fit stops the line instead of running past it.
 		const Int room = (Int)ARRAY_SIZE(line) - used;
-		const Int wrote = snprintf(line + used, room, " %s %.1f", best->m_identifier, ms);
+		const Int wrote = snprintf(line + used, room, " %s%s %.1f",
+															 bestSlot == GATHER_LOGIC ? LOGIC_ROW_PREFIX : "", best->m_identifier, ms);
 		if (wrote < 0 || wrote >= room)
 			break;
 		used += wrote;
@@ -319,34 +339,44 @@ static UnsignedInt s_framesAccumulated = 0;
 
 	// Sorted by net time, because the only question this table exists to answer is "what is the
 	// frame actually spent on".  Insertion sort over a list that is a few dozen long at most.
-	enum { MAX_ROWS = 256 };
-	const PerfGather* rows[MAX_ROWS];
+	// One row per scope per thread that entered it, the logic thread's named with LOGIC_ROW_PREFIX.
+	struct Row { const PerfGather* g; Int slot; };
+	enum { MAX_ROWS = 512 };
+	Row rows[MAX_ROWS];
 	Int numRows = 0;
-	for (const PerfGather* head = getHeadPtr(); head != NULL && numRows < MAX_ROWS; head = head->m_next)
+	for (const PerfGather* head = getHeadPtr(); head != NULL; head = head->m_next)
 	{
-		if (head->m_totalCallCount == 0)
-			continue;
-		Int at = numRows++;
-		while (at > 0 && rows[at-1]->m_totalTimeNet < head->m_totalTimeNet)
+		for (Int slot = GATHER_MAIN; slot < GATHER_SLOTS && numRows < MAX_ROWS; ++slot)
 		{
-			rows[at] = rows[at-1];
-			--at;
+			const Int64 net = head->m_c[slot].totalTimeNet;
+			if (head->m_c[slot].totalCallCount == 0)
+				continue;
+			Int at = numRows++;
+			while (at > 0 && rows[at-1].g->m_c[rows[at-1].slot].totalTimeNet < net)
+			{
+				rows[at] = rows[at-1];
+				--at;
+			}
+			rows[at].g = head;
+			rows[at].slot = slot;
 		}
-		rows[at] = head;
 	}
 
-	DEBUG_LOG(("HEADLESS PERF: %d frames gathered, us/frame net (gross) x calls/frame, worst single frame\n", s_framesAccumulated));
+	DEBUG_LOG(("HEADLESS PERF: %d frames gathered, us/frame net (gross) x calls/frame, worst single frame; %s rows are the logic thread's\n",
+						 s_framesAccumulated, LOGIC_ROW_PREFIX));
 	for (Int i = 0; i < numRows; ++i)
 	{
-		const PerfGather* g = rows[i];
+		const PerfGather* g = rows[i].g;
+		const Counters& c = g->m_c[rows[i].slot];
 		// The worst column is the stability column: a scope whose average is nothing and whose
 		// worst frame is twenty milliseconds is a stutter, and the average alone hides it.
-		DEBUG_LOG(("HEADLESS PERF %s: %.1f (%.1f) x%.2f worst %.1f\n",
+		DEBUG_LOG(("HEADLESS PERF %s%s: %.1f (%.1f) x%.2f worst %.1f\n",
+			rows[i].slot == GATHER_LOGIC ? LOGIC_ROW_PREFIX : "",
 			g->m_identifier,
-			(double)g->m_totalTimeNet / s_ticksPerUSec / s_framesAccumulated,
-			(double)g->m_totalTimeGross / s_ticksPerUSec / s_framesAccumulated,
-			(double)g->m_totalCallCount / s_framesAccumulated,
-			(double)g->m_worstFrameNet / s_ticksPerUSec));
+			(double)c.totalTimeNet / s_ticksPerUSec / s_framesAccumulated,
+			(double)c.totalTimeGross / s_ticksPerUSec / s_framesAccumulated,
+			(double)c.totalCallCount / s_framesAccumulated,
+			(double)c.worstFrameNet / s_ticksPerUSec));
 	}
 }
 
@@ -354,7 +384,7 @@ static UnsignedInt s_framesAccumulated = 0;
 /*static*/ void PerfGather::initPerfDump(const char* fname, Int options)
 {
 	// Whichever thread sets the profile up is the one whose frame is being measured.
-	m_gatherOnThisThread = TRUE;
+	m_gatherSlot = GATHER_MAIN;
 
 	PerfGather::termPerfDump();
 
@@ -456,7 +486,7 @@ static UnsignedInt s_framesAccumulated = 0;
 		{
 			for (const PerfGather* head = getHeadPtr(); head != NULL; head = head->m_next)
 			{
-				double t = head->m_runningTimeGross;
+				double t = head->runningTimeGross();		// both threads' time, here and below
 				t /= s_ticksPerUSec;
 				if (t > CLIP_BIG_SPIKES)
 					t = CLIP_BIG_SPIKES;
@@ -467,7 +497,7 @@ static UnsignedInt s_framesAccumulated = 0;
 		{
 			for (const PerfGather* head = getHeadPtr(); head != NULL; head = head->m_next)
 			{
-				double t = head->m_runningTimeNet;
+				double t = head->runningTimeNet();
 				t /= s_ticksPerUSec;
 				if (t > CLIP_BIG_SPIKES)
 					t = CLIP_BIG_SPIKES;
@@ -478,7 +508,7 @@ static UnsignedInt s_framesAccumulated = 0;
 		{
 			for (const PerfGather* head = getHeadPtr(); head != NULL; head = head->m_next)
 			{
-				fprintf(s_perfStatsFile, ",%d", head->m_callCount);
+				fprintf(s_perfStatsFile, ",%d", head->callCount());
 			}
 		}
 
@@ -512,7 +542,7 @@ static UnsignedInt s_framesAccumulated = 0;
 		{
 			for (const PerfGather* head = getHeadPtr(); head != NULL; head = head->m_next)
 			{
-				Real t = head->m_runningTimeGross;
+				Real t = head->runningTimeGross();
 				t /= s_ticksPerUSec;
 				if (t > CLIP_BIG_SPIKES)
 					t = CLIP_BIG_SPIKES;
@@ -524,7 +554,7 @@ static UnsignedInt s_framesAccumulated = 0;
 		{
 			for (const PerfGather* head = getHeadPtr(); head != NULL; head = head->m_next)
 			{
-				Real t = head->m_runningTimeNet;
+				Real t = head->runningTimeNet();
 				t /= s_ticksPerUSec;
 				if (t > CLIP_BIG_SPIKES)
 					t = CLIP_BIG_SPIKES;
@@ -536,7 +566,7 @@ static UnsignedInt s_framesAccumulated = 0;
 		{
 			for (const PerfGather* head = getHeadPtr(); head != NULL; head = head->m_next)
 			{
-				Real t = head->m_callCount;
+				Real t = head->callCount();
 				TheGraphDraw->addEntry(head->m_identifier, REAL_TO_INT(t));
 				
 			}

@@ -132,6 +132,13 @@ public:
 	static void accumulateFrame(Real frameMS);
 	static void dumpSummary();
 
+	/* LogicThread's threadMain calls this, so the tick's scopes are gathered too.  Each gathered
+		 thread keeps counters of its own in every gather (GATHER_MAIN, GATHER_LOGIC), because the
+		 render and the tick run beside each other and a scope both enter (CritSec, FileSystem)
+		 would otherwise have two threads adding into one Int64.  The main thread reads the logic
+		 thread's counters only between passes, when the tick is parked on LogicThread's lock. */
+	static void gatherLogicThread();
+
 	void reset();
 
 private:
@@ -149,12 +156,12 @@ private:
 	enum { MAX_ACTIVE_STACK = 256 };
 	static __declspec(thread) PerfGather* m_active[MAX_ACTIVE_STACK];
 	static __declspec(thread) Int m_activeDepth;
-	/* TRUE only on the thread initPerfDump() was called from.  The counters below are shared and
-		 an Int64 += is two writes on x86, so a gather on a scope several threads enter (CritSec,
-		 FileSystem) used to report torn nonsense - the FileSystem row came out at 27 *seconds* per
-		 frame.  Only the profiled thread accumulates now, which is also the right answer to the
-		 question the table exists for: where the frame goes is where the main thread goes. */
-	static __declspec(thread) Bool m_gatherOnThisThread;
+	/* Which counters this thread writes: GATHER_MAIN on the thread initPerfDump() was called from,
+		 GATHER_LOGIC on the logic thread, GATHER_OFF (zero, so every other thread starts there for
+		 free) on the job pool, the texture loader and the log writer.  Shared counters used to
+		 report torn nonsense - the FileSystem row came out at 27 *seconds* per frame. */
+	enum { GATHER_OFF, GATHER_MAIN, GATHER_LOGIC, GATHER_SLOTS };
+	static __declspec(thread) Int m_gatherSlot;
 	static Int64 s_stopStartOverhead;	// overhead for stop+start a timer
 
 	static PerfGather*& getHeadPtr();
@@ -162,20 +169,25 @@ private:
 	void addToList();
 	void removeFromList();
 
-	/* The counters below are shared, and a gather on a scope that several threads enter (CritSec,
-		 FileSystem) has them incremented from several threads without a lock.  On x86 an Int64 +=
-		 is two writes, so such a row can be off by a torn update.  Left alone deliberately: this is
-		 a measurement build, the affected rows are the ones whose absolute value nobody acts on,
-		 and making them atomic would cost more than the thing being measured. */
+	// One set per gathered thread, indexed by m_gatherSlot; GATHER_OFF's set is never written.
+	struct Counters
+	{
+		Int64				startTime;
+		Int64				runningTimeGross;
+		Int64				runningTimeNet;
+		Int					callCount;
+		Int64				totalTimeNet;			// summed over every frame accumulateFrame() saw
+		Int64				totalTimeGross;
+		Int64				totalCallCount;
+		Int64				worstFrameNet;		// the single worst frame this scope ever had
+	};
+
+	Int64 runningTimeGross() const { return m_c[GATHER_MAIN].runningTimeGross + m_c[GATHER_LOGIC].runningTimeGross; }
+	Int64 runningTimeNet() const { return m_c[GATHER_MAIN].runningTimeNet + m_c[GATHER_LOGIC].runningTimeNet; }
+	Int callCount() const { return m_c[GATHER_MAIN].callCount + m_c[GATHER_LOGIC].callCount; }
+
 	const char*		m_identifier;
-	Int64					m_startTime;
-	Int64					m_runningTimeGross;
-	Int64					m_runningTimeNet;
-	Int						m_callCount;
-	Int64					m_totalTimeNet;			// summed over every frame accumulateFrame() saw
-	Int64					m_totalTimeGross;
-	Int64					m_totalCallCount;
-	Int64					m_worstFrameNet;		// the single worst frame this scope ever had
+	Counters			m_c[GATHER_SLOTS];
 	PerfGather*		m_next;
 	PerfGather*		m_prev;
 	Bool					m_ignore;
@@ -185,14 +197,15 @@ private:
 //-------------------------------------------------------------------------------------------------
 void PerfGather::startTimer()
 {
-	if (!m_gatherOnThisThread)
+	const Int slot = m_gatherSlot;
+	if (slot == GATHER_OFF)
 		return;
 
 	// The depth moves whether or not the slot exists, so start and stop stay balanced even if
 	// something nests deeper than the array; only the parent attribution is lost.
 	if (++m_activeDepth < MAX_ACTIVE_STACK)
 		m_active[m_activeDepth] = this;
-	GetPrecisionTimer(&m_startTime);
+	GetPrecisionTimer(&m_c[slot].startTime);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -200,18 +213,20 @@ void PerfGather::stopTimer()
 {
 	DEBUG_ASSERTCRASH(this != NULL, ("I am null, uh oh"));
 
-	if (!m_gatherOnThisThread)
+	const Int slot = m_gatherSlot;
+	if (slot == GATHER_OFF)
 		return;
 
 	Int64 runTime;
 	GetPrecisionTimer(&runTime);
 
-	runTime -= m_startTime;
+	Counters& c = m_c[slot];
+	runTime -= c.startTime;
 
-	m_runningTimeGross += runTime;
-	m_runningTimeNet += runTime;
+	c.runningTimeGross += runTime;
+	c.runningTimeNet += runTime;
 
-	++m_callCount;
+	++c.callCount;
 
 #ifdef _DEBUG
 	DEBUG_ASSERTCRASH(m_activeDepth > 0 && m_activeDepth < MAX_ACTIVE_STACK, ("active under/over flow"));
@@ -223,9 +238,10 @@ void PerfGather::stopTimer()
 	if (parent)
 	{
 		// don't add the time it took for us to actually get the ticks (in startTimer) to our parent...
-		parent->m_runningTimeGross -= (s_stopStartOverhead);
+		// The stack is this thread's, so the parent's counters are this thread's slot too.
+		parent->m_c[slot].runningTimeGross -= (s_stopStartOverhead);
 		if (parent->m_netTimeOnly) {
-			parent->m_runningTimeNet -= (runTime + s_stopStartOverhead);
+			parent->m_c[slot].runningTimeNet -= (runTime + s_stopStartOverhead);
 		}
 	}
 }

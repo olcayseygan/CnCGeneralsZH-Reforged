@@ -193,7 +193,7 @@ static Bool buildPending( Player *player, const ThingTemplate *tmpl )
 	* the bank keeps (bankTarget).  The whole target was too much: at Elo 1800 the bank sat under it nearly all
 	* match, and of four Laser matches only the opening's 8,000 ever paid for a turret.  Never in the opening
 	* either: the first plant guard took 1,000 of the starting 8,000 at frame 597 in every match. */
-static const UnsignedInt IDENTITY_BUILD_START_FRAMES = (UnsignedInt)( 150 * LOGICFRAMES_PER_GAME_SECOND );
+#define IDENTITY_BUILD_START_FRAMES ( (UnsignedInt)( 150 * LOGICFRAMES_PER_GAME_SECOND ) )
 
 const ThingTemplate *AIIdentityUSA::buildableDefence( const char *name, Int *cost, Real reserveShare )
 {
@@ -221,7 +221,7 @@ const ThingTemplate *AIIdentityUSA::buildableDefence( const char *name, Int *cos
 //----------------------------------------------------------------------------------------------------------
 
 static const char *LASER_TURRET = "Lazr_AmericaPatriotBattery";
-static const UnsignedInt LASER_CHECK_FRAMES = (UnsignedInt)( 10 * LOGICFRAMES_PER_GAME_SECOND );
+#define LASER_CHECK_FRAMES ( (UnsignedInt)( 10 * LOGICFRAMES_PER_GAME_SECOND ) )
 /** A plant counts as guarded with a defence of ours (or one asked for) within the turret's reach of it.  At six
 	* tenths, the ring search's own outer ring, a turret it had put 270 from its plant counted as no guard. */
 static const Real PLANT_GUARD_REACH = 1.0f;
@@ -229,7 +229,7 @@ static const Real PLANT_GUARD_REACH = 1.0f;
 static const Real LASER_RESERVE = 0.5f;
 static const Real FORTRESS_RESERVE = 0.5f;
 /** A wave front this fresh still gets its turret, and one this far from it already covers it. */
-static const UnsignedInt FORWARD_LASER_FRAMES = (UnsignedInt)( 20 * LOGICFRAMES_PER_GAME_SECOND );
+#define FORWARD_LASER_FRAMES ( (UnsignedInt)( 20 * LOGICFRAMES_PER_GAME_SECOND ) )
 static const Real FORWARD_LASER_COVER_REACH = 1.5f;
 /** The turret stands this share of its reach back from the front, on the home side. */
 static const Real FORWARD_LASER_BACK_REACH = 0.5f;
@@ -580,8 +580,8 @@ Real AIIdentityUSA::pullHealth( const Object *unit, Real shared ) const
 	return max( shared, HELI_MEND_HEALTH );
 }
 
-static const UnsignedInt CLEAR_AA_CHECK_FRAMES = (UnsignedInt)( 2 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt CLEAR_AA_FRESH_FRAMES = (UnsignedInt)( 15 * LOGICFRAMES_PER_GAME_SECOND );
+#define CLEAR_AA_CHECK_FRAMES ( (UnsignedInt)( 2 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define CLEAR_AA_FRESH_FRAMES ( (UnsignedInt)( 15 * LOGICFRAMES_PER_GAME_SECOND ) )
 /** The known anti-air gun nearest the front, when one stands within this of it, and the jets go only in a pair or more. */
 static const Real CLEAR_AA_RANGE = 600.0f;
 static const Int CLEAR_AA_MIN_JETS = 2;
@@ -651,9 +651,9 @@ void AIIdentityUSA::doClearAntiAir( void )
 	* (Bombardment's 20% damage when it walks into known guns, Search and Destroy's 20% range and sight otherwise)
 	* and when the pressure turns to defence (Hold the Line's tenth off the damage taken).  Under attack it changes
 	* nothing, and it waits BATTLE_PLAN_SWITCH_FRAMES between two changes. */
-static const UnsignedInt BATTLE_PLAN_CHECK_FRAMES = (UnsignedInt)( 2 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt BATTLE_PLAN_SWITCH_FRAMES = (UnsignedInt)( 45 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt BATTLE_PLAN_WAVE_FRAMES = (UnsignedInt)( 20 * LOGICFRAMES_PER_GAME_SECOND );	///< how long after a send its plan may still be put up
+#define BATTLE_PLAN_CHECK_FRAMES ( (UnsignedInt)( 2 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define BATTLE_PLAN_SWITCH_FRAMES ( (UnsignedInt)( 45 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define BATTLE_PLAN_WAVE_FRAMES ( (UnsignedInt)( 20 * LOGICFRAMES_PER_GAME_SECOND ) )	///< how long after a send its plan may still be put up
 static const Real BATTLE_PLAN_SIEGE_SHARE = 0.25f;	///< known guns on its road worth this share of the wave make it a siege
 
 void AIIdentityUSA::onWaveSent( AIGroup *wave, Real power )

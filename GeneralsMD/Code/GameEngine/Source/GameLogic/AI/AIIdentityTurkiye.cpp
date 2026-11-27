@@ -100,7 +100,7 @@ static Real blendOf( Real AIPersonaWeights::*field )
 static const Real LONG_GUN_TEAM_SPAN = 10.0f;
 
 // ---- the standing orders ----
-static const Int TURKIYE_TICK_FRAMES = (Int)( 3 * LOGICFRAMES_PER_GAME_SECOND );
+#define TURKIYE_TICK_FRAMES ( (Int)( 3 * LOGICFRAMES_PER_GAME_SECOND ) )	///< a macro: the game speed is the match's, read at each use
 /** A spotter stands this far outside a known defence's reach: past where holdAtDefences parks a unit at the
 	* edge (reach + 30 + 90), so the two never send it back and forth, and still near enough that its 500 sight
 	* reaches well past the gun into the base behind it. */

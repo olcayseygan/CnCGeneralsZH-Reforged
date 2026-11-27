@@ -114,14 +114,14 @@ static const Int HACKER_FARM_BID = 12;
 	* may start, and what it leaves in the bank.  Never under a gun this AI knows of. */
 static const Real FORWARD_TOWER_OUT = 150.0f;
 static const Int FORWARD_TOWER_MAX = 2;
-static const UnsignedInt FORWARD_TOWER_EVERY = (UnsignedInt)( 120 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt FORWARD_TOWER_FROM = (UnsignedInt)( 4 * 60 * LOGICFRAMES_PER_GAME_SECOND );
+#define FORWARD_TOWER_EVERY ( (UnsignedInt)( 120 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define FORWARD_TOWER_FROM ( (UnsignedInt)( 4 * 60 * LOGICFRAMES_PER_GAME_SECOND ) )
 static const Real FORWARD_TOWER_GUN_MARGIN = 60.0f;
 static const Int FORWARD_TOWER_BANK = 1000;
 /** A tank of the Tank General's that the shared AI pulls out dear goes at this health share, not the rung's. */
 static const Real TANK_PULL_HEALTH = 0.45f;
 /** The Tank Drop waits this long for a breach, then the shared aim has it. */
-static const UnsignedInt DROP_HOLD_FRAMES = (UnsignedInt)( 120 * LOGICFRAMES_PER_GAME_SECOND );
+#define DROP_HOLD_FRAMES ( (UnsignedInt)( 120 * LOGICFRAMES_PER_GAME_SECOND ) )
 /** A breach: one of ours stands within this of a known enemy building, no known gun reaches it, and its company
 	* within BREACH_COMPANY is counted to pick the best foothold. */
 static const Real BREACH_REACH = 450.0f;
@@ -129,7 +129,7 @@ static const Real BREACH_COMPANY = 300.0f;
 /** The steamroller: a full wave is heavier than the shared one, and for this long after it leaves the waves
 	* behind it go at half the size and half the wait, so the advance is fed instead of halted.  The window runs
 	* from the full wave alone: kept open by each follow-up, 110 of 119 sends in 20 matches went at half. */
-static const UnsignedInt STEAMROLL_FRAMES = (UnsignedInt)( 90 * LOGICFRAMES_PER_GAME_SECOND );
+#define STEAMROLL_FRAMES ( (UnsignedInt)( 90 * LOGICFRAMES_PER_GAME_SECOND ) )
 static const Real STEAMROLL_FIRST = 1.2f;
 static const Real STEAMROLL_FOLLOW = 0.5f;
 /** The horde: waves wait for more and for longer. */
@@ -137,9 +137,9 @@ static const Real HORDE_POWER = 1.25f;
 static const Real HORDE_HOLD = 1.2f;
 /** The crawler raids: until when, how often a crawler leaves, how long it may drive before it unloads wherever it
 	* is, how near its target it unloads, and the bid on the crawler's teams while raids are on. */
-static const UnsignedInt RAID_UNTIL = (UnsignedInt)( 10 * 60 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt RAID_EVERY = (UnsignedInt)( 40 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt RAID_DRIVE_FRAMES = (UnsignedInt)( 120 * LOGICFRAMES_PER_GAME_SECOND );
+#define RAID_UNTIL ( (UnsignedInt)( 10 * 60 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define RAID_EVERY ( (UnsignedInt)( 40 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define RAID_DRIVE_FRAMES ( (UnsignedInt)( 120 * LOGICFRAMES_PER_GAME_SECOND ) )
 static const Real RAID_UNLOAD_REACH = 200.0f;
 static const Real RAID_GUN_MARGIN = 50.0f;
 static const Real CRAWLER_TEAM_BID = 15.0f;

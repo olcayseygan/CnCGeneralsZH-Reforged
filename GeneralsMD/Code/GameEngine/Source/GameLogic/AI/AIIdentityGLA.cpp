@@ -112,16 +112,17 @@ AIIdentity *createGLAIdentity( AIPlayer *ai, AIGeneral general )
 }
 
 // ---- the clocks: one turn a game second, each move on its own multiple of it ----------------------------
-static const UnsignedInt GLA_TURN_FRAMES = (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND;
-static const UnsignedInt TUNNEL_JUMP_GAP = (UnsignedInt)( 25 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt SCUD_RAID_GAP = (UnsignedInt)( 40 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt POISON_GAP = (UnsignedInt)( 45 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt TRUCK_DRESS_FRAMES = (UnsignedInt)( 15 * LOGICFRAMES_PER_GAME_SECOND );	///< a truck not dressed by then goes as it is
-static const UnsignedInt SUPPLY_RAID_GAP = (UnsignedInt)( 50 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt TRAP_GAP = (UnsignedInt)( 12 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt BLOB_FRESH_FRAMES = (UnsignedInt)( 3 * LOGICFRAMES_PER_GAME_SECOND );	///< a ledger row seen this lately is where it was
-static const UnsignedInt ARMY_FRESH_FRAMES = (UnsignedInt)( 8 * LOGICFRAMES_PER_GAME_SECOND );
-static const UnsignedInt OPENING_FRAMES = (UnsignedInt)( 150 * LOGICFRAMES_PER_GAME_SECOND );		///< no raids or traps before the economy is in
+// Macros, not namespace constants: the game speed is the match's, so a value filled before main would keep 150's.
+#define GLA_TURN_FRAMES ( (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND )
+#define TUNNEL_JUMP_GAP ( (UnsignedInt)( 25 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define SCUD_RAID_GAP ( (UnsignedInt)( 40 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define POISON_GAP ( (UnsignedInt)( 45 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define TRUCK_DRESS_FRAMES ( (UnsignedInt)( 15 * LOGICFRAMES_PER_GAME_SECOND ) )	///< a truck not dressed by then goes as it is
+#define SUPPLY_RAID_GAP ( (UnsignedInt)( 50 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define TRAP_GAP ( (UnsignedInt)( 12 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define BLOB_FRESH_FRAMES ( (UnsignedInt)( 3 * LOGICFRAMES_PER_GAME_SECOND ) )	///< a ledger row seen this lately is where it was
+#define ARMY_FRESH_FRAMES ( (UnsignedInt)( 8 * LOGICFRAMES_PER_GAME_SECOND ) )
+#define OPENING_FRAMES ( (UnsignedInt)( 150 * LOGICFRAMES_PER_GAME_SECOND ) )		///< no raids or traps before the economy is in
 
 static const Int TUNNEL_JUMP_INTRUDERS = 3;			///< enemies that can shoot at home before the army is called back
 static const Int TUNNEL_JUMP_MOST = 30;

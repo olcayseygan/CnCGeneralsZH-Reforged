@@ -34,6 +34,7 @@ found and fixed, EA's own, not port damage.**
 - In the console's `freecam` the mouse wheel narrows and widens the lens, from 10 to 120 degrees across, for a long shot of one tank or a wide one of a whole base up close. Landing puts the normal lens back, and `freecam x y z heading tilt fov` repeats a shot with its lens; leaving the freecam prints the lens with the rest of the pose.
 - Under Ragdoll Deaths a soldier who had fallen lies where he fell after a save is loaded, instead of getting up into his death animation and dying again. Saves made by this version need it to load.
 - Roads darken with the night. With Day and Night ticked, a road the camera had in view when the light turned kept the daylight it was drawn with and glowed against the dark ground beside it under Classic graphics and Direct3D 9; it now takes each change of light with the ground under it, the Apocalypse's red nights and a mission's change of hour too.
+- With Ground Foliage on, the grass, stones and dead trees no longer stop in a straight line where the map's ground ends and the land past the edge carries on bare: they thin out over the last hundred and twenty units instead.
 ## The game room in the new menu look
 
 - The room you set up every skirmish, LAN game and online custom game in is the next screen in the new menu look: the thin lit frame with its ruler ticks, one lit key (Play Game, Start or Accept), and every drop-down and check box drawn in the same lines instead of EA's 2003 art.

@@ -119,6 +119,7 @@ static_assert(BUSH_VARIANTS == 6 && BUSH_CORNERS == 37, "W3DGrassBuffer::m_bushC
 #define ROOT_SHADE					0.65f		///< the roots' share of the light
 #define NORMAL_TO_UP				0.5f		///< how far a card's normal goes from the ground's toward straight up
 #define GRASS_RADIUS				480.0f	///< around the tactical view's focus
+#define EDGE_FADE_CELLS			12			///< the heightmap's last cells, over which the cover thins to nothing
 #define FAR_RADIUS					1100.0f	///< the big trees': out past the edges of the view, as the map's own trees are drawn
 #define BIG_MESH_REACH			16.0f		///< how far a fir's tiers or a dead tree's branches lean past its chunk
 #define GRASS_FADE_WIDTH		140.0f	///< the last stretch of it, thinned on the CPU and folded on the GPU
@@ -562,6 +563,14 @@ void W3DGrassBuffer::classify(WorldHeightMap *map, const W3DTreeBuffer *trees)
 	for (Int y = 0; y < m_height - 1; y++) {
 		for (Int x = 0; x < m_width - 1; x++) {
 			const Int ndx = y * m_width + x;
+			// the heightmap's last EDGE_FADE_CELLS lose more cells the nearer the edge, everything a cell
+			// grows with them (the border's dead trees and firs too), so the cover ends in a ragged fringe and
+			// not a straight line where the land past the edge carries on bare
+			const Int edgeCells = min(min(x, y), min(m_width - 2 - x, m_height - 2 - y));
+			if (edgeCells < EDGE_FADE_CELLS
+					&& unit(hash(x, y, SALT_KIND + 0x42)) * EDGE_FADE_CELLS >= edgeCells + 0.5f) {
+				continue;
+			}
 			const Int baseTile = tiles[ndx] >> 2;
 			const TileInfo &base = (baseTile >= 0 && baseTile < NUM_SOURCE_TILES) ? tileInfo[baseTile] : none;
 			const Short b = blends ? blends[ndx] : 0;

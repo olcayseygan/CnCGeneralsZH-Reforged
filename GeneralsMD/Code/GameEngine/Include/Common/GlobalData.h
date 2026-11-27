@@ -140,6 +140,7 @@ enum
 	AIKNOB_ATTENTION		= 67108864,	///< no attention budget: the micro looks at every unit on every turn, as before 2026-11-27
 	AIKNOB_FLANK				= 134217728,	///< a wave walks its authored road however gunned, as before 2026-11-27
 	AIKNOB_SIEGE_LEAD		= 268435456,	///< a siege gun out with a wave walks SHELL_WALK for a defence at every rating, as before 2026-11-27
+	AIKNOB_PLANS				= 536870912,	///< a Random seat draws any of twelve personalities alike, as before 2026-11-27
 };
 
 //-------------------------------------------------------------------------------------------------

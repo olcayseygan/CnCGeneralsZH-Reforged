@@ -929,6 +929,22 @@ class Walk(object):
 
     # -- a state -------------------------------------------------------------------------------------
 
+    def fold(self, trigger, revealed):
+        """Put away a panel a sub-walk opened (the friends box): its trigger clicked again, then a fresh launch if
+        it is still up, so the next control on the root is not walked under it."""
+        try:
+            if not self.game.ctl or not (revealed & set(named(self.game.tree()))):
+                return
+            if trigger in named(self.game.tree()):
+                self.game.send("uiclick " + trigger)
+                if not (revealed & set(named(settle(self.game)))):
+                    return
+            self.game.stop()
+            self.root = None
+        except Crashed:
+            self.game.stop()
+            self.root = None
+
     def walk(self, path, depth, only=None):
         """The controls of the state at the end of path; below the root only the ones its last click revealed
         (only), so the screen under an open panel is not walked through the panel."""
@@ -975,6 +991,7 @@ class Walk(object):
                     self.walk([w["n"]], 1, {c["n"] for c in fresh})
                 elif fresh:
                     self.walk(path + [w["n"]], depth + 1, {c["n"] for c in fresh})
+                    self.fold(w["n"], {c["n"] for c in fresh})
         disabled = [w for w in controls(tree, self.area) if not w["e"]]
         if disabled and depth == 0 and not path:
             self.record("(disabled)", "-", short([w["n"] for w in disabled], 12), path)

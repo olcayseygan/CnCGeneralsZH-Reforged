@@ -188,6 +188,10 @@ const Real cosAngleToCare = cos ((0.2 * PI) / 180.0);	//1.5 degree difference
 // filter spread a fuselage four units wide over fourteen.  At 0.01 its blades read as a star.
 #define SHADOW_MAP_WIDEST_TEXELS 9.0f
 #define SHADOW_MAP_NARROWEST_TEXELS 0.9f
+// The same floor in texels of the map as drawn, whatever the box: ffshader.h's narrow filter is a
+// square 2.5 times this to a side, weighed by area, so the edge is two texels wide at the floor.  A
+// caster one texel across still darkens its own texel by half.
+#define SHADOW_MAP_NARROWEST_MAP_TEXELS 0.8f
 #define SHADOW_MAP_PENUMBRA_PER_UNIT 0.01f
 #define SHADOW_MAP_SKY_FILL 0.12f
 // The smoke in the sun's light.  The strength is how dark the thickest cloud leaves the ground and
@@ -4725,9 +4729,13 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 		 as it does at the usual one; counted in texels they would both spread with the zoom.  The
 		 freecam's larger map is the same rule: it is the width of a texel on the ground that counts. */
 	const Real texelsPerBoxTexel = (2.0f * SHADOW_MAP_HALF_WIDTH / (Real)SHADOW_MAP_TEXELS) / texelWidth;
-	const Real widest = texelsPerBoxTexel * ((TheGlobalData->m_shadowMapWidest > 0.0f)
-		? TheGlobalData->m_shadowMapWidest : SHADOW_MAP_WIDEST_TEXELS);
-	const Real narrowest = texelsPerBoxTexel * SHADOW_MAP_NARROWEST_TEXELS;
+	/* Except that the narrowest never closes to a point inside one texel.  Held at its width on the
+		 ground it did: at the wheel's limit on a 1024 map it came to an eighth of a texel, every tap
+		 read the one texel, and a building's shadow ended in stairs a texel high.  The edge now spans
+		 two texels however wide the box opens, which is as hard as the map can draw it without steps. */
+	const Real narrowest = WWMath::Max( texelsPerBoxTexel * SHADOW_MAP_NARROWEST_TEXELS, SHADOW_MAP_NARROWEST_MAP_TEXELS );
+	const Real widest = WWMath::Max( narrowest, texelsPerBoxTexel * ((TheGlobalData->m_shadowMapWidest > 0.0f)
+		? TheGlobalData->m_shadowMapWidest : SHADOW_MAP_WIDEST_TEXELS) );
 
 	/* How far across the map a pixel reads, which is how far beside a caster's own outline its
 		 shadow can still darken one.  sun_reaching in ffshader.h: the blocker search's corner tap is

@@ -1369,6 +1369,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		TheWritableGlobalData->m_noTacticsSlotParity = -1;						// -notactics
 		TheWritableGlobalData->m_aiKnobsOffParity = -1;								// -aiknobsoff
 		TheWritableGlobalData->m_aiKnobsOffMask = 0;
+		TheWritableGlobalData->m_aiKnobsOffMask2 = 0;
 		TheWritableGlobalData->m_turbo = FALSE;												// -turbo
 		TheWritableGlobalData->m_noDraw = 0;													// -jumpToFrame, -noDraw
 #if defined(_DEBUG) || defined(_INTERNAL)

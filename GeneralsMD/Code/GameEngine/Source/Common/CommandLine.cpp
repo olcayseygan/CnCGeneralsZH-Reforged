@@ -1402,7 +1402,7 @@ Int parseNoTactics(char *args[], int num)
 	return 2;
 }
 
-/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit,basewatch,strikedodge,defensequeue,costmap,abilities,maplayers,foreigntech,secondbase,killzones,pressure,teamplay,dearpull,homestretch,identity,menders,bibgap,dearstay,routehome,rockvee,scouting,powerhold,harass,garrison,attention,flank,siegelead,plans,ambush: those slots keep their rung with these knobs
+/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit,basewatch,strikedodge,defensequeue,costmap,abilities,maplayers,foreigntech,secondbase,killzones,pressure,teamplay,dearpull,homestretch,identity,menders,bibgap,dearstay,routehome,rockvee,scouting,powerhold,harass,garrison,attention,flank,siegelead,plans,ambush,brokecenter: those slots keep their rung with these knobs
 	* of its profile off, so a batch can play Hard against Hard without them, or a scenario against the AI
 	* as it was.  A measuring aid like -notactics: read only in a single-player skirmish, never in a
 	* network game, and a replay made with it is played back with it given again. */
@@ -1447,6 +1447,9 @@ Int parseAIKnobsOff(char *args[], int num)
 		if (strstr(names.str(), "plans")) mask |= AIKNOB_PLANS;
 		if (strstr(names.str(), "ambush")) mask |= AIKNOB_AMBUSH;
 		TheWritableGlobalData->m_aiKnobsOffMask = mask;
+		Int mask2 = 0;
+		if (strstr(names.str(), "brokecenter")) mask2 |= AIKNOB2_BROKE_CENTER;
+		TheWritableGlobalData->m_aiKnobsOffMask2 = mask2;
 	}
 	return 3;
 }

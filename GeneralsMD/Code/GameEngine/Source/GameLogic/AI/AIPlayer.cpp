@@ -7204,6 +7204,33 @@ static Bool hasPendingRequest( Player *player, const AsciiString &name )
 	return FALSE;
 }
 
+/** Broke with a supply center asked for (-aiknobsoff brokecenter): past BROKE_AFTER_SECONDS, earning under
+	* BROKE_INCOME a second and short of that center's price, a seat puts up nothing of its plan but the center and
+	* power.  Ladder seed 410's America (econ, second order) asked for a center at frame 3870 with 4,647 banked,
+	* spent it on the War Factory, power plant and two Patriots its scripts rebuilt, and sat at 44 in the bank on
+	* "request pending" from frame 3930 to 7230 and past, earning 42 a second and falling. */
+static const Real BROKE_INCOME = 60.0f;
+static const UnsignedInt BROKE_AFTER_SECONDS = 180;
+
+Bool AIPlayer::waitsForCenter( const ThingTemplate *plan )
+{
+	if( plan == NULL || !runsOwnAI() || ( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask2 & AIKNOB2_BROKE_CENTER ) != 0 ) )
+		return FALSE;
+	if( plan->isKindOf( KINDOF_FS_SUPPLY_CENTER ) || plan->isKindOf( KINDOF_FS_POWER ) || m_incomePerSecond >= BROKE_INCOME ||
+			TheGameLogic->getFrame() < BROKE_AFTER_SECONDS * LOGICFRAMES_PER_GAME_SECOND )
+		return FALSE;
+	const Int bank = (Int)m_player->getMoney()->countMoney();
+	for( BuildListInfo *info = m_player->getBuildList(); info; info = info->getNext() )
+	{
+		if( !info->isPriorityBuild() || info->getObjectID() != INVALID_ID || !info->isBuildable() )
+			continue;
+		const ThingTemplate *center = TheThingFactory->findTemplate( info->getTemplateName(), FALSE );
+		if( center && center->isKindOf( KINDOF_FS_SUPPLY_CENTER ) && bank < center->calcCostToBuild( m_player ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+
 /** Something of this player's that can shoot stands within reach of a point: a base defense, a
 	* team on guard. */
 static Bool hasGuardNear( Player *player, const Coord3D *pos, Real reach )

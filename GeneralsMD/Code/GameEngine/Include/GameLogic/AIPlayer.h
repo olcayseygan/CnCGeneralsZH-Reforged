@@ -1073,6 +1073,7 @@ protected:
 	Bool harassHere(void);		///< every personality raids the enemy's economy, smaller than the Raider, and raiders withdraw when hurt or outgunned
 	Int raidPartySize(void);	///< how many go on a raid: the Raider's party, any other personality's harass party, under 2 for none
 	void clearGarrisons(void);	///< units whose weapons clear a garrison go at a known enemy-held building near them (-aiknobsoff garrison)
+	Bool waitsForCenter(const ThingTemplate *plan);	///< broke with a supply center asked for: this other plan entry waits (-aiknobsoff brokecenter)
 	Bool ambushHere(void);					///< GLA's tunnel ambush beside the enemy's gatherer road (-aiknobsoff ambush)
 	Object *ambushSupplyCenter(void);		///< the known enemy supply center nearest our base, NULL for none
 	Bool ambushSpot(Coord3D *spot);			///< where the ambush tunnel goes, off that center's road to its pile, clear of known guns

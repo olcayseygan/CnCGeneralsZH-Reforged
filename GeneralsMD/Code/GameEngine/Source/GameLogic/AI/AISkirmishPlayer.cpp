@@ -253,6 +253,10 @@ void AISkirmishPlayer::processBaseBuilding( void )
 			if (bldg) {
 				continue; // already built.
 			}
+			// Broke with a supply center asked for: the center goes first, and power (waitsForCenter).
+			if (waitsForCenter(curPlan)) {
+				continue;
+			}
 			// A second war factory, barracks or airfield of the plan's waits until the ones standing
 			// fall behind their queues, as an extra one would.  Only for the fork's AI: the queues are
 			// sampled by its doSpending, so EA's would wait on a sample that never comes.

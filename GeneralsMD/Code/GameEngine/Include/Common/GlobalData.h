@@ -144,6 +144,12 @@ enum
 	AIKNOB_AMBUSH				= 1073741824,	///< no ambush tunnel, and the raiders never wait in the network, as before 2026-11-27; the last bit an Int mask holds
 };
 
+/** ... and the knobs past the first mask's 31 bits, in m_aiKnobsOffMask2, by the same -aiknobsoff names. */
+enum AIKnobsOff2
+{
+	AIKNOB2_BROKE_CENTER	= 1,	///< a broke seat with a supply center asked for rebuilds its other buildings first, as before 2026-11-27
+};
+
 //-------------------------------------------------------------------------------------------------
 /** Global data container class
   *	Defines all global game data used by the system
@@ -537,6 +543,7 @@ public:
 	Int m_noTacticsSlotParity;			///< -notactics even|odd: those slots of a skirmish fight without Hard's unit tactics; -1 none
 	Int m_aiKnobsOffParity;				///< -aiknobsoff even|odd|all <names>: those slots of a skirmish play with these profile knobs off; -1 none, 2 all
 	Int m_aiKnobsOffMask;					///< ... which knobs: AIKNOB_* bits
+	Int m_aiKnobsOffMask2;				///< ... and AIKNOB2_* bits
 	Int m_autoSkirmishTeams;				///< -teams <n>: split the auto-skirmish slots into n allied teams (0 or 1 = free-for-all)
 	Int m_peaceTime;								///< -peacetime <n>: the lobby's peace time, in minutes, for an -autoskirmish run
 	Bool m_unitLimit;								///< -unitlimit: the lobby's unit limit for an -autoskirmish run

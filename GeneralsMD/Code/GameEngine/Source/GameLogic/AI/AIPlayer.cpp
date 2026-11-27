@@ -18325,7 +18325,7 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 Bool AIRetreat_mendedEnough( Real healthFraction, Real hurtAt );
 static const Real TUNNEL_MENDED_HEALTH = 0.99f;	///< a rider mended this far leaves the tunnel it was sent into
 static const Real MEND_DOCK_REACH = 300.0f;	///< one that walked round to its mender is sent in when it stands this near
-static const UnsignedInt MEND_WALK_FRAMES = 120 * LOGICFRAMES_PER_GAME_SECOND;	///< ... and no later after the pull: a dock that will not take it frees it
+static const UnsignedInt MEND_WALK_SECONDS = 120;	///< ... and no later after the pull, in game seconds: a dock that will not take it frees it
 
 /** Within the reach of a heal aura of this player's. */
 static Bool standsInMendAura( Player *player, const Object *obj )
@@ -18382,7 +18382,7 @@ void AIPlayer::releaseMended( void )
 		if( mendersHere() && !AIRetreat_mendedEnough( health, row ? row->hurtAt : 0.0f ) && standsInMendAura( m_player, obj ) )
 			continue;
 		// walked round to a dock or a tunnel short of mended (pullOutRanked): sent in now, while the pull is fresh
-		if( row && row->hurtAt > 0.0f && row->fallbackFrame != 0 && TheGameLogic->getFrame() - row->fallbackFrame < MEND_WALK_FRAMES &&
+		if( row && row->hurtAt > 0.0f && row->fallbackFrame != 0 && TheGameLogic->getFrame() - row->fallbackFrame < MEND_WALK_SECONDS * LOGICFRAMES_PER_GAME_SECOND &&
 				!AIRetreat_mendedEnough( health, row->hurtAt ) && routeHomeHere() )
 		{
 			Object *mender = aiFindMender( m_player, obj, CMD_FROM_AI, mendersHere() );

@@ -73,7 +73,9 @@ public:
 	virtual Real teamScore( const TeamPrototype *team, Real shared ) const { return shared; }
 	/// defence placement: TRUE when the identity placed this base defence itself, and the shared placement is skipped.
 	/// Asked first by AIPlayer::placeDefense (flank FALSE), and again by buildAIBaseDefenseStructure when the shared
-	/// placement failed, so one defence can be asked twice in a turn: keep it free of draws and counters
+	/// placement failed, so one defence can be asked twice in a turn: keep it free of draws and counters.  Never call
+	/// AIPlayer::placeDefense or buildAIBaseDefenseStructure from here: both ask this hook first and would recurse
+	/// for ever; place through placeDefenseAround or placeNear
 	virtual Bool placeDefence( const ThingTemplate *defence, Bool flank ) { return FALSE; }
 	/// wave size: the power a parked wave waits for (AIPlayer::wavePower)
 	virtual Real wavePower( Real shared ) const { return shared; }

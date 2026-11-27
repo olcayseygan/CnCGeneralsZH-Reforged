@@ -898,7 +898,7 @@ static const Color SKIN_CARD_GROUND = GameMakeColor( 0x09, 0x0b, 0x13, 0xff );
 /// the three panels at 1080: the list 360 wide, the platform 520, the cards between, 24 apart
 static const Real LIST_LEFT = 60.0f, LIST_RIGHT = 420.0f, MID_LEFT = 444.0f, MID_RIGHT = 1316.0f,
 	PLATFORM_LEFT = 1340.0f, PLATFORM_RIGHT = 1860.0f;
-static const Real CARDS_TOP = 262.0f, CARDS_BOTTOM = 930.0f;
+static const Real CARDS_TOP = ONLINE_SKINS_CARDS_TOP, CARDS_BOTTOM = ONLINE_SKINS_CARDS_BOTTOM;
 
 /// a five-pointed star, its points on a circle of size across centred in the size-square box at x, y:
 /// a rare look's mark, white on the cyan edge (gold is the local player's alone)
@@ -960,34 +960,31 @@ static Int sideHeads( void )
 	return heads;
 }
 
-/** Row r's place in the list at 1080: a side's head 30 high over its first unit, the rows sharing the
-	* column out (81 for eight units under three heads), 6 apart; the head's top in headTop when r is a
-	* side's first, else -1. */
+/** Row r's place in the list at 1080 (OnlineSelfLayout.h): 8 apart inside a side, 40 between sides,
+	* 70 high or less where more units must fit; a side's head 30 over its first unit, its top in headTop
+	* when r is a side's first, else -1. */
 static void unitPlace( size_t r, Real &x, Real &y, Real &width, Real &height, Real &headTop )
 {
 	const Int heads = sideHeads();
 	const Int units = max( 1, (Int)s_skinRows.size() );
-	const Real band = min( 81.0f, (Real)(Int)( ( BOX_BOTTOM - 12.0f - ( BOX_TOP + 10.0f ) - 30.0f * heads ) / units ) );
-	Real top = BOX_TOP + 10.0f;
+	const Real gaps = ONLINE_SKINS_UNIT_GAP * max( 0, units - max( 1, heads ) ) + ONLINE_SKINS_SIDE_GAP * max( 0, heads - 1 );
+	height = min( ONLINE_SKINS_UNIT_HEIGHT, (Real)(Int)( ( ONLINE_SKINS_UNITS_BOTTOM - ONLINE_SKINS_UNITS_TOP - gaps ) / units ) );
+	Real top = ONLINE_SKINS_UNITS_TOP;
 	Int side = -1;
 	headTop = -1.0f;
 	for (size_t i = 0; i <= r && i < s_skinRows.size(); ++i)
 	{
 		const Int its = rowSide( i );
-		if (its != side && its >= 0)
-		{
-			if (i == r)
-				headTop = top;
-			top += 30.0f;
-		}
+		const Bool newSide = its != side && its >= 0;
+		if (i > 0)
+			top += height + ( newSide ? ONLINE_SKINS_SIDE_GAP : ONLINE_SKINS_UNIT_GAP );
+		if (i == r && newSide)
+			headTop = top - 30.0f;
 		side = its;
-		if (i < r)
-			top += band;
 	}
 	x = LIST_LEFT + 8.0f;
 	y = top;
 	width = LIST_RIGHT - 8.0f - x;
-	height = band - 6.0f;
 }
 
 /// the look in focus on the shown unit's row, its first when the focus is not one of its own
@@ -1299,7 +1296,7 @@ static void createSkinsGadgets( void )
 	static const char *const FILTER_NAME[ FILTER_COUNT ] = { "WOLLadderScreen.wnd:SkinFilterAll", "WOLLadderScreen.wnd:SkinFilterOwned",
 		"WOLLadderScreen.wnd:SkinFilterLocked" };
 	GameFont *tabFont = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL + 2, TRUE );
-	Int right = bx( MID_RIGHT - 20.0f );
+	Int right = bx( ONLINE_SKINS_CARDS_RIGHT );
 	for (Int i = FILTER_COUNT - 1; i >= 0; --i)
 	{
 		const UnicodeString label = UIStyle::capitals( TheGameText->fetch( FILTER_KEY[i] ) );
@@ -1415,7 +1412,7 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 		s_skinFocus = focus->id;
 
 	// the middle: the unit's name at 28 and its owned count left of the filter, the owned bar, the cards
-	const Real midLeft = MID_LEFT + 20.0f, midRight = MID_RIGHT - 20.0f;
+	const Real midLeft = ONLINE_SKINS_CARDS_LEFT, midRight = ONLINE_SKINS_CARDS_RIGHT;
 	if (row)
 	{
 		const Int looks = (Int)row->choices.size();

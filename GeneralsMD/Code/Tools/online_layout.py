@@ -243,7 +243,7 @@ CARD_PROFILE = (CARD_X1 - 220 - CARD_KEY_GAP - 380, CARD_Y1 - 68, 380, 48)
 # where Next stands (the skins page shows it, the ladder hides it), Jump to my page in Your place, the
 # platform's one key under the look's name
 LADDER_JUMP = (1344, 452, 492, 46)
-SKINS_ACTION = (1364, 860, 472, 54)
+SKINS_ACTION = (1364, 860, 472, 52)        # 64 over the foot's keys, the 8 px grid
 
 
 def card_tab(name, label, rect):

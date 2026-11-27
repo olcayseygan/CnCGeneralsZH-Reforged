@@ -88,30 +88,31 @@ COMMITS = re.compile(r"(Yes|Ok|OK|Accept|Start|Play|Quit|Exit)$")
 # buttons a restore may press to step back, in this order
 BACKS = ("Cancel", "No", "Back", "Close", "Ok", "OK")
 
-# Direct Strike's lobby is drawn over hidden boxes (DirectStrikeLobby.cpp); its parts are points at
-# 1920x1080, from docs/reference/UI-MAP.md in the wrapper, "The Direct Strike lobby, offline, 2026-11-24".
-# A part is a list of clicks; the probe is a click whose hidden box must change, to tell that the room
-# still takes clicks afterwards.
+# Direct Strike's lobby is drawn over hidden boxes (DirectStrikeLobby.cpp); its parts are points in the
+# design's 1920x1080, worked out from GameClient/DirectStrikeLayout.h for the offline room (seat line,
+# army and colour lines beside each card's picture, a list under its chip at 40 a row, the Mixed box at the
+# caption's right end, the size and speed chips, START, BACK in the header).  A part is a list of clicks;
+# the probe is a click whose hidden box must change, to tell that the room still takes clicks afterwards.
 DS_PARTS = [
-    ("seat 1 line", [(434, 386)]),
-    ("seat 1 Open", [(434, 386), (434, 440)]),
-    ("seat 1 Closed", [(434, 386), (434, 476)]),
-    ("seat 1 Easy", [(434, 386), (434, 512)]),
-    ("seat 2 line", [(1486, 386)]),
-    ("seat 2 Open", [(1486, 386), (1486, 440)]),
-    ("seat 2 Hard", [(1486, 386), (1486, 584)]),
-    ("seat 3 line", [(434, 546)]),
-    ("seat 3 Open", [(434, 546), (434, 600)]),
-    ("army 1 chip", [(380, 450)]),
-    ("army 1 China", [(380, 450), (316, 610)]),
-    ("army 2 chip", [(1540, 450)]),
-    ("mixed armies", [(960, 699)]),
-    ("team size", [(840, 776)]),
-    ("speed", [(964, 776)]),
-    ("back", [(736, 776)]),
-    ("start", [(1126, 776)]),
+    ("seat 1 line", [(457, 228)]),
+    ("seat 1 Open", [(457, 228), (457, 288)]),
+    ("seat 1 Closed", [(457, 228), (457, 328)]),
+    ("seat 1 Easy key", [(457, 228), (457, 288), (350, 398)]),
+    ("seat 2 line", [(1707, 228)]),
+    ("seat 2 Open", [(1707, 228), (1707, 288)]),
+    ("seat 3 line", [(457, 490)]),
+    ("seat 3 Open", [(457, 490), (457, 550)]),
+    ("army 1 chip", [(457, 313)]),
+    ("army 1 China", [(457, 313), (335, 484)]),
+    ("army 2 chip", [(1707, 313)]),
+    ("colour 1 chip", [(457, 398)]),
+    ("mixed armies", [(1160, 738)]),
+    ("team size", [(796, 798)]),
+    ("speed", [(1124, 798)]),
+    ("back", [(1782, 70)]),
+    ("start", [(960, 901)]),
 ]
-DS_PROBE = (960, 699)
+DS_PROBE = (1160, 738)
 
 SCREENS = {
     # nodescend: a control whose new controls have a walk of their own (options)
@@ -128,13 +129,21 @@ SCREENS = {
                              ("OptionsMenu.wnd:TabControls", "OptionsMenu.wnd:CheckGridBuild"),
                              ("OptionsMenu.wnd:TabInterface", "OptionsMenu.wnd:ComboBoxHealthBars"),
                              ("OptionsMenu.wnd:TabControls", "OptionsMenu.wnd:SliderScrollSpeed")]),
-    "online": dict(args=["-online", "127.0.0.1:1", "-onlinelogin"], nav=[]),
+    # the login against a server nobody answers comes up under a "could not connect" box: OK it first
+    "online": dict(args=["-online", "127.0.0.1:1", "-onlinelogin"], nav=["MessageBox.wnd:ButtonOk"]),
+    # the observer HUD is drawn: the five keys down the radar's recess (ObserverHudLayout.h, ObsHud_key)
     "observer": dict(args=["-autoskirmish", "2", "-observer", "-seed", "1", "-map",
-                           r"Maps\Tournament Desert\Tournament Desert.map"], nav=[], match=True),
+                           r"Maps\Tournament Desert\Tournament Desert.map"], nav=[], match=True,
+                     parts=[("key standings", [(299, 876)]), ("key vision", [(299, 920)]), ("key chat", [(299, 964)]),
+                            ("key options", [(299, 1008)]), ("key quit", [(299, 1052)])]),
     # the end screen: an observed match left at once (the socket's leave), as docs/reference/UI-MAP.md's
     # score screen shots reach it
     "end": dict(args=["-autoskirmish", "2", "-observer", "-seed", "1", "-map",
-                      r"Maps\Tournament Desert\Tournament Desert.map"], nav=[], match=True, post=["leave"]),
+                      r"Maps\Tournament Desert\Tournament Desert.map"], nav=[], match=True, post=["leave"],
+                # its drawn tabs on y 158-190 and the graph and build-order toggles (ScoreScreenLayout.h, UI-MAP)
+                parts=[("tab summary", [(167, 174)]), ("tab graphs", [(290, 174)]), ("graphs line", [(290, 174), (1680, 174)]),
+                       ("graphs share", [(290, 174), (1770, 174)]), ("tab build order", [(453, 174)]),
+                       ("build order all", [(453, 174), (1770, 174)])]),
     "apocalypse": dict(args=[], nav=["MainMenu.wnd:ButtonSinglePlayer", "MainMenu.wnd:ButtonMods",
                                      "MainMenu.wnd:ButtonModeApocalypse"]),
     # the signed-in online pages: "@online" is the switches in ZHR_UI_WALK_ONLINE (or the file it names)
@@ -213,6 +222,16 @@ class Game(object):
         look = os.path.join(SRC, "reforged-look.ini")
         if os.path.exists(look):
             shutil.copy(look, os.path.join(ud, "Options.ini"))
+        # an earlier launch's model checksums and map cache: a fresh folder reads every model and map again,
+        # minutes on a busy machine
+        for earlier in sorted(os.listdir(WORK), key=lambda d: -os.path.getmtime(os.path.join(WORK, d))):
+            cache = os.path.join(WORK, earlier, "ModelChecksums.txt")
+            if earlier != os.path.basename(ud) and os.path.exists(cache):
+                shutil.copy(cache, ud)
+                maps = os.path.join(WORK, earlier, "Maps")
+                if os.path.isdir(maps):
+                    shutil.copytree(maps, os.path.join(ud, "Maps"))
+                break
         args = [os.path.join(RUN, "generals.exe"), "-win", "-xres", str(w), "-yres", str(h), "-msaa", "0",
                 "-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-control", str(self.opts.port),
                 "-language", self.opts.lang, "-logPrefix", "uiwalk_%s_%d_" % (self.screen, self.launches)]
@@ -222,10 +241,11 @@ class Game(object):
         self.userdir = ud
         self.proc = subprocess.Popen(args, cwd=RUN, env=env)
         t0 = time.time()
-        while time.time() - t0 < 180:
+        # a first launch after a build, beside a batch on a busy machine, has taken over three minutes
+        while time.time() - t0 < 420:
             self.alive()
             try:
-                self.ctl = Control(self.opts.port, timeout=20.0)
+                self.ctl = Control(self.opts.port, timeout=60.0)
                 self.ctl.send("ping")
                 break
             except (OSError, ControlError):
@@ -234,7 +254,7 @@ class Game(object):
         if self.ctl is None:
             raise Crashed("the socket never answered")
         if self.spec.get("match"):
-            while time.time() - t0 < 240:
+            while time.time() - t0 < 600:
                 if self.send("status").get("inGame"):
                     break
                 time.sleep(1.0)
@@ -246,7 +266,7 @@ class Game(object):
                 settle(self, minimum=3.0)
         else:
             # the socket answers before the shell is up
-            while time.time() - t0 < 240:
+            while time.time() - t0 < 600:
                 t = self.tree()
                 if t.get("screens") and t.get("windows"):
                     break
@@ -334,6 +354,13 @@ def is_internal(w, by_index):
     return False
 
 
+def off_screen(w, tree):
+    """Parked out of sight (a room's spare seat rows wait at -20000, -20000): neither clicked nor linted."""
+    x, y, ww, hh = w["r"]
+    dw, dh = tree.get("display") or (1 << 16, 1 << 16)
+    return x + ww <= 0 or y + hh <= 0 or x >= dw or y >= dh
+
+
 def controls(tree, screen_area):
     """The enabled visible controls a player can click, front first."""
     ws = windows(tree)
@@ -343,7 +370,7 @@ def controls(tree, screen_area):
         if not w["n"] or w.get("h") or w["n"] in seen or is_internal(w, by_index):
             continue
         x, y, ww, hh = w["r"]
-        if ww <= 0 or hh <= 0:
+        if ww <= 0 or hh <= 0 or off_screen(w, tree):
             continue
         own_input = w["t"] == "window" and w.get("in") and ww * hh < screen_area // 4
         if w["t"] in INPUT_KINDS or own_input:
@@ -433,8 +460,13 @@ def unreachable(game, tree, screen_area):
         reply = game.send(line)
         for w, hit in zip(chunk, reply.get("hits", [])):
             if w["n"] not in hit["chain"]:
-                out[w["n"]] = hit["hit"] or "(nothing)"
+                # a chain of one unnamed window is a box built by winCreate(NULL), the army picker's kind;
+                # an empty chain is a click that reaches no window at all
+                out[w["n"]] = hit["hit"] or (UNNAMED if hit["chain"] else "(nothing)")
     return out
+
+
+UNNAMED = "(unnamed window)"
 
 
 def owners(tree):
@@ -453,7 +485,8 @@ def lint(tree):
     ws = [w for w in windows(tree) if not w.get("h")]
     by_index = {w["i"]: w for w in ws}
     faults = set()
-    items = [w for w in ws if w["n"] and w["t"] in GADGET_KINDS and not is_internal(w, by_index)]
+    items = [w for w in ws if w["n"] and w["t"] in GADGET_KINDS and not is_internal(w, by_index)
+             and not off_screen(w, tree)]
     for w in items:
         x, y, ww, hh = w["r"]
         tw, wh = w.get("tw", 0), w.get("wh", 0)
@@ -622,6 +655,9 @@ class Walk(object):
         if kind == "entry":
             self.game.send("uiclick " + name)
             settle(self.game, minimum=0.3)
+            # one character off first: a box already at its length (a 12 letter name) takes nothing more
+            self.game.send("key KEY_BACKSPACE")
+            tree = settle(self.game, minimum=0.3)
             typed = self.game.send("uitype 12")		# digits: a port box takes nothing else
             after = settle(self.game)
             change = diff(tree, after)
@@ -664,6 +700,17 @@ class Walk(object):
         held = owners(after)
         bad = unreachable(self.game, after, self.area) if not after.get("lone") else {}
         new_bad = {n: by for n, by in bad.items() if n not in before_bad}
+        if new_bad and set(new_bad.values()) == {UNNAMED}:
+            # an unnamed full-screen box (the army picker): it should take the clicks, and Escape close it
+            self.game.send("key KEY_ESC")
+            closed = settle(self.game)
+            still = {n for n in unreachable(self.game, closed, self.area) if n not in before_bad}
+            if still:
+                result, change = "locks input", change + ["an unnamed box came up and Escape left %d controls under it" % len(still)]
+            else:
+                result, change = "ok", change + ["an unnamed box came up over %d controls; Escape closed it" % len(new_bad)]
+            self.record(label, result, "; ".join(change), path)
+            return result
         if held:
             result, change = "locks input", change + held
         elif new_bad and not after.get("modal"):
@@ -684,13 +731,21 @@ class Walk(object):
         self.game.send("uiclick " + name)
         opened = settle(self.game)
         if not opened.get("lone"):
-            self.judge(leaf(name) + " (open)", path, opened, diff(tree, opened) + ["did not open"], before_bad)
-            self.game.send("key KEY_ESC")
+            # an editable box takes the click in its text; its arrow opens the list (no Escape: on a
+            # screen of its own that is Back)
+            x, y, ww, hh = cur["r"]
+            self.game.send("uiclick %s %d %d" % (name, ww - hh // 2, hh // 2))
+            opened = settle(self.game)
+        if not opened.get("lone"):
+            # no list: a box of its own instead (the army picker), or nothing at all
+            self.judge(leaf(name) + " (open, no list)", path, opened, diff(tree, opened), before_bad)
             return None
         self.record(leaf(name) + " (open)", "ok", "lone %s" % leaf(opened["lone"]), path)
         rows = cur.get("rows", 0) or 0
         original = cur.get("v", -1)
         for row in range(min(rows, self.opts.rows)):
+            if row == original:		# the row already picked changes nothing
+                continue
             state = self.reach(path, name)
             if not state.get("lone"):
                 self.game.send("uiclick " + name)
@@ -732,7 +787,7 @@ class Walk(object):
 
     def act_list(self, path, cur, tree, before_bad):
         name = cur["n"]
-        if (cur.get("sh") or 0) > (cur.get("dh") or 0):
+        if (cur.get("sh") or 0) > (cur.get("dh") or 0) + 8:		# a list that really overflows
             self.game.send("uiscroll %s -3" % name)
             after = settle(self.game)
             moved = named(after).get(name, {}).get("sc") != cur.get("sc")
@@ -786,9 +841,9 @@ class Walk(object):
         for w in todo:
             if w["n"] in self.done:		# a deeper walk got to it first
                 continue
-            self.done.add(w["n"])
-            if not w["e"]:
+            if not w["e"]:		# not done: it may be live back on the root
                 continue
+            self.done.add(w["n"])
             try:
                 outcome = self.act(path, w)
             except Crashed as e:
@@ -835,7 +890,7 @@ class Walk(object):
                 change = diff(tree, after) + hidden_diff(hb, ha)
                 # still takes clicks: the probe's hidden box must answer
                 probe_ok = None
-                if after.get("screen") == tree.get("screen") and not after.get("modal"):
+                if self.game.spec.get("probe") and after.get("screen") == tree.get("screen") and not after.get("modal"):
                     self.game.send("uiclickat 960 40")
                     settle(self.game, minimum=0.4)
                     p0 = self.game.tree(hidden=True)
@@ -851,9 +906,10 @@ class Walk(object):
                 elif change:
                     result = "ok"
                 else:
-                    result = "dead"
+                    # a drawn part changes only the picture: a still after the build says whether it worked
+                    result = "dead" if self.game.spec.get("probe") else "drawn, unverified"
                 self.record(label, result, "; ".join(change), [])
-                if after.get("screen") != tree.get("screen") or after.get("modal"):
+                if after.get("screen") != tree.get("screen") or after.get("modal") or (self.game.spec.get("match") and change):
                     self.game.stop()
                     self.root = None
             except Crashed as e:

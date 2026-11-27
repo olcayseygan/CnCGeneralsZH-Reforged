@@ -1,5 +1,5 @@
 """The Key Grid layout's art (Options, Layout = Key Grid), the owner's pick of 2026-11-27: V2.1 with round 4's
-silhouettes (C:\\zhr-proofs\\hotkeys\\mock-V21-silhouettes.png on the owner's machine), drawn with the command bar
+silhouettes (the owner's V21 silhouette mockup), drawn with the command bar
 generator's painter (hud_command_bar: Painter.tiers, floor, well, button, key_piece, shade, bar_finish) in each side's
 bar steel (BAR_LOOKS) and build.  Only the Key Grid layout draws these; every other layout keeps its own art.
 

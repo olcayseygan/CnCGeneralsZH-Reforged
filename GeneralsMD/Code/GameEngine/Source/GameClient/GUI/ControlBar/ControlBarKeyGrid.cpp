@@ -1,4 +1,4 @@
-// The Key Grid layout (HUD_LAYOUT_GRID, the owner's of 2026-11-27; mockups C:\zhr-proofs\hotkeys\mock-V21-*.png):
+// The Key Grid layout (HUD_LAYOUT_GRID, the owner's of 2026-11-27, after the owner's V21 mockups):
 // the Reforged bar with its commands as three staggered keyboard rows of six on a deck that hangs off the
 // radar box, the box cut to the map's own shape.  The pure half (where everything stands, which structure
 // the rows open with) and ControlBar's half: ControlBar.wnd's windows put on those rectangles after

@@ -2542,7 +2542,7 @@ static Int lobbyLayRoom(const LobbySeatState seats[], const Int order[], const I
 	for (Int k = first; k < count && shown < mostShown; ++k)
 	{
 		const Bool newGroup = k == first || group[k] != group[k - 1];
-		const Int rowHeight = seats[order[k]].seated ? LOBBY_ROW_SEAT : LOBBY_ROW_EMPTY;
+		const Int rowHeight = LOBBY_ROW_SEAT;
 		// a seat after this one needs the foot's strip should it not fit
 		const Int reserve = k < count - 1 ? LOBBY_ROW_STRIP : 0;
 		if (y + (newGroup ? LOBBY_ROW_HEAD : 0) + rowHeight + reserve > height)
@@ -2638,10 +2638,11 @@ namespace
 	const Int APOC_RIGHT = 1270;							///< the seat rows' and the band's right edge
 	const Color APOC_BLOOD_TEXT = GameMakeColor(236, 92, 78, 255);	///< the Blood Moon's red lifted for words on the glass
 	const Int APOC_NIGHT_CELLS = 10;					///< nights 1 to 9, then the twelfth and on
-	const Int APOC_NIGHTS_TOP = 566;
-	const Int APOC_DAY_TOP = 606, APOC_DAY_BOTTOM = 648;
-	const Int APOC_TABLE_TOP = 664;
-	const Int APOC_CHAT_TOP = 784;
+	// the nights band stands 14 under the four seats' rows, whatever a row's height; the chat under it takes the rest
+	const Int APOC_NIGHTS_TOP = LOBBY_SEATS_TOP + LOBBY_ROW_HEAD + APOCALYPSE_SEATS * LOBBY_ROW_SEAT + 14;
+	const Int APOC_DAY_TOP = APOC_NIGHTS_TOP + 40, APOC_DAY_BOTTOM = APOC_NIGHTS_TOP + 82;
+	const Int APOC_TABLE_TOP = APOC_NIGHTS_TOP + 98;
+	const Int APOC_CHAT_TOP = APOC_NIGHTS_TOP + 218;
 	const Int APOC_RULES_TOP = 542;
 	const Int APOC_MODE_TOP = 804;
 	const Color APOC_BLOOD = GameMakeColor(184, 38, 31, 255);	///< BRAND.md's red, the Blood Moon's only
@@ -2651,7 +2652,9 @@ namespace
 	{
 		TEXT_HEADS = 0, TEXT_TITLE = 8, TEXT_SUBTITLE, TEXT_TENANT, TEXT_TENANT_NAME, TEXT_TENANT_SEATS,
 		TEXT_FOOT = 16, TEXT_STRIPS = 28, TEXT_MAP = 32, TEXT_TAB = 36, TEXT_GROUPS = 40, TEXT_ROWS = 120,
-		TEXT_APOCALYPSE = TEXT_ROWS + 4 * MAX_SLOTS,
+		// a seat's words: its number, the portrait's "?", the rating, the state, the name fitted before them
+		TEXT_ROW_NUMBER = 0, TEXT_ROW_UNKNOWN, TEXT_ROW_RATING, TEXT_ROW_STATE, TEXT_ROW_NAME, TEXT_ROW_KEYS,
+		TEXT_APOCALYPSE = TEXT_ROWS + TEXT_ROW_KEYS * MAX_SLOTS,
 		// the Apocalypse room's own words, from TEXT_APOCALYPSE on
 		APOC_HEAD = 0,				///< survivors, their count, then three facts as a word and a note each
 		APOC_OPEN_SEAT = 8,		///< one a row
@@ -2714,18 +2717,20 @@ namespace
 		return list != NULL && !list->winIsHidden();
 	}
 
-	/// a combo at a size: its caret block square on its height, the field the rest
+	/// a combo at a size: its caret block 28 wide (narrower than the box, so a team's or a handicap's
+	/// narrow box keeps room for its value), the field the rest
 	void roomSizeCombo(GameWindow *combo, Int width, Int height)
 	{
+		const Int caret = min(height, roomPx(28));
 		combo->winSetSize(width, height);
 		if (GameWindow *button = GadgetComboBoxGetDropDownButton(combo))
 		{
-			button->winSetSize(height, height);
-			button->winSetPosition(width - height, 0);
+			button->winSetSize(caret, height);
+			button->winSetPosition(width - caret, 0);
 		}
 		if (GameWindow *edit = GadgetComboBoxGetEditBox(combo))
 		{
-			edit->winSetSize(width - height, height);
+			edit->winSetSize(width - caret, height);
 			edit->winSetPosition(0, 0);
 		}
 	}
@@ -2898,7 +2903,55 @@ namespace
 		Int textW, textH;
 		e->text->getSize(&textW, &textH);
 		const Bool local = kind == 2 && theRoomGame && seat >= 0 && seat == theRoomGame->getLocalSlotNum();
-		e->text->draw(left, y + (h - textH) / 2, local ? UIStyle::GOLD : UIStyle::INK, GameMakeColor(0, 0, 0, 160));
+		const Color ink = local ? UIStyle::GOLD : UIStyle::INK;
+		if (kind != 2 || slot == NULL || !slot->isHuman() || theRoomKind == ROOM_SKIRMISH)
+		{
+			e->text->draw(left, y + (h - textH) / 2, ink, GameMakeColor(0, 0, 0, 160));
+			return;
+		}
+
+		/* A network player's one line: his name, then at the field's right his rating (online) and the
+			 seat's state (HOST, READY with its tick, NOT READY), the name cut with an ellipsis before them. */
+		const Int key = TEXT_ROWS + TEXT_ROW_KEYS * (seat % MAX_SLOTS);
+		const Int middle = y + h / 2;
+		Int right = x + w - roomPx(10);
+		const Bool ready = seat != 0 && slot->isAccepted();
+		const char *state = seat == 0 ? "GUI:RoomHost" : ready ? "GUI:RoomReady" : "GUI:RoomNotReady";
+		DisplayString *words = roomText(key + TEXT_ROW_STATE, TheGameText->fetch(state), UIStyle::menuFont(UIStyle::MENU_TEXT_LABEL, TRUE));
+		Int sw, sh;
+		words->getSize(&sw, &sh);
+		right -= sw;
+		words->draw(right, middle - sh / 2, ready ? UIStyle::ACTIVE : UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
+		if (ready)
+		{
+			// the tick before READY
+			const Int size = roomPx(10);
+			const Int tx = right - roomPx(6) - size;
+			const Real line = (Real)max(1, roomPx(2));
+			TheDisplay->drawLine(tx, middle, tx + size / 3, middle + size / 3, line, UIStyle::ACTIVE);
+			TheDisplay->drawLine(tx + size / 3, middle + size / 3, tx + size, middle - size / 2, line, UIStyle::ACTIVE);
+			right = tx;
+		}
+		if (theRoomKind == ROOM_ONLINE)
+		{
+			AsciiString nick;
+			nick.translate(slot->getName());
+			OnlinePlayerInfo card;
+			if (OnlineGetPlayerInfo(nick, card) && card.hasRating)
+			{
+				DisplayString *rating = roomText(key + TEXT_ROW_RATING, UIStyle::ladderText(card.shown(), card.hasElo),
+					UIStyle::menuFont(UIStyle::MENU_TEXT_HINT));
+				Int rw, rh;
+				rating->getSize(&rw, &rh);
+				right -= roomPx(10) + rw;
+				rating->draw(right, middle - rh / 2, UIStyle::MUTED, GameMakeColor(0, 0, 0, 160));
+			}
+		}
+		const UnicodeString name = UIStyle::fitName(e->text->getText(), font, max(0, right - roomPx(10) - left));
+		DisplayString *fitted = roomText(key + TEXT_ROW_NAME, name, font);
+		Int nw, nh;
+		fitted->getSize(&nw, &nh);
+		fitted->draw(left, middle - nh / 2, ink, GameMakeColor(0, 0, 0, 160));
 	}
 
 	/// the skirmish room's own name, a text entry: the field's box and the name in gold
@@ -2934,6 +2987,10 @@ namespace
 		if (GameWindow *edit = GadgetComboBoxGetEditBox(combo))
 			edit->winSetDrawFunc(drawRoomField);
 		roomFont(combo, px1080);
+		// the room's narrow caret from the start, whatever the layout made it
+		Int w, h;
+		combo->winGetSize(&w, &h);
+		roomSizeCombo(combo, w, h);
 	}
 
 	/// the skirmish room's PRESET field in the header: a combo's look over the presets key
@@ -3048,7 +3105,17 @@ namespace
 		TheDisplay->drawFillRect(ruleX, roomY(middle), max(0, roomX(ROOM_CELLS_RIGHT) - ruleX), 1, UIStyle::withAlpha(UIStyle::FRAME, 110));
 	}
 
-	/// a seat's row: its wash, the slot's number, the army's portrait, a network player's second line
+	/* A seat's row, one line of boxes whatever sits there, its gaps on the 8 px grid down the whole list:
+		 every box 40 tall from +8 (16 to the next row's, 48 across a team's head), all in body type; a
+		 computer's level and its personality side by side in the player cell; the portrait at the row's
+		 left, the online ping light in its corner.  Board pixels at 1080. */
+	const Int ROW_BOX_TOP = 8, ROW_BOX_HEIGHT = 40;
+	const Int ROW_PORTRAIT_LEFT = 96, ROW_PORTRAIT_SIZE = 44;
+	const Int ROW_PING_SIZE = 18;
+	const Int ROOM_PLAYER_LEFT = 152, ROOM_PLAYER_RIGHT = 444;
+	const Int ROOM_LEVEL_RIGHT = 292;	///< a computer's level; its personality from 8 after it to the cell's right
+
+	/// a seat's row: its wash, the slot's number, the army's portrait or an open seat's empty frame
 	void drawRoomSeat(Int index, const LobbyRoomItem &item, Int top)
 	{
 		const GameSlot *slot = roomSlot(item.slot);
@@ -3066,53 +3133,50 @@ namespace
 		const Int middle = top + item.height / 2;
 		UnicodeString number;
 		number.format(u"%d", item.slot + 1);
-		const Int key = TEXT_ROWS + 4 * (item.slot % MAX_SLOTS);
-		roomDraw(key, number, UIStyle::menuFont(UIStyle::MENU_TEXT_BODY), ROOM_LEFT + 17, middle, UIStyle::MUTED, 1);
-		if (!slot->isOccupied())
-			return;
+		const Int key = TEXT_ROWS + TEXT_ROW_KEYS * (item.slot % MAX_SLOTS);
+		roomDraw(key + TEXT_ROW_NUMBER, number, UIStyle::menuFont(UIStyle::MENU_TEXT_BODY), ROOM_LEFT + 17, middle, UIStyle::MUTED, 1);
 
-		// the portrait, 76 square, the seat's colour under it
-		const IRegion2D picture = UIStyle::boardRect(96, middle - 38, 172, middle + 38);
+		// the portrait, 44 square and on the row's middle: the army's picture with the seat's colour under
+		// it, a "?" for a random army, an empty dashed frame for an open or closed seat
+		const IRegion2D picture = UIStyle::boardRect(ROW_PORTRAIT_LEFT, middle - ROW_PORTRAIT_SIZE / 2,
+			ROW_PORTRAIT_LEFT + ROW_PORTRAIT_SIZE, middle + ROW_PORTRAIT_SIZE / 2);
+		const Int pw = picture.hi.x - picture.lo.x, ph = picture.hi.y - picture.lo.y;
+		if (!slot->isOccupied())
+		{
+			const Color dash = UIStyle::withAlpha(UIStyle::FRAME, slot->isOpen() ? 200 : 90);
+			const Int on = max(2, roomPx(4)), period = on + max(2, roomPx(4));
+			for (Int d = 0; d < pw; d += period)
+			{
+				TheDisplay->drawFillRect(picture.lo.x + d, picture.lo.y, min(on, pw - d), 1, dash);
+				TheDisplay->drawFillRect(picture.lo.x + d, picture.hi.y - 1, min(on, pw - d), 1, dash);
+			}
+			for (Int d = 0; d < ph; d += period)
+			{
+				TheDisplay->drawFillRect(picture.lo.x, picture.lo.y + d, 1, min(on, ph - d), dash);
+				TheDisplay->drawFillRect(picture.hi.x - 1, picture.lo.y + d, 1, min(on, ph - d), dash);
+			}
+			return;
+		}
 		const Int pick = slot->getPlayerTemplate();
 		const PlayerTemplate *army = pick >= 0 && pick < ThePlayerTemplateStore->getPlayerTemplateCount()
 			? ThePlayerTemplateStore->getNthPlayerTemplate(pick) : NULL;
 		const Image *portrait = army ? UIStyle::armyPortrait(army) : NULL;
-		TheDisplay->drawFillRect(picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y, GameMakeColor(0, 0, 0, 170));
+		TheDisplay->drawFillRect(picture.lo.x, picture.lo.y, pw, ph, GameMakeColor(0, 0, 0, 170));
 		if (portrait)
-			UIStyle::coverImage(portrait, picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y);
+			UIStyle::coverImage(portrait, picture.lo.x, picture.lo.y, pw, ph);
 		else
 		{
-			TheDisplay->drawOpenRect(picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y, 1.0f, UIStyle::FRAME);
-			roomDraw(key + 1, UnicodeString(u"?"), UIStyle::menuFont(UIStyle::MENU_TEXT_TITLE), 134, middle, UIStyle::INK, 1);
+			TheDisplay->drawOpenRect(picture.lo.x, picture.lo.y, pw, ph, 1.0f, UIStyle::FRAME);
+			roomDraw(key + TEXT_ROW_UNKNOWN, UnicodeString(u"?"), UIStyle::menuFont(UIStyle::MENU_TEXT_ROW_FIGURE),
+				ROW_PORTRAIT_LEFT + ROW_PORTRAIT_SIZE / 2, middle - 1, UIStyle::INK, 1);
 		}
 		const Int stripe = max(2, roomPx(3));
-		TheDisplay->drawFillRect(picture.lo.x, picture.hi.y - stripe, picture.hi.x - picture.lo.x, stripe, LobbySeatColor(slot));
-
-		if (!network || !slot->isHuman())
-			return;
-		// the second line: the online rating after the ping light, the seat's state at the cell's right
-		const Int line = top + 62;		// the ping light's middle (placeRoomRow: 50 down, 24 tall)
-		if (theRoomKind == ROOM_ONLINE)
-		{
-			AsciiString nick;
-			nick.translate(slot->getName());
-			OnlinePlayerInfo card;
-			if (OnlineGetPlayerInfo(nick, card) && card.hasRating)
-				roomDraw(key + 2, UIStyle::ladderText(card.shown(), card.hasElo), UIStyle::menuFont(UIStyle::MENU_TEXT_HINT),
-					216, line, UIStyle::MUTED);
-		}
-		const char *state = item.slot == 0 ? "GUI:RoomHost" : ready ? "GUI:RoomReady" : "GUI:RoomNotReady";
-		GameFont *label = UIStyle::menuFont(UIStyle::MENU_TEXT_LABEL, TRUE);
-		const Int stateW = roomDraw(key + 3, TheGameText->fetch(state), label, 444, line, ready ? UIStyle::ACTIVE : UIStyle::MUTED, 2);
-		if (ready)
-		{
-			// the tick before READY
-			const Int size = roomPx(10);
-			const Int tx = roomX(444) - stateW - roomPx(6) - size, ty = roomY(line);
-			const Real width = (Real)max(1, roomPx(2));
-			TheDisplay->drawLine(tx, ty, tx + size / 3, ty + size / 3, width, UIStyle::ACTIVE);
-			TheDisplay->drawLine(tx + size / 3, ty + size / 3, tx + size, ty - size / 2, width, UIStyle::ACTIVE);
-		}
+		TheDisplay->drawFillRect(picture.lo.x, picture.hi.y - stripe, pw, stripe, LobbySeatColor(slot));
+		// the online ping light sits in the portrait's top right corner on a dark square of its own
+		if (theRoomKind == ROOM_ONLINE && slot->isHuman())
+			roomFill(ROW_PORTRAIT_LEFT + ROW_PORTRAIT_SIZE - ROW_PING_SIZE - 2, middle - ROW_PORTRAIT_SIZE / 2,
+				ROW_PORTRAIT_LEFT + ROW_PORTRAIT_SIZE, middle - ROW_PORTRAIT_SIZE / 2 + ROW_PING_SIZE + 2, GameMakeColor(0, 0, 0, 200));
+		// a network player's rating and state stand in his name's box (drawRoomField)
 	}
 
 	// ---- the Apocalypse room's own parts (README-apocalypse-room.md) ----
@@ -3621,10 +3685,10 @@ namespace
 
 		// the column heads and the rule under them
 		static const char *const heads[] = { "GUI:RoomPlayer", "GUI:RoomArmy", "GUI:RoomColour", "GUI:RoomTeamHead", "GUI:RoomHandicap", "GUI:RoomMap" };
-		static const Int headX[] = { 186, 462, 798, 994, 1122, ROOM_COLUMN_LEFT + 2 };
+		static const Int headX[] = { ROOM_PLAYER_LEFT + 2, 462, 798, 994, 1122, ROOM_COLUMN_LEFT + 2 };
 		// the Apocalypse room has no team column (the director allies every seat); its army and colour grow
 		static const char *const apocalypseHeads[] = { "GUI:RoomPlayer", "GUI:RoomArmy", "GUI:RoomColour", "GUI:RoomHandicap", "GUI:RoomMap" };
-		static const Int apocalypseHeadX[] = { 186, 462, 874, 1122, ROOM_COLUMN_LEFT + 2 };
+		static const Int apocalypseHeadX[] = { ROOM_PLAYER_LEFT + 2, 462, 874, 1122, ROOM_COLUMN_LEFT + 2 };
 		const char *const *headKeys = apocalypse ? apocalypseHeads : heads;
 		const Int *headAt = apocalypse ? apocalypseHeadX : headX;
 		const Int headCount = apocalypse ? (Int)ARRAY_SIZE(apocalypseHeads) : (Int)ARRAY_SIZE(heads);
@@ -3653,10 +3717,8 @@ namespace
 				const GameSlot *slot = roomSlot(item.slot);
 				if (apocalypse && slot && !slot->isOccupied())
 				{
-					// an empty seat keeps its picture's place, dark, so the four rows read as four seats
+					// an open seat says what it adds; its empty frame is drawRoomSeat's, as in every room
 					const Int middle = top + item.height / 2;
-					roomFill(96, middle - 38, 172, middle + 38, GameMakeColor(0, 0, 0, 150));
-					roomFrame(96, middle - 38, 172, middle + 38, UIStyle::withAlpha(UIStyle::FRAME, 120));
 					if (slot->isOpen())
 						roomDraw(TEXT_APOCALYPSE + APOC_OPEN_SEAT + item.slot % 4, roomCountText("GUI:ApocalypseOpenSeat", APOCALYPSE_WAVE_PER_SEAT),
 							UIStyle::menuFont(UIStyle::MENU_TEXT_HINT), 470, middle, UIStyle::MUTED);
@@ -3784,20 +3846,8 @@ namespace
 		}
 	}
 
-	/* A seat's row's boxes, every gap between two of them on the 8 px grid down the whole list,
-		 rows of 90 (seated) and 52 (open or closed) mixed in any order (the UI walker's lint):
-		 a seated row's boxes 42 tall from +20 (48 to the next seated row's), an open row's one box 44
-		 tall from +4 (8 to the next open row's), a computer's level from +4 and its personality 8
-		 under it, a network player's name from +4 and his ping 8 under it.  Every top is 4 off the
-		 8 grid, so any row after any other lands its boxes 8, 16, 32 or 48 under the last ones. */
-	const Int ROW_BOX_TOP = 20, ROW_BOX_HEIGHT = 42;
-	const Int ROW_OPEN_TOP = 4, ROW_OPEN_HEIGHT = 44;
-	const Int ROW_LEVEL_TOP = 4, ROW_LEVEL_HEIGHT = 38;
-	const Int ROW_PERSONA_TOP = 50, ROW_PERSONA_HEIGHT = 28;
-	const Int ROW_PING_TOP = 50, ROW_PING_SIZE = 24;
-
-	/// a seat's row's windows round its top: a computer's level over its personality, a network
-	/// player's name over his second line, an open or closed seat's one box
+	/// a seat's row's windows round its top, one line: a computer's level beside its personality, a
+	/// player's name (a network player's rating and state inside its box), an open or closed seat's one box
 	void placeRoomRow(Int row, Int seat, Int top)
 	{
 		const GameSlot *slot = roomSlot(seat);
@@ -3807,20 +3857,14 @@ namespace
 			return;
 		const Bool seated = slot->isOccupied();
 		// a takeover seat ("Human" on a skirmish seat past the first) counts as AI to the lobby but has no
-		// AI and no personality (UpdateAIPersonaComboBoxes hides it): it is laid out as a player's row,
-		// its box where every other box of the row is, not up on a level line over nothing
+		// AI and no personality (UpdateAIPersonaComboBoxes hides it): it is laid out as a player's row
 		const Bool computer = slot->isAI() && !slot->isTakeover();
-		const Bool network = theRoomKind != ROOM_SKIRMISH;
 		const Bool apocalypse = roomApocalypse();
 		const Int boxTop = top + ROW_BOX_TOP, boxBottom = boxTop + ROW_BOX_HEIGHT;
+		roomFont(w.player, UIStyle::MENU_TEXT_BODY);
 		if (!seated)
 		{
-			// an Apocalypse row is a seat's height whoever sits there, its box where a seated row's are
-			if (apocalypse)
-				roomPlace(w.player, 184, boxTop, 444, boxBottom);
-			else
-				roomPlace(w.player, 184, top + ROW_OPEN_TOP, 444, top + ROW_OPEN_TOP + ROW_OPEN_HEIGHT);
-			roomFont(w.player, UIStyle::MENU_TEXT_BODY);
+			roomPlace(w.player, ROOM_PLAYER_LEFT, boxTop, ROOM_PLAYER_RIGHT, boxBottom);
 			GameWindow *rest[] = { w.persona, w.army, w.colour, w.team, w.handicap, w.ping };
 			for (Int i = 0; i < (Int)ARRAY_SIZE(rest); ++i)
 				roomPark(rest[i]);
@@ -3828,21 +3872,21 @@ namespace
 		}
 		if (computer)
 		{
-			roomPlace(w.player, 184, top + ROW_LEVEL_TOP, 444, top + ROW_LEVEL_TOP + ROW_LEVEL_HEIGHT);
-			roomPlace(w.persona, 184, top + ROW_PERSONA_TOP, 444, top + ROW_PERSONA_TOP + ROW_PERSONA_HEIGHT);
+			roomPlace(w.player, ROOM_PLAYER_LEFT, boxTop, ROOM_LEVEL_RIGHT, boxBottom);
+			roomPlace(w.persona, ROOM_LEVEL_RIGHT + 8, boxTop, ROOM_PLAYER_RIGHT, boxBottom);
 		}
 		else
 		{
-			if (network)
-				roomPlace(w.player, 184, top + ROW_LEVEL_TOP, 444, top + ROW_LEVEL_TOP + ROW_LEVEL_HEIGHT);
-			else
-				roomPlace(w.player, 184, boxTop, 444, boxBottom);
+			roomPlace(w.player, ROOM_PLAYER_LEFT, boxTop, ROOM_PLAYER_RIGHT, boxBottom);
 			roomPark(w.persona);
 		}
-		roomFont(w.player, UIStyle::MENU_TEXT_ROW_FIGURE);
 		roomFont(w.persona, UIStyle::MENU_TEXT_HINT);
 		if (w.ping && theRoomKind == ROOM_ONLINE && slot->isHuman())
-			roomPlace(w.ping, 184, top + ROW_PING_TOP, 184 + ROW_PING_SIZE, top + ROW_PING_TOP + ROW_PING_SIZE);
+		{
+			const Int pingRight = ROW_PORTRAIT_LEFT + ROW_PORTRAIT_SIZE - 1;
+			const Int pingTop = top + (LOBBY_ROW_SEAT - ROW_PORTRAIT_SIZE) / 2 + 1;
+			roomPlace(w.ping, pingRight - ROW_PING_SIZE, pingTop, pingRight, pingTop + ROW_PING_SIZE);
+		}
 		else
 			roomPark(w.ping);
 		if (apocalypse)
@@ -4062,11 +4106,11 @@ namespace
 			for (Int c = 0; c < (Int)ARRAY_SIZE(combos); ++c)
 				styleRoomCombo(combos[c], combos[c] == w.persona ? UIStyle::MENU_TEXT_HINT : UIStyle::MENU_TEXT_BODY);
 			if (w.player && BitTest(w.player->winGetStyle(), GWS_COMBO_BOX))
-				styleRoomCombo(w.player, UIStyle::MENU_TEXT_ROW_FIGURE);
+				styleRoomCombo(w.player, UIStyle::MENU_TEXT_BODY);
 			else if (w.player)
 			{
 				w.player->winSetDrawFunc(drawRoomNameEntry);
-				roomFont(w.player, UIStyle::MENU_TEXT_ROW_FIGURE);
+				roomFont(w.player, UIStyle::MENU_TEXT_BODY);
 			}
 			// a seat's list opens over the seats around it, as far as the seat column goes
 			GameWindow *lists[] = { w.player, w.persona, w.army, w.colour, w.team, w.handicap };

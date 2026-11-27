@@ -50,8 +50,7 @@ TEST( room_layout_ties_keep_team_order )
 
 TEST( room_layout_eight_seats_in_two_teams_fit_without_a_scroll )
 {
-	// eight seats in two teams take 784 of the 792 pixels (the README's 788 with heads of 34; heads
-	// are 32 since the rows' boxes were put on the 8 px grid)
+	// eight seats in two teams take 512 of the 792 pixels: two heads of 32 and eight one-line rows of 56
 	const Int teams[] = { 0, 0, 0, 0, 1, 1, 1, 1 };
 	const Bool seated[] = { TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE };
 	LobbySeatState seats[ 8 ];
@@ -67,7 +66,7 @@ TEST( room_layout_eight_seats_in_two_teams_fit_without_a_scroll )
 	CHECK( plan.items[ 5 ].head );
 	const LobbyRoomItem &last = plan.items[ plan.itemCount - 1 ];
 	CHECK_EQ( last.top + last.height, 2 * LOBBY_ROW_HEAD + 8 * LOBBY_ROW_SEAT );
-	CHECK_EQ( last.top + last.height, 784 );
+	CHECK_EQ( last.top + last.height, 512 );
 }
 
 TEST( room_layout_rows_keep_their_size_at_32_seats )
@@ -123,9 +122,10 @@ TEST( room_layout_rows_keep_their_size_at_32_seats )
 	CHECK_EQ( plan.scroll, 0 );
 }
 
-TEST( room_layout_open_seats_are_short_rows_and_a_row_budget_holds )
+TEST( room_layout_open_seats_are_rows_of_the_same_height_and_a_row_budget_holds )
 {
-	// one player and 31 open seats: 52 a row; the skirmish room's 15 rows bind the window
+	// one player and 31 open seats: every row 56, open or seated, so the rows never jump; at most 15
+	// rows (the skirmish room's row windows) and what the window holds
 	Int teams[ 32 ];
 	Bool seated[ 32 ];
 	for( Int i = 0; i < 32; ++i )
@@ -143,7 +143,9 @@ TEST( room_layout_open_seats_are_short_rows_and_a_row_budget_holds )
 	CHECK( plan.items[ 2 ].head );
 	CHECK_EQ( plan.items[ 2 ].group, (Int)LOBBY_GROUP_UNSEATED );
 	CHECK_EQ( plan.items[ 2 ].count, 31 );
-	CHECK_EQ( plan.items[ 3 ].height, (Int)LOBBY_ROW_EMPTY );
+	CHECK_EQ( plan.items[ 1 ].height, (Int)LOBBY_ROW_SEAT );
+	CHECK_EQ( plan.items[ 3 ].height, (Int)LOBBY_ROW_SEAT );
+	CHECK( plan.items[ plan.itemCount - 1 ].top + LOBBY_ROW_SEAT <= ROOM_WINDOW - LOBBY_ROW_STRIP );
 	Int rows = 0;
 	for( Int i = 0; i < plan.itemCount; ++i )
 		rows += plan.items[ i ].head ? 0 : 1;

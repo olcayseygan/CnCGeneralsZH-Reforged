@@ -16,9 +16,10 @@ drawn by GUIUtil.cpp (InitLobbySeatVisuals and the room look under it), never by
 The seat rows here are only where each row's controls start. The code lays the rows out itself on
 every update, grouped by team under a head a team, with a scroll past what fits, so the rows of this
 file are the visible window of that list: 16 in the skirmish room (more than the 792 pixels of the
-seat column ever show), 8 in the network rooms. A row's cells are the same at every count: player
-184 to 444 (a computer's personality under its level), army 460 to 780, colour 796 to 976, team 992
-to 1104, handicap 1120 to 1262. The windows an earlier grid drew a row with (SeatCard, SeatBar,
+seat column ever show), 8 in the network rooms. Every row is one line of 40 tall boxes, 56 apart,
+seated or open. A row's cells are the same at every count: player 152 to 444 (a computer's level to
+292, its personality beside it from 300), army 460 to 780, colour 796 to 976, team 992 to 1104,
+handicap 1120 to 1262. The windows an earlier grid drew a row with (SeatCard, SeatBar,
 SeatSwatch, SeatTeam) stay, hidden, so a lookup still finds them.
 
 The right column is the map, its name and Select Map, then the rules from y 506. The network rooms
@@ -88,13 +89,16 @@ SLIDER_TEMPLATE = ("WOLCustomLobby", "SliderChatAdjust")
 # the track the code draws: 1280 to 1294, beside the cells
 TRACK = (1280, ROW_TOP, 14, SEATS_BOTTOM - ROW_TOP)
 
-# a seat row: 90 tall, its boxes 44 tall and centred; a computer's level (38) over its personality (30)
-ROW_PITCH = 90
+# a seat row, seated, open or closed alike (GUIUtil.cpp's LOBBY_ROW_SEAT and placeRoomRow): 56 tall,
+# one line of 40 tall boxes from +8; a computer's level (152 to 292) beside its personality (300 to
+# 444); the online ping light 18 square in the portrait's top right corner (the portrait 96 to 140)
+ROW_PITCH = 56
+ROW_BOX_TOP, ROW_BOX_HEIGHT = 8, 40
 BOX_HEIGHT = 44
-LEVEL_HEIGHT, PERSONA_HEIGHT = 38, 30
-CELLS = {"player": (184, 444), "army": (460, 780), "colour": (796, 976), "team": (992, 1104),
+LEVEL_RIGHT = 292
+CELLS = {"player": (152, 444), "army": (460, 780), "colour": (796, 976), "team": (992, 1104),
          "handicap": (1120, 1262)}
-PING = 24
+PING, PING_RIGHT, PING_TOP = 18, 139, 7
 
 MAP_TOP = ROW_TOP
 MAP_WIDTH, MAP_HEIGHT = 542, 278
@@ -450,13 +454,13 @@ def place_seats(layout, spec, seat_zero_player):
                     name = seat_zero_player
                 control = need(layout, name)
                 if prefix == "GenericPing":
-                    control.place(left, top + 54, PING, PING)
+                    control.place(PING_RIGHT - PING, top + PING_TOP, PING, PING)
                 elif prefix == PERSONA_PREFIX:
-                    control.place(left, top + ROW_PITCH - 9 - PERSONA_HEIGHT, right - left, PERSONA_HEIGHT)
+                    control.place(LEVEL_RIGHT + GAP, top + ROW_BOX_TOP, right - LEVEL_RIGHT - GAP, ROW_BOX_HEIGHT)
                 elif prefix in ("ComboBoxPlayer", "StaticTextPlayer"):
-                    control.place(left, top + 9, right - left, LEVEL_HEIGHT)
+                    control.place(left, top + ROW_BOX_TOP, LEVEL_RIGHT - left, ROW_BOX_HEIGHT)
                 else:
-                    control.place(left, top + (ROW_PITCH - BOX_HEIGHT) // 2, right - left, BOX_HEIGHT)
+                    control.place(left, top + ROW_BOX_TOP, right - left, ROW_BOX_HEIGHT)
     return SEATS_BOTTOM
 
 

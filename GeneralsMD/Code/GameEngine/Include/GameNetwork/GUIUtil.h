@@ -293,8 +293,7 @@ Int ApocalypseNewKindsOfNight(Int night, Int kinds[], Int most);
 // row to its new group only once the team list has closed.  Everything at 1080, in board pixels.
 enum
 {
-	LOBBY_ROW_SEAT = 90,				///< a seated row
-	LOBBY_ROW_EMPTY = 52,				///< an open or closed seat: one box
+	LOBBY_ROW_SEAT = 56,				///< every seat's row, seated, open or closed: one line of 40 tall boxes, 16 between rows
 	LOBBY_ROW_HEAD = 32,				///< a team's head: a multiple of 8, so the rows' boxes stay on the grid across it (34 left 50 between them)
 	LOBBY_ROW_STRIP = 26,				///< "n SEATS ABOVE" or "BELOW" at the window's edge
 	LOBBY_SEATS_TOP = 160,

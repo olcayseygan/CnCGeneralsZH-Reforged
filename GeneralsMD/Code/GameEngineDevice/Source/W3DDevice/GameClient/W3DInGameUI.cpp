@@ -1402,8 +1402,8 @@ static const Real ORDER_MARK_MAX_ZOOM = 4.5f;			// a mark keeps about its width 
 // body drew a grid of ghost selection rings over a group's formation and drowned the click marker
 static const Real ORDER_DOT_RADIUS = 1.1f;				// Classic's; the Reforged look's is finer (2026-11-26)
 static const Real ORDER_DOT_RIM = 0.4f;
-static const Real ORDER_DOT_RADIUS_FINE = 0.9f;		// W3DWaypointBuffer's WATER_DOT_RADIUS_FINE follows these two
-static const Real ORDER_DOT_RIM_FINE = 0.35f;
+static const Real ORDER_DOT_RADIUS_FINE = 1.8f;		// W3DWaypointBuffer's WATER_DOT_RADIUS_FINE follows these two
+static const Real ORDER_DOT_RIM_FINE = 0.5f;			// twice the dot (0.9 and 0.35 before, owner 2026-11-27: too small to see), a rim less than twice
 static const Real ORDER_RING_ALPHA = 0xD0;
 
 // the marker where an order lands: a ring closing on the point with four arrowheads on it pointing
@@ -1411,18 +1411,19 @@ static const Real ORDER_RING_ALPHA = 0xD0;
 // destination dot's width of band, solid colour. Drawn only under the Reforged look, for the orders
 // W3DGroundMarkers has no cursor mark for, and for a move or attack too while scripts hide the marks
 // (W3DGroundMarkers_drawsClickMarker's markersShown); sized to the cursor's mark since 2026-11-26 (14 and 3.2
-// world units at zoom 1 before), W3DWaypointBuffer's WATER_MARKER_* in step
-static const Real MARKER_START_RADIUS = 9.0f;
-static const Real MARKER_END_RADIUS = 2.4f;
+// world units at zoom 1 before), W3DWaypointBuffer's WATER_MARKER_* in step.  Twice that since 2026-11-27
+// (owner: too small to see; 9, 2.4, 0.5, 2 and 1 before), the band and rim less than twice (0.75, 0.35)
+static const Real MARKER_START_RADIUS = 18.0f;
+static const Real MARKER_END_RADIUS = 4.8f;
 static const Real MARKER_CLOSE_MS = 320.0f;				// to close on the point, easing in
 static const Real MARKER_IN_MS = 50.0f;
 static const Real MARKER_FADE_MS = 260.0f;				// the last of it
-static const Real MARKER_WIDTH = 0.75f;
-static const Real MARKER_RIM = 0.35f;
-static const Real MARKER_ARROW_GAP = 0.5f;				// between the ring and an arrowhead's tip
-static const Real MARKER_ARROW_ARM = 2.0f;
+static const Real MARKER_WIDTH = 1.2f;
+static const Real MARKER_RIM = 0.5f;
+static const Real MARKER_ARROW_GAP = 1.0f;				// between the ring and an arrowhead's tip
+static const Real MARKER_ARROW_ARM = 4.0f;
 static const Real MARKER_ARROW_SPREAD = 0.62f;		// radians off the spoke, each arm
-static const Real MARKER_DOT_RADIUS = 1.0f;				// on the point once the ring is there
+static const Real MARKER_DOT_RADIUS = 2.0f;				// on the point once the ring is there
 static const Real MARKER_HULL_MARGIN = 3.0f;			// world units an attack's ring rests outside its target (W3DGroundMarkers' TARGET_HULL_MARGIN)
 static const Real MARKER_ALPHA = 0xFF;
 enum { MARKER_SEGMENTS = 32, MARKER_ARROWS = 4, MARKER_DOT_SEGMENTS = 10 };

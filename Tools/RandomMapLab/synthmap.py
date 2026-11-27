@@ -113,6 +113,11 @@ SLOPE_REACH = 100           # cells from a start the skeleton's walkable slopes 
 PILE_FLAT = 4               # cells round a pile levelled
 TECH_FLAT = 8               # cells round a tech building levelled
 MIN_RELIEF = 60.0           # bytes: the unit of t where the bases are not raised
+WALL_BYTES = 10             # bytes of corner span from which a finished cell is a wall (cliff_of)
+TEXTURE_REACH = 16          # cells from a cell of the wrong steepness to the exemplar cell whose class it takes
+CLIFF_UV_RISE = 12          # bytes both edges down a cliff cell's fall rise past for it to get a mapping
+NUM_CLIFF_INFO = 32384      # cliff mapping entries the reader holds, the default at 0 included
+NUM_BLEND_TILES = 16192     # blend entries the renderer holds
 
 # How the exemplar's features are built; their sizes come from its inventory (mapfeatures.py)
 RAMP_BANK = 10.0            # cells a widened way down takes to meet the ground beside it
@@ -262,7 +267,8 @@ def waypoint_paths(raw, shape, border):
     out = np.zeros(shape, bool)
     for i in range(struct.unpack_from("<i", links, 0)[0]):
         first, second = struct.unpack_from("<2i", links, 4 + 8 * i)
-        out |= line_cells(where[first], where[second], shape)
+        if first in where and second in where:
+            out |= line_cells(where[first], where[second], shape)
     return out
 
 
@@ -401,6 +407,103 @@ def span_cliff(h):
     return out
 
 
+def cliff_of(h):
+    """The finished map's cliffs (the generator's cliffOf): the engine's rule, and a corner span of
+    WALL_BYTES or more that the rule would leave open, which a shipped map paints impassable by hand."""
+    h = h.astype(np.int32)
+    corners = np.stack([h[:-1, :-1], h[:-1, 1:], h[1:, :-1], h[1:, 1:]])
+    out = np.zeros(h.shape, bool)
+    out[:-1, :-1] = corners.max(0) - corners.min(0) >= WALL_BYTES
+    return out
+
+
+def nearest_class(seed, cls, steps_most):
+    """Each cell's nearest seed's class, four-way steps and no further than steps_most, else -1: one
+    flood from every seed at once, seeds in raster order, the first to come to a cell keeps it."""
+    hh, ww = seed.shape
+    out = np.where(seed, cls, -1).ravel().tolist()
+    steps = np.where(seed, 0, -1).ravel().tolist()
+    queue = deque(np.flatnonzero(seed).tolist())
+    while queue:
+        i = queue.popleft()
+        if steps[i] >= steps_most:
+            continue
+        x, y = i % ww, i // ww
+        for n in (i + 1 if x + 1 < ww else -1, i - 1 if x > 0 else -1,
+                  i + ww if y + 1 < hh else -1, i - ww if y > 0 else -1):
+            if n >= 0 and steps[n] < 0:
+                steps[n] = steps[i] + 1
+                out[n] = out[i]
+                queue.append(n)
+    return np.array(out, np.int64).reshape(hh, ww)
+
+
+def cliff_mapping(h, sheet_first, sheet_width):
+    """The generator's rmgCliffMapping: a cliff class's cell whose two edges down its fall both rise
+    more than CLIFF_UV_RISE takes its texture coordinates from its heights, V the height (a byte
+    1/1024 of the texture), restarting a block's height apart at the level fewest of its face's cells
+    cross, U across the fall. Returns the per-cell index layer and the entries (tile, u[4], v[4],
+    flip), entry 0 the default."""
+    hh, ww = h.shape
+    h = h.astype(np.int64)
+    c0, c1, c2, c3 = h[:-1, :-1], h[:-1, 1:], h[1:, 1:], h[1:, :-1]
+    ax = np.minimum(abs(c0 - c1), abs(c3 - c2))
+    ay = np.minimum(abs(c0 - c3), abs(c1 - c2))
+    falls_x = np.maximum(abs(c0 - c1), abs(c3 - c2)) >= np.maximum(abs(c0 - c3), abs(c1 - c2))
+    mapped = np.zeros((hh, ww), bool)
+    mapped[:-1, :-1] = (sheet_first[:-1, :-1] >= 0) & (sheet_width[:-1, :-1] >= 1) & (np.where(falls_x, ax, ay) > CLIFF_UV_RISE)
+    lowest = np.full((hh, ww), -1, np.int64)
+    highest = np.full((hh, ww), -1, np.int64)
+    corners = np.stack([c0, c1, c2, c3])
+    lowest[:-1, :-1] = np.where(mapped[:-1, :-1], corners.min(0), -1)
+    highest[:-1, :-1] = np.where(mapped[:-1, :-1], corners.max(0), -1)
+
+    # the faces: 8-connected pieces of mapped cells of one sheet
+    face = np.full((hh, ww), -1, np.int64)
+    faces = 0
+    for first in np.unique(sheet_first[mapped]):
+        labels, count = ndimage.label(mapped & (sheet_first == first), structure=np.ones((3, 3)))
+        face[labels > 0] = labels[labels > 0] - 1 + faces
+        faces += count
+    # each face's restart: of the heights a block apart, the lowest phase the fewest of its cells cross
+    sheet_bytes = sheet_width * 32
+    phase = np.zeros(faces, np.int64)
+    crossing = {}
+    for y, x in zip(*np.nonzero(mapped)):
+        f = face[y, x]
+        counts = crossing.setdefault(f, np.zeros(sheet_bytes[y, x], np.int64))
+        t = np.arange(lowest[y, x] + 1, highest[y, x]) % sheet_bytes[y, x]
+        np.add.at(counts, t, 1)
+    for f, counts in crossing.items():
+        phase[f] = int(np.argmin(counts))
+
+    cells = []
+    restart = np.zeros((hh, ww), np.int64)
+    for y, x in zip(*np.nonzero(mapped)):
+        sb, p = sheet_bytes[y, x], phase[face[y, x]]
+        restart[y, x] = p + ((lowest[y, x] - p) // sb) * sb
+        if highest[y, x] - restart[y, x] <= sb:
+            cells.append((lowest[y, x] - highest[y, x], y * ww + x))
+    if len(cells) > NUM_CLIFF_INFO - 1:
+        cells = sorted(sorted(cells)[:NUM_CLIFF_INFO - 1], key=lambda c: c[1])
+
+    index = np.zeros((hh, ww), np.int64)
+    info = [(0, (0.0,) * 4, (0.0,) * 4, False)]
+    for _, i in cells:
+        y, x = divmod(i, ww)
+        w = int(sheet_width[y, x])
+        k = (h[y, x], h[y, x + 1], h[y + 1, x + 1], h[y + 1, x])
+        along_x = max(abs(k[0] - k[1]), abs(k[3] - k[2])) >= max(abs(k[0] - k[3]), abs(k[1] - k[2]))
+        along = y if along_x else x
+        behind = along - along % (2 * w)
+        corner = ((x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1))
+        u = tuple((corner[n][1 if along_x else 0] - behind) * 32 / 2048.0 for n in range(4))
+        v = tuple(-(k[n] - restart[y, x]) * 2 / 2048.0 for n in range(4))
+        index[y, x] = len(info)
+        info.append((int(sheet_first[y, x]) << 2, u, v, abs(k[2] - k[0]) >= abs(k[3] - k[1])))
+    return index, info
+
+
 def walkable(cliff):
     """Pathfinder's one-cell growth of every cliff."""
     grown = cliff.copy()
@@ -413,11 +516,13 @@ def walkable(cliff):
 
 
 def reach(passable, start):
-    """Cells walkable from one cell, four ways."""
+    """Cells walkable from one cell, four ways; from a cell that is no ground, that cell alone."""
     h, w = passable.shape
     seen = np.zeros_like(passable)
     sy, sx = start
     seen[sy, sx] = True
+    if not passable[sy, sx]:
+        return seen
     queue = deque([(sy, sx)])
     while queue:
         y, x = queue.popleft()
@@ -426,6 +531,21 @@ def reach(passable, start):
                 seen[ny, nx] = True
                 queue.append((ny, nx))
     return seen
+
+
+def reach_origin(passable, start):
+    """Where a walk from a start begins: its cell, or when that is no ground the nearest passable
+    cell within two (the 5x5 the reach checks count a start reached by), else the start's cell."""
+    sy, sx = start
+    if passable[sy, sx]:
+        return start
+    best, best_d = start, None
+    for y in range(max(sy - 2, 0), min(sy + 2, passable.shape[0] - 1) + 1):
+        for x in range(max(sx - 2, 0), min(sx + 2, passable.shape[1] - 1) + 1):
+            d = (y - sy) ** 2 + (x - sx) ** 2
+            if passable[y, x] and (best_d is None or d < best_d):
+                best, best_d = (y, x), d
+    return best
 
 
 class Grid:
@@ -476,13 +596,39 @@ def load_exemplar(path, inner):
     grid.cls = owner[grid.layers[0] >> 2]
     grid.class_names = [name for name, _, _ in grid.m.texture_classes]
     grid.first = np.array([first for _, first, _ in grid.m.texture_classes])
-    grid.width = np.array([math.isqrt(count) for _, _, count in grid.m.texture_classes])
+    grid.width = np.array([max(math.isqrt(count), 1) for _, _, count in grid.m.texture_classes])
     grid.bitmap_tiles, grid.table_head, entries = texture_table(grid.tail)
     # a blend is the class laid over the cell and how; its tile follows from where it lands
     grid.blend_class = np.array([owner[tile >> 2] for tile, _, _ in entries])
     shapes = sorted(set((flags, custom) for _, flags, custom in entries[1:]))
     grid.shapes = shapes
     grid.blend_shape = np.array([0] + [shapes.index((f, c)) for _, f, c in entries[1:]])
+
+    # which class the exemplar lays over which, for the blends blend_chunk works out again: the count
+    # of each pair (cells of class c carrying a blend of class k at [c, k]), and one order of all of
+    # them for the pairs the exemplar never puts side by side
+    nc = max(len(grid.m.texture_classes), 1)
+    grid.blend_over = np.zeros((nc, nc), np.int64)
+    for layer in grid.layers[1:3]:
+        entry = layer.astype(np.int64)
+        on = (entry > 0) & (entry < len(entries))
+        over = grid.blend_class[np.where(on, entry, 0)]
+        on &= over != grid.cls
+        np.add.at(grid.blend_over, (grid.cls[on], over[on]), 1)
+    net = grid.blend_over.sum(0) - grid.blend_over.sum(1)
+    grid.class_rank = np.zeros(nc, np.int64)
+    grid.class_rank[np.lexsort((np.arange(nc), net))] = np.arange(nc)
+    # the exemplar's cliffs by its own heights, and for each cell the class of the nearest cliff painted
+    # as cliff and of the nearest ground that is no cliff, which blend_chunk paints a cell with when the
+    # new heights made it the other one
+    grid.steep = span_cliff(grid.h)
+    grid.cliff_texture = np.array(["cliff" in name.lower() for name in grid.class_names] + [False] * (nc - len(grid.class_names)))
+    rock_face = grid.steep & grid.cliff_texture[grid.cls]
+    faces = np.bincount(grid.cls[rock_face], minlength=nc)
+    commonest = int(np.argmax(faces)) if faces.max() > 0 else -1
+    grid.steep_class = nearest_class(rock_face, grid.cls, TEXTURE_REACH)
+    grid.steep_class[grid.steep_class < 0] = commonest
+    grid.open_class = nearest_class(~grid.steep, grid.cls, TEXTURE_REACH)
 
     # the scenery that moves with the ground, by the cell it stands on, and its trees counted
     grid.scenery = {}
@@ -571,30 +717,31 @@ class Frame:
         m = skel.m
         self.yy, self.xx = np.mgrid[0:m.height, 0:m.width].astype(np.float64)
         self.cy, self.cx = skel.centre
-        self.k = min(1.0, max(0.6, m.playable / 356.0))         # the generator's m_styleScale
+        self.k = min(1.0, max(0.4, m.playable / 356.0))
         self.half = m.playable / 2.0
         self.play = np.zeros(skel.h.shape, bool)
         self.play[m.border:m.border + m.playable_y, m.border:m.border + m.playable_x] = True
         self.seat_ring = float(np.mean([math.hypot(y - self.cy, x - self.cx) for y, x in skel.starts]))
         self.bowl = skel.plateau - skel.bowl > MIN_RELIEF       # the skeleton is a style's bowl
-        # the open middle: a bowl's floor inside its rim (RMGLayout::placeBowlStarts' m_bowlRim)
-        self.middle = (self.seat_ring - (0.85 * 53.75 + 8.0) * self.k if self.bowl else 0.55 * self.seat_ring)
+        self.middle = 0.55 * self.seat_ring                     # the open middle
         docks = [(y + m.border, x + m.border) for x, y in m.supplies]
         derricks = [(y + m.border, x + m.border) for x, y in m.derricks]
         self.sites = list(skel.starts) + docks + derricks
+        # how wide a site stands in the way of a line: a start's pad, or a dock's or derrick's
+        self.site_reach = [PAD_RADIUS[1]] * len(skel.starts) + [SITE_RADIUS[1]] * (len(docks) + len(derricks))
         self.guard = np.zeros(skel.h.shape)
         for (y, x), r in [(p, PAD_RADIUS[1]) for p in skel.starts] + [(p, SITE_RADIUS[1]) for p in docks + derricks]:
             self.guard = np.maximum(self.guard, fade((r + 10.0 - np.hypot(self.yy - y, self.xx - x)) / 10.0))
 
     def axis(self, seed, salt, offset=0.0):
         """Of 32 bearings turned by the seed, the line through the middle (moved offset cells to its
-        side) passing furthest from any start, dock or derrick."""
+        side) passing furthest from any start, dock or derrick, a start's pad counted as wide as it is."""
         turn = hash_unit(seed, salt, 1)
         best = None
         for q in range(32):
             angle = math.pi * (q + turn) / 32.0
-            clear = min(abs((y - self.cy) * math.cos(angle) - (x - self.cx) * math.sin(angle) - offset)
-                        for y, x in self.sites)
+            clear = min(abs((y - self.cy) * math.cos(angle) - (x - self.cx) * math.sin(angle) - offset) - r
+                        for (y, x), r in zip(self.sites, self.site_reach))
             if best is None or clear > best[0]:
                 best = (clear, angle)
         return best[1]
@@ -975,8 +1122,8 @@ def judge(out, trial, starts):
     spacing = min(math.hypot(p[0] - q[0], p[1] - q[1]) for i, p in enumerate(starts) for q in starts[i + 1:])
     wet = trial.wet & (out < trial.level)
     gap = ndimage.distance_transform_edt(~wet)
-    ground, _ = ndimage.label(walkable(span_cliff(out)) & ~wet)
-    return min(float(gap[p]) for p in starts) / spacing, len(set(int(ground[p]) for p in starts)) > 1
+    seen = reach(walkable(span_cliff(out)) & ~wet, starts[0])
+    return min(float(gap[p]) for p in starts) / spacing, not all(seen[p] for p in starts[1:])
 
 
 def river_bridges(inv, index):
@@ -1251,8 +1398,8 @@ def place_tech(h, skel, f, plan, inv, seed):
             angle = 2.0 * math.pi * (q + turn) / 64.0
             y = int(f.cy + radius * math.sin(angle))
             x = int(f.cx + radius * math.cos(angle))
-            if min(y, x) < TECH_FLAT:          # a corner's tech building: the circle leaves the grid
-                continue
+            if min(y, x) < TECH_FLAT or y + TECH_FLAT >= h.shape[0] or x + TECH_FLAT >= h.shape[1]:
+                continue                        # a corner's tech building: the circle leaves the grid
             near = (slice(y - TECH_FLAT, y + TECH_FLAT + 1), slice(x - TECH_FLAT, x + TECH_FLAT + 1))
             if (f.play[near].all() and not (plan.keepout[near].any() or plan.wet[near].any() or barred[near].any())
                     and f.guard[near].max() < 0.01 and np.ptp(h[near]) <= 12):
@@ -1397,8 +1544,8 @@ def simplify(points, tolerance):
 
 
 def subdivide(a, z, step):
-    """a and the points between a and z no further apart than step (z itself left out)."""
-    pieces = max(int(math.ceil(math.hypot(z[0] - a[0], z[1] - a[1]) / max(step, 1.0))), 1)
+    """a and the points between a and z, as many pieces as step fits best (z itself left out)."""
+    pieces = max(int(math.floor(math.hypot(z[0] - a[0], z[1] - a[1]) / max(step, 1.0) + 0.5)), 1)
     return [(a[0] + (z[0] - a[0]) * k / pieces, a[1] + (z[1] - a[1]) * k / pieces) for k in range(pieces)]
 
 
@@ -1598,37 +1745,173 @@ def level(h, y, x, radius):
     h[disc] = int(np.median(h[disc]))
 
 
-def blend_chunk(src, sy_map, sx_map, cliff):
-    """BlendTileData, version 8: every cell's class and blends from its source cell, the tiles
-    worked out again for where the cell landed, the exemplar's texture table, a blend table of the
-    blends that occur, no cliff texture mapping (Twilight's cells use none) and the cliff bits."""
+# A blend's six flag bytes (horizontal, vertical, right diagonal, left diagonal, inverted, long
+# diagonal) say which corners of its cell the blended class covers: 0 (x, y), 1 (x + 1, y),
+# 2 (x + 1, y + 1), 3 (x, y + 1), a bit each.
+BLEND_INVERTED_BIT = 0x1
+BLEND_FLIPPED_BIT = 0x2     # a side blend cut the way the cell's diagonal blend cuts it
+BLEND_SHAPES = ((0x6, 0, False, False), (0x9, 0, True, False), (0xC, 1, False, False), (0x3, 1, True, False),
+                (0x4, 2, False, False), (0x2, 2, True, False), (0xE, 2, False, True), (0x7, 2, True, True),
+                (0x8, 3, False, False), (0x1, 3, True, False), (0xD, 3, False, True), (0xB, 3, True, True))
+DRAWN_CORNERS = (0x6, 0x9, 0xC, 0x3, 0x4, 0x2, 0xE, 0x7, 0x8, 0x1, 0xD, 0xB)
+NEIGHBOURS = ((-1, -1, 0x1), (-1, 0, 0x3), (-1, 1, 0x2), (0, -1, 0x9), (0, 1, 0x6), (1, -1, 0x8), (1, 0, 0xC), (1, 1, 0x4))
+
+
+def blend_corners(flags):
+    inverted = flags[4] & BLEND_INVERTED_BIT
+    long_one = flags[5] != 0
+    if flags[0]:
+        return 0x9 if inverted else 0x6
+    if flags[1]:
+        return 0x3 if inverted else 0xC
+    if flags[2]:
+        return (0x7 if long_one else 0x2) if inverted else (0xE if long_one else 0x4)
+    if flags[3]:
+        return (0xB if long_one else 0x1) if inverted else (0xD if long_one else 0x8)
+    return 0
+
+
+def blend_flags_for(corners, flipped):
+    flags = bytearray(6)
+    for shape, kind, inverted, long_one in BLEND_SHAPES:
+        if shape == corners:
+            flags[kind] = 1
+            flags[4] = (BLEND_FLIPPED_BIT if flipped else 0) | (BLEND_INVERTED_BIT if inverted else 0)
+            flags[5] = 1 if long_one else 0
+    return bytes(flags)
+
+
+def drawable_corners(corners):
+    """The most of these corners a blend can paint: the corners themselves when the renderer has the
+    shape, else the largest shape inside them."""
+    best, most = 0, 0
+    for c in DRAWN_CORNERS:
+        if c & ~corners == 0 and bin(c).count("1") > most:
+            best, most = c, bin(c).count("1")
+    return best
+
+
+def blend_chunk(src, sy_map, sx_map, cliff, h):
+    """BlendTileData, version 8 (the generator's blendChunk; the lab turns no copy, so no blend is
+    turned): every cell's class and blends from its source cell, the tiles worked out again for where
+    the cell landed, the exemplar's texture table and the cliff bits.
+
+    A blend is drawn for the cell's neighbours, so it holds only where they are the source cell's: a
+    corner a neighbour of another class than the source's touches (a quilt seam, a town's stamp) is
+    worked out again from the classes round it now, a class going over another where the exemplar
+    more often puts it over than under, else by rank. A cell whose neighbours all match keeps its
+    blends. A cell the final heights made a cliff whose source is no painted cliff takes the nearest
+    painted cliff's class, flat ground copied off a cliff face the nearest flat ground's. The faces of
+    a cliff class get their mapping from the final heights (cliff_mapping)."""
     th, tw = sy_map.shape
     yy, xx = np.mgrid[0:th, 0:tw]
-    cls = src.cls[sy_map, sx_map]
-    layers = [tile_for(cls, src.first, src.width, yy, xx)]
-    keys = []
-    for layer in (1, 2):
-        entry = src.layers[layer][sy_map, sx_map].astype(np.int64)
-        over = src.blend_class[entry]
-        tile = tile_for(over, src.first, src.width, yy, xx)
-        keys.append(np.where(entry > 0, (tile * len(src.shapes) + src.blend_shape[entry]) + 1, 0))
-    table, index = np.unique(np.concatenate([k.ravel() for k in keys]), return_inverse=True)
-    if table[0] != 0:                           # entry 0, "no blend", is always there
-        table = np.concatenate(([0], table))
-        index = index + 1
-    if len(table) > 16192:                      # NUM_BLEND_TILES
-        raise ValueError("%d blends, the renderer holds 16192" % len(table))
-    layers += [index[:th * tw].reshape(th, tw), index[th * tw:].reshape(th, tw)]
-    layers.append(np.zeros((th, tw), np.int64))
+    sh, sw = src.cls.shape
+    shapes = list(src.shapes)
+    made = {}
+
+    def shape_for(corners, flipped, custom):
+        key = (corners, flipped, custom)
+        if key not in made:
+            wanted = (blend_flags_for(corners, flipped), custom)
+            if wanted not in shapes:
+                shapes.append(wanted)
+            made[key] = shapes.index(wanted)
+        return made[key]
+
+    def lies_over(k, a):
+        up, down = src.blend_over[a, k], src.blend_over[k, a]
+        return up > down if up != down else src.class_rank[k] > src.class_rank[a]
+
+    # each cell's class: its source cell's, unless the heights made it a cliff the source is not or the other way round
+    source = src.cls[sy_map, sx_map]
+    rock = src.steep[sy_map, sx_map] & src.cliff_texture[source]
+    steep_class, open_class = src.steep_class[sy_map, sx_map], src.open_class[sy_map, sx_map]
+    ground = np.where(cliff & ~rock & (steep_class >= 0), steep_class,
+                      np.where(~cliff & rock & (open_class >= 0), open_class, source))
+    moved = ground != source
+
+    # the corners a changed neighbour touches: every corner of a cell whose own class changed
+    loose = np.where(moved, 0xF, 0)
+    for dy, dx, touch in NEIGHBOURS:
+        ny, nx = yy + dy, xx + dx
+        inside = (ny >= 0) & (nx >= 0) & (ny < th) & (nx < tw)
+        sy, sx = sy_map + dy, sx_map + dx
+        off = (sy < 0) | (sx < 0) | (sy >= sh) | (sx >= sw)
+        theirs = src.cls[np.clip(sy, 0, sh - 1), np.clip(sx, 0, sw - 1)]
+        here = ground[np.clip(ny, 0, th - 1), np.clip(nx, 0, tw - 1)]
+        loose |= np.where(inside & (off | (theirs != here)), touch, 0)
+
+    entries = [src.layers[layer][sy_map, sx_map].astype(np.int64) for layer in (1, 2)]
+    count = len(src.blend_class)
+    tiles, shape_of = [], []
+    for entry in entries:
+        valid = (entry > 0) & (entry < count) & (loose == 0)
+        e = np.where(valid, entry, 0)
+        tiles.append(np.where(valid, tile_for(src.blend_class[e], src.first, src.width, yy, xx), 0))
+        shape_of.append(np.where(valid, src.blend_shape[e], -1))
+
+    for y, x in zip(*np.nonzero(loose)):
+        mine, lost = ground[y, x], loose[y, x]
+        layer = []                              # [class, corners, custom], a class once
+
+        def add(k, corners, custom):
+            if k == mine or corners == 0:
+                return
+            for item in layer:
+                if item[0] == k:
+                    item[1] |= corners
+                    return
+            layer.append([k, corners, custom])
+
+        if not moved[y, x]:
+            for entry in entries:
+                e = int(entry[y, x])
+                if 0 < e < count:
+                    flags, custom = src.shapes[src.blend_shape[e]]
+                    add(src.blend_class[e], blend_corners(flags) & ~lost, custom)
+        for dy, dx, touch in NEIGHBOURS:
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < th and 0 <= nx < tw and touch & lost:
+                k = ground[ny, nx]
+                if k != mine and lies_over(k, mine):
+                    add(k, touch & lost, -1)
+        # lowest first, as the renderer stacks them; it has two, and keeps the classes on top
+        layer.sort(key=lambda item: src.class_rank[item[0]])
+        first = max(len(layer) - 2, 0)
+        cut_flipped = False
+        for item in layer[first:]:
+            item[1] = drawable_corners(item[1])
+            cut_flipped = cut_flipped or item[1] in (0x1, 0x4, 0xB, 0xE)
+        # a side blend takes the cut of a diagonal it shares the cell with
+        for n, (k, corners, custom) in enumerate(layer[first:]):
+            if corners == 0:
+                continue
+            side = corners in (0x3, 0x6, 0x9, 0xC)
+            tiles[n][y, x] = tile_for(k, src.first, src.width, y, x)
+            shape_of[n][y, x] = shape_for(corners, side and len(layer) - first == 2 and cut_flipped, custom)
+
+    n_shapes = max(len(shapes), 1)
+    keys = [np.where(s >= 0, t * n_shapes + s + 1, 0) for t, s in zip(tiles, shape_of)]
+    table, index = np.unique(np.concatenate([[0]] + [k.ravel() for k in keys]), return_inverse=True)
+    index = index[1:]
+    if len(table) > NUM_BLEND_TILES:
+        raise ValueError("%d blends, the renderer holds %d" % (len(table), NUM_BLEND_TILES))
+    sheet_first = np.where(src.cliff_texture[ground], src.first[ground], -1)
+    sheet_width = np.where(src.cliff_texture[ground], src.width[ground], 0)
+    cliff_index, cliff_info = cliff_mapping(h, sheet_first, sheet_width)
+    layers = [tile_for(ground, src.first, src.width, yy, xx),
+              index[:th * tw].reshape(th, tw), index[th * tw:].reshape(th, tw), cliff_index]
 
     out = struct.pack("<i", th * tw) + b"".join(l.astype("<i2").tobytes() for l in layers)
     row = (tw + 7) // 8
     out += np.packbits(np.pad(cliff, ((0, 0), (0, row * 8 - tw))), axis=1, bitorder="little").tobytes()
-    out += struct.pack("<3i", src.bitmap_tiles, len(table), 1) + src.table_head
+    out += struct.pack("<3i", src.bitmap_tiles, len(table), len(cliff_info)) + src.table_head
     for key in table[1:]:
-        tile, shape = divmod(int(key) - 1, len(src.shapes))
-        flags, custom = src.shapes[shape]
+        tile, shape = divmod(int(key) - 1, n_shapes)
+        flags, custom = shapes[shape]
         out += struct.pack("<i6sii", tile, flags, custom, 0x7ADA0000)
+    for tile, u, v, flip in cliff_info[1:]:
+        out += struct.pack("<i8fBB", tile, *[c for pair in zip(u, v) for c in pair], int(flip), 0)
     return out
 
 
@@ -1669,6 +1952,8 @@ def place_on_bearing(h, ok, centre, angle, inner, outer):
     for r in np.arange(outer, inner, -1.0):
         y = int(centre[0] + r * math.sin(angle) + 0.5)
         x = int(centre[1] + r * math.cos(angle) + 0.5)
+        if y < 2 or x < 2 or y + 2 >= h.shape[0] or x + 2 >= h.shape[1]:
+            continue
         if ok[y - 2:y + 3, x - 2:x + 3].all() and np.ptp(h[y - 2:y + 3, x - 2:x + 3]) <= 4:
             return y, x
     return None
@@ -1719,27 +2004,34 @@ def synthesise(skeleton_path, src, out_dir, seed):
     dry = (plan.level >= 0.0) & ~plan.wet
     h = np.where(dry, np.maximum(h, plan.level + 1.0), h)
     h = np.clip(np.rint(h), 0, 255).astype(np.int32)
-    cliff = span_cliff(h)       # Twilight's painted bits are exactly its heights' (selfcheck)
+    cliff = cliff_of(h)
 
     # the skeleton's money and seats stay, its scenery goes; the piles move
     _, objects = raw.body("ObjectsList")
-    kept, piles = [], []
+    kept, piles, start_chunks = [], [], set()
     civil = mapfeatures.civilian_buildings()
     road = mapfeatures.FLAG_ROAD_POINT1 | mapfeatures.FLAG_ROAD_POINT2
     for chunk in split_chunks(objects, 0, len(objects)):
         template = object_head(chunk[2])[3]
         # the generator's dressing goes, its towns and roads with its trees: the exemplar's come instead
-        if SKELETON_SCENERY.match(template) or template.lower() in civil or \
+        entries = {key: value for key, _, value in object_entries(chunk[2], raw.names)} if chunk[1] >= 2 else {}
+        waypoint = "waypointID" in entries
+        if SKELETON_SCENERY.match(template) or (not waypoint and template.lower() in civil) or \
                 struct.unpack_from("<i", chunk[2], 16)[0] & road:
             continue
+        # the seats' waypoints, which the snapping leaves on their pads
+        name = entries.get("waypointName", b"\0\0")[2:].decode("latin-1")
+        if waypoint and name.startswith("Player_") and name.endswith("_Start"):
+            start_chunks.add(len(kept))
         (piles if template == "SupplyPileSmall" else kept).append(chunk)
 
     wet = plan.wet & (h < plan.level)
     decks = np.zeros((th, tw), bool)
     for _, a, z in plan.bridges:
         decks |= box(line_cells(a, z, (th, tw)), 1) > 0
-    passable = walkable(cliff) & ~wet | decks
-    reached = reach(passable, skel.starts[0])
+    # the border is no ground: the pathfinder keeps to the playable area
+    passable = (walkable(cliff) & ~wet | decks) & play
+    reached = reach(passable, reach_origin(passable, skel.starts[0]))
     open_ground = passable & reached & ~plan.keepout & ~wet
 
     # the piles: where the exemplar keeps its own when they stand on high ground (Twilight's, up
@@ -1795,22 +2087,41 @@ def synthesise(skeleton_path, src, out_dir, seed):
     # share, or a wave walks at a bank or a wall it cannot reach and stands there wedged. Clear of
     # the water by a few cells, as the water area's polygon is drawn round the bed loosely, and
     # after the levelling, which can ring a pad with cliff.
-    level_wet = plan.wet & (h < plan.level)
-    cliff = span_cliff(h)
-    ground = reach(walkable(cliff) & ~level_wet | decks, skel.starts[0])
-    ground &= ~(box(level_wet, 3) > 0) & ~decks
-    _, (near_y, near_x) = ndimage.distance_transform_edt(~ground, return_indices=True)
-    snapped = 0
-    for index, (cid, version, body) in enumerate(kept):
-        x, y, _, template = object_head(body)
-        cy, cx = int(y / MAP_XY_FACTOR) + m.border, int(x / MAP_XY_FACTOR) + m.border
-        if template not in ("*Waypoints/Waypoint", "SupplyPileSmall") or ground[cy, cx]:
-            continue
-        ty, tx = near_y[cy, cx], near_x[cy, cx]
-        body = struct.pack("<2f", (tx - m.border + 0.5) * MAP_XY_FACTOR,
-                           (ty - m.border + 0.5) * MAP_XY_FACTOR) + body[8:]
-        kept[index] = (cid, version, body)
-        snapped += 1
+    # The piles go first, each levelled where it lands, then the waypoints on the ground that leaves;
+    # a seat's start stays on its pad, and a first start on no ground moves nothing.
+    def find_ground():
+        level_wet = plan.wet & (h < plan.level)
+        passable = (walkable(cliff_of(h)) & ~level_wet | decks) & play
+        origin = reach_origin(passable, skel.starts[0])
+        ground = reach(passable, origin) & ~(box(level_wet, 3) > 0) & ~decks
+        # the nearest cell (ties to the first found: rows from the top, the ring's edges)
+        return bool(passable[origin]), ground, ndimage.distance_transform_edt(~ground, return_indices=True)[1]
+
+    def snap_all(piles_pass):
+        moved = 0
+        for index, (cid, version, body) in enumerate(kept):
+            x, y, _, template = object_head(body)
+            if template != ("SupplyPileSmall" if piles_pass else "*Waypoints/Waypoint") or index in start_chunks:
+                continue
+            cy = min(max(int(y / MAP_XY_FACTOR) + m.border, 0), th - 1)
+            cx = min(max(int(x / MAP_XY_FACTOR) + m.border, 0), tw - 1)
+            if ground[cy, cx] or not ground.any():
+                continue
+            ty, tx = near_y[cy, cx], near_x[cy, cx]
+            body = struct.pack("<2f", (tx - m.border + 0.5) * MAP_XY_FACTOR,
+                               (ty - m.border + 0.5) * MAP_XY_FACTOR) + body[8:]
+            kept[index] = (cid, version, body)
+            if piles_pass:
+                level(h, int(ty), int(tx), PILE_FLAT)
+            moved += 1
+        return moved
+
+    anchored, ground, (near_y, near_x) = find_ground()
+    snapped = snap_all(True) if anchored else 0
+    if snapped:
+        anchored, ground, (near_y, near_x) = find_ground()
+    snapped += snap_all(False) if anchored else 0
+    cliff = cliff_of(h)
 
     # the exemplar's scenery, wherever its cell landed off the pads, the kept ways down, the
     # features' edges and the water; a tree only where the quilting counted trees
@@ -1818,6 +2129,8 @@ def synthesise(skeleton_path, src, out_dir, seed):
     for cell in src.scenery:
         hit[cell] = True
     landed = hit[sy_map, sx_map] & play & (pads < 0.9) & (keep < 0.95) & ~plan.keepout & ~(box(plan.wet, 2) > 0) & ~stamped
+    # nothing on a wall the new ground made where the exemplar's cell was not one
+    landed &= ~(cliff & ~src.cliff[sy_map, sx_map])
     taken = [(int(p[0]), int(p[1])) for p in sites] + [p for _, p in plan.tech]
     for y, x in zip(*np.nonzero(landed)):
         if any(abs(y - py) < 6 and abs(x - px) < 6 for py, px in taken):
@@ -1829,7 +2142,7 @@ def synthesise(skeleton_path, src, out_dir, seed):
     standing = np.zeros((th, tw), bool)
     for template, cx, cy, _ in added:
         standing[int(cy), int(cx)] |= template.startswith("Tree")
-    free = trees_allowed & ~(box(standing, 1) > 0)
+    free = trees_allowed & ~(box(standing, 1) > 0) & ~cliff
     for py, px in taken:
         free[max(py - 6, 0):py + 7, max(px - 6, 0):px + 7] = False
     added += more_trees(src, sy_map, sx_map, free, int(round(trees_wanted)) - int(standing.sum()), seed)
@@ -1927,18 +2240,24 @@ def synthesise(skeleton_path, src, out_dir, seed):
 
     version, body = raw.body("HeightMapData")
     raw.replace("HeightMapData", version, body[:-th * tw] + h.astype(np.uint8).tobytes())
-    cliff = span_cliff(h)
-    raw.replace("BlendTileData", 8, blend_chunk(src, sy_map, sx_map, cliff))
+    cliff = cliff_of(h)
+    raw.replace("BlendTileData", 8, blend_chunk(src, sy_map, sx_map, cliff, h))
     version, body = raw.body("PolygonTriggers")
     raw.replace("PolygonTriggers", version, water_triggers(version, body, plan.water, m.border))
-    raw.replace("GlobalLighting", *src.raw.body("GlobalLighting"))
+    version, light = src.raw.body("GlobalLighting")
+    # a night exemplar (Tournament City) hides the copied relief: its own afternoon light instead
+    if len(light) >= 4 and struct.unpack_from("<i", light, 0)[0] == 4:          # TIME_OF_DAY_NIGHT
+        light = struct.pack("<i", 2) + light[4:]                                # TIME_OF_DAY_AFTERNOON
+    raw.replace("GlobalLighting", version, light)
 
     skeleton_name = os.path.splitext(os.path.basename(skeleton_path))[0]
     name = "%s_%s_%08x" % (skeleton_name, src.label, src.crc)
     # the shell names a map by WorldInfo's mapName, a label the map.str beside the map holds; with
-    # none it logs "Missing TheKey_mapName!" and shows the file name
+    # none it logs "Missing TheKey_mapName!" and shows the file name; the weather is the exemplar's
     version, body = raw.body("WorldInfo")
-    entries = [e for e in dict_entries(body, 0, raw.names)[0] if e[0] != "mapName"]
+    weather = [e for e in dict_entries(src.raw.body("WorldInfo")[1], 0, src.raw.names)[0] if e[0] == "weather" and e[1] == 1]
+    entries = [weather[0] if weather and e[0] == "weather" and e[1] == 1 else e
+               for e in dict_entries(body, 0, raw.names)[0] if e[0] != "mapName"]
     raw.replace("WorldInfo", version, encode_dict(entries + [("mapName", 3, ascii_value("MAP:" + name))], raw))
     # a folder of its own, as the map cache wants a map: Maps\<name>\<name>.map
     folder = os.path.join(out_dir, name)
@@ -1952,14 +2271,14 @@ def synthesise(skeleton_path, src, out_dir, seed):
 
     # every start walks to every other one, and to every dock, derrick and tech building, over
     # the bridges and round the water
-    passable = walkable(cliff) & ~(plan.wet & (h < plan.level)) | decks
-    reached = reach(passable, skel.starts[0])
+    passable = (walkable(cliff) & ~(plan.wet & (h < plan.level)) | decks) & play
+    reached = reach(passable, reach_origin(passable, skel.starts[0]))
     docks = [(int(y + 0.5) + m.border, int(x + 0.5) + m.border) for x, y in m.supplies + m.derricks]
 
     def cut_off(points):
-        return sum(1 for y, x in points if not reached[y - 2:y + 3, x - 2:x + 3].any())
+        return sum(1 for y, x in points if not reached[max(y - 2, 0):y + 3, max(x - 2, 0):x + 3].any())
 
-    dry = reach(passable & ~decks, skel.starts[0])
+    dry = reach(passable & ~decks, reach_origin(passable & ~decks, skel.starts[0]))
     unbridged = [sum(1 for y, x in points if not dry[y - 2:y + 3, x - 2:x + 3].any())
                  for points in (skel.starts, [p for _, p in plan.tech])]
     trees = sum(1 for entry in added if entry[0].startswith("Tree"))
@@ -2307,7 +2626,15 @@ def selfcheck():
     assert span_cliff(step)[:5, 2].all() and not span_cliff(step)[:5, 0].any()
     assert simplify([(0, k) for k in range(10)], 1.0) == [(0, 0), (0, 9)]
     assert simplify([(0, 0), (0, 5), (5, 5)], 1.0) == [(0, 0), (0, 5), (5, 5)]
-    assert len(subdivide((0, 0), (0, 25), 10.0)) == 3
+    assert len(subdivide((0, 0), (0, 25), 10.0)) == 3 and len(subdivide((0, 0), (0, 24), 10.0)) == 2
+    assert cliff_of(np.array([[0, 10], [0, 10]]))[0, 0] and not cliff_of(np.array([[0, 9], [0, 9]]))[0, 0]
+    for corners, _, _, _ in BLEND_SHAPES:
+        assert blend_corners(blend_flags_for(corners, False)) == corners
+        assert drawable_corners(corners) == corners
+    assert drawable_corners(0x5) in (0x1, 0x4) and drawable_corners(0xF) in (0xE, 0x7, 0xD, 0xB)
+    blocked = np.ones((3, 3), bool)
+    blocked[1, 1] = False
+    assert reach(blocked, (1, 1)).sum() == 1 and reach_origin(blocked, (1, 1)) == (0, 1)
 
     # what the synthesis leans on: the exemplar's cliff bits are its heights', and its tiles and
     # blend tiles are a function of class and cell
@@ -2323,6 +2650,20 @@ def selfcheck():
             blended = layer > 0
             over = tile_for(src.blend_class[layer], src.first, src.width, yy, xx)
             assert (over[blended] == tiles[layer][blended]).all()
+        # the exemplar laid on itself, its cliffs where it paints them: every cell keeps its class and
+        # its blends, byte for byte, and its faces take a mapping the reader holds
+        sy, sx = yy, xx
+        rock = src.steep & src.cliff_texture[src.cls]
+        body = blend_chunk(src, sy, sx, rock, src.h)
+        layers, _, tail = blend_cells(8, body, src.h.shape[1], src.h.shape[0])
+        assert (layers[0] == src.layers[0]).all()
+        _, _, entries = texture_table(tail)
+        _, _, before = texture_table(src.tail)
+        for new, old in zip(layers[1:3], src.layers[1:3]):
+            assert all(entries[a] == before[b] for a, b in set(zip(new.ravel().tolist(), old.ravel().tolist())))
+        sheet = src.cliff_texture[src.cls]
+        index, info = cliff_mapping(src.h, np.where(sheet, src.first[src.cls], -1), np.where(sheet, src.width[src.cls], 0))
+        assert 1 < len(info) <= NUM_CLIFF_INFO and (layers[3] == index).all()
     print("synthmap selfcheck OK")
 
 

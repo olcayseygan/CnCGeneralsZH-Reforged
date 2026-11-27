@@ -23466,7 +23466,7 @@ OPTIONTIP:Weather
 END
 
 OPTIONTIP:ShowProps
-"Haritadaki ağaçlar ve çalılar. Ağ oyunlarında hep görünürler."
+"Haritadaki ağaçlar ve çalılar. Çatışma ve ağ oyunlarında hep görünürler."
 END
 
 OPTIONTIP:GroundFoliage

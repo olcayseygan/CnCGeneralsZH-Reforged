@@ -9283,7 +9283,7 @@ OPTIONTIP:Weather
 END
 
 OPTIONTIP:ShowProps
-"Trees and bushes on the map. Network games always show them."
+"Trees and bushes on the map. Skirmish and network games always show them."
 END
 
 OPTIONTIP:GroundFoliage

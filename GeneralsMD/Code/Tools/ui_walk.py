@@ -929,7 +929,9 @@ class Walk(object):
 
     # -- a state -------------------------------------------------------------------------------------
 
-    def walk(self, path, depth):
+    def walk(self, path, depth, only=None):
+        """The controls of the state at the end of path; below the root only the ones its last click revealed
+        (only), so the screen under an open panel is not walked through the panel."""
         tree = self.reach(path)
         self.faults.update(lint(tree))
         base_bad = unreachable(self.game, tree, self.area)
@@ -938,7 +940,8 @@ class Walk(object):
         todo = [w for w in controls(tree, self.area) if w["n"] not in self.done
                 and (not self.opts.only or self.opts.only.lower() in w["n"].lower())
                 and w["n"].startswith(self.game.spec.get("prefix", ""))		# a picker's own windows, not the room's
-                and not NEVER.search(w["n"])]
+                and not NEVER.search(w["n"])
+                and (only is None or w["n"] in only)]
         for w in todo:
             if w["n"] in self.done:		# a deeper walk got to it first
                 continue
@@ -969,9 +972,9 @@ class Walk(object):
                 if fresh and (w["t"] == "tab" or leaf(w["n"]).startswith("Tab")):
                     # a tab's page is reached from the root by that tab alone, not through the tab before it, so
                     # eight tabs do not use up the depth on the way
-                    self.walk([w["n"]], 1)
+                    self.walk([w["n"]], 1, {c["n"] for c in fresh})
                 elif fresh:
-                    self.walk(path + [w["n"]], depth + 1)
+                    self.walk(path + [w["n"]], depth + 1, {c["n"] for c in fresh})
         disabled = [w for w in controls(tree, self.area) if not w["e"]]
         if disabled and depth == 0 and not path:
             self.record("(disabled)", "-", short([w["n"] for w in disabled], 12), path)

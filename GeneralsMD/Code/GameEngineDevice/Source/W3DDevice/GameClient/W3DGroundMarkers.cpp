@@ -1790,6 +1790,8 @@ static void emit( Int piece, const Real *x, const Real *y, const Real *pu, const
 	* HAIR_THIN of the width its caller names, on the same middle line, and HAIR_ALPHA of its alpha. */
 static const Real HAIR_THIN = 0.7f;
 static const Real HAIR_ALPHA = 0.85f;
+static const Real CHEVRON_SCALE = 0.55f;		///< MarkerChevron's quad, of the size a caller names (quadPiece)
+static const Real CHEVRON_ALPHA = 0.65f;
 
 static Bool isHair( Int piece )
 {
@@ -1851,6 +1853,15 @@ static void arcPiece( Int piece, Real cx, Real cy, Real rc, Real aMid, Real half
 static void quadPiece( Int piece, Real cx, Real cy, Real ang, Real sx, Real sy, const Tint &tint, Real alpha,
 											 Real au = 0.5f, Real av = 0.5f )
 {
+	if( piece == P_CHEVRON )
+	{
+		// the cursors' fineness (2026-11-27: the lanes' chevrons read loud beside the ring): every
+		// chevron, a lane's, an orbit's or a design's, CHEVRON_SCALE of the size its caller names round
+		// the same anchor (its tip), so its baked stroke thins with it, at CHEVRON_ALPHA of its alpha
+		sx *= CHEVRON_SCALE;
+		sy *= CHEVRON_SCALE;
+		alpha *= CHEVRON_ALPHA;
+	}
 	if( alpha <= 0.002f || sx <= 0.0f || sy <= 0.0f )
 		return;
 	const Real hx = (Real)cos( ang ), hy = (Real)sin( ang );		// +u
@@ -2482,10 +2493,11 @@ static void drawLane( const Marker &m, Real R, Real t, Real tl, Real app )
 			lineStrip( P_RAIL, m.ex, m.ey, m.ux, m.uy, b0, b1, q, 8.0f * k, FALSE, TINT_WHITE, alphaAt, 40.0f );
 	}
 
-	// pairs every 46k, the second 8k behind the first, marching at 135k a second while aiming and
-	// 450k after the click; each placed from the phase, so nothing is baked at the sync point
+	// one chevron every 60k (the cursors' fineness, 2026-11-27: pairs every 46k before), marching at
+	// 135k a second while aiming and 450k after the click; each placed from the phase, so nothing is
+	// baked at the sync point
 	const Real speed = ( tl >= 0.0f ? 450.0f : 135.0f ) * k;
-	const Real spacing = 46.0f * k;
+	const Real spacing = 60.0f * k;
 	const Real phase = (Real)fmod( t * speed, spacing );
 	const Real limit = MIN( m.chevUntil, MAX( a1, b1 ) );
 	const Real heading = (Real)atan2( m.uy, m.ux );
@@ -2493,18 +2505,12 @@ static void drawLane( const Marker &m, Real R, Real t, Real tl, Real app )
 	for( size_t o = 0; o < m.offsets.size(); ++o )
 	{
 		const Real q = m.offsets[ o ];
-		for( Real front = phase + 0.5f * spacing - spacing; front < limit + 8.0f * k; front += spacing )
+		for( Real s = phase + 0.5f * spacing - spacing; s <= limit; s += spacing )
 		{
-			for( Int pair = 0; pair < 2; ++pair )
-			{
-				const Real s = front - (Real)pair * 8.0f * k;
-				if( s < 0.0f || s > limit )
-					continue;
-				if( !( ( s >= a0 && s <= a1 ) || ( s >= b0 && s <= b1 ) ) )
-					continue;
-				quadPiece( P_CHEVRON, m.ex + m.ux * s + lx * q, m.ey + m.uy * s + ly * q, heading,
-									 18.0f * k, 28.0f * k, m.tint, alphaAt( s ), CHEVRON_ANCHOR_U, 0.5f );
-			}
+			if( s < 0.0f || !( ( s >= a0 && s <= a1 ) || ( s >= b0 && s <= b1 ) ) )
+				continue;
+			quadPiece( P_CHEVRON, m.ex + m.ux * s + lx * q, m.ey + m.uy * s + ly * q, heading,
+								 18.0f * k, 28.0f * k, m.tint, alphaAt( s ), CHEVRON_ANCHOR_U, 0.5f );
 		}
 	}
 

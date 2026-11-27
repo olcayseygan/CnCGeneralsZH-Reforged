@@ -265,7 +265,7 @@ WindowLayout *OptionsLayout = NULL;
 // since menu package 8 (Tools/optionsmenu_layout.py); this is the two arrays that name them and the
 // one function that decides which one you are looking at.  Shell::optionsLayoutFile names the
 // file, OptionsMenuClassic.wnd.  Network is System's last group and the Linux water rows are
-// World's water fold, so there is no page a machine cannot use.
+// in World's water group, so there is no page a machine cannot use.
 //-------------------------------------------------------------------------------------------------
 enum { OPTIONS_PAGE_COUNT = 8 };
 
@@ -2652,10 +2652,11 @@ static void markDetailCustom( void )
 // The screen in the menu language (docs/plans/MENU-REDESIGN.md, package 8; the design is
 // experiments/proofs/2026-11-24/screens/settings/README-settings.md in the wrapper).  The layout
 // (Tools/optionsmenu_layout.py) holds the windows at 1920x1080: a rail of eight tabs with Look and
-// Quality under them, one column of rows, each row a container Row<Stem> (RowMore<Stem> behind the
-// page's fold) round its label and control, Audio's volumes as Fader<Stem>, and the pane.  The code
-// lays each page down its column again whenever a fold opens, a row goes or the page scrolls
-// (optionsFlow), and draws every line, frame, state and figure.  The pane explains the row under the
+// Quality under them, one column of rows, each row a container Row<Stem> round its label and control,
+// Audio's volumes as Fader<Stem>, and the pane.  Every row of a page stands in the column, no fold; a
+// page taller than the body scrolls under the wheel with a thin track at the column's right edge while
+// the pane stays put.  The code lays each page down its column again whenever a row goes or the page
+// scrolls (optionsFlow), and draws every line, frame, state and figure.  The pane explains the row under the
 // pointer or the focus, with what it needs, what needs it, its choices and the page as it stands.
 //-------------------------------------------------------------------------------------------------
 namespace
@@ -2676,7 +2677,7 @@ namespace
 	const Int LOOK_FOOT_RULE = 966;
 	const Int LOOK_KEYS_MIDDLE = 1006;
 
-	enum LookItemKind { LOOK_HEAD, LOOK_ROW, LOOK_FADER, LOOK_MORE };
+	enum LookItemKind { LOOK_HEAD, LOOK_ROW, LOOK_FADER };
 
 	/// a row's facts the plan gives it: its badges and what greys it
 	enum
@@ -2764,7 +2765,6 @@ namespace
 	{
 		GameWindow *window;
 		Int kind;							///< LookItemKind
-		Bool more;						///< behind the fold
 		Int left, top, right, bottom;		///< as authored, at 1080
 		AsciiString stem;
 		GameWindow *control;	///< the row's gadget; a fader's hidden slider
@@ -2776,8 +2776,6 @@ namespace
 	struct LookPage
 	{
 		std::vector< LookItem > items;
-		Int moreBar;						///< the More bar's item, -1 for none
-		Bool foldOpen;
 		Int scroll;
 		OptionsFlowResult flow;
 		Int settings;						///< the rail's count
@@ -3068,7 +3066,6 @@ static void lookBuildPages( void )
 	{
 		LookPage &p = s_lookPage[ page ];
 		p.items.clear();
-		p.moreBar = -1;
 		p.scroll = 0;
 		p.settings = 0;
 		if( optionsPage[ page ] == NULL )
@@ -3078,18 +3075,11 @@ static void lookBuildPages( void )
 			const AsciiString name = lookShortName( child );
 			LookItem item;
 			item.window = child;
-			item.more = FALSE;
 			item.control = NULL;
 			item.readout = NULL;
 			item.flags = 0;
 			item.group = -1;
-			if( name.startsWith( "RowMore" ) )
-			{
-				item.kind = LOOK_ROW;
-				item.more = TRUE;
-				item.stem = name.str() + 7;
-			}
-			else if( name.startsWith( "Row" ) )
+			if( name.startsWith( "Row" ) )
 			{
 				item.kind = LOOK_ROW;
 				item.stem = name.str() + 3;
@@ -3101,8 +3091,6 @@ static void lookBuildPages( void )
 			}
 			else if( name.startsWith( "Head" ) && page != OPTIONS_PAGE_COUNT - 1 )
 				item.kind = LOOK_HEAD;
-			else if( name.startsWith( "ButtonMore" ) )
-				item.kind = LOOK_MORE;
 			else
 				continue;
 			const IRegion2D r = lookWindowRect( child );
@@ -3130,8 +3118,6 @@ static void lookBuildPages( void )
 				for( GameWindow *part = child->winGetChild(); part; part = part->winGetNext() )
 					if( lookShortName( part ).startsWith( "Value" ) )
 						item.readout = part;
-			if( item.kind == LOOK_MORE )
-				p.moreBar = (Int)p.items.size();
 			p.items.push_back( item );
 		}
 		std::stable_sort( p.items.begin(), p.items.end(), lookLess );
@@ -3142,12 +3128,9 @@ static void lookBuildPages( void )
 			if( item.kind == LOOK_HEAD )
 				++group;
 			item.group = group;
-			if( item.kind == LOOK_MORE )
-				p.moreBar = i;
 			if( ( item.kind == LOOK_ROW || item.kind == LOOK_FADER ) && lookRowHere( item ) )
 				++p.settings;
-			if( item.kind != LOOK_MORE )
-				s_lookItemOf[ item.window ] = ( page << 16 ) | i;
+			s_lookItemOf[ item.window ] = ( page << 16 ) | i;
 		}
 	}
 	s_lookBuilt = TRUE;
@@ -3177,12 +3160,10 @@ static void lookLayoutPage( Int page )
 	for( Int i = 0; i < (Int)p.items.size(); ++i )
 	{
 		const LookItem &item = p.items[ i ];
-		if( item.kind == LOOK_MORE )
-			continue;
 		OptionsFlowItem f;
 		f.kind = item.kind == LOOK_HEAD ? OPTIONS_FLOW_HEAD : item.kind == LOOK_FADER ? OPTIONS_FLOW_FADER : OPTIONS_FLOW_ROW;
 		f.height = item.bottom - item.top;
-		f.shown = item.kind != LOOK_HEAD && lookRowHere( item ) && ( !item.more || p.foldOpen );
+		f.shown = item.kind != LOOK_HEAD && lookRowHere( item );
 		f.top = -1;
 		f.drawnHeight = f.height;
 		flow.push_back( f );
@@ -3193,10 +3174,6 @@ static void lookLayoutPage( Int page )
 	m.bottom = LOOK_BODY_BOTTOM;
 	m.groupGap = 4;
 	m.faderMin = 330;
-	m.moreGap = 10;
-	m.moreHeight = 40;
-	m.pinGap = 8;
-	m.hasMore = p.moreBar >= 0;
 	p.flow = optionsFlow( flow.empty() ? NULL : &flow[ 0 ], (Int)flow.size(), m, p.scroll );
 	p.scroll = max( 0, min( p.scroll, p.flow.maxScroll ) );
 	for( Int f = 0; f < (Int)flow.size(); ++f )
@@ -3210,46 +3187,12 @@ static void lookLayoutPage( Int page )
 		lookPlace( item.window, item.left, flow[ f ].top, item.right, flow[ f ].top + flow[ f ].drawnHeight );
 		item.window->winHide( FALSE );
 	}
-	if( p.moreBar >= 0 )
-	{
-		LookItem &bar = p.items[ p.moreBar ];
-		lookPlace( bar.window, bar.left, p.flow.moreTop, bar.right, p.flow.moreTop + 40 );
-		bar.window->winHide( FALSE );
-	}
 	if( s_lookHover >= 0 && page == s_lookShown )
 	{
 		LookItem *hover = lookItem( page, s_lookHover );
 		if( hover == NULL || hover->window->winIsHidden() )
 			s_lookHover = -1;
 	}
-}
-
-/// the fold's choice per page, kept in Options.ini beside the menu's other state
-static void lookReadFolds( void )
-{
-	for( Int page = 0; page < OPTIONS_PAGE_COUNT; ++page )
-	{
-		AsciiString key;
-		key.format( "OptionsMore%d", page );
-		const AsciiString value = pref ? (*pref)[ key ] : AsciiString::TheEmptyString;
-		// open by default on every page that fits its body, Controls closed
-		const Bool byDefault = page != 5;
-		s_lookPage[ page ].foldOpen = value.isEmpty() ? byDefault : ( value == "yes" );
-	}
-}
-
-static void lookToggleFold( Int page )
-{
-	LookPage &p = s_lookPage[ page ];
-	p.foldOpen = !p.foldOpen;
-	p.scroll = 0;
-	if( pref )
-	{
-		AsciiString key;
-		key.format( "OptionsMore%d", page );
-		(*pref)[ key ] = p.foldOpen ? "yes" : "no";
-	}
-	lookLayoutPage( page );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3567,7 +3510,7 @@ static Bool lookIsHover( const LookItem *item )
 	return s_lookRail == 0 && item != NULL && lookItem( s_lookShown, s_lookHover ) == item;
 }
 
-/// a row: the lift when hovered or focused, the fold's tick, the label and its badges, or the reason
+/// a row: the lift when hovered or focused, the label and its badges, or the reason
 static void lookRowDraw( GameWindow *window, WinInstanceData *instData )
 {
 	Int page = -1;
@@ -3578,8 +3521,6 @@ static void lookRowDraw( GameWindow *window, WinInstanceData *instData )
 	const Int middle = ( r.lo.y + r.hi.y ) / 2;
 	if( lookIsHover( item ) )
 		UIStyle::menuRow( r, UIStyle::ROW_HOVER );
-	if( item->more )
-		TheDisplay->drawFillRect( r.lo.x + lookPx( 3.0f ), middle, max( 1, lookPx( 8.0f ) ), 1, UIStyle::FRAME );
 
 	const char *reason = lookReasonOf( *item );
 	const Bool enabled = reason == NULL && ( item->control == NULL || item->control->winGetEnabled() );
@@ -3604,51 +3545,6 @@ static void lookRowDraw( GameWindow *window, WinInstanceData *instData )
 		GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
 		lookDraw( UIStyle::fitText( TheGameText->fetch( reason ), hint, r.hi.x - controlX - lookPx( 8.0f ) ), hint, controlX, middle, UIStyle::MUTED );
 	}
-}
-
-/// the More bar: MORE, and while folded the labels it holds; its caret points the way it opens
-static void lookMoreDraw( GameWindow *window, WinInstanceData *instData )
-{
-	const IRegion2D r = lookWindowRect( window );
-	const Bool hovered = BitTest( instData->getState(), WIN_STATE_HILITED );
-	lookFill( r, GameMakeColor( 0, 0, 0, 120 ) );
-	lookOutline( r, hovered ? UIStyle::EDGE_LIT : UIStyle::FRAME );
-	const Int middle = ( r.lo.y + r.hi.y ) / 2;
-	Int x = r.lo.x + lookPx( 16.0f );
-	x += lookCaps( TheGameText->fetch( "GUI:OptionsMore" ), x, middle, UIStyle::ACTIVE ) + lookPx( 16.0f );
-
-	Int page = -1;
-	for( Int p = 0; p < OPTIONS_PAGE_COUNT; ++p )
-		if( s_lookPage[ p ].moreBar >= 0 && s_lookPage[ p ].items[ s_lookPage[ p ].moreBar ].window == window )
-			page = p;
-	const Int caretW = lookPx( 12.0f );
-	const Int cx = r.hi.x - lookPx( 22.0f );
-	const Bool open = page >= 0 && s_lookPage[ page ].foldOpen;
-	const Real width = (Real)max( 1, lookPx( 2.0f ) );
-	const Int dy = open ? -caretW / 4 : caretW / 4;
-	TheDisplay->drawLine( cx - caretW / 2, middle - dy, cx, middle + dy, width, UIStyle::INK );
-	TheDisplay->drawLine( cx, middle + dy, cx + caretW / 2, middle - dy, width, UIStyle::INK );
-	if( page < 0 || open )
-		return;
-
-	// "3 more: Online IP, Send Delay, HTTP Proxy"
-	Int count = 0;
-	UnicodeString names;
-	for( Int i = 0; i < (Int)s_lookPage[ page ].items.size(); ++i )
-	{
-		const LookItem &item = s_lookPage[ page ].items[ i ];
-		if( item.kind != LOOK_ROW || !item.more || !lookRowHere( item ) )
-			continue;
-		if( count++ > 0 )
-			names.concat( u", " );
-		names.concat( item.window->winGetText() );
-	}
-	UnicodeString line;
-	line.format( TheGameText->fetch( "GUI:OptionsMoreCount" ).str(), count );
-	line.concat( u" " );
-	line.concat( names );
-	GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
-	lookDraw( UIStyle::fitText( line, hint, cx - caretW - x - lookPx( 8.0f ), UnicodeString::TheEmptyString, names ), hint, x, middle, UIStyle::MUTED );
 }
 
 static Int lookCapsMeasure( const UnicodeString &text, void * )
@@ -3869,7 +3765,7 @@ static void lookPageDraw( GameWindow *window, WinInstanceData *instData )
 	// a page taller than the body: a FRAME track at the column's right edge, the thumb cyan
 	if( p.flow.maxScroll > 0 )
 	{
-		const IRegion2D track = lookRect( LOOK_ROWS_RIGHT - 4, LOOK_BODY_TOP, LOOK_ROWS_RIGHT, p.flow.moreTop - 10 );
+		const IRegion2D track = lookRect( LOOK_ROWS_RIGHT - 4, LOOK_BODY_TOP, LOOK_ROWS_RIGHT, LOOK_BODY_BOTTOM );
 		lookFill( track, UIStyle::FRAME );
 		const Int height = track.hi.y - track.lo.y;
 		const Int visible = height * height / max( 1, height + lookPx( (Real)p.flow.maxScroll ) );
@@ -3901,7 +3797,7 @@ static WindowMsgHandledType lookPageInput( GameWindow *window, UnsignedInt msg, 
 		const Int y = lookBoardOf( (Int)( ( mData1 >> 16 ) & 0xFFFF ), TRUE );
 		if( x < LOOK_ROWS_RIGHT - 14 || x > LOOK_ROWS_RIGHT + 4 )
 			return MSG_IGNORED;
-		const Int height = max( 1, p.flow.moreTop - 10 - LOOK_BODY_TOP );
+		const Int height = max( 1, LOOK_BODY_BOTTOM - LOOK_BODY_TOP );
 		p.scroll = p.flow.maxScroll * ( y - LOOK_BODY_TOP ) / height;
 		lookLayoutPage( page );
 		return MSG_HANDLED;
@@ -4688,8 +4584,6 @@ static void lookStyle( void )
 			item.window->winClearStatus( WIN_STATUS_SEE_THRU );
 			if( item.kind == LOOK_HEAD )
 				item.window->winSetDrawFunc( lookHeadDraw );
-			else if( item.kind == LOOK_MORE )
-				item.window->winSetDrawFunc( lookMoreDraw );
 			else if( item.kind == LOOK_FADER )
 			{
 				item.window->winSetDrawFunc( lookFaderDraw );
@@ -4754,7 +4648,6 @@ static void lookStyle( void )
 			else if( BitTest( child->winGetStyle(), GWS_STATIC_TEXT ) )
 				child->winSetFont( UIStyle::menuFont( UIStyle::MENU_TEXT_HINT ) );
 		}
-	lookReadFolds();
 }
 
 /// the page on screen: laid down its column, the pane beside it but on Hotkeys
@@ -4778,24 +4671,15 @@ static void lookForget( void )
 	s_lookLockedBuilt = FALSE;
 	s_lookBuilt = FALSE;
 	for( Int page = 0; page < OPTIONS_PAGE_COUNT; ++page )
-	{
 		s_lookPage[ page ].items.clear();
-		s_lookPage[ page ].moreBar = -1;
-	}
 	s_lookTitle = s_lookVersion = s_lookPane = s_lookQuality = NULL;
 	s_lookClassic = s_lookReforged = s_lookFiltering = s_lookReflections = NULL;
 }
 
-/// a click the screen's own windows answer: the folds, Look's boxes, the merged Heat Haze, the test.
+/// a click the screen's own windows answer: Look's boxes, the merged Heat Haze, the test.
 /// TRUE when it was one of them.
 static Bool lookClicked( GameWindow *control )
 {
-	for( Int page = 0; page < OPTIONS_PAGE_COUNT; ++page )
-		if( s_lookPage[ page ].moreBar >= 0 && s_lookPage[ page ].items[ s_lookPage[ page ].moreBar ].window == control )
-		{
-			lookToggleFold( page );
-			return TRUE;
-		}
 	if( control == s_lookClassic || control == s_lookReforged )
 	{
 		// the press flipped the box's pushed state; the choice puts both back where they belong

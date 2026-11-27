@@ -22953,7 +22953,7 @@ GUI:LaneEndWaveSent
 "Dalga gönderildi"
 END
 
-// Menu redesign package 8, the options screen: the rail's tabs and groups, Look and Quality, the fold,
+// Menu redesign package 8, the options screen: the rail's tabs and groups, Look and Quality,
 // the badges and their legend, the reasons a row is greyed, the merged lists, the pane's blocks and
 // every row's OPTIONTIP:<Stem>, the two sentences the pane says about it: what the row changes on the
 // screen.  OptionsMenu.cpp, optionsmenu_layout.py.
@@ -22963,14 +22963,6 @@ END
 
 GUI:OptionsTabWorld
 "Dünya"
-END
-
-GUI:OptionsMore
-"Diğer"
-END
-
-GUI:OptionsMoreCount
-"%d tane daha:"
 END
 
 GUI:OptionsLook

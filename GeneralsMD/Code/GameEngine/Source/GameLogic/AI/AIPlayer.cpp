@@ -1952,6 +1952,14 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 	if (dozer==NULL) {
 		return NULL;
 	}
+	/* A dozer that cannot put this up (another side's, or the prerequisite is gone) is turned down by
+		 buildObjectNow below, the way EA's was, and the pass goes on to the next entry.  Asked here, before
+		 the frame's placement is claimed: after it, that failure held the claim every frame and every later
+		 entry waited behind it for good.  A mission player that is handed China's dozers and GLA's workers
+		 with one build list (12kill's Sneak Attack) built nothing all match. */
+	if (!TheBuildAssistant->isPossibleToMakeUnit(dozer, bldgPlan)) {
+		return NULL;
+	}
 	// Check available funds, and with a Hard AI whether the money is saved for something better.
 	Money *money = m_player->getMoney();
 	const Int cost = bldgPlan->calcCostToBuild(m_player);

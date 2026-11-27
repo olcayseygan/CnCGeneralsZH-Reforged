@@ -202,9 +202,15 @@ enum { HEALTH_BAR_COLORS_COUNT = 2 };
 // writes EA's own superweapon countdowns and stands the general's powers in one column up from the
 // bottom.  A third, plain Reforged, came and went the same day; a stored value past the range reads as 0
 // (OptionsCatalog.cpp, parseOptionValue).  GUI:HudLayout2.
-enum { HUD_LAYOUT_CLASSIC, HUD_LAYOUT_SIDEBAR, HUD_LAYOUT_RETAIL, HUD_LAYOUT_COUNT };
-/// the bottom bar's Buildings, Ground and Aircraft tabs and their painted socket: every layout but Classic (the sidebar has its own)
-inline Bool hudLayoutHasCommandTabs( Int layout ) { return layout != HUD_LAYOUT_RETAIL; }
+// 3 HUD_LAYOUT_GRID, shown as "Key Grid" (the owner's of 2026-11-27): the Reforged bar's right half with
+// a console of its own on the left, the commands in three staggered keyboard rows of six beside a radar
+// box cut to the map's shape (GameClient/ControlBarKeyGrid.h).  Everything that places windows reads it
+// as 0 first, then ControlBar::layoutKeyGrid moves the left half.  The plain layout held 3 only on
+// 2026-11-20 between v4.2.0 and v4.3.0, never in a release, so a dev machine that picked it that
+// afternoon is the only one that opens on Key Grid.  GUI:HudLayout3.
+enum { HUD_LAYOUT_CLASSIC, HUD_LAYOUT_SIDEBAR, HUD_LAYOUT_RETAIL, HUD_LAYOUT_GRID, HUD_LAYOUT_COUNT };
+/// the bottom bar's Buildings, Ground and Aircraft tabs and their painted socket: Reforged's alone (the sidebar has its own)
+inline Bool hudLayoutHasCommandTabs( Int layout ) { return layout != HUD_LAYOUT_RETAIL && layout != HUD_LAYOUT_GRID; }
 
 // How wide the in-game interface may spread ("HudWidth", GlobalData m_hudWidth), for either layout: 0 the
 // whole screen, the default; 1 a centred 21:9 area, 2 a centred 16:9 one, so a player on a wider screen
@@ -218,9 +224,17 @@ enum { HUD_WIDTH_FULL, HUD_WIDTH_21_9, HUD_WIDTH_16_9, HUD_WIDTH_COUNT };
 // (docs/plans/HOTKEY-SCHEME-RA.md).  The table is GameClient/HotkeyScheme.h.  It has no Options.ini key
 // or control of its own: the layout picks it, the Red Alert style sidebar the Red Alert keys and Classic
 // the Classic ones.  HudLayout's catalog setter keeps the field on it, and the Hotkeys page follows the
-// HudLayout combo through it.
-enum { HOTKEY_SCHEME_CLASSIC, HOTKEY_SCHEME_RED_ALERT, HOTKEY_SCHEME_COUNT };
-inline Int hotkeySchemeForHudLayout( Int layout ) { return layout == HUD_LAYOUT_SIDEBAR ? HOTKEY_SCHEME_RED_ALERT : HOTKEY_SCHEME_CLASSIC; }
+// HudLayout combo through it.  2 Key Grid, the Key Grid layout's with its Grid Keys box ticked
+// ("GridKeys", GlobalData m_gridKeys): the eighteen places on their letters bare and the commands Classic
+// had on them moved to U J M I, kept in HotkeysGrid.ini.  Key Grid with the box clear plays Classic's keys.
+// Both setters, HudLayout's and GridKeys', put the pair's scheme in force.
+enum { HOTKEY_SCHEME_CLASSIC, HOTKEY_SCHEME_RED_ALERT, HOTKEY_SCHEME_GRID, HOTKEY_SCHEME_COUNT };
+inline Int hotkeySchemeFor( Int layout, Bool gridKeys )
+{
+	if( layout == HUD_LAYOUT_SIDEBAR )
+		return HOTKEY_SCHEME_RED_ALERT;
+	return layout == HUD_LAYOUT_GRID && gridKeys ? HOTKEY_SCHEME_GRID : HOTKEY_SCHEME_CLASSIC;
+}
 
 // The picture cap: off, 240, 144, 120 or 60 pictures a second.  Options.ini stores the level.
 enum { FRAME_RATE_LIMIT_COUNT = 5 };

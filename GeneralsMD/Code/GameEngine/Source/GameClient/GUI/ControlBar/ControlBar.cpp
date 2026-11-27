@@ -77,6 +77,7 @@
 #include "GameClient/AnimateWindowManager.h"
 #include "Common/OptionsCatalog.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarKeyGrid.h"
 #include "GameClient/ControlBarScheme.h"
 #include "GameClient/ControlBarSidebar.h"
 #include "GameClient/Drawable.h"
@@ -423,6 +424,191 @@ void ControlBar_orderKeyPlaces( const Int *places, Int count, Bool fights, Int *
 }
 
 //-------------------------------------------------------------------------------------------------
+const Int KEY_GRID_RIDER_PLACES[ 11 ] =
+{
+	COMMAND_PLACE_N, COMMAND_PLACE_B, COMMAND_PLACE_V, COMMAND_PLACE_C, COMMAND_PLACE_X,
+	COMMAND_PLACE_H, COMMAND_PLACE_G, COMMAND_PLACE_F, COMMAND_PLACE_D, COMMAND_PLACE_S, COMMAND_PLACE_A
+};
+
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places )
+{
+	enum { ROWS = COMMAND_PLACE_COUNT / COMMAND_PLACE_COLUMNS, RIDER_PLACES = 11 };
+	count = MIN( count, (Int)MAX_COMMANDS_PER_SET );
+	Bool builder = FALSE;
+	for( Int slot = 0; slot < count; slot++ )
+	{
+		places[ slot ] = -1;
+		builder = builder || slots[ slot ].type == GUI_COMMAND_DOZER_CONSTRUCT;
+	}
+
+	// a set that builds nothing: today's rows for all but the passengers, who go round the corner
+	if( !builder )
+	{
+		Int types[ MAX_COMMANDS_PER_SET ], groups[ MAX_COMMANDS_PER_SET ], pinned[ MAX_COMMANDS_PER_SET ];
+		for( Int slot = 0; slot < count; slot++ )
+		{
+			const Bool rider = slots[ slot ].type == GUI_COMMAND_EXIT_CONTAINER;
+			types[ slot ] = rider ? (Int)GUI_COMMAND_NONE : slots[ slot ].type;
+			groups[ slot ] = slots[ slot ].group;
+			pinned[ slot ] = rider ? -1 : slots[ slot ].pinned;
+		}
+		const Bool fights = ControlBar_commandPlaces( types, groups, pinned, count, places );
+		Bool used[ COMMAND_PLACE_COUNT ] = { FALSE };
+		for( Int slot = 0; slot < count; slot++ )
+			if( places[ slot ] >= 0 )
+				used[ places[ slot ] ] = TRUE;
+		if( fights )
+			used[ COMMAND_PLACE_ATTACK ] = used[ COMMAND_PLACE_HOLD ] = used[ COMMAND_PLACE_MOVE ] = TRUE;
+		Int next = 0;
+		for( Int slot = 0; slot < count; slot++ )
+		{
+			if( slots[ slot ].type != GUI_COMMAND_EXIT_CONTAINER )
+				continue;
+			while( next < RIDER_PLACES && used[ KEY_GRID_RIDER_PLACES[ next ] ] )
+				next++;
+			if( next >= RIDER_PLACES )
+				break;
+			places[ slot ] = KEY_GRID_RIDER_PLACES[ next ];
+			used[ KEY_GRID_RIDER_PLACES[ next ] ] = TRUE;
+		}
+		return fights;
+	}
+
+	Bool taken[ COMMAND_PLACE_COUNT ] = { FALSE };
+	Bool fights = FALSE;
+	for( Int slot = 0; slot < count; slot++ )
+		fights = fights || slots[ slot ].type == GUI_COMMAND_ATTACK_MOVE;
+	taken[ COMMAND_PLACE_ATTACK ] = taken[ COMMAND_PLACE_HOLD ] = taken[ COMMAND_PLACE_MOVE ] = fights;
+
+	// the named and fixed buttons, then each GLA fake on its real building's place
+	for( Int slot = 0; slot < count; slot++ )
+	{
+		if( slots[ slot ].type == GUI_COMMAND_NONE )
+			continue;
+		const Int place = slots[ slot ].pinned >= 0 ? slots[ slot ].pinned : fixedCommandPlace( slots[ slot ].type );
+		if( place >= 0 && place < COMMAND_PLACE_COUNT && !taken[ place ] )
+		{
+			places[ slot ] = place;
+			taken[ place ] = TRUE;
+		}
+	}
+	for( Int slot = 0; slot < count; slot++ )
+	{
+		const Int place = slots[ slot ].mirror;
+		if( places[ slot ] < 0 && slots[ slot ].type != GUI_COMMAND_NONE && place >= 0 && place < COMMAND_PLACE_COUNT
+				&& !taken[ place ] )
+		{
+			places[ slot ] = place;
+			taken[ place ] = TRUE;
+		}
+	}
+
+	// each role's slots by prerequisite depth, then slot (an insertion that keeps slot order on a tie)
+	Int byRole[ KEY_GRID_ROLE_COMMAND_CENTER + 1 ][ MAX_COMMANDS_PER_SET ];
+	Int inRole[ KEY_GRID_ROLE_COMMAND_CENTER + 1 ] = { 0 };
+	for( Int slot = 0; slot < count; slot++ )
+	{
+		const Int role = slots[ slot ].role;
+		if( places[ slot ] >= 0 || slots[ slot ].type == GUI_COMMAND_NONE || role < 0 || role > KEY_GRID_ROLE_COMMAND_CENTER )
+			continue;
+		Int at = inRole[ role ]++;
+		while( at > 0 && slots[ byRole[ role ][ at - 1 ] ].depth > slots[ slot ].depth )
+		{
+			byRole[ role ][ at ] = byRole[ role ][ at - 1 ];
+			at--;
+		}
+		byRole[ role ][ at ] = slot;
+	}
+
+	// a slot onto the first free place of the first of three rows with one; the row, or -1
+	auto put = [ & ]( Int slot, Int first, Int second, Int third ) -> Int
+	{
+		const Int rows[ ROWS ] = { first, second, third };
+		for( Int r = 0; r < ROWS; r++ )
+			for( Int column = 0; column < COMMAND_PLACE_COLUMNS; column++ )
+			{
+				const Int place = rows[ r ] * COMMAND_PLACE_COLUMNS + column;
+				if( !taken[ place ] )
+				{
+					places[ slot ] = place;
+					taken[ place ] = TRUE;
+					return rows[ r ];
+				}
+			}
+		return -1;
+	};
+
+	// the build line along Q: economy, then production
+	Int last = 0;
+	for( Int role = KEY_GRID_ROLE_ECONOMY; role <= KEY_GRID_ROLE_BUILD; role++ )
+		for( Int i = 0; i < inRole[ role ]; i++ )
+		{
+			const Int row = put( byRole[ role ][ i ], 0, 2, 1 );
+			last = row >= 0 ? row : last;
+		}
+
+	// Z: the tech building, the extra the most objects name (a superweapon's refs are 0), then the rest
+	Int tech = -1;
+	for( Int i = 0; i < inRole[ KEY_GRID_ROLE_EXTRA ]; i++ )
+	{
+		const Int slot = byRole[ KEY_GRID_ROLE_EXTRA ][ i ];
+		if( slots[ slot ].refs > 0 && ( tech < 0 || slots[ slot ].refs > slots[ tech ].refs
+				|| ( slots[ slot ].refs == slots[ tech ].refs && slot < tech ) ) )
+			tech = slot;
+	}
+	if( tech >= 0 )
+	{
+		const Int row = put( tech, 2, 0, 1 );
+		last = row >= 0 ? row : last;
+	}
+	for( Int i = 0; i < inRole[ KEY_GRID_ROLE_EXTRA ]; i++ )
+	{
+		const Int slot = byRole[ KEY_GRID_ROLE_EXTRA ][ i ];
+		if( slot == tech )
+			continue;
+		const Int row = put( slot, 2, 0, 1 );
+		last = row >= 0 ? row : last;
+	}
+
+	// A: the defenses
+	for( Int i = 0; i < inRole[ KEY_GRID_ROLE_DEFENSE ]; i++ )
+		put( byRole[ KEY_GRID_ROLE_DEFENSE ][ i ], 1, 2, 0 );
+
+	// the command center, a rebuild and never the opening: the last free key of the row the line ended in
+	for( Int i = 0; i < inRole[ KEY_GRID_ROLE_COMMAND_CENTER ]; i++ )
+	{
+		const Int slot = byRole[ KEY_GRID_ROLE_COMMAND_CENTER ][ i ];
+		const Int rows[ ROWS + 1 ] = { last, 2, 1, 0 };
+		for( Int r = 0; r < ROWS + 1 && places[ slot ] < 0; r++ )
+			for( Int column = COMMAND_PLACE_COLUMNS - 1; column >= 0; column-- )
+			{
+				const Int place = rows[ r ] * COMMAND_PLACE_COLUMNS + column;
+				if( !taken[ place ] )
+				{
+					places[ slot ] = place;
+					taken[ place ] = TRUE;
+					break;
+				}
+			}
+	}
+
+	// anything else a builder carries: the last free place
+	for( Int i = 0; i < inRole[ KEY_GRID_ROLE_OTHER ]; i++ )
+	{
+		const Int slot = byRole[ KEY_GRID_ROLE_OTHER ][ i ];
+		for( Int place = COMMAND_PLACE_COUNT - 1; place >= 0; place-- )
+			if( !taken[ place ] )
+			{
+				places[ slot ] = place;
+				taken[ place ] = TRUE;
+				break;
+			}
+	}
+	return fights;
+}
+
+//-------------------------------------------------------------------------------------------------
 void ControlBar::getOrderKeyPlaces( Int *keys ) const
 {
 	Int places[ MAX_COMMANDS_PER_SET ];
@@ -433,6 +619,10 @@ void ControlBar::getOrderKeyPlaces( Int *keys ) const
 //-------------------------------------------------------------------------------------------------
 Bool ControlBar::getCommandPlaces( Int *places ) const
 {
+	// Key Grid stands a builder's structures in the order they open and the passengers round the corner
+	if( m_keyGridLayout )
+		return getKeyGridPlaces( places );
+
 	// a context without the command group hides the group's parent.  Its buttons stay as the last
 	// selection set them and are not on the bar.
 	const Bool groupShown = !m_contextParent[ CP_COMMAND ]->winIsHidden();
@@ -499,6 +689,13 @@ void ControlBar::pressCommandButton( Int place )
 	if( m_commandTab != COMMAND_TAB_NONE )
 		return;
 
+	// Key Grid's deck showing the chosen squad's build tray: the place's key builds that entry
+	if( keyGridTrayView() )
+	{
+		GroupPanel_pressTrayEntry( KeyGrid_trayPlace( place ) );
+		return;
+	}
+
 	// the page's stance key stands where no button does
 	Int keys[ ORDER_KEY_EXTRAS ];
 	getOrderKeyPlaces( keys );
@@ -515,6 +712,15 @@ void ControlBar::pressCommandButton( Int place )
 	GameWindow *win = ( slot == SLOT_NOTHING ) ? NULL : m_commandWindows[ slot ];
 	if( win == NULL )
 		win = contextButtonAtPlace( place );
+	// a builder standing in for an empty selection lends its buildings to the places and nothing else,
+	// as setControlCommand gives its orders no letter: nobody selected it
+	if( m_keyGridLayout && win != NULL && slot != SLOT_NOTHING && m_standInBuilderID != INVALID_DRAWABLE_ID && m_currentSelectedDrawable
+			&& m_currentSelectedDrawable->getID() == m_standInBuilderID )
+	{
+		const CommandButton *lent = (const CommandButton *)GadgetButtonGetData( win );
+		if( lent != NULL && lent->getCommandType() != GUI_COMMAND_DOZER_CONSTRUCT )
+			win = NULL;
+	}
 	const CommandButton *command = win ? (const CommandButton *)GadgetButtonGetData( win ) : NULL;
 	const GameMessage::Type order = orderAtPlace( place );
 	if( order != GameMessage::MSG_INVALID && ( command == NULL || fixedCommandPlace( command->getCommandType() ) == place ) )
@@ -1817,6 +2023,9 @@ ControlBar::ControlBar( void )
 	m_sidebarLayout = FALSE;
 	m_sidebarBlockSaved = FALSE;
 	m_sidebarBlockEnabled = FALSE;
+	m_keyGridLayout = FALSE;
+	m_keyGridTrayView = FALSE;
+	m_keyGridSwitchParent = NULL;
 	for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
 	{
 		m_commandWindows[ i ] = NULL;
@@ -2871,6 +3080,12 @@ void ControlBar::layoutPanels( void )
 	if( sidebar != m_sidebarLayout )
 		markUIDirty();
 	m_sidebarLayout = sidebar;
+	// Key Grid comes after the Classic pass the same way, its left half moved by layoutKeyGrid, which
+	// fitRadarToMap runs below (the radar box takes the map's shape)
+	const Bool keyGrid = !sidebar && wantsKeyGridLayout();
+	if( keyGrid != m_keyGridLayout )
+		markUIDirty();
+	m_keyGridLayout = keyGrid;
 	if( sidebar )
 		layoutSidebar();
 	else
@@ -2967,6 +3182,20 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 			r.lo.x -= origin.x;
 			r.lo.y -= origin.y;
 		}
+	}
+
+	// Key Grid's whole left half follows the map's shape (layoutKeyGrid); with no radar or no map yet it
+	// stands on today's glass, 322x232
+	if( m_keyGridLayout )
+	{
+		if( TheRadar != NULL )
+		{
+			m_radarFitWidth = TheRadar->getMapExtent()->width();
+			m_radarFitHeight = TheRadar->getMapExtent()->height();
+		}
+		m_radarFitSize = TheGlobalData->m_minimapSize;
+		layoutKeyGrid();
+		return;
 	}
 
 	// ControlBar::init lays the bar out before GameEngine::init makes the radar; update() fits it then
@@ -3354,6 +3583,8 @@ void ControlBar::shutdownWindows( void )
 	m_sidebarLayout = FALSE;
 	m_sidebarHidden.clear();
 	m_sidebarBlockSaved = FALSE;
+	m_keyGridLayout = FALSE;
+	m_keyGridTrayView = FALSE;
 
 	if( m_scienceLayout )
 	{
@@ -3842,7 +4073,7 @@ void ControlBar::update( void )
 
 	// the seat may have lost or won the sidebar since the last layout (a defeat, the match starting
 	// after the scheme was set); a scheme change usually lays the bar out again, this catches the rest
-	if( wantsSidebarLayout() != m_sidebarLayout )
+	if( wantsSidebarLayout() != m_sidebarLayout || ( !m_sidebarLayout && wantsKeyGridLayout() != m_keyGridLayout ) )
 		layoutPanels();
 
 	// the scheme lays the bar out before the map is loaded, so the radar takes the map's shape here
@@ -4051,6 +4282,9 @@ void ControlBar::update( void )
 		updateSelectionCardReadout();
 		arrangeStripByRole();
 	}
+	// and Key Grid's cells by place, for the same reason, with the squad tray's switch
+	arrangeKeyGrid();
+	updateKeyGridSwitch();
 
 	// nothing below here can change without either a logic tick or a rebuilt UI, and the rest
 	// of it is the expensive half: a pass over every command button in the current context.
@@ -5219,8 +5453,9 @@ void ControlBar::switchToContext( ControlBarContext context, Drawable *draw )
 	// save our context
 	m_currContext = context;
 
-	// the sidebar's strip stands its buttons by role, not by slot
+	// the sidebar's strip stands its buttons by role, not by slot, and Key Grid by place
 	arrangeStripByRole();
+	arrangeKeyGrid();
 
 }  // end switchToContext
 

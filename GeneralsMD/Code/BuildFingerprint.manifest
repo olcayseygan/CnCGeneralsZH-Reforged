@@ -2108,6 +2108,7 @@ GameEngine/Include/GameClient/ClientRandomValue.h
 GameEngine/Include/GameClient/Color.h
 GameEngine/Include/GameClient/CommandXlat.h
 GameEngine/Include/GameClient/ControlBar.h
+GameEngine/Include/GameClient/ControlBarKeyGrid.h
 GameEngine/Include/GameClient/ControlBarScheme.h
 GameEngine/Include/GameClient/ControlBarSidebar.h
 GameEngine/Include/GameClient/Credits.h
@@ -2777,6 +2778,7 @@ GameEngine/Source/GameClient/GUI/ControlBar/ControlBar.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarBeacon.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarCommand.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarCommandProcessing.cpp
+GameEngine/Source/GameClient/GUI/ControlBar/ControlBarKeyGrid.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarMultiSelect.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarOCLTimer.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarObserver.cpp
@@ -4870,6 +4872,7 @@ Tests/test_hotkey_scheme_map.inc
 Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
+Tests/test_key_grid.inc
 Tests/test_lan_broadcast.cpp
 Tests/test_linux_portable.sh
 Tests/test_load_screen.inc

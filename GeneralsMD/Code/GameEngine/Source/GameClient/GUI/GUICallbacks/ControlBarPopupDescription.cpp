@@ -175,8 +175,10 @@ static UnicodeString paintedKeySuffix( GameWindow *win, const CommandButton *com
 		return suffix;
 	const UnicodeString painted = win->winGetText();
 	Bool pressable = FALSE;
-	if( painted.getLength() != 1
-			|| TheHotKeyManager->findHotKey( HotKeyManager::nameOf( painted.getCharAt( 0 ) ), &pressable ) != win )
+	// Key Grid paints the place's letter, which the place's key presses with no hotkey map entry
+	const WideChar place = TheControlBar ? TheControlBar->keyGridLetter( win ) : 0;
+	if( painted.getLength() != 1 || ( painted.getCharAt( 0 ) != place
+			&& TheHotKeyManager->findHotKey( HotKeyManager::nameOf( painted.getCharAt( 0 ) ), &pressable ) != win ) )
 		return suffix;
 	suffix = u" (";
 	suffix.concat( painted );

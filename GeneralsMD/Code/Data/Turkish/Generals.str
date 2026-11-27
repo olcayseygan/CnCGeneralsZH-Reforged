@@ -15803,6 +15803,18 @@ TOOLTIP:SelectionOutlines
 "Seçili her birimin altında sahibinin renginde parlayan bir halka, seçili binanın çevresinde de aynı çizgi. Kapalıyken ikisi de çizilmez; emir çizgileri ve tıklanan yerdeki işaretler kalır."
 END
 
+GUI:GridKeys
+"Izgara Tuşları"
+END
+
+TOOLTIP:GridKeys
+"Her komut tuşuna kendi harfiyle değil, durduğu yerle basılır. Tuş Izgarası'nda bu, tuşun üstündeki harftir: Q W E R T Y, altında A S D F G H, en altta Z X C V B N. Öteki düzenlerde çubuğun iki sırasıdır: Q W E R T Y U, altında A S D F G H J. Tuş Izgarası seçilince bu da açılır."
+END
+
+OPTIONTIP:GridKeys
+"Her komut tuşuna kendi harfiyle değil, çubuktaki yeriyle basılır. Tuş Izgarası seçilince açılır."
+END
+
 GUI:PlayerColors
 "Oyuncu Renkleri"
 END
@@ -16957,7 +16969,7 @@ GUI:HudLayout1
 END
 
 TOOLTIP:HudLayout
-"Reforged, komuta çubuğunu altta, bu sürümün eklediği her şeyle tutar: yapım sekmeleri, mini haritanın üstündeki işaret tuşları, üretim listesi, takım listesi ve üretim tepsisi, kahraman tuşu, süper silah simgeleri ve tepsideki general güçleri. Klasik, aynı çubuğun ilk oyundaki hâlidir, bunların hiçbiri yok: süper silahlar ad ve süre olarak yazılır, generalin güçleri sağ kenarda tek sütunda aşağıdan yukarı dizilir. Red Alert tarzı bina ve birim üretimini sağdaki yan panele taşır, seçili birimlerin komutlarını alttaki şeride koyar ve Red Alert 2'nin tuşlarını bu oyuna uyduğu yerde alır: yapım sekmeleri için Q W E R, konuşlanmak için D, satmak için L, onarmak için K, ara noktalar için basılı Z. Reforged ve Klasik oyunun kendi tuşlarını paylaşır, Red Alert tarzı kendi tuşlarını tutar; ikisi de Kısayollar sayfasında değişir."
+"Reforged, komuta çubuğunu altta, bu sürümün eklediği her şeyle tutar: yapım sekmeleri, mini haritanın üstündeki işaret tuşları, üretim listesi, takım listesi ve üretim tepsisi, kahraman tuşu, süper silah simgeleri ve tepsideki general güçleri. Klasik, aynı çubuğun ilk oyundaki hâlidir, bunların hiçbiri yok: süper silahlar ad ve süre olarak yazılır, generalin güçleri sağ kenarda tek sütunda aşağıdan yukarı dizilir. Red Alert tarzı bina ve birim üretimini sağdaki yan panele taşır, seçili birimlerin komutlarını alttaki şeride koyar ve Red Alert 2'nin tuşlarını bu oyuna uyduğu yerde alır: yapım sekmeleri için Q W E R, konuşlanmak için D, satmak için L, onarmak için K, ara noktalar için basılı Z. Tuş Izgarası, klavyeye göre yeniden kurulmuş Reforged çubuğudur: komutlar kaydırmalı altışar tuşluk üç sırada, Q W E R T Y, altında A S D F G H, en altta Z X C V B N; mini haritanın kutusu her haritanın kendi biçimini alır. Izgara Tuşları açıkken her tuş harfini taşır ve o harf ona basar; hepsini seç, aynı birimleri seç, karargah ve boştaki işçi J, U, M ve I'ya geçer. Reforged ve Klasik oyunun kendi tuşlarını paylaşır, Red Alert tarzı ve Tuş Izgarası kendi tuşlarını tutar; hepsi Kısayollar sayfasında değişir."
 END
 
 GUI:HudWidth
@@ -17446,6 +17458,10 @@ END
 
 GUI:HotkeyScheme1
 "Red Alert"
+END
+
+GUI:HotkeyScheme2
+"Tuş Izgarası"
 END
 
 GUI:HotkeysEditingScheme
@@ -21568,6 +21584,10 @@ GUI:HudLayout2
 "Klasik"
 END
 
+GUI:HudLayout3
+"Tuş Izgarası"
+END
+
 Network:WaitingForReconnect
 "%ls için yeniden bağlantı bekleniyor (%d:%02d)"
 END
@@ -23670,7 +23690,7 @@ OPTIONTIP:ChromaLighting
 END
 
 OPTIONTIP:HudLayout
-"Reforged; sekmeli, üretim listeli, güç tepsili alt çubuktur. Klasik 2003 çubuğudur; Red Alert Tarzı inşayı yan panele taşır, Red Alert 2 tuşlarını kullanır."
+"Reforged; sekmeli, üretim listeli, güç tepsili alt çubuktur. Klasik 2003 çubuğudur; Red Alert Tarzı inşayı yan panele taşır, Red Alert 2 tuşlarını kullanır. Tuş Izgarası komutları klavye gibi dizer, her biri kendi harfinde."
 END
 
 OPTIONTIP:MinimapSize

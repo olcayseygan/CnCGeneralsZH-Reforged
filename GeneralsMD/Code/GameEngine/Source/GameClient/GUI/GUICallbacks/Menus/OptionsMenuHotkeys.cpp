@@ -23,7 +23,7 @@
 // command on the left with its chord, and on the right the command bar of one building or unit,
 // picked by general and object, with each button's letter.  A double click, Enter or Change waits for
 // the key; Esc lets go.  The page edits the keyboard scheme of the layout the HudLayout combo shows
-// (hotkeySchemeForHudLayout), Classic in Hotkeys.ini, Red Alert in HotkeysRedAlert.ini
+// and the Grid Keys box (hotkeySchemeFor), Classic in Hotkeys.ini, Red Alert in HotkeysRedAlert.ini, Key Grid in HotkeysGrid.ini
 // (HotkeyScheme_fileName); picking the other layout puts this scheme's edits aside and shows the other's.  Nothing is written until Accept, which writes
 // each scheme's file that changed, in the user data folder in the launcher's own format
 // (Hotkeys_format in HotKey.cpp), and reads every key again, so a key changed from Esc > Options in a
@@ -50,6 +50,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
+#include "GameClient/GadgetCheckBox.h"
 #include "GameClient/GadgetComboBox.h"
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GadgetPushButton.h"
@@ -124,6 +125,18 @@ struct SchemeKeys
 SchemeKeys s_stash[ HOTKEY_SCHEME_COUNT ];
 Int s_scheme = HOTKEY_SCHEME_CLASSIC;			///< the scheme shown, HOTKEY_SCHEME_*
 Int s_openScheme = HOTKEY_SCHEME_CLASSIC;	///< the scheme in force when the page opened
+GameWindow *s_gridCheck = NULL;					///< the catalog's Grid Keys box on the Interface page, which picks Key Grid's keys with its layout
+Bool s_openGridKeys = FALSE;							///< the box as the page opened: a change gives the bar its letters again on Accept
+
+/// the scheme of the layout the combo shows and the Grid Keys box (hotkeySchemeFor)
+Int shownScheme( void )
+{
+	Int layout = TheGlobalData->m_hudLayout;
+	if( s_schemeCombo )
+		GadgetComboBoxGetSelectedPos( s_schemeCombo, &layout );
+	const Bool grid = s_gridCheck ? GadgetCheckBoxIsChecked( s_gridCheck ) : TheGlobalData->m_gridKeys;
+	return hotkeySchemeFor( layout, grid );
+}
 
 Int s_active = 0;					///< the list touched last: 0 the commands, 1 the bar
 Int s_commandRow = -1;		///< index into s_rows
@@ -878,12 +891,12 @@ void OptionsHotkeysInit( void )
 		loadShown( scheme, commandMapText );
 		swapShown( scheme );
 	}
-	// the scheme of the layout the combo shows, which fillCatalogWidgets has just put there
+	// the scheme of the layout the combo shows and of the Grid Keys box, which fillCatalogWidgets has just
+	// put there
 	s_openScheme = TheGlobalData->m_hotkeyScheme;
-	Int layout = TheGlobalData->m_hudLayout;
-	if( s_schemeCombo )
-		GadgetComboBoxGetSelectedPos( s_schemeCombo, &layout );
-	s_scheme = hotkeySchemeForHudLayout( layout );
+	s_openGridKeys = TheGlobalData->m_gridKeys;
+	s_gridCheck = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:CheckGridKeys" ) );
+	s_scheme = shownScheme();
 	swapShown( s_scheme );
 	s_active = 0;
 	s_commandRow = -1;
@@ -906,14 +919,20 @@ Bool OptionsHotkeysSystem( UnsignedInt msg, GameWindow *control, WindowMsgData r
 {
 	if( s_commandList == NULL || s_filling )
 		return FALSE;
-	// the layout combo is the catalog's, so the menu goes on with it after the page follows
-	if( control != NULL && control == s_schemeCombo )
+	// the layout combo and the Grid Keys box are the catalog's, so the menu goes on with them after the
+	// page follows.  Picking Key Grid ticks Grid Keys and picking another layout clears it (the owner's,
+	// 2026-11-27); the player may still change the box after
+	if( control != NULL && ( control == s_schemeCombo || ( control == s_gridCheck && s_gridCheck != NULL ) ) )
 	{
-		Int layout = -1;
-		if( msg == GCM_SELECTED )
+		if( control == s_schemeCombo && msg == GCM_SELECTED && s_gridCheck != NULL )
+		{
+			Int layout = -1;
 			GadgetComboBoxGetSelectedPos( s_schemeCombo, &layout );
-		if( layout >= 0 && layout < HUD_LAYOUT_COUNT && hotkeySchemeForHudLayout( layout ) != s_scheme )
-			showScheme( hotkeySchemeForHudLayout( layout ) );
+			if( layout >= 0 && layout < HUD_LAYOUT_COUNT )
+				GadgetCheckBoxSetChecked( s_gridCheck, layout == HUD_LAYOUT_GRID );
+		}
+		if( shownScheme() != s_scheme )
+			showScheme( shownScheme() );
 		return FALSE;
 	}
 	const Bool ours = control == s_commandList || control == s_buttonList || control == s_factionCombo
@@ -1077,8 +1096,9 @@ void OptionsHotkeysSave( void )
 		DEBUG_LOG(( "HOTKEYS: wrote %s from the options menu\n", path.str() ));
 		wrote = TRUE;
 	}
-	// saveOptions has put the layout's scheme in force by now (set_m_hudLayout)
-	if( wrote || TheGlobalData->m_hotkeyScheme != s_openScheme )
+	// saveOptions has put the layout's scheme in force by now (set_m_hudLayout, set_m_gridKeys); Grid
+	// Keys on another layout changes no scheme, only the bar's letters
+	if( wrote || TheGlobalData->m_hotkeyScheme != s_openScheme || TheGlobalData->m_gridKeys != s_openGridKeys )
 		HotKeyManager::reloadKeys();
 }
 

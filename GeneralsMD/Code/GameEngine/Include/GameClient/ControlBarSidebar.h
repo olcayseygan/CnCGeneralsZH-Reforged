@@ -19,6 +19,8 @@
 #include <vector>
 
 class Image;
+class ControlBar;
+class GameWindow;
 
 /** The sidebar art for the local player's side: the MappedImage `<Prefix>Sidebar<piece>`, Prefix
 	* AmericaPro, ChinaPro (Boss too), GLAPro or TurkiyePro, AmericaPro for a side it does not know; NULL
@@ -170,5 +172,15 @@ Bool Sidebar_takeRightRelease( void );
 /** HintSpy, after the hint set the pointer: the mode's cursor over the world, the valid one over a
 	* structure the click would act on, the invalid one elsewhere.  Nothing with no mode on. */
 void Sidebar_pointCursor( void );
+
+/** A Classic pane (the construction timer, the beacon, the portrait) onto `to`, what it holds scaled
+	* with it at one scale, through placeWindowAt.  The sidebar's and Key Grid's (ControlBarSidebarLayout.cpp). */
+void ControlBar_fitWindowTree( ControlBar *bar, GameWindow *window, const IRegion2D &to );
+
+/** The power bar stood on end (W3DPowerDrawV); restoreClassicWindows lays it down again. */
+void ControlBar_standPowerOnEnd( GameWindow *power );
+
+/** Key Grid's shelf keys back in the scheme's own art (ControlBarKeyGrid.cpp); restoreClassicWindows. */
+void ControlBar_restoreKeyGridKeys( void );
 
 #endif // __CONTROLBARSIDEBAR_H__

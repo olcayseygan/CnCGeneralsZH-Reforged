@@ -42,6 +42,8 @@
 
 #include "GameClient/GroupPanel.h"
 
+#include "Common/AudioEventRTS.h"
+#include "Common/GameAudio.h"
 #include "Common/GameCommon.h"
 #include "Common/GlobalData.h"
 #include "Common/MessageStream.h"
@@ -53,6 +55,7 @@
 #include "Common/ThingTemplate.h"
 #include "GameClient/Color.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarKeyGrid.h"
 #include "GameClient/ControlBarScheme.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
@@ -997,6 +1000,102 @@ static void trayGone( void )
 	hideTrayWindows();
 }
 
+//-------------------------------------------------------------------------------------------------
+// Key Grid's deck (ControlBar::keyGridTrayView): the tray's buttons on the deck's eighteen cells in
+// reading order, each wearing its place's letter under Key Grid's keys, the panel painting the cells
+// dark under them so the commands beneath do not show through an empty one
+//-------------------------------------------------------------------------------------------------
+static IRegion2D s_deckCells[ COMMAND_PLACE_COUNT ];
+static Bool s_deckLettered = FALSE;		///< the buttons wear the places' letters, the panel the deck's wells
+
+static void drawDeckWells( GameWindow *window, WinInstanceData *instData )
+{
+	// a gold line round every cell says the keys build into the squad now (no art for it: the owner's
+	// "draw it in code", 2026-11-27)
+	const Color gold = GameMakeColor( 255, 196, 64, 255 );
+	for( Int place = 0; place < COMMAND_PLACE_COUNT; place++ )
+	{
+		const IRegion2D &c = s_deckCells[ place ];
+		const Int w = c.hi.x - c.lo.x, h = c.hi.y - c.lo.y;
+		TheDisplay->drawFillRect( c.lo.x, c.lo.y, w, h, GameMakeColor( 8, 22, 30, 255 ) );
+		TheDisplay->drawFillRect( c.lo.x - 2, c.lo.y - 2, w + 4, 2, gold );
+		TheDisplay->drawFillRect( c.lo.x - 2, c.hi.y, w + 4, 2, gold );
+		TheDisplay->drawFillRect( c.lo.x - 2, c.lo.y, 2, h, gold );
+		TheDisplay->drawFillRect( c.hi.x, c.lo.y, 2, h, gold );
+	}
+}
+
+/// back to the drawer's look: no letters, the panel drawing nothing
+static void leaveDeck( GameWindow *panel )
+{
+	if( !s_deckLettered )
+		return;
+	s_deckLettered = FALSE;
+	panel->winSetDrawFunc( drawNothing );
+	for( Int i = 0; i < MAX_BUTTONS; i++ )
+	{
+		if( s_buttons[ i ] == NULL )
+			continue;
+		GadgetButtonSetText( s_buttons[ i ], UnicodeString( u"" ) );
+		s_buttons[ i ]->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON );
+	}
+}
+
+static void layDeckTray( GameWindow *panel )
+{
+	if( !TheControlBar->keyGridTrayView() || !TheControlBar->getKeyGridCells( s_deckCells ) )
+	{
+		hideTrayWindows();
+		return;
+	}
+	IRegion2D box = s_deckCells[ 0 ];
+	for( Int place = 1; place < COMMAND_PLACE_COUNT; place++ )
+	{
+		box.lo.x = min( box.lo.x, s_deckCells[ place ].lo.x );
+		box.lo.y = min( box.lo.y, s_deckCells[ place ].lo.y );
+		box.hi.x = max( box.hi.x, s_deckCells[ place ].hi.x );
+		box.hi.y = max( box.hi.y, s_deckCells[ place ].hi.y );
+	}
+	panel->winSetPosition( box.lo.x, box.lo.y );
+	panel->winSetSize( box.hi.x - box.lo.x, box.hi.y - box.lo.y );
+	panel->winSetDrawFunc( drawDeckWells );
+	s_deckLettered = TRUE;
+
+	const Bool lettered = TheGlobalData->m_hotkeyScheme == HOTKEY_SCHEME_GRID;
+	const Int shown = min( (Int)s_buildables.size(), (Int)MAX_BUTTONS );
+	for( Int i = 0; i < MAX_BUTTONS; i++ )
+	{
+		GameWindow *button = s_buttons[ i ];
+		if( button == NULL )
+			continue;
+		const Int place = KeyGrid_trayPlace( i );
+		if( i >= shown || place < 0 )
+		{
+			button->winHide( TRUE );
+			continue;
+		}
+		const IRegion2D &cell = s_deckCells[ place ];
+		button->winSetPosition( cell.lo.x - box.lo.x, cell.lo.y - box.lo.y );
+		button->winSetSize( cell.hi.x - cell.lo.x, cell.hi.y - cell.lo.y );
+		const Buildable &entry = s_buildables[ i ];
+		if( GadgetButtonGetData( button ) != (void *)entry.button )
+		{
+			GadgetButtonSetEnabledImage( button, entry.button->getButtonImage() );
+			GadgetButtonSetData( button, (void *)entry.button );
+		}
+		const WideChar letter[ 2 ] = { lettered ? ControlBar_commandPlaceKey( place ) : (WideChar)0, 0 };
+		if( button->winGetText().compare( UnicodeString( letter ) ) != 0 )
+			GadgetButtonSetText( button, UnicodeString( letter ) );
+		if( letter[ 0 ] != 0 )
+			button->winSetStatus( WIN_STATUS_SHORTCUT_BUTTON );
+		else
+			button->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON );
+		GroupPanel_showAvailability( button, entry.best );
+		button->winHide( FALSE );
+	}
+	panel->winHide( FALSE );
+}
+
 static void hidePanel( void )
 {
 	s_shownSquad = -1;
@@ -1428,6 +1527,15 @@ static void drawTray( Int top )
 	if( panel == NULL )
 		return;
 
+	// Key Grid: no drawer at the top right.  The deck shows the tray on its keys while its switch is on,
+	// and nothing of it while the deck shows the commands
+	if( TheControlBar->isKeyGridLayout() )
+	{
+		layDeckTray( panel );
+		return;
+	}
+	leaveDeck( panel );
+
 	// the body: the scheme's powers tray, laid as the superweapons' (foot on top, open side left) with
 	// the side's StepDown where the short last row steps in
 	const Pieces &p = pieces();
@@ -1666,6 +1774,35 @@ Bool GroupPanel_click( const ICoord2D *mouse, Bool cancel )
 
 	// between the rows, the box is still the list's
 	return s_rowsBoxed > 0 && inside( s_listBox );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool GroupPanel_trayAvailable( void )
+{
+	return isValidHotkeySquadIndex( s_shownSquad ) && !s_buildables.empty();
+}
+
+//-------------------------------------------------------------------------------------------------
+void GroupPanel_pressTrayEntry( Int index )
+{
+	if( !panelAlive() || index < 0 || index >= (Int)MAX_BUTTONS || s_buttons[ index ] == NULL
+			|| s_buttons[ index ]->winIsHidden() )
+		return;
+	GameWindow *button = s_buttons[ index ];
+	if( BitTest( button->winGetStatus(), WIN_STATUS_ENABLED ) )
+	{
+		// the press a click sends, which panelSystem turns into the squad's build order
+		TheWindowManager->winSendSystemMsg( s_panel, GBM_SELECTED, (WindowMsgData)button, button->winGetWindowId() );
+		AudioEventRTS click( "GUIClick" );
+		if( TheAudio )
+			TheAudio->addAudioEvent( &click );
+	}
+	else
+	{
+		AudioEventRTS refused( "GUIClickDisabled" );
+		if( TheAudio )
+			TheAudio->addAudioEvent( &refused );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

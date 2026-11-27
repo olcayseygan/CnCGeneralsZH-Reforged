@@ -78,4 +78,13 @@ void GroupPanel_queueUnit( const ThingTemplate *thing, Int squad, ObjectID facto
 	* other window.  ControlBar::populateBuildTooltipLayout asks it every time it places the card. */
 Bool GroupPanel_buildTooltipPosition( GameWindow *anchor, const ICoord2D *cardSize, ICoord2D *at );
 
+/** A squad with a build tray is chosen now (the last GroupPanel_draw found one): Key Grid's deck switch
+	* shows only then. */
+Bool GroupPanel_trayAvailable( void );
+
+/** Key Grid's deck showing the squad's tray: press entry `index` (its place, Q first) as a click on its
+	* button would, the refusal noise for a greyed one, nothing past the tray's end.  The tray offers no
+	* removal, so there is no Ctrl+letter to take an entry out. */
+void GroupPanel_pressTrayEntry( Int index );
+
 #endif // __GROUPPANEL_H__

@@ -51,6 +51,7 @@
 #include "Common/version.h"
 
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarKeyGrid.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/WindowLayout.h"
@@ -3961,6 +3962,28 @@ static void lookMiniHud( const LookMini &m, const HudLayoutRects &r, Int layout,
 			lookOutline( m.map( r.cameos[ i ] ), UIStyle::FRAME );
 		for( Int i = 0; i < HUD_STRIP_BUTTONS; ++i )
 			lookOutline( m.map( r.stripButtons[ i ] ), UIStyle::FRAME );
+	}
+	else if( layout == HUD_LAYOUT_GRID )
+	{
+		// Key Grid's console on today's glass (KeyGridLayoutForScreen) and the Reforged right box
+		KeyGridRects kg;
+		KeyGridLayoutForScreen( r.screen.width(), r.screen.height(), r.area, (Real)r.screen.height() / KEY_GRID_DESIGN_H, 0.0f, &kg );
+		lookMiniPlate( m.map( kg.box ) );
+		lookMiniPlate( m.map( kg.shelf ) );
+		lookMiniPlate( m.map( kg.spine ) );
+		lookMiniPlate( m.map( kg.head ) );
+		for( Int row = 0; row < 3; ++row )
+		{
+			IRegion2D back = kg.cells[ row * COMMAND_PLACE_COLUMNS ];
+			back.hi = kg.cells[ row * COMMAND_PLACE_COLUMNS + COMMAND_PLACE_COLUMNS - 1 ].hi;
+			lookMiniPlate( m.map( back ) );
+		}
+		for( Int place = 0; place < COMMAND_PLACE_COUNT; ++place )
+			lookOutline( m.map( kg.cells[ place ] ), UIStyle::FRAME );
+		lookFill( m.map( kg.meter ), UIStyle::EDGE_LIT );
+		lookMiniRadar( m.map( kg.glass ) );
+		const Real k = r.scale, foot = (Real)r.screen.hi.y, right = (Real)r.area.hi.x;
+		lookMiniPlate( m.map( right - ( 1920.0f - 1626.0f ) * k, foot - ( 1080.0f - 863.0f ) * k, right, foot ) );
 	}
 	else
 	{

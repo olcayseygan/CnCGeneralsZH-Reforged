@@ -67,6 +67,7 @@
 #include "GameClient/Image.h"
 #include "GameClient/GroupPanel.h"
 #include "GameClient/ControlBarScheme.h"
+#include "GameClient/ControlBarKeyGrid.h"
 #include "GameClient/GameText.h"
 #include "GameClient/Display.h"
 
@@ -2823,7 +2824,8 @@ static void drawSignalPlate( GameWindow *window, WinInstanceData *instData )
 {
 	ControlBarSchemeManager *schemes = TheControlBar ? TheControlBar->getControlBarSchemeManager() : NULL;
 	const Image *plate = schemes ? schemes->getSignalPlateImage() : NULL;
-	if( plate == NULL )
+	// Key Grid's shelf paints the keys' wells itself
+	if( plate == NULL || TheControlBar->isKeyGridLayout() )
 		return;
 	ICoord2D pos, size;
 	window->winGetScreenPosition( &pos.x, &pos.y );
@@ -2963,6 +2965,25 @@ void ControlBar::updateSignalKeys( void )
 		{
 			key[ kind ].lo.y += lift;
 			key[ kind ].hi.y += lift;
+		}
+	}
+	// Key Grid's shelf carries them at its left, each in its painted well (KeyGridRects::signalKeys)
+	if( m_keyGridLayout )
+	{
+		KeyGridRects kg;
+		getKeyGridRects( &kg );
+		row = kg.signals;
+		row.lo.x += dx;
+		row.hi.x += dx;
+		row.lo.y += dy;
+		row.hi.y += dy;
+		for( Int kind = 0; kind < SIGNAL_KEYS && kind < KEY_GRID_SIGNAL_KEYS; kind++ )
+		{
+			key[ kind ] = kg.signalKeys[ kind ];
+			key[ kind ].lo.x += dx;
+			key[ kind ].hi.x += dx;
+			key[ kind ].lo.y += dy;
+			key[ kind ].hi.y += dy;
 		}
 	}
 	m_signalPlateRect = row;

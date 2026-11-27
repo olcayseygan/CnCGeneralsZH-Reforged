@@ -143,13 +143,20 @@ OPTION_BOOL_ACCESSORS( m_hdTextures )
 OPTION_INT_ACCESSORS( m_lightingStyle )
 OPTION_INT_ACCESSORS( m_healthBarMode )
 OPTION_INT_ACCESSORS( m_healthBarColors )
-// The keys follow the layout (hotkeySchemeForHudLayout).  Options.ini's line, the menu's Accept and
-// Defaults all come through here, so the scheme in force is always the one the layout names.
+// The keys follow the layout and the Grid Keys box (hotkeySchemeFor).  Options.ini's lines, the menu's
+// Accept and Defaults all come through these two, in either order, so the scheme in force is always the
+// one the pair names.
 static Int get_m_hudLayout( void ) { return TheGlobalData->m_hudLayout; }
 static void set_m_hudLayout( Int value )
 {
 	TheWritableGlobalData->m_hudLayout = value;
-	TheWritableGlobalData->m_hotkeyScheme = hotkeySchemeForHudLayout( value );
+	TheWritableGlobalData->m_hotkeyScheme = hotkeySchemeFor( value, TheGlobalData->m_gridKeys );
+}
+static Int get_m_gridKeys( void ) { return TheGlobalData->m_gridKeys ? 1 : 0; }
+static void set_m_gridKeys( Int value )
+{
+	TheWritableGlobalData->m_gridKeys = value != 0;
+	TheWritableGlobalData->m_hotkeyScheme = hotkeySchemeFor( TheGlobalData->m_hudLayout, value != 0 );
 }
 OPTION_INT_ACCESSORS( m_hudWidth )
 OPTION_INT_ACCESSORS( m_playerColorScheme )
@@ -664,14 +671,24 @@ const OptionDef TheOptionCatalog[] =
 	// Where the in-game interface sits: 0 Classic, the bar along the bottom, 1 the Red Alert style
 	// sidebar down the right with a command strip under the world (docs/plans/HUD-SIDEBAR-LAYOUT.md),
 	// 2 the same bar with the fork's pieces left off (HUD_LAYOUT_RETAIL, shown as Classic; 0 is shown
-	// as Reforged).
+	// as Reforged), 3 the Reforged bar with its commands as a keyboard (HUD_LAYOUT_GRID, Key Grid).
 	// Read as the bar is laid out, so Accept builds the shell and the bar again, in a match too.
 	// Every menu is fitted; MenuLayout, HudScale and the old InterfaceStyle are gone for good.  The
-	// layout brings its keys too, Classic's or Red Alert's (set_m_hudLayout); HotkeyScheme was a row of
-	// its own until 2026-11-16, and a line left from then is a key nothing reads.
+	// layout brings its keys too, Classic's, Red Alert's or Key Grid's (set_m_hudLayout); HotkeyScheme
+	// was a row of its own until 2026-11-16, and a line left from then is a key nothing reads.
 	{ "HudLayout",								OPT_WND( "ComboBoxHudLayout" ), "GUI:HudLayout",
 		OPTION_ENUM, APPLY_SHELL_REBUILD, 0, HUD_LAYOUT_COUNT - 1,
 		get_m_hudLayout, set_m_hudLayout },
+
+	// Grid Keys, Age of Empires IV's grid hotkeys (the owner's, 2026-11-27): every command button
+	// pressed by where it stands.  Under Key Grid that is its place's letter (HOTKEY_SCHEME_GRID); on the
+	// other layouts the bar's window slots, Q W E R T Y U over A S D F G H J (HotKeyManager's
+	// commandBarGridKey, what Hotkeys.ini's CommandBarGrid block turns on too).  Off by default; the menu
+	// ticks it when Key Grid is picked and clears it when another layout is (OptionsMenuHotkeys.cpp).
+	// After HudLayout, so both lines are read before the scheme is used.  Client only.
+	{ "GridKeys",									OPT_WND( "CheckGridKeys" ), "GUI:GridKeys",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_gridKeys, set_m_gridKeys },
 
 	// How wide the interface may spread, for either layout: the whole screen, or a centred 21:9 or
 	// 16:9 area on a screen wider than that, the world still drawn edge to edge (HudAreaForScreen).

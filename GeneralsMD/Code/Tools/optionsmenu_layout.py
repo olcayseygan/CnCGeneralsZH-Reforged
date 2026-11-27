@@ -249,6 +249,7 @@ GROUP_LAYOUT = [
     ("PageInterface", [
         ("GUI:OptionsHeadBar", [
             combo("HudLayout", "LabelHudLayout", "ComboBoxHudLayout"),
+            check("GridKeys", "CheckGridKeys"),
             slider("MinimapSize", "LabelMinimapSize", "SliderMinimapSize", "ValueMinimapSize"),
             check("NetBox", "CheckNetBox"),
             combo("HudWidth", "LabelHudWidth", "ComboBoxHudWidth", MORE),
@@ -315,6 +316,8 @@ NEW_VIEWS = [
     ("COMBO", "ComboBoxTextureFiltering", None),
     ("LABEL", "LabelReflections", "GUI:OptionsReflections"),
     ("COMBO", "ComboBoxReflections", None),
+    # Key Grid's Grid Keys box (2026-11-27), the catalog's GridKeys row
+    ("CHECK", "CheckGridKeys", "GUI:GridKeys"),
 ]
 
 # Renamed captions (the plan's renames and the two Turkish words the writing rule forced), and the
@@ -850,8 +853,9 @@ def selfcheck():
 
     # every row, fader and rail choice has its pane sentences in both languages, and its name
     stems = [row[0] for _page, groups in GROUP_LAYOUT for _h, rs in groups for row in rs] + RAIL_STEMS
-    if len(stems) != 118:
-        problems.append("%d settings on the screen, the plan's tooltip table holds 118" % len(stems))
+    # the plan's 118 and Key Grid's Grid Keys (2026-11-27)
+    if len(stems) != 119:
+        problems.append("%d settings on the screen, the plan's tooltip table holds 118 and Grid Keys" % len(stems))
     for stem in stems:
         for table, language in ((keys, "Patch.str"), (turkish, "Turkish/Generals.str")):
             if "OPTIONTIP:%s" % stem not in table:

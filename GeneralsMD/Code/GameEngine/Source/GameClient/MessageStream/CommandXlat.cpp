@@ -3167,6 +3167,14 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 				TheControlBar->pressCommandButton( slot );
 			disp = DESTROY_MESSAGE;
 			break;
+		}
+
+		case GameMessage::MSG_META_TOGGLE_KEY_GRID_TRAY:
+		{
+			// Key Grid's deck: the chosen squad's build tray or the commands (the switch on the spine)
+			TheControlBar->toggleKeyGridTray();
+			disp = DESTROY_MESSAGE;
+			break;
 		}		// end command bar grid slots
 
 		case GameMessage::MSG_META_SHORTCUT_SLOT01:

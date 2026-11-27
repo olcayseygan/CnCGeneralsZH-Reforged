@@ -218,6 +218,7 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "SIGNAL_ATTACK",														GameMessage::MSG_META_SIGNAL_ATTACK },
 	{ "SIGNAL_DEFEND",														GameMessage::MSG_META_SIGNAL_DEFEND },
 	{ "SIGNAL_ATTENTION",													GameMessage::MSG_META_SIGNAL_ATTENTION },
+	{ "TOGGLE_KEY_GRID_TRAY",											GameMessage::MSG_META_TOGGLE_KEY_GRID_TRAY },
 	{ "REQUEST_MONEY",														GameMessage::MSG_META_REQUEST_MONEY },
 	{ "SELL_MODE",																GameMessage::MSG_META_SELL_MODE },
 	{ "REPAIR_MODE",															GameMessage::MSG_META_REPAIR_MODE },

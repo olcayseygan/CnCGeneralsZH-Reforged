@@ -70,6 +70,7 @@
 #include "GameClient/CommandXlat.h"
 #include "GameClient/HotkeyScheme.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarKeyGrid.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/InGameUI.h"
@@ -483,9 +484,29 @@ static Int schemeOf( Int scheme )
 	return TheGlobalData ? TheGlobalData->m_hotkeyScheme : HOTKEY_SCHEME_CLASSIC;
 }
 
+/** The command bar grid by window slot (commandBarGridKey): CommandBarGrid in Hotkeys.ini, or the Grid
+	* Keys box (GlobalData m_gridKeys), on every layout but Key Grid, whose grid is its places' and whose
+	* box picks HOTKEY_SCHEME_GRID instead. */
+static Bool slotGridOn( void )
+{
+	if( TheGlobalData != NULL && TheGlobalData->m_hudLayout == HUD_LAYOUT_GRID )
+		return FALSE;
+	return s_commandBarGrid || ( TheGlobalData != NULL && TheGlobalData->m_gridKeys );
+}
+
+/// one of Key Grid's eighteen place letters (ControlBar_commandPlaceKey), upper case
+static Bool isPlaceLetter( WideChar letter )
+{
+	for( Int place = 0; place < COMMAND_PLACE_COUNT; place++ )
+		if( ControlBar_commandPlaceKey( place ) == letter )
+			return TRUE;
+	return FALSE;
+}
+
 static WideChar fixedButtonKey( const AsciiString& lowerName, Int commandType, Int scheme )
 {
-	if( !s_fixedOrderKeys )
+	// Key Grid has no fixed letters: its orders stand on their places
+	if( !s_fixedOrderKeys || scheme == HOTKEY_SCHEME_GRID )
 		return 0;
 	const char *letters = HotkeyScheme_fixedLetters( scheme );
 	if( strncmp( lowerName.str(), FIXED_H_PREFIX, sizeof( FIXED_H_PREFIX ) - 1 ) == 0 )
@@ -555,7 +576,7 @@ static Int keyClaim( GameWindow *win, const AsciiString& key, Int barSlot )
 	WideChar letter = 0;
 	if( findPlayerSlotKey( s_playerButtonKeys, std::string( lower.str() ), barSlot, &letter ) )
 		return letter != 0 && HotKeyManager::nameOf( letter ) == key ? 1 : 0;
-	if( s_commandBarGrid && barSlot >= 0 )
+	if( slotGridOn() && barSlot >= 0 )
 		return 0;
 	const WideChar fixed = fixedButtonKey( lower, command->getCommandType(), schemeOf( -1 ) );
 	return fixed != 0 && HotKeyManager::nameOf( fixed ) == key ? 2 : 0;
@@ -622,7 +643,18 @@ WideChar HotKeyManager::buttonKeyIn( const AsciiString& button, WideChar labelKe
 	// included: the fixed letter is only its default.  With the grid on, the bar's place is next
 	WideChar letter = labelKey;
 	const Bool chosen = findPlayerSlotKey( keys, std::string( lower.str() ), barSlot, &letter );
-	if( !chosen && s_commandBarGrid && barSlot >= 0 )
+	// Key Grid's keys: a command bar button is pressed by its place's letter through COMMAND_SLOTnn, never
+	// by a letter of its own, and no other button may hold one of the eighteen, the player's own
+	// included, or a line in HotkeysGrid.ini would put one key on two cells
+	if( scheme == HOTKEY_SCHEME_GRID )
+	{
+		if( letter >= 'a' && letter <= 'z' )
+			letter -= 'a' - 'A';
+		if( barSlot >= 0 || letter == 0 || isPlaceLetter( letter ) )
+			return 0;
+		return chosen || !schemeHoldsLetter( scheme, letter ) ? letter : 0;
+	}
+	if( !chosen && slotGridOn() && barSlot >= 0 )
 	{
 		const Bool upgrade = commandType == GUI_COMMAND_PLAYER_UPGRADE || commandType == GUI_COMMAND_OBJECT_UPGRADE;
 		return commandBarGridKey( barSlot, upgrade ? upgradeRank : -1 );
@@ -795,9 +827,10 @@ void HotKeyManager::reloadKeys( void )
 const char HOTKEYS_LAUNCHER_PART[] = "; the launcher's own keys from here on";
 
 /// KEY_NAMES in hotkeys.js: the keys a command may take there, so what this writes the launcher reads.
+/// KEY_CAPS is the game's alone (Key Grid's squad tray switch, in HotkeysGrid.ini, which no launcher reads).
 static const char *const HOTKEY_KEY_NAMES[] =
 {
-	"KEY_ESC", "KEY_BACKSPACE", "KEY_ENTER", "KEY_SPACE", "KEY_TAB",
+	"KEY_ESC", "KEY_BACKSPACE", "KEY_ENTER", "KEY_SPACE", "KEY_TAB", "KEY_CAPS",
 	"KEY_F1", "KEY_F2", "KEY_F3", "KEY_F4", "KEY_F5", "KEY_F6", "KEY_F7", "KEY_F8", "KEY_F9", "KEY_F10", "KEY_F11", "KEY_F12",
 	"KEY_A", "KEY_B", "KEY_C", "KEY_D", "KEY_E", "KEY_F", "KEY_G", "KEY_H", "KEY_I", "KEY_J", "KEY_K", "KEY_L", "KEY_M",
 	"KEY_N", "KEY_O", "KEY_P", "KEY_Q", "KEY_R", "KEY_S", "KEY_T", "KEY_U", "KEY_V", "KEY_W", "KEY_X", "KEY_Y", "KEY_Z",

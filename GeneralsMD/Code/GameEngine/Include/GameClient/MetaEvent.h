@@ -158,6 +158,7 @@ enum MappableKeyType
 	MK_KPSLASH			= KEY_KPSLASH,
 	MK_KPPLUS				= KEY_KPPLUS,
 	MK_KPMINUS			= KEY_KPMINUS,
+	MK_CAPS					= KEY_CAPS,				///< Key Grid's squad tray switch (HotkeyScheme.cpp's GRID_KEYS)
 	MK_NONE					= KEY_NONE
 
 };	
@@ -169,6 +170,7 @@ static const LookupListRec KeyNames[] =
 	{ "KEY_ENTER", MK_ENTER },
 	{ "KEY_SPACE", MK_SPACE },
 	{ "KEY_TAB", MK_TAB },
+	{ "KEY_CAPS", MK_CAPS },
 	{ "KEY_F1", MK_F1 },
 	{ "KEY_F2", MK_F2 },
 	{ "KEY_F3", MK_F3 },

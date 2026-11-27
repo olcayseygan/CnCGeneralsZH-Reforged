@@ -34,4 +34,12 @@
 void HandleBuddyResponses(void);
 void PopulateOldBuddyMessages(void);
 
+/* -online's friends on the screens around the overlay (WOLBuddyOverlay.cpp, menu redesign package F4).
+	 FriendsCornerUpdate runs from every screen an invite can reach (HandleBuddyResponses calls it, so the
+	 hub, Quick Match, the custom lobby and the room have it; the ladder and the end screen call it
+	 themselves): the FRIENDS key on an online page's tab row, the invite toast under the head's right
+	 end, and a JOIN carried from there to the custom lobby.  Nothing shows against a server without
+	 friends. */
+void FriendsCornerUpdate(void);
+
 #endif // __BUDDYDEFS_H__

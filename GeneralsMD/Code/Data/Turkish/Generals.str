@@ -24299,3 +24299,106 @@ END
 GUI:OnlineCardEsc
 "Esc kapatır"
 END
+
+// Menu redesign package F4, friends on screen: the friends box's rows, its name field's lines, the
+// invite on a friend's menu, the toast and its keys, what the service refuses
+
+GUI:FriendsOnline
+"%d çevrimiçi"
+END
+
+GUI:FriendRequest
+"İSTEK"
+END
+
+GUI:FriendRequestSent
+"Gönderildi"
+END
+
+GUI:InARoom
+"Odada · %s"
+END
+
+GUI:InAMatch
+"Maçta"
+END
+
+GUI:InTheLobby
+"Lobide"
+END
+
+GUI:FriendInvite
+"Davet et"
+END
+
+GUI:FriendRequestSentTo
+"%s adlı oyuncuya arkadaşlık isteği gönderildi."
+END
+
+GUI:FriendInviteSentTo
+"%s davet edildi."
+END
+
+GUI:FriendInvites
+"%s seni davet ediyor"
+END
+
+GUI:FriendJoin
+"Katıl"
+END
+
+GUI:FriendDecline
+"Reddet"
+END
+
+GUI:FriendInviteTitle
+"Davet"
+END
+
+GUI:FriendLeaveRoom
+"Katılmak için bu odadan çıkılsın mı?"
+END
+
+GUI:FriendError
+"İşlem yapılamadı."
+END
+
+GUI:FriendError_not_found
+"Bu adda oyuncu yok."
+END
+
+GUI:FriendError_already
+"Zaten listende."
+END
+
+GUI:FriendError_full
+"Arkadaş listen dolu."
+END
+
+GUI:FriendError_rate
+"Çok fazla istek. Bir dakika sonra dene."
+END
+
+GUI:FriendError_offline
+"Oyuncu çevrimdışı."
+END
+
+GUI:FriendError_inmatch
+"Oyuncu maçta."
+END
+
+GUI:FriendError_nogame
+"Oda kapandı."
+END
+
+GUI:FriendError_unavailable
+"Arkadaşlar şu an kullanılamıyor."
+END
+
+GUI:FriendErrorRoomFull
+"Oda dolu."
+END
+
+GUI:FriendErrorBuild
+"Bu oda oyunun başka bir sürümünü oynuyor."
+END

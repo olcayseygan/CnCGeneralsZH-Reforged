@@ -343,6 +343,12 @@ namespace UIStyle
 		* round trip.  The friends package's FRIENDS key goes left of that server line, its invite toast
 		* under the head's right end.  Signed out (the login) the wordmark takes the player's line's place. */
 	void onlineHeader( const UnicodeString &title, const UnicodeString &subtitle = UnicodeString::TheEmptyString );
+	/// the friends package's FRIENDS key: onlineHeader keeps width1080 (and 24 of air) clear at the
+	/// left of the server's words on the tab row, the name cut shorter for it; 0 for no key
+	void onlineReserveFriendsKey( Int width1080 );
+	/// where the last onlineHeader stood that key, on the screen, 36 high on the tab row's middle;
+	/// empty (lo.x == hi.x) when the header drew none (signed out, nothing reserved, no page)
+	IRegion2D onlineFriendsKeyRect( void );
 	/// a page's way out to a tab: its Back with the tab as the argument (see onlineTabClicked)
 	typedef void (*OnlineLeave)( OnlineTab to );
 	/** For the page's GBM_SELECTED: TRUE when control is one of its tabs, and the page then returns

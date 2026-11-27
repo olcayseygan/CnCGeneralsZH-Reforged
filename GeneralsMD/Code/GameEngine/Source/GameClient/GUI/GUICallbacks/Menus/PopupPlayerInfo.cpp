@@ -1320,6 +1320,9 @@ static Int s_cardLaidWidth = 0;
 static Real s_cardScale = 1.0f;
 static Int s_cardFullTop = -1;			///< the card's top and height as the master loaded them, -1 before
 static Int s_cardFullHeight = 0;
+static GameWindow *s_addFriend = NULL;	///< ADD FRIEND left of Profile (package F4), made in code
+static Int s_addFriendState = -1;				///< what it shows: AddFriendState, -1 before
+enum AddFriendState { ADD_FRIEND_HIDDEN, ADD_FRIEND_OFFER, ADD_FRIEND_SENT };
 
 struct CardWords { DisplayString *words; Int x, y; Color color; Bool tracked; };
 struct CardPicture { const Image *image; Int x, y, size; };
@@ -1626,7 +1629,7 @@ static void fitCard( Bool compact )
 	parent->winSetPosition( x, s_cardFullTop + ( s_cardFullHeight - wanted ) / 2 );
 	parent->winSetSize( width, wanted );
 	card->winSetSize( width, wanted );
-	GameWindow *keys[] = { buttonClose, buttonBuddies };
+	GameWindow *keys[] = { buttonClose, buttonBuddies, s_addFriend };
 	for( Int each = 0; each < (Int)ARRAY_SIZE( keys ); each++ )
 	{
 		if( keys[ each ] == NULL )
@@ -1979,6 +1982,84 @@ static void openCardTab( Int tab )
 //-------------------------------------------------------------------------------------------------
 /** Initialize the Overlay */
 //-------------------------------------------------------------------------------------------------
+/// whether the card is the local player's own
+static Bool cardIsLocal( void )
+{
+	if( TheGameSpyInfo == NULL )
+		return FALSE;
+	if( lookAtPlayerID > 0 && lookAtPlayerID == TheGameSpyInfo->getLocalProfileID() )
+		return TRUE;
+	return TheGameSpyInfo->getLocalBaseName().compareNoCase( lookAtPlayerName.c_str() ) == 0;
+}
+
+/** ADD FRIEND on another player's card while the service has friends (package F4): Close's look, its
+	* width, 12 left of Profile (of Close when Profile is hidden), "PopupPlayerInfo.wnd:ButtonAddFriend". */
+static void makeAddFriendKey( void )
+{
+	s_addFriend = NULL;
+	s_addFriendState = -1;
+	if( buttonClose == NULL || buttonClose->winGetParent() == NULL || !OnlineFriendsAvailable() || cardIsLocal() )
+		return;
+	GameWindow *holder = buttonClose->winGetParent();
+	WinInstanceData inst;
+	inst.init();
+	BitSet( inst.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK );
+	inst.m_decoratedNameString = "PopupPlayerInfo.wnd:ButtonAddFriend";
+	inst.m_id = (Int)TheNameKeyGenerator->nameToKey( inst.m_decoratedNameString );
+	Int closeX, closeY, closeWidth, closeHeight;
+	buttonClose->winGetPosition( &closeX, &closeY );
+	buttonClose->winGetSize( &closeWidth, &closeHeight );
+	Int right = closeX;
+	if( buttonBuddies && !buttonBuddies->winIsHidden() )
+	{
+		Int profileX, profileY;
+		buttonBuddies->winGetPosition( &profileX, &profileY );
+		right = profileX;
+	}
+	right -= at( 12 );
+	s_addFriend = TheWindowManager->gogoGadgetPushButton( holder, WIN_STATUS_ENABLED, right - closeWidth, closeY,
+		closeWidth, closeHeight, &inst, buttonClose->winGetFont(), FALSE );
+	if( s_addFriend == NULL )
+		return;
+	GadgetButtonSetText( s_addFriend, UIStyle::capitals( TheGameText->fetch( "GUI:AddFriend" ) ) );
+	UIStyle::setMenuKey( s_addFriend, FALSE );
+}
+
+/// ADD FRIEND as the service's list has this player: hidden for a friend or a block, SENT while ours waits
+static void updateAddFriendKey( void )
+{
+	if( s_addFriend == NULL )
+		return;
+	Int state = ADD_FRIEND_OFFER;
+	if( !OnlineFriendsAvailable() )
+		state = ADD_FRIEND_HIDDEN;
+	else
+	{
+		std::vector<OnlineFriend> rows;
+		OnlineGetFriends( rows );
+		for( size_t each = 0; each < rows.size(); ++each )
+		{
+			const OnlineFriend &row = rows[ each ];
+			if( ( lookAtPlayerID > 0 && row.id == lookAtPlayerID ) || row.nick.compareNoCase( lookAtPlayerName.c_str() ) == 0 )
+			{
+				if( row.status == ONLINE_FRIEND_PENDING_OUT )
+					state = ADD_FRIEND_SENT;
+				else if( row.status != ONLINE_FRIEND_PENDING_IN )
+					state = ADD_FRIEND_HIDDEN;		// a friend already, or blocked
+				break;
+			}
+		}
+	}
+	if( state == ADD_FRIEND_OFFER && s_addFriendState == ADD_FRIEND_SENT )
+		state = ADD_FRIEND_SENT;		// asked from here; the server's row has not come back yet
+	if( state == s_addFriendState )
+		return;
+	s_addFriendState = state;
+	s_addFriend->winHide( state == ADD_FRIEND_HIDDEN );
+	s_addFriend->winEnable( state == ADD_FRIEND_OFFER );
+	GadgetButtonSetText( s_addFriend, UIStyle::capitals( TheGameText->fetch( state == ADD_FRIEND_SENT ? "GUI:FriendRequestSent" : "GUI:AddFriend" ) ) );
+}
+
 void GameSpyPlayerInfoOverlayInit( WindowLayout *layout, void *userData )
 {
 	parentID = TheNameKeyGenerator->nameToKey( "PopupPlayerInfo.wnd:PopupParent" );
@@ -2074,6 +2155,8 @@ void GameSpyPlayerInfoOverlayInit( WindowLayout *layout, void *userData )
 		openCardTab( CARD_TAB_AI );
 		if (buttonBuddies)
 			buttonBuddies->winHide( profileUrl( nick ).isEmpty() );
+		makeAddFriendKey();
+		updateAddFriendKey();
 	}
 	PopulatePlayerInfoWindows("PopupPlayerInfo.wnd");
 
@@ -2132,6 +2215,8 @@ void GameSpyPlayerInfoOverlayShutdown( WindowLayout *layout, void *userData )
 	s_cardBoxes.clear();
 	for (Int tab = 0; tab < CARD_TAB_COUNT; ++tab)
 		s_cardTabs[tab] = NULL;
+	s_addFriend = NULL;		// a child of the card, destroyed with it
+	s_addFriendState = -1;
 	s_cardDirty = TRUE;
 
 	// our shutdown is complete
@@ -2160,6 +2245,7 @@ void GameSpyPlayerInfoOverlayUpdate( WindowLayout * layout, void *userData)
 			s_cardDirty = TRUE;
 		}
 		pollCardHistory();
+		updateAddFriendKey();
 	}
 }// GameSpyPlayerInfoOverlayUpdate
 
@@ -2268,6 +2354,15 @@ WindowMsgHandledType GameSpyPlayerInfoOverlaySystem( GameWindow *window, Unsigne
 						RefreshGameListBoxes();
 						GameSpyOpenOverlay( GSOVERLAY_BUDDY );
 					}
+				}
+				else if (s_addFriend != NULL && control == s_addFriend)
+				{
+					// -online: a friend request by the card's nick; SENT until the service's row comes back
+					OnlineAddFriend( AsciiString( lookAtPlayerName.c_str() ) );
+					DEBUG_LOG(("ONLINE FRIEND screen add %s from the card\n", lookAtPlayerName.c_str()));
+					s_addFriendState = ADD_FRIEND_SENT;
+					s_addFriend->winEnable( FALSE );
+					GadgetButtonSetText( s_addFriend, UIStyle::capitals( TheGameText->fetch( "GUI:FriendRequestSent" ) ) );
 				}
 				else if (controlID == s_cardTabIDs[CARD_TAB_QUICK_MATCH])
 				{

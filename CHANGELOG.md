@@ -115,6 +115,13 @@ found and fixed, EA's own, not port damage.**
 
 - The password box in Host Game did nothing online: the room opened to everyone. On a server with friends the password now locks the room, the game list marks it, a wrong password is refused as one, and a friend you invite walks in without it. Against an older server the game behaves exactly as before.
 
+## Friends online
+
+- EA's buddy list ran on GameSpy and has had nobody on it since 2014. On a server with friends it is your friends list again: every online page has a FRIENDS key beside the server line with how many of them are on, and the list shows a green dot for each one signed in and where he is, "In a room · Iron Dragon", in a match or in the lobby. Type a name next to ADD FRIEND, or pick Add friend on a player's card or on his name in the lobby's player list. A request to you carries a REQUEST chip; right-click it to accept or deny.
+- Sitting in a room, right-click a friend who is signed in and pick Invite. He gets a box under the head of whatever online page he is on: who asks, the room and its mode, JOIN and DECLINE, and a bar running down his two minutes. JOIN takes him to the custom games page and into the room, past its password; from Quick Match, the ladder or the end screen it walks him there first, and from a room of his own it asks before he leaves it. An invite that came during a match waits for the end screen.
+- Ignore on a player now blocks him on the server as well, so his requests, invites and messages stop on every PC you sign in from. Against a server without friends nothing here shows and the buddy list is EA's.
+- Not there yet: no line in the match tells you an invite came in, adding a friend from a room's seats or the end screen's rows needs its own right-click, and the toast has no Quick Match party.
+
 ## Computer guards, medics and paratroopers stop wasting time
 
 - A computer's base guards kept grabbing a target their teammate had picked, a Comanche overhead or a tank across the map, dropped it the same instant because they could not reach it, and grabbed it again a few seconds later. One four-player Hard match logged 52,257 of those turns, a single Microwave Tank 7,616 of them. A guard now takes the team's target only when it stands inside its own circle and it can hit it, and it no longer picks an aircraft out of its weapons' reach. Over the same twelve four-player matches the turns fell from 60,149 to 18,793.

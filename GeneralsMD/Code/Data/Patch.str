@@ -10118,3 +10118,106 @@ END
 GUI:OnlineCardEsc
 "Esc closes"
 END
+
+// Menu redesign package F4, friends on screen: the friends box's rows, its name field's lines, the
+// invite on a friend's menu, the toast and its keys, what the service refuses
+
+GUI:FriendsOnline
+"%d online"
+END
+
+GUI:FriendRequest
+"REQUEST"
+END
+
+GUI:FriendRequestSent
+"Sent"
+END
+
+GUI:InARoom
+"In a room · %s"
+END
+
+GUI:InAMatch
+"In a match"
+END
+
+GUI:InTheLobby
+"In the lobby"
+END
+
+GUI:FriendInvite
+"Invite"
+END
+
+GUI:FriendRequestSentTo
+"Friend request sent to %s."
+END
+
+GUI:FriendInviteSentTo
+"Invite sent to %s."
+END
+
+GUI:FriendInvites
+"%s invites you"
+END
+
+GUI:FriendJoin
+"Join"
+END
+
+GUI:FriendDecline
+"Decline"
+END
+
+GUI:FriendInviteTitle
+"Invite"
+END
+
+GUI:FriendLeaveRoom
+"Leave this room to join?"
+END
+
+GUI:FriendError
+"That did not go through."
+END
+
+GUI:FriendError_not_found
+"No player by that name."
+END
+
+GUI:FriendError_already
+"Already on your list."
+END
+
+GUI:FriendError_full
+"Your friends list is full."
+END
+
+GUI:FriendError_rate
+"Too many at once. Try again in a minute."
+END
+
+GUI:FriendError_offline
+"That player is offline."
+END
+
+GUI:FriendError_inmatch
+"That player is in a match."
+END
+
+GUI:FriendError_nogame
+"That room is gone."
+END
+
+GUI:FriendError_unavailable
+"Friends are not available right now."
+END
+
+GUI:FriendErrorRoomFull
+"That room is full."
+END
+
+GUI:FriendErrorBuild
+"That room plays another version of the game."
+END

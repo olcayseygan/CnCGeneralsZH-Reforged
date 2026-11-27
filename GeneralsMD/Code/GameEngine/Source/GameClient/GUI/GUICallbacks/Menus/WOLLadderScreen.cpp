@@ -50,6 +50,7 @@
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/PersistentStorageDefs.h"
+#include "GameNetwork/GameSpy/BuddyDefs.h"
 #include "GameNetwork/Online/OnlineQueues.h"
 #include "GameNetwork/WOLBrowser/WebBrowser.h"
 
@@ -1740,6 +1741,9 @@ void WOLLadderScreenUpdate( WindowLayout *layout, void *userData )
 			drawSkins();
 		else
 			drawLadder();
+		// the FRIENDS key and an invite's toast, as the pages that read the buddy queue have them
+		if (TheShell->isAnimFinished())
+			FriendsCornerUpdate();
 	}
 }  // end ReplayMenuUpdate
 

@@ -107,6 +107,7 @@
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/Online/OnlineQueues.h"
+#include "GameNetwork/GameSpy/BuddyDefs.h"
 #include "GameNetwork/GameSpy/BuddyThread.h"
 #include "GameNetwork/GameSpy/PersistentStorageThread.h"
 #include "GameClient/InGameUI.h"
@@ -1044,6 +1045,10 @@ void ScoreScreenUpdate( WindowLayout * layout, void *userData)
 	updateSendingHold();
 	showFoot();
 	updateRatingCard();
+	// -online: an invite that came in during the match, still alive, as the toast (package F4)
+	if( ( screenType == SCORESCREEN_INTERNET || screenType == SCORESCREEN_SKIRMISH ) && OnlineIsEnabled()
+		&& TheGameSpyInfo != NULL && TheShell->isAnimFinished() )
+		FriendsCornerUpdate();
 
 	//TheGameLogic->clearGameData() gets called after ScoreScreenInit and before the
 	//first ScoreScreenUpdate(), so it was creatively moved here so we can actually

@@ -3450,7 +3450,7 @@ namespace
 		roomPlace(theRoomChat, ROOM_LEFT + 8, APOC_CHAT_TOP + 6, APOC_RIGHT - 8, entryTop - 8);
 		GameWindow *entry = roomWindow(theRoomLayout, "TextEntryChat");
 		GameWindow *send = roomWindow(theRoomLayout, "ButtonEmote");
-		roomPlace(entry, ROOM_LEFT + 8, entryTop, APOC_RIGHT - 8 - 122 - 10, entryTop + 38);
+		roomPlace(entry, ROOM_LEFT + 8, entryTop, APOC_RIGHT - 8 - 122 - 8, entryTop + 38);
 		roomPlace(send, APOC_RIGHT - 8 - 122, entryTop, APOC_RIGHT - 8, entryTop + 38);
 		GameWindow *shown[] = { theRoomChat, entry, send };
 		for (Int i = 0; i < (Int)ARRAY_SIZE(shown); ++i)

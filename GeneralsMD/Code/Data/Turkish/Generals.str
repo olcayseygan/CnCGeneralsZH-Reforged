@@ -17663,10 +17663,6 @@ GUI:AIPersonaTooltipNormal
 "Bilgisayarın her zaman oynadığı gibi oynar."
 END
 
-GUI:AIPersonaTooltipAttacker
-"Erken ve sık, küçük dalgalarla saldırır, parasını geldiği anda harcar ve az savunma kurar."
-END
-
 GUI:AIPersonaTooltipTurtle
 "Erkenden bir savunma hattı ve geçitlere toplar kurar, geç ve büyük dalgalarla saldırır, kaybederken daha erken geri çekilir."
 END
@@ -17675,44 +17671,16 @@ GUI:AIPersonaTooltipEconomist
 "Önce gelir ve yükseltmeler, ilk saldırısı daha geç, artan parası en yoksul müttefikine gider."
 END
 
-GUI:AIPersonaTooltipAir
-"Havaalanları kurar, uçaklarını akınlara yollar, uçaksavarın güçlüyse uçaktan vazgeçer."
-END
-
 GUI:AIPersonaTooltipRusher
 "Her şeyini tek bir saldırıya koyar, Zor'da üçüncü, Kolay'da dördüncü buçuk dakikada, neredeyse hiç savunma kurmadan. Sonrasında erken ve sık saldırmaya devam eder."
-END
-
-GUI:AIPersonaTooltipRaider
-"En hızlı araçlarından küçük grupları ordunun etrafından dolaştırıp toplayıcılarına ve işçilerine yollar, Zor'da üçüncü, Kolay'da beşinci dakikadan başlayarak."
-END
-
-GUI:AIPersonaTooltipTech
-"Savunmasının arkasında süper silaha koşar, süper silah ayağa kalkınca normal bilgisayar gibi oynar. Müttefikine vurana güçlerini çevirir."
 END
 
 GUI:AIPersonaTooltipInfantry
 "Önce kışlasından yetiştirdiği bir piyade ordusu, dalgalarını nakliye araçlarıyla taşır."
 END
 
-GUI:AIPersonaTooltipArmor
-"Toplanmak için daha uzun bekleyen, daha az ama daha büyük dalgalarla saldıran tank ağırlıklı bir ordu."
-END
-
 GUI:AIPersonaTooltipSneaky
 "Görünmez olabilen birlikleri sever, generallik puanlarını önce gizliliğe harcar, kanatlardan ve arka kapıdan gelir."
-END
-
-GUI:AIPersonaTooltipOpportunist
-"Görüşteki en zayıf düşmanın ve zaten başkasıyla savaşanın peşine düşer."
-END
-
-GUI:AIPersonaTooltipSupporter
-"Müttefiklerinin saldırılarına katılır, boştaki ordusunu müttefikin üssündeki düşmanları temizlemeye yollar."
-END
-
-GUI:AIPersonaTooltipCounter
-"Ordunu daha dikkatli okur ve onu yenecek olanı kurar, Kolay'da bile."
 END
 
 GUI:AIPersonaTooltipRandom

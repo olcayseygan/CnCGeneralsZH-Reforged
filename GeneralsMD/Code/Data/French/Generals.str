@@ -17741,10 +17741,6 @@ GUI:AIPersonaTooltipNormal
 "Joue exactement comme l'ordinateur l'a toujours fait."
 END
 
-GUI:AIPersonaTooltipAttacker
-"Attaque tôt et souvent par petites vagues, dépense son argent aussitôt gagné et construit peu de défenses."
-END
-
 GUI:AIPersonaTooltipTurtle
 "Monte tôt une ligne de défense et des tourelles aux passages étroits, attaque tard par grosses vagues et se replie plus vite quand il perd."
 END
@@ -17753,44 +17749,16 @@ GUI:AIPersonaTooltipEconomist
 "Les revenus et les améliorations d'abord, une première attaque plus tardive, et son argent en trop va à l'allié le plus pauvre."
 END
 
-GUI:AIPersonaTooltipAir
-"Construit des aérodromes et envoie ses avions en sorties, et s'en détourne quand votre défense antiaérienne est forte."
-END
-
 GUI:AIPersonaTooltipRusher
 "Jette tout dans une seule attaque, à trois minutes en Difficile et quatre et demie en Facile, avec presque aucune défense. Ensuite, il continue d'attaquer tôt et souvent."
-END
-
-GUI:AIPersonaTooltipRaider
-"Envoie de petits groupes de ses véhicules les plus rapides contourner votre armée pour frapper vos collecteurs et vos ouvriers, dès la troisième minute en Difficile et la cinquième en Facile."
-END
-
-GUI:AIPersonaTooltipTech
-"Reste derrière ses défenses et fonce vers la superarme, puis joue comme l'ordinateur normal une fois qu'elle est debout. Tourne ses pouvoirs contre quiconque frappe un allié."
 END
 
 GUI:AIPersonaTooltipInfantry
 "Une armée d'infanterie formée d'abord dans ses casernes, ses vagues amenées en transports."
 END
 
-GUI:AIPersonaTooltipArmor
-"Une armée riche en chars qui attend plus longtemps pour se rassembler et attaque en vagues moins nombreuses mais plus grosses."
-END
-
 GUI:AIPersonaTooltipSneaky
 "Préfère les unités qui deviennent invisibles, dépense d'abord ses points de général en furtivité et arrive par les flancs et par la porte de derrière."
-END
-
-GUI:AIPersonaTooltipOpportunist
-"S'en prend à l'ennemi le plus faible en vue, et à quiconque se bat déjà contre quelqu'un d'autre."
-END
-
-GUI:AIPersonaTooltipSupporter
-"Se joint aux attaques de ses alliés et envoie son armée inactive chasser les ennemis de la base d'un allié."
-END
-
-GUI:AIPersonaTooltipCounter
-"Analyse mieux votre armée et construit ce qui la bat, même en Facile."
 END
 
 GUI:AIPersonaTooltipRandom

@@ -3024,10 +3024,6 @@ GUI:AIPersonaTooltipNormal
 "Plays exactly as the computer always has."
 END
 
-GUI:AIPersonaTooltipAttacker
-"Attacks early and often with smaller waves, spends its money as fast as it comes in and builds few defences."
-END
-
 GUI:AIPersonaTooltipTurtle
 "Puts up a defence line early and guns at the chokepoints, attacks late with big waves and pulls back sooner when it is losing."
 END
@@ -3036,44 +3032,16 @@ GUI:AIPersonaTooltipEconomist
 "Income and upgrades first, a later first attack, and its spare money goes to the poorest ally."
 END
 
-GUI:AIPersonaTooltipAir
-"Builds airfields and sends its aircraft out on sorties, and turns away from them when your anti-air is heavy."
-END
-
 GUI:AIPersonaTooltipRusher
 "Throws everything into one attack, three minutes in on Hard and four and a half on Easy, with almost no defences. After it, it keeps attacking early and often."
-END
-
-GUI:AIPersonaTooltipRaider
-"Sends small groups of its fastest vehicles around your army at your gatherers and workers, from the third minute on Hard and the fifth on Easy."
-END
-
-GUI:AIPersonaTooltipTech
-"Sits behind its defences and races to the superweapon, then plays as the normal computer once it stands. Turns its powers on whoever hits an ally."
 END
 
 GUI:AIPersonaTooltipInfantry
 "An infantry army trained from its barracks first, with its waves carried in transports."
 END
 
-GUI:AIPersonaTooltipArmor
-"A tank-heavy army that waits longer to gather and attacks in fewer, bigger waves."
-END
-
 GUI:AIPersonaTooltipSneaky
 "Favours units that turn invisible, spends its general's points on stealth first and comes in by the flanks and the back door."
-END
-
-GUI:AIPersonaTooltipOpportunist
-"Goes after the weakest enemy in sight, and after whoever is already fighting someone else."
-END
-
-GUI:AIPersonaTooltipSupporter
-"Joins its allies' attacks and sends its idle army to clear enemies out of an ally's base."
-END
-
-GUI:AIPersonaTooltipCounter
-"Reads your army harder and builds what beats it, even on Easy."
 END
 
 GUI:AIPersonaTooltipRandom

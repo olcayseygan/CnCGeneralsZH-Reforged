@@ -18553,22 +18553,6 @@ GUI:AIPersonaTooltip
 "Wie dieser Computerspieler spielt, unabhängig vom Schwierigkeitsgrad"
 END
 
-GUI:AIPersonaTooltipAir
-"Baut Flugfelder und schickt seine Flugzeuge auf Einsätze, dreht aber ab, wenn deine Luftabwehr stark ist."
-END
-
-GUI:AIPersonaTooltipArmor
-"Eine panzerlastige Armee, die länger sammelt und in weniger, dafür größeren Wellen angreift."
-END
-
-GUI:AIPersonaTooltipAttacker
-"Greift früh und oft mit kleineren Wellen an, gibt sein Geld so schnell aus, wie es hereinkommt, und baut wenig Verteidigung."
-END
-
-GUI:AIPersonaTooltipCounter
-"Liest deine Armee genauer und baut, was sie schlägt, sogar auf Leicht."
-END
-
 GUI:AIPersonaTooltipEconomist
 "Erst Einkommen und Upgrades, ein späterer erster Angriff, und überschüssiges Geld geht an den ärmsten Verbündeten."
 END
@@ -18581,14 +18565,6 @@ GUI:AIPersonaTooltipNormal
 "Spielt genau so, wie der Computer immer gespielt hat."
 END
 
-GUI:AIPersonaTooltipOpportunist
-"Geht auf den schwächsten Feind in Sicht los und auf jeden, der schon mit jemand anderem kämpft."
-END
-
-GUI:AIPersonaTooltipRaider
-"Schickt kleine Gruppen seiner schnellsten Fahrzeuge um deine Armee herum zu deinen Sammlern und Arbeitern, auf Schwer ab der dritten Minute, auf Leicht ab der fünften."
-END
-
 GUI:AIPersonaTooltipRandom
 "Rusher, Ökonom oder Igel, beim Start der Partie je nach General ausgelost."
 END
@@ -18599,14 +18575,6 @@ END
 
 GUI:AIPersonaTooltipSneaky
 "Bevorzugt Einheiten, die sich tarnen, gibt seine Generalspunkte zuerst für Tarnung aus und kommt über die Flanken und die Hintertür."
-END
-
-GUI:AIPersonaTooltipSupporter
-"Schließt sich den Angriffen seiner Verbündeten an und schickt seine untätige Armee, um Feinde aus der Basis eines Verbündeten zu räumen."
-END
-
-GUI:AIPersonaTooltipTech
-"Sitzt hinter seiner Verteidigung und rast zur Superwaffe, danach spielt er wie der normale Computer, sobald sie steht. Richtet seine Fähigkeiten gegen jeden, der einen Verbündeten angreift."
 END
 
 GUI:AIPersonaTooltipTurtle

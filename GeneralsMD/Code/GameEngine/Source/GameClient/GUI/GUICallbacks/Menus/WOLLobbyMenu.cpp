@@ -1002,7 +1002,7 @@ static void placeSideColumn( Bool picked )
 {
 	s_playersTop = picked ? 558 : UIStyle::MENU_CONTENT_TOP;
 	LobbyPlaceOnBoard( lobbyWindow( "PanelPlayers" ), 1334, s_playersTop, 1860, 946 );
-	LobbyPlaceOnBoard( listboxLobbyPlayers, 1334, s_playersTop + 60, 1860, 946 );
+	LobbyPlaceOnBoard( listboxLobbyPlayers, 1334, s_playersTop + 60, 1860, 944 );		// 32 over the keys, online_layout.py
 	if (GameWindow *box = lobbyWindow( "PanelPicked" ))
 		box->winHide( !picked );
 }

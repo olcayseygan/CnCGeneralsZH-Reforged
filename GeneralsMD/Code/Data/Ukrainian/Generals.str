@@ -22014,6 +22014,10 @@ GUI:RandomMapAnyTemplate
 "Будь-який"
 END
 
+GUI:RandomMapAod
+"Art of Defense"
+END
+
 GUI:RandomMapSize
 "Розмір карти"
 END

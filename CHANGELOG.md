@@ -8,6 +8,14 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Art of Defense on random maps, a first playable version
+
+Pick Art of Defense in the Random tab's list of map types, or start `-randommap <seed> [players] aod`, and you get a new tower defence map every seed: two to six players share one base on a plateau in the middle, and the waves walk in from one, two or three points at the map's edge, each down its own winding trench to your base. The trench walls are cliffs, so the waves stay on their road and you build your defences on the high ground beside it, where every turn is a narrow place to hold. Paths never cross, and every map is rebuilt from its name on each machine, so nothing has to be sent.
+
+Twenty waves of ordinary units, Rebels and Red Guards first, Paladins and Gattling tanks by the end, more of them for every player in the match and with ranks from wave 8 on. Every fifth wave an Overlord with several times its health leads the column. Each kill pays every player, and so does every wave as it starts. A unit that reaches the base is gone and costs a life, the Overlord five; lose twenty and the base falls, see off all twenty waves and you win together. No more than 80 attackers walk at once, so a late wave cannot pile up enough tanks to bring the game down the way the old Art of Defense maps did.
+
+This is the prototype: no wave counter on screen yet, and the numbers are a first guess. Saves from before this change still load; the new mode needs this build on every machine.
+
 ## Key Grid: the command bar laid out like your keyboard
 
 Layout under Options > Interface has a fourth choice, Key Grid. The commands stand in three staggered rows of six at full size, Q W E R T Y over A S D F G H over Z X C V B N, the way your left hand lies on the keys, and with Grid Keys ticked every button wears its letter and that letter presses it. You read the key off the bar instead of learning one per unit.

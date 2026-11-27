@@ -22210,6 +22210,10 @@ GUI:RandomMapAnyTemplate
 "Удиви меня"
 END
 
+GUI:RandomMapAod
+"Art of Defense"
+END
+
 GUI:RandomMapSize
 "Размер карты"
 END

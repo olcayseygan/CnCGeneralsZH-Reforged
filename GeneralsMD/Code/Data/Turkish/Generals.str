@@ -19083,6 +19083,10 @@ GUI:RandomMapAnyTemplate
 "Sürpriz yap"
 END
 
+GUI:RandomMapAod
+"Art of Defense"
+END
+
 TOOLTIP:MapListCrowded
 "Sekizden fazla oyuncuda yalnız her oyuncuya bir başlangıç noktası olan haritalar listelenir; Rastgele sekmesi her sayıya bir harita üretir"
 END

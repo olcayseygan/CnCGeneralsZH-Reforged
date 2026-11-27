@@ -18945,6 +18945,10 @@ GUI:RandomMapAnyTemplate
 "Surprenez-moi"
 END
 
+GUI:RandomMapAod
+"Art of Defense"
+END
+
 GUI:RandomMapSize
 "Taille de carte"
 END

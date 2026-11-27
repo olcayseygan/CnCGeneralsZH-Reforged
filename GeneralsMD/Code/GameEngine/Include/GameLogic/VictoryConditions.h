@@ -46,6 +46,7 @@ enum VictoryType
 	VICTORY_NOUNITS = 2,
 	VICTORY_DIRECTSTRIKE = 4,		///< Direct Strike: a player is out when his team's fortress dies, and nothing else counts (fork)
 	VICTORY_APOCALYPSE = 8,	///< Apocalypse: the allied seats standing do not win; the match ends when the last of them falls (fork)
+	VICTORY_AOD = 16,				///< Art of Defense: the allied seats win only once every wave is seen off (AodDirector, fork)
 };
 
 /**

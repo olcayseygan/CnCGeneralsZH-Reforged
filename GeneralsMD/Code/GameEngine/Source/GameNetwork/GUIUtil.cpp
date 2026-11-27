@@ -1314,6 +1314,7 @@ void DrawMapListTab(GameWindow *window, WinInstanceData *instData)
 void positionStartSpots(AsciiString mapName, GameWindow *buttonMapStartPositions[], GameWindow *mapWindow);
 
 static const char *const theRandomMapPrefsFile = "RandomMap.ini";
+static const char *const theAodRow = "style:aod";		// the type list's Art of Defense row: a style, not a shipped map
 
 static const char *theRandomLayout = NULL;
 static GameWindow *theRandomParent = NULL;
@@ -1408,7 +1409,18 @@ static void fillTemplateList(void)
 	Int selected = GadgetListBoxAddEntryText(theTemplateList, TheGameText->fetch("GUI:RandomMapAnyTemplate"), color, -1, column);
 	GadgetListBoxSetItemData(theTemplateList, (void *)(intptr_t)0, selected);
 	theTemplates.push_back(AsciiString::TheEmptyString);
+	// the Art of Defense style, a row of its own: no shipped map behind it, the generator's aod ground
 	Bool found = FALSE;
+	{
+		const Int at = GadgetListBoxAddEntryText(theTemplateList, TheGameText->fetch("GUI:RandomMapAod"), color, -1, column);
+		GadgetListBoxSetItemData(theTemplateList, (void *)(intptr_t)theTemplates.size(), at);
+		theTemplates.push_back(AsciiString(theAodRow));
+		if (theRandomTemplate == theAodRow)
+		{
+			selected = at;
+			found = TRUE;
+		}
+	}
 	for (size_t i = 0; i < rows.size(); ++i)
 	{
 		Int at = GadgetListBoxAddEntryText(theTemplateList, rows[i].name, color, -1, column);
@@ -1557,8 +1569,13 @@ static AsciiString stageRoomRandomMap(const GameInfo *game, Int size, const Asci
 	RandomMapSettings settings;
 	settings.m_seed = (Int)((Clock_Milliseconds() + 7919u * ++theRolls) & 0x7fffffff);
 	settings.m_numPlayers = players;
-	settings.m_playableCells = RandomMapGenerator::cellsFor((RandomMapSize)size, players, templatePath);
-	settings.m_template = templatePath;
+	if (templatePath == theAodRow)
+		settings.m_style = RandomMapGenerator::styleNamed("aod");	// its own ground: the size is the style's
+	else
+	{
+		settings.m_playableCells = RandomMapGenerator::cellsFor((RandomMapSize)size, players, templatePath);
+		settings.m_template = templatePath;
+	}
 	AsciiString map;
 	stageRandomMap(settings, map);
 	map.toLower();

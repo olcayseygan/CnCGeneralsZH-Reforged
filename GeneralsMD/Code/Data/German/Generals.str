@@ -20282,6 +20282,10 @@ GUI:RandomMapAnyTemplate
 "Überrasch mich"
 END
 
+GUI:RandomMapAod
+"Art of Defense"
+END
+
 GUI:RandomMapSize
 "Kartengröße"
 END

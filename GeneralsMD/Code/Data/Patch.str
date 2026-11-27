@@ -4465,6 +4465,10 @@ GUI:RandomMapAnyTemplate
 "Surprise me"
 END
 
+GUI:RandomMapAod
+"Art of Defense"
+END
+
 TOOLTIP:MapListCrowded
 "With more than eight players only the maps with a start position for every player are listed; the Random tab builds one for any number"
 END

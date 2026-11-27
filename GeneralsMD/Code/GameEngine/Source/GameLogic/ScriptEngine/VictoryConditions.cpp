@@ -52,6 +52,7 @@
 #include "GameClient/MessageBox.h"
 #include "GameClient/GameClient.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/AodDirector.h"
 #include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/DirectStrikeStats.h"
 #include "GameLogic/PartitionManager.h"
@@ -191,6 +192,9 @@ void VictoryConditions::update( void )
 		// in Apocalypse the seats are one alliance from the start and the dead are no player here, so
 		// the match is decided only once nobody is left standing
 		if (ISSET(APOCALYPSE) && alive != NULL)
+			multipleAlliances = true;
+		// in Art of Defense the seats are one alliance too, and win only once the director says every wave is seen off
+		if (ISSET(AOD) && alive != NULL && !TheAodDirector->hasWon())
 			multipleAlliances = true;
 
 		if (!multipleAlliances)

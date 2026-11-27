@@ -836,12 +836,18 @@ static const Int RMG_STYLE_LANE = RMG_STYLE_COUNT + 1;
 	<players> [size] apocalypse". Any player count; the seed picks the look and the gates' bearing. */
 static const Int RMG_STYLE_APOCALYPSE = RMG_STYLE_COUNT + 2;
 
+/** The Art of Defense map (RMGLayout::buildAod), a third: "-randommap <seed> [players] [size] aod". Two to
+	six seats; the seed picks the look, the spawn count and the rows each path winds through. */
+static const Int RMG_STYLE_AOD = RMG_STYLE_COUNT + 3;
+
 static const char *rmgStyleName( Int style )
 {
 	if( style == RMG_STYLE_LANE )
 		return "lane";
 	if( style == RMG_STYLE_APOCALYPSE )
 		return "apocalypse";
+	if( style == RMG_STYLE_AOD )
+		return "aod";
 	return style > 0 && style <= RMG_STYLE_COUNT ? theStyles[style - 1].m_name : "";
 }
 
@@ -1249,6 +1255,7 @@ public:
 private:
 	void buildLane( void );
 	void buildApocalypse( void );
+	void buildAod( void );
 	void placeBowlStarts( void );
 	Real bowlRimAt( Real unitX, Real unitY ) const;
 	Real bowlHeight( Real cellX, Real cellY, Real noise ) const;
@@ -11078,6 +11085,344 @@ void RMGLayout::buildApocalypse( void )
 }
 
 //-----------------------------------------------------------------------------
+// The Art of Defense map
+//-----------------------------------------------------------------------------
+
+/* Art of Defense plays on this map (AodDirector.h): the seats share one base on a plateau in the middle
+	and the waves walk in from one to three points at the map's edge, each down its own path to the base.
+	A path is a trench cut into the plateau. Its walls are cliffs, so no wave climbs out of it and no seat's
+	vehicle drives down into it but through the base, and the high ground on both sides is where the
+	defences go. Each path winds in its own sector of the map: arcs round the middle at falling radii,
+	joined by short radial steps, so two paths never cross and every step is a narrow place the defence can
+	hold. The last step is a ramp up into the base. The names the director looks up:
+
+	AOD_Base                waypoint, the base's middle, where every path ends; and a trigger area of the
+	                        same name, the base's outline, which a wave unit leaks through when it crosses
+	AOD_Spawn_1 to _N       waypoints, where each path's waves come in at the map's edge
+	AOD_Path_N_1 to _K      waypoints down path N, AOD_Spawn_N linked to the first, the last to AOD_Base */
+#define RMG_AOD_FLOOR			24.0f	///< height bytes of a path's floor
+#define RMG_AOD_HIGH			62.0f	///< and of the plateau: 38 bytes, 24 world units, over the floor
+#define RMG_AOD_FACE			1.6f	///< cells a trench wall rises over: 24 bytes a cell, 15 world units, a cliff
+#define RMG_AOD_ROW				34.0f	///< cells between two arcs of a path, middle to middle
+#define RMG_AOD_ARC_HALF		5.5f	///< cells from a path's middle to its wall along an arc
+#define RMG_AOD_STEP_HALF		3.5f	///< and down a step between two arcs: the narrow places
+#define RMG_AOD_RAMP_HALF		4.5f	///< and up the last one into the base
+#define RMG_AOD_BASE_LEAST		48.0f	///< cells of base radius at the least
+#define RMG_AOD_BASE_PER_SEAT	9.0f	///< and each seat's share of it
+#define RMG_AOD_OUTER			24.0f	///< cells from the outermost arc to the map's edge
+#define RMG_AOD_SPAWN_IN		6.0f	///< cells in from the edge a spawn stands
+#define RMG_AOD_WAYPOINT_EVERY	22.0f	///< cells between two waypoints of a path, at the most
+#define RMG_AOD_WOBBLE			3.5f	///< cells an arc wanders in and out
+/* Radians an arc's end lies off its path's middle bearing at the most: a path of 300 to 700 cells, two to
+	five game minutes of a Rebel's walk. The first build let one spawn's arcs swing 144 degrees either way,
+	2006 cells, and wave 1 had not reached the base twelve minutes in. */
+#define RMG_AOD_ARC_MOST		0.6f
+#define RMG_AOD_SEATS_MOST		6
+#define RMG_AOD_SPAWNS_MOST		3
+#define RMG_AOD_PROPS_MOST		1500	///< trees and stones on the whole map at most
+
+struct RMGAodShape
+{
+	Int m_spawns;			///< paths, one to three
+	Int m_rows;				///< arcs each path winds through
+	Real m_baseRadius;		///< cells
+	Int m_cells;			///< the playable square's side
+};
+
+static RMGAodShape rmgAodShape( Int seed, Int players )
+{
+	RMGAodShape shape;
+	shape.m_spawns = 1 + (Int)( hashCell( (UnsignedInt)seed + 71001U, 0, 0 ) % (UnsignedInt)RMG_AOD_SPAWNS_MOST );
+	shape.m_rows = 2 + (Int)( hashCell( (UnsignedInt)seed + 71003U, 0, 0 ) % 2U );
+	const Int seats = std::max( (Int)RandomMapGenerator::MIN_PLAYERS, std::min( players, (Int)RMG_AOD_SEATS_MOST ) );
+	shape.m_baseRadius = RMG_AOD_BASE_LEAST + RMG_AOD_BASE_PER_SEAT * (Real)seats;
+	shape.m_cells = 2 * (Int)( shape.m_baseRadius + RMG_AOD_ROW * (Real)shape.m_rows + RMG_AOD_OUTER + 0.5f );
+	return shape;
+}
+
+void RMGLayout::buildAod( void )
+{
+	m_style = NULL;
+	m_styleScale = 1.0f;
+	m_skeleton = FALSE;
+	m_type = &theMapTypes[RMG_MAP_PLAINS];
+	m_biome = &theBiomes[rmgBiomeFor( m_settings.m_seed )];
+	m_timeOfDay = rmgTimeOfDayFor( m_settings.m_seed );
+	m_snowy = rmgSnowsOn( m_settings.m_seed );
+	const UnsignedInt seed = (UnsignedInt)m_settings.m_seed;
+	seedPermutation( m_settings.m_seed, m_perm );
+
+	const RMGAodShape shape = rmgAodShape( m_settings.m_seed, m_settings.m_numPlayers );
+	const Int players = m_settings.m_numPlayers;
+	const Real side = (Real)m_settings.m_playableCells, half = 0.5f * side;
+	const Real baseR = shape.m_baseRadius;
+	m_width = m_settings.m_playableCells + 2 * RMG_BORDER_CELLS;
+	m_height = m_width;
+	m_waterHeight = 0.0f;		// no water anywhere
+	m_playable = TRUE;
+	m_starts.clear();
+	m_objects.clear();
+	m_waypointLinks.clear();
+	m_lakes.clear();
+	m_areas.clear();
+	m_sites.clear();
+	m_routeLock.clear();
+	const Int cells = m_width * m_height;
+	m_inLake.assign( cells, 0 );
+
+	// the plateau: flat in and round the base, rolling a little past it
+	std::vector<Real> high( cells );
+	for( Int y = 0; y < m_height; y++ )
+	{
+		for( Int x = 0; x < m_width; x++ )
+		{
+			const Real dx = (Real)( x - RMG_BORDER_CELLS ) - half, dy = (Real)( y - RMG_BORDER_CELLS ) - half;
+			const Real roll = rmgUnit( ( sqrtf( dx * dx + dy * dy ) - baseR - 6.0f ) / 20.0f );
+			high[cellIndex( x, y )] = RMG_AOD_HIGH + 6.0f * roll * fractalNoise( m_perm, (Real)x * 0.03f + 11.3f, (Real)y * 0.03f + 47.9f, 3 );
+		}
+	}
+
+	/* The paths, as points half a cell apart along each, with the half-width and the floor there, and the
+		spots of their waypoints. A path comes in from the edge on the bearing of its first arc's end, then
+		runs each arc to its other end and steps in to the next, the ends taking turns either side of the
+		path's sector, and from its last arc climbs into the base. */
+	struct AodSample { Real x, y, half, floor; };
+	std::vector<AodSample> samples;
+	std::vector< std::vector<RMGPoint> > spots( shape.m_spawns );
+	std::vector<Real> lengths( shape.m_spawns, 0.0f );
+	const Real sector = 2.0f * PI / (Real)shape.m_spawns;
+	const Real turn = 2.0f * PI * hashUnit( seed + 71005U, 0, 0 );
+	const Real reach = std::min( ( shape.m_spawns == 1 ? 0.40f : 0.34f ) * sector, RMG_AOD_ARC_MOST );
+	const Real lastArc = baseR + RMG_AOD_ROW;
+	for( Int n = 0; n < shape.m_spawns; n++ )
+	{
+		const Real middle = turn + sector * (Real)n;
+		Real way = 0.0f, sinceSpot = 0.0f;
+		auto at = [&]( Real r, Real bearing ) -> RMGPoint
+		{
+			const RMGPoint p = { half + r * Cos( bearing ), half + r * Sin( bearing ) };
+			return p;
+		};
+		// one stretch, from polar (r1, a1) to (r2, a2); an arc wanders in and out along the way
+		auto stretch = [&]( Real r1, Real a1, Real r2, Real a2, Real halfWidth, Bool arc, Bool ramp, Int row )
+		{
+			const Real length = std::max( fabsf( r2 - r1 ), 0.5f * ( r1 + r2 ) * fabsf( a2 - a1 ) );
+			const Int steps = std::max( 1, (Int)( length / 0.5f ) );
+			for( Int s = 1; s <= steps; s++ )
+			{
+				const Real t = (Real)s / (Real)steps;
+				const Real bearing = a1 + ( a2 - a1 ) * t;
+				Real r = r1 + ( r2 - r1 ) * t;
+				if( arc )
+					r += RMG_AOD_WOBBLE * 4.0f * t * ( 1.0f - t ) * fractalNoise( m_perm, bearing * 2.7f + 13.1f * (Real)n, 5.7f * (Real)row + 3.3f, 2 );
+				const RMGPoint p = at( r, bearing );
+				AodSample sample = { p.m_cellX, p.m_cellY, halfWidth, RMG_AOD_FLOOR };
+				if( ramp )
+					sample.floor += ( RMG_AOD_HIGH - RMG_AOD_FLOOR ) * rmgUnit( ( lastArc - 6.0f - r ) / ( lastArc - 6.0f - baseR ) );
+				samples.push_back( sample );
+				way += length / (Real)steps;
+				sinceSpot += length / (Real)steps;
+				if( s == steps || sinceSpot >= RMG_AOD_WAYPOINT_EVERY )
+				{
+					spots[n].push_back( p );
+					sinceSpot = 0.0f;
+				}
+			}
+		};
+		Int flip = ( hashCell( seed + 71007U, n, 0 ) & 1U ) ? 1 : -1;
+		Real bearing = middle + (Real)flip * reach * ( 0.85f + 0.15f * hashUnit( seed + 71009U, n, 0 ) );
+		// in from the edge: the spawn stands where the bearing leaves the playable square
+		Real edge = lastArc + RMG_AOD_ROW * (Real)( shape.m_rows - 1 );
+		for( ; edge < side; edge += 1.0f )
+		{
+			const RMGPoint p = at( edge + 1.0f, bearing );
+			if( p.m_cellX < RMG_AOD_SPAWN_IN || p.m_cellY < RMG_AOD_SPAWN_IN || p.m_cellX > side - RMG_AOD_SPAWN_IN || p.m_cellY > side - RMG_AOD_SPAWN_IN )
+				break;
+		}
+		spots[n].push_back( at( edge, bearing ) );
+		// the trench runs on out to the edge past the spawn, so the waves come out of the map's side
+		for( Real r = edge; r < edge + RMG_AOD_SPAWN_IN + 4.0f; r += 0.5f )
+		{
+			const RMGPoint p = at( r, bearing );
+			const AodSample sample = { p.m_cellX, p.m_cellY, RMG_AOD_ARC_HALF, RMG_AOD_FLOOR };
+			samples.push_back( sample );
+		}
+		Real r = lastArc + RMG_AOD_ROW * (Real)( shape.m_rows - 1 );
+		stretch( edge, bearing, r, bearing, RMG_AOD_ARC_HALF, FALSE, FALSE, 0 );
+		for( Int row = 0; row < shape.m_rows; row++ )
+		{
+			flip = -flip;
+			const Real end = middle + (Real)flip * reach * ( 0.85f + 0.15f * hashUnit( seed + 71009U, n, row + 1 ) );
+			stretch( r, bearing, r, end, RMG_AOD_ARC_HALF, TRUE, FALSE, row );
+			bearing = end;
+			if( row + 1 < shape.m_rows )
+			{
+				stretch( r, bearing, r - RMG_AOD_ROW, bearing, RMG_AOD_STEP_HALF, FALSE, FALSE, row );
+				r -= RMG_AOD_ROW;
+			}
+		}
+		stretch( r, bearing, baseR - 8.0f, bearing, RMG_AOD_RAMP_HALF, FALSE, TRUE, shape.m_rows );
+		lengths[n] = way;
+	}
+
+	// the trenches cut into the plateau, the union of every sample's: a flat floor, cliff walls
+	std::vector<Real> heights( high );
+	std::vector<Real> nearPath( cells, 1.0e9f );		///< cells from the nearest path's wall foot, negative on a floor
+	for( UnsignedInt s = 0; s < samples.size(); s++ )
+	{
+		const AodSample& sample = samples[s];
+		const Real outer = sample.half + RMG_AOD_FACE + 8.0f;
+		const Int x0 = std::max( 0, (Int)( sample.x - outer ) + RMG_BORDER_CELLS ), x1 = std::min( m_width - 1, (Int)( sample.x + outer ) + 1 + RMG_BORDER_CELLS );
+		const Int y0 = std::max( 0, (Int)( sample.y - outer ) + RMG_BORDER_CELLS ), y1 = std::min( m_height - 1, (Int)( sample.y + outer ) + 1 + RMG_BORDER_CELLS );
+		for( Int y = y0; y <= y1; y++ )
+		{
+			for( Int x = x0; x <= x1; x++ )
+			{
+				const Int i = cellIndex( x, y );
+				const Real dx = (Real)( x - RMG_BORDER_CELLS ) - sample.x, dy = (Real)( y - RMG_BORDER_CELLS ) - sample.y;
+				const Real d = sqrtf( dx * dx + dy * dy ) - sample.half;
+				if( d < nearPath[i] )
+					nearPath[i] = d;
+				const Real wall = sample.floor + ( high[i] - sample.floor ) * rmgUnit( d / RMG_AOD_FACE );
+				if( wall < heights[i] )
+					heights[i] = wall;
+			}
+		}
+	}
+	m_heights.assign( cells, (UnsignedByte)RMG_AOD_HIGH );
+	for( Int i = 0; i < cells; i++ )
+		m_heights[i] = (UnsignedByte)(Int)( std::max( 0.0f, std::min( 255.0f, heights[i] ) ) + 0.5f );
+
+	Int waypointID = 1;
+	auto addWaypoint = [&]( const AsciiString& name, Real cellX, Real cellY ) -> Int
+	{
+		RMGObject waypoint;
+		waypoint.m_templateName = "*Waypoints/Waypoint";
+		waypoint.m_uniqueID = name;
+		waypoint.m_worldX = cellX * MAP_XY_FACTOR;
+		waypoint.m_worldY = cellY * MAP_XY_FACTOR;
+		waypoint.m_angle = 0.0f;
+		waypoint.m_waypointID = waypointID++;
+		waypoint.m_flags = 0;
+		m_objects.push_back( waypoint );
+		return waypoint.m_waypointID;
+	};
+
+	// the seats round the base's middle, each with a dock on the way in to it
+	AsciiString name;
+	for( Int i = 0; i < players; i++ )
+	{
+		const Real bearing = turn + 0.5f * PI + 2.0f * PI * (Real)i / (Real)players;
+		const RMGPoint start = { half + 0.55f * baseR * Cos( bearing ), half + 0.55f * baseR * Sin( bearing ) };
+		m_starts.push_back( start );
+		name.format( "Player_%d_Start", i + 1 );
+		addWaypoint( name, start.m_cellX, start.m_cellY );
+		reserveSite( start.m_cellX, start.m_cellY, 20.0f );
+		const Real dockR = 0.55f * baseR - 16.0f;
+		name.format( "SupplyDock %d", i + 1 );
+		addObject( "SupplyDock", name.str(), half + dockR * Cos( bearing ), half + dockR * Sin( bearing ), bearing );
+	}
+	const Int baseID = addWaypoint( AsciiString( "AOD_Base" ), half, half );
+	{
+		RMGArea base;
+		base.m_name = "AOD_Base";
+		for( Int k = 0; k < 32; k++ )
+		{
+			const Real bearing = 2.0f * PI * (Real)k / 32.0f;
+			const RMGPoint point = { half + baseR * Cos( bearing ), half + baseR * Sin( bearing ) };
+			base.m_polygon.push_back( point );
+		}
+		m_areas.push_back( base );
+	}
+	for( Int n = 0; n < shape.m_spawns; n++ )
+	{
+		name.format( "AOD_Spawn_%d", n + 1 );
+		Int previous = addWaypoint( name, spots[n][0].m_cellX, spots[n][0].m_cellY );
+		for( UnsignedInt k = 1; k < spots[n].size(); k++ )
+		{
+			name.format( "AOD_Path_%d_%d", n + 1, (Int)k );
+			const Int id = addWaypoint( name, spots[n][k].m_cellX, spots[n][k].m_cellY );
+			m_waypointLinks.push_back( std::make_pair( previous, id ) );
+			previous = id;
+		}
+		m_waypointLinks.push_back( std::make_pair( previous, baseID ) );
+	}
+
+	/* The ground: the floors bare dirt, the walls and the rim along them rock, the base worn, the plateau
+		grass broken by patches of the second class. */
+	m_terrain.assign( cells, (UnsignedByte)RMG_TERRAIN_GRASS );
+	m_passable.assign( cells, 0 );
+	for( Int y = 0; y + 1 < m_height; y++ )
+	{
+		for( Int x = 0; x + 1 < m_width; x++ )
+		{
+			const Int i = cellIndex( x, y );
+			const Real dx = (Real)( x - RMG_BORDER_CELLS ) + 0.5f - half, dy = (Real)( y - RMG_BORDER_CELLS ) + 0.5f - half;
+			const Real wander = fractalNoise( m_perm, (Real)x * 0.09f + 5.3f, (Real)y * 0.09f + 61.7f, 2 );
+			const Bool cliff = cellSpanWorld( x, y ) > RMG_CLIFF_WORLD_SPAN;
+			UnsignedByte terrainClass = RMG_TERRAIN_GRASS;
+			if( cliff || ( nearPath[i] > 0.0f && nearPath[i] < 2.5f + wander ) )
+				terrainClass = RMG_TERRAIN_ROCK;
+			else if( nearPath[i] <= 0.0f )
+				terrainClass = RMG_TERRAIN_DIRT;
+			else if( dx * dx + dy * dy < baseR * baseR )
+				terrainClass = fractalNoise( m_perm, (Real)x * 0.06f + 3.1f, (Real)y * 0.06f + 9.4f, 2 ) > 0.0f ? RMG_TERRAIN_DIRT : RMG_TERRAIN_GRASS;
+			else if( fractalNoise( m_perm, (Real)x * 0.05f + 87.3f, (Real)y * 0.05f + 45.6f, 3 ) > 0.3f )
+				terrainClass = RMG_TERRAIN_SAND;
+			m_terrain[i] = terrainClass;
+			m_passable[i] = insidePlayable( x, y ) && !cliff ? 1 : 0;
+		}
+	}
+
+	// trees and stones on the plateau in clumps, off the rims and out of the base, thinned to RMG_AOD_PROPS_MOST
+	enum { PROP_NONE, PROP_TREE, PROP_ROCK };
+	auto propAt = [&]( Int x, Int y ) -> Int
+	{
+		const Int i = cellIndex( x, y );
+		if( !m_passable[i] || nearPath[i] < 5.0f )
+			return PROP_NONE;
+		const Real dx = (Real)( x - RMG_BORDER_CELLS ) + 0.5f - half, dy = (Real)( y - RMG_BORDER_CELLS ) + 0.5f - half;
+		if( dx * dx + dy * dy < ( baseR + 8.0f ) * ( baseR + 8.0f ) )
+			return PROP_NONE;
+		const Real roll = (Real)( hashCell( seed + 71011U, x, y ) % 1024U ) / 1024.0f;
+		const Real clump = fractalNoise( m_perm, (Real)x * 0.05f + 7.1f, (Real)y * 0.05f + 3.9f, 3 );
+		if( roll < ( clump > 0.3f ? 0.08f : 0.004f ) * m_biome->m_treeShare )
+			return PROP_TREE;
+		return roll > 0.997f ? PROP_ROCK : PROP_NONE;
+	};
+	const Int lo = RMG_BORDER_CELLS, hi = RMG_BORDER_CELLS + m_settings.m_playableCells;
+	Int propsWanted = 0;
+	for( Int y = lo; y < hi; y++ )
+		for( Int x = lo; x < hi; x++ )
+			propsWanted += propAt( x, y ) != PROP_NONE ? 1 : 0;
+	const UnsignedInt keep = propsWanted <= RMG_AOD_PROPS_MOST ? 4096U
+		: (UnsignedInt)( 4096.0f * (Real)RMG_AOD_PROPS_MOST / (Real)propsWanted );
+	Int propID = 1;
+	AsciiString uniqueID;
+	for( Int y = lo; y < hi; y++ )
+	{
+		for( Int x = lo; x < hi; x++ )
+		{
+			const Int prop = propAt( x, y );
+			if( prop == PROP_NONE || hashCell( seed + 71013U, x, y ) % 4096U >= keep )
+				continue;
+			const UnsignedInt hash = hashCell( seed + 71011U, x, y );
+			const char *templateName = prop == PROP_TREE ? m_biome->m_trees[( hash >> 10 ) % (UnsignedInt)RMG_BIOME_TREES]
+				: m_biome->m_rocks[( hash >> 10 ) % (UnsignedInt)RMG_BIOME_ROCKS];
+			uniqueID.format( "Prop %d", propID++ );
+			addObject( templateName, uniqueID.str(), (Real)( x - RMG_BORDER_CELLS ) + 0.5f, (Real)( y - RMG_BORDER_CELLS ) + 0.5f,
+				(Real)( ( hash >> 14 ) % 8U ) * PI * 0.25f );
+		}
+	}
+
+	DEBUG_LOG(( "random map: aod %d spawns, %d rows, base radius %.0f, %d cells, paths %.0f %.0f %.0f cells long, %d props\n",
+		shape.m_spawns, shape.m_rows, baseR, m_settings.m_playableCells, lengths[0], shape.m_spawns > 1 ? lengths[1] : 0.0f,
+		shape.m_spawns > 2 ? lengths[2] : 0.0f, propID - 1 ));
+
+	buildBlends();
+}
+
+//-----------------------------------------------------------------------------
 // The whole layout
 //-----------------------------------------------------------------------------
 
@@ -11111,6 +11456,12 @@ void RMGLayout::build( const RandomMapSettings& settings, Bool skeleton )
 	if( m_settings.m_style == RMG_STYLE_APOCALYPSE )
 	{
 		buildApocalypse();
+		restoreFPMode( callersFPMode );
+		return;
+	}
+	if( m_settings.m_style == RMG_STYLE_AOD )
+	{
+		buildAod();
 		restoreFPMode( callersFPMode );
 		return;
 	}
@@ -11706,8 +12057,19 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 	if( settings.m_numPlayers < MIN_PLAYERS ) settings.m_numPlayers = MIN_PLAYERS;
 	if( settings.m_numPlayers > MAX_PLAYERS ) settings.m_numPlayers = MAX_PLAYERS;
 
-	if( settings.m_style < 0 || settings.m_style > RMG_STYLE_APOCALYPSE )
+	if( settings.m_style < 0 || settings.m_style > RMG_STYLE_AOD )
 		settings.m_style = 0;
+
+	// one ground for the seed and the seats: the size asked for is not taken
+	if( settings.m_style == RMG_STYLE_AOD )
+	{
+		if( settings.m_numPlayers > RMG_AOD_SEATS_MOST )
+			settings.m_numPlayers = RMG_AOD_SEATS_MOST;
+		settings.m_template.clear();
+		settings.m_templateCRC = 0;
+		settings.m_playableCells = rmgAodShape( settings.m_seed, settings.m_numPlayers ).m_cells;
+		return;
+	}
 
 	// the ground grows with the seats: never smaller than the walled clearing and a belt round it
 	if( settings.m_style == RMG_STYLE_APOCALYPSE )
@@ -11796,7 +12158,7 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 
 Int RandomMapGenerator::styleNamed( const char *name )
 {
-	for( Int style = 1; style <= RMG_STYLE_APOCALYPSE; style++ )
+	for( Int style = 1; style <= RMG_STYLE_AOD; style++ )
 	{
 		if( AsciiString( name ).compareNoCase( rmgStyleName( style ) ) == 0 )
 			return style;
@@ -12629,7 +12991,8 @@ static const char *rulesFor( const AsciiString& path, Int *sizeOut )
 
 	RandomMapSettings settings;
 	if( !settingsFromGeneratedPath( folder, settings )
-			|| ( settings.m_style != 0 && settings.m_style != RMG_STYLE_LANE && settings.m_style != RMG_STYLE_APOCALYPSE ) )
+			|| ( settings.m_style != 0 && settings.m_style != RMG_STYLE_LANE && settings.m_style != RMG_STYLE_APOCALYPSE
+				&& settings.m_style != RMG_STYLE_AOD ) )
 		return NULL;
 	if( settings.m_style == RMG_STYLE_LANE && rmgLaneTwilight( settings.m_seed ) )
 		return NULL;

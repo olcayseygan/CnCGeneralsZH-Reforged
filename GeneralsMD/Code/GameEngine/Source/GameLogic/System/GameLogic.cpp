@@ -94,6 +94,7 @@
 #include "GameLogic/FPUControl.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/ApocalypseDirector.h"
+#include "GameLogic/AodDirector.h"
 #include "GameLogic/DayNightCycle.h"
 #include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/DirectStrikeStats.h"
@@ -487,6 +488,7 @@ void GameLogic::reset( void )
 	TheDirectStrikeDirector->reset();
 	TheDirectStrikeStats->reset();
 	TheApocalypseDirector->reset();
+	TheAodDirector->reset();
 	m_dayNight = FALSE;	// a load sets it from the save before its objects, a new game from its options
 	DayNight_resetPicture();	// the shadow's darkness back; the next map keeps its own light
 
@@ -2293,6 +2295,11 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	TheApocalypseDirector->newMap( loadingSaveGame );
 	if (TheApocalypseDirector->isActive())
 		TheVictoryConditions->setVictoryConditions(VICTORY_NOUNITS | VICTORY_NOBUILDINGS | VICTORY_APOCALYPSE);
+
+	// an Art of Defense map turns that mode on (AodDirector.h): the seats win together once every wave is seen off
+	TheAodDirector->newMap( loadingSaveGame );
+	if (TheAodDirector->isActive())
+		TheVictoryConditions->setVictoryConditions(VICTORY_NOUNITS | VICTORY_NOBUILDINGS | VICTORY_AOD);
 
 	/* The day and night cycle stands down under both modes, which run their own light through the same
 		 tables.  Settled once here, so DayNight_isOn reads one saved Bool and nothing a load fills in
@@ -5602,6 +5609,7 @@ void GameLogic::update( void )
 	TheDirectStrikeDirector->update();
 	TheDirectStrikeStats->update();
 	TheApocalypseDirector->update();
+	TheAodDirector->update();
 	// the day and night cycle's re-looks after a sight step (DayNightCycle.h)
 	DayNight_update();
 
@@ -6314,6 +6322,13 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 		xferCRC->xferAsciiString(&marker);
 		xferCRC->xferSnapshot( TheApocalypseDirector );
 	}
+	// only on an Art of Defense map, the same way
+	if (TheAodDirector->isActive())
+	{
+		marker = "MARKER:TheAodDirector";
+		xferCRC->xferAsciiString(&marker);
+		xferCRC->xferSnapshot( TheAodDirector );
+	}
 	if (recordSnapshot)
 		m_crcSnapshots.setSectionCRC( CRC_SECTION_SCRIPTS, xferCRC->getCRC() );
 	if (isInGameLogicUpdate())
@@ -6939,13 +6954,14 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 22: xfer TheApocalypseDirector
 	* 23: xfer m_dayNight
 	* 24: xfer m_frameObjectsChangedTriggerAreas
+	* 25: xfer TheAodDirector
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 24;
+	const XferVersion currentVersion = 25;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -7457,6 +7473,11 @@ void GameLogic::xfer( Xfer *xfer )
     xfer->xferSnapshot( TheApocalypseDirector );
   else if ( xfer->getXferMode() == XFER_LOAD )
     TheApocalypseDirector->reset();	// a save from before the mode plays as it was made
+
+  if ( version >= 25 )
+    xfer->xferSnapshot( TheAodDirector );
+  else if ( xfer->getXferMode() == XFER_LOAD )
+    TheAodDirector->reset();	// a save from before the mode plays as it was made
 
 }  // end xfer
 

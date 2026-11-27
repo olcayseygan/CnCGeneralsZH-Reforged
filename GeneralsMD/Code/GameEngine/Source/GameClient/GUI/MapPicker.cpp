@@ -979,8 +979,8 @@ static void drawPickedType( void )
 	const MapMetaData *md = path.isEmpty() ? NULL : TheMapCache->findMap( path );
 	std::vector< UnicodeString > facts;
 	UnicodeString style;
-	style.format( TheGameText->fetch( "GUI:RandomMapStyleOf" ).str(),
-		md ? md->m_displayName.str() : TheGameText->fetch( "GUI:RandomMapAnyTemplate" ).str() );
+	style.format( TheGameText->fetch( "GUI:RandomMapStyleOf" ).str(), md ? md->m_displayName.str()
+		: TheGameText->fetch( path == "style:aod" ? "GUI:RandomMapAod" : "GUI:RandomMapAnyTemplate" ).str() );
 	facts.push_back( style );
 	UnicodeString size = TheGameText->fetch( sizes[ max( 0, min( (Int)ARRAY_SIZE( sizes ) - 1, RandomMapTabSize() ) ) ] );
 	size.concat( UIStyle::HEADER_JOINER );

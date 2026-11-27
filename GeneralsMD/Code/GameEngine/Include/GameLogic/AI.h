@@ -1027,8 +1027,11 @@ void aiPostTeamRequest( Player *from, AITeamRequestKind kind, Int enemy, const C
 /** The enemy of this player's who owns what stands nearest pos, -1 for none within reach. */
 Int aiEnemyNear( const Player *of, const Coord3D *pos );
 /** The nearest of this player's own buildings that mends this unit, a repair pad for a vehicle, an
-	* airfield for an aircraft, a heal pad for infantry, or NULL.  A unit at full health has none. */
-Object *aiFindMender( Player *player, Object *unit, CommandSourceType cmdSource );
+	* airfield for an aircraft, a heal pad for infantry, or NULL.  A unit at full health has none.  With
+	* auras, also a building that mends what stands round it (aiMendRadius) and a tunnel it can ride. */
+Object *aiFindMender( Player *player, Object *unit, CommandSourceType cmdSource, Bool auras = FALSE );
+/** How far this finished building mends the units round it, 0 for none. */
+Real aiMendRadius( const Object *building );
 /** The building within radius of center a soldier goes for next, or NULL: the one nearest center that
 	* is not in tried, that a player's order may enter, and that has a seat left after the owner's other
 	* men walking to it.  A building its owner has neither in sight nor remembers is left out, so nothing

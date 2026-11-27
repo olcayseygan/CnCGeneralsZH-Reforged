@@ -73,6 +73,9 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/AutoDepositUpdate.h"	// what an income upgrade adds, for the upgrade buyer
+#include "GameLogic/Module/BattlePlanUpdate.h"	// the Strategy Center's plans, for the USA identity
+#include "GameLogic/Module/SpecialPowerUpdateModule.h"
+#include "GameLogic/Module/PropagandaTowerBehavior.h"	// the heal auras a hurt unit is sent to
 #include "GameLogic/Module/DozerAIUpdate.h"
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/ScriptEngine.h"
@@ -546,6 +549,11 @@ m_role(AIROLE_AGGRESSIVE)
 	m_personaFromRandom = FALSE;
 	m_rushSent = FALSE;
 	m_techDone = FALSE;
+	m_identityMoves = 0;
+	m_identityDrawn = FALSE;
+	m_planWaveFrame = 0;
+	m_planWanted = PLANSTATUS_NONE;
+	m_planSwitchFrame = 0;
 	m_raidFrame = 0;
 	for( Int r = 0; r < MAX_PERSONA_RAIDERS; ++r )
 		m_raider[ r ] = INVALID_ID;
@@ -6998,6 +7006,8 @@ void AIPlayer::update( void )
 	// A Direct Strike seat has no base and its units are the director's wave copies, which it alone drives.
 	if( runsOwnAI() && !TheDirectStrikeDirector->isActive() )
 	{
+		if( !m_identityDrawn )
+			drawIdentity();															// Its general's own moves for this match.
 		AI_PHASE( AIP_SCOUT,   doScouting() );					// Keep one unit looking at the map.
 		AI_PHASE( AIP_RETREAT, doRetreats() );					// Break off the fights we are losing.
 		AI_PHASE( AIP_EXPAND,  doExpansion() );					// Go and take the money that is lying around.
@@ -7011,6 +7021,7 @@ void AIPlayer::update( void )
 		AI_PHASE( AIP_ECONOMY, doSuperweapons() );			// The big guns, as soon as they can be bought.
 		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_OTHER, doParticleBeams() ) );	// ... and the Particle Cannon's beam driven across his base.
 		AI_PHASE( AIP_ECONOMY, doReadySpecialPowers() );	// The powers no script knows to fire, as soon as they are ready.
+		AI_PHASE( AIP_ECONOMY, doBattlePlans() );				// The Strategy Center's plan, by what the army is doing.
 		if( m_lookFrame != TheGameLogic->getFrame() + 1 )
 			AI_PHASE( AIP_WAVE,  rememberEnemies() );			// Write down the enemy army in sight (lookAllSeats did, beside the other seats).
 		AI_PHASE( AIP_WAVE,    answerArmy() );					// Train the answer to the part of it nothing answers.
@@ -10550,6 +10561,121 @@ Bool AIPlayer::killZonesHere( void ) const
 Bool AIPlayer::teamPlayHere( void )
 {
 	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_TEAM_PLAY ) != 0 );
+}
+
+/** A hurt unit pulled out may go to a heal aura or into a tunnel, not only to a dock (-aiknobsoff menders). */
+Bool AIPlayer::mendersHere( void )
+{
+	return runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_MENDERS ) != 0 );
+}
+
+/** The owner, 2026-11-26: every general's computer player plays in its own style, under whatever personality the
+	* seat was given.  A general's moves are listed here with the chance a match gets each; a chance under 100 is one
+	* draw from the logic stream at the seat's first turn, so two matches of one general need not play alike.  The
+	* other generals' moves join this table one at a time, each measured before the next. */
+struct AIIdentityMove
+{
+	const char	*side;			///< the player template's Side
+	UnsignedInt	move;				///< AIPlayer::AIMOVE_*
+	Int					chance;			///< percent of matches that get it
+};
+
+void AIPlayer::drawIdentity( void )
+{
+	static const AIIdentityMove AI_IDENTITY_MOVES[] =
+	{
+		{ "America", AIMOVE_BATTLE_PLANS, 100 },
+	};
+	m_identityDrawn = TRUE;
+	m_identityMoves = 0;
+	const AsciiString &side = m_player->getSide();
+	for( Int i = 0; i < (Int)( sizeof( AI_IDENTITY_MOVES ) / sizeof( AI_IDENTITY_MOVES[ 0 ] ) ); ++i )
+	{
+		const AIIdentityMove &m = AI_IDENTITY_MOVES[ i ];
+		if( side.compareNoCase( m.side ) != 0 )
+			continue;
+		if( m.chance >= 100 || GameLogicRandomValue( 1, 100 ) <= m.chance )
+			m_identityMoves |= m.move;
+	}
+	DEBUG_LOG(("AI IDENTITY frame %d player %d '%s' moves 0x%x%s\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
+		side.str(), m_identityMoves, ( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_IDENTITY ) != 0 ) ? ", off by -aiknobsoff" : ""));
+}
+
+Bool AIPlayer::identityMove( UnsignedInt move ) const
+{
+	return ( m_identityMoves & move ) != 0 && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_IDENTITY ) != 0 );
+}
+
+/** The scripts set Hold the Line once and leave it.  A plan change stuns every unit it covers for five seconds
+	* (BattlePlanChangeParalyzeTime), so the plan moves only on the turns that are quiet anyway: when a wave sets out
+	* (Bombardment's 20% damage when it walks into known guns, Search and Destroy's 20% range and sight otherwise)
+	* and when the pressure turns to defence (Hold the Line's tenth off the damage taken).  Under attack it changes
+	* nothing, and it waits BATTLE_PLAN_SWITCH_FRAMES between two changes. */
+static const UnsignedInt BATTLE_PLAN_CHECK_FRAMES = (UnsignedInt)( 2 * LOGICFRAMES_PER_GAME_SECOND );
+static const UnsignedInt BATTLE_PLAN_SWITCH_FRAMES = (UnsignedInt)( 45 * LOGICFRAMES_PER_GAME_SECOND );
+static const UnsignedInt BATTLE_PLAN_WAVE_FRAMES = (UnsignedInt)( 20 * LOGICFRAMES_PER_GAME_SECOND );	///< how long after a send its plan may still be put up
+static const Real BATTLE_PLAN_SIEGE_SHARE = 0.25f;	///< known guns on its road worth this share of the wave make it a siege
+static void collectOwned( Object *obj, void *userData );
+
+void AIPlayer::notePlanWave( Real power )
+{
+	if( !identityMove( AIMOVE_BATTLE_PLANS ) )
+		return;
+	const Bool siege = m_gunHoldSince != 0 || guardedRoad() >= BATTLE_PLAN_SIEGE_SHARE * power;
+	m_planWaveFrame = TheGameLogic->getFrame();
+	m_planWanted = siege ? PLANSTATUS_BOMBARDMENT : PLANSTATUS_SEARCHANDDESTROY;
+}
+
+void AIPlayer::doBattlePlans( void )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if( now % BATTLE_PLAN_CHECK_FRAMES != 0 || !identityMove( AIMOVE_BATTLE_PLANS ) )
+		return;
+	if( m_planSwitchFrame != 0 && now - m_planSwitchFrame < BATTLE_PLAN_SWITCH_FRAMES )
+		return;
+	Int want = PLANSTATUS_NONE;
+	if( m_planWaveFrame != 0 && now - m_planWaveFrame < BATTLE_PLAN_WAVE_FRAMES )
+		want = m_planWanted;
+	else if( m_pressure == AIPRESSURE_DEFEND && !isBaseUnderAttack() )
+		want = PLANSTATUS_HOLDTHELINE;
+	if( want == PLANSTATUS_NONE )
+		return;
+	const UnsignedInt option = want == PLANSTATUS_BOMBARDMENT ? OPTION_ONE : ( want == PLANSTATUS_HOLDTHELINE ? OPTION_TWO : OPTION_THREE );
+
+	std::vector<Object *> owned;
+	m_player->iterateObjects( collectOwned, &owned );
+	for( size_t o = 0; o < owned.size(); ++o )
+	{
+		Object *center = owned[ o ];
+		if( !center->isKindOf( KINDOF_FS_STRATEGY_CENTER ) || center->isEffectivelyDead() ||
+				center->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || center->testStatus( OBJECT_STATUS_SOLD ) )
+			continue;
+		// the plan it was last told, whoever told it
+		UnsignedInt current = 0;
+		for( BehaviorModule **m = center->getBehaviorModules(); *m; ++m )
+		{
+			SpecialPowerUpdateInterface *sp = (*m)->getSpecialPowerUpdateInterface();
+			if( sp && sp->getCommandOption() != 0 )
+				current = (UnsignedInt)sp->getCommandOption();
+		}
+		if( current == option )
+			continue;
+		const CommandSet *commandSet = TheCommandStore->findCommandSet( center->getCommandSetString() );
+		if( commandSet == NULL )
+			continue;
+		for( Int i = 0; i < MAX_COMMANDS_PER_SET; ++i )
+		{
+			const CommandButton *button = commandSet->getCommandButton( i );
+			if( button == NULL || button->getCommandType() != GUI_COMMAND_SPECIAL_POWER || button->getSpecialPowerTemplate() == NULL ||
+					button->getSpecialPowerTemplate()->getSpecialPowerType() != SPECIAL_CHANGE_BATTLE_PLANS || ( button->getOptions() & option ) == 0 )
+				continue;
+			DEBUG_LOG(("AI PLAN frame %d player %d sets plan %d (was option %d)%s\n", now, m_player->getPlayerIndex(), want, current,
+				want == PLANSTATUS_HOLDTHELINE ? ", outmatched" : ( want == PLANSTATUS_BOMBARDMENT ? ", wave into guns" : ", wave out" )));
+			center->doCommandButton( button, CMD_FROM_AI );
+			m_planSwitchFrame = now;
+			break;
+		}
+	}
 }
 
 /** The owner, 2026-11-23: players beat even the hardest level easily, and every level should press them
@@ -14807,6 +14933,7 @@ void AIPlayer::sendWave( AIGroup *wave, const AsciiString &approach, Int pathSuf
 	}
 	DEBUG_LOG(("AI WAVE frame %d player %d sends %d teams, %d units, %.0f power, after %d s, down %s; %d ranked out mending, %.0f of %.0f army power\n", TheGameLogic->getFrame(),
 		m_player->getPlayerIndex(), teams, wave->getCount(), power, heldFrames / LOGICFRAMES_PER_GAME_SECOND, pathLabel.str(), rankedOut, rankedOutPower, armyPower));
+	notePlanWave( power );
 	// an attack went: the guns' clock starts again with the next one they hold
 	if( m_gunHoldSince != 0 )
 	{
@@ -18089,8 +18216,27 @@ Bool AIRetreat_rankPullsOut( Int rank, Real healthFraction, Bool inFight, Real r
 	return inFight && healthFraction < RANK_UNHURT && ratio < min( retreatRatio * (1.0f + RANK_RATIO_STEP * rank), 1.0f );
 }
 
-/** Ties go to the first in the object list. */
-Object *aiFindMender( Player *player, Object *unit, CommandSourceType cmdSource )
+/** How far a finished building of ours mends the units round it (a Propaganda Tower and its kin), 0 for none. */
+Real aiMendRadius( const Object *building )
+{
+	static const NameKeyType key_tower = NAMEKEY("PropagandaTowerBehavior");
+	if( building->isEffectivelyDead() || building->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+		return 0.0f;
+	const PropagandaTowerBehavior *tower = (const PropagandaTowerBehavior *)building->findUpdateModule( key_tower );
+	return tower ? tower->getMendRadius() : 0.0f;
+}
+
+/** A finished tunnel of ours with room for the unit: the network mends a rider whole in TimeForFullHeal. */
+static Bool tunnelMends( const Object *unit, const Object *building, CommandSourceType cmdSource )
+{
+	ContainModuleInterface *contain = building->getContain();
+	return contain && contain->isTunnelContain() && !building->isEffectivelyDead() && !building->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) &&
+		TheActionManager->canEnterObject( unit, building, cmdSource, CHECK_CAPACITY );
+}
+
+/** Ties go to the first in the object list.  With auras, a heal aura (stood in) and a tunnel (ridden) count
+	* too: before them a hurt GLA vehicle had nowhere to go and a China one only its War Factory. */
+Object *aiFindMender( Player *player, Object *unit, CommandSourceType cmdSource, Bool auras )
 {
 	std::vector<Object *> owned;
 	player->iterateObjects( collectOwned, &owned );
@@ -18098,8 +18244,10 @@ Object *aiFindMender( Player *player, Object *unit, CommandSourceType cmdSource 
 	Real bestSqr = 0.0f;
 	for( std::vector<Object *>::const_iterator o = owned.begin(); o != owned.end(); ++o )
 	{
-		if( !(*o)->isKindOf( KINDOF_STRUCTURE ) ||
-				!(TheActionManager->canGetRepairedAt( unit, *o, cmdSource ) || TheActionManager->canGetHealedAt( unit, *o, cmdSource )) )
+		if( !(*o)->isKindOf( KINDOF_STRUCTURE ) )
+			continue;
+		if( !(TheActionManager->canGetRepairedAt( unit, *o, cmdSource ) || TheActionManager->canGetHealedAt( unit, *o, cmdSource )) &&
+				!( auras && ( aiMendRadius( *o ) > 0.0f || tunnelMends( unit, *o, cmdSource ) ) ) )
 			continue;
 		const Real distSqr = sqr( (*o)->getPosition()->x - unit->getPosition()->x ) + sqr( (*o)->getPosition()->y - unit->getPosition()->y );
 		if( best == NULL || distSqr < bestSqr )
@@ -18165,9 +18313,11 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 		}
 		if( waitsForClear && m_influence.enemyAt( obj->getPosition()->x, obj->getPosition()->y, unitMix( obj ) ) > 0.0f )
 			continue;
-		Object *mender = aiFindMender( m_player, obj, CMD_FROM_AI );
+		Object *mender = aiFindMender( m_player, obj, CMD_FROM_AI, mendersHere() );
 		if( mender == NULL && isAtHome( obj->getPosition() ) )
 			continue;		// home already, and nothing there mends it
+		const Bool docks = mender && ( TheActionManager->canGetRepairedAt( obj, mender, CMD_FROM_AI ) || TheActionManager->canGetHealedAt( obj, mender, CMD_FROM_AI ) );
+		const Bool tunnel = mender && !docks && tunnelMends( obj, mender, CMD_FROM_AI );
 		// one already walking there from an earlier pass whose row has since gone
 		const Coord3D *to = mender ? mender->getPosition() : &m_baseCenter;
 		const Coord3D *goal = obj->getAI()->getGoalPosition();
@@ -18180,14 +18330,16 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 		step->fallbackFrame = now;
 		step->hurtAt = health;
 		step->hurtTeam = team != m_player->getDefaultTeam() ? team->getID() : TEAM_ID_INVALID;
-		if( mender )
-			stepCalmly( obj, step, to );		// the dock order below takes the walk over
+		if( docks || tunnel )
+			stepCalmly( obj, step, to );		// the dock or enter order below takes the walk over
 		else
-			walkCalmlyRound( obj, step, to );
-		if( mender && TheActionManager->canGetRepairedAt( obj, mender, CMD_FROM_AI ) )
+			walkCalmlyRound( obj, step, to );		// home, or into a heal aura, where it stands (releaseMended)
+		if( docks && TheActionManager->canGetRepairedAt( obj, mender, CMD_FROM_AI ) )
 			obj->getAI()->aiGetRepaired( mender, CMD_FROM_SCRIPT );
-		else if( mender )
+		else if( docks )
 			obj->getAI()->aiGetHealed( mender, CMD_FROM_SCRIPT );
+		else if( tunnel )
+			obj->getAI()->aiEnter( mender, CMD_FROM_SCRIPT );
 		DEBUG_LOG(("AI VETERAN frame %d player %d pulls '%s' %d rank %d out at %.0f%% health, fight %.2f%s, state %d, %.0f from %s, now state %d\n", now,
 			m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), obj->getID(), rank, health * 100.0f,
 			inFight ? ratio : 0.0f, inFight ? "" : " (none)", (Int)state,
@@ -18207,24 +18359,66 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 	* to being recruitable.  A patient still inside stays out of reach.
 	* ponytail: any ranked or infantry default-team unit not recruitable counts as one of ours; a script that
 	* marks such a unit unrecruitable would see it undone. */
+Bool AIRetreat_mendedEnough( Real healthFraction, Real hurtAt );
+static const Real TUNNEL_MENDED_HEALTH = 0.99f;	///< a rider mended this far leaves the tunnel it was sent into
+
+/** Within the reach of a heal aura of this player's. */
+static Bool standsInMendAura( Player *player, const Object *obj )
+{
+	std::vector<Object *> owned;
+	player->iterateObjects( collectOwned, &owned );
+	for( size_t o = 0; o < owned.size(); ++o )
+	{
+		if( !owned[ o ]->isKindOf( KINDOF_STRUCTURE ) )
+			continue;
+		const Real reach = aiMendRadius( owned[ o ] );
+		if( reach > 0.0f && sqr( owned[ o ]->getPosition()->x - obj->getPosition()->x ) + sqr( owned[ o ]->getPosition()->y - obj->getPosition()->y ) <= sqr( reach ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+
 void AIPlayer::releaseMended( void )
 {
 	for( DLINK_ITERATOR<Object> m = m_player->getDefaultTeam()->iterate_TeamMemberList(); !m.done(); m.advance() )
 	{
 		Object *obj = m.cur();
 		AIUpdateInterface *ai = obj->getAI();
-		if( ai == NULL || ai->isRecruitable() || obj->isEffectivelyDead() || obj->isContained() ||
-				(obj->getVeterancyLevel() <= LEVEL_REGULAR && !obj->isKindOf( KINDOF_INFANTRY )) )
+		if( ai == NULL || ai->isRecruitable() || obj->isEffectivelyDead() )
 			continue;
+		// a dear one at rank 0 that pullOutRanked sent out: before this it was never let go, and a mended
+		// Overlord stood beside its War Factory for the rest of the match
+		const TacticalStep *row = findTacticalStep( obj->getID() );
+		const Bool dear = mendersHere() && obj->getTemplate()->calcCostToBuild( m_player ) >= DEAR_UNIT_COST;	// ponytail: as the ranked, any such unrecruitable one
+		if( obj->getVeterancyLevel() <= LEVEL_REGULAR && !obj->isKindOf( KINDOF_INFANTRY ) && !dear )
+			continue;
+		const BodyModuleInterface *body = obj->getBodyModule();
+		const Real health = body ? body->getHealth() / body->getMaxHealth() : 1.0f;
+		if( obj->isContained() )
+		{
+			// sent into a tunnel to be mended, and whole: out by the mouth it went in at
+			Object *tunnel = obj->getContainedBy();
+			if( row && row->hurtAt > 0.0f && health >= TUNNEL_MENDED_HEALTH && tunnel && tunnel->getContain() &&
+					tunnel->getContain()->isTunnelContain() && !ai->isMoving() )
+			{
+				DEBUG_LOG(("AI VETERAN frame %d player %d lets '%s' %d out of '%s' %d mended, %.0f%% health\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
+					obj->getTemplate()->getName().str(), obj->getID(), tunnel->getTemplate()->getName().str(), tunnel->getID(), health * 100.0f));
+				ai->aiExit( tunnel, CMD_FROM_AI );
+			}
+			continue;
+		}
 		// never the capturer: mid-capture it reads as idle, and a script team recruited it off the derrick
 		if( obj->getID() == m_capturerID )
 			continue;
 		const StateID state = ai->getCurrentStateID();
 		if( state == AI_DOCK || state == AI_ENTER || state >= 1000 || ai->isMoving() )
 			continue;
+		// standing in a heal aura short of mended: a while yet
+		if( mendersHere() && !AIRetreat_mendedEnough( health, row ? row->hurtAt : 0.0f ) && standsInMendAura( m_player, obj ) )
+			continue;
 		ai->setIsRecruitable( TRUE );
 		DEBUG_LOG(("AI VETERAN frame %d player %d frees '%s' %d at %.0f%% health\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
-			obj->getTemplate()->getName().str(), obj->getID(), obj->getBodyModule()->getHealth() / obj->getBodyModule()->getMaxHealth() * 100.0f));
+			obj->getTemplate()->getName().str(), obj->getID(), health * 100.0f));
 	}
 }
 
@@ -25806,7 +26000,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 45;		// 45: the dozer's search  44: the rating on Elo  43: the loss map and the guns' hold  42: the rating  41: a strike route kept once struck  40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
+	XferVersion currentVersion = 46;		// 46: the general's identity and the battle plan clock  45: the dozer's search  44: the rating on Elo  43: the loss map and the guns' hold  42: the rating  41: a strike route kept once struck  40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -26499,6 +26693,25 @@ void AIPlayer::xfer( Xfer *xfer )
 	{
 		m_buildSearchCells.clear();
 		m_buildSearchPlan = NULL;
+	}
+
+	// the general's moves drawn for this match, and the Strategy Center's plan clock; an older save draws
+	// them again at its first turn
+	if( version >= 46 )
+	{
+		xfer->xferUnsignedInt( &m_identityMoves );
+		xfer->xferBool( &m_identityDrawn );
+		xfer->xferUnsignedInt( &m_planWaveFrame );
+		xfer->xferInt( &m_planWanted );
+		xfer->xferUnsignedInt( &m_planSwitchFrame );
+	}
+	else if( xfer->getXferMode() == XFER_LOAD )
+	{
+		m_identityMoves = 0;
+		m_identityDrawn = FALSE;
+		m_planWaveFrame = 0;
+		m_planWanted = PLANSTATUS_NONE;
+		m_planSwitchFrame = 0;
 	}
 
 }  // end xfer

@@ -837,6 +837,21 @@ protected:
 	Int						m_personaShared;
 	UnsignedInt		m_superweaponFrame;
 
+	// the general's identity: moves only one general makes, drawn once a match, under any personality
+	enum
+	{
+		AIMOVE_BATTLE_PLANS = 1,	///< USA: the Strategy Center's plan follows the war (doBattlePlans)
+	};
+	void drawIdentity(void);											///< which of its general's moves this match gets, once, at its first turn
+	Bool identityMove(UnsignedInt move) const;		///< that move was drawn and -aiknobsoff identity is not on this seat
+	void doBattlePlans(void);											///< Search and Destroy or Bombardment with a wave, Hold the Line when outmatched
+	void notePlanWave(Real power);								///< a wave of that power went: the plan it wants
+	UnsignedInt		m_identityMoves;			///< AIMOVE_* bits drawn for this match
+	Bool					m_identityDrawn;
+	UnsignedInt		m_planWaveFrame;			///< the last wave sent, 0 for none
+	Int						m_planWanted;					///< the plan (PLANSTATUS_*) that wave wants
+	UnsignedInt		m_planSwitchFrame;		///< the last plan change ordered, 0 for none
+
 	enum { MAX_AI_SCOUTS = 2 };				///< the ladder's maxScouts never asks for more than this
 	ObjectID	m_scoutID[ MAX_AI_SCOUTS ];	///< the units currently touring the map for us
 	Int				m_scoutTargetFor[ MAX_AI_SCOUTS ];	///< which start position each one is walking to
@@ -1049,6 +1064,7 @@ protected:
 	/** A Normal seat plays with its allies: joins an ally's attack and helps an ally's hit base.  -aiknobsoff ...
 		* teamplay takes it off a seat. */
 	Bool teamPlayHere(void);
+	Bool mendersHere(void);	///< heal auras and tunnels mend what it pulls out
 	Real killZoneWeight(void) const;							///< how much of the loss record a reading counts, 0 when off
 	Real killZoneAt(const Coord3D *at) const;			///< ... the losses round one spot, weighed
 	Real gunOdds(void) const;											///< what an attack has to be worth against the guns it meets, 0 when off

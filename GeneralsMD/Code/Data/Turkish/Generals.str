@@ -17476,6 +17476,10 @@ GUI:HotkeysCommandSELL_MODE
 "Satış modu"
 END
 
+GUI:HotkeysCommandTOGGLE_KEY_GRID_TRAY
+"Tuşlarda takım tepsisi"
+END
+
 GUI:HotkeysCommandREPAIR_MODE
 "Onarım modu"
 END

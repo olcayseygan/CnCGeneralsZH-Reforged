@@ -2841,6 +2841,10 @@ GUI:HotkeysCommandREPAIR_MODE
 "Repair mode"
 END
 
+GUI:HotkeysCommandTOGGLE_KEY_GRID_TRAY
+"Squad tray on the keys"
+END
+
 GUI:HotkeysCommandBEGIN_WAYPOINTS_KEY
 "Waypoint mode (hold)"
 END

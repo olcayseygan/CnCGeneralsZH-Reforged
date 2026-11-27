@@ -1377,7 +1377,11 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 				teamQueueSize = 0;		// a queued team's match: out of the queue
 				matchId = m.getString( "matchId" );
 				teamMatch = matchId;
-				quickMatch.clear();		// its replay stays home
+				// a rated one's replay goes up as a Quick Match's does, for an admin to look at a judged win
+				if (m.getBool( "rated" ))
+					quickMatch = matchId;
+				else
+					quickMatch.clear();
 				hostLeftGame = 0;
 				hostLeftPumps = 0;
 				gameId = 0;
@@ -2742,11 +2746,13 @@ void OnlineSendAITick( Int frame )
 {
 	OnlineSession &s = OnlineSession::get();
 	const long long now = OnlineNowMs();
-	if (s.aiMatch.empty() || now - s.aiTickMs < ONLINE_AI_TICK_SECONDS * 1000LL)
+	// a Play vs AI match, else a Team vs AI one: the server judges either's win on these
+	const std::string &match = !s.aiMatch.empty() ? s.aiMatch : OnlineIsTeamAIMatch() ? s.teamMatch : s.aiMatch;
+	if (match.empty() || now - s.aiTickMs < ONLINE_AI_TICK_SECONDS * 1000LL)
 		return;
 	s.aiTickMs = now;
 	OnlineMessage m;
-	m.setString( "t", "ai.tick" ).setString( "matchId", s.aiMatch ).setInt( "frame", frame );
+	m.setString( "t", "ai.tick" ).setString( "matchId", match ).setInt( "frame", frame );
 	s.send( m );
 }
 

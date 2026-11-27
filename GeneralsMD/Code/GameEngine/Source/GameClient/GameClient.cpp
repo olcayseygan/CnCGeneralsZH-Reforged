@@ -102,6 +102,7 @@
 #include "GameLogic/ScriptEngine.h"		// For TheScriptEngine - jkmcd
 #include "GameLogic/VictoryConditions.h"
 #include "GameNetwork/GameSpy/StagingRoomGameInfo.h"
+#include "GameNetwork/NetworkInterface.h"
 #include "GameNetwork/Online/OnlineQueues.h"
 #include "GameNetwork/Transport.h"
 #ifdef _INTERNAL
@@ -713,12 +714,19 @@ static void updateOnline( void )
 	/* Team vs AI: the score screen sends no report for a match with computer seats (EA's "no stats for any AI"),
 		 so a member who left before the victory conditions decided it would never be heard and the server would
 		 wait on its line.  Once the match is gone without one, its report goes from here: no winner, the last
-		 frame it played, which the server counts as leaving.  OnlineSendReport drops it after an endframe one. */
+		 frame it played, which the server counts as leaving, or a desync when the network saw one (void if most
+		 members say so).  OnlineSendReport drops it after an endframe one.  While it plays, Play vs AI's ai.tick
+		 every half minute: the server judges a team win on each member's ticks. */
 	static Int s_teamFrame = 0;
+	static Bool s_teamDesync = FALSE;
 	if (OnlineIsTeamAIMatch())
 	{
 		if (TheGameLogic->isInGame() && TheGameLogic->getGameMode() == GAME_INTERNET && !TheGameLogic->isLoadingMap())
+		{
 			s_teamFrame = (Int)TheGameLogic->getFrame();
+			s_teamDesync = TheNetwork && TheNetwork->sawCRCMismatch();
+			OnlineSendAITick( s_teamFrame );
+		}
 		else if (s_teamFrame > 0)
 		{
 			OnlineReport left;
@@ -726,6 +734,7 @@ static void updateOnline( void )
 			left.endFrame = left.duration = s_teamFrame;
 			left.winningTeam = -1;
 			left.sawGameEnd = FALSE;
+			left.sawDesync = s_teamDesync;
 			left.speed = TheGameSpyGame ? TheGameSpyGame->getGameSpeedPercent() : RETAIL_GAME_SPEED_PERCENT;
 			left.map = TheGameSpyGame ? TheGameSpyGame->getMap() : AsciiString::TheEmptyString;
 			if (OnlineSendReport( left ))

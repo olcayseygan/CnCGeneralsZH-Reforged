@@ -3718,6 +3718,21 @@ TEST(online_team_ai_party_ask_and_ready)
 	CHECK( ai.nick[0] == "Amy" && ai.nick[1] == "Tank" && ai.vip[1] == 167772163u && ai.army[1] == "FactionGLA" );
 	CHECK( !OnlineIsTeamAIMatchReady() && !OnlineIsAIMatchLive() );		// no ai.result for it: the relay match's report
 	CHECK( OnlineSession::get().matchId == "m1" );
+	CHECK( OnlineSession::get().quickMatch.empty() );		// unrated: its replay stays home
+
+	// its ai.tick goes under the team match, every half minute as Play vs AI's
+	rig.sent.clear();
+	OnlineSendAITick( 30 );
+	CHECK( rig.sent.empty() );
+	OnlineSession::get().aiTickMs -= ONLINE_AI_TICK_SECONDS * 1000 + 1;
+	OnlineSendAITick( 900 );
+	CHECK( rig.sent.size() == 1 && rig.sentType( 0 ) == "ai.tick" && rig.sent[0].getString( "matchId" ) == "m1" && rig.sent[0].getInt( "frame" ) == 900 );
+
+	// a rated one's replay goes up under its id
+	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m3\",\"team\":1,\"rated\":true,\"map\":\"m\",\"seed\":3,\"ids\":[8,7],\"nicks\":[\"Amy\",\"Tank\"],"
+		"\"vips\":[1,167772163],\"bots\":2}" );
+	CHECK_EQ( (Int)OnlineGetAIMatch( ai ), (Int)ONLINE_AI_READY );
+	CHECK( OnlineSession::get().quickMatch == "m3" );
 
 	// out of the party
 	rig.feed( "{\"t\":\"party\",\"leader\":0,\"members\":[]}" );

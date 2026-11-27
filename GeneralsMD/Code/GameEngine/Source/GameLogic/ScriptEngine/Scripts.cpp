@@ -978,13 +978,18 @@ void Script::crc( Xfer *xfer )
 	* 3: Each condition's cached answer and the frame it was cached on.  The conditions that count
 	*    objects in an area keep an answer until an object is made or destroyed or a team crosses an
 	*    area, so a unit that died but is not yet gone still counts in the uninterrupted game; a load
-	*    that dropped the cache counted afresh and could fire a script the saved game would not. */
+	*    that dropped the cache counted afresh and could fire a script the saved game would not.
+	* 4: The frame a SKIRMISH_SPECIAL_POWER_READY condition looks again, which it keeps in its power
+	*    parameter (ScriptConditions::evaluateSkirmishSpecialPowerIsReady): with no usable building
+	*    holding the power it waits ten seconds.  A load read the map's 0 there and looked on its first
+	*    frame, so its ten-second steps fell on other frames: a Rebel Ambush whose Command Center went
+	*    back up fired a frame before the game that was saved fired it. */
 // ------------------------------------------------------------------------------------------------
 void Script::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 3;
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1024,6 +1029,15 @@ void Script::xfer( Xfer *xfer )
 			{
 				cond->setCustomData( customData );
 				cond->setCustomFrame( customFrame );
+			}
+			if( version >= 4 )
+			{
+				Parameter *power = cond && cond->getConditionType() == Condition::SKIRMISH_SPECIAL_POWER_READY &&
+					cond->getNumParameters() > 1 ? cond->getParameter( 1 ) : NULL;
+				Int nextLook = power ? power->getInt() : 0;
+				xfer->xferInt( &nextLook );
+				if( power && xfer->getXferMode() == XFER_LOAD && conditionCount == ownCount )
+					power->friend_setInt( nextLook );
 			}
 			if( cond )
 				cond = cond->getNext();

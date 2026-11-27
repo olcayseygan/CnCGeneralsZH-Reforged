@@ -439,6 +439,11 @@ enum { ORDER_MARK_SAMPLES = 24 };
 
 static Real shroudLight( Real x, Real y );		///< the shroud's light on the ground there, 0 black to 1 clear
 
+// the selection ring's width and a target ring's gap outside it, here because an order line starts on a
+// unit's own selection ring (takeReadsForRender); the rings' other constants are with takeSelectionRings
+static const Real RING_WIDTH = 0.65f;			///< the line at the default camera height: two pixels of colour between two dark rims (rimTexture)
+static const Real ORDER_TARGET_GAP = 1.0f;		///< a target's ring outside the selection ring a unit of one's own wears, times the zoom scale
+
 //=============================================================================
 // W3DWaypointBuffer::takeReadsForRender
 //=============================================================================
@@ -513,7 +518,22 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 			points[ 1 ].Set( it->to.x, it->to.y, max( it->to.z, TheTerrainLogic->getGroundHeight( it->to.x, it->to.y ) ) );
 			// a unit at either end: the middle of its ring on the ground, not the spot over its top
 			SelectionCircle fromRing, toRing;
-			const Bool fromOnRing = orderTargetRing( it->fromTarget, fromRing );
+			Bool fromOnRing = orderTargetRing( it->fromTarget, fromRing );
+			Real fromEdge = fromOnRing ? fromRing.r + markHalf : 0.0f;
+			// a unit's first leg starts on the unit itself (no fromTarget: InGameUI sets one on a shift
+			// list's later legs only), so the line ran out of its middle over the hull, drawn over
+			// everything; it starts on the outer edge of the unit's own selection ring instead
+			if( !fromOnRing && it->fromTarget == INVALID_ID && it->step <= 1 && TheGlobalData->m_selectionOutlines
+					&& orderTargetRing( it->owner, fromRing ) )
+			{
+				fromRing.r -= ORDER_TARGET_GAP * m_orderWidthScale;		// the selection ring's circle, not a target's
+				const Real ox = points[ 0 ].X - fromRing.x, oy = points[ 0 ].Y - fromRing.y;
+				if( ox * ox + oy * oy < fromRing.r * fromRing.r )
+				{
+					fromOnRing = TRUE;
+					fromEdge = fromRing.r + 0.5f * RING_WIDTH * m_ringWidthScale;
+				}
+			}
 			const Bool toOnRing = targetRing( *it, toRing );
 			if( fromOnRing )
 				points[ 0 ].Set( fromRing.x, fromRing.y, ringGroundZ( fromRing, fromRing.x, fromRing.y ) );
@@ -544,7 +564,7 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 					}
 				}
 				if( fromOnRing )
-					startCut = MAX( startCut, ringCut( fromRing.r + markHalf ) );		// never out of the middle of a unit
+					startCut = MAX( startCut, ringCut( fromEdge ) );		// never out of the middle of a unit
 				const Real endCut = markRadius( *it );
 				const Real dx = points[ 1 ].X - points[ 0 ].X, dy = points[ 1 ].Y - points[ 0 ].Y;
 				const Real flat = (Real)sqrt( dx * dx + dy * dy );
@@ -1019,7 +1039,6 @@ static const Real RING_STEP = 1.0f;					///< world units between two points of a
 static const Int RING_MIN_SAMPLES = 48;
 static const Real RING_LIFT = 1.0f;					///< over the ground at the default camera height, times the zoom scale
 static const Real RING_MIN_LIFT = 0.6f;			///< never lower, or the ground pokes through between two points on a bump
-static const Real RING_WIDTH = 0.65f;			///< the line at the default camera height: two pixels of colour between two dark rims (rimTexture)
 static const Real RING_OPACITY = 1.0f;
 static const Real RING_GLOW_WIDTH = 1.2f;		///< the soft additive glow under it, a little past the rims
 static const Real RING_GLOW_STRENGTH = 0.35f;	///< the glow's colour, a share of the line's; kept low, the rim is what gives the edge
@@ -1033,7 +1052,6 @@ static const Real RING_JOIN_TOLERANCE = 0.25f;	///< two runs whose crossing poin
 // 310 times ZOOM_OUT_LIMIT_FACTOR 2.9 over CameraHeight 232, a zoom near 3.9, and held at the rings'
 // 3.0 a ribbon came out under two pixels there, its colour under one, and broke into dashes
 static const Real ORDER_MAX_ZOOM_SCALE = 4.5f;
-static const Real ORDER_TARGET_GAP = 1.0f;		///< a target's ring outside the selection ring a unit of one's own wears, times the zoom scale
 
 // an attack order's pulse: copies of the outline rising off the ground and fading (recordRingLoop)
 static const Int PULSE_COUNT = 2;

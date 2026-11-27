@@ -319,7 +319,7 @@ def selfcheck():
 
 
 # ---------------------------------------------------------------------------------------------- the places map
-WORLD = r"C:\Users\user\anaconda3\Lib\site-packages\datashader\tests\data\world.rgb.tif"
+WORLD_ENV = "ZHR_WORLD_TIF"          # datashader's tests/data/world.rgb.tif, or any equirectangular world RGB
 PLACES_W, PLACES_H = 1216, 340
 SHEET = (2048, 512)
 
@@ -344,7 +344,10 @@ def places(out):
     for lat in range(15, 61, 15):
         y = proj(0, lat)[1]
         d.line((0, y, w, y), fill=frame + (52,))
-    src = np.asarray(Image.open(WORLD).convert("RGB").resize((2048, 1024), Image.BILINEAR)).astype(np.int16)
+    world = os.environ.get(WORLD_ENV)
+    if not world:
+        sys.exit("places: set %s to an equirectangular world RGB image (datashader's world.rgb.tif)" % WORLD_ENV)
+    src = np.asarray(Image.open(world).convert("RGB").resize((2048, 1024), Image.BILINEAR)).astype(np.int16)
     r, g, b = src[..., 0], src[..., 1], src[..., 2]
     land = gaussian_filter((~((b > r + 25) & (b >= g - 12))).astype(np.float32), 1.6) > 0.5
     ys = np.arange(h)

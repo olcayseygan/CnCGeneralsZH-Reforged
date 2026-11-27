@@ -100,6 +100,14 @@ found and fixed, EA's own, not port damage.**
 - Host Game and Create Game ask which of the three modes the room is for, Classic, Direct Strike or Apocalypse, so the separate Mods key is gone. Join is the lit key while a game you can take is picked, Host Game otherwise, and Enter on an empty chat line joins the picked game.
 - Host Game, the password box and Direct Connect are boxes over the lobby in the same look, with Enter for the lit key and Esc to cancel. Join Game now has a JOIN key; EA's only joined on Enter.
 
+## Ladder, skins and the player card in the new menu look
+
+- The ladder is a table of twenty on a faint zebra where grid lines used to be: place, nick, the rank's portrait and name, the ELO at row size with a thin bar of how close it comes to the page's best, then wins, losses and win rate. ELO is the green head with a caret, because that is the order the server pages by. Your own row is gold, on the page or pinned under it past a dotted gap, and the row under the pointer lights up. Click any row and that player's card opens over the ladder.
+- Your place sits beside the table in big figures with your rank portrait, your ELO and rank, the next rank and how many points it still wants over a track, and your wins, losses and win rate. An unranked player reads 3 of 5 games, PLACEMENT and how many games are left. The Ranks box lists all eight bands with their ELO ranges, yours on the gold edge.
+- Skins sizes the cards to the unit: the Chinook's seven looks come in rows of three, two and two, the Worker's two stand one above the other, and no slot is ever left empty. A green tick is what you wear, a cyan one a pick you have not saved and a grey one the look you still wear while another is picked. The Worker's Special Thanks is framed in cyan with a white star now, since gold on these screens means you. SAVE is the lit key while there is something to save, the platform's key the rest of the time, and the status line under the cards says Saved or what went wrong in one short sentence.
+- The player card is one box in the same frame: the nick large, where he is, both ELOs with their rank portraits, the open tab's figures across the card, the two army boxes with GAMES and WIN RATE over their columns, and the last five with WIN in green and the ELO change at row size. While the history is still coming the card shrinks to the figures. Enter or Esc closes it, and the screen under it takes no clicks until you do.
+- Not there yet: a card opened from someone else's ladder row has his ratings and record but no match history, because the ladder does not send account numbers.
+
 ## Password rooms online
 
 - The password box in Host Game did nothing online: the room opened to everyone. On a server with friends the password now locks the room, the game list marks it, a wrong password is refused as one, and a friend you invite walks in without it. Against an older server the game behaves exactly as before.

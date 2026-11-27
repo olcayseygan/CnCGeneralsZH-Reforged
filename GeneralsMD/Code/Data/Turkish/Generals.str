@@ -19439,27 +19439,27 @@ GUI:OnlineSkinsWaiting
 END
 
 GUI:OnlineSkinsNone
-"Hesabında henüz skin yok. Her kart, skinini nasıl alacağını söyler; birini aldıktan sonra bu ekranı yeniden aç."
+"Hesabında henüz skin yok."
 END
 
 GUI:OnlineSkinsSaved
-"Kaydedildi. Bir sonraki oyununda (özel oyun ya da Hızlı Maç) bu skinler görünür."
+"Kaydedildi. Sonraki çevrim içi oyununda görünürler."
 END
 
 GUI:OnlineSkinsSignedOut
-"Giriş yapmadın. Skinlerini seçmek için çevrim içi giriş yap."
+"Skin seçmek için çevrim içi giriş yap."
 END
 
 GUI:OnlineSkinsThrottled
-"Bir dakikada çok fazla kayıt. Biraz bekle, sonra yeniden Kaydet'e bas."
+"Çok fazla kayıt. Biraz bekle."
 END
 
 GUI:OnlineSkinsUnavailable
-"zerohour.gg cevap vermedi. Skinlerin olduğu gibi kaldı; birazdan yeniden dene."
+"zerohour.gg cevap vermedi. Birazdan dene."
 END
 
 GUI:OnlineSkinsRefused
-"zerohour.gg bu seçimi kabul etmedi, skinlerin olduğu gibi kaldı. Hesabında ne olduğunu görmek için bu ekranı yeniden aç."
+"zerohour.gg seçimi kabul etmedi. Bu ekranı yeniden aç."
 END
 
 GUI:OnlineVsAIButton
@@ -24218,4 +24218,55 @@ END
 
 GUI:SPHintEscEnterSaves
 "Esc vazgeçer, Enter kaydeder"
+END
+
+// Menu redesign package 11, online self: the ladder's side column, the short column heads, the player
+// card's foot hint and its short heads
+
+GUI:OnlineLadderNextRank
+"SONRAKİ RÜTBE"
+END
+
+GUI:OnlineLadderNextRank_Short
+"SONRAKİ"
+END
+
+GUI:OnlineLadderNextAt
+"%ls için %ls"
+END
+
+GUI:OnlineLadderToGo
+"%ls kaldı"
+END
+
+GUI:OnlineLadderPlacement
+"YERLEŞTİRME"
+END
+
+GUI:OnlineLadderGamesToGo
+"%d maç kaldı"
+END
+
+GUI:OnlineLadderWins_Short
+"GAL."
+END
+
+GUI:OnlineLadderLosses_Short
+"MAĞ."
+END
+
+GUI:OnlineLadderWinPct_Short
+"KAZ. %%"
+END
+
+GUI:OnlineCardByAI_Short
+"Bot ordusuna göre"
+END
+
+GUI:OnlineCardColAI_Short
+"BOT ELO"
+END
+
+GUI:OnlineCardEsc
+"Esc kapatır"
 END

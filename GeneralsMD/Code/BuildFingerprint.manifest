@@ -2174,6 +2174,7 @@ GameEngine/Include/GameClient/Module/SwayClientUpdate.h
 GameEngine/Include/GameClient/Mouse.h
 GameEngine/Include/GameClient/ObserverCamera.h
 GameEngine/Include/GameClient/ObserverHudLayout.h
+GameEngine/Include/GameClient/OnlineSelfLayout.h
 GameEngine/Include/GameClient/ParabolicEase.h
 GameEngine/Include/GameClient/ParticleClosedForm.h
 GameEngine/Include/GameClient/ParticleSys.h
@@ -4864,6 +4865,7 @@ Tests/test_msvc_float_casts.cpp
 Tests/test_observer_camera.inc
 Tests/test_observerhud.cpp
 Tests/test_online.cpp
+Tests/test_online_self.inc
 Tests/test_options_menu.inc
 Tests/test_partition_collide.inc
 Tests/test_pathfind_slicing.inc

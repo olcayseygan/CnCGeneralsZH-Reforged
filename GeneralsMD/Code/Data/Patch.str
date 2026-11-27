@@ -5165,27 +5165,27 @@ GUI:OnlineSkinsWaiting
 END
 
 GUI:OnlineSkinsNone
-"Your account owns no skins yet. Each card says how to get its skin; open this screen again once you have one."
+"Your account has no skins yet."
 END
 
 GUI:OnlineSkinsSaved
-"Saved. Your next game, custom or Quick Match, shows these skins."
+"Saved. Your next online game shows them."
 END
 
 GUI:OnlineSkinsSignedOut
-"You are not signed in. Sign in online to pick your skins."
+"Sign in online to pick skins."
 END
 
 GUI:OnlineSkinsThrottled
-"Too many saves in a minute. Wait a little and press Save again."
+"Too many saves. Wait a moment."
 END
 
 GUI:OnlineSkinsUnavailable
-"zerohour.gg did not answer. Your skins stay as they were; try again in a moment."
+"zerohour.gg did not answer. Try again soon."
 END
 
 GUI:OnlineSkinsRefused
-"zerohour.gg refused that pick, so your skins stay as they were. Open this screen again to see what your account holds."
+"zerohour.gg refused the pick. Open this screen again."
 END
 
 // Play vs AI on the online hub: the button, and why a match did not start
@@ -10037,4 +10037,55 @@ END
 
 GUI:SPHintEscEnterSaves
 "Esc cancels, Enter saves"
+END
+
+// Menu redesign package 11, online self: the ladder's side column, the short column heads, the player
+// card's foot hint and its short heads
+
+GUI:OnlineLadderNextRank
+"NEXT RANK"
+END
+
+GUI:OnlineLadderNextRank_Short
+"NEXT"
+END
+
+GUI:OnlineLadderNextAt
+"%ls at %ls"
+END
+
+GUI:OnlineLadderToGo
+"%ls to go"
+END
+
+GUI:OnlineLadderPlacement
+"PLACEMENT"
+END
+
+GUI:OnlineLadderGamesToGo
+"%d games to go"
+END
+
+GUI:OnlineLadderWins_Short
+"W"
+END
+
+GUI:OnlineLadderLosses_Short
+"L"
+END
+
+GUI:OnlineLadderWinPct_Short
+"%%"
+END
+
+GUI:OnlineCardByAI_Short
+"By AI army"
+END
+
+GUI:OnlineCardColAI_Short
+"AI ELO"
+END
+
+GUI:OnlineCardEsc
+"Esc closes"
 END

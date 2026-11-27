@@ -14,6 +14,7 @@ class AIPlayer;
 class AIGroup;
 class Object;
 class SpecialPowerTemplate;
+class Team;
 class TeamPrototype;
 class ThingTemplate;
 class Xfer;
@@ -84,6 +85,13 @@ public:
 	virtual Bool powerTarget( const SpecialPowerTemplate *power, Int enemyIndex, Real radius, Coord3D *target ) { return FALSE; }
 	/// unit retreat: the health share under which a dear unit is pulled out to be mended, 0 for never (pullOutRanked)
 	virtual Real pullHealth( const Object *unit, Real shared ) const { return shared; }
+	/// unit retreat: the health share under which a ranked unit is pulled out on its own health (pullOutRanked; shared
+	/// is the rank rule's, 35% a veteran, 55% a heroic).  Only a higher share changes anything: the rule still pulls
+	/// at its own
+	virtual Real rankPullHealth( const Object *unit, Real shared ) const { return shared; }
+	/// wave building: TRUE for a script team the general leaves to its script, never parked for a wave
+	/// (AIPlayer::holdTeamForWave, after the base and perimeter defence teams).  Keep it pure
+	virtual Bool keepsScript( const Team *team ) const { return FALSE; }
 	/// science pick: the science the skill set buyer weighs at this place of its list (AIPlayer::update's SKILLS walk).
 	/// Return another to put it first: one the seat cannot afford yet stops the walk there and saves the points, as
 	/// the shared buyer does for its own list.  Asked once per place per walk, so keep it pure

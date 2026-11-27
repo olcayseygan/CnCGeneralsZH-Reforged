@@ -13278,6 +13278,9 @@ Bool AIPlayer::holdTeamForWave( Team *team, const AsciiString &approach, Int pat
 	const TeamTemplateInfo *info = team->getPrototype()->getTemplateInfo();
 	if( info->m_isBaseDefense || info->m_isPerimeterDefense )
 		return FALSE;
+	// a team the general leaves to its script (AIIdentity::keepsScript)
+	if( identityOn() && m_identity->keepsScript( team ) )
+		return FALSE;
 	const Bool underAttack = isBaseUnderAttack();
 
 	Int freeSlot = -1;
@@ -18230,7 +18233,11 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 		if( state == AI_DOCK || state == AI_ENTER || state >= 1000 )
 			continue;
 		const Real health = obj->getBodyModule()->getHealth() / obj->getBodyModule()->getMaxHealth();
-		if( dear ? health >= unitDearHealth : !AIRetreat_rankPullsOut( rank, health, inFight, ratio, getSkillProfile()->m_retreatTtkRatio ) )
+		// a ranked one leaves on its health at the rule's share, or at the general's own when that is higher
+		// (AIIdentity::rankPullHealth)
+		if( dear ? health >= unitDearHealth :
+				!( AIRetreat_rankPullsOut( rank, health, inFight, ratio, getSkillProfile()->m_retreatTtkRatio ) ||
+					 ( identityOn() && health < m_identity->rankPullHealth( obj, RANK_HEALTH_BASE + RANK_HEALTH_STEP * rank ) ) ) )
 			continue;
 		// a dear one in a fight its team is winning stays in it: walked out alone it died on the way, two Overlords
 		// of an 8-seat Twilight Flame match pulled at 19 and 26 to 1, 900 and 1,150 from their War Factory, one

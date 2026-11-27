@@ -78,6 +78,8 @@ public:
 	virtual void onWaveSent( AIGroup *wave, Real power );
 	virtual Bool powerTarget( const SpecialPowerTemplate *power, Int enemyIndex, Real radius, Coord3D *target );
 	virtual Real pullHealth( const Object *unit, Real shared ) const;
+	virtual Real rankPullHealth( const Object *unit, Real shared ) const;
+	virtual Bool keepsScript( const Team *team ) const;
 	virtual void xfer( Xfer *xfer );
 
 private:
@@ -118,8 +120,13 @@ static const Int FORWARD_TOWER_MAX = 2;
 #define FORWARD_TOWER_FROM ( (UnsignedInt)( 4 * 60 * LOGICFRAMES_PER_GAME_SECOND ) )
 static const Real FORWARD_TOWER_GUN_MARGIN = 60.0f;
 static const Int FORWARD_TOWER_BANK = 1000;
-/** A tank of the Tank General's that the shared AI pulls out dear goes at this health share, not the rung's. */
+/** A tank of the Tank General's that the shared AI pulls out dear goes at this health share, not the rung's, and a
+	* veteran one at this share and not the rank rule's 35% (an elite one's is 45% already, a heroic one's 55%). */
 static const Real TANK_PULL_HEALTH = 0.45f;
+/** The script teams the Infantry General leaves to their scripts, by a part of the team's name: the garrisons, the
+	* tech building and derrick captures and the first wave's supply hunters.  Parked for the next wave, the garrison
+	* never garrisoned and the captures never captured. */
+static const char *const SCRIPT_JOBS[] = { "Garrison", "Capture", "Supply Hunters" };
 /** The Tank Drop waits this long for a breach, then the shared aim has it. */
 #define DROP_HOLD_FRAMES ( (UnsignedInt)( 120 * LOGICFRAMES_PER_GAME_SECOND ) )
 /** A breach: one of ours stands within this of a known enemy building, no known gun reaches it, and its company
@@ -314,6 +321,24 @@ Real AIIdentityChina::pullHealth( const Object *unit, Real shared ) const
 	if( hasMove( MOVE_MEND_TANKS ) && shared > 0.0f && unit->isKindOf( KINDOF_VEHICLE ) && !unit->isKindOf( KINDOF_AIRCRAFT ) )
 		return max( shared, TANK_PULL_HEALTH );
 	return shared;
+}
+
+Real AIIdentityChina::rankPullHealth( const Object *unit, Real shared ) const
+{
+	if( hasMove( MOVE_MEND_TANKS ) && unit->isKindOf( KINDOF_VEHICLE ) && !unit->isKindOf( KINDOF_AIRCRAFT ) )
+		return max( shared, TANK_PULL_HEALTH );
+	return shared;
+}
+
+Bool AIIdentityChina::keepsScript( const Team *team ) const
+{
+	if( m_general != AIGENERAL_CHINA_INFANTRY || team == NULL )
+		return FALSE;
+	const char *name = team->getName().str();
+	for( Int j = 0; j < (Int)( sizeof( SCRIPT_JOBS ) / sizeof( SCRIPT_JOBS[ 0 ] ) ); ++j )
+		if( strstr( name, SCRIPT_JOBS[ j ] ) != NULL )
+			return TRUE;
+	return FALSE;
 }
 
 void AIIdentityChina::xfer( Xfer *xfer )

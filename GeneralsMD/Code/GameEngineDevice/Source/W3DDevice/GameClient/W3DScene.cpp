@@ -951,8 +951,11 @@ static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, fl
 		// Detected, the amber stays on for as long as it lasts; on the pulse alone it showed for a few
 		// frames a sweep and was never seen.  It eases in and out (Drawable::getStealthAmber).  Four
 		// more for an enemy's cloak (effect_cloak): its fades go between paint and nothing, no glass.
+		// Eight more for an own or allied building, which keeps a stronger ghost of its paint: at a
+		// unit's third a base under Camo Netting read as empty sand to its own player.
 		effect = DRAW_EFFECT_CLOAK;
-		strength = draw->getStealthAmber() + ( draw->getStealthEnemy() ? 4.0f : 0.0f );
+		strength = draw->getStealthAmber() + ( draw->getStealthEnemy() ? 4.0f
+			: ( draw->isKindOf( KINDOF_STRUCTURE ) ? 8.0f : 0.0f ) );
 	}
 	else if ( draw->getObjectForDraw().hasObject && !draw->isObjectDeadForDraw() )
 	{

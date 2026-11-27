@@ -3703,10 +3703,49 @@ static void lookMoreDraw( GameWindow *window, WinInstanceData *instData )
 	lookDraw( UIStyle::fitText( line, hint, cx - caretW - x - lookPx( 8.0f ), UnicodeString::TheEmptyString, names ), hint, x, middle, UIStyle::MUTED );
 }
 
+static Int lookCapsMeasure( const UnicodeString &text, void * )
+{
+	return lookCapsWidth( text );
+}
+
+/// the room a fader's name has: its width less 12 px of air either side's neighbour keeps
+static Int lookFaderRoom( const LookItem &item )
+{
+	const IRegion2D r = lookWindowRect( item.window );
+	return r.hi.x - r.lo.x - lookPx( 12.0f );
+}
+
+/// a fader's short name, GUI:<stem>_Short (MUSIC for Music Volume), empty without one
+static UnicodeString lookFaderShort( const LookItem &item )
+{
+	AsciiString key;
+	key.format( "GUI:%s_Short", item.stem.str() );
+	return UIStyle::hasText( key.str() ) ? TheGameText->fetch( key ) : UnicodeString::TheEmptyString;
+}
+
+/** A fader's name under it.  The five stand side by side, so when one name does not fit its fader
+	* every one takes its short form, the row reading alike; a short form still too wide, or a name
+	* with none, is shortened by the language's own rule (UIStyle::abbreviate), never run into the next. */
+static UnicodeString lookFaderLabel( Int page, const LookItem &item )
+{
+	Bool shortAll = FALSE;
+	if( page >= 0 )
+		for( Int i = 0; i < (Int)s_lookPage[ page ].items.size(); ++i )
+		{
+			const LookItem &each = s_lookPage[ page ].items[ i ];
+			if( each.kind == LOOK_FADER && lookCapsWidth( each.window->winGetText() ) > lookFaderRoom( each ) )
+				shortAll = TRUE;
+		}
+	const UnicodeString shortForm = lookFaderShort( item );
+	const UnicodeString words = shortAll && !shortForm.isEmpty() ? shortForm : item.window->winGetText();
+	return UIStyle::abbreviate( words, shortForm, lookFaderRoom( item ), TheGlobalData->m_textLanguage, lookCapsMeasure, NULL );
+}
+
 /// a fader: its value over it at 24 px, the track standing upright, its name under it
 static void lookFaderDraw( GameWindow *window, WinInstanceData *instData )
 {
-	const LookItem *item = lookItemOfWindow( window );
+	Int page = -1;
+	const LookItem *item = lookItemOfWindow( window, &page );
 	if( item == NULL )
 		return;
 	const IRegion2D r = lookWindowRect( window );
@@ -3716,7 +3755,7 @@ static void lookFaderDraw( GameWindow *window, WinInstanceData *instData )
 	GameFont *figure = UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE, TRUE );
 	if( item->readout )
 		lookDraw( GadgetStaticTextGetText( item->readout ), figure, cx, r.lo.y + lookPx( 22.0f ), UIStyle::INK, 1 );
-	lookCaps( window->winGetText(), cx, r.hi.y - lookPx( 16.0f ), UIStyle::MUTED, 1 );
+	lookCaps( lookFaderLabel( page, *item ), cx, r.hi.y - lookPx( 16.0f ), UIStyle::MUTED, 1 );
 
 	const Int top = r.lo.y + lookPx( 48.0f ), bottom = r.hi.y - lookPx( 40.0f );
 	Int lo = 0, hi = 100;
@@ -4084,10 +4123,12 @@ static void lookPaneDraw( GameWindow *window, WinInstanceData *instData )
 		stem = item->stem;
 		label = item->window->winGetText();
 		flags = item->flags;
-		// the line from the row's end into the pane
+		// the line from the row's end into the pane; a fader stands beside others, so its line starts at
+		// the column's edge, where a row ends, and never runs across the faders right of it
 		const IRegion2D row = lookWindowRect( item->window );
 		const Int middle = ( row.lo.y + row.hi.y ) / 2;
-		UIStyle::litLine( row.hi.x, middle, max( 1, pane.lo.x - row.hi.x ), 1, UIStyle::EDGE_LIT );
+		const Int from = item->kind == LOOK_FADER ? max( row.hi.x, lookX( LOOK_ROWS_RIGHT ) ) : row.hi.x;
+		UIStyle::litLine( from, middle, max( 1, pane.lo.x - from ), 1, UIStyle::EDGE_LIT );
 	}
 	if( stem.isEmpty() )
 		return;

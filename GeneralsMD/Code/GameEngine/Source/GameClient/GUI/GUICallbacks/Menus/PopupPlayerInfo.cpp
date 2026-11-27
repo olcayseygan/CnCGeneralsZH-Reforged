@@ -1290,18 +1290,22 @@ void HandlePersistentStorageResponses( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-// -online: the player card (ONLINE-UI-REDESIGN.md, "Player card", and the wrapper's
-// experiments/online-redesign/card.html).  The master hides EA's statistics and keeps the card, Close,
-// Profile and two tabs; the head, the open tab's figures, its two army boxes and its last five
-// matches are drawn here over PopupParentOld, on the card's 1200x896 as online_layout.py authors it,
-// scaled with the fitted window as its buttons are.  fitText measures with display strings of its
-// own, so the words are laid out once per change into a list the draw only replays.
+// -online: the player card (the wrapper's experiments/proofs/2026-11-24/screens/online-self/
+// README-online-self.md, "Player card").  The master hides EA's statistics and keeps the card, Close,
+// Profile and two tabs; the glass and frame A, the head, the open tab's figures, its two army boxes and
+// its last five matches are drawn here over PopupParentOld, on the card's 1240x900 as online_layout.py
+// authors it, scaled with the fitted window as its buttons are.  While the history waits the card
+// closes under the figures, 410 high.  fitText measures with display strings of its own, so the words
+// are laid out once per change into a list the draw only replays.
 //-------------------------------------------------------------------------------------------------
 enum CardTab { CARD_TAB_QUICK_MATCH, CARD_TAB_AI, CARD_TAB_COUNT };
 static const OnlineHistoryMode CARD_HISTORY[ CARD_TAB_COUNT ] = { ONLINE_HISTORY_QM, ONLINE_HISTORY_AI };
 static const char *const CARD_TAB_WINDOW[ CARD_TAB_COUNT ] = { "PopupPlayerInfo.wnd:TabQuickMatch", "PopupPlayerInfo.wnd:TabAI" };
-static const Real CARD_WIDTH = 1200.0f;		///< online_layout.py CARD
+static const Real CARD_WIDTH = 1240.0f;		///< online_layout.py CARD
+static const Real CARD_HEIGHT = 900.0f;
+static const Real CARD_HEIGHT_WAITING = 410.0f;
 enum { CARD_ARMY_ROWS = 4, CARD_LAST_ROWS = 5 };
+enum { CARD_FILL, CARD_OPEN, CARD_LIT };	///< a CardBox's kind
 
 static GameWindow *s_cardTabs[ CARD_TAB_COUNT ];
 static NameKeyType s_cardTabIDs[ CARD_TAB_COUNT ] = { NAMEKEY_INVALID, NAMEKEY_INVALID };
@@ -1314,10 +1318,12 @@ static GameWinDrawFunc s_cardWindowDraw = NULL;	///< PopupParentOld's own: GROUN
 static Bool s_cardDirty = TRUE;
 static Int s_cardLaidWidth = 0;
 static Real s_cardScale = 1.0f;
+static Int s_cardFullTop = -1;			///< the card's top and height as the master loaded them, -1 before
+static Int s_cardFullHeight = 0;
 
-struct CardWords { DisplayString *words; Int x, y; Color color; };
+struct CardWords { DisplayString *words; Int x, y; Color color; Bool tracked; };
 struct CardPicture { const Image *image; Int x, y, size; };
-struct CardBox { Int x, y, width, height; Color color; Bool open; };
+struct CardBox { Int x, y, width, height; Color color; Int kind; };
 static std::vector<DisplayString *> s_cardStrings;		///< kept from one layout to the next, freed at shutdown
 static std::vector<CardWords> s_cardWords;			///< relative to the card's top left, in pixels
 static std::vector<CardPicture> s_cardPictures;
@@ -1329,9 +1335,9 @@ static Int at( Real at1080 )
 	return REAL_TO_INT( at1080 * s_cardScale + 0.5f );
 }
 
-static void cardBox( Int x, Int y, Int width, Int height, Color color, Bool open = FALSE )
+static void cardBox( Int x, Int y, Int width, Int height, Color color, Int kind = CARD_FILL )
 {
-	const CardBox box = { x, y, width, height, color, open };
+	const CardBox box = { x, y, width, height, color, kind };
 	s_cardBoxes.push_back( box );
 }
 
@@ -1355,33 +1361,43 @@ static Int cardWords( const UnicodeString &text, GameFont *font, Int x, Int top,
 	words->setText( text );
 	Int width, textHeight;
 	words->getSize( &width, &textHeight );
-	const CardWords put = { words, right ? x - width : x, top + ( height - textHeight ) / 2, color };
+	const CardWords put = { words, right ? x - width : x, top + ( height - textHeight ) / 2, color, FALSE };
 	s_cardWords.push_back( put );
 	return width;
 }
 
-/// UIStyle::track, on the card
-static void cardTrack( Int x, Int y, Int width, Int height, Real fraction )
+/// tracked 14 px bold capitals (labels and heads) from x (ending at x when right), centred on the band
+static Int cardCaps( const UnicodeString &text, Int x, Int top, Int height, Color color, Bool right = FALSE )
 {
-	cardBox( x, y, width, height, UIStyle::GRID );
-	const Int filled = REAL_TO_INT( width * max( 0.0f, min( 1.0f, fraction ) ) + 0.5f );
-	if( filled > 0 )
-		cardBox( x, y, filled, height, UIStyle::EDGE );
+	GameFont *font = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	const size_t index = s_cardWords.size();
+	if( cardWords( text, font, x, top, height, color ) == 0 )
+		return 0;
+	const Int width = UIStyle::trackedWidth( text, font, UIStyle::MENU_LABEL_TRACKING );
+	s_cardWords[ index ].tracked = TRUE;
+	s_cardWords[ index ].x = right ? x - width : x;
+	return width;
 }
 
-/// UIStyle::chip from x, centred on the band: eight pixels either side, five over and four under
-static void cardChip( const UnicodeString &label, GameFont *font, Int x, Int top, Int height, Color color, Color edge )
+/// a label key's capitals as cardCaps draws them, its _Short form when the whole is wider than room
+static UnicodeString capsFit( const char *key, Int room )
 {
-	const Int side = at( 8 ), over = at( 5 ), under = at( 4 );
-	const size_t index = s_cardWords.size();
-	const Int width = cardWords( label, font, x + side, top, height, color );
-	if( width == 0 )
-		return;
-	Int w, h;
-	s_cardWords[ index ].words->getSize( &w, &h );
-	const Int chipTop = top + ( height - h - over - under ) / 2;
-	s_cardWords[ index ].y = chipTop + over;
-	cardBox( x, chipTop, width + 2 * side, h + over + under, edge, TRUE );
+	GameFont *font = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	const UnicodeString whole = UIStyle::capitals( TheGameText->fetch( key ) );
+	if( UIStyle::trackedWidth( whole, font, UIStyle::MENU_LABEL_TRACKING ) <= room )
+		return whole;
+	AsciiString shortKey = key;
+	shortKey.concat( "_Short" );
+	return UIStyle::hasText( shortKey.str() ) ? UIStyle::capitals( TheGameText->fetch( shortKey ) ) : whole;
+}
+
+/// a track on the card: a faint white channel, its share a lit EDGE line
+static void cardTrack( Int x, Int y, Int width, Int height, Real fraction )
+{
+	cardBox( x, y, width, height, GameMakeColor( 255, 255, 255, 24 ) );
+	const Int filled = REAL_TO_INT( width * max( 0.0f, min( 1.0f, fraction ) ) + 0.5f );
+	if( filled > 0 )
+		cardBox( x, y, max( 2, filled ), height, UIStyle::EDGE, CARD_LIT );
 }
 
 /// a key the strings may not have yet: its words, else the English
@@ -1570,26 +1586,55 @@ static AsciiString profileUrl( const AsciiString &nick )
 	return AsciiString( url.c_str() );
 }
 
-/// a rating at the head's right: its tier's portrait, the label MUTED over the value, the words'
-/// right edge at right; returns the portrait's left edge
-static Int ratingSummary( UIStyle::RatingTier tier, const AsciiString &side, const char *label, const UnicodeString &value, Real right )
+/// a rating at the head's right: its label in capitals over the figure at 40 and the tier MUTED, their
+/// left edge shared and the widest ending at right, the tier's portrait 60 square 16 before them; returns
+/// the portrait's left edge
+static Int ratingSummary( UIStyle::RatingTier tier, const AsciiString &side, const char *label, const UnicodeString &value, Int right )
 {
-	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	GameFont *strong = UIStyle::font( UIStyle::TEXT_HEADING, TRUE );
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	GameFont *figure = UIStyle::menuFont( UIStyle::MENU_TEXT_TITLE );
 	const size_t first = s_cardWords.size();
-	const Int labelWidth = cardWords( TheGameText->fetch( label ), body, 0, at( 44 ), at( 27 ), UIStyle::MUTED );
-	const Int valueWidth = cardWords( value, strong, 0, at( 71 ), at( 29 ), UIStyle::INK );
-	const Int left = at( right ) - max( labelWidth, valueWidth );
+	const Int labelWidth = cardCaps( UIStyle::capitals( TheGameText->fetch( label ) ), 0, at( 26 ), at( 18 ), UIStyle::MUTED );
+	const Int valueWidth = cardWords( value, figure, 0, at( 46 ), at( 48 ), UIStyle::INK );
+	const Int tierWidth = cardWords( OnlineTierName( AsciiString( UIStyle::tierKey( tier ) ) ), body, 0, at( 94 ), at( 26 ), UIStyle::MUTED );
+	const Int left = right - max( max( labelWidth, valueWidth ), tierWidth ) - at( 2 );
 	for( size_t each = first; each < s_cardWords.size(); each++ )
 		s_cardWords[ each ].x += left;
-	const Int portrait = left - at( 14 ) - at( 56 );
-	const Image *image = UIStyle::tierImage( tier, side );
-	if( image )
-	{
-		cardBox( portrait - 1, at( 44 ) - 1, at( 56 ) + 2, at( 56 ) + 2, UIStyle::FRAME, TRUE );
-		cardPicture( image, portrait, at( 44 ), at( 56 ) );
-	}
+	const Int portrait = left - at( 76 );
+	cardPicture( UIStyle::tierImage( tier, side ), portrait, at( 40 ), at( 60 ) );
 	return portrait;
+}
+
+/** The card's height: the master's, or 410 of its 900 while the history waits, centred where the master
+	* stands it; the keys keep their place over its foot. */
+static void fitCard( Bool compact )
+{
+	GameWindow *card = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( "PopupPlayerInfo.wnd:PopupParentOld" ) );
+	if( parent == NULL || card == NULL )
+		return;
+	Int x, y, width, height;
+	parent->winGetPosition( &x, &y );
+	parent->winGetSize( &width, &height );
+	if( s_cardFullTop < 0 )
+	{
+		s_cardFullTop = y;
+		s_cardFullHeight = height;
+	}
+	const Int wanted = compact ? REAL_TO_INT( s_cardFullHeight * CARD_HEIGHT_WAITING / CARD_HEIGHT + 0.5f ) : s_cardFullHeight;
+	if( wanted == height )
+		return;
+	parent->winSetPosition( x, s_cardFullTop + ( s_cardFullHeight - wanted ) / 2 );
+	parent->winSetSize( width, wanted );
+	card->winSetSize( width, wanted );
+	GameWindow *keys[] = { buttonClose, buttonBuddies };
+	for( Int each = 0; each < (Int)ARRAY_SIZE( keys ); each++ )
+	{
+		if( keys[ each ] == NULL )
+			continue;
+		Int keyX, keyY;
+		keys[ each ]->winGetPosition( &keyX, &keyY );
+		keys[ each ]->winSetPosition( keyX, keyY + wanted - height );
+	}
 }
 
 static UnicodeString winsAndLosses( Int wins, Int games )
@@ -1616,39 +1661,50 @@ static void layOutCard( Int width )
 	const OnlineHistory &history = s_history[ s_cardTab ];
 	const AsciiString side = cardSide();
 	const UnicodeString none( u"\x2013" );		// an en dash for a number nobody sent
-	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	GameFont *strong = UIStyle::font( UIStyle::TEXT_HEADING, TRUE );
-	GameFont *section = UIStyle::sectionFont();
-	GameFont *figure = UIStyle::titleFont( UIStyle::TEXT_TITLE );
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	GameFont *strong = UIStyle::menuFont( UIStyle::MENU_TEXT_TITLE, TRUE );
+	GameFont *figure = UIStyle::menuFont( UIStyle::MENU_TEXT_TITLE );
+	GameFont *rowFigure = UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE );
 	const UIStyle::RatingTier ladderTier = UIStyle::playerTier( card );
 	const UIStyle::RatingTier aiTier = UIStyle::aiRatingTier( card.aiRating, card.hasAIRating ? card.aiGames : -1 );
+	const Int x0 = at( 28 ), x1 = at( CARD_WIDTH - 28.0f );
 
-	// the head: the portrait of his ladder tier, the nick, where he is, both ratings at the right and
-	// the two-pixel rule closing it.  An unranked player has EA's new player's portrait here.
+	// while the history waits the card closes under the figures; its foot, the faint rule and the hint
+	fitCard( !history.arrived );
+	Int cardWidth = width;
+	Int height = REAL_TO_INT( ( history.arrived ? CARD_HEIGHT : CARD_HEIGHT_WAITING ) * s_cardScale + 0.5f );
+	if( parent )
+		parent->winGetSize( &cardWidth, &height );
+	cardBox( x0, height - at( 84 ), x1 - x0, 1, UIStyle::withAlpha( UIStyle::FRAME, 110 ) );
+	cardWords( TheGameText->fetch( "GUI:OnlineCardEsc" ), UIStyle::menuFont( UIStyle::MENU_TEXT_HINT ), x0, height - at( 68 ), at( 48 ),
+		UIStyle::MUTED );
+
+	// the head: the portrait of his ladder tier, the nick at 40, where he is, both ratings at the right
+	// and the lit rule closing it.  An unranked player has EA's new player's portrait here.
 	const Image *portrait = UIStyle::tierImage( ladderTier, side );
 	if( portrait == NULL )
 		portrait = TheMappedImageCollection->findImageByName( "NewPlayer" );
-	cardBox( at( 24 ) - 1, at( 24 ) - 1, at( 96 ) + 2, at( 96 ) + 2, UIStyle::FRAME, TRUE );
-	cardPicture( portrait, at( 24 ), at( 24 ), at( 96 ) );
-	ratingSummary( aiTier, side, "GUI:OnlineAIRatingLabel", card.hasAIRating ? UIStyle::eloText( card.aiRating ) : none,
-		CARD_WIDTH - 24.0f );
+	cardBox( x0 - 1, at( 24 ) - 1, at( 96 ) + 2, at( 96 ) + 2, UIStyle::withAlpha( UIStyle::FRAME, 220 ), CARD_OPEN );
+	cardPicture( portrait, x0, at( 24 ), at( 96 ) );
+	const Int aiLeft = ratingSummary( aiTier, side, "GUI:OnlineAIRatingLabel", card.hasAIRating ? UIStyle::eloText( card.aiRating ) : none, x1 );
 	const Int ratingsLeft = ratingSummary( ladderTier, side, "GUI:OnlineLadderRatingLabel",
-		card.hasRating ? UIStyle::ladderText( card.shown(), card.hasElo ) : none, CARD_WIDTH - 330.0f );
+		card.hasRating ? UIStyle::ladderText( card.shown(), card.hasElo ) : none, aiLeft - at( 40 ) );
 	UnicodeString shown;
 	shown.translate( nick );
-	cardWords( UIStyle::fitName( shown, strong, ratingsLeft - at( 24 ) - at( 144 ) ), strong, at( 144 ), at( 34 ), at( 32 ), UIStyle::INK );
+	const Int nickLeft = x0 + at( 120 );
+	cardWords( UIStyle::fitName( shown, strong, ratingsLeft - at( 24 ) - nickLeft ), strong, nickLeft, at( 26 ), at( 50 ), UIStyle::INK );
 	UnicodeString room;
 	const UnicodeString where = cardWhere( nick, card, room );
-	Int whereLeft = at( 144 );
+	Int whereLeft = nickLeft;
 	const Image *light = card.notOnline ? NULL : UIStyle::pingImage( card.ping );
 	if( light )
 	{
-		cardPicture( light, whereLeft, at( 82 ) + ( at( 27 ) - at( 16 ) ) / 2, at( 16 ) );
+		cardPicture( light, whereLeft, at( 89 ), at( 16 ) );
 		whereLeft += at( 26 );
 	}
 	cardWords( UIStyle::fitText( where, body, ratingsLeft - at( 24 ) - whereLeft, UnicodeString::TheEmptyString, room ), body,
-		whereLeft, at( 82 ), at( 27 ), UIStyle::MUTED );
-	cardBox( 1, at( 144 ), width - 2, max( 1, at( 2 ) ), UIStyle::FRAME );
+		whereLeft, at( 82 ), at( 30 ), UIStyle::MUTED );
+	cardBox( at( 2 ), at( 144 ), width - at( 4 ), max( 1, at( 2 ) ), UIStyle::FRAME, CARD_LIT );
 
 	// the tab's figures: the rating with its tier, then games with the record and the win rate, with the
 	// ladder place before them on Quick Match (vs AI has three: each match plays the speed its player picked)
@@ -1670,8 +1726,8 @@ static void layOutCard( Int width )
 		games = history.games;
 	}
 	UnicodeString label[ 4 ], value[ 4 ], under[ 4 ];
-	Color underColor[ 4 ] = { UIStyle::INK, UIStyle::MUTED, UIStyle::MUTED, UIStyle::MUTED };
 	const Int gamesAt = ai ? 1 : 2;
+	const Int figures = ai ? 3 : 4;
 	label[ 0 ] = TheGameText->fetch( ai ? "GUI:OnlineAIRatingLabel" : "GUI:OnlineLadderRatingLabel" );
 	if( ai ? card.hasAIRating : card.hasRating )
 		value[ 0 ] = ai ? UIStyle::eloText( card.aiRating ) : UIStyle::ladderText( card.shown(), card.hasElo );
@@ -1694,13 +1750,27 @@ static void layOutCard( Int width )
 		else
 			value[ 1 ] = none;
 	}
-	for( Int each = 0; each < 4; each++ )
+	// across the card, each its label, its figure at 40 and the tier or record after it; the win rate
+	// a track after its figure
+	const Int column = ( x1 - x0 ) / figures;
+	for( Int each = 0; each < figures; each++ )
 	{
-		const Int left = at( 24.0f + 290.0f * each );
-		const Int column = at( 266 );
-		cardWords( UIStyle::fitText( label[ each ], body, column ), body, left, at( 204 ), at( 27 ), UIStyle::MUTED );
-		cardWords( UIStyle::fitText( value[ each ], figure, column ), figure, left, at( 237 ), at( 37 ), UIStyle::INK );
-		cardWords( UIStyle::fitText( under[ each ], body, column ), body, left, at( 278 ), at( 27 ), underColor[ each ] );
+		const Int left = x0 + each * column;
+		const Int room = column - at( 24 );
+		cardCaps( UIStyle::fitText( UIStyle::capitals( label[ each ] ), UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE ), room ), left,
+			at( 218 ), at( 18 ), UIStyle::MUTED );
+		const Int valueWidth = cardWords( UIStyle::fitText( value[ each ], figure, room ), figure, left, at( 238 ), at( 48 ), UIStyle::INK );
+		if( each == gamesAt + 1 )
+		{
+			const Int trackLeft = left + valueWidth + at( 18 );
+			if( left + room > trackLeft )
+				cardTrack( trackLeft, at( 266 ), left + room - trackLeft, at( 5 ), games > 0 ? (Real)wins / games : 0.0f );
+		}
+		else if( !under[ each ].isEmpty() )
+		{
+			const Int underLeft = left + valueWidth + at( 14 );
+			cardWords( UIStyle::fitText( under[ each ], body, left + room - underLeft ), body, underLeft, at( 254 ), at( 28 ), UIStyle::MUTED );
+		}
 	}
 
 	// the history: a line while it is on its way or when the server has none to give
@@ -1709,66 +1779,66 @@ static void layOutCard( Int width )
 		const UnicodeString line = s_historyState[ s_cardTab ] == ONLINE_LADDER_WAITING
 			? TheGameText->fetch( "GUI:FetchingPlayerInfo" )
 			: cardWord( "GUI:OnlineCardUnavailable", u"Match history is not available right now." );
-		cardWords( UIStyle::fitText( line, body, at( 1152 ) ), body, at( 24 ), at( 318 ), at( 38 ), UIStyle::MUTED );
+		cardWords( UIStyle::fitText( line, body, x1 - x0 ), body, x0, at( 300 ), at( 30 ), UIStyle::MUTED );
 		return;
 	}
 
 	// two boxes: the win rate by his own army and by the computer's or the opponent's, four rows each
 	const char *const boxHeading[ 2 ] = { "GUI:OnlineCardByOwn", ai ? "GUI:OnlineCardByAI" : "GUI:OnlineCardByOpp" };
 	const std::vector<OnlineHistoryArmy> boxArmies[ 2 ] = { topArmies( history.byArmy ), topArmies( history.byOpponentArmy ) };
+	const Int boxWidth = ( x1 - x0 - at( 24 ) ) / 2;
 	for( Int box = 0; box < 2; box++ )
 	{
-		const Real left = box == 0 ? 24.0f : 616.0f;
-		const Real rowLeft = left + 14.0f;
-		cardBox( at( left ), at( 318 ), at( 560 ), at( 204 ), UIStyle::PANEL );
-		cardBox( at( left ), at( 318 ), at( 560 ), at( 204 ), UIStyle::FRAME, TRUE );
-		cardWords( UIStyle::fitKey( boxHeading[ box ], section, at( 520 ) ), section, at( left + 20.0f ), at( 334 ), at( 25 ), UIStyle::ACTIVE );
+		const Int left = box == 0 ? x0 : x1 - boxWidth;
+		const Int right = left + boxWidth;
+		cardBox( left, at( 304 ), boxWidth, at( 512 ) - at( 304 ), UIStyle::withAlpha( UIStyle::FRAME, 200 ), CARD_OPEN );
+		cardCaps( capsFit( boxHeading[ box ], boxWidth - at( 328 ) ), left + at( 18 ), at( 318 ), at( 18 ), UIStyle::ACTIVE );
+		cardCaps( capsFit( "GUI:OnlineGamesLabel", at( 68 ) ), right - at( 232 ), at( 318 ), at( 18 ), UIStyle::MUTED, TRUE );
+		cardCaps( capsFit( "GUI:OnlineWinRateLabel", at( 182 ) ), right - at( 18 ), at( 318 ), at( 18 ), UIStyle::MUTED, TRUE );
 		for( size_t row = 0; row < boxArmies[ box ].size(); row++ )
 		{
 			const OnlineHistoryArmy &army = boxArmies[ box ][ row ];
 			const PlayerTemplate *found = armyTemplate( army.army );
-			const Real y = 368.0f + 38.0f * row;
-			const Int top = at( y );
-			const Int height = at( y + 38.0f ) - top;
+			const Int top = at( 348.0f + 38.0f * row );
+			const Int height = at( 348.0f + 38.0f * ( row + 1 ) ) - top;
 			if( found )
-				cardPicture( found->getGeneralImage(), at( rowLeft + 10.0f ), top + ( height - at( 28 ) ) / 2, at( 28 ) );
-			cardWords( UIStyle::fitText( armyName( army.army, found ), body, at( 182 ) ), body, at( rowLeft + 48.0f ), top, height, UIStyle::INK );
+				cardPicture( found->getGeneralImage(), left + at( 18 ), top + ( height - at( 28 ) ) / 2, at( 28 ) );
+			cardWords( UIStyle::fitText( armyName( army.army, found ), body, right - at( 300 ) - left - at( 58 ) ), body, left + at( 58 ), top,
+				height, UIStyle::INK );
 			UnicodeString count;
 			count.format( u"%d", army.games );
-			cardWords( count, body, at( rowLeft + 302.0f ), top, height, UIStyle::MUTED, TRUE );
-			const Int shareRight = at( rowLeft + 522.0f );
-			const Int shareWidth = cardWords( UIStyle::percentText( UIStyle::percent( army.wins, army.games ) ), body, shareRight, top, height,
-				UIStyle::INK, TRUE );
-			cardTrack( shareRight - shareWidth - at( 10 ) - at( 110 ), top + ( height - at( 10 ) ) / 2, at( 110 ), at( 10 ),
-				army.games > 0 ? (Real)army.wins / army.games : 0.0f );
-			cardBox( at( rowLeft ), top + height - 1, at( 532 ), 1, UIStyle::GRID );
+			cardWords( count, body, right - at( 232 ), top, height, UIStyle::MUTED, TRUE );
+			cardTrack( right - at( 200 ), top + ( height - at( 5 ) ) / 2, at( 110 ), at( 5 ), army.games > 0 ? (Real)army.wins / army.games : 0.0f );
+			cardWords( UIStyle::percentText( UIStyle::percent( army.wins, army.games ) ), body, right - at( 18 ), top, height, UIStyle::INK, TRUE );
 		}
 	}
 
 	// the last five: result, map, both armies' logos, the computer's rating or the opponent with his,
 	// length and change
-	cardWords( UIStyle::fitKey( ai ? "GUI:OnlineCardLastAI" : "GUI:OnlineCardLastQM", section, at( 1152 ) ), section,
-		at( 24 ), at( 540 ), at( 25 ), UIStyle::ACTIVE );
-	const Int headTop = at( 580 );
-	const Int headHeight = at( 614 ) - headTop;
-	cardWords( UIStyle::fitKey( "GUI:OnlineMapLabel", body, at( 220 ) ), body, at( 184 ), headTop, headHeight, UIStyle::INK );
-	cardWords( UIStyle::fitKey( "GUI:HudArmies", body, at( 180 ) ), body, at( 424 ), headTop, headHeight, UIStyle::INK );
-	cardWords( UIStyle::fitKey( ai ? "GUI:OnlineCardColAI" : "GUI:OnlineOpponentLabel", body, at( 240 ) ), body, at( 624 ), headTop,
-		headHeight, UIStyle::INK );
-	cardWords( UIStyle::fitKey( "GUI:ScoreLength", body, at( 110 ) ), body, at( 994 ), headTop, headHeight, UIStyle::INK, TRUE );
-	cardWords( UIStyle::fitKey( "GUI:OnlineLadderRating", body, at( 120 ) ), body, at( 1134 ), headTop, headHeight, UIStyle::INK, TRUE );
-	cardBox( at( 24 ), headTop + headHeight - 1, at( 1152 ), 1, UIStyle::FRAME );
-	GameFont *chip = UIStyle::chipFont();
+	cardCaps( capsFit( ai ? "GUI:OnlineCardLastAI" : "GUI:OnlineCardLastQM", x1 - x0 ), x0, at( 532 ), at( 18 ), UIStyle::ACTIVE );
+	const Int headTop = at( 560 );
+	const Int headHeight = at( 18 );
+	cardCaps( capsFit( "GUI:OnlineMapLabel", at( 250 ) ), x0 + at( 130 ), headTop, headHeight, UIStyle::MUTED );
+	cardCaps( capsFit( "GUI:HudArmies", at( 160 ) ), x0 + at( 400 ), headTop, headHeight, UIStyle::MUTED );
+	if( ai )
+		cardCaps( capsFit( "GUI:OnlineCardColAI", at( 270 ) ), x0 + at( 860 ), headTop, headHeight, UIStyle::MUTED, TRUE );
+	else
+		cardCaps( capsFit( "GUI:OnlineOpponentLabel", at( 270 ) ), x0 + at( 590 ), headTop, headHeight, UIStyle::MUTED );
+	cardCaps( capsFit( "GUI:ScoreLength", at( 120 ) ), x0 + at( 1000 ), headTop, headHeight, UIStyle::MUTED, TRUE );
+	cardCaps( capsFit( "GUI:OnlineLadderShort", at( 160 ) ), x1, headTop, headHeight, UIStyle::MUTED, TRUE );
+	cardBox( x0, at( 584 ), x1 - x0, 1, UIStyle::FRAME, CARD_LIT );
 	const UnicodeString versus = TheGameText->fetch( "GUI:QMVs" );
 	for( size_t row = 0; row < history.rows.size() && row < CARD_LAST_ROWS; row++ )
 	{
 		const OnlineHistoryRow &match = history.rows[ row ];
-		const Real y = 614.0f + 38.0f * row;
+		const Real y = 590.0f + 38.0f * row;
 		const Int top = at( y );
 		const Int height = at( y + 38.0f ) - top;
-		cardChip( TheGameText->fetch( match.won ? "GUI:OnlineWinLabel" : "GUI:OnlineLossLabel" ), chip, at( 34 ), top, height,
-			match.won ? UIStyle::GOLD : UIStyle::MUTED, match.won ? UIStyle::GOLD : UIStyle::FRAME );
-		cardWords( match.map.isEmpty() ? none : UIStyle::fitText( historyMapName( match.map ), body, at( 220 ) ), body, at( 184 ), top,
+		if( row % 2 == 1 )
+			cardBox( x0, top, x1 - x0, height, GameMakeColor( 255, 255, 255, 7 ) );
+		cardCaps( UIStyle::capitals( TheGameText->fetch( match.won ? "GUI:OnlineWinLabel" : "GUI:OnlineLossLabel" ) ), x0 + at( 10 ), top, height,
+			match.won ? UIStyle::ACTIVE : UIStyle::MUTED );
+		cardWords( match.map.isEmpty() ? none : UIStyle::fitText( historyMapName( match.map ), body, at( 250 ) ), body, x0 + at( 130 ), top,
 			height, UIStyle::INK );
 
 		// old Quick Match rows may carry no armies
@@ -1778,19 +1848,19 @@ static void layOutCard( Int width )
 		{
 			const Int logo = at( 26 );
 			const Int logoTop = top + ( height - logo ) / 2;
-			Int x = at( 424 );
+			Int x = x0 + at( 400 );
 			if( mine )
 				cardPicture( mine->getGeneralImage(), x, logoTop, logo );
-			x += logo + at( 6 );
-			x += cardWords( versus, body, x, top, height, UIStyle::MUTED ) + at( 6 );
+			x += logo + at( 8 );
+			x += cardWords( versus, body, x, top, height, UIStyle::MUTED ) + at( 8 );
 			if( theirs )
 				cardPicture( theirs->getGeneralImage(), x, logoTop, logo );
 		}
 		else
-			cardWords( none, body, at( 424 ), top, height, UIStyle::MUTED );
+			cardWords( none, body, x0 + at( 400 ), top, height, UIStyle::MUTED );
 
 		if( ai )
-			cardWords( UIStyle::eloText( match.opponentRating ), body, at( 624 ), top, height, UIStyle::INK );
+			cardWords( UIStyle::eloText( match.opponentRating ), body, x0 + at( 860 ), top, height, UIStyle::INK, TRUE );
 		else
 		{
 			// the opponent's nick, then his rating MUTED after it
@@ -1798,9 +1868,9 @@ static void layOutCard( Int width )
 			const Int ratingWidth = cardWords( UIStyle::ladderText( match.opponentRating, match.hasElo ), body, 0, top, height, UIStyle::MUTED );
 			UnicodeString opponent;
 			opponent.translate( match.opponent );
-			const Int nickWidth = cardWords( UIStyle::fitName( opponent, body, at( 240 ) - ratingWidth - at( 8 ) ), body, at( 624 ), top,
+			const Int nickWidth = cardWords( UIStyle::fitName( opponent, body, at( 270 ) - ratingWidth - at( 10 ) ), body, x0 + at( 590 ), top,
 				height, UIStyle::INK );
-			s_cardWords[ ratingIndex ].x = at( 624 ) + ( nickWidth > 0 ? nickWidth + at( 8 ) : 0 );
+			s_cardWords[ ratingIndex ].x = x0 + at( 590 ) + ( nickWidth > 0 ? nickWidth + at( 10 ) : 0 );
 		}
 
 		UnicodeString length;
@@ -1808,29 +1878,42 @@ static void layOutCard( Int width )
 			length.format( u"%d:%02d", match.seconds / 60, match.seconds % 60 );
 		else
 			length = none;
-		cardWords( length, body, at( 994 ), top, height, match.seconds > 0 ? UIStyle::INK : UIStyle::MUTED, TRUE );
-		cardWords( UIStyle::ladderText( match.change, match.hasElo, TRUE ), body, at( 1134 ), top, height, UIStyle::changeColor( match.change ), TRUE );
-		cardBox( at( 24 ), top + height - 1, at( 1152 ), 1, UIStyle::GRID );
+		cardWords( length, body, x0 + at( 1000 ), top, height, match.seconds > 0 ? UIStyle::INK : UIStyle::MUTED, TRUE );
+		cardWords( UIStyle::ladderText( match.change, match.hasElo, TRUE ), rowFigure, x1 - at( 6 ), top, height,
+			match.change > 0.0f ? UIStyle::ACTIVE : UIStyle::MUTED, TRUE );
 	}
 }
 
-/// PopupParentOld: its own GROUND and FRAME, then the card over them
+/// PopupParentOld: the screen stepped back, the card's glass and frame A, then the card
 static void drawCardWindow( GameWindow *window, WinInstanceData *instData )
 {
-	if( s_cardWindowDraw )
-		s_cardWindowDraw( window, instData );
 	if( !OnlineIsEnabled() )
+	{
+		if( s_cardWindowDraw )
+			s_cardWindowDraw( window, instData );
 		return;
+	}
 	Int x, y, width, height;
-	window->winGetScreenPosition( &x, &y );
 	window->winGetSize( &width, &height );
 	if( s_cardDirty || width != s_cardLaidWidth )
-		layOutCard( width );
+		layOutCard( width );		// may close the card while the history waits
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &width, &height );
+	IRegion2D card;
+	card.lo.x = x;
+	card.lo.y = y;
+	card.hi.x = x + width;
+	card.hi.y = y + height;
+	UIStyle::veil( 150 );
+	UIStyle::glass( card, 200 );
+	UIStyle::frameA( card );
 	for( size_t each = 0; each < s_cardBoxes.size(); each++ )
 	{
 		const CardBox &box = s_cardBoxes[ each ];
-		if( box.open )
+		if( box.kind == CARD_OPEN )
 			TheDisplay->drawOpenRect( x + box.x, y + box.y, box.width, box.height, 1.0f, box.color );
+		else if( box.kind == CARD_LIT )
+			UIStyle::litLine( x + box.x, y + box.y, box.width, box.height, box.color );
 		else
 			TheDisplay->drawFillRect( x + box.x, y + box.y, box.width, box.height, box.color );
 	}
@@ -1840,24 +1923,28 @@ static void drawCardWindow( GameWindow *window, WinInstanceData *instData )
 		TheDisplay->drawImage( picture.image, x + picture.x, y + picture.y, x + picture.x + picture.size, y + picture.y + picture.size );
 	}
 	for( size_t each = 0; each < s_cardWords.size(); each++ )
-		s_cardWords[ each ].words->draw( x + s_cardWords[ each ].x, y + s_cardWords[ each ].y, s_cardWords[ each ].color, UIStyle::SHADOW );
+	{
+		const CardWords &put = s_cardWords[ each ];
+		if( put.tracked )
+			UIStyle::drawTracked( put.words->getText(), put.words->getFont(), x + put.x, y + put.y, put.color, UIStyle::MENU_LABEL_TRACKING );
+		else
+			put.words->draw( x + put.x, y + put.y, put.color, UIStyle::SHADOW );
+	}
 }
 
-/// a card tab: a page tab's look (UIStyle::tab), the open one's label ACTIVE and never lit by the mouse
+/// a card tab: a menu tab, the open one green and never lit by the mouse
 static void drawCardTab( GameWindow *window, WinInstanceData *instData )
 {
 	Int x, y, width, height;
 	window->winGetScreenPosition( &x, &y );
 	window->winGetSize( &width, &height );
+	IRegion2D box;
+	box.lo.x = x;
+	box.lo.y = y;
+	box.hi.x = x + width;
+	box.hi.y = y + height;
 	const Bool open = window == s_cardTabs[ s_cardTab ];
-	const Color color = UIStyle::tab( x, y, width, height, BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ), open,
-		!open && BitTest( instData->getState(), WIN_STATE_HILITED ) );
-	DisplayString *text = instData->getTextDisplayString();
-	if( text->getFont() != window->winGetFont() )
-		text->setFont( window->winGetFont() );
-	Int textWidth, textHeight;
-	text->getSize( &textWidth, &textHeight );
-	text->draw( x + ( width - textWidth ) / 2, y + ( height - textHeight ) / 2, color, UIStyle::SHADOW );
+	UIStyle::menuTab( box, instData->getTextDisplayString(), open, !open && BitTest( instData->getState(), WIN_STATE_HILITED ) );
 }
 
 /// a history whose serial moved (a new state or a new answer) is copied and lays the card out again
@@ -1930,9 +2017,19 @@ void GameSpyPlayerInfoOverlayInit( WindowLayout *layout, void *userData )
 	if (buttonClose)
 		GadgetButtonSetText( buttonClose, TheGameText->fetch( "GUI:LobbyRecordClose" ) );
 
-	// -online's card: the tabs in a page tab's look, the card drawn over PopupParentOld, vs AI open as
-	// the mockup opens, Profile only when the welcome named the site.  Without -online neither tab shows.
-	GameFont *tabFont = UIStyle::readableFont( UIStyle::TEXT_BODY );
+	// -online's card: the tabs as menu tabs sized to their words (16 px bold capitals and 22 a side, 8
+	// apart, 28 in and 164 down), the card drawn over PopupParentOld, vs AI open as the mockup opens,
+	// Close the lit key and Profile only when the welcome named the site.  Without -online neither tab shows.
+	GameWindow *cardWindow = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( "PopupPlayerInfo.wnd:PopupParentOld" ) );
+	s_cardFullTop = -1;
+	if (cardWindow)
+	{
+		Int cardWidth, cardHeight;
+		cardWindow->winGetSize( &cardWidth, &cardHeight );
+		s_cardScale = cardWidth / CARD_WIDTH;
+	}
+	GameFont *tabFont = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL + 2, TRUE );
+	Int tabLeft = at( 28 );
 	for (Int tab = 0; tab < CARD_TAB_COUNT; ++tab)
 	{
 		s_cardTabIDs[tab] = TheNameKeyGenerator->nameToKey( CARD_TAB_WINDOW[tab] );
@@ -1944,11 +2041,17 @@ void GameSpyPlayerInfoOverlayInit( WindowLayout *layout, void *userData )
 		if (s_cardTabs[tab] == NULL)
 			continue;
 		s_cardTabs[tab]->winHide( !OnlineIsEnabled() );
-		Int width, height;
-		s_cardTabs[tab]->winGetSize( &width, &height );
-		s_cardTabs[tab]->winSetFont( tabFont );
-		GadgetButtonSetText( s_cardTabs[tab], UIStyle::fitText( UIStyle::capitals( s_cardTabs[tab]->winGetText() ), tabFont,
-			width - max( tabFont->height / 2, 4 ) * 3 ) );
+		if (!OnlineIsEnabled())
+			continue;
+		GadgetButtonSetText( s_cardTabs[tab], UIStyle::capitals( s_cardTabs[tab]->winGetText() ) );
+		DisplayString *label = s_cardTabs[tab]->winGetInstanceData()->getTextDisplayString();
+		label->setFont( tabFont );
+		Int labelWidth, labelHeight;
+		label->getSize( &labelWidth, &labelHeight );
+		const Int width = labelWidth + 2 * at( 22 );
+		s_cardTabs[tab]->winSetPosition( tabLeft, at( 164 ) );
+		s_cardTabs[tab]->winSetSize( width, at( 34 ) );
+		tabLeft += width + at( 8 );
 		s_cardTabs[tab]->winSetDrawFunc( drawCardTab );
 	}
 	if (OnlineIsEnabled())
@@ -1958,12 +2061,16 @@ void GameSpyPlayerInfoOverlayInit( WindowLayout *layout, void *userData )
 		OnlinePlayerInfo card;
 		OnlineGetPlayerInfo(nick, card);
 		s_onlineInfoSerial = card.serial;
-		GameWindow *cardWindow = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( "PopupPlayerInfo.wnd:PopupParentOld" ) );
 		if (cardWindow && cardWindow->winGetDrawFunc() != drawCardWindow)
 		{
 			s_cardWindowDraw = cardWindow->winGetDrawFunc();
 			cardWindow->winSetDrawFunc( drawCardWindow );
 		}
+		UIStyle::setMenuKey( buttonClose, TRUE );
+		UIStyle::setMenuKey( buttonBuddies, FALSE );
+		// the screen under the card steps back and takes no clicks while it is up, as a box's does
+		if (parent)
+			TheWindowManager->winSetModal( parent );
 		openCardTab( CARD_TAB_AI );
 		if (buttonBuddies)
 			buttonBuddies->winHide( profileUrl( nick ).isEmpty() );
@@ -2012,6 +2119,8 @@ void GameSpyPlayerInfoOverlayShutdown( WindowLayout *layout, void *userData )
 	// hide menu
 	layout->hide( TRUE );
 
+	if( parent && OnlineIsEnabled() )
+		TheWindowManager->winUnsetModal( parent );
 	parent = NULL;
 
 	// the card's words go with it; its windows are destroyed after this
@@ -2073,16 +2182,19 @@ WindowMsgHandledType GameSpyPlayerInfoOverlayInput( GameWindow *window, Unsigned
 			{
 
 				// ----------------------------------------------------------------------------------------
+				case KEY_ENTER:		// -online: Close is the card's lit key, Enter's
+					if( !OnlineIsEnabled() )
+						break;
 				case KEY_ESC:
 				{
-					
+
 					//
 					// send a simulated selected event to the parent window of the
 					// back/exit button
 					//
 					if( BitTest( state, KEY_STATE_UP ) )
 					{
-						TheWindowManager->winSendSystemMsg( window, GBM_SELECTED, 
+						TheWindowManager->winSendSystemMsg( window, GBM_SELECTED,
 																							(WindowMsgData)buttonClose, buttonCloseID );
 
 					}  // end if

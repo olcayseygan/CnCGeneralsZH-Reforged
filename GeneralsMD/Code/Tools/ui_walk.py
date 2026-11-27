@@ -10,6 +10,7 @@
     python ui_walk.py observer        a match watched as an observer, its HUD
     python ui_walk.py end             the end screen of an observed match left at once
     python ui_walk.py apocalypse      the Apocalypse room (Solo Play, Mods, Apocalypse)
+    python ui_walk.py ladder          the online ladder, signed in (ZHR_UI_WALK_ONLINE; also skins, card)
     python ui_walk.py all             every screen above, one launch after another (or main,options,...)
 
     --res 1280x720   --lang turkish   --only <name part>   --rows <n>   --json <file>
@@ -136,7 +137,25 @@ SCREENS = {
                       r"Maps\Tournament Desert\Tournament Desert.map"], nav=[], match=True, post=["leave"]),
     "apocalypse": dict(args=[], nav=["MainMenu.wnd:ButtonSinglePlayer", "MainMenu.wnd:ButtonMods",
                                      "MainMenu.wnd:ButtonModeApocalypse"]),
+    # the signed-in online pages: "@online" is the switches in ZHR_UI_WALK_ONLINE (or the file it names)
+    # that reach a server and sign in, -online host:port -onlineca ca.pem -onlineuser mail -onlinepass pass,
+    # as online/online_check.py's Stack makes them for a local site and server; wait names the hub's window
+    # the sign-in lands on, a fresh user folder building its map cache first
+    "ladder": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:TabLadder", nav=["WOLWelcomeMenu.wnd:TabLadder"]),
+    "skins": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:TabSkins", nav=["WOLWelcomeMenu.wnd:TabSkins"]),
+    "card": dict(args=["@online"], wait="WOLWelcomeMenu.wnd:ButtonMyInfo", nav=["WOLWelcomeMenu.wnd:ButtonMyInfo"]),
 }
+
+
+def online_switches():
+    """The sign-in switches "@online" stands for: ZHR_UI_WALK_ONLINE, or the file it names."""
+    value = os.environ.get("ZHR_UI_WALK_ONLINE", "")
+    if value and os.path.isfile(value):
+        with open(value, encoding="utf-8") as f:
+            value = f.read()
+    if not value.strip():
+        raise Crashed("ZHR_UI_WALK_ONLINE names no server and account")
+    return value.split()
 
 
 class Crashed(RuntimeError):
@@ -197,7 +216,8 @@ class Game(object):
         args = [os.path.join(RUN, "generals.exe"), "-win", "-xres", str(w), "-yres", str(h), "-msaa", "0",
                 "-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-control", str(self.opts.port),
                 "-language", self.opts.lang, "-logPrefix", "uiwalk_%s_%d_" % (self.screen, self.launches)]
-        args += self.spec["args"]
+        for arg in self.spec["args"]:
+            args += online_switches() if arg == "@online" else [arg]
         env = dict(os.environ, ZH_USER_DATA_DIR=ud, ZH_UNATTENDED="1")
         self.userdir = ud
         self.proc = subprocess.Popen(args, cwd=RUN, env=env)
@@ -232,6 +252,12 @@ class Game(object):
                     break
                 time.sleep(1.0)
             settle(self, minimum=2.0)
+        if self.spec.get("wait"):
+            while self.spec["wait"] not in named(self.tree()):
+                if time.time() - t0 > 300:
+                    raise Crashed("%s never came up" % self.spec["wait"])
+                time.sleep(2.0)
+            settle(self, minimum=1.0)
         for name in self.spec["nav"]:
             self.click_until(name)
         return settle(self, minimum=1.0)

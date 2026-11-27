@@ -2162,6 +2162,7 @@ GameEngine/Include/GameClient/GameWindowTransitions.h
 GameEngine/Include/GameClient/GlobalLanguage.h
 GameEngine/Include/GameClient/GraphDraw.h
 GameEngine/Include/GameClient/GroupPanel.h
+GameEngine/Include/GameClient/GrownRadarSize.h
 GameEngine/Include/GameClient/HeaderTemplate.h
 GameEngine/Include/GameClient/HintSpy.h
 GameEngine/Include/GameClient/HotKey.h
@@ -2238,6 +2239,7 @@ GameEngine/Include/GameLogic/AIPlayer.h
 GameEngine/Include/GameLogic/AISkirmishPlayer.h
 GameEngine/Include/GameLogic/AIStateMachine.h
 GameEngine/Include/GameLogic/AITNGuard.h
+GameEngine/Include/GameLogic/AodDirector.h
 GameEngine/Include/GameLogic/ApocalypseDirector.h
 GameEngine/Include/GameLogic/Armor.h
 GameEngine/Include/GameLogic/ArmorSet.h
@@ -3191,6 +3193,7 @@ GameEngine/Source/GameLogic/ScriptEngine/ScriptConditions.cpp
 GameEngine/Source/GameLogic/ScriptEngine/ScriptEngine.cpp
 GameEngine/Source/GameLogic/ScriptEngine/Scripts.cpp
 GameEngine/Source/GameLogic/ScriptEngine/VictoryConditions.cpp
+GameEngine/Source/GameLogic/System/AodDirector.cpp
 GameEngine/Source/GameLogic/System/ApocalypseDirector.cpp
 GameEngine/Source/GameLogic/System/CRCSnapshotRing.cpp
 GameEngine/Source/GameLogic/System/CaveSystem.cpp
@@ -4862,6 +4865,7 @@ Tests/test_gametext_csf.cpp
 Tests/test_global_new_alignment.cpp
 Tests/test_glyph_rasteriser.cpp
 Tests/test_ground_marks.cpp
+Tests/test_grown_radar.cpp
 Tests/test_harness.h
 Tests/test_hazard_cloud_bake.cpp
 Tests/test_hazard_cloud_policy.cpp

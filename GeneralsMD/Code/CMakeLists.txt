@@ -2497,6 +2497,9 @@ target_include_directories(test_directstrikehud PRIVATE ${CMAKE_CURRENT_SOURCE_D
 # GameClient/ObserverHudLayout.h: the watcher's radar box, right box, followed player's panel and Tab screen, 2 to 32 seats.
 add_lib_test(test_observerhud)
 target_include_directories(test_observerhud PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
+# GameClient/GrownRadarSize.h: how tall Minimap Size draws the radar in a side's frame.
+add_lib_test(test_grown_radar)
+target_include_directories(test_grown_radar PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
 # W3DDevice/GameClient/TerrainSubdivide.h: the subdivided ground through the samples, near the plane.
 add_lib_test(test_terrain_subdivide)
 target_include_directories(test_terrain_subdivide PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)

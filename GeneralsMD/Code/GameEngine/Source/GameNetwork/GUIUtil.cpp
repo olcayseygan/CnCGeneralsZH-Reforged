@@ -3064,7 +3064,7 @@ namespace
 		if (!network || !slot->isHuman())
 			return;
 		// the second line: the online rating after the ping light, the seat's state at the cell's right
-		const Int line = top + 66;
+		const Int line = top + 62;		// the ping light's middle (placeRoomRow: 50 down, 24 tall)
 		if (theRoomKind == ROOM_ONLINE)
 		{
 			AsciiString nick;
@@ -3751,6 +3751,18 @@ namespace
 		}
 	}
 
+	/* A seat's row's boxes, every gap between two of them on the 8 px grid down the whole list,
+		 rows of 90 (seated) and 52 (open or closed) mixed in any order (the UI walker's lint):
+		 a seated row's boxes 42 tall from +20 (48 to the next seated row's), an open row's one box 44
+		 tall from +4 (8 to the next open row's), a computer's level from +4 and its personality 8
+		 under it, a network player's name from +4 and his ping 8 under it.  Every top is 4 off the
+		 8 grid, so any row after any other lands its boxes 8, 16, 32 or 48 under the last ones. */
+	const Int ROW_BOX_TOP = 20, ROW_BOX_HEIGHT = 42;
+	const Int ROW_OPEN_TOP = 4, ROW_OPEN_HEIGHT = 44;
+	const Int ROW_LEVEL_TOP = 4, ROW_LEVEL_HEIGHT = 38;
+	const Int ROW_PERSONA_TOP = 50, ROW_PERSONA_HEIGHT = 28;
+	const Int ROW_PING_TOP = 50, ROW_PING_SIZE = 24;
+
 	/// a seat's row's windows round its top: a computer's level over its personality, a network
 	/// player's name over his second line, an open or closed seat's one box
 	void placeRoomRow(Int row, Int seat, Int top)
@@ -3764,13 +3776,14 @@ namespace
 		const Bool computer = slot->isAI();
 		const Bool network = theRoomKind != ROOM_SKIRMISH;
 		const Bool apocalypse = roomApocalypse();
+		const Int boxTop = top + ROW_BOX_TOP, boxBottom = boxTop + ROW_BOX_HEIGHT;
 		if (!seated)
 		{
-			// an Apocalypse row is a seat's height whoever sits there, its box on the row's middle
+			// an Apocalypse row is a seat's height whoever sits there, its box where a seated row's are
 			if (apocalypse)
-				roomPlace(w.player, 184, top + 23, 444, top + 67);
+				roomPlace(w.player, 184, boxTop, 444, boxBottom);
 			else
-				roomPlace(w.player, 184, top + 4, 444, top + 48);
+				roomPlace(w.player, 184, top + ROW_OPEN_TOP, 444, top + ROW_OPEN_TOP + ROW_OPEN_HEIGHT);
 			roomFont(w.player, UIStyle::MENU_TEXT_BODY);
 			GameWindow *rest[] = { w.persona, w.army, w.colour, w.team, w.handicap, w.ping };
 			for (Int i = 0; i < (Int)ARRAY_SIZE(rest); ++i)
@@ -3779,36 +3792,36 @@ namespace
 		}
 		if (computer)
 		{
-			roomPlace(w.player, 184, top + 9, 444, top + 47);
-			roomPlace(w.persona, 184, top + 51, 444, top + 81);
+			roomPlace(w.player, 184, top + ROW_LEVEL_TOP, 444, top + ROW_LEVEL_TOP + ROW_LEVEL_HEIGHT);
+			roomPlace(w.persona, 184, top + ROW_PERSONA_TOP, 444, top + ROW_PERSONA_TOP + ROW_PERSONA_HEIGHT);
 		}
 		else
 		{
 			if (network)
-				roomPlace(w.player, 184, top + 8, 444, top + 46);
+				roomPlace(w.player, 184, top + ROW_LEVEL_TOP, 444, top + ROW_LEVEL_TOP + ROW_LEVEL_HEIGHT);
 			else
-				roomPlace(w.player, 184, top + 23, 444, top + 67);
+				roomPlace(w.player, 184, boxTop, 444, boxBottom);
 			roomPark(w.persona);
 		}
 		roomFont(w.player, UIStyle::MENU_TEXT_ROW_FIGURE);
 		roomFont(w.persona, UIStyle::MENU_TEXT_HINT);
 		if (w.ping && theRoomKind == ROOM_ONLINE && slot->isHuman())
-			roomPlace(w.ping, 184, top + 56, 208, top + 80);
+			roomPlace(w.ping, 184, top + ROW_PING_TOP, 184 + ROW_PING_SIZE, top + ROW_PING_TOP + ROW_PING_SIZE);
 		else
 			roomPark(w.ping);
 		if (apocalypse)
 		{
 			// no team box: the director allies every seat whatever it says (README-apocalypse-room.md, A)
-			roomPlace(w.army, 460, top + 23, 856, top + 67);
-			roomPlace(w.colour, 872, top + 23, 1104, top + 67);
+			roomPlace(w.army, 460, boxTop, 856, boxBottom);
+			roomPlace(w.colour, 872, boxTop, 1104, boxBottom);
 			roomPark(w.team);
-			roomPlace(w.handicap, 1120, top + 23, 1262, top + 67);
+			roomPlace(w.handicap, 1120, boxTop, 1262, boxBottom);
 			return;
 		}
-		roomPlace(w.army, 460, top + 23, 780, top + 67);
-		roomPlace(w.colour, 796, top + 23, 976, top + 67);
-		roomPlace(w.team, 992, top + 23, 1104, top + 67);
-		roomPlace(w.handicap, 1120, top + 23, 1262, top + 67);
+		roomPlace(w.army, 460, boxTop, 780, boxBottom);
+		roomPlace(w.colour, 796, boxTop, 976, boxBottom);
+		roomPlace(w.team, 992, boxTop, 1104, boxBottom);
+		roomPlace(w.handicap, 1120, boxTop, 1262, boxBottom);
 	}
 
 	void parkRoomRow(Int row)
@@ -3841,8 +3854,12 @@ namespace
 			if (md)
 				count = max(count, min((Int)MAX_SLOTS, md->m_numPlayers));
 		}
+		/* The Apocalypse room lists its four seats always.  Its skirmish map is made for the seats taken,
+			 so the count above (the last seat not closed, or the map's starts) dropped a seat closed at the
+			 end of the four off the list, and nothing could open it again: its row was parked and the
+			 walker's picks on it went nowhere. */
 		if (IsApocalypseMap(theRoomGame->getMap()))
-			count = min(count, (Int)APOCALYPSE_SEATS);
+			count = min(theRoomRowCount, (Int)APOCALYPSE_SEATS);
 		Bool listOpen = FALSE;
 		for (Int row = 0; row < theRoomRowCount; ++row)
 			listOpen = listOpen || roomComboOpen(theRoomRows[row].team);

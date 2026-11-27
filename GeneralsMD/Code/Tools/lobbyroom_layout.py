@@ -669,7 +669,9 @@ def place_record(layout, menu, container):
     for row, (label_name, value_name) in enumerate(STAT_ROWS):
         row_top = body_top + 16 + row * STAT_PITCH
         label = need(layout, label_name)
-        label.place(stats_left + 16 - TEXT_NUDGE, row_top, value_left - stats_left - 16, CONTROL_HEIGHT)
+        # the word ends 8 before its figure (it ended 10 before: the nudge came off its width too)
+        label_left = stats_left + 16 - TEXT_NUDGE
+        label.place(label_left, row_top, value_left - GAP - label_left, CONTROL_HEIGHT)
         left_align(label)
         need(layout, value_name).place(value_left, row_top, STAT_VALUE_WIDTH, CONTROL_HEIGHT)
     record = need(layout, "ButtonRecord")

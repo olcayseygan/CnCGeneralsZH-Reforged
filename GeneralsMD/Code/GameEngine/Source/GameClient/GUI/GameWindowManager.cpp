@@ -1199,7 +1199,15 @@ WinInputReturnCode GameWindowManager::winProcessMouseEvent( GameWindowMessage ms
 					if( m_loneWindow && m_loneWindow == oldLoneWindow 
 					&&( msg == GWM_LEFT_UP || msg == GWM_MIDDLE_UP || msg == GWM_RIGHT_UP || tempWin))
 					{
-						if(!m_loneWindow->winIsChild(tempWin))
+						/* A combo box stays the lone window after a pick from its list (that pick's release
+							 goes the grab window's way and never comes here).  A press on its field then
+							 opens the list again, the box itself takes the release, and winIsChild is FALSE
+							 for the window itself: the lone was let go with a GGM_CLOSE that shut the list
+							 the same release had opened, so the second open of any combo took two clicks.
+							 The box that took the release is its own; only another window closes it. */
+						const Bool ownRelease = tempWin == m_loneWindow
+							&& BitTest( m_loneWindow->winGetStyle(), GWS_COMBO_BOX );
+						if( !ownRelease && !m_loneWindow->winIsChild(tempWin) )
 							winSetLoneWindow( NULL );
 						/*
 								ComboBoxData *cData = (ComboBoxData *)m_comboBoxOpen->winGetUserData();

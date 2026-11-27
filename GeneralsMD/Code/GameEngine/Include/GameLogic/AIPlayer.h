@@ -819,6 +819,7 @@ protected:
 	Bool pressureHere(void) const;								///< -aiknobsoff pressure is not on this seat
 	void defendAlly(void);												///< Supporter: idle units at home go to an ally's base when it is hit
 	void postTeamRequests(void);									///< what this AI asks of its allies, every wave tick
+	void readHumanAllyAttacks(void);							///< a person ally's attack, read off his army, noted as his posted attack
 	void answerTeamRequests(void);								///< Air, Attacker and Rusher answer an ally's call for help
 	const AITeamRequest *freshRequest(AITeamRequestKind kind, UnsignedInt within) const;	///< the request of that kind posted inside within frames, NULL for none
 	void coopChat(const char *trigger);					///< one line to the team when answering, GUI:AICoop<trigger>

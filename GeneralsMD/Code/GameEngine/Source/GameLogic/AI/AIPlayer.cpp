@@ -13821,6 +13821,8 @@ void AIPlayer::doWaves( void )
 	defendHome();
 	notePersonaProgress();
 	postTeamRequests();
+	if( teamPlayHere() )
+		readHumanAllyAttacks();		// a person's attack is a call too, read off his army
 	if( m_persona != AIPERSONA_NORMAL )
 		answerTeamRequests();
 	if( m_persona == AIPERSONA_SUPPORTER || ( m_persona == AIPERSONA_NORMAL && teamPlayHere() ) )
@@ -25743,6 +25745,91 @@ void AIPlayer::postTeamRequests( void )
 	}
 	if( now > COOP_POOR_AFTER_FRAMES && (Int)m_player->getMoney()->countMoney() < COOP_POOR_BANK )
 		aiPostTeamRequest( m_player, AIREQ_MONEY, -1, &m_baseCenter );
+}
+
+/** A person's attack, read off his army: his units away from his buildings that are shooting at an enemy of ours,
+	* worth HUMAN_ATTACK_SHARE of a wave of ours against one enemy, are his posted attack on that enemy, at the
+	* middle of what they shoot.  A person posts only by beacon or chat command, and in a 2v2 with a computer none
+	* did: the computer went on with its own clock while its partner fought alone.  Read every wave look and noted
+	* at most every AI_COOP_JOIN_FRAMES per person, so a long fight is one call and a fresh one after it. */
+static const Real HUMAN_ATTACK_SHARE = 0.5f;
+static const Real HUMAN_HOME_REACH = 600.0f;	///< from the middle of his buildings, his own base
+
+void AIPlayer::readHumanAllyAttacks( void )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const AITeamRequest *last = freshRequest( AIREQ_ATTACK, AI_COOP_JOIN_FRAMES );
+	const Real least = HUMAN_ATTACK_SHARE * wavePower();
+	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+	{
+		Player *ally = ThePlayerList->getNthPlayer( i );
+		if( ally == m_player || ally->getPlayerType() != PLAYER_HUMAN || !ally->isPlayableSide() ||
+				ally->getRelationship( m_player->getDefaultTeam() ) != ALLIES || m_player->getRelationship( ally->getDefaultTeam() ) != ALLIES )
+			continue;
+		if( last && last->from == ally->getPlayerIndex() )
+			continue;		// his attack is already on the board
+		std::vector<Object *> owned;
+		ally->iterateObjects( collectOwned, &owned );
+		Coord3D home;
+		home.zero();
+		Real buildings = 0.0f;
+		for( size_t o = 0; o < owned.size(); ++o )
+		{
+			if( owned[ o ]->isKindOf( KINDOF_STRUCTURE ) && !owned[ o ]->isEffectivelyDead() )
+			{
+				home.x += owned[ o ]->getPosition()->x;
+				home.y += owned[ o ]->getPosition()->y;
+				buildings += 1.0f;
+			}
+		}
+		if( buildings <= 0.0f )
+			continue;
+		home.x /= buildings;
+		home.y /= buildings;
+		// what his units away from home shoot at, by the enemy it belongs to
+		Real power[ MAX_PLAYER_COUNT ];
+		Coord3D at[ MAX_PLAYER_COUNT ];
+		for( Int e = 0; e < MAX_PLAYER_COUNT; ++e )
+		{
+			power[ e ] = 0.0f;
+			at[ e ].zero();
+		}
+		for( size_t o = 0; o < owned.size(); ++o )
+		{
+			const Object *unit = owned[ o ];
+			const AIUpdateInterface *ai = unit->getAI();
+			if( ai == NULL || unit->isEffectivelyDead() || unit->isKindOf( KINDOF_STRUCTURE ) || unit->isKindOf( KINDOF_IMMOBILE ) ||
+					unit->isKindOf( KINDOF_DOZER ) || unit->isKindOf( KINDOF_HARVESTER ) || unit->isContained() )
+				continue;
+			if( sqr( unit->getPosition()->x - home.x ) + sqr( unit->getPosition()->y - home.y ) <= sqr( HUMAN_HOME_REACH ) )
+				continue;
+			const Object *victim = ai->getCurrentVictim();
+			if( victim == NULL || victim->isEffectivelyDead() || victim->getControllingPlayer() == NULL ||
+					!victim->getControllingPlayer()->isPlayableSide() || m_player->getRelationship( victim->getTeam() ) != ENEMIES )
+				continue;
+			const Int e = victim->getControllingPlayer()->getPlayerIndex();
+			if( e < 0 || e >= MAX_PLAYER_COUNT )
+				continue;
+			const Real worth = aiCombatPower( unit );
+			power[ e ] += worth;
+			at[ e ].x += victim->getPosition()->x * worth;
+			at[ e ].y += victim->getPosition()->y * worth;
+		}
+		Int best = -1;
+		for( Int e = 0; e < MAX_PLAYER_COUNT; ++e )
+			if( power[ e ] > 0.0f && ( best < 0 || power[ e ] > power[ best ] ) )
+				best = e;
+		if( best < 0 || power[ best ] < least )
+			continue;
+		Coord3D aim;
+		aim.x = at[ best ].x / power[ best ];
+		aim.y = at[ best ].y / power[ best ];
+		aim.z = TheTerrainLogic->getGroundHeight( aim.x, aim.y );
+		DEBUG_LOG(("AI COOP frame %d player %d reads person %d's attack on player %d at (%.0f,%.0f), %.0f of army (a wave of ours %.0f)\n", now,
+			m_player->getPlayerIndex(), ally->getPlayerIndex(), best, aim.x, aim.y, power[ best ], wavePower()));
+		noteTeamRequest( AIREQ_ATTACK, ally->getPlayerIndex(), best, &aim );
+		return;		// one call a look
+	}
 }
 
 /** An ally's call for help, answered by the Air AI with its idle aircraft at the attacker (an air raid

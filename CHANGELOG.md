@@ -29,6 +29,7 @@ found and fixed, EA's own, not port damage.**
 - A dear unit at low health was pulled out of a fight its side was winning by nineteen to one, then drove a thousand paces home alone and died on the road. It now stays in a fight that is going its way.
 - A hurt unit sent back for repair took the repair bay's own road, straight across whatever stood between, and Overlords died on the way home. When the computer knows guns or an army on that road, the unit now walks round them first and drives into the bay once it is there.
 - A computer's Humvee full of missile men kept its distance by its own machine gun's reach, so it drove in close enough for the tanks to answer. It now keeps to the reach of the men firing out of it, and the soldiers with rockets and missiles get the seats first.
+- A computer ally only answered a person's attack when he marked it with a beacon or a chat command. It now sees it on its own: once your army away from home is fighting an enemy and is worth half of one of its own attacks, it turns on that enemy and sends what it has gathered to join you.
 - Replays with a computer player recorded before this change will not play back.
 
 ## Huge battles run lighter

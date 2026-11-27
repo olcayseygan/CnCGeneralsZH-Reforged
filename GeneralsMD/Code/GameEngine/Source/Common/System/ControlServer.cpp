@@ -1423,9 +1423,19 @@ static Bool handleUiCommand( const AsciiString &command )
 			replyMembers( FALSE, "uitype", "\"error\":\"no window has the keyboard; uiclick the entry first\"" );
 			return TRUE;
 		}
+		/* the socket's text is UTF-8: each sequence is one character, sent wide as WM_CHAR brings it, so a
+			 Turkish c-cedilla typed here reaches the box as one letter, the way the player's keyboard types it */
 		Int typed = 0;
-		for( const unsigned char *at = (const unsigned char *)line + 7; *at; ++at, ++typed )
-			TheWindowManager->winSendInputMsg( focus, GWM_IME_CHAR, (WindowMsgData)*at, 0 );
+		for( const unsigned char *at = (const unsigned char *)line + 7; *at; ++typed )
+		{
+			UnsignedInt c = *at++;
+			Int more = c >= 0xF0 ? 3 : ( c >= 0xE0 ? 2 : ( c >= 0xC0 ? 1 : 0 ) );
+			if (more > 0)
+				c &= 0x3F >> more;
+			for( ; more > 0 && ( *at & 0xC0 ) == 0x80; --more )
+				c = ( c << 6 ) | ( *at++ & 0x3F );
+			TheWindowManager->winSendInputMsg( focus, GWM_IME_CHAR, (WindowMsgData)( c > 0xFFFF ? 0xFFFD : c ), 0 );
+		}
 		std::string members( "\"to\":" );
 		appendJsonString( members, uiWindowName( focus ) );
 		char piece[ 32 ];

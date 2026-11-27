@@ -89,6 +89,8 @@ INPUT_KINDS = ("button", "check", "radio", "hslider", "vslider", "list", "entry"
 GADGET_KINDS = INPUT_KINDS + ("static", "progress")
 # box buttons that would leave the walk (quit, start a mission, accept a change): not pressed
 COMMITS = re.compile(r"(Yes|Ok|OK|Accept|Start|Play|Quit|Exit)$")
+# never pressed anywhere: the player card's COMMUNICATOR opens the web profile in the browser
+NEVER = re.compile(r"ButtonCommunicator$")
 # buttons a restore may press to step back, in this order
 BACKS = ("Cancel", "No", "Back", "Close", "Ok", "OK")
 
@@ -911,6 +913,9 @@ class Walk(object):
         buttons = [w for w in controls(tree, self.area) if w["n"].startswith(layout + ":")]
         print("    buttons: %s" % (short([b["n"] for b in buttons], 8) or "none"), flush=True)
         for b in buttons:
+            if NEVER.search(b["n"]):
+                self.record("  [%s] %s" % (layout, leaf(b["n"])), "skipped", "opens the browser", path + [trigger])
+                continue
             if COMMITS.search(leaf(b["n"])):
                 self.record("  [%s] %s" % (layout, leaf(b["n"])), "skipped", "commits", path + [trigger])
                 continue
@@ -932,7 +937,8 @@ class Walk(object):
             self.faults.add("covered: %s under %s" % (leaf(n), leaf(by)))
         todo = [w for w in controls(tree, self.area) if w["n"] not in self.done
                 and (not self.opts.only or self.opts.only.lower() in w["n"].lower())
-                and w["n"].startswith(self.game.spec.get("prefix", ""))]		# a picker's own windows, not the room's
+                and w["n"].startswith(self.game.spec.get("prefix", ""))		# a picker's own windows, not the room's
+                and not NEVER.search(w["n"])]
         for w in todo:
             if w["n"] in self.done:		# a deeper walk got to it first
                 continue

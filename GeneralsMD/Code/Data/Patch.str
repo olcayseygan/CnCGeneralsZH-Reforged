@@ -727,6 +727,27 @@ TOOLTIP:MasterVolume
 "Turns the whole game up or down: music, effects, voices, ambience and movies. The other sliders keep the mix, this one sets how loud the mix is."
 END
 
+// The Audio page's faders, short: every name under them takes these once one full name does not fit
+GUI:MasterVolume_Short
+"Master"
+END
+
+GUI:MusicVolume_Short
+"Music"
+END
+
+GUI:SFXVolume_Short
+"Sound FX"
+END
+
+GUI:VoiceVolume_Short
+"Voice"
+END
+
+GUI:AmbientVolume_Short
+"Ambient"
+END
+
 GUI:OptionsGroupMusic
 "Music"
 END

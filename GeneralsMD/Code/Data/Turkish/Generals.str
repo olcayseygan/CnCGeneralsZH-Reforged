@@ -15498,6 +15498,27 @@ TOOLTIP:MasterVolume
 "Oyunun tamamını açar ya da kısar: müzik, efektler, konuşmalar, ortam ve videolar. Öteki sürgüler karışımı ayarlar, bu sürgü karışımın ne kadar yüksek çalacağını."
 END
 
+// Ses sayfasının sürgüleri, kısa: bir ad sığmayınca hepsi bunları alır
+GUI:MasterVolume_Short
+"Genel"
+END
+
+GUI:MusicVolume_Short
+"Müzik"
+END
+
+GUI:SFXVolume_Short
+"Efekt"
+END
+
+GUI:VoiceVolume_Short
+"Konuşma"
+END
+
+GUI:AmbientVolume_Short
+"Ortam"
+END
+
 GUI:OptionsGroupMusic
 "Müzik"
 END

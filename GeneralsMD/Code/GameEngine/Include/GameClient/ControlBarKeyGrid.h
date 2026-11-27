@@ -31,7 +31,7 @@ enum { KEY_GRID_QUEUE_CELLS = 9 };		///< the production queue's cells over the s
 	* with the signal keys and the four tool keys, the spine standing out of the box's right side with the
 	* power meter sunk in it and the money head on it, and the deck of three rows hanging off the spine.
 	* The right side (portrait, rank, minimise and General keys) is the Reforged bar's and not here.
-	* Mock: C:\zhr-proofs\hotkeys\mock-V21-*.png, mock_v21.py's v21() at 1920x1080. */
+	* The owner's V21 mockups at 1920x1080; Tools/hud_key_grid.py's rects() and compose() hold the same numbers. */
 //-------------------------------------------------------------------------------------------------
 struct KeyGridRects
 {

@@ -1,4 +1,4 @@
-// The Key Grid layout (HUD_LAYOUT_GRID, the owner's of 2026-11-27; mockups C:\zhr-proofs\hotkeys\mock-V21-*.png):
+// The Key Grid layout (HUD_LAYOUT_GRID, the owner's of 2026-11-27, after the owner's V21 mockups):
 // the Reforged bar with its commands as three staggered keyboard rows of six on a deck that hangs off the
 // radar box, the box cut to the map's own shape.  The pure half (where everything stands, which structure
 // the rows open with) and ControlBar's half: ControlBar.wnd's windows put on those rectangles after
@@ -280,12 +280,26 @@ static AsciiString mirrorKey( const ThingTemplate *thing )
 //-------------------------------------------------------------------------------------------------
 Bool ControlBar::getKeyGridPlaces( Int *places ) const
 {
+	// A transport's seat with nobody in it: EA shows every seat's exit button, the empty ones on the
+	// empty-seat picture, and updateContextCommand enables them all each frame, so the window's state
+	// says nothing.  A passenger is a window doTransportInventoryUI wrote into m_containData; the rest
+	// are empty seats, which take no place under Key Grid and fold away (arrangeKeyGrid)
+	auto emptySeat = [ & ]( GameWindow *window ) -> Bool
+	{
+		const CommandButton *command = (const CommandButton *)GadgetButtonGetData( window );
+		if( command == NULL || command->getCommandType() != GUI_COMMAND_EXIT_CONTAINER )
+			return FALSE;
+		for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+			if( m_containData[ i ].control == window && m_containData[ i ].objectID != INVALID_ID )
+				return FALSE;
+		return TRUE;
+	};
 	const Bool groupShown = !m_contextParent[ CP_COMMAND ]->winIsHidden();
 	const CommandButton *commands[ MAX_COMMANDS_PER_SET ];
 	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
 	{
 		GameWindow *window = m_commandWindows[ slot ];
-		commands[ slot ] = ( groupShown && window && !BitTest( window->winGetStatus(), WIN_STATUS_HIDDEN ) )
+		commands[ slot ] = ( groupShown && window && !BitTest( window->winGetStatus(), WIN_STATUS_HIDDEN ) && !emptySeat( window ) )
 			? (const CommandButton *)GadgetButtonGetData( window ) : NULL;
 	}
 	const Object *obj = m_currentSelectedDrawable ? m_currentSelectedDrawable->getObject() : NULL;
@@ -444,6 +458,23 @@ static IRegion2D moved( const IRegion2D &r, const ICoord2D &d )
 	out.lo.y += d.y;
 	out.hi.y += d.y;
 	return out;
+}
+
+/// a rectangle of no size at r's bottom left corner
+static IRegion2D folded( const IRegion2D &r )
+{
+	IRegion2D out;
+	out.lo.x = out.hi.x = r.lo.x;
+	out.lo.y = out.hi.y = r.hi.y;
+	return out;
+}
+
+/// the production queue's entries on the bar now: its tray ends after the last (QueueCap, QueueCell, QueueLast)
+static Int queueEntries( UnsignedInt shown, const GameWindow *queueParent )
+{
+	if( queueParent == NULL || const_cast< GameWindow * >( queueParent )->winIsHidden() )
+		return 0;
+	return MIN( (Int)shown, (Int)MAX_BUILD_QUEUE_BUTTONS );
 }
 
 static IRegion2D joined( const IRegion2D &a, const IRegion2D &b )
@@ -636,6 +667,7 @@ void ControlBar::arrangeKeyGrid( void )
 	Int places[ MAX_COMMANDS_PER_SET ];
 	getKeyGridPlaces( places );
 	const Bool lettered = TheGlobalData->m_hotkeyScheme == HOTKEY_SCHEME_GRID;
+	const Bool tray = keyGridTrayView();
 	const Bool standIn = m_standInBuilderID != INVALID_DRAWABLE_ID && m_currentSelectedDrawable
 		&& m_currentSelectedDrawable->getID() == m_standInBuilderID;
 	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
@@ -644,8 +676,15 @@ void ControlBar::arrangeKeyGrid( void )
 		if( win == NULL )
 			continue;
 		const Int place = places[ slot ];
-		if( place < 0 )
+		if( place < 0 || tray )
+		{
+			// a shown window with no place (an empty seat), or any while the squad's tray has the deck,
+			// folds to nothing at the deck's corner, where it neither draws nor takes a click; it opens on
+			// its cell the frame it gets a place back
+			if( !BitTest( win->winGetStatus(), WIN_STATUS_HIDDEN ) )
+				placeWindowAt( win, folded( moved( kg.deck, d ) ) );
 			continue;
+		}
 		placeWindowAt( win, moved( kg.cells[ place ], d ) );
 		if( !lettered )
 			continue;
@@ -660,6 +699,12 @@ void ControlBar::arrangeKeyGrid( void )
 		else
 			win->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON );
 	}
+
+	// the production queue's tray ends after its last entry: the empty buttons past it fold away
+	const Int entries = queueEntries( m_displayedQueueCount, m_contextParent[ CP_BUILD_QUEUE ] );
+	for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS && i < KEY_GRID_QUEUE_CELLS; i++ )
+		if( m_keyGridQueueButtons[ i ] != NULL )
+			placeWindowAt( m_keyGridQueueButtons[ i ], i < entries ? moved( kg.queue[ i ], d ) : folded( moved( kg.queue[ i ], d ) ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -738,14 +783,7 @@ void ControlBar::drawKeyGridConsole( void )
 	auto put = [ & ]( Int which, Real x, Real y ) { stretch( which, x, y, x + W( which ), y + H( which ) ); };
 
 	// the production queue's tray climbs from the shelf with one cell an entry shown
-	Int queue = 0;
-	if( m_contextParent[ CP_BUILD_QUEUE ] != NULL && !m_contextParent[ CP_BUILD_QUEUE ]->winIsHidden() )
-		for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS; i++ )
-		{
-			GameWindow *button = m_keyGridQueueButtons[ i ];
-			if( button != NULL && !button->winIsHidden() )
-				queue = i + 1;
-		}
+	const Int queue = queueEntries( m_displayedQueueCount, m_contextParent[ CP_BUILD_QUEUE ] );
 
 	if( deck != NULL )
 	{
@@ -830,38 +868,48 @@ void ControlBar::drawKeyGridConsole( void )
 	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
 		if( places[ slot ] >= 0 )
 			used[ places[ slot ] ] = TRUE;
-	const Image *empty = piece( ControlBarScheme::KEY_GRID_KEY_EMPTY );
-	for( Int place = 0; place < COMMAND_PLACE_COUNT && empty != NULL; place++ )
+	for( Int place = 0; place < COMMAND_PLACE_COUNT; place++ )
 		if( !used[ place ] )
-		{
-			const IRegion2D cell = moved( kg.cells[ place ], d );
-			TheDisplay->drawImage( empty, cell.lo.x, cell.lo.y, cell.hi.x, cell.hi.y );
-		}
-	if( TheGlobalData->m_hotkeyScheme != HOTKEY_SCHEME_GRID )
+			drawKeyGridEmptyKey( place, moved( kg.cells[ place ], d ),
+				fights && ( place == COMMAND_PLACE_ATTACK || place == COMMAND_PLACE_HOLD || place == COMMAND_PLACE_MOVE ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A place with no button: the side's KeyEmpty (a dark well without it), and under Key Grid's keys its
+	* letter dim in the middle, a shade brighter when `live`.  The deck's commands and GroupPanel's squad
+	* tray both draw their empty places so. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::drawKeyGridEmptyKey( Int place, const IRegion2D &cell, Bool live ) const
+{
+	if( place < 0 || place >= COMMAND_PLACE_COUNT || TheDisplay == NULL )
 		return;
-	GameFont *font = TheFontLibrary ? TheFontLibrary->getFont( "Arial", MAX( 8, REAL_TO_INT( 15.0f * kg.scale + 0.5f ) ), TRUE ) : NULL;
-	for( Int place = 0; place < COMMAND_PLACE_COUNT && font != NULL; place++ )
+	const Image *const *art = m_controlBarSchemeManager ? m_controlBarSchemeManager->getKeyGridPieces() : NULL;
+	const Image *empty = art ? art[ ControlBarScheme::KEY_GRID_KEY_EMPTY ] : NULL;
+	if( empty != NULL )
+		TheDisplay->drawImage( empty, cell.lo.x, cell.lo.y, cell.hi.x, cell.hi.y );
+	else
+		darkWell( cell );
+	if( TheGlobalData->m_hotkeyScheme != HOTKEY_SCHEME_GRID || TheFontLibrary == NULL )
+		return;
+	// 15 points on a 72 high key at 1080
+	GameFont *font = TheFontLibrary->getFont( "Arial", MAX( 8, REAL_TO_INT( 15.0f * ( cell.hi.y - cell.lo.y ) / 72.0f + 0.5f ) ), TRUE );
+	if( font == NULL )
+		return;
+	DisplayString *&text = s_emptyLetter[ place ];
+	if( text == NULL )
 	{
-		if( used[ place ] )
-			continue;
-		DisplayString *&text = s_emptyLetter[ place ];
+		text = TheDisplayStringManager->newDisplayString();
 		if( text == NULL )
-		{
-			text = TheDisplayStringManager->newDisplayString();
-			if( text == NULL )
-				continue;
-			const WideChar letter[ 2 ] = { ControlBar_commandPlaceKey( place ), 0 };
-			text->setText( UnicodeString( letter ) );
-		}
-		if( text->getFont() != font )
-			text->setFont( font );
-		const Bool live = fights && ( place == COMMAND_PLACE_ATTACK || place == COMMAND_PLACE_HOLD || place == COMMAND_PLACE_MOVE );
-		const IRegion2D cell = moved( kg.cells[ place ], d );
-		Int w, h;
-		text->getSize( &w, &h );
-		text->draw( ( cell.lo.x + cell.hi.x - w ) / 2, ( cell.lo.y + cell.hi.y - h ) / 2,
-			live ? GameMakeColor( 150, 182, 204, 255 ) : GameMakeColor( 70, 104, 128, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+			return;
+		const WideChar letter[ 2 ] = { ControlBar_commandPlaceKey( place ), 0 };
+		text->setText( UnicodeString( letter ) );
 	}
+	if( text->getFont() != font )
+		text->setFont( font );
+	Int w, h;
+	text->getSize( &w, &h );
+	text->draw( ( cell.lo.x + cell.hi.x - w ) / 2, ( cell.lo.y + cell.hi.y - h ) / 2,
+		live ? GameMakeColor( 150, 182, 204, 255 ) : GameMakeColor( 70, 104, 128, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
 }
 
 //-------------------------------------------------------------------------------------------------

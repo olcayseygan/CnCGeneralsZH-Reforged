@@ -5943,6 +5943,10 @@ void ControlBar::showIdleButtons( Bool show )
 		// the Red Alert style sidebar has no idle keys (layoutSidebar); restoreClassicWindows brings them back
 		if( win && show && m_sidebarLayout )
 			hideForSidebar( win );
+		// Key Grid has the worker key on its shelf and no select army or idle infantry, vehicle and
+		// aircraft column (layoutKeyGrid); restoreClassicWindows brings them back
+		else if( win && show && m_keyGridLayout && i > 0 )
+			hideForSidebar( win );
 		else if( win )
 			win->winHide( !show || ( classic && i > 0 ) );
 	}

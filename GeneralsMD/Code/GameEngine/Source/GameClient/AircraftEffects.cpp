@@ -56,6 +56,7 @@ namespace
 	const Real ROLL_MIN_SPEED = 45.0f;			///< a takeoff roll fast enough to blow the tarmac's dust
 	const Real CONTRAIL_HEIGHT = 40.0f;
 	const Real WASH_HEIGHT = 140.0f;				///< a helicopter lower than this over its ground blows it about; they cruise at 100
+	const Real WASH_DOUBLE_HEIGHT = 40.0f;	///< and higher than this its rings read thin, so two a frame
 	const Real BARREL_HOT_SECONDS = 2.0f;		///< a burst this long heats the barrels
 	const Real BARREL_COOL_SECONDS = 2.5f;	///< and they shimmer this long after it
 	const UnsignedInt BURST_GAP = 12;				///< logic frames between shots that still count as one burst
@@ -361,19 +362,23 @@ namespace
 		(void)s;
 		if( obj->isEffectivelyDead() || height >= WASH_HEIGHT || height < -2.0f )
 			return;
-		// thicker the lower it hangs; a sitting one blows hardest
-		if( GameClientRandomValueReal( 0.0f, WASH_HEIGHT ) < height )
-			return;
+		// a puff ring every frame under WASH_HEIGHT, two above WASH_DOUBLE_HEIGHT: thinned by height, a
+		// Comanche at its cruise height of 100 left a faint haze the cloud shadows hid, its rings strung
+		// out along its track (2026-11-27)
 		const Coord3D *pos = obj->getPosition();
 		Coord3D under = *pos;
 		under.z = surface + 1.0f;
 		char name[ 64 ];
-		spawn( byGround( name, sizeof( name ), "ReforgedRotorWash", pos->x, pos->y, water ), under );
-		// over water, a fine ring of condensation off the rotor tips now and then
-		if( water && now % 6 == 0 )
+		byGround( name, sizeof( name ), "ReforgedRotorWash", pos->x, pos->y, water );
+		spawn( name, under );
+		if( height > WASH_DOUBLE_HEIGHT )
+			spawn( name, under );
+		// over water, a ring of condensation off the rotor tips at the rotor's height, apart from the
+		// spray on the water below it
+		if( water && now % 4 == 0 )
 		{
 			Coord3D rotor = *pos;
-			rotor.z += 4.0f;
+			rotor.z += 0.8f * obj->getGeometryInfo().getMaxHeightAbovePosition();
 			spawn( "ReforgedRotorTipRing", rotor );
 		}
 	}
@@ -482,7 +487,10 @@ void AircraftEffects_update( void )
 		const Matrix3D *m = obj->getTransformMatrix();
 		const Vector3 nose = m->Get_X_Vector();
 		const Real heading = WWMath::Atan2( nose.Y, nose.X );
-		const Real pitch = WWMath::Asin( WWMath::Clamp( nose.Z, -1.0f, 1.0f ) );
+		// The object's matrix carries the heading only: an aircraft's pitch and bank are the drawable's
+		// (Drawable::calcPhysicsXform*), so the nose's Z was always 0 and a pull-out never showed. The
+		// pull is read off the flight path instead, its climb angle from one step to the next.
+		Real pitch = s.pitch;
 		Real speed = 0.0f, turnRate = 0.0f, pitchRate = 0.0f, accel = 0.0f;
 		if( s.known )
 		{
@@ -492,7 +500,16 @@ void AircraftEffects_update( void )
 			step.sub( &s.pos );
 			speed = step.length() * perSecond / ticks;
 			turnRate = wrapAngle( heading - s.heading ) * perSecond / ticks;
-			pitchRate = ( pitch - s.pitch ) * perSecond / ticks;
+			// under two units a tick (a hover, a helicopter slowing) a hair of height swings the angle wide:
+			// a stopping Comanche logged 47 rad/s
+			const Real across = WWMath::Sqrt( step.x * step.x + step.y * step.y );
+			if( across > 2.0f * ticks )
+			{
+				pitch = WWMath::Atan2( step.z, across );
+				// only against a climb angle the last step measured too
+				if( s.speed > 2.0f * perSecond )
+					pitchRate = ( pitch - s.pitch ) * perSecond / ticks;
+			}
 			accel = speed - s.speed;
 		}
 

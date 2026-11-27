@@ -394,6 +394,13 @@ static const HeatLook HEAT_LOOKS[ 2 ] =
 	{ HEAT_EXHAUST_MIN_RADIUS, HEAT_EXHAUST_MAX_RADIUS, 0.0f, 1.0f, HEAT_EXHAUST_AMPLITUDE, HEAT_EXHAUST_MAX_SHIFT, HEAT_EXHAUST_FULL, HEAT_EXHAUST_GROWN, HEAT_EXHAUST_CLEARANCE }
 };
 
+// A heat source that draws nothing (HeatHaze on a blended template: a gun's barrels after a long
+// burst). It bends a sleeve round the barrels wider than a missile trail's 3 to 7, rising a little,
+// and over twice as hard as a fire: at a fire's strength the Comanche's burst only softened the
+// ground under its nose in a still (2026-11-27).
+static const HeatLook HEAT_BARREL_LOOK =
+	{ 12.0f, 18.0f, 0.5f, 1.4f, 0.5f, 0.013f, 6.0f, 0.0f, 12.0f };
+
 // A glowing laser's air (W3DLaserDraw::gatherHeat). No depth to hide behind, so the beam is kept
 // still by a band along it instead; HEAT_HAZE_CLEARANCE still keeps the unit it hits.
 static const Real HEAT_BEAM_RADIUS_SCALE = 0.5f;	///< a splat's radius over the halo's whole width: 5 to 11 for EA's lasers
@@ -427,8 +434,9 @@ static void gatherHeatHaze( CameraClass &camera, const std::vector<ParticleSyste
 	for (Int kind = 0; kind < 2; ++kind)
 	for (size_t i = 0; i < ( kind ? exhausts : fires ).size() && count < (Int)DIRECT3D11_HEAT_SPLAT_LIMIT; ++i)
 	{
-		const HeatLook &look = HEAT_LOOKS[ kind ];
 		ParticleSystem *sys = ( kind ? exhausts : fires )[ i ];
+		const HeatLook &look = ( kind && sys->getTemplate()->isHeatHaze() && sys->getShaderType() != ParticleSystemInfo::ADDITIVE )
+			? HEAT_BARREL_LOOK : HEAT_LOOKS[ kind ];
 		FireLights::Flames flames;
 		sumFlames( sys, flames );
 		if (flames.w <= 0.0f)

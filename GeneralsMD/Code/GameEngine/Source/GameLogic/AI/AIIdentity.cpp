@@ -24,7 +24,8 @@
 #include "GameLogic/AIIdentity.h"
 #include "GameLogic/LogicRandomValue.h"
 
-/** The player template's Side for every general.  A side not listed plays the shared AI alone. */
+/** The player template's Side for every general.  A side not listed plays the shared AI alone.  Append
+	* only, never remap: AIGeneral is written in saves (AIIdentity::xfer). */
 static const struct { const char *side; AIGeneral general; } AI_GENERAL_SIDES[] =
 {
 	{ "America",										AIGENERAL_USA },
@@ -71,10 +72,22 @@ void AIIdentity::drawMove( UnsignedInt move, Int chance )
 		m_moves |= move;
 }
 
+/** 2: the general.  A load whose general is not the one this side makes would hand a side class another
+	* class's fields, so it is refused. */
 void AIIdentity::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
+	if( version >= 2 )
+	{
+		Int general = (Int)m_general;
+		xfer->xferInt( &general );
+		if( xfer->getXferMode() == XFER_LOAD && general != (Int)m_general )
+		{
+			DEBUG_CRASH(( "AIIdentity::xfer - saved general %d, the side makes %d", general, (Int)m_general ));
+			throw XFER_INVALID_PARAMETERS;
+		}
+	}
 	xfer->xferUnsignedInt( &m_moves );
 }

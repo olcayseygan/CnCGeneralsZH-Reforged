@@ -90,7 +90,10 @@ public:
 	static AIGeneral generalOfSide( const AsciiString &side );
 
 protected:
-	/// one move of this match, on with chance percent: 100 or more draws nothing, under it one logic-stream draw
+	/// one move of this match, on with chance percent: 100 or more draws nothing, under it one logic-stream draw.
+	/// Draw only in onStart or onTick.  Never call a hook, or draw, inside look() or the scan jobs: they run on a
+	/// parallel_for (AIPlayer.cpp, the lookAllSeats jobs), and a draw there splits the logic stream.  The score
+	/// hooks (buildingScore, teamScore, wavePower, waveMaxHoldFrames, pullHealth) stay const and pure.
 	void drawMove( UnsignedInt move, Int chance );
 
 	AIPlayer		*m_ai;

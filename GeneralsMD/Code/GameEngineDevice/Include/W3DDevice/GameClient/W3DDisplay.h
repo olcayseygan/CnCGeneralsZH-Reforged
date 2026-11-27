@@ -122,6 +122,7 @@ public:
 															 Real fromDegrees, Real sweepDegrees, Color color = 0xFFFFFFFF );
 
 	virtual Bool drawBackdropBlur( Int startX, Int startY, Int endX, Int endY );
+	virtual void staleBackdrop( void );
 
 	/// draw a video buffer fit within the screen coordinates
 	virtual void drawVideoBuffer( VideoBuffer *buffer, Int startX, Int startY,

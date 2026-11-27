@@ -162,9 +162,12 @@ public:
 		* drawn into the box from (startX, startY) to (endX, endY).  A display that can (Direct3D 11,
 		* while the interface goes to the screen over a finished world) draws it and returns TRUE; the
 		* rest return FALSE and the glass's dim stands alone.  The screen as it stands at the first call
-		* in a frame is blurred once, and every call that frame draws that blur.  An empty box draws
-		* nothing and only answers. */
+		* in a frame is blurred, and every call after draws that blur until staleBackdrop says the
+		* screen under it changed.  An empty box draws nothing and only answers. */
 	virtual Bool drawBackdropBlur( Int startX, Int startY, Int endX, Int endY ) { return FALSE; }
+	/// a veil or a panel's glass went down: the next drawBackdropBlur blurs the screen again, so a
+	/// box over a menu frosts the menu and not the world under it
+	virtual void staleBackdrop( void ) { }
 
 	/// draw a video buffer fit within the screen coordinates
 	virtual void drawVideoBuffer( VideoBuffer *buffer, Int startX, Int startY,

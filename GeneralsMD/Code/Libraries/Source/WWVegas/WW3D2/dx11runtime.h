@@ -427,13 +427,18 @@ void Direct3D11_Finish_Scene(bool world = true);
 // whether the other has, so the first one to ask pays and the second finds the work done.
 void Direct3D11_Finish_Frame();
 
-// The menu backdrop: the frame on the back buffer as it stands at the first call in a frame, blurred
-// to radius at a height of 1080 (DX11PostProcessClass::Draw_Backdrop), drawn into the rectangle given.
-// Only while the draws go into the swap chain, which is a frame whose world is finished (the shell map
-// or a match behind a menu); a frame whose interface goes into the post chain's target, -d3d9 and
-// SDL3 get false and nothing drawn.  An empty rectangle draws nothing and only says whether a blur
-// could be drawn now.  The interface's target, viewport and bindings are as they were afterwards.
+// The menu backdrop: the frame on the back buffer as it stands at the first call in a frame (or the
+// first since Direct3D11_Stale_Backdrop), blurred to radius at a height of 1080
+// (DX11PostProcessClass::Draw_Backdrop), drawn into the rectangle given.  Only while the draws go into
+// the swap chain, which is a frame whose world is finished (the shell map or a match behind a menu);
+// a frame whose interface goes into the post chain's target, -d3d9 and SDL3 get false and nothing
+// drawn.  An empty rectangle draws nothing and only says whether a blur could be drawn now.  The
+// interface's target, viewport and bindings are as they were afterwards.
 bool Direct3D11_Draw_Backdrop(int x0, int y0, int x1, int y1, float radius);
+
+// The screen under the backdrop changed (a veil, a panel's glass): the next Direct3D11_Draw_Backdrop
+// blurs the back buffer again.
+void Direct3D11_Stale_Backdrop();
 
 // The back buffer as it stands, in the eight-bit blue-green-red-alpha order the screenshot writer
 // wants, top row first.  Has to be called before the present that discards it.  Null when there is

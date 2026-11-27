@@ -1553,6 +1553,8 @@ static void drawCentred( DisplayString *words, GameFont *font, const IRegion2D &
 void veil( Int alpha )
 {
 	TheDisplay->drawFillRect( 0, 0, TheDisplay->getWidth(), TheDisplay->getHeight(), black( alpha ) );
+	// a box drawn after this frosts the veiled screen, not the world under it
+	TheDisplay->staleBackdrop();
 }
 
 Bool backdropBlurs( void )
@@ -1566,6 +1568,8 @@ void glass( const IRegion2D &panel, Int alpha )
 {
 	TheDisplay->drawBackdropBlur( panel.lo.x, panel.lo.y, panel.hi.x, panel.hi.y );
 	fill( panel, black( alpha ) );
+	// a panel stacked on this one frosts this one, not the world under both
+	TheDisplay->staleBackdrop();
 }
 
 void dimOutside( const IRegion2D &panel, Int alpha )

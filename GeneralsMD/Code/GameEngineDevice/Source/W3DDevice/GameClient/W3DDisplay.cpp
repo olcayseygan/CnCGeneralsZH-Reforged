@@ -4415,6 +4415,12 @@ Bool W3DDisplay::drawBackdropBlur( Int startX, Int startY, Int endX, Int endY )
 
 }  // end drawBackdropBlur
 
+void W3DDisplay::staleBackdrop( void )
+{
+	if( isRecording() ) { record( [=]() { staleBackdrop(); } ); return; }
+	Direct3D11_Stale_Backdrop();
+}
+
 //============================================================================
 // W3DDisplay::drawVideoBuffer
 //============================================================================

@@ -319,7 +319,9 @@ TEST(dx11post_copy_gives_every_pixel_back_unchanged)
 	CHECK(result != NULL);
 	if (result != NULL) {
 		// Exactly zero. A sampler set to point instead of linear, a viewport carrying the scene's
-		// half pixel, or a triangle that does not land on the corners would all put a number here.
+		// half pixel or starting anywhere but nought (Draw_Pass's DestinationX and DestinationY,
+		// which only the menu backdrop sets), or a triangle that does not land on the corners would
+		// all put a number here.
 		CHECK_EQ(0u, differing_pixels(picture, result, pitch));
 		delete [] result;
 	}
@@ -1804,5 +1806,53 @@ TEST(dx11post_the_menu_backdrop_blurs_inside_its_panel_once_a_frame)
 	delete [] first;
 	delete [] second;
 	delete [] third;
+	delete [] picture;
+}
+
+// A box over a menu: once the screen under the backdrop changes (here the whole back buffer cleared
+// light, as a veil or a panel's glass changes it) and Stale_Backdrop says so, the next panel blurs the
+// screen as it is now; without the word it keeps the frame's first blur.  The ask with no box answers
+// for the program and the targets.
+TEST(dx11post_a_stale_menu_backdrop_blurs_the_screen_again)
+{
+	DeviceFixture fixture;
+	if (!fixture.Create()) {
+		printf("skip: no Direct3D 11 device on this machine\n");
+		return;
+	}
+
+	unsigned char * picture = new unsigned char[SURFACE_SIZE * SURFACE_SIZE * BYTES_A_PIXEL];
+	fill_flat(picture, DARK_LEVEL);
+	const float radius = 270.0f;
+	const unsigned row = SURFACE_SIZE / 2;
+	const DX11PostEffect chain[] = { DX11_POST_COPY };
+	DX11PostProcessClass & post = fixture.Get_Post();
+	post.Set_Chain(chain, 1);
+	CHECK(post.Backdrop_Ready());
+
+	CHECK(backdrop_frame(fixture, picture));
+	CHECK(post.Draw_Backdrop(0, 0, SURFACE_SIZE, SURFACE_SIZE, radius));
+	const float light[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	fixture.Get_Device().Get_Context()->ClearRenderTargetView(fixture.Get_Device().Get_Back_Buffer_View(), light);
+
+	CHECK(post.Draw_Backdrop(0, 0, SURFACE_SIZE, SURFACE_SIZE, radius));
+	unsigned pitch = 0;
+	unsigned char * kept = read_back_buffer(fixture.Get_Device(), pitch);
+	CHECK(kept != NULL);
+	if (kept != NULL) {
+		CHECK(pixel_level(kept, pitch, row, row) == DARK_LEVEL);
+	}
+
+	fixture.Get_Device().Get_Context()->ClearRenderTargetView(fixture.Get_Device().Get_Back_Buffer_View(), light);
+	post.Stale_Backdrop();
+	CHECK(post.Draw_Backdrop(0, 0, SURFACE_SIZE, SURFACE_SIZE, radius));
+	unsigned char * again = read_back_buffer(fixture.Get_Device(), pitch);
+	CHECK(again != NULL);
+	if (again != NULL) {
+		CHECK(pixel_level(again, pitch, row, row) >= 250);
+	}
+
+	delete [] kept;
+	delete [] again;
 	delete [] picture;
 }

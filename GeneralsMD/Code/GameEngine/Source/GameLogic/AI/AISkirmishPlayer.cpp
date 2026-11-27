@@ -307,7 +307,7 @@ void AISkirmishPlayer::processBaseBuilding( void )
 					!curPlan->isKindOf(KINDOF_FS_SUPPLY_CENTER)) {
 				relocated = true;
 				Coord3D spot;
-				if (placeNear(curPlan, &m_baseCenter, 0.0f, FALSE, &spot, TRUE)) {
+				if (homeSpotFor(curPlan, &spot)) {
 					DEBUG_LOG(("AI BUILD frame %d player %d moves '%s' from unsafe (%.0f,%.0f) to (%.0f,%.0f)\n", TheGameLogic->getFrame(),
 						m_player->getPlayerIndex(), name.str(), info->getLocation()->x, info->getLocation()->y, spot.x, spot.y));
 					info->setLocation(spot);

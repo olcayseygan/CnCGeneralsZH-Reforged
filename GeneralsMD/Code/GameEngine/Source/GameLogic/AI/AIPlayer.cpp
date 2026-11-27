@@ -10349,6 +10349,19 @@ Bool AIPlayer::holdsExtraFactory( const ThingTemplate *tmpl )
 	return FALSE;
 }
 
+/** Where a plan entry whose own spot is unsafe goes instead: inside the base, and with no room there on the
+	* superweapon's stretched edge behind it, between the spots as well.  On turtle bench seed 1 an Elo 1800 China
+	* walled in beside the human's base found no spot inside it for its War Factory on any pass of a 30 minute match;
+	* with the stretched edge it put one up at frame 1350, and over the bench's twelve matches the AI won 10 where it
+	* won 5.  Ladder seed 306 at 96 cells still has no room either way: of 165 spots inside two base radii 71 lie
+	* towards the enemy and most of the rest fail the skirmish AI's spacing between buildings. */
+Bool AIPlayer::homeSpotFor( const ThingTemplate *tmpl, Coord3D *spot )
+{
+	return placeNear( tmpl, &m_baseCenter, 0.0f, FALSE, spot, TRUE ) ||
+		( !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_HOME_STRETCH ) != 0 ) &&
+			placeNear( tmpl, &m_baseCenter, 0.0f, FALSE, spot, TRUE, SUPERWEAPON_REACH_SCALE ) );
+}
+
 //----------------------------------------------------------------------------------------------------------
 /** Flood out from center over ground a vehicle can cross, nearest first by the ground, until a spot
 	* is legal and safe, and hand it to the dozers as a priority build.  It used to try twelve angles
@@ -13724,6 +13737,9 @@ void AIPlayer::updatePressure( void )
 }
 
 //----------------------------------------------------------------------------------------------------------
+/** The share of a wave a seat's parked teams have to be worth to go with an ally's wave. */
+static const Real ALLY_WAVE_SHARE = 0.5f;
+
 /** Send the parked teams once they add up to a wave or have waited long enough.  They go as one group
 	* down one approach at the pace of the slowest, so what gathered together arrives together. */
 //----------------------------------------------------------------------------------------------------------
@@ -13831,11 +13847,19 @@ void AIPlayer::doWaves( void )
 	// a full staging point goes whatever it adds up to: sixteen GLA teams of one man each are 3,200, and
 	// every team formed behind them would leave alone
 	// and a rung that does not mass lets go the moment what is parked is worth sending
-	if( teams < MAX_HELD_TEAMS ? !waveGoes( baseHit ? power + sparePower : power, heldFrames ) : !readyToPush() )
+	// an ally's wave that went since the last look takes along what is parked here once it is worth half a wave, so
+	// two allied computers hit together and not one after the other (teamPlayHere; the window is one look long, so
+	// it is read once).  acquireEnemy already turns this seat on his target
+	const AITeamRequest *allyWave = ( m_persona == AIPERSONA_NORMAL && teamPlayHere() ) ? freshRequest( AIREQ_ATTACK, WAVE_CHECK_RATE ) : NULL;
+	const Bool withAlly = allyWave != NULL && !baseHit && power >= ALLY_WAVE_SHARE * wavePower();
+	if( withAlly )
+		DEBUG_LOG(("AI COOP frame %d player %d sends its %d teams (%.0f of a wave of %.0f) with player %d's wave\n", TheGameLogic->getFrame(),
+			m_player->getPlayerIndex(), teams, power, wavePower(), allyWave->from));
+	if( !withAlly && ( teams < MAX_HELD_TEAMS ? !waveGoes( baseHit ? power + sparePower : power, heldFrames ) : !readyToPush() ) )
 		return;
 	if( !attackBeatsGuns( power + sparePower, "wave" ) )
 		return;
-	const char *cause = !holdsTeamsForWaves() ? "press" : teams >= MAX_HELD_TEAMS ? "full" : power >= wavePower() ? "wave" : "timeout";
+	const char *cause = withAlly ? "ally" : !holdsTeamsForWaves() ? "press" : teams >= MAX_HELD_TEAMS ? "full" : power >= wavePower() ? "wave" : "timeout";
 
 	// a gunship still being filled holds the wave a little while its riders walk over or come out of
 	// the barracks.  Without the wait 13 of 15 bunkered Helixes left with nobody aboard: the riders
@@ -18049,6 +18073,12 @@ static const Real RANK_UNHURT = 0.9f;
 static const Real RANK_GOAL_SLACK = 50.0f;
 /** Medium and up leave a hurt ranked unit where it fights while the map shows an enemy reach on it. */
 static const AIRungReal RANK_PULL_WAITS_FOR_CLEAR = { { 0.0f, 1.0f, 1.0f }, AIKNOB_GATED };
+/** A dear unit is worth keeping at any rank: an Overlord, a Paladin, a Tomahawk or a Scud Launcher at rank 0 fought
+	* to its death where a human pulls it out to be mended.  One that cost DEAR_UNIT_COST or more leaves below this
+	* share of its health, from Medium up, rising past Hard and never above DEAR_PULL_HEALTH_MOST. */
+static const Int DEAR_UNIT_COST = 1000;
+static const AIRungReal DEAR_PULL_HEALTH = { { 0.0f, 0.25f, 0.3f }, AIKNOB_GATED };
+static const Real DEAR_PULL_HEALTH_MOST = 0.4f;
 
 Bool AIRetreat_rankPullsOut( Int rank, Real healthFraction, Bool inFight, Real ratio, Real retreatRatio )
 {
@@ -18094,11 +18124,16 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 	const UnsignedInt now = TheGameLogic->getFrame();
 	std::vector<Object *> pulled;
 	Int waitsForClear = -1;		// RANK_PULL_WAITS_FOR_CLEAR, read once a candidate needs it
+	const Real dearHealth = runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_DEAR_PULL ) != 0 ) ?
+		min( aiRatingLerp( m_rating, DEAR_PULL_HEALTH ), DEAR_PULL_HEALTH_MOST ) : 0.0f;
 	for( DLINK_ITERATOR<Object> objIter = team->iterate_TeamMemberList(); !objIter.done(); objIter.advance() )
 	{
 		Object *obj = objIter.cur();
 		const Int rank = (Int)obj->getVeterancyLevel();
-		if( rank <= LEVEL_REGULAR || obj->isEffectivelyDead() || obj->isContained() || !retreatCanOrderHome( obj ) ||
+		// a dozer or a gatherer has a job of its own, and pulled it stopped building: 18 of the first 60 sent
+		const Bool dear = rank <= LEVEL_REGULAR && dearHealth > 0.0f && !obj->isKindOf( KINDOF_DOZER ) && !obj->isKindOf( KINDOF_HARVESTER ) &&
+			obj->getTemplate()->calcCostToBuild( m_player ) >= DEAR_UNIT_COST;
+		if( (rank <= LEVEL_REGULAR && !dear) || obj->isEffectivelyDead() || obj->isContained() || !retreatCanOrderHome( obj ) ||
 				obj->getBodyModule() == NULL || obj->getAI()->hasTunnelTrip() )
 			continue;
 		const TacticalStep *row = findTacticalStep( obj->getID() );
@@ -18116,7 +18151,7 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 		if( state == AI_DOCK || state == AI_ENTER || state >= 1000 )
 			continue;
 		const Real health = obj->getBodyModule()->getHealth() / obj->getBodyModule()->getMaxHealth();
-		if( !AIRetreat_rankPullsOut( rank, health, inFight, ratio, getSkillProfile()->m_retreatTtkRatio ) )
+		if( dear ? health >= dearHealth : !AIRetreat_rankPullsOut( rank, health, inFight, ratio, getSkillProfile()->m_retreatTtkRatio ) )
 			continue;
 		// one standing inside a reach the map shows for its class fights on where it is, and goes once it is clear.
 		// Walked out hurt, it died on the way: in eight Hard Air Force against China matches on Tournament Desert
@@ -26977,6 +27012,7 @@ static const AIRatingTable s_ratingTables[] =
 	AI_TABLE_INT( AMBULANCE_REBUY_SECONDS ),
 	AI_TABLE_INT( AMBULANCE_MATCH_CAP ),
 	AI_TABLE_REAL( EDGE_ODDS ),
+	AI_TABLE_REAL( DEAR_PULL_HEALTH ),
 	AI_TABLE_INT( RUSH_SECONDS ),
 	AI_TABLE_INT( RAID_EVERY_SECONDS ),
 	AI_TABLE_INT( SHARE_CAP ),

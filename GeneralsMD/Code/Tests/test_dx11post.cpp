@@ -1728,3 +1728,81 @@ TEST(dx11post_sun_shafts_light_the_gap_between_shadows_dim_shaded_air_and_leave_
 		}
 	}
 }
+
+// One frame of the menu backdrop's test: the frame opened, the picture written and brought to the
+// swap chain by the chain set before, as the world is when the interface starts on it.
+static bool backdrop_frame(DeviceFixture & fixture, const unsigned char * picture)
+{
+	fixture.Get_Post().Open_Frame();
+	fixture.Get_Post().Begin_Frame();
+	return write_scene(fixture.Get_Device(), fixture.Get_Post(), picture) && fixture.Get_Post().Run_Chain();
+}
+
+// The menu backdrop (Draw_Backdrop) over a light right half and a dark left one.  Inside the panel
+// the edge goes soft and outside it nothing moves; a second panel in the same frame draws the same
+// blur, not a blur of the first panel; the next frame blurs its own picture.
+TEST(dx11post_the_menu_backdrop_blurs_inside_its_panel_once_a_frame)
+{
+	DeviceFixture fixture;
+	if (!fixture.Create()) {
+		printf("skip: no Direct3D 11 device on this machine\n");
+		return;
+	}
+
+	unsigned char * picture = new unsigned char[SURFACE_SIZE * SURFACE_SIZE * BYTES_A_PIXEL];
+	for (unsigned y = 0; y < SURFACE_SIZE; ++y) {
+		for (unsigned x = 0; x < SURFACE_SIZE; ++x) {
+			set_pixel(picture, x, y, (x >= SURFACE_SIZE / 2) ? LIGHT_LEVEL : DARK_LEVEL);
+		}
+	}
+	// a standard deviation at a height of 1080: 270 is a quarter of this frame's 64, 16 pixels
+	const float radius = 270.0f;
+	const unsigned row = SURFACE_SIZE / 2;
+	const unsigned left = SURFACE_SIZE / 4;
+	const unsigned right = SURFACE_SIZE * 3 / 4;
+	const DX11PostEffect chain[] = { DX11_POST_COPY };
+	DX11PostProcessClass & post = fixture.Get_Post();
+	post.Set_Chain(chain, 1);
+
+	CHECK(backdrop_frame(fixture, picture));
+	CHECK(post.Draw_Backdrop(left, 0, right, SURFACE_SIZE, radius));
+	unsigned pitch = 0;
+	unsigned char * first = read_back_buffer(fixture.Get_Device(), pitch);
+	CHECK(first != NULL);
+	if (first != NULL) {
+		CHECK(pixel_level(first, pitch, left - 1, row) == DARK_LEVEL);
+		CHECK(pixel_level(first, pitch, right, row) == LIGHT_LEVEL);
+		CHECK(pixel_level(first, pitch, row - 1, row) > 40);
+		CHECK(pixel_level(first, pitch, row, row) < 215);
+		CHECK(pixel_level(first, pitch, left, row) < pixel_level(first, pitch, row - 1, row));
+		CHECK(pixel_level(first, pitch, row, row) < pixel_level(first, pitch, right - 1, row));
+	}
+
+	CHECK(post.Draw_Backdrop(0, 0, SURFACE_SIZE, SURFACE_SIZE, radius));
+	unsigned char * second = read_back_buffer(fixture.Get_Device(), pitch);
+	CHECK(second != NULL);
+	if (first != NULL && second != NULL) {
+		unsigned moved = 0;
+		for (unsigned x = left; x < right; ++x) {
+			if (pixel_level(first, pitch, x, row) != pixel_level(second, pitch, x, row)) {
+				++moved;
+			}
+		}
+		CHECK_EQ(0u, moved);
+		CHECK(pixel_level(second, pitch, left - 1, row) > DARK_LEVEL);
+	}
+
+	fill_flat(picture, LIGHT_LEVEL);
+	CHECK(backdrop_frame(fixture, picture));
+	CHECK(post.Draw_Backdrop(0, 0, SURFACE_SIZE, SURFACE_SIZE, radius));
+	unsigned char * third = read_back_buffer(fixture.Get_Device(), pitch);
+	CHECK(third != NULL);
+	if (third != NULL) {
+		CHECK(pixel_level(third, pitch, 4, row) >= 250);
+	}
+
+	delete [] first;
+	delete [] second;
+	delete [] third;
+	delete [] picture;
+}

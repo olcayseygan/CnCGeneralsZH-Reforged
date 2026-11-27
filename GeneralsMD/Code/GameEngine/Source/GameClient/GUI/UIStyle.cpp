@@ -1557,13 +1557,14 @@ void veil( Int alpha )
 
 Bool backdropBlurs( void )
 {
-	// package 2b's seam: a Display virtual that hands back the screen blurred at radius 14 when a
-	// menu opened, drawn here under the glass.  Until it lands every display draws the dim alone.
-	return FALSE;
+	// Direct3D 11 blurs what stands behind the glass (radius 14 at 1080); -d3d9, SDL3 and a frame
+	// with no world under its interface draw the dim alone.  An empty box only asks.
+	return TheDisplay->drawBackdropBlur( 0, 0, 0, 0 );
 }
 
 void glass( const IRegion2D &panel, Int alpha )
 {
+	TheDisplay->drawBackdropBlur( panel.lo.x, panel.lo.y, panel.hi.x, panel.hi.y );
 	fill( panel, black( alpha ) );
 }
 

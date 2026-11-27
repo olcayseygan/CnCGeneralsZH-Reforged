@@ -4399,6 +4399,22 @@ VideoBuffer*	W3DDisplay::createVideoBuffer( void )
 }
 
 
+// W3DDisplay::drawBackdropBlur ===============================================
+/** The menu backdrop, on Direct3D 11 alone.  The batch goes down first, so what the 2D calls drew
+	* before this is in the blur and nothing they drew lands on top of it afterwards. */
+//=============================================================================
+Bool W3DDisplay::drawBackdropBlur( Int startX, Int startY, Int endX, Int endY )
+{
+	// UI-STYLE.md's backdrop: radius 14 at 1080, the backend scaling it with the screen's height
+	static const Real MENU_BACKDROP_BLUR_RADIUS = 14.0f;
+
+	if( isRecording() ) { record( [=]() { drawBackdropBlur( startX, startY, endX, endY ); } ); return FALSE; }
+	if( endX > startX && endY > startY )
+		flush2D();
+	return Direct3D11_Draw_Backdrop( startX, startY, endX, endY, MENU_BACKDROP_BLUR_RADIUS ) ? TRUE : FALSE;
+
+}  // end drawBackdropBlur
+
 //============================================================================
 // W3DDisplay::drawVideoBuffer
 //============================================================================

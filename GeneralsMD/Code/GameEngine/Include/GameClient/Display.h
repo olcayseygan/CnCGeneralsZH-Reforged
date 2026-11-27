@@ -158,6 +158,14 @@ public:
 	virtual void drawImageWedge( const Image *image, Int startX, Int startY, Int endX, Int endY,
 															 Real fromDegrees, Real sweepDegrees, Color color = 0xFFFFFFFF ) { }
 
+	/** The menu backdrop: what stands behind a menu's glass, blurred (UI-STYLE's radius 14 at 1080),
+		* drawn into the box from (startX, startY) to (endX, endY).  A display that can (Direct3D 11,
+		* while the interface goes to the screen over a finished world) draws it and returns TRUE; the
+		* rest return FALSE and the glass's dim stands alone.  The screen as it stands at the first call
+		* in a frame is blurred once, and every call that frame draws that blur.  An empty box draws
+		* nothing and only answers. */
+	virtual Bool drawBackdropBlur( Int startX, Int startY, Int endX, Int endY ) { return FALSE; }
+
 	/// draw a video buffer fit within the screen coordinates
 	virtual void drawVideoBuffer( VideoBuffer *buffer, Int startX, Int startY,
 													Int endX, Int endY ) = 0;

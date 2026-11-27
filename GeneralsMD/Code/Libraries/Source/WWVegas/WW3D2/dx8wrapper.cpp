@@ -6127,7 +6127,7 @@ void FinishScene() {
 }
 void FinishFrame() {
 #if defined(_WIN32)
-	Direct3D11_Finish_Scene();
+	Direct3D11_Finish_Scene(false);
 #else
 	FinishScene(DX8Wrapper::_Get_D3D_Device(), true);
 #endif

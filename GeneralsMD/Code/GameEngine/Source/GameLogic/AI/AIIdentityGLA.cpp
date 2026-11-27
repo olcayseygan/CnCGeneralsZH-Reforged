@@ -26,8 +26,9 @@
 // tractor poisons that road.  Demolition trades lives: demo traps at the chokes whatever the personality,
 // a Bomb Truck dressed as one of the enemy's own vehicles driven at his dearest building, and a unit with
 // the suicide upgrade that is nearly dead blows itself up beside an enemy worth the trade.
-// Stealth is never seen: the GPS Scrambler goes up over every wave as it sets out, and the units that are
-// invisible from the factory raid the enemy's supply centers down a side road no detector watches.
+// Stealth is never seen: its first science point goes on the GPS Scrambler, which goes up over every wave as it
+// sets out, the waves take the road no detector of the enemy's watches, and the units that are invisible from
+// the factory raid the enemy's supply centers down a side road no detector watches.
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 #include "Common/Player.h"
@@ -46,6 +47,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
@@ -80,6 +82,8 @@ public:
 	virtual void onTick( void );
 	virtual void onWaveSent( AIGroup *wave, Real power );
 	virtual Bool powerTarget( const SpecialPowerTemplate *power, Int enemyIndex, Real radius, Coord3D *target );
+	virtual ScienceType sciencePick( ScienceType shared ) const;
+	virtual Real laneScore( const AsciiString &lane, const Coord3D *from, Real shared ) const;
 	virtual void xfer( Xfer *xfer );
 
 private:
@@ -144,6 +148,10 @@ static const Int RAID_LEAST = 2;
 static const Int RAID_MOST = 6;
 static const Real DETECTOR_REACH = 450.0f;			///< the widest sight a detector is looked for within
 static const Real RAID_SIDE = 0.35f;						///< the side road bends out this share of the way
+/** What a known detector watching an attack road adds to its score.  The lane scores run 0 to about 2 (the AI LANE
+	* lines), so one detector outweighs every gun: a defence cannot shoot a unit it cannot see. */
+static const Real DETECTOR_LANE_COST = 100.0f;
+static const Int ROAD_MOST_WAYPOINTS = 64;			///< APPROACH_MAX_WAYPOINTS, AIPlayer.cpp: a looped road ends here
 
 static Real distSqr2D( const Coord3D *a, const Coord3D *b )
 {
@@ -243,6 +251,35 @@ static Bool coveredByGuns( const std::vector<AIKnownGun> &guns, const Coord3D *s
 	return FALSE;
 }
 
+/** Where the detectors of his that observer knows of stand, in his object list order. */
+static void knownDetectors( Player *foe, Int observer, std::vector<Coord3D> *detectors )
+{
+	static const NameKeyType detectorKey = NAMEKEY( "StealthDetectorUpdate" );
+	std::vector<Object *> theirs;
+	foe->iterateObjects( collectOwned, &theirs );
+	for( size_t t = 0; t < theirs.size(); ++t )
+	{
+		const Object *obj = theirs[ t ];
+		const StealthDetectorUpdate *detector = (const StealthDetectorUpdate *)obj->findUpdateModule( detectorKey );
+		if( detector && detector->isSDEnabled() && glaKnows( obj, observer ) )
+			detectors->push_back( *obj->getPosition() );
+	}
+}
+
+/** How far the spot p is from the leg a to b, squared, on the ground. */
+static Real legDistSqr( const Coord3D *p, const Coord3D *a, const Coord3D *b )
+{
+	const Real dx = b->x - a->x;
+	const Real dy = b->y - a->y;
+	const Real length = dx * dx + dy * dy;
+	Real t = length > 0.0f ? ( ( p->x - a->x ) * dx + ( p->y - a->y ) * dy ) / length : 0.0f;
+	if( t < 0.0f )
+		t = 0.0f;
+	else if( t > 1.0f )
+		t = 1.0f;
+	return sqr( a->x + t * dx - p->x ) + sqr( a->y + t * dy - p->y );
+}
+
 // ---- the hooks -------------------------------------------------------------------------------------------
 
 void AIIdentityGLA::onStart( void )
@@ -326,7 +363,8 @@ void AIIdentityGLA::onTick( void )
 		deathBlasts( owned );
 	if( hasMove( MOVE_SUPPLY_RAID ) && foe && turn % 5 == 0 )
 		supplyRaid( owned, foe );
-	// the skill sets never buy the GPS Scrambler: the first point it can take goes on it
+	// the skill sets never buy the GPS Scrambler: sciencePick puts it first in the shared buyer's walk, and this
+	// buys it should the walk not run (a side with no skill set)
 	if( hasMove( MOVE_GPS_COVER ) && turn % 5 == 0 )
 	{
 		const ScienceType gps = TheScienceStore->getScienceFromInternalName( "Slth_SCIENCE_GPSScrambler" );
@@ -818,6 +856,61 @@ void AIIdentityGLA::onWaveSent( AIGroup *wave, Real power )
 	scrambler->doSpecialPowerAtLocation( &center, INVALID_ANGLE, COMMAND_FIRED_BY_SCRIPT );
 }
 
+/** The GPS Scrambler at every place of the skill set walk until it is bought, once its rank is reached.  The
+	* shared buyer took the points first: one Scrambler fired in 40 Stealth matches.  Short of points the walk stops
+	* on it and keeps them. */
+ScienceType AIIdentityGLA::sciencePick( ScienceType shared ) const
+{
+	if( !hasMove( MOVE_GPS_COVER ) )
+		return shared;
+	const Player *player = m_ai->m_player;
+	const ScienceType gps = TheScienceStore->getScienceFromInternalName( "Slth_SCIENCE_GPSScrambler" );
+	if( gps == SCIENCE_INVALID || player->hasScience( gps ) || !player->hasPrereqsForScience( gps ) ||
+			player->isScienceDisabled( gps ) || player->isScienceHidden( gps ) || TheScienceStore->getSciencePurchaseCost( gps ) <= 0 )
+		return shared;
+	return gps;
+}
+
+/** A road a known detector of the enemy's watches scores DETECTOR_LANE_COST a detector over the shared score: the
+	* wave walks the road he cannot see it on, guns or not, and on a map where every road is watched the one with
+	* the fewest.  The road is the one chooseApproachLabel walks, towards the enemy the shared AI last picked. */
+Real AIIdentityGLA::laneScore( const AsciiString &lane, const Coord3D *from, Real shared ) const
+{
+	if( !hasMove( MOVE_GPS_COVER ) || from == NULL )
+		return shared;
+	Player *foe = m_ai->peekAiEnemy();
+	if( foe == NULL )
+		return shared;
+	std::vector<Coord3D> detectors;
+	knownDetectors( foe, m_ai->m_player->getPlayerIndex(), &detectors );
+	if( detectors.empty() )
+		return shared;
+	AsciiString label;
+	label.format( "%s%d", lane.str(), foe->getMpStartIndex() + 1 );
+	const Waypoint *road = TheTerrainLogic->getClosestWaypointOnPath( from, label );
+	if( road == NULL )
+		return shared;
+	Int watching = 0;
+	for( size_t d = 0; d < detectors.size(); ++d )
+	{
+		Bool watched = FALSE;
+		const Waypoint *way = road;
+		for( Int step = 0; way != NULL && step < ROAD_MOST_WAYPOINTS && !watched; ++step )
+		{
+			const Waypoint *next = way->getNumLinks() > 0 ? way->getLink( 0 ) : NULL;
+			watched = legDistSqr( &detectors[ d ], way->getLocation(), next ? next->getLocation() : way->getLocation() ) <= sqr( DETECTOR_REACH );
+			way = next;
+		}
+		if( watched )
+			++watching;
+	}
+	if( watching == 0 )
+		return shared;
+	DEBUG_LOG(("AI STEALTH frame %d player %d scores %s %.2f over %.2f: %d of %d known detectors watch it\n", TheGameLogic->getFrame(),
+		m_ai->m_player->getPlayerIndex(), label.str(), shared + DETECTOR_LANE_COST * watching, shared, watching, (Int)detectors.size()));
+	return shared + DETECTOR_LANE_COST * watching;
+}
+
 /** The units invisible from the factory that wait at home raid an enemy supply center no detector of his
 	* the AI has seen watches.  They go round by a side road, the straight line's middle bent out towards
 	* whichever side the AI's map and its losses say is quieter, and fight the trucks they find there. */
@@ -839,17 +932,10 @@ void AIIdentityGLA::supplyRaid( const std::vector<Object *> &owned, Player *foe 
 
 	// his detectors the AI knows of, and the first supply center of his none of them watches
 	const Int me = m_ai->m_player->getPlayerIndex();
-	static const NameKeyType detectorKey = NAMEKEY( "StealthDetectorUpdate" );
+	std::vector<Coord3D> detectors;
+	knownDetectors( foe, me, &detectors );
 	std::vector<Object *> theirs;
 	foe->iterateObjects( collectOwned, &theirs );
-	std::vector<Coord3D> detectors;
-	for( size_t t = 0; t < theirs.size(); ++t )
-	{
-		const Object *obj = theirs[ t ];
-		const StealthDetectorUpdate *detector = (const StealthDetectorUpdate *)obj->findUpdateModule( detectorKey );
-		if( detector && detector->isSDEnabled() && glaKnows( obj, me ) )
-			detectors.push_back( *obj->getPosition() );
-	}
 	Coord3D road;
 	road.zero();
 	Bool found = FALSE;

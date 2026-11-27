@@ -189,7 +189,7 @@ void NeutronMissileUpdate::projectileFireAtObjectOrPosition( const Object *victi
 	}
 
 	m_deliveryDecal.clear();
-	// the client's countdown ring stands there instead (W3DGroundMarkers); the decal is the client's
+	// the client's ground marker stands for it instead, and ends at the click (W3DGroundMarkers); the decal is the client's
 	// alone, no CRC and no save carries it
 	if( !InGameUI::groundMarkersOn() )
 		getNeutronMissileUpdateModuleData()->m_deliveryDecalTemplate.createRadiusDecal(m_targetPos,

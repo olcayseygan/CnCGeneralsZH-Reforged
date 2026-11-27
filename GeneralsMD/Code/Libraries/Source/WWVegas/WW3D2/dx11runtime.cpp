@@ -98,6 +98,7 @@ struct GpuTimingSlot
 static GpuTimingSlot GpuSlots[GPU_TIMING_SLOTS];
 static bool GpuTiming = false;
 static bool FrameOpen = false;				// a Begin_Scene since the last flip
+static bool WorldFinished = false;			// this frame's world is drawn (Direct3D11_Finish_Scene), for the menu backdrop
 static unsigned FrameNumber = 0;			// flips so far; frame n writes slot n % GPU_TIMING_SLOTS
 
 // What the frames read back since the last report add up to.
@@ -296,6 +297,7 @@ static void begin_frame()
 		GpuWindow.ScreenMs += present_to_screen_ms;
 	}
 	FrameOpen = true;
+	WorldFinished = false;
 	if (!GpuTiming) {
 		return;
 	}
@@ -1224,9 +1226,10 @@ static void take_the_frame_to_the_screen()
 }
 
 // The chain binds its own shaders, states and views on the context the backend's draws use.
-void Direct3D11_Finish_Scene()
+void Direct3D11_Finish_Scene(bool world)
 {
 	if (Active) {
+		WorldFinished = WorldFinished || world;
 		stamp_gpu_frame(GPU_SCENE_END);
 		// The chain's occlusion and whatever tests against the depth over the interface read it
 		// single-sampled.
@@ -1247,6 +1250,45 @@ void Direct3D11_Finish_Frame()
 		take_the_frame_to_the_screen();
 	}
 	Backend.Forget_Bindings();
+}
+
+bool Direct3D11_Draw_Backdrop(int x0, int y0, int x1, int y1, float radius)
+{
+	// A world, finished and on the screen: with the chain off the interface goes to the swap chain
+	// all frame, and a load screen's or a bare menu's own art is no world to blur.
+	if (!Active || !PresentRequested || !WorldFinished || !Backend.Draws_Into_Scene()
+			|| Device.Get_Scene_View() != Device.Get_Back_Buffer_View()) {
+		return false;
+	}
+	x0 = (x0 > 0) ? x0 : 0;
+	y0 = (y0 > 0) ? y0 : 0;
+	if (x1 <= x0 || y1 <= y0) {
+		return true;
+	}
+
+	// The passes bind their own target and viewport; the interface goes on where it was.
+	ID3D11DeviceContext * context = Device.Get_Context();
+	ID3D11RenderTargetView * target = NULL;
+	ID3D11DepthStencilView * depth = NULL;
+	context->OMGetRenderTargets(1, &target, &depth);
+	D3D11_VIEWPORT viewport;
+	UINT viewports = 1;
+	context->RSGetViewports(&viewports, &viewport);
+
+	const bool drew = Post.Draw_Backdrop((unsigned)x0, (unsigned)y0, (unsigned)x1, (unsigned)y1, radius);
+
+	context->OMSetRenderTargets(1, &target, depth);
+	if (viewports > 0) {
+		context->RSSetViewports(1, &viewport);
+	}
+	if (target != NULL) {
+		target->Release();
+	}
+	if (depth != NULL) {
+		depth->Release();
+	}
+	Backend.Forget_Bindings();
+	return drew;
 }
 
 void Direct3D11_Begin_Scene()

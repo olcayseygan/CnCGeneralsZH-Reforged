@@ -43,7 +43,11 @@
 #include "Common/MultiplayerSettings.h"
 #include "Common/PlayerTemplate.h"
 #include "GameNetwork/GameInfo.h"
+#include "GameNetwork/GUIUtil.h"
 #include "GameNetwork/LANAPI.h"
+#include "GameNetwork/LANAPICallbacks.h"
+#include "GameNetwork/GameSpy/LobbyUtils.h"
+#include "GameClient/UIStyle.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -68,6 +72,71 @@ static NameKeyType winSuperWeaponsID = NAMEKEY_INVALID;
 static NameKeyType winFreeForAllID = NAMEKEY_INVALID;
 
 static WindowLayout *gameInfoWindowLayout = NULL;
+static AsciiString s_previewMap;
+static const Image *s_preview = NULL;
+
+/* The picked LAN game in the menu language (README-game-lists.md "lists-lan"): the map large at its own shape,
+	 the host, the map and the mode under it, the seats with their colours, armies and pictures.  Drawn from the
+	 lobby's picked row every frame, so a game the network drops never leaves a stale pointer here; EA's texts
+	 and list on this window stay, hidden. */
+static void drawPickedGame( GameWindow *window, WinInstanceData * )
+{
+	(void)window;
+	Int selected = -1;
+	if (TheLAN == NULL || listboxGames == NULL)
+		return;
+	GadgetListBoxGetSelected( listboxGames, &selected );
+	LANGameInfo *info = selected >= 0 ? TheLAN->LookupGameByListOffset( selected ) : NULL;
+	if (info == NULL)
+		return;
+	LobbyPicked game;
+	const AsciiString map = info->getMap();
+	game.name = info->getPlayerName( 0 );
+	game.mode = LobbyMapMode( map );
+	game.map = LobbyMapName( map );
+	game.line = LobbyModeName( game.mode );
+	game.password = FALSE;
+	if (map.compare( s_previewMap ) != 0)
+	{
+		// made once a map; a mode game's island or basin is generated at load and has none yet
+		s_previewMap = map;
+		s_preview = game.mode == HOST_MODE_CLASSIC ? getMapPreviewImage( map ) : NULL;
+	}
+	game.preview = s_preview;
+	game.seated = game.seats = game.seatCount = 0;
+	const Int numColors = TheMultiplayerSettings->getNumColors();
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		GameSlot *slot = info->getSlot( i );
+		if (slot == NULL || slot->getState() == SLOT_CLOSED)
+			continue;
+		++game.seats;
+		if (!slot->isOccupied())
+			continue;
+		++game.seated;
+		if (game.seatCount >= LobbyPicked::SEATS)
+			continue;
+		LobbySeat &seat = game.seat[ game.seatCount++ ];
+		seat.name = slot->isAI() ? SlotStateName( slot->getState(), slot->getAIRating() ) : slot->getName();
+		seat.known = TRUE;
+		seat.color = UIStyle::MUTED;
+		if (slot->getColor() >= 0 && slot->getColor() < numColors)
+			seat.color = TheMultiplayerSettings->getColor( slot->getColor() )->getColor();
+		seat.portrait = NULL;
+		const Int army = slot->getPlayerTemplate();
+		if (army == PLAYERTEMPLATE_OBSERVER)
+			seat.army = TheGameText->fetch( "GUI:Observer" );
+		else if (army < 0 || army >= ThePlayerTemplateStore->getPlayerTemplateCount())
+			seat.army = TheGameText->fetch( "GUI:Random" );
+		else
+		{
+			const PlayerTemplate *fact = ThePlayerTemplateStore->getNthPlayerTemplate( army );
+			seat.army = fact->getDisplayName();
+			seat.portrait = UIStyle::armyPortrait( fact );
+		}
+	}
+	LobbyDrawPicked( game, 1334, 130, 1860, 742, TRUE );
+}
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////////////////////////
 
 void CreateLANGameInfoWindow( GameWindow *sizeAndPosWin )
@@ -220,7 +289,17 @@ void GameInfoWindowInit( WindowLayout *layout, void *userData )
 	GadgetStaticTextSetText(staticTextGameName,UnicodeString::TheEmptyString);
 	GadgetStaticTextSetText(staticTextMapName,UnicodeString::TheEmptyString);
 	GadgetListBoxReset(listBoxPlayers);
-	
+
+	// the block is drawn by code over the whole window; EA's labels and list stay for their lookups, hidden
+	if (parent)
+	{
+		parent->winSetDrawFunc( drawPickedGame );
+		for (GameWindow *child = parent->winGetChild(); child; child = child->winGetNext())
+			child->winHide( TRUE );
+	}
+	s_previewMap.clear();
+	s_preview = NULL;
+
 }  // end MapSelectMenuInit
 
 

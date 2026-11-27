@@ -1703,18 +1703,20 @@ const Vector3 * Drawable::getTintColor( void ) const
 
 }
 //-------------------------------------------------------------------------------------------------
+/** The tint an order's target blips in: the local player's house colour, made once a sync point by
+	* Drawable_flashOrderTargets. One for every drawable, since every flash is the same player's order. */
+static Vector3 s_orderFlashTint( 0.55f, -0.2f, -0.2f );
+
+//-------------------------------------------------------------------------------------------------
 /** get SELECTION color value to add to ALL LIGHTS when drawing */
 //-------------------------------------------------------------------------------------------------
 const Vector3 * Drawable::getSelectionColor( void )	const
 {
 	if( LogicThread::isInsideWindow() )
 		return m_lookForDraw.hasSelectionColor ? &m_lookForDraw.selectionColor : NULL;
-	// the target of the local player's order, lit for a blip (Drawable_flashOrderTargets)
-	// summed into every scene light and the ambient like the Hit Flash: red comes from taking green and
-	// blue away, since a positive tint on all three only pushes a bright target toward white
-	static const Vector3 ORDER_FLASH_RED( 0.5f, -0.6f, -0.6f );
+	// the target of the local player's order, lit for a blip in his own colour (Drawable_flashOrderTargets)
 	if( m_orderFlash )
-		return &ORDER_FLASH_RED;
+		return &s_orderFlashTint;
 	if (m_selectionFlashEnvelope)
 	{
 		if (m_selectionFlashEnvelope->isEffective())
@@ -3948,7 +3950,7 @@ Real Drawable_attackOrderSeconds( DrawableID id )
 	return -1.0f;
 }
 
-/** The objects the local player's orders were aimed at. Each one's model blips full red
+/** The objects the local player's orders were aimed at. Each one's model blips in his house colour
 	* ORDER_FLASH_BLIPS times, the instant the click lands, as quick click feedback: lit, dark, lit, off.
 	* The tint goes on and off outright through the selection colour (setOrderFlash, getSelectionColor),
 	* not the selection flash's envelope, which steps on logic frames and fades. A phase lasts its
@@ -3989,8 +3991,37 @@ void Drawable_noteOrderTarget( ObjectID target )
 	s_orderTargets.push_back( stamp );
 }
 
+/** The order flash's tint from the local player's house colour. W3DScene sums it into every scene
+	* light and the ambient, two to four times over on a face, so a plain positive colour only pushes a
+	* bright target toward white. The hue is the colour's offset from its own grey, stretched to the same
+	* reach for every house colour (a pale one would otherwise barely show), so the colour's own channels
+	* rise and the others fall, with a small lift on top. A grey house colour just brightens. Full red
+	* came out at (0.5, -0.6, -0.6) before and read too strong; it is (0.55, -0.2, -0.2) here. */
+static void updateOrderFlashTint( void )
+{
+	const Player *local = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	if( local == NULL )
+		return;
+	RGBColor house;
+	house.setFromInt( clientPlayerColor( local ) );
+	const Real grey = ( house.red + house.green + house.blue ) / 3.0f;
+	const Real dr = house.red - grey, dg = house.green - grey, db = house.blue - grey;
+	const Real reach = MAX( fabs( dr ), MAX( fabs( dg ), fabs( db ) ) );
+	const Real HUE = 0.5f;		// the largest channel's push off grey
+	const Real LIFT = 0.05f;
+	if( reach < 0.05f )
+	{
+		s_orderFlashTint.Set( 0.3f, 0.3f, 0.3f );
+		return;
+	}
+	const Real k = HUE / reach;
+	s_orderFlashTint.Set( dr * k + LIFT, dg * k + LIFT, db * k + LIFT );
+}
+
 void Drawable_flashOrderTargets( void )
 {
+	if( !s_orderTargets.empty() )
+		updateOrderFlashTint();
 	for( size_t i = 0; i < s_orderTargets.size(); ++i )
 	{
 		OrderTargetStamp& stamp = s_orderTargets[ i ];

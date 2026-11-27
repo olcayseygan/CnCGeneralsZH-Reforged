@@ -1021,6 +1021,24 @@ static const char * const SUN_SHAFTS_COMPOSITE_SHADER_BODY =
 	"    return float4(ShaftColour.rgb * add, min(saturate(ShaftColour.a * dim), ShaftLimit.x));\n"
 	"}\n";
 
+// The menu backdrop's last pass.  Its viewport is one panel, so the triangle's own coordinates run
+// nought to one across the panel; the blur is read where the pixel stands on the screen instead
+// (TexelSize is one over the back buffer's size), and the panel shows the part of the frame behind it.
+// Here and not in postshader.cpp, so test_postshader's baselines stay as they are.
+static const char * const BACKDROP_SHADER_BODY =
+	"float4 main(VertexOutput input) : SV_TARGET\n"
+	"{\n"
+	"    return float4(Source.Sample(Sampler, input.Position.xy * TexelSize.xy).rgb, 1.0);\n"
+	"}\n";
+
+// The bloom blur's nine weights spread a pass of one texel's step to this standard deviation, in
+// texels: the square root of twice the sum of each weight times its offset squared.
+static const float BACKDROP_PASS_SPREAD = 1.6894f;
+// The widest step a backdrop pass takes, in quarter size texels.  A wider blur takes more pairs at
+// this step or under, since taps further apart than this start to show as copies.
+static const float BACKDROP_STEP_MOST = 2.0f;
+static const unsigned BACKDROP_PAIRS_MOST = 8;
+
 static D3DCompileFunction compiler_function()
 {
 	static D3DCompileFunction compiler = NULL;
@@ -1114,7 +1132,16 @@ DX11PostProcessClass::DX11PostProcessClass()
 	, HeatHazeShader(NULL)
 	, HeatBlendState(NULL)
 	, HeatHazeRefused(false)
+	, BackdropShader(NULL)
+	, BackdropSource(0)
+	, BackdropWidth(0)
+	, BackdropHeight(0)
+	, BackdropBlurred(false)
+	, BackdropRefused(false)
 {
+	memset(&BackdropCopy, 0, sizeof(BackdropCopy));
+	memset(&BackdropHalf, 0, sizeof(BackdropHalf));
+	memset(BackdropBlur, 0, sizeof(BackdropBlur));
 	memset(&HeatTarget, 0, sizeof(HeatTarget));
 	memset(HazeWorldFromClip, 0, sizeof(HazeWorldFromClip));
 	memset(WorldAoShaders, 0, sizeof(WorldAoShaders));
@@ -1187,6 +1214,8 @@ void DX11PostProcessClass::Shutdown()
 	release_interface(reinterpret_cast<IUnknown **>(&BlendState));
 	release_interface(reinterpret_cast<IUnknown **>(&Sampler));
 	release_interface(reinterpret_cast<IUnknown **>(&HazeShader));
+	release_interface(reinterpret_cast<IUnknown **>(&BackdropShader));
+	BackdropRefused = false;
 	for (unsigned index = 0; index < SUN_SHAFT_PROGRAMS; ++index) {
 		release_interface(reinterpret_cast<IUnknown **>(&SunShaftShaders[index]));
 	}
@@ -1278,6 +1307,10 @@ bool DX11PostProcessClass::Create_Shaders()
 			return false;
 		}
 	}
+
+	// The menu backdrop's here too, so the first menu panel pays no compile; refused, the menus keep
+	// their plain dim and the chain is untouched.
+	BackdropRefused = !compile_pixel_shader(compiler, device, BACKDROP_SHADER_BODY, &BackdropShader);
 
 	return compile_pixel_shader(compiler, device, TONE_MAP_SHADER_BODY, &ToneMapShader)
 		&& compile_pixel_shader(compiler, device, TONE_MAP_WIDE_SHADER_BODY, &ToneMapWideShader)
@@ -1466,6 +1499,7 @@ void DX11PostProcessClass::Release_Targets()
 	for (unsigned index = 0; index < bloom_target_count; ++index) {
 		Release_Target(BloomTargets[index]);
 	}
+	Release_Backdrop();
 	Width = 0;
 	Height = 0;
 	BloomWidth = 0;
@@ -1535,6 +1569,7 @@ void DX11PostProcessClass::Open_Frame()
 	Hazed = false;
 	Shafted = false;
 	ShroudRemembered = false;
+	BackdropBlurred = false;
 }
 
 bool DX11PostProcessClass::Wants_Atmosphere_Programs() const
@@ -2484,8 +2519,8 @@ void DX11PostProcessClass::Draw_Pass(const PassSetup & pass)
 	context->OMSetRenderTargets(1, &pass.Destination, NULL);
 
 	D3D11_VIEWPORT viewport;
-	viewport.TopLeftX = 0.0f;
-	viewport.TopLeftY = 0.0f;
+	viewport.TopLeftX = static_cast<float>(pass.DestinationX);
+	viewport.TopLeftY = static_cast<float>(pass.DestinationY);
 	viewport.Width = static_cast<float>(pass.DestinationWidth);
 	viewport.Height = static_cast<float>(pass.DestinationHeight);
 	viewport.MinDepth = 0.0f;
@@ -2749,6 +2784,143 @@ bool DX11PostProcessClass::Copy_Through()
 	Draw_Pass(pass);
 
 	Resolved = true;
+	return true;
+}
+
+void DX11PostProcessClass::Release_Backdrop()
+{
+	Release_Target(BackdropCopy);
+	Release_Target(BackdropHalf);
+	Release_Target(BackdropBlur[0]);
+	Release_Target(BackdropBlur[1]);
+	BackdropWidth = 0;
+	BackdropHeight = 0;
+	BackdropBlurred = false;
+}
+
+bool DX11PostProcessClass::Blur_Backdrop(float radius)
+{
+	if (BackdropBlurred) {
+		return true;
+	}
+	ID3D11RenderTargetView * back_buffer = (Device != NULL) ? Device->Get_Back_Buffer_View() : NULL;
+	if (!ShadersReady || BackdropRefused || BackdropShader == NULL || back_buffer == NULL) {
+		return false;
+	}
+
+	ID3D11Resource * back = NULL;
+	back_buffer->GetResource(&back);
+	if (back == NULL) {
+		return false;
+	}
+	D3D11_TEXTURE2D_DESC description;
+	static_cast<ID3D11Texture2D *>(back)->GetDesc(&description);
+	const unsigned width = description.Width;
+	const unsigned height = description.Height;
+	const unsigned half_width = (width / 2) > 0 ? (width / 2) : 1;
+	const unsigned half_height = (height / 2) > 0 ? (height / 2) : 1;
+	const unsigned quarter_width = (half_width / 2) > 0 ? (half_width / 2) : 1;
+	const unsigned quarter_height = (half_height / 2) > 0 ? (half_height / 2) : 1;
+
+	// The copy has to be the back buffer's own format for CopyResource; a resize makes all four the
+	// wrong size.
+	bool fits = BackdropCopy.Texture != NULL && BackdropWidth == width && BackdropHeight == height;
+	if (fits) {
+		D3D11_TEXTURE2D_DESC held;
+		BackdropCopy.Texture->GetDesc(&held);
+		fits = held.Format == description.Format;
+	}
+	if (!fits) {
+		Release_Backdrop();
+		if (!Create_Target(BackdropCopy, width, height, description.Format)
+				|| !Create_Target(BackdropHalf, half_width, half_height, EIGHT_BIT_FORMAT)
+				|| !Create_Target(BackdropBlur[0], quarter_width, quarter_height, EIGHT_BIT_FORMAT)
+				|| !Create_Target(BackdropBlur[1], quarter_width, quarter_height, EIGHT_BIT_FORMAT)) {
+			Release_Backdrop();
+			back->Release();
+			return false;
+		}
+		BackdropWidth = width;
+		BackdropHeight = height;
+	}
+	Device->Get_Context()->CopyResource(BackdropCopy.Texture, back);
+	back->Release();
+
+	// Two halvings, each a bilinear read on the corner four texels share, which is their average: a
+	// four by four box from the full size to the quarter, where one read would skip twelve of sixteen.
+	PassSetup pass;
+	memset(&pass, 0, sizeof(pass));
+	pass.Shader = PixelShaders[DX11_POST_COPY];
+	pass.Source = BackdropCopy.Resource;
+	pass.Destination = BackdropHalf.View;
+	pass.DestinationWidth = half_width;
+	pass.DestinationHeight = half_height;
+	pass.SourceWidth = width;
+	pass.SourceHeight = height;
+	Draw_Pass(pass);
+	pass.Source = BackdropHalf.Resource;
+	pass.Destination = BackdropBlur[0].View;
+	pass.DestinationWidth = quarter_width;
+	pass.DestinationHeight = quarter_height;
+	pass.SourceWidth = half_width;
+	pass.SourceHeight = half_height;
+	Draw_Pass(pass);
+
+	// The spread asked for in quarter size texels, made of pairs of equal steps no wider than
+	// BACKDROP_STEP_MOST: the spreads of the pairs add in squares.
+	const float spread = (radius > 0.0f ? radius : 0.0f) * static_cast<float>(quarter_height) / 1080.0f;
+	const float steps = spread / (BACKDROP_PASS_SPREAD * BACKDROP_STEP_MOST);
+	unsigned pairs = static_cast<unsigned>(ceilf(steps * steps));
+	pairs = (pairs < 1) ? 1 : (pairs > BACKDROP_PAIRS_MOST) ? BACKDROP_PAIRS_MOST : pairs;
+	const float step = spread / (BACKDROP_PASS_SPREAD * sqrtf(static_cast<float>(pairs)));
+
+	pass.Shader = BloomBlurShader;
+	pass.SourceWidth = quarter_width;
+	pass.SourceHeight = quarter_height;
+	unsigned source = 0;
+	for (unsigned pair = 0; pair < pairs; ++pair) {
+		for (unsigned axis = 0; axis < 2; ++axis) {
+			const unsigned other = 1 - source;
+			pass.Source = BackdropBlur[source].Resource;
+			pass.Destination = BackdropBlur[other].View;
+			pass.BlurX = (axis == 0) ? step / static_cast<float>(quarter_width) : 0.0f;
+			pass.BlurY = (axis == 0) ? 0.0f : step / static_cast<float>(quarter_height);
+			Draw_Pass(pass);
+			source = other;
+		}
+	}
+	BackdropSource = source;
+	BackdropBlurred = true;
+	return true;
+}
+
+bool DX11PostProcessClass::Draw_Backdrop(unsigned x0, unsigned y0, unsigned x1, unsigned y1, float radius)
+{
+	if (!Blur_Backdrop(radius)) {
+		return false;
+	}
+	if (x1 > BackdropWidth) {
+		x1 = BackdropWidth;
+	}
+	if (y1 > BackdropHeight) {
+		y1 = BackdropHeight;
+	}
+	if (x0 >= x1 || y0 >= y1) {
+		return false;
+	}
+
+	PassSetup pass;
+	memset(&pass, 0, sizeof(pass));
+	pass.Shader = BackdropShader;
+	pass.Source = BackdropBlur[BackdropSource].Resource;
+	pass.Destination = Device->Get_Back_Buffer_View();
+	pass.DestinationX = x0;
+	pass.DestinationY = y0;
+	pass.DestinationWidth = x1 - x0;
+	pass.DestinationHeight = y1 - y0;
+	pass.SourceWidth = BackdropWidth;
+	pass.SourceHeight = BackdropHeight;
+	Draw_Pass(pass);
 	return true;
 }
 

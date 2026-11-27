@@ -62,9 +62,12 @@
 #include "GameClient/KeyDefs.h"
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetStaticText.h"
+#include "GameClient/GameText.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/PeerThread.h"
 #include "GameNetwork/GameSpyOverlay.h"
+#include "GameNetwork/GameSpy/LobbyUtils.h"
+#include "GameClient/UIStyle.h"
 
 
 //-----------------------------------------------------------------------------
@@ -74,11 +77,42 @@
 static NameKeyType parentPopupID = NAMEKEY_INVALID;
 static NameKeyType textEntryGamePasswordID = NAMEKEY_INVALID;
 static NameKeyType buttonCancelID = NAMEKEY_INVALID;
+static NameKeyType buttonJoinID = NAMEKEY_INVALID;
 
 static GameWindow *parentPopup = NULL;
 static GameWindow *textEntryGamePassword = NULL;
+static UnicodeString s_gameName;
 
 static void joinGame( AsciiString password );
+
+/// the field's words as a password: joins when there are any
+static void joinWithEntry( void )
+{
+	UnicodeString txtInput;
+	txtInput.set( GadgetTextEntryGetText( textEntryGamePassword ) );
+	GadgetTextEntrySetText( textEntryGamePassword, UnicodeString::TheEmptyString );
+	txtInput.trim();
+	if (!txtInput.isEmpty())
+	{
+		AsciiString munkee;
+		munkee.translate( txtInput );
+		joinGame( munkee );
+	}
+}
+
+/* Join Game in the menu language (README-game-lists.md, "lists-join-password"): the box's shell with the game's
+	 name after the title, the field's label and "Esc cancels" at the foot; offsets at 1080 from its top left. */
+static void drawJoinBox( GameWindow *window, WinInstanceData * )
+{
+	IRegion2D box;
+	Int width, height;
+	window->winGetScreenPosition( &box.lo.x, &box.lo.y );
+	window->winGetSize( &width, &height );
+	box.hi.x = box.lo.x + width;
+	box.hi.y = box.lo.y + height;
+	LobbyDrawBoxHead( box, TheGameText->fetch( "GUI:LobbyJoinGame" ), s_gameName, TheGameText->fetch( "GUI:HintEscCancel" ) );
+	LobbyDrawBoxLabel( TheGameText->fetch( "GUI:JoinPasswordLine" ), box.lo.x + UIStyle::px( 32.0f ), box.lo.y + UIStyle::px( 120.0f ) );
+}
 
 //-----------------------------------------------------------------------------
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////
@@ -101,12 +135,24 @@ void PopupJoinGameInit( WindowLayout *layout, void *userData )
 	GadgetStaticTextSetText(staticTextGameName, UnicodeString::TheEmptyString);
 
 	buttonCancelID = NAMEKEY("PopupJoinGame.wnd:ButtonCancel");
+	buttonJoinID = NAMEKEY("PopupJoinGame.wnd:ButtonJoin");
 
+	s_gameName.clear();
 	GameSpyStagingRoom *ourRoom = TheGameSpyInfo->findStagingRoomByID(TheGameSpyInfo->getCurrentStagingRoomID());
 	if (ourRoom)
+	{
 		GadgetStaticTextSetText(staticTextGameName, ourRoom->getGameName());
+		s_gameName = ourRoom->getGameName();
+	}
 
-	TheWindowManager->winSetFocus( parentPopup );
+	// the menu language: the box drawn by code, the field and the keys on the master's windows, JOIN Enter's key
+	if (parentPopup)
+		parentPopup->winSetDrawFunc( drawJoinBox );
+	LobbyMenuEntry( textEntryGamePassword, UIStyle::MENU_TEXT_BODY, UIStyle::INK );
+	LobbyMenuKey( TheWindowManager->winGetWindowFromId( parentPopup, buttonCancelID ), FALSE );
+	LobbyMenuKey( TheWindowManager->winGetWindowFromId( parentPopup, buttonJoinID ), TRUE );
+
+	TheWindowManager->winSetFocus( textEntryGamePassword ? textEntryGamePassword : parentPopup );
 	TheWindowManager->winSetModal( parentPopup );
 
 }
@@ -194,6 +240,8 @@ WindowMsgHandledType PopupJoinGameSystem( GameWindow *window, UnsignedInt msg, W
 				SetLobbyAttemptHostJoin( FALSE );
 				parentPopup = NULL;
 			}
+			else if (controlID == buttonJoinID && parentPopup)
+				joinWithEntry();
 			break;
 		}
 
@@ -214,20 +262,8 @@ WindowMsgHandledType PopupJoinGameSystem( GameWindow *window, UnsignedInt msg, W
 			GameWindow *control = (GameWindow *)mData1;
 			Int controlID = control->winGetWindowId();
      
-      if( controlID == textEntryGamePasswordID )
-			{
-				// read the user's input and clear the entry box
-				UnicodeString txtInput;
-				txtInput.set(GadgetTextEntryGetText( textEntryGamePassword ));
-				GadgetTextEntrySetText(textEntryGamePassword, UnicodeString::TheEmptyString);
-				txtInput.trim();
-				if (!txtInput.isEmpty())
-				{
-					AsciiString munkee;
-					munkee.translate(txtInput);
-					joinGame(munkee);
-				}
-			}
+      if( controlID == textEntryGamePasswordID && parentPopup )
+				joinWithEntry();
 			break;
 		}
 		default:

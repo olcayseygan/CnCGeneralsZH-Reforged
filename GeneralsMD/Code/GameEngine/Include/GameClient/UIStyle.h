@@ -421,14 +421,14 @@ namespace UIStyle
 	/// Arial at a size given at 1080, its em scaled with the board: the one call for menu text
 	GameFont *menuFont( Int px1080, Bool bold = FALSE );
 
-	/// The backdrop.  Package 2b blurs what is behind (radius 14) where the display can; until then,
-	/// and on Direct3D 9 and SDL3, the backdrop is the dim alone.  veil darkens the whole screen;
+	/// The backdrop.  Direct3D 11 blurs what is behind (radius 14) when a world is on the screen;
+	/// on Direct3D 9 and SDL3 the backdrop is the dim alone.  veil darkens the whole screen;
 	/// glass is a panel's see-through black over what is behind it (blurred when it can be).
 	void veil( Int alpha );
 	void glass( const IRegion2D &panel, Int alpha = 168 );
 	/// the world outside a panel dimmed, as frame A stands on a dark shell
 	void dimOutside( const IRegion2D &panel, Int alpha = 120 );
-	/// whether glass blurs on this display; FALSE until package 2b lands its virtual on Display
+	/// whether glass blurs on this display right now (Display::drawBackdropBlur)
 	Bool backdropBlurs( void );
 
 	/// A line with its soft light: two wider passes at low alpha, then the line.  Only for the lines
@@ -493,7 +493,7 @@ namespace UIStyle
 	const Int BOX_FOOT = 84;				///< the key band under the faint rule
 	const Int BOX_LINE = 28;				///< a body line; the box grows a line at a time
 	const Int BOX_KEY_WIDTH = 170;	///< three keys fit a question box
-	const Int BOX_KEY_GAP = 12;
+	const Int BOX_KEY_GAP = 16;			///< the 8 px grid, as MENU_KEY_GAP
 	const Int BOX_KEY_HEIGHT = 48;
 	const Int BOX_BAR_TOP = 832;		///< the command bar's highest plate: a box over a match ends 44 over it
 	const Int BOX_TOP_MIN = 56;

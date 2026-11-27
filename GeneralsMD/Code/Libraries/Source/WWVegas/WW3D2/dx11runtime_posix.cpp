@@ -137,8 +137,10 @@ void Direct3D11_Set_VSync(bool) {}
 // understand it for, so every chain is refused.
 bool Direct3D11_Post_Chain(const char *) { return false; }
 const char * Direct3D11_Post_Diagnostic() { return "post-process off"; }
-void Direct3D11_Finish_Scene() {}
+void Direct3D11_Finish_Scene(bool) {}
 void Direct3D11_Finish_Frame() {}
+// The menu backdrop stays the plain dim here.
+bool Direct3D11_Draw_Backdrop(int, int, int, int, float) { return false; }
 
 unsigned char * Direct3D11_Capture_Back_Buffer(unsigned & width, unsigned & height, unsigned & pitch)
 {

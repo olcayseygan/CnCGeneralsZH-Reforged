@@ -13,9 +13,10 @@ which the code sizes to their words), content from 182, the foot rule at 962 and
 from its corner and no tabs. The two popups are cards of their own, solid GROUND under a FRAME
 edge, centred on the board.
 
-Package 9 (login, hub, Quick Match) authored the board for all seven and its own three screens; the
-lobby, the ladder and the two popups keep their windows where they were, moved onto the board's
-columns (main 60 to 1236, side 1260 to 1860) until packages 10 and 11 lay them out.
+Package 9 (login, hub, Quick Match) authored the board and its own three screens; package 10 the
+Custom games lobby (README-game-lists.md in screens/game-lists) and the Host Game and Join Game boxes,
+PopupJoinGame a master of its own since; the ladder and the player card keep their windows on the
+board's columns (main 60 to 1236, side 1260 to 1860) until package 11 lays them out.
 
 Nothing EA named goes. A window the design drops is kept HIDDEN, so every lookup the callbacks make
 still finds it; the windows this script adds are boxes the code draws in (Panel*, Card*), static
@@ -105,9 +106,21 @@ CLEAR = (0, 0, 0, 0)
 BOX_DRAWN = (CLEAR, CLEAR)
 BOX_OLD = (PANEL, FRAME_COLOR)
 
-# the popups: the player card as mocked (card.html), the host popup sized to its two fields
+# the popups: the player card as mocked (card.html); Host Game and Join Game are boxes of the message box's
+# pattern, 760 wide and centred (README-game-lists.md: 454 and 320 high), fields 32 in, keys 220 by 48, 12
+# apart at the foot's right, 20 over its foot
 CARD = (360, 96, 1200, 896)
-HOST_CARD = (600, 330, 720, 420)
+HOST_CARD = (580, 313, 760, 454)
+JOIN_CARD = (580, 380, 760, 320)
+BOX_X0, BOX_W = 612, 696
+BOX_KEY_W, BOX_KEY_H, BOX_KEY_GAP = 220, 48, 12
+
+
+def box_key(box, index):
+    """A box's key: index 0 is the rightmost, Enter's."""
+    left, top, width, height = box
+    right = left + width - 32 - index * (BOX_KEY_W + BOX_KEY_GAP)
+    return (right - BOX_KEY_W, top + height - 20 - BOX_KEY_H, BOX_KEY_W, BOX_KEY_H)
 
 
 def text(name, template, rect, body=True, label=None):
@@ -181,9 +194,23 @@ QM_ARMY = (MAIN[0], TOP, MAIN[1], 744 - TOP)
 QM_COLOUR = (MAIN[0], 768, MAIN[1], BOTTOM - 768)
 QM_PICKS = (SIDE[0], TOP, SIDE[1], BOTTOM - TOP)
 QM_SEARCH = (MAIN[0], TOP, MAIN[1], BOTTOM - TOP)
-# the lobby until package 10: the games over the chat in the main column, the players at the side
-LOBBY_GAMES = (MAIN[0], TOP, MAIN[1], 420)
-LOBBY_PLAYERS = (SIDE[0], TOP, SIDE[1], BOTTOM - TOP)
+# Custom games (README-game-lists.md, "Rects at 1920x1080"): the left column 60 to 1310 holds the games (the
+# head from 184, the column words at 220, rows of 40 from 250, eight of them, the list 4 px in from its top
+# as the listbox draws, its scroll bar ending 1310, the lock legend under it), the room tabs and the chat with
+# its entry and SEND; the right column 1334 to 1860 the picked game over the players (the head, the column
+# words at 599, rows of 34 from 618). LobbyUtils.cpp's GAME_COLUMN_EDGES are the columns inside the list.
+LOBBY_LEFT_W, LOBBY_RIGHT_X = 1310 - INSET, 1334
+LOBBY_RIGHT_W = INSET_RIGHT - LOBBY_RIGHT_X
+LOBBY_GAMES = (INSET, TOP, LOBBY_LEFT_W, 602 - TOP)
+LOBBY_LIST = (INSET, 246, LOBBY_LEFT_W, 8 * 40 + 8)
+LOBBY_TABS = (INSET, 606, LOBBY_LEFT_W, 30)
+LOBBY_CHAT = (INSET, 644, LOBBY_LEFT_W, 896 - 644)
+SEND_W = 120
+LOBBY_ENTRY = (INSET, 908, LOBBY_LEFT_W - SEND_W - 12, 44)
+LOBBY_SEND = (1310 - SEND_W, 908, SEND_W, 44)
+LOBBY_PICKED = (LOBBY_RIGHT_X, TOP, LOBBY_RIGHT_W, 548 - TOP)
+LOBBY_PLAYERS = (LOBBY_RIGHT_X, 558, LOBBY_RIGHT_W, BOTTOM - 558)
+LOBBY_PLAYER_LIST = (LOBBY_RIGHT_X, 618, LOBBY_RIGHT_W, BOTTOM - 618)
 
 
 def card_button(box):
@@ -307,23 +334,25 @@ SCREENS = {
 
     "WOLCustomLobby": dict(
         panel="GadgetParent", home="GadgetParent", title="StaticTextTitle", title_text="GUI:OnlineTabCustom",
-        rule="HeaderRule", tabs=True, box_fill=BOX_OLD,
-        labels={"ButtonJoin": "GUI:OnlineLobbyJoin", "ButtonHost": "GUI:OnlineLobbyHost"},
+        rule="HeaderRule", tabs=True,
+        labels={"ButtonJoin": "GUI:OnlineLobbyJoin", "ButtonHost": "GUI:OnlineLobbyHost", "ButtonEmote": "GUI:RoomSend"},
         names=[],
         reparent=[],
-        boxes=[("PanelGames", LOBBY_GAMES, False), ("PanelPlayers", LOBBY_PLAYERS, False)],
+        boxes=[("PanelGames", LOBBY_GAMES, False), ("PanelPicked", LOBBY_PICKED, False),
+               ("PanelPlayers", LOBBY_PLAYERS, False)],
         framed=[],
-        # Host makes a classic room; Mods asks Direct Strike or Apocalypse first (the owner, 2026-11-24)
+        # Host Game asks the three modes (AskGameMode); the Mods key an earlier layout added stays, hidden, for
+        # anything that still looks it up
         adds=[button("ButtonMods", "ButtonHost", THIRD_RIGHT, "GUI:Mods", "TOOLTIP:Mods")],
-        # ListboxGamesLarge is the game list: ZH dropped the small one (LobbyUtils.cpp GrabWindowInfo)
-        place={"ParentGameListLarge": LOBBY_GAMES, "ListboxGamesLarge": inset(LOBBY_GAMES),
-               "ComboBoxGroupRooms": (MAIN[0], 610, MAIN[1], 34),
-               "ListboxChat": (MAIN[0], 618, MAIN[1], 270), "TextEntryChat": (MAIN[0], 896, MAIN[1], 44),
-               "ListboxPlayers": inset(LOBBY_PLAYERS),
+        # ListboxGamesLarge is the game list: ZH dropped the small one (LobbyUtils.cpp GrabWindowInfo); the
+        # hidden room combo keeps the strip the room tabs are drawn in; ButtonEmote is SEND
+        place={"ParentGameListLarge": LOBBY_GAMES, "ListboxGamesLarge": LOBBY_LIST,
+               "ComboBoxGroupRooms": LOBBY_TABS, "ListboxChat": LOBBY_CHAT, "TextEntryChat": LOBBY_ENTRY,
+               "ButtonEmote": LOBBY_SEND, "ListboxPlayers": LOBBY_PLAYER_LIST,
                "ButtonBack": BACK, "ButtonJoin": SECOND_RIGHT, "ButtonHost": RIGHT},
         aligned=[],
-        keys=["ButtonBack", "ButtonMods", "ButtonJoin", "ButtonHost"],
-        hide=["ButtonGameListToggle", "SliderChatAdjust", "ButtonBuddy", "ButtonEmote", "ParentSortButtons",
+        keys=["ButtonBack", "ButtonJoin", "ButtonHost"],
+        hide=["ButtonGameListToggle", "SliderChatAdjust", "ButtonBuddy", "ButtonMods", "ParentSortButtons",
               "ComboBoxGroupRooms"]),
 
     # the ladder and the skins page are drawn in code over this layout's panel (WOLLadderScreen.cpp)
@@ -355,18 +384,37 @@ SCREENS = {
               "CheckBoxNonAsianText", "ButtonDeleteAccount", "ButtonSetLocale", "StaticTextPlayerStatisticsLabel",
               "Line"]),
 
+    # Host Game, a box of the message box's pattern (README-game-lists.md, "lists-host-popup"): the code draws
+    # the shell, the title with the mode it answered, the field labels and the armies' line; the fields and
+    # keys stand here. Use Stats is a GameSpy box an online game never asks (PopupHostGame.cpp hides it)
     "PopupHostGame": dict(
         panel=None, home="ParentHostPopUp", title=None, rule=None, tabs=False,
         names=[("StaticTextGameName", ("text", "GUI:GameName")), ("StaticTextPassword", ("text", "GUI:Password"))],
         reparent=[], boxes=[],
-        framed=[("ParentHostPopUp", HOST_CARD, GROUND, FRAME_COLOR)],
+        framed=[("ParentHostPopUp", HOST_CARD, CLEAR, CLEAR)],
         adds=[],
-        place={"StaticTextGameName": (614, 354, 682, 28), "TextEntryGameName": (624, 386, 672, 44),
-               "StaticTextPassword": (614, 446, 682, 28), "TextEntryGamePassword": (624, 478, 672, 44),
-               "CheckBoxLimitArmies": (624, 542, 672, 32), "CheckBoxUseStats": (624, 586, 672, 32),
-               "ButtonCancel": (624, 670, 300, POPUP_ROW_HEIGHT), "ButtonCreateGame": (996, 670, 300, POPUP_ROW_HEIGHT)},
-        aligned=["StaticTextGameName", "StaticTextPassword"],
-        hide=[]),
+        place={"StaticTextGameName": (BOX_X0, 416, BOX_W, 26), "TextEntryGameName": (BOX_X0, 445, BOX_W, 48),
+               "StaticTextPassword": (BOX_X0, 512, BOX_W, 26), "TextEntryGamePassword": (BOX_X0, 541, BOX_W, 48),
+               "CheckBoxLimitArmies": (BOX_X0, 620, BOX_W, 28), "CheckBoxUseStats": (BOX_X0, 620, BOX_W, 28),
+               "ButtonCancel": box_key(HOST_CARD, 1), "ButtonCreateGame": box_key(HOST_CARD, 0)},
+        aligned=[],
+        hide=["StaticTextGameName", "StaticTextPassword", "CheckBoxUseStats"]),
+
+    # Join Game, for a password game (README-game-lists.md, "lists-join-password"): EA's popup had no join key,
+    # Enter in the field joined; JOIN is Cancel cloned. The title, the game's name and the label are the code's
+    "PopupJoinGame": dict(
+        panel=None, home="ParentJoinPopUp", title=None, rule=None, tabs=False,
+        names=[("StaticTextGameLabel", ("text", "GUI:GameName")), ("StaticTextPassword", ("text", "GUI:Password"))],
+        reparent=[], boxes=[],
+        framed=[("ParentJoinPopUp", JOIN_CARD, CLEAR, CLEAR)],
+        adds=[button("ButtonJoin", "ButtonCancel", box_key(JOIN_CARD, 0), "GUI:OnlineLobbyJoin")],
+        place={"TextEntryGamePassword": (BOX_X0, JOIN_CARD[1] + 140, BOX_W, 48), "ButtonCancel": box_key(JOIN_CARD, 1),
+               "StaticTextGameName": (BOX_X0, JOIN_CARD[1] + 46, BOX_W, 26),
+               "StaticTextGameLabel": (BOX_X0, JOIN_CARD[1] + 110, BOX_W, 26),
+               "StaticTextPassword": (BOX_X0, JOIN_CARD[1] + 110, BOX_W, 26)},
+        labels={"ButtonCancel": "GUI:Cancel"},
+        aligned=[],
+        hide=["StaticTextGameName", "StaticTextGameLabel", "StaticTextPassword"]),
 }
 
 # Every window the callbacks look up that the retail layout has (WOLLoginMenu.cpp, WOLWelcomeMenu.cpp,
@@ -410,6 +458,7 @@ LOOKUPS = {
     "PopupHostGame": ["ParentHostPopUp", "ButtonCancel", "ButtonCreateGame", "CheckBoxAllowObservers",
                       "CheckBoxLimitArmies", "CheckBoxUseStats", "TextEntryGameDescription", "TextEntryGameName",
                       "TextEntryGamePassword"],
+    "PopupJoinGame": ["ParentJoinPopUp", "TextEntryGamePassword", "StaticTextGameName", "ButtonCancel", "ButtonJoin"],
 }
 # the hub's title and Back lend their lettering to the two pages that have neither
 KIT = "WOLWelcomeMenu"

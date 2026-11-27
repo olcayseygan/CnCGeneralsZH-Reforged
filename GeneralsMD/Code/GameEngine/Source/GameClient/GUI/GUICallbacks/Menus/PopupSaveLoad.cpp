@@ -61,6 +61,11 @@
 #include "GameClient/Shell.h"
 #include "GameLogic/GameLogic.h"
 #include "GameClient/GameWindowTransitions.h"
+#include "GameClient/ChallengeGenerals.h"
+#include "GameClient/Image.h"
+#include "GameClient/MapUtil.h"
+#include "GameClient/MessageBox.h"
+#include "GameClient/SinglePlayerParts.h"
 
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
 static NameKeyType buttonBackKey					= NAMEKEY_INVALID;
@@ -95,6 +100,406 @@ static Bool isShuttingDown = false;
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////////////////////////
 extern Bool DontShowMainMenu; //KRIS
 extern Bool ReplayWasPressed;
+
+//-------------------------------------------------------------------------------------------------
+// The menu language (docs/plans/MENU-REDESIGN.md, package 12).  Load Game is a screen in frame A:
+// the saves in five columns, two legend lines and the picked save's details.  Save / Load over a
+// match is a 1040 box of the same list squeezed, the new save first.  The confirms ask through the
+// message box; the save's description keeps a question box of its own.  SinglePlayerLayout.h holds
+// every number; the masters (singleplayer_layout.py, boxes_layout.py) stand on them.
+//-------------------------------------------------------------------------------------------------
+namespace SPL = SinglePlayerLayout;
+namespace SPP = SinglePlayerParts;
+using SinglePlayerParts::speedText;
+using SinglePlayerParts::lengthText;
+
+static MenuBox::TextPool saveText;
+
+static AvailableGameInfo *saveRow( Int row )
+{
+	return listboxGames && row >= 0 && row < SPP::rowCount( listboxGames ) ? (AvailableGameInfo *)GadgetListBoxGetItemData( listboxGames, row ) : NULL;
+}
+
+/// the name the list gives a save: its description, else its map's label
+static UnicodeString saveName( const SaveGameInfo &save )
+{
+	if( !save.description.isEmpty() )
+		return save.description;
+	Bool exists = FALSE;
+	UnicodeString label = TheGameText->fetch( save.mapLabel, &exists );
+	if( exists == FALSE )
+		label.translate( save.mapLabel );
+	return label;
+}
+
+static UnicodeString savedWhen( const SaveGameInfo &save )
+{
+	WallClockTime when;
+	when.wYear = save.date.year;
+	when.wMonth = save.date.month;
+	when.wDayOfWeek = save.date.dayOfWeek;
+	when.wDay = save.date.day;
+	when.wHour = save.date.hour;
+	when.wMinute = save.date.minute;
+	when.wSecond = save.date.second;
+	when.wMilliseconds = save.date.milliseconds;
+	UnicodeString text = getUnicodeDateBuffer( when );
+	text.concat( u" " );
+	text.concat( getUnicodeTimeBuffer( when ) );
+	return text;
+}
+
+static Campaign *saveCampaign( const SaveGameInfo &save )
+{
+	return save.campaignSide.isEmpty() || TheCampaignManager == NULL ? NULL : TheCampaignManager->findCampaign( save.campaignSide );
+}
+
+/// the campaign a save is in: Zero Hour USA, Generals China, Challenge: Air Force, Skirmish
+static UnicodeString campaignWords( const SaveGameInfo &save )
+{
+	Campaign *campaign = saveCampaign( save );
+	if( campaign == NULL )
+		return TheGameText->fetch( "GUI:SPSkirmish" );
+	UnicodeString text;
+	if( campaign->isChallengeCampaign() )
+	{
+		const GeneralPersona *general = TheChallengeGenerals ? TheChallengeGenerals->getPlayerGeneralByCampaignName( campaign->m_name ) : NULL;
+		const Int index = general ? (Int)( general - TheChallengeGenerals->getChallengeGenerals() ) : -1;
+		text.format( TheGameText->fetch( "GUI:SPCampaignChallenge" ), TheGameText->fetch( SPL::armyKey( index ) ).str() );
+		return text;
+	}
+	const AsciiString side = campaign->getSide();
+	const char *sideKey = side.compareNoCase( "usa" ) == 0 ? "GUI:SPSideUSA" : side.compareNoCase( "china" ) == 0 ? "GUI:SPSideChina"
+		: side.compareNoCase( "gla" ) == 0 ? "GUI:SPSideGLA" : NULL;
+	if( sideKey == NULL )
+		return TheGameText->fetch( campaign->m_campaignNameLabel );
+	text.format( TheGameText->fetch( campaign->m_name.startsWithNoCase( "gen_" ) ? "GUI:SPCampaignGenerals" : "GUI:SPCampaignZH" ),
+		TheGameText->fetch( sideKey ).str() );
+	return text;
+}
+
+static const char *kindKey( const SaveGameInfo &save )
+{
+	return save.saveFileType == SAVE_FILE_TYPE_MISSION ? "GUI:SPKindMissionStart" : "GUI:SPKindSaved";
+}
+
+/// the list's columns, where they stand at 1080: the screen's, or squeezed into the box
+static void saveColumns( SPL::Column *columns )
+{
+	for( Int c = 0; c < SPL::SAVE_COLUMNS; c++ )
+		columns[ c ] = isPopup ? SPL::saveColumn( c, SPL::SAVE_BOX_LIST.lo.x, SPL::SAVE_BOX_LIST.hi.x ) : SPL::saveColumn( c );
+}
+
+/// the rows over EA's gadget: the new save first in a box that saves, a save this build cannot read MUTED
+static void saveListDraw( GameWindow *list, WinInstanceData * )
+{
+	using namespace UIStyle;
+	SPL::Column columns[ SPL::SAVE_COLUMNS ];
+	saveColumns( columns );
+	const IRegion2D box = MenuBox::windowRect( list );
+	const Int right = SPP::point( (Real)( isPopup ? SPL::SAVE_BOX_LIST.hi.x - 8 : SPL::SAVE_ROW_RIGHT ), 0.0f ).x;
+	const Int selected = SPP::selectedRow( list ), hovered = SPP::hoveredRow( list );
+	const Int rows = SPP::rowCount( list );
+	for( Int row = 0; row < rows; row++ )
+	{
+		const IRegion2D r = SPP::rowRect( list, row, right );
+		if( r.lo.y < box.lo.y || r.hi.y > box.hi.y + 1 )
+			continue;
+		menuRow( r, row == hovered && row != selected ? ROW_HOVER : ROW_PLAIN, ( row & 1 ) != 0 );
+		if( row == selected )
+			SPP::picked( r );
+		const Int middle = ( r.lo.y + r.hi.y ) / 2;
+		const AvailableGameInfo *info = saveRow( row );
+		const IRegion2D first = SPP::on( SPL::rect( columns[ 0 ].left, 0, columns[ 0 ].right, 1 ) );
+		if( info == NULL )
+		{
+			const Int plus = SPP::words( saveText, UnicodeString( u"+" ), MENU_TEXT_ROW_FIGURE, FALSE, first.lo.x, middle, EDGE_LIT, 0 );
+			SPP::wordsKey( saveText, "GUI:SPNewSave", MENU_TEXT_BODY, FALSE, first.lo.x + plus + SPP::px( 10.0f ), middle, INK,
+				right - first.lo.x - plus );
+			continue;
+		}
+		const SaveGameInfo &save = info->saveGameInfo;
+		const Bool loads = save.isLoadable();
+		const Color ink = loads ? INK : MUTED;
+		Campaign *campaign = saveCampaign( save );
+		for( Int c = 0; c < SPL::SAVE_COLUMNS; c++ )
+		{
+			const IRegion2D cell = SPP::on( SPL::rect( columns[ c ].left, 0, columns[ c ].right, 1 ) );
+			const Int w = cell.hi.x - cell.lo.x;
+			const Int x = columns[ c ].alignRight ? cell.hi.x : cell.lo.x;
+			const MenuBox::Align align = columns[ c ].alignRight ? MenuBox::RIGHT : MenuBox::LEFT;
+			UnicodeString figure;
+			switch( c )
+			{
+				case SPL::SAVE_NAME:
+					SPP::words( saveText, saveName( save ), MENU_TEXT_BODY, FALSE, x, middle, ink, w, align, TRUE );
+					break;
+				case SPL::SAVE_CAMPAIGN:
+					SPP::words( saveText, campaignWords( save ), MENU_TEXT_BODY, FALSE, x, middle, ink, w, align, TRUE );
+					break;
+				case SPL::SAVE_MISSION:
+					if( campaign )
+					{
+						figure.format( u"%d", save.missionNumber + 1 );
+						SPP::words( saveText, figure, MENU_TEXT_BODY, FALSE, x, middle, ink, w, align );
+					}
+					break;
+				case SPL::SAVE_KIND:
+					if( loads )
+						SPP::wordsKey( saveText, kindKey( save ), MENU_TEXT_BODY, FALSE, x, middle, ink, w, align );
+					else
+						SPP::capitalsKey( "GUI:SPOlder", x, middle, MUTED, align, w );
+					break;
+				case SPL::SAVE_SAVED:
+					SPP::words( saveText, savedWhen( save ), MENU_TEXT_BODY, FALSE, x, middle, ink, w, align );
+					break;
+			}
+		}
+	}
+	SPP::scrollBar( list, SPP::point( (Real)( isPopup ? SPL::SAVE_BOX_LIST.hi.x - 4 : SPL::SAVE_SCROLL_X ), 0.0f ).x );
+}
+
+/// the column heads over the list, SAVED sorted (newest first, as GameState lists them)
+static void saveHeads( Int top )
+{
+	static const char *heads[ SPL::SAVE_COLUMNS ] = { "GUI:SPName", "GUI:SPCampaign", "GUI:SPMission", "GUI:SPKind", "GUI:SPSaved" };
+	SPL::Column columns[ SPL::SAVE_COLUMNS ];
+	UnicodeString labels[ SPL::SAVE_COLUMNS ];
+	saveColumns( columns );
+	for( Int c = 0; c < SPL::SAVE_COLUMNS; c++ )
+		labels[ c ] = TheGameText->fetch( heads[ c ] );
+	SPP::heads( columns, labels, SPL::SAVE_COLUMNS, SPL::SAVE_SAVED, top, isPopup ? SPL::SAVE_BOX_LIST.lo.x : SPL::LEFT,
+		isPopup ? SPL::SAVE_BOX_LIST.hi.x : SPL::SAVE_LIST_RIGHT );
+}
+
+/// a fact at 1080: its label in capitals, its value under it
+static void saveFact( Int x0, Int y0, Int x1, const char *label, const UnicodeString &value, Color ink = UIStyle::INK )
+{
+	SPP::fact( saveText, SPP::on( SPL::rect( x0, y0, x1, y0 + 46 ) ), TheGameText->fetch( label ), value, ink );
+}
+
+/// the picked save's details: name, campaign, the campaign's missions as tiles, the map, the facts
+static void drawSaveDetails( const AvailableGameInfo *info )
+{
+	using namespace UIStyle;
+	if( info == NULL )
+		return;
+	const SaveGameInfo &save = info->saveGameInfo;
+	const Bool loads = save.isLoadable();
+	const IRegion2D name = SPP::on( SPL::SAVE_DETAILS_NAME );
+	SPP::words( saveText, saveName( save ), MENU_TEXT_ROW_FIGURE, FALSE, name.lo.x, ( name.lo.y + name.hi.y ) / 2, INK,
+		name.hi.x - name.lo.x, MenuBox::LEFT, TRUE );
+	const IRegion2D line = SPP::on( SPL::SAVE_DETAILS_CAMPAIGN );
+	SPP::words( saveText, campaignWords( save ), MENU_TEXT_BODY, FALSE, line.lo.x, ( line.lo.y + line.hi.y ) / 2, MUTED,
+		line.hi.x - line.lo.x, MenuBox::LEFT, TRUE );
+
+	Campaign *campaign = saveCampaign( save );
+	const Int count = campaign ? (Int)campaign->m_missions.size() : 0;
+	if( count > 0 )
+	{
+		const IRegion2D head = SPP::on( SPL::SAVE_DETAILS_MISSION );
+		UnicodeString of;
+		of.format( TheGameText->fetch( "GUI:SPMissionOf" ), save.missionNumber + 1, count );
+		SPP::capitals( of, head.lo.x, ( head.lo.y + head.hi.y ) / 2, MUTED, MenuBox::LEFT, head.hi.x - head.lo.x );
+		for( Int each = 0; each < count; each++ )
+		{
+			const IRegion2D tile = SPP::on( SPL::missionTile( count, each ) );
+			const char *word = each < save.missionNumber ? "GUI:SPDone" : each == save.missionNumber ? "GUI:SPThisSave" : "GUI:SPAhead";
+			if( each < save.missionNumber )
+			{
+				MenuBox::fill( tile, withAlpha( FRAME, 60 ) );
+				MenuBox::outline( tile, FRAME );
+			}
+			else if( each == save.missionNumber )
+				SPP::picked( tile );
+			else
+			{
+				MenuBox::fill( tile, GameMakeColor( 0, 0, 0, 150 ) );
+				MenuBox::outline( tile, withAlpha( FRAME, 120 ) );
+			}
+			UnicodeString number;
+			number.format( u"%d", each + 1 );
+			const Int middle = ( tile.lo.x + tile.hi.x ) / 2;
+			SPP::words( saveText, number, MENU_TEXT_ROW_FIGURE, FALSE, middle, ( tile.lo.y + tile.hi.y ) / 2,
+				each > save.missionNumber ? MUTED : INK, 0, MenuBox::CENTRE );
+			SPP::capitalsKey( word, middle, tile.hi.y + SPP::px( 14.0f ), each == save.missionNumber ? INK : MUTED, MenuBox::CENTRE,
+				tile.hi.x - tile.lo.x );
+		}
+	}
+
+	// the mission's map at its shape, NO PREVIEW where it has no picture (Generals' own missions)
+	static AsciiString s_previewOf;
+	static Image *s_preview = NULL;
+	const MapMetaData *md = TheMapCache ? TheMapCache->findMap( save.pristineMapName ) : NULL;
+	if( s_previewOf.compareNoCase( save.pristineMapName ) != 0 )
+	{
+		s_previewOf = save.pristineMapName;
+		s_preview = md ? getMapPreviewImage( save.pristineMapName ) : NULL;
+	}
+	const Real mw = md ? md->m_extent.hi.x - md->m_extent.lo.x : 0.0f;
+	const Real mh = md ? md->m_extent.hi.y - md->m_extent.lo.y : 0.0f;
+	const IRegion2D preview = SPP::on( SPL::fitShape( SPL::SAVE_PREVIEW, mw, mh ) );
+	if( s_preview )
+		SPP::framed( s_preview, preview, FALSE );
+	else
+	{
+		MenuBox::fill( preview, GameMakeColor( 0, 0, 0, 150 ) );
+		MenuBox::outline( preview, withAlpha( FRAME, 220 ) );
+		SPP::capitalsKey( "GUI:SPNoPreview", ( preview.lo.x + preview.hi.x ) / 2, ( preview.lo.y + preview.hi.y ) / 2, MUTED, MenuBox::CENTRE );
+	}
+
+	// the facts beside it
+	const Int fx = SPL::SAVE_FACTS_LEFT;
+	const Int top = SPL::SAVE_PREVIEW.lo.y;
+	UnicodeString file;
+	file.translate( info->filename );
+	const Int speed = save.gameSpeedPercent();
+	saveFact( fx, top, SPL::RIGHT, "GUI:SPSaved", savedWhen( save ) );
+	saveFact( fx, top + 54, SPL::RIGHT, "GUI:SPKind", TheGameText->fetch( save.saveFileType == SAVE_FILE_TYPE_MISSION ? "GUI:SPKindMissionStart" : "GUI:SPSavedByYou" ) );
+	saveFact( fx, top + 108, SPL::RIGHT, "GUI:SPSpeed", speed > 0 ? speedText( speed ) : UnicodeString( u"-" ) );
+	saveFact( fx, top + 162, SPL::RIGHT, "GUI:SPLoads", TheGameText->fetch( loads ? "GUI:SPLoadsYes" : "GUI:SPLoadsNo" ), loads ? INK : MUTED );
+	saveFact( fx, top + 216, SPL::RIGHT, "GUI:SPFile", file );
+
+	// the mission's place, then how hard and how long, or why it will not load
+	const Int x0 = SPP::point( (Real)SPL::SAVE_DETAILS_LEFT, 0.0f ).x, x1 = SPP::point( (Real)SPL::RIGHT, 0.0f ).x;
+	SPP::section( saveText, x0, x1, SPP::point( 0.0f, (Real)SPL::SAVE_MISSION_TOP ).y, TheGameText->fetch( "GUI:SPMission" ) );
+	Bool labelled = FALSE;
+	UnicodeString place = TheGameText->fetch( save.mapLabel, &labelled );
+	if( !labelled )
+		place.translate( save.mapLabel );
+	SPP::wrapped( saveText, place, MENU_TEXT_BODY, x0, SPP::point( 0.0f, (Real)( SPL::SAVE_MISSION_TOP + 36 ) ).y, x1 - x0, 2, INK,
+		SPP::px( 26.0f ) );
+	if( !loads )
+	{
+		SPP::capitalsKey( "GUI:SPLoads", x0, SPP::point( 0.0f, (Real)( SPL::SAVE_DIFFICULTY_TOP + 8 ) ).y, MUTED );
+		SPP::wrapped( saveText, TheGameText->fetch( "GUI:SPWontLoad" ), MENU_TEXT_BODY, x0,
+			SPP::point( 0.0f, (Real)( SPL::SAVE_DIFFICULTY_TOP + 20 ) ).y, x1 - x0, 2, MUTED, SPP::px( 26.0f ) );
+		return;
+	}
+	SaveGameExtras extras;
+	if( !GameState_saveExtras( info->filename, extras ) )
+		return;
+	const Int half = ( SPL::SAVE_DETAILS_LEFT + SPL::RIGHT ) / 2;
+	const char *difficulty = extras.difficulty == DIFFICULTY_EASY ? "GUI:Easy" : extras.difficulty == DIFFICULTY_HARD ? "GUI:Hard" : "GUI:Medium";
+	saveFact( SPL::SAVE_DETAILS_LEFT, SPL::SAVE_DIFFICULTY_TOP, half - 12, "GUI:SPDifficulty", TheGameText->fetch( difficulty ) );
+	if( extras.frames > 0 )
+	{
+		const Int perSecond = save.framesPerSecond > 0 ? save.framesPerSecond : LOGICFRAMES_PER_SECOND;
+		saveFact( half, SPL::SAVE_DIFFICULTY_TOP, SPL::RIGHT, "GUI:SPPlayedFor", lengthText( (Int)( extras.frames / perSecond ) ) );
+	}
+}
+
+static Int saveCount( void )
+{
+	Int saves = 0;
+	const Int rows = listboxGames ? SPP::rowCount( listboxGames ) : 0;
+	for( Int row = 0; row < rows; row++ )
+		if( saveRow( row ) )
+			saves++;
+	return saves;
+}
+
+/// Load Game, the full screen
+static void saveScreenDraw( GameWindow *, WinInstanceData * )
+{
+	using namespace UIStyle;
+	saveText.begin();
+	const IRegion2D panel = boardRect( MENU_PANEL_LEFT, MENU_PANEL_TOP, MENU_PANEL_RIGHT, MENU_PANEL_BOTTOM );
+	glass( panel, 168 );
+	frameA( panel );
+	UnicodeString count;
+	count.format( TheGameText->fetch( "GUI:SPSaveCount" ), saveCount() );
+	menuHeader( saveText.get( capitals( TheGameText->fetch( "GUI:LoadGame" ) ) ), saveText.get( count ) );
+	saveHeads( SPL::SAVE_HEADS.lo.y );
+	const Int x = SPP::point( 76.0f, 0.0f ).x, widest = SPP::point( (Real)SPL::SAVE_ROW_RIGHT, 0.0f ).x - x;
+	SPP::capitalsKey( "GUI:SPLegendMissionStart", x, SPP::point( 0.0f, (Real)( SPL::SAVE_LEGEND_TOP + 9 ) ).y, MUTED, MenuBox::LEFT, widest );
+	SPP::capitalsKey( "GUI:SPLegendOlder", x, SPP::point( 0.0f, (Real)( SPL::SAVE_LEGEND_TOP + 35 ) ).y, MUTED, MenuBox::LEFT, widest );
+	drawSaveDetails( saveRow( SPP::selectedRow( listboxGames ) ) );
+	const IRegion2D foot = SPP::on( SPL::rect( SPL::LEFT, SPL::FOOT_RULE, SPL::RIGHT, SPL::FOOT_RULE + 1 ) );
+	MenuBox::rule( foot.lo.x, foot.hi.x, foot.lo.y, 110 );
+}
+
+/// Save / Load, the box over the match
+static void saveBoxDraw( GameWindow *window, WinInstanceData * )
+{
+	using namespace UIStyle;
+	saveText.begin();
+	const IRegion2D box = MenuBox::windowRect( window );
+	const Bool overMatch = TheShell == NULL || !TheShell->isShellActive();
+	// the in-game menu it opens from stays up under it: the glass alone let its words read through
+	MenuBox::fill( box, GameMakeColor( 0, 0, 0, 190 ) );
+	boxShell( box, saveText.get( capitals( TheGameText->fetch( currentLayoutType == SLLT_LOAD_ONLY ? "GUI:LoadGame" : "GUI:SPSaveLoad" ) ) ),
+		overMatch );
+	saveHeads( SPL::SAVE_BOX_HEADS );
+	boxFootRule( box );
+	SPP::wordsKey( saveText, "GUI:HintEscCancel", MENU_TEXT_HINT, FALSE, box.lo.x + SPP::px( (Real)BOX_PAD ), box.hi.y - SPP::px( 44.0f ),
+		MUTED, SPP::px( 300.0f ) );
+}
+
+/// the save's description, a question box with its text box
+static void saveDescDraw( GameWindow *window, WinInstanceData * )
+{
+	using namespace UIStyle;
+	const IRegion2D box = MenuBox::windowRect( window );
+	MenuBox::fill( box, GameMakeColor( 0, 0, 0, 190 ) );
+	boxShell( box, saveText.get( capitals( TheGameText->fetch( "GUI:SaveGame" ) ) ), FALSE );
+	SPP::words( saveText, TheGameText->fetch( "GUI:EnterSaveDesc" ), MENU_TEXT_BODY, FALSE, box.lo.x + SPP::px( (Real)BOX_PAD ),
+		box.lo.y + SPP::px( (Real)( BOX_HEAD + 24 + BOX_LINE / 2 ) ), INK, box.hi.x - box.lo.x - 2 * SPP::px( (Real)BOX_PAD ) );
+	boxFootRule( box );
+}
+
+static void saveNothingDraw( GameWindow *, WinInstanceData * )
+{
+}
+
+/// the windows the language draws, the keys outline only
+static void dressSaveLoad( WindowLayout *layout )
+{
+	if( parent == NULL || listboxGames == NULL )
+		return;
+	parent->winSetDrawFunc( isPopup ? saveBoxDraw : saveScreenDraw );
+	if( !isPopup && parent->winGetParent() )
+		parent->winGetParent()->winSetDrawFunc( saveNothingDraw );
+	if( buttonFrame )
+		buttonFrame->winSetDrawFunc( saveNothingDraw );
+	if( saveDesc )
+		saveDesc->winSetDrawFunc( saveDescDraw );
+	SPP::takeOver( listboxGames, saveListDraw );
+	GadgetListBoxSetFont( listboxGames, UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL ) );
+	SPP::setEntry( editDesc );
+	SPP::key( TheWindowManager->winGetWindowFromId( NULL, buttonBackKey ), "GUI:Back", FALSE );
+	SPP::key( TheWindowManager->winGetWindowFromId( NULL, buttonDeleteKey ), "GUI:SPDelete", FALSE );
+	SPP::key( TheWindowManager->winGetWindowFromId( NULL, buttonSaveDescCancel ), "GUI:Cancel", FALSE );
+	SPP::key( TheWindowManager->winGetWindowFromId( NULL, buttonSaveDescConfirm ), "GUI:SaveGame", TRUE );
+	GameWindow *save = TheWindowManager->winGetWindowFromId( NULL, buttonSaveKey );
+	if( save && currentLayoutType == SLLT_LOAD_ONLY )
+		save->winHide( TRUE );
+}
+
+/// the code draws the rows; each takes its height from an empty picture
+static void saveRowHeights( void )
+{
+	// a cell added to a row drops the list's pick, so the one populate made is put back
+	const Int picked = SPP::selectedRow( listboxGames );
+	const Int rows = SPP::rowCount( listboxGames );
+	for( Int row = 0; row < rows; row++ )
+		SPP::rowHeight( listboxGames, row, 1, SPL::SAVE_ROW_HEIGHT );
+	GadgetListBoxSetSelected( listboxGames, picked >= 0 ? picked : 0 );
+}
+
+/// the confirms through the message box: each answer presses the hidden key EA's own box had
+static void pressSaveKey( NameKeyType key )
+{
+	GameWindow *button = TheWindowManager->winGetWindowFromId( parent, key );
+	if( parent && button )
+		TheWindowManager->winSendSystemMsg( parent, GBM_SELECTED, (WindowMsgData)button, key );
+}
+static void loadConfirmed( void ) { pressSaveKey( buttonLoadConfirm ); }
+static void loadCancelled( void ) { pressSaveKey( buttonLoadCancel ); }
+static void overwriteConfirmed( void ) { pressSaveKey( buttonOverwriteConfirm ); }
+static void overwriteCancelled( void ) { pressSaveKey( buttonOverwriteCancel ); }
+static void deleteConfirmed( void ) { pressSaveKey( buttonDeleteConfirm ); }
+static void deleteCancelled( void ) { pressSaveKey( buttonDeleteCancel ); }
 // ------------------------------------------------------------------------------------------------
 /** Given the current layout and selection in the game listbox, update the main save/load
 	* menu buttons to be enabled or disabled */
@@ -118,8 +523,13 @@ static void updateMenuActions( void )
 	GadgetListBoxGetSelected( listboxGames, &selected );
 	AvailableGameInfo *selectedGameInfo;
 	selectedGameInfo = (AvailableGameInfo *)GadgetListBoxGetItemData( listboxGames, selected );
+	// LOAD GAME dimmed for a save this build cannot read; the lit key is SAVE GAME while the new
+	// save is picked, LOAD GAME while a save is
 	GameWindow *buttonLoad = TheWindowManager->winGetWindowFromId( NULL, buttonLoadKey );
-	buttonLoad->winEnable( selectedGameInfo != NULL );
+	buttonLoad->winEnable( selectedGameInfo != NULL && selectedGameInfo->saveGameInfo.isLoadable() );
+	const Bool saving = currentLayoutType != SLLT_LOAD_ONLY && selectedGameInfo == NULL;
+	SPP::key( buttonLoad, "GUI:LoadGame", !saving );
+	SPP::key( saveButton, "GUI:SaveGame", saving );
 	GameWindow *buttonDelete = TheWindowManager->winGetWindowFromId( NULL, buttonDeleteKey );
 	buttonDelete->winEnable( selectedGameInfo != NULL );
 	
@@ -178,6 +588,8 @@ void SaveLoadMenuInit( WindowLayout *layout, void *userData )
 
 	// populate the listbox with the save games on disk
 	TheGameState->populateSaveGameListbox( listboxGames, currentLayoutType );
+	dressSaveLoad( layout );
+	saveRowHeights();
 
 	// update the availability of the menu buttons
 	updateMenuActions();
@@ -241,6 +653,8 @@ void SaveLoadMenuFullScreenInit( WindowLayout *layout, void *userData )
 
 	// populate the listbox with the save games on disk
 	TheGameState->populateSaveGameListbox( listboxGames, currentLayoutType );
+	dressSaveLoad( layout );
+	saveRowHeights();
 
 	// update the availability of the menu buttons
 	updateMenuActions();
@@ -272,6 +686,7 @@ void SaveLoadMenuShutdown( WindowLayout *layout, void *userData )
 	// our shutdown is complete
 	TheTransitionHandler->reverse("SaveLoadMenuFade");
 	isShuttingDown = TRUE;
+	saveText.clear();
 }  // end SaveLoadMenuShutdown
 
 //-------------------------------------------------------------------------------------------------
@@ -521,8 +936,8 @@ static void processLoadButtonPress(GameWindow *window)
 			listboxGames->winEnable( FALSE );
 			buttonFrame->winEnable( FALSE );
 
-			// show the load confirm dialog
-			loadConfirm->winHide( FALSE );
+			// ask through the message box; its answer presses EA's confirm or cancel key
+			MessageBoxYesNo( TheGameText->fetch( "GUI:LoadGame" ), TheGameText->fetch( "GUI:LoadGameConfirmation" ), loadConfirmed, loadCancelled );
 
 		}  // end else
 
@@ -633,6 +1048,8 @@ WindowMsgHandledType SaveLoadMenuSystem( GameWindow *window, UnsignedInt msg,
 					// show the save description window
 					//GameWindow *saveDesc = TheWindowManager->winGetWindowFromId( parent, NAMEKEY( "PopupSaveLoad.wnd:SaveDescParent" ) );
 					saveDesc->winHide( FALSE );
+					// the box's SAVE GAME is the lit key while it is up
+					SPP::key( control, "GUI:SaveGame", FALSE );
 
 					// set the description text entry field to default value
 					//GameWindow *editDesc = TheWindowManager->winGetWindowFromId( saveDesc, NAMEKEY( "PopupSaveLoad.wnd:EntryDesc" ) );
@@ -660,9 +1077,9 @@ WindowMsgHandledType SaveLoadMenuSystem( GameWindow *window, UnsignedInt msg,
 					//GameWindow *buttonFrame  = TheWindowManager->winGetWindowFromId( parent, NAMEKEY( "PopupSaveLoad.wnd:MenuButtonFrame" ) );
 					buttonFrame->winEnable( FALSE );
 
-					// show the save save confirm
-					//GameWindow *overwriteConfirm  = TheWindowManager->winGetWindowFromId( parent, NAMEKEY( "PopupSaveLoad.wnd:OverwriteConfirmParent" ) );
-					overwriteConfirm->winHide( FALSE );
+					// ask through the message box; its answer presses EA's confirm or cancel key
+					MessageBoxYesNo( TheGameText->fetch( "GUI:SaveGame" ), TheGameText->fetch( "GUI:OverwriteSaveConfirmation" ),
+						overwriteConfirmed, overwriteCancelled );
 
 				}  // end else
 
@@ -688,9 +1105,9 @@ WindowMsgHandledType SaveLoadMenuSystem( GameWindow *window, UnsignedInt msg,
 					//GameWindow *buttonFrame = TheWindowManager->winGetWindowFromId( parent, NAMEKEY( "PopupSaveLoad.wnd:MenuButtonFrame" ) );
 					buttonFrame->winEnable( FALSE );
 
-					// unhide confirmation dialog
-					//GameWindow *deleteConfirm = TheWindowManager->winGetWindowFromId( parent, NAMEKEY( "PopupSaveLoad.wnd:DeleteConfirmParent" ) );
-					deleteConfirm->winHide( FALSE );
+					// ask through the message box, No lit so Enter never deletes
+					MessageBoxYesNo( TheGameText->fetch( "GUI:DeleteGame" ), TheGameText->fetch( "GUI:ConfirmDelete" ),
+						deleteConfirmed, deleteCancelled, MSG_BOX_NO );
 
 				}  // end if
 								
@@ -729,6 +1146,7 @@ WindowMsgHandledType SaveLoadMenuSystem( GameWindow *window, UnsignedInt msg,
 
 						// repopulate the listbox
 						TheGameState->populateSaveGameListbox( listboxGames, currentLayoutType );
+						saveRowHeights();
 					}
 
 				}  // end if

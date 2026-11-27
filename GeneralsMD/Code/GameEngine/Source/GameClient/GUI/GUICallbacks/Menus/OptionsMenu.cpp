@@ -59,6 +59,7 @@
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetComboBox.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameClient/GadgetRadioButton.h"
 #include "GameClient/GadgetSlider.h"
 #include "GameClient/HeaderTemplate.h"
@@ -73,6 +74,8 @@
 #include "GameClient/IMEManager.h"
 #include "GameClient/ShellHooks.h"
 #include "GameClient/GUICallbacks.h"
+#include "GameClient/GadgetListBox.h"
+#include "GameClient/UIStyle.h"
 #include "GameNetwork/FirewallHelper.h"
 #include "GameNetwork/IPEnumeration.h"
 #include "GameNetwork/GameSpyOverlay.h"
@@ -86,6 +89,11 @@
 //added by saad
 //used to access a messagebox that does "ok" and "cancel"
 #include "GameClient/MessageBox.h"
+
+#include <algorithm>
+#include <map>
+#include <set>
+#include <vector>
 
 // This is for non-RC builds only!!!
 #define VERBOSE_VERSION u"Release"
@@ -253,35 +261,35 @@ WindowLayout *OptionsLayout = NULL;
 // EA's screen was one panel with every control on it, and it was already out of room when it
 // shipped - the language filter, the keyboard button and the four camera check boxes are all still
 // in the layout, parked off the right edge with HIDDEN set because there was nowhere to put them.
-// The layout now sorts the same controls into seven pages on one grid (Tools/optionsmenu_layout.py);
-// this is the two arrays that name them and the one function that decides which one you are
-// looking at.  Shell::optionsLayoutFile names the file, OptionsMenuClassic.wnd.
+// The layout sorts the same controls into eight pages behind a rail of tabs, in the menu language
+// since menu package 8 (Tools/optionsmenu_layout.py); this is the two arrays that name them and the
+// one function that decides which one you are looking at.  Shell::optionsLayoutFile names the
+// file, OptionsMenuClassic.wnd.  Network is System's last group and the Linux water rows are
+// World's water fold, so there is no page a machine cannot use.
 //-------------------------------------------------------------------------------------------------
-enum { OPTIONS_PAGE_COUNT = 9, OPTIONS_WATER_PAGE = 3 };
+enum { OPTIONS_PAGE_COUNT = 8 };
 
 static const char *TheOptionsPageNames[ OPTIONS_PAGE_COUNT ] =
 {
-	"OptionsMenu.wnd:PageDisplay",
+	"OptionsMenu.wnd:PageSystem",
 	"OptionsMenu.wnd:PageGraphics",
+	"OptionsMenu.wnd:PageWorld",
 	"OptionsMenu.wnd:PageEffects",
-	"OptionsMenu.wnd:PageWater",
 	"OptionsMenu.wnd:PageAudio",
 	"OptionsMenu.wnd:PageControls",
 	"OptionsMenu.wnd:PageInterface",
-	"OptionsMenu.wnd:PageNetwork",
 	"OptionsMenu.wnd:PageHotkeys",
 };
 
 static const char *TheOptionsTabNames[ OPTIONS_PAGE_COUNT ] =
 {
-	"OptionsMenu.wnd:TabDisplay",
+	"OptionsMenu.wnd:TabSystem",
 	"OptionsMenu.wnd:TabGraphics",
+	"OptionsMenu.wnd:TabWorld",
 	"OptionsMenu.wnd:TabEffects",
-	"OptionsMenu.wnd:TabWater",
 	"OptionsMenu.wnd:TabAudio",
 	"OptionsMenu.wnd:TabControls",
 	"OptionsMenu.wnd:TabInterface",
-	"OptionsMenu.wnd:TabNetwork",
 	"OptionsMenu.wnd:TabHotkeys",
 };
 
@@ -290,8 +298,15 @@ static GameWindow *		optionsTab[ OPTIONS_PAGE_COUNT ]	= { NULL };
 static NameKeyType		optionsTabID[ OPTIONS_PAGE_COUNT ] =
 {
 	NAMEKEY_INVALID, NAMEKEY_INVALID, NAMEKEY_INVALID, NAMEKEY_INVALID, NAMEKEY_INVALID, NAMEKEY_INVALID,
-	NAMEKEY_INVALID, NAMEKEY_INVALID, NAMEKEY_INVALID
+	NAMEKEY_INVALID, NAMEKEY_INVALID
 };
+
+// the screen's look, further down (menu package 8)
+static Bool lookLocked( GameWindow *control );
+static void lookShowViews( void );
+static void lookRefreshRows( void );
+static void lookShowPage( Int page );
+static void lookForget( void );
 
 // The Hotkeys page, OptionsMenuHotkeys.cpp.  Its keys are written on Accept like the rest.
 void OptionsHotkeysInit( void );
@@ -318,80 +333,18 @@ static Bool rayTracedShadowsHidden( const OptionDef& def )
 	return !traced && strcmp( def.iniKey, "ShadowQuality" ) == 0;
 }
 
-// Nine tabs leave less space for translated captions. Fit the actual glyphs,
-// keeping the normal font wherever it already fits the button.
-static void fitWaterOptionsTabCaption( GameWindow *tab )
-{
-	if( !TheFontLibrary || !TheDisplayStringManager ) return;
-	GameFont *font = tab->winGetFont();
-	if( !font ) return;
-	Int width, height;
-	tab->winGetSize( &width, &height );
-	DisplayString *caption = TheDisplayStringManager->newDisplayString();
-	if( !caption ) return;
-	caption->setText( tab->winGetText() );
-	const Int minimum = 8;
-	for( ;; )
-	{
-		caption->setFont( font );
-		if( caption->getWidth() <= (width > 8 ? width - 8 : 1) || font->pointSize <= minimum ) break;
-		GameFont *smaller = TheFontLibrary->getFont( font->nameString, font->pointSize - 1, font->bold );
-		if( !smaller ) break;
-		font = smaller;
-	}
-	tab->winSetFont( font );
-	TheDisplayStringManager->freeDisplayString( caption );
-}
-
-// Hide the Water page off Linux and give the remaining tabs their original width. Derive
-// the bounds from the loaded layout so shell scaling and reopening an existing layout both work.
-static void layoutOptionsTabs( void )
-{
-	if( !optionsTab[0] || !optionsTab[1] || !optionsTab[OPTIONS_PAGE_COUNT - 1] )
-		return;
-	Int left, top, width, height, secondLeft, secondTop, lastLeft, lastTop, lastWidth, lastHeight;
-	optionsTab[0]->winGetPosition( &left, &top );
-	optionsTab[0]->winGetSize( &width, &height );
-	optionsTab[1]->winGetPosition( &secondLeft, &secondTop );
-	optionsTab[OPTIONS_PAGE_COUNT - 1]->winGetPosition( &lastLeft, &lastTop );
-	optionsTab[OPTIONS_PAGE_COUNT - 1]->winGetSize( &lastWidth, &lastHeight );
-	const Int gap = secondLeft - left - width;
-	const Int right = lastLeft + lastWidth;
-	const Bool waterSupported = modernWaterSettingsSupported();
-	const Int count = OPTIONS_PAGE_COUNT - (waterSupported ? 0 : 1);
-	const Int tabWidth = (right - left - (count - 1) * gap) / count;
-	Int visible = 0;
-	for( Int i = 0; i < OPTIONS_PAGE_COUNT; ++i )
-	{
-		if( !optionsTab[i] ) continue;
-		const Bool hidden = i == OPTIONS_WATER_PAGE && !waterSupported;
-		optionsTab[i]->winHide( hidden );
-		if( hidden ) continue;
-		const Int x = left + visible * (tabWidth + gap);
-		optionsTab[i]->winSetPosition( x, top );
-		optionsTab[i]->winSetSize( ++visible == count ? right - x : tabWidth, height );
-		if( waterSupported ) fitWaterOptionsTabCaption( optionsTab[i] );
-	}
-}
-
 //-------------------------------------------------------------------------------------------------
-/** Show one page and hide the rest.
-	*
-	* The page you are on is the disabled button, which is the one piece of tab feedback available
-	* without drawing new artwork: a pressed-looking tab would need a second image per button, and
-	* the buttons are cloned from one that already exists. */
+/** Show one page and hide the rest.  The open tab is drawn green (lookTabDraw); the pane stands
+	* beside every page but Hotkeys, whose lists take its place. */
 //-------------------------------------------------------------------------------------------------
 static void showOptionsPage( Int which )
 {
-	if( which == OPTIONS_WATER_PAGE && !modernWaterSettingsSupported() )
+	if( which < 0 || which >= OPTIONS_PAGE_COUNT )
 		which = 0;
 	for( Int i = 0; i < OPTIONS_PAGE_COUNT; ++i )
-	{
 		if( optionsPage[ i ] )
 			optionsPage[ i ]->winHide( i != which );
-		if( optionsTab[ i ] )
-			optionsTab[ i ]->winEnable( i != which );
-	}
+	lookShowPage( which );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -460,10 +413,11 @@ static void showMainMenuColumns( void )
 	}
 }
 
+// The backdrop draws nothing of its own since menu package 8: the panel's glass and frame A
+// (lookFrameDraw) darken the world, inside the panel and round it.
 static void drawOptionsPanel( GameWindow *window, WinInstanceData *instData )
 {
 	hideMainMenuColumns();
-	optionsPanelDraw( window, instData );
 }
 
 enum Detail
@@ -1219,7 +1173,6 @@ static void fillCatalogWidgets( void )
 	const Color entryColor = GameMakeColor( 255, 255, 255, 255 );
 
 	const Bool waterSettingsSupported = modernWaterSettingsSupported();
-	layoutOptionsTabs();
 
 	for( Int i = 0; i < TheOptionCatalogCount; ++i )
 	{
@@ -2025,6 +1978,7 @@ static void DestroyOptionsLayout() {
 	SignalUIInteraction(SHELL_SCRIPT_HOOK_OPTIONS_CLOSED);
 
 	showMainMenuColumns();
+	lookForget();
 	TheShell->destroyOptionsLayout();
 	OptionsLayout = NULL;
 }
@@ -2408,7 +2362,7 @@ static void showSunShaftsAvailable( void )
 static GameWindow *graphicsQualityDrivenWidget( const GraphicsQualityRow &row )
 {
 	GameWindow *control = graphicsQualityWidget( row );
-	if( control->winIsHidden() || !control->winGetEnabled() )
+	if( control == NULL || lookLocked( control ) )
 		return NULL;
 
 	if( GadgetCheckBoxIsChecked( classicGraphicsCheckBox() ) && graphicsQualityRowIsReforged( row ) )
@@ -2571,6 +2525,8 @@ static void showGraphicsQualityStep( Int step )
 
 	updateSliderReadouts();
 	updateDetailNote();
+	lookShowViews();
+	lookRefreshRows();
 }
 
 /** A preset picked in the detail box: the quality slider moves to its step and the controls show
@@ -2606,12 +2562,14 @@ static void showClassicGraphicsChoice( void )
 	for( Int row = 0; row < TheGraphicsQualityTableCount; ++row )
 	{
 		GameWindow *control = graphicsQualityWidget( TheGraphicsQualityTable[ row ] );
-		if( graphicsQualityRowIsReforged( TheGraphicsQualityTable[ row ] ) && !control->winIsHidden() && control->winGetEnabled() )
+		if( graphicsQualityRowIsReforged( TheGraphicsQualityTable[ row ] ) && !lookLocked( control ) )
 			setGraphicsQualityControl( control, TheGraphicsQualityTable[ row ].values[ 0 ] );
 	}
 	ignoreSelected = FALSE;
 	showSunShaftsAvailable();
 	updateSliderReadouts();
+	lookShowViews();
+	lookRefreshRows();
 }
 
 /** The row Defaults leaves: the words and how the window sits on this monitor are the player's, for
@@ -2642,7 +2600,7 @@ static void showClassicDefaults( void )
 	{
 		const OptionDef& def = TheOptionCatalog[ i ];
 		GameWindow *control = findOptionWidget( def );
-		if( control != NULL && !defaultsKeepsRow( def ) && !control->winIsHidden() && control->winGetEnabled() )
+		if( control != NULL && !defaultsKeepsRow( def ) && !lookLocked( control ) )
 			setGraphicsQualityControl( control, optionDefaultValue( def ) );
 	}
 	GadgetCheckBoxSetChecked( checkCloudShadows, optionDefaultValue( *findOptionDef( "UseCloudMap" ) ) != 0 );
@@ -2651,6 +2609,8 @@ static void showClassicDefaults( void )
 
 	defaultsPressed = TRUE;
 	updateSliderReadouts();
+	lookShowViews();
+	lookRefreshRows();
 }
 
 /** The grey line under the detail box: what the picked preset turns on, and that picking one only
@@ -2688,6 +2648,1950 @@ static void markDetailCustom( void )
 	updateSliderReadouts();
 	updateDetailNote();
 }
+//-------------------------------------------------------------------------------------------------
+// The screen in the menu language (docs/plans/MENU-REDESIGN.md, package 8; the design is
+// experiments/proofs/2026-11-24/screens/settings/README-settings.md in the wrapper).  The layout
+// (Tools/optionsmenu_layout.py) holds the windows at 1920x1080: a rail of eight tabs with Look and
+// Quality under them, one column of rows, each row a container Row<Stem> (RowMore<Stem> behind the
+// page's fold) round its label and control, Audio's volumes as Fader<Stem>, and the pane.  The code
+// lays each page down its column again whenever a fold opens, a row goes or the page scrolls
+// (optionsFlow), and draws every line, frame, state and figure.  The pane explains the row under the
+// pointer or the focus, with what it needs, what needs it, its choices and the page as it stands.
+//-------------------------------------------------------------------------------------------------
+namespace
+{
+	// the design's rects at 1080
+	const Int LOOK_BODY_TOP = 132;
+	const Int LOOK_BODY_BOTTOM = 954;
+	const Int LOOK_RAIL_LEFT = 60;
+	const Int LOOK_RAIL_RIGHT = 340;
+	const Int LOOK_ROWS_LEFT = 372;
+	const Int LOOK_ROWS_RIGHT = 1124;
+	const Int LOOK_LABEL_INSET = 16;			///< the label's left inside a row
+	const Int LOOK_CONTROL_INSET = 452;		///< the control column's left inside a row (824)
+	const Int LOOK_PANE_LEFT = 1156;
+	const Int LOOK_PANE_RIGHT = 1860;
+	const Int LOOK_PANE_INNER_LEFT = 1178;
+	const Int LOOK_PANE_INNER_RIGHT = 1838;
+	const Int LOOK_FOOT_RULE = 966;
+	const Int LOOK_KEYS_MIDDLE = 1006;
+
+	enum LookItemKind { LOOK_HEAD, LOOK_ROW, LOOK_FADER, LOOK_MORE };
+
+	/// a row's facts the plan gives it: its badges and what greys it
+	enum
+	{
+		ROW_RESTART = 1 << 0,		///< takes effect after a restart: the RESTART badge
+		ROW_NEXT_MAP = 1 << 1,	///< from the next map: the NEXT MAP badge
+		ROW_REFORGED = 1 << 2,	///< greyed while Look is Classic
+		ROW_D3D11 = 1 << 3,			///< drawn by Direct3D 11 only: a need the pane names
+	};
+
+	struct LookRowFlags
+	{
+		const char *stem;
+		Int flags;
+	};
+
+	// SETTINGS-PLAN.md's badge column, read for the eight tabs
+	const LookRowFlags TheLookRowFlags[] =
+	{
+		{ "ShadowQuality", ROW_REFORGED | ROW_D3D11 },
+		{ "InfantryShadows", ROW_NEXT_MAP },
+		{ "ProjectileShadows", ROW_NEXT_MAP },
+		{ "PropShadows", ROW_NEXT_MAP },
+		{ "VolumetricSmoke", ROW_REFORGED },
+		{ "MSAA", ROW_RESTART },
+		{ "HDTextures", ROW_RESTART | ROW_REFORGED },
+		{ "DetailedModels", ROW_RESTART | ROW_REFORGED },
+		{ "TextureFiltering", ROW_RESTART },
+		{ "FullDetailAtDistance", ROW_REFORGED },
+		{ "LightingStyle", ROW_NEXT_MAP | ROW_REFORGED },
+		{ "MapLight", ROW_NEXT_MAP | ROW_D3D11 },
+		{ "SunShafts", ROW_REFORGED | ROW_D3D11 },
+		{ "AmbientOcclusion", ROW_REFORGED | ROW_D3D11 },
+		{ "HemiAmbient", ROW_REFORGED | ROW_D3D11 },
+		{ "InternalHdr", ROW_REFORGED | ROW_D3D11 },
+		{ "TeamGlow", ROW_NEXT_MAP | ROW_D3D11 },
+		{ "Atmosphere", ROW_REFORGED | ROW_D3D11 },
+		{ "Weather", ROW_REFORGED | ROW_D3D11 },
+		{ "ShowProps", ROW_NEXT_MAP },
+		{ "GroundFoliage", ROW_REFORGED | ROW_D3D11 },
+		{ "TreeSway", ROW_NEXT_MAP },
+		{ "SmoothWater", ROW_NEXT_MAP },
+		{ "WaterFoam", ROW_REFORGED | ROW_D3D11 },
+		{ "WaterSplashes", ROW_REFORGED | ROW_D3D11 },
+		{ "Smoke", ROW_RESTART },
+		{ "ParticleBounce", ROW_RESTART },
+		{ "Firelight", ROW_REFORGED | ROW_D3D11 },
+		{ "GroundMarks", ROW_REFORGED | ROW_D3D11 },
+		{ "StructureCollapse", ROW_REFORGED | ROW_D3D11 },
+		{ "Ragdoll", ROW_REFORGED },
+		{ "ExtraAnimations", ROW_NEXT_MAP },
+		{ "Language", ROW_RESTART },
+		{ "Look", ROW_RESTART },
+	};
+
+	/// a row another row greys (or hides) unless that one shows a value
+	struct LookRowNeed
+	{
+		const char *stem;			///< the row greyed
+		const char *needs;		///< the row it waits on
+		Int value;						///< the value that row has to show: a check 0 or 1, a combo its entry
+		Bool hideWhenEqual;		///< the other way round: the row goes while that row shows value
+		const char *reason;		///< what stands in place of the control
+	};
+
+	const LookRowNeed TheLookRowNeeds[] =
+	{
+		{ "InfantryShadows", "CastShadows", 1, FALSE, "GUI:OptionsReasonCastShadows" },
+		{ "WaterFoam", "WaterStyle", 0, FALSE, "GUI:OptionsReasonClassicWater" },
+		{ "WaterSplashes", "WaterStyle", 0, FALSE, "GUI:OptionsReasonClassicWater" },
+		{ "DynamicMusic", "LegacySound", 0, FALSE, "GUI:OptionsReasonLegacySound" },
+		{ "FullscreenScaling", "WindowMode", WINDOW_MODE_FULLSCREEN, FALSE, "GUI:OptionsReasonFullscreen" },
+		{ "EdgeScrollWindowed", "WindowMode", WINDOW_MODE_BORDERLESS, TRUE, NULL },
+	};
+
+	// the rows -d3d9 greys (OptionsMenuInit); Heat Haze is not one, EA's half of its box still draws there
+	const char *const TheDirect3D11OnlyRows[] = { "MapLight", "TeamGlow", "WaterFoam", "GroundMarks", "Firelight", "HemiAmbient",
+		"AmbientOcclusion", "InternalHdr", "Weather", "WaterSplashes", "Atmosphere", "StructureCollapse", "GroundFoliage", "SunShafts" };
+
+	// the merged lists' views and the models behind them, and the models the slider still drives
+	const char *const TheMergedModels[] = { "ComboBoxTextureFilter", "SliderAnisotropy", "CheckHeatEffects",
+		"CheckWaterReflectionEnabled", "ComboBoxWaterReflection" };
+
+	struct LookItem
+	{
+		GameWindow *window;
+		Int kind;							///< LookItemKind
+		Bool more;						///< behind the fold
+		Int left, top, right, bottom;		///< as authored, at 1080
+		AsciiString stem;
+		GameWindow *control;	///< the row's gadget; a fader's hidden slider
+		GameWindow *readout;	///< a slider's value
+		Int flags;						///< ROW_*
+		Int group;						///< its head's index in the page
+	};
+
+	struct LookPage
+	{
+		std::vector< LookItem > items;
+		Int moreBar;						///< the More bar's item, -1 for none
+		Bool foldOpen;
+		Int scroll;
+		OptionsFlowResult flow;
+		Int settings;						///< the rail's count
+	};
+
+	LookPage s_lookPage[ OPTIONS_PAGE_COUNT ];
+	Int s_lookShown = 0;					///< the page on screen
+	Int s_lookHover = -1;					///< the item the pane explains, on the shown page
+	Int s_lookRail = 0;						///< or 1 Look, 2 Quality, which then win
+	Bool s_lookBuilt = FALSE;
+	Bool s_lookLockedBuilt = FALSE;
+	Bool s_lookTested = FALSE;		///< the connection test was asked for since the game started
+	std::set< GameWindow * > s_lookLocked;
+	std::map< GameWindow *, GameWinDrawFunc > s_lookControlDraws;
+	std::map< GameWindow *, Int > s_lookItemOf;	///< a row's or fader's window -> its item on its page
+	typedef std::pair< GameFont *, std::basic_string< WideChar > > LookTextKey;
+	std::map< LookTextKey, DisplayString * > s_lookTexts;
+	GameWindow *s_lookTitle = NULL;
+	GameWindow *s_lookVersion = NULL;
+	GameWindow *s_lookPane = NULL;
+	GameWindow *s_lookQuality = NULL;
+	GameWindow *s_lookClassic = NULL;
+	GameWindow *s_lookReforged = NULL;
+	GameWindow *s_lookFiltering = NULL;
+	GameWindow *s_lookReflections = NULL;
+	Bool s_lookInMatch = FALSE;
+}
+
+static Bool lookLocked( GameWindow *control );
+static void lookShowViews( void );
+static void lookRefreshRows( void );
+
+static IRegion2D lookRect( Int l, Int t, Int r, Int b ) { return UIStyle::boardRect( l, t, r, b ); }
+static Int lookX( Int x ) { return UIStyle::boardRect( x, 0, x, 0 ).lo.x; }
+static Int lookY( Int y ) { return UIStyle::boardRect( 0, y, 0, y ).lo.y; }
+static Int lookPx( Real length ) { return UIStyle::pxOn( length, TheDisplay->getWidth(), TheDisplay->getHeight() ); }
+
+static IRegion2D lookWindowRect( GameWindow *window )
+{
+	IRegion2D r;
+	Int w, h;
+	window->winGetScreenPosition( &r.lo.x, &r.lo.y );
+	window->winGetSize( &w, &h );
+	r.hi.x = r.lo.x + w;
+	r.hi.y = r.lo.y + h;
+	return r;
+}
+
+/// a screen length back on the board
+static Int lookBoardOf( Int screen, Bool vertical )
+{
+	const UIStyle::BoardFit fit = UIStyle::boardFit( TheDisplay->getWidth(), TheDisplay->getHeight() );
+	const Real v = ( (Real)screen - (Real)( vertical ? fit.y : fit.x ) ) / ( fit.scale > 0.0f ? fit.scale : 1.0f );
+	return REAL_TO_INT_FLOOR( v + 0.5f );
+}
+
+static void lookFill( const IRegion2D &r, Color color )
+{
+	TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, color );
+}
+
+static void lookOutline( const IRegion2D &r, Color color )
+{
+	TheDisplay->drawOpenRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, 1.0f, color );
+}
+
+static DisplayString *lookText( const UnicodeString &text, GameFont *font )
+{
+	const LookTextKey key( font, std::basic_string< WideChar >( text.str() ) );
+	std::map< LookTextKey, DisplayString * >::iterator it = s_lookTexts.find( key );
+	if( it != s_lookTexts.end() )
+		return it->second;
+	DisplayString *s = TheDisplayStringManager->newDisplayString();
+	s->setFont( font );
+	s->setText( text );
+	s_lookTexts[ key ] = s;
+	return s;
+}
+
+static void lookFreeTexts( void )
+{
+	for( std::map< LookTextKey, DisplayString * >::iterator it = s_lookTexts.begin(); it != s_lookTexts.end(); ++it )
+		TheDisplayStringManager->freeDisplayString( it->second );
+	s_lookTexts.clear();
+}
+
+static Int lookWidth( const UnicodeString &text, GameFont *font )
+{
+	if( text.isEmpty() || font == NULL )
+		return 0;
+	return lookText( text, font )->getWidth( -1 );
+}
+
+/// words at screen x (left, centre or right by align 0, 1, 2), centred on screen y; their width
+static Int lookDraw( const UnicodeString &text, GameFont *font, Int x, Int middle, Color color, Int align = 0 )
+{
+	if( text.isEmpty() || font == NULL )
+		return 0;
+	DisplayString *s = lookText( text, font );
+	Int w, h;
+	s->getSize( &w, &h );
+	if( align == 1 )
+		x -= w / 2;
+	else if( align == 2 )
+		x -= w;
+	s->draw( x, middle - h / 2, color, GameMakeColor( 0, 0, 0, 160 ) );
+	return w;
+}
+
+/// 14 px capitals, tracked, centred on middle; their width
+static Int lookCaps( const UnicodeString &text, Int x, Int middle, Color color, Int align = 0 )
+{
+	GameFont *font = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	const UnicodeString caps = UIStyle::capitals( text );
+	const Int w = UIStyle::trackedWidth( caps, font, UIStyle::MENU_LABEL_TRACKING );
+	if( align == 1 )
+		x -= w / 2;
+	else if( align == 2 )
+		x -= w;
+	const Int h = font ? font->height : 0;
+	UIStyle::drawTracked( caps, font, x, middle - h / 2, color, UIStyle::MENU_LABEL_TRACKING );
+	return w;
+}
+
+static Int lookCapsWidth( const UnicodeString &text )
+{
+	return UIStyle::trackedWidth( UIStyle::capitals( text ), UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE ), UIStyle::MENU_LABEL_TRACKING );
+}
+
+/// a badge: its word in 14 px capitals in a 1 px box, 20 tall, from x; its width
+static Int lookBadge( const char *key, Int x, Int middle )
+{
+	const UnicodeString word = TheGameText->fetch( key );
+	const Int pad = lookPx( 6.0f );
+	const Int w = lookCapsWidth( word ) + 2 * pad;
+	const Int h = lookPx( 20.0f );
+	IRegion2D box;
+	box.lo.x = x;
+	box.lo.y = middle - h / 2;
+	box.hi.x = x + w;
+	box.hi.y = box.lo.y + h;
+	lookOutline( box, UIStyle::FRAME );
+	lookCaps( word, x + pad, middle, UIStyle::MUTED );
+	return w;
+}
+
+/// a row's badges from x; their width
+static Int lookBadges( Int flags, Int x, Int middle )
+{
+	Int w = 0;
+	if( flags & ROW_RESTART )
+		w += lookBadge( "GUI:OptionsBadgeRestart", x + w, middle ) + lookPx( 6.0f );
+	if( flags & ROW_NEXT_MAP )
+		w += lookBadge( "GUI:OptionsBadgeNextMap", x + w, middle ) + lookPx( 6.0f );
+	return w;
+}
+
+static AsciiString lookShortName( GameWindow *window )
+{
+	AsciiString name = window->winGetInstanceData()->m_decoratedNameString;
+	const char *colon = strchr( name.str(), ':' );
+	return AsciiString( colon ? colon + 1 : name.str() );
+}
+
+static Int lookFlagsOf( const AsciiString &stem )
+{
+	for( Int i = 0; i < ARRAY_SIZE( TheLookRowFlags ); ++i )
+		if( stem == TheLookRowFlags[ i ].stem )
+			return TheLookRowFlags[ i ].flags;
+	return 0;
+}
+
+static Bool lookDirect3D11Only( const AsciiString &stem )
+{
+	for( Int i = 0; i < ARRAY_SIZE( TheDirect3D11OnlyRows ); ++i )
+		if( stem == TheDirect3D11OnlyRows[ i ] )
+			return TRUE;
+	return FALSE;
+}
+
+/// a merged list's hidden model the slider and Defaults still set
+static Bool lookMergedModel( GameWindow *control )
+{
+	const AsciiString name = lookShortName( control );
+	for( Int i = 0; i < ARRAY_SIZE( TheMergedModels ); ++i )
+		if( name == TheMergedModels[ i ] )
+			return i < 3 || modernWaterSettingsSupported();
+	return FALSE;
+}
+
+static GameWindow *lookFind( const char *name )
+{
+	AsciiString full;
+	full.format( "OptionsMenu.wnd:%s", name );
+	return TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( full ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+// what a control shows
+//-------------------------------------------------------------------------------------------------
+static Int lookValueOf( GameWindow *control )
+{
+	if( control == NULL )
+		return -1;
+	if( BitTest( control->winGetStyle(), GWS_CHECK_BOX ) )
+		return GadgetCheckBoxIsChecked( control ) ? 1 : 0;
+	if( BitTest( control->winGetStyle(), GWS_COMBO_BOX ) )
+	{
+		Int entry = -1;
+		GadgetComboBoxGetSelectedPos( control, &entry );
+		return entry;
+	}
+	if( BitTest( control->winGetStyle(), GWS_HORZ_SLIDER | GWS_VERT_SLIDER ) )
+		return GadgetSliderGetPosition( control );
+	return -1;
+}
+
+/// a combo's entry in words
+static UnicodeString lookEntryText( GameWindow *combo, Int entry )
+{
+	GameWindow *list = combo ? GadgetComboBoxGetListBox( combo ) : NULL;
+	if( list == NULL || entry < 0 || entry >= GadgetListBoxGetNumEntries( list ) )
+		return UnicodeString::TheEmptyString;
+	return GadgetListBoxGetText( list, entry, 0 );
+}
+
+/// what a row shows, in words: On or Off, the combo's entry, the slider's readout
+static UnicodeString lookValueText( const LookItem &item )
+{
+	GameWindow *control = item.control;
+	if( control == NULL )
+		return UnicodeString::TheEmptyString;
+	if( BitTest( control->winGetStyle(), GWS_CHECK_BOX ) )
+		return TheGameText->fetch( GadgetCheckBoxIsChecked( control ) ? "GUI:OptionsValueOn" : "GUI:OptionsValueOff" );
+	if( BitTest( control->winGetStyle(), GWS_COMBO_BOX ) )
+		return lookEntryText( control, lookValueOf( control ) );
+	if( item.readout )
+		return GadgetStaticTextGetText( item.readout );
+	if( BitTest( control->winGetStyle(), GWS_ENTRY_FIELD ) )
+		return GadgetTextEntryGetText( control );
+	return UnicodeString::TheEmptyString;
+}
+
+/// a row's measured price from the quality table, -1 for none; on is whether the row now pays it
+static Real lookCostOf( const LookItem &item, Bool *on )
+{
+	*on = FALSE;
+	if( item.control == NULL )
+		return -1.0f;
+	AsciiString name = lookShortName( item.control );
+	const char *models[ 2 ] = { name.str(), NULL };
+	// a merged list costs what its models do
+	if( name == "ComboBoxTextureFiltering" )
+	{
+		models[ 0 ] = "ComboBoxTextureFilter";
+		models[ 1 ] = "SliderAnisotropy";
+	}
+	else if( name == "ComboBoxReflections" )
+		models[ 0 ] = "CheckWaterReflectionEnabled";
+	Real cost = -1.0f;
+	for( Int m = 0; m < 2 && models[ m ]; ++m )
+	{
+		const GraphicsQualityRow *row = findGraphicsQualityRow( models[ m ] );
+		if( row == NULL )
+			continue;
+		cost = max( 0.0f, cost ) + row->costMs;
+		GameWindow *model = m == 0 && models[ 0 ] == name.str() ? item.control : lookFind( models[ m ] );
+		if( model && lookValueOf( model ) != row->values[ 0 ] )
+			*on = TRUE;
+	}
+	return cost;
+}
+
+/// a price in milliseconds, its decimals the language's: 0.4, 2.5, 0.25, and 0,4 in Turkish
+static UnicodeString lookMs( Real ms )
+{
+	const Int hundredths = REAL_TO_INT_FLOOR( ms * 100.0f + 0.5f );
+	UnicodeString text;
+	if( hundredths % 10 == 0 )
+		text.format( u"%d.%d", hundredths / 100, ( hundredths / 10 ) % 10 );
+	else
+		text.format( u"%d.%02d", hundredths / 100, hundredths % 100 );
+	if( TheGlobalData->m_textLanguage != TEXT_LANGUAGE_ENGLISH )
+	{
+		UnicodeString comma;
+		for( const WideChar *c = text.str(); *c; ++c )
+		{
+			WideChar one[ 2 ] = { *c == u'.' ? u',' : *c, 0 };
+			comma.concat( one );
+		}
+		return comma;
+	}
+	return text;
+}
+
+//-------------------------------------------------------------------------------------------------
+// the pages as items
+//-------------------------------------------------------------------------------------------------
+static LookItem *lookItem( Int page, Int index )
+{
+	if( page < 0 || page >= OPTIONS_PAGE_COUNT || index < 0 || index >= (Int)s_lookPage[ page ].items.size() )
+		return NULL;
+	return &s_lookPage[ page ].items[ index ];
+}
+
+static LookItem *lookItemOfWindow( GameWindow *window, Int *pageOut = NULL )
+{
+	for( GameWindow *w = window; w; w = w->winGetParent() )
+	{
+		std::map< GameWindow *, Int >::iterator it = s_lookItemOf.find( w );
+		if( it == s_lookItemOf.end() )
+			continue;
+		const Int page = it->second >> 16;
+		if( pageOut )
+			*pageOut = page;
+		return lookItem( page, it->second & 0xFFFF );
+	}
+	return NULL;
+}
+
+/// a row that is on this machine at all: its control was not taken away (water the device lacks, one monitor)
+static Bool lookRowHere( const LookItem &item )
+{
+	if( item.kind == LOOK_FADER )
+		return TRUE;
+	return item.control != NULL && !item.control->winIsHidden();
+}
+
+static Bool lookLess( const LookItem &a, const LookItem &b )
+{
+	if( a.top != b.top )
+		return a.top < b.top;
+	return a.left < b.left;
+}
+
+static void lookBuildPages( void )
+{
+	s_lookItemOf.clear();
+	for( Int page = 0; page < OPTIONS_PAGE_COUNT; ++page )
+	{
+		LookPage &p = s_lookPage[ page ];
+		p.items.clear();
+		p.moreBar = -1;
+		p.scroll = 0;
+		p.settings = 0;
+		if( optionsPage[ page ] == NULL )
+			continue;
+		for( GameWindow *child = optionsPage[ page ]->winGetChild(); child; child = child->winGetNext() )
+		{
+			const AsciiString name = lookShortName( child );
+			LookItem item;
+			item.window = child;
+			item.more = FALSE;
+			item.control = NULL;
+			item.readout = NULL;
+			item.flags = 0;
+			item.group = -1;
+			if( name.startsWith( "RowMore" ) )
+			{
+				item.kind = LOOK_ROW;
+				item.more = TRUE;
+				item.stem = name.str() + 7;
+			}
+			else if( name.startsWith( "Row" ) )
+			{
+				item.kind = LOOK_ROW;
+				item.stem = name.str() + 3;
+			}
+			else if( name.startsWith( "Fader" ) )
+			{
+				item.kind = LOOK_FADER;
+				item.stem = name.str() + 5;
+			}
+			else if( name.startsWith( "Head" ) && page != OPTIONS_PAGE_COUNT - 1 )
+				item.kind = LOOK_HEAD;
+			else if( name.startsWith( "ButtonMore" ) )
+				item.kind = LOOK_MORE;
+			else
+				continue;
+			const IRegion2D r = lookWindowRect( child );
+			item.left = lookBoardOf( r.lo.x, FALSE );
+			item.top = lookBoardOf( r.lo.y, TRUE );
+			item.right = lookBoardOf( r.hi.x, FALSE );
+			item.bottom = lookBoardOf( r.hi.y, TRUE );
+			item.flags = lookFlagsOf( item.stem );
+			// the gadget and the readout among the row's windows; a label is drawn by the row, so it goes
+			for( GameWindow *part = child->winGetChild(); part; part = part->winGetNext() )
+			{
+				const UnsignedInt style = part->winGetStyle();
+				if( BitTest( style, GWS_STATIC_TEXT ) )
+				{
+					if( lookShortName( part ).startsWith( "Value" ) && item.kind == LOOK_ROW )
+						item.readout = part;
+					else if( item.kind == LOOK_ROW )
+						part->winHide( TRUE );
+				}
+				else if( BitTest( style, GWS_CHECK_BOX | GWS_COMBO_BOX | GWS_HORZ_SLIDER | GWS_VERT_SLIDER | GWS_ENTRY_FIELD | GWS_PUSH_BUTTON ) )
+					item.control = part;
+			}
+			// a fader's readout is its hidden static named Value...
+			if( item.kind == LOOK_FADER )
+				for( GameWindow *part = child->winGetChild(); part; part = part->winGetNext() )
+					if( lookShortName( part ).startsWith( "Value" ) )
+						item.readout = part;
+			if( item.kind == LOOK_MORE )
+				p.moreBar = (Int)p.items.size();
+			p.items.push_back( item );
+		}
+		std::stable_sort( p.items.begin(), p.items.end(), lookLess );
+		Int group = -1;
+		for( Int i = 0; i < (Int)p.items.size(); ++i )
+		{
+			LookItem &item = p.items[ i ];
+			if( item.kind == LOOK_HEAD )
+				++group;
+			item.group = group;
+			if( item.kind == LOOK_MORE )
+				p.moreBar = i;
+			if( ( item.kind == LOOK_ROW || item.kind == LOOK_FADER ) && lookRowHere( item ) )
+				++p.settings;
+			if( item.kind != LOOK_MORE )
+				s_lookItemOf[ item.window ] = ( page << 16 ) | i;
+		}
+	}
+	s_lookBuilt = TRUE;
+}
+
+/// a window to a board rectangle, its parent's offset taken off
+static void lookPlace( GameWindow *window, Int l, Int t, Int r, Int b )
+{
+	const IRegion2D box = lookRect( l, t, r, b );
+	Int parentX = 0, parentY = 0;
+	if( GameWindow *parent = window->winGetParent() )
+		parent->winGetScreenPosition( &parentX, &parentY );
+	window->winSetPosition( box.lo.x - parentX, box.lo.y - parentY );
+	Int w, h;
+	window->winGetSize( &w, &h );
+	if( w != box.hi.x - box.lo.x || h != box.hi.y - box.lo.y )
+		window->winSetSize( box.hi.x - box.lo.x, box.hi.y - box.lo.y );
+}
+
+static void lookLayoutPage( Int page )
+{
+	if( !s_lookBuilt || page < 0 || page >= OPTIONS_PAGE_COUNT )
+		return;
+	LookPage &p = s_lookPage[ page ];
+	std::vector< OptionsFlowItem > flow;
+	std::vector< Int > of;
+	for( Int i = 0; i < (Int)p.items.size(); ++i )
+	{
+		const LookItem &item = p.items[ i ];
+		if( item.kind == LOOK_MORE )
+			continue;
+		OptionsFlowItem f;
+		f.kind = item.kind == LOOK_HEAD ? OPTIONS_FLOW_HEAD : item.kind == LOOK_FADER ? OPTIONS_FLOW_FADER : OPTIONS_FLOW_ROW;
+		f.height = item.bottom - item.top;
+		f.shown = item.kind != LOOK_HEAD && lookRowHere( item ) && ( !item.more || p.foldOpen );
+		f.top = -1;
+		f.drawnHeight = f.height;
+		flow.push_back( f );
+		of.push_back( i );
+	}
+	OptionsFlowMetrics m;
+	m.top = LOOK_BODY_TOP;
+	m.bottom = LOOK_BODY_BOTTOM;
+	m.groupGap = 4;
+	m.faderMin = 330;
+	m.moreGap = 10;
+	m.moreHeight = 40;
+	m.pinGap = 8;
+	m.hasMore = p.moreBar >= 0;
+	p.flow = optionsFlow( flow.empty() ? NULL : &flow[ 0 ], (Int)flow.size(), m, p.scroll );
+	p.scroll = max( 0, min( p.scroll, p.flow.maxScroll ) );
+	for( Int f = 0; f < (Int)flow.size(); ++f )
+	{
+		LookItem &item = p.items[ of[ f ] ];
+		if( flow[ f ].top < 0 )
+		{
+			item.window->winHide( TRUE );
+			continue;
+		}
+		lookPlace( item.window, item.left, flow[ f ].top, item.right, flow[ f ].top + flow[ f ].drawnHeight );
+		item.window->winHide( FALSE );
+	}
+	if( p.moreBar >= 0 )
+	{
+		LookItem &bar = p.items[ p.moreBar ];
+		lookPlace( bar.window, bar.left, p.flow.moreTop, bar.right, p.flow.moreTop + 40 );
+		bar.window->winHide( FALSE );
+	}
+	if( s_lookHover >= 0 && page == s_lookShown )
+	{
+		LookItem *hover = lookItem( page, s_lookHover );
+		if( hover == NULL || hover->window->winIsHidden() )
+			s_lookHover = -1;
+	}
+}
+
+/// the fold's choice per page, kept in Options.ini beside the menu's other state
+static void lookReadFolds( void )
+{
+	for( Int page = 0; page < OPTIONS_PAGE_COUNT; ++page )
+	{
+		AsciiString key;
+		key.format( "OptionsMore%d", page );
+		const AsciiString value = pref ? (*pref)[ key ] : AsciiString::TheEmptyString;
+		// open by default on every page that fits its body, Controls closed
+		const Bool byDefault = page != 5;
+		s_lookPage[ page ].foldOpen = value.isEmpty() ? byDefault : ( value == "yes" );
+	}
+}
+
+static void lookToggleFold( Int page )
+{
+	LookPage &p = s_lookPage[ page ];
+	p.foldOpen = !p.foldOpen;
+	p.scroll = 0;
+	if( pref )
+	{
+		AsciiString key;
+		key.format( "OptionsMore%d", page );
+		(*pref)[ key ] = p.foldOpen ? "yes" : "no";
+	}
+	lookLayoutPage( page );
+}
+
+//-------------------------------------------------------------------------------------------------
+// what greys a row
+//-------------------------------------------------------------------------------------------------
+static LookItem *lookFindStem( const char *stem, Int *pageOut = NULL )
+{
+	for( Int page = 0; page < OPTIONS_PAGE_COUNT; ++page )
+		for( Int i = 0; i < (Int)s_lookPage[ page ].items.size(); ++i )
+			if( s_lookPage[ page ].items[ i ].stem == stem && s_lookPage[ page ].items[ i ].kind != LOOK_HEAD )
+			{
+				if( pageOut )
+					*pageOut = page;
+				return &s_lookPage[ page ].items[ i ];
+			}
+	return NULL;
+}
+
+static Bool lookClassicPicked( void )
+{
+	GameWindow *box = classicGraphicsCheckBox();
+	return box != NULL && GadgetCheckBoxIsChecked( box );
+}
+
+/// the words standing in place of a row's control, NULL while it can be changed
+static const char *lookReasonOf( const LookItem &item )
+{
+	if( item.kind != LOOK_ROW || item.control == NULL )
+		return NULL;
+	if( !TheGlobalData->m_direct3D11 && lookDirect3D11Only( item.stem ) )
+		return "GUI:OptionsReasonD3D11";
+	if( ( item.flags & ROW_REFORGED ) && lookClassicPicked() )
+		return "GUI:OptionsReasonReforged";
+	for( Int n = 0; n < ARRAY_SIZE( TheLookRowNeeds ); ++n )
+	{
+		const LookRowNeed &need = TheLookRowNeeds[ n ];
+		if( need.hideWhenEqual || item.stem != need.stem )
+			continue;
+		LookItem *other = lookFindStem( need.needs );
+		if( other && lookValueOf( other->control ) != need.value )
+			return need.reason;
+	}
+	return NULL;
+}
+
+/// every row's grey and the rows a choice hides, after anything that can change them
+static void lookRefreshRows( void )
+{
+	if( !s_lookBuilt )
+		return;
+	for( Int page = 0; page < OPTIONS_PAGE_COUNT; ++page )
+		for( Int i = 0; i < (Int)s_lookPage[ page ].items.size(); ++i )
+		{
+			LookItem &item = s_lookPage[ page ].items[ i ];
+			if( item.kind != LOOK_ROW || item.control == NULL )
+				continue;
+			Bool greyable = ( item.flags & ROW_REFORGED ) != 0;
+			for( Int n = 0; n < ARRAY_SIZE( TheLookRowNeeds ); ++n )
+			{
+				const LookRowNeed &need = TheLookRowNeeds[ n ];
+				if( item.stem != need.stem )
+					continue;
+				LookItem *other = lookFindStem( need.needs );
+				if( need.hideWhenEqual )
+				{
+					// forced on there, so the row goes rather than greying
+					if( other && !lookLocked( item.control ) )
+						item.control->winHide( lookValueOf( other->control ) == need.value );
+				}
+				else
+					greyable = TRUE;
+			}
+			if( greyable && !lookLocked( item.control ) )
+				item.control->winEnable( lookReasonOf( item ) == NULL );
+		}
+	lookLayoutPage( s_lookShown );
+}
+
+/// a control the player cannot change this time: hidden where the device lacks it, greyed by -d3d9
+/// or a match.  A row greyed by another row's choice is not, so the slider and Defaults still set it.
+static Bool lookLocked( GameWindow *control )
+{
+	if( control == NULL )
+		return TRUE;
+	if( s_lookLockedBuilt )
+		return s_lookLocked.count( control ) != 0;
+	return ( control->winIsHidden() && !lookMergedModel( control ) ) || !control->winGetEnabled();
+}
+
+static void lookBuildLocked( void )
+{
+	s_lookLocked.clear();
+	s_lookLockedBuilt = FALSE;
+	GameWindow *sunShafts = findOptionWidget( *findOptionDef( "SunShafts" ) );
+	for( Int i = 0; i < TheOptionCatalogCount; ++i )
+	{
+		GameWindow *control = findOptionWidget( TheOptionCatalog[ i ] );
+		if( control == NULL )
+			continue;
+		// the sun shafts are greyed by the Classic box too, which the player can untick
+		const Bool locked = control == sunShafts ? !TheGlobalData->m_direct3D11 : lookLocked( control );
+		if( locked )
+			s_lookLocked.insert( control );
+	}
+	for( Int row = 0; row < TheGraphicsQualityTableCount; ++row )
+	{
+		GameWindow *control = graphicsQualityWidget( TheGraphicsQualityTable[ row ] );
+		if( control && control != sunShafts && lookLocked( control ) )
+			s_lookLocked.insert( control );
+	}
+	s_lookLockedBuilt = TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+// the merged lists
+//-------------------------------------------------------------------------------------------------
+static void lookFillView( GameWindow *view, const char *keyFormat, Int count )
+{
+	if( view == NULL )
+		return;
+	GadgetComboBoxReset( view );
+	for( Int entry = 0; entry < count; ++entry )
+	{
+		AsciiString key;
+		key.format( keyFormat, entry );
+		GadgetComboBoxAddEntry( view, TheGameText->fetch( key ), MENU_ENTRY_COLOR );
+	}
+}
+
+/// the views read off their models
+static void lookShowViews( void )
+{
+	const Bool was = ignoreSelected;
+	ignoreSelected = TRUE;
+	GameWindow *filter = lookFind( "ComboBoxTextureFilter" );
+	GameWindow *anisotropy = lookFind( "SliderAnisotropy" );
+	if( s_lookFiltering && filter && anisotropy )
+		GadgetComboBoxSetSelectedPos( s_lookFiltering, textureFilteringEntry( lookValueOf( filter ), lookValueOf( anisotropy ) ) );
+	GameWindow *enabled = lookFind( "CheckWaterReflectionEnabled" );
+	GameWindow *mode = lookFind( "ComboBoxWaterReflection" );
+	if( s_lookReflections && enabled && mode )
+		GadgetComboBoxSetSelectedPos( s_lookReflections, waterReflectionsEntry( lookValueOf( enabled ), lookValueOf( mode ) ) );
+	ignoreSelected = was;
+}
+
+/// a view picked: its models take it, and the page is nobody's preset any more.  TRUE when control was one.
+static Bool lookViewPicked( GameWindow *control )
+{
+	if( control == NULL )
+		return FALSE;
+	const Bool was = ignoreSelected;
+	if( control == s_lookFiltering )
+	{
+		GameWindow *filter = lookFind( "ComboBoxTextureFilter" );
+		GameWindow *anisotropy = lookFind( "SliderAnisotropy" );
+		Int f = lookValueOf( filter ), a = lookValueOf( anisotropy );
+		textureFilteringRows( lookValueOf( control ), &f, &a );
+		ignoreSelected = TRUE;
+		if( filter )
+			GadgetComboBoxSetSelectedPos( filter, f );
+		if( anisotropy )
+			GadgetSliderSetPosition( anisotropy, a );
+		ignoreSelected = was;
+		markDetailCustom();
+		return TRUE;
+	}
+	if( control == s_lookReflections )
+	{
+		GameWindow *enabled = lookFind( "CheckWaterReflectionEnabled" );
+		GameWindow *mode = lookFind( "ComboBoxWaterReflection" );
+		Int e = lookValueOf( enabled ), m = lookValueOf( mode );
+		waterReflectionsRows( lookValueOf( control ), &e, &m );
+		ignoreSelected = TRUE;
+		if( enabled )
+			GadgetCheckBoxSetChecked( enabled, e != 0 );
+		if( mode )
+			GadgetComboBoxSetSelectedPos( mode, m );
+		ignoreSelected = was;
+		markDetailCustom();
+		return TRUE;
+	}
+	return FALSE;
+}
+
+/// Look's two boxes hold the choice as their pushed state, the picked one pushed, so the gadgets
+/// say what the screen shows (ui_walk.py reads it)
+static void lookShowLook( void )
+{
+	const Bool classic = lookClassicPicked();
+	if( s_lookClassic && BitTest( s_lookClassic->winGetStatus(), WIN_STATUS_CHECK_LIKE ) )
+		GadgetCheckLikeButtonSetVisualCheck( s_lookClassic, classic );
+	if( s_lookReforged && BitTest( s_lookReforged->winGetStatus(), WIN_STATUS_CHECK_LIKE ) )
+		GadgetCheckLikeButtonSetVisualCheck( s_lookReforged, !classic );
+}
+
+/// Look's two boxes stand for the hidden Classic Graphics box
+static void lookPickLook( Bool classic )
+{
+	GameWindow *box = classicGraphicsCheckBox();
+	if( box == NULL || lookClassicPicked() == classic )
+		return;
+	GadgetCheckBoxSetChecked( box, classic );
+	showClassicGraphicsChoice();
+	lookShowViews();
+	lookRefreshRows();
+}
+
+//-------------------------------------------------------------------------------------------------
+// the draws
+//-------------------------------------------------------------------------------------------------
+static Bool lookHovered( GameWindow *window, WinInstanceData *instData )
+{
+	return BitTest( instData->getState(), WIN_STATE_HILITED ) && window->winGetEnabled();
+}
+
+/// a row's control, drawn unless the row says why it cannot be changed in its place
+static void lookControlDraw( GameWindow *window, WinInstanceData *instData )
+{
+	const LookItem *item = lookItemOfWindow( window );
+	if( item && lookReasonOf( *item ) != NULL )
+		return;
+	std::map< GameWindow *, GameWinDrawFunc >::iterator it = s_lookControlDraws.find( window );
+	if( it != s_lookControlDraws.end() && it->second )
+		it->second( window, instData );
+}
+
+static void lookWrapDraw( GameWindow *window )
+{
+	if( window == NULL || window->winGetDrawFunc() == lookControlDraw )
+		return;
+	s_lookControlDraws[ window ] = window->winGetDrawFunc();
+	window->winSetDrawFunc( lookControlDraw );
+}
+
+/// a row's check box: the room's square at the control column; the row draws the words
+static void lookCheckDraw( GameWindow *window, WinInstanceData *instData )
+{
+	const LookItem *item = lookItemOfWindow( window );
+	if( item && lookReasonOf( *item ) != NULL )
+		return;
+	const IRegion2D r = lookWindowRect( window );
+	const Int side = lookPx( 18.0f );
+	IRegion2D box;
+	box.lo.x = item ? lookX( item->left + LOOK_CONTROL_INSET ) : r.lo.x;
+	box.lo.y = ( r.lo.y + r.hi.y - side ) / 2;
+	box.hi.x = box.lo.x + side;
+	box.hi.y = box.lo.y + side;
+	const Bool enabled = window->winGetEnabled();
+	lookFill( box, GameMakeColor( 0, 0, 0, 170 ) );
+	lookOutline( box, !enabled ? UIStyle::FRAME : lookHovered( window, instData ) ? UIStyle::EDGE_LIT : UIStyle::EDGE );
+	if( BitTest( instData->getState(), WIN_STATE_SELECTED ) )
+	{
+		// lit inside when on
+		IRegion2D inner = box;
+		const Int inset = max( 3, lookPx( 4.0f ) );
+		inner.lo.x += inset;
+		inner.lo.y += inset;
+		inner.hi.x -= inset;
+		inner.hi.y -= inset;
+		if( enabled )
+			UIStyle::litLine( inner.lo.x, inner.lo.y, inner.hi.x - inner.lo.x, inner.hi.y - inner.lo.y, UIStyle::ACTIVE );
+		else
+			lookFill( inner, UIStyle::MUTED );
+	}
+}
+
+/// a slider: a FRAME track, the filled part a lit EDGE line, a 10 by 22 thumb with a cyan edge
+static void lookSliderDraw( GameWindow *window, WinInstanceData *instData )
+{
+	const LookItem *item = lookItemOfWindow( window );
+	if( item && lookReasonOf( *item ) != NULL )
+		return;
+	const IRegion2D r = lookWindowRect( window );
+	GameWindow *thumb = GadgetSliderGetThumb( window );
+	Int tw = lookPx( 10.0f );
+	IRegion2D t = r;
+	if( thumb )
+	{
+		t = lookWindowRect( thumb );
+		tw = t.hi.x - t.lo.x;
+	}
+	const Bool enabled = window->winGetEnabled();
+	const Int middle = ( r.lo.y + r.hi.y ) / 2;
+	const Int x0 = r.lo.x + tw / 2, x1 = r.hi.x - tw / 2;
+	const Int cx = ( t.lo.x + t.hi.x ) / 2;
+	const Int line = max( 1, lookPx( 2.0f ) );
+	TheDisplay->drawFillRect( x0, middle - line / 2, max( 1, x1 - x0 ), line, UIStyle::FRAME );
+	if( enabled )
+		UIStyle::litLine( x0, middle - line / 2, max( 1, cx - x0 ), line, UIStyle::EDGE );
+	else
+		TheDisplay->drawFillRect( x0, middle - line / 2, max( 1, cx - x0 ), line, UIStyle::MUTED );
+	IRegion2D mark;
+	mark.lo.x = cx - lookPx( 5.0f );
+	mark.hi.x = mark.lo.x + max( 4, lookPx( 10.0f ) );
+	mark.lo.y = middle - lookPx( 11.0f );
+	mark.hi.y = mark.lo.y + max( 8, lookPx( 22.0f ) );
+	lookFill( mark, GameMakeColor( 0, 0, 0, 220 ) );
+	lookOutline( mark, enabled ? UIStyle::EDGE_LIT : UIStyle::FRAME );
+}
+
+static void lookNothingDraw( GameWindow *, WinInstanceData * )
+{
+}
+
+/// a group head: its words in green 14 px capitals, a FRAME rule in its soft light at its foot
+static void lookHeadDraw( GameWindow *window, WinInstanceData *instData )
+{
+	const IRegion2D r = lookWindowRect( window );
+	lookCaps( window->winGetText(), r.lo.x + lookPx( 16.0f ), r.lo.y + lookPx( 17.0f ), UIStyle::ACTIVE );
+	UIStyle::litLine( r.lo.x, r.lo.y + lookPx( 31.0f ), r.hi.x - r.lo.x, 1, UIStyle::FRAME );
+}
+
+static Bool lookIsHover( const LookItem *item )
+{
+	return s_lookRail == 0 && item != NULL && lookItem( s_lookShown, s_lookHover ) == item;
+}
+
+/// a row: the lift when hovered or focused, the fold's tick, the label and its badges, or the reason
+static void lookRowDraw( GameWindow *window, WinInstanceData *instData )
+{
+	Int page = -1;
+	const LookItem *item = lookItemOfWindow( window, &page );
+	if( item == NULL )
+		return;
+	const IRegion2D r = lookWindowRect( window );
+	const Int middle = ( r.lo.y + r.hi.y ) / 2;
+	if( lookIsHover( item ) )
+		UIStyle::menuRow( r, UIStyle::ROW_HOVER );
+	if( item->more )
+		TheDisplay->drawFillRect( r.lo.x + lookPx( 3.0f ), middle, max( 1, lookPx( 8.0f ) ), 1, UIStyle::FRAME );
+
+	const char *reason = lookReasonOf( *item );
+	const Bool enabled = reason == NULL && ( item->control == NULL || item->control->winGetEnabled() );
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	const Int labelX = r.lo.x + lookPx( (Real)LOOK_LABEL_INSET );
+	if( item->control && BitTest( item->control->winGetStyle(), GWS_PUSH_BUTTON ) )
+	{
+		// the connection test: its key, then the result in words
+		const IRegion2D key = lookWindowRect( item->control );
+		const UnicodeString result = TheGameText->fetch( s_lookTested ? "GUI:OptionsTestDone" : "GUI:OptionsTestNotRun" );
+		lookDraw( UIStyle::fitText( result, body, r.hi.x - key.hi.x - lookPx( 32.0f ) ), body, key.hi.x + lookPx( 16.0f ), middle, UIStyle::MUTED );
+		return;
+	}
+	const Int controlX = r.lo.x + lookPx( (Real)LOOK_CONTROL_INSET );
+	const Int labelRoom = controlX - labelX - lookPx( 12.0f );
+	const UnicodeString label = UIStyle::fitText( window->winGetText(), body, labelRoom );
+	const Int w = lookDraw( label, body, labelX, middle, enabled ? UIStyle::INK : UIStyle::MUTED );
+	if( w + lookPx( 12.0f ) < labelRoom )
+		lookBadges( item->flags, labelX + w + lookPx( 12.0f ), middle );
+	if( reason )
+	{
+		GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+		lookDraw( UIStyle::fitText( TheGameText->fetch( reason ), hint, r.hi.x - controlX - lookPx( 8.0f ) ), hint, controlX, middle, UIStyle::MUTED );
+	}
+}
+
+/// the More bar: MORE, and while folded the labels it holds; its caret points the way it opens
+static void lookMoreDraw( GameWindow *window, WinInstanceData *instData )
+{
+	const IRegion2D r = lookWindowRect( window );
+	const Bool hovered = BitTest( instData->getState(), WIN_STATE_HILITED );
+	lookFill( r, GameMakeColor( 0, 0, 0, 120 ) );
+	lookOutline( r, hovered ? UIStyle::EDGE_LIT : UIStyle::FRAME );
+	const Int middle = ( r.lo.y + r.hi.y ) / 2;
+	Int x = r.lo.x + lookPx( 16.0f );
+	x += lookCaps( TheGameText->fetch( "GUI:OptionsMore" ), x, middle, UIStyle::ACTIVE ) + lookPx( 16.0f );
+
+	Int page = -1;
+	for( Int p = 0; p < OPTIONS_PAGE_COUNT; ++p )
+		if( s_lookPage[ p ].moreBar >= 0 && s_lookPage[ p ].items[ s_lookPage[ p ].moreBar ].window == window )
+			page = p;
+	const Int caretW = lookPx( 12.0f );
+	const Int cx = r.hi.x - lookPx( 22.0f );
+	const Bool open = page >= 0 && s_lookPage[ page ].foldOpen;
+	const Real width = (Real)max( 1, lookPx( 2.0f ) );
+	const Int dy = open ? -caretW / 4 : caretW / 4;
+	TheDisplay->drawLine( cx - caretW / 2, middle - dy, cx, middle + dy, width, UIStyle::INK );
+	TheDisplay->drawLine( cx, middle + dy, cx + caretW / 2, middle - dy, width, UIStyle::INK );
+	if( page < 0 || open )
+		return;
+
+	// "3 more: Online IP, Send Delay, HTTP Proxy"
+	Int count = 0;
+	UnicodeString names;
+	for( Int i = 0; i < (Int)s_lookPage[ page ].items.size(); ++i )
+	{
+		const LookItem &item = s_lookPage[ page ].items[ i ];
+		if( item.kind != LOOK_ROW || !item.more || !lookRowHere( item ) )
+			continue;
+		if( count++ > 0 )
+			names.concat( u", " );
+		names.concat( item.window->winGetText() );
+	}
+	UnicodeString line;
+	line.format( TheGameText->fetch( "GUI:OptionsMoreCount" ).str(), count );
+	line.concat( u" " );
+	line.concat( names );
+	GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+	lookDraw( UIStyle::fitText( line, hint, cx - caretW - x - lookPx( 8.0f ), UnicodeString::TheEmptyString, names ), hint, x, middle, UIStyle::MUTED );
+}
+
+/// a fader: its value over it at 24 px, the track standing upright, its name under it
+static void lookFaderDraw( GameWindow *window, WinInstanceData *instData )
+{
+	const LookItem *item = lookItemOfWindow( window );
+	if( item == NULL )
+		return;
+	const IRegion2D r = lookWindowRect( window );
+	if( lookIsHover( item ) )
+		UIStyle::menuRow( r, UIStyle::ROW_HOVER );
+	const Int cx = ( r.lo.x + r.hi.x ) / 2;
+	GameFont *figure = UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE, TRUE );
+	if( item->readout )
+		lookDraw( GadgetStaticTextGetText( item->readout ), figure, cx, r.lo.y + lookPx( 22.0f ), UIStyle::INK, 1 );
+	lookCaps( window->winGetText(), cx, r.hi.y - lookPx( 16.0f ), UIStyle::MUTED, 1 );
+
+	const Int top = r.lo.y + lookPx( 48.0f ), bottom = r.hi.y - lookPx( 40.0f );
+	Int lo = 0, hi = 100;
+	if( item->control )
+		GadgetSliderGetMinMax( item->control, &lo, &hi );
+	const Int value = item->control ? GadgetSliderGetPosition( item->control ) : 0;
+	const Real frac = hi > lo ? (Real)( value - lo ) / (Real)( hi - lo ) : 0.0f;
+	const Int line = max( 2, lookPx( 4.0f ) );
+	TheDisplay->drawFillRect( cx - line / 2, top, line, max( 1, bottom - top ), UIStyle::FRAME );
+	const Int at = bottom - REAL_TO_INT_FLOOR( frac * (Real)( bottom - top ) );
+	UIStyle::litLine( cx - line / 2, at, line, max( 1, bottom - at ), UIStyle::EDGE );
+	IRegion2D mark;
+	mark.lo.x = cx - lookPx( 11.0f );
+	mark.hi.x = cx + lookPx( 11.0f );
+	mark.lo.y = at - lookPx( 5.0f );
+	mark.hi.y = at + lookPx( 5.0f );
+	lookFill( mark, GameMakeColor( 0, 0, 0, 220 ) );
+	lookOutline( mark, UIStyle::EDGE_LIT );
+}
+
+/// a fader moved by the pointer: the hidden slider it stands for takes the value
+static WindowMsgHandledType lookFaderInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
+{
+	if( msg != GWM_LEFT_DOWN && msg != GWM_LEFT_DRAG && msg != GWM_LEFT_UP )
+		return MSG_IGNORED;
+	const LookItem *item = lookItemOfWindow( window );
+	if( item == NULL || item->control == NULL )
+		return MSG_IGNORED;
+	if( msg == GWM_LEFT_DOWN )
+		TheWindowManager->winCapture( window );
+	else if( msg == GWM_LEFT_UP )
+	{
+		TheWindowManager->winRelease( window );
+		return MSG_HANDLED;
+	}
+	const Int mouseY = (Int)( ( mData1 >> 16 ) & 0xFFFF );
+	const IRegion2D r = lookWindowRect( window );
+	const Int top = r.lo.y + lookPx( 48.0f ), bottom = r.hi.y - lookPx( 40.0f );
+	Int lo = 0, hi = 100;
+	GadgetSliderGetMinMax( item->control, &lo, &hi );
+	const Real frac = bottom > top ? (Real)( bottom - max( top, min( bottom, mouseY ) ) ) / (Real)( bottom - top ) : 0.0f;
+	GadgetSliderSetPosition( item->control, lo + REAL_TO_INT_FLOOR( frac * (Real)( hi - lo ) + 0.5f ) );
+	updateSliderReadouts();
+	return MSG_HANDLED;
+}
+
+/// the rail's tab: a 1 px box, the name at 20 px and its count at the right, its groups under it;
+/// the open one green with a lit left edge
+static void lookTabDraw( GameWindow *window, WinInstanceData *instData )
+{
+	Int page = -1;
+	for( Int p = 0; p < OPTIONS_PAGE_COUNT; ++p )
+		if( optionsTab[ p ] == window )
+			page = p;
+	const IRegion2D r = lookWindowRect( window );
+	const Bool open = page == s_lookShown;
+	const Bool hovered = BitTest( instData->getState(), WIN_STATE_HILITED ) && !open;
+	lookFill( r, GameMakeColor( 0, 0, 0, open ? 150 : 110 ) );
+	lookOutline( r, open ? GameMakeColor( 90, 120, 40, 255 ) : hovered ? UIStyle::EDGE_LIT : UIStyle::withAlpha( UIStyle::TAB_EDGE, 150 ) );
+	if( open )
+		UIStyle::litLine( r.lo.x, r.lo.y, max( 2, lookPx( 3.0f ) ), r.hi.y - r.lo.y, UIStyle::ACTIVE );
+	const Int x = r.lo.x + lookPx( 16.0f );
+	const Int right = r.hi.x - lookPx( 14.0f );
+	GameFont *name = UIStyle::menuFont( UIStyle::MENU_TEXT_KEY, TRUE );
+	lookDraw( window->winGetText(), name, x, r.lo.y + lookPx( 24.0f ), open ? UIStyle::ACTIVE : UIStyle::INK );
+	if( page >= 0 && s_lookPage[ page ].settings > 0 )
+	{
+		UnicodeString count;
+		count.format( u"%d", s_lookPage[ page ].settings );
+		lookDraw( count, UIStyle::menuFont( UIStyle::MENU_TEXT_BODY ), right, r.lo.y + lookPx( 24.0f ), UIStyle::MUTED, 2 );
+	}
+	if( page < 0 )
+		return;
+
+	// the groups line, the table of contents: shortened first, then its last groups dropped
+	std::vector< UnicodeString > heads;
+	if( page == OPTIONS_PAGE_COUNT - 1 )
+	{
+		heads.push_back( TheGameText->fetch( "GUI:HotkeysCommands" ) );
+		heads.push_back( TheGameText->fetch( "GUI:HotkeysCommandBar" ) );
+	}
+	else
+		for( Int i = 0; i < (Int)s_lookPage[ page ].items.size(); ++i )
+			if( s_lookPage[ page ].items[ i ].kind == LOOK_HEAD )
+				heads.push_back( s_lookPage[ page ].items[ i ].window->winGetText() );
+	const UnicodeString longRate = TheGameText->fetch( "GUI:OptionsHeadFrameRate" );
+	const Int room = r.hi.x - lookPx( 10.0f ) - x;
+	for( Int pass = 0; pass < 2; ++pass )
+	{
+		for( Int keep = (Int)heads.size(); keep > 0; --keep )
+		{
+			UnicodeString line;
+			for( Int h = 0; h < keep; ++h )
+			{
+				if( h > 0 )
+					line.concat( UIStyle::HEADER_JOINER );
+				const Bool shorten = pass == 1 && heads[ h ].compare( longRate ) == 0 && UIStyle::hasText( "GUI:OptionsHeadFrameRate_Short" );
+				line.concat( shorten ? TheGameText->fetch( "GUI:OptionsHeadFrameRate_Short" ) : heads[ h ] );
+			}
+			// the first pass tries every group whole; the second shortens and then drops
+			if( lookCapsWidth( line ) <= room && ( pass == 1 || keep == (Int)heads.size() ) )
+			{
+				lookCaps( line, x, r.lo.y + lookPx( 52.0f ), open ? UIStyle::ACTIVE : UIStyle::MUTED );
+				return;
+			}
+			if( pass == 0 )
+				break;
+		}
+	}
+}
+
+/// Look's box: the picked one green
+static void lookLookDraw( GameWindow *window, WinInstanceData *instData )
+{
+	const Bool picked = ( window == s_lookClassic ) == lookClassicPicked();
+	// Defaults and the page's own Classic box move the choice too; the boxes follow it here
+	lookShowLook();
+	UIStyle::menuTab( lookWindowRect( window ), instData->getTextDisplayString(), picked,
+		BitTest( instData->getState(), WIN_STATE_HILITED ) );
+}
+
+/// the quality track: its Low, Medium, High and Ultra notches, the thumb on it
+static void lookQualityDraw( GameWindow *window, WinInstanceData *instData )
+{
+	const IRegion2D r = lookWindowRect( window );
+	const Bool enabled = window->winGetEnabled();
+	GameWindow *thumb = GadgetSliderGetThumb( window );
+	const IRegion2D t = thumb ? lookWindowRect( thumb ) : r;
+	const Int tw = t.hi.x - t.lo.x;
+	const Int x0 = r.lo.x + tw / 2, x1 = r.hi.x - tw / 2;
+	const Int middle = ( r.lo.y + r.hi.y ) / 2;
+	const Int line = max( 1, lookPx( 2.0f ) );
+	const Int cx = ( t.lo.x + t.hi.x ) / 2;
+	TheDisplay->drawFillRect( x0, middle - line / 2, max( 1, x1 - x0 ), line, UIStyle::FRAME );
+	if( enabled )
+		UIStyle::litLine( x0, middle - line / 2, max( 1, cx - x0 ), line, UIStyle::EDGE );
+	for( Int level = STATIC_GAME_LOD_LOW; level <= STATIC_GAME_LOD_ULTRA; ++level )
+	{
+		const Int step = TheGraphicsQualityAnchors[ level ];
+		const Int nx = x0 + ( x1 - x0 ) * step / ( GRAPHICS_QUALITY_STEPS - 1 );
+		TheDisplay->drawFillRect( nx, middle - lookPx( 6.0f ), 1, lookPx( 12.0f ), UIStyle::FRAME );
+	}
+	IRegion2D mark;
+	mark.lo.x = cx - lookPx( 5.0f );
+	mark.hi.x = mark.lo.x + max( 4, lookPx( 10.0f ) );
+	mark.lo.y = middle - lookPx( 11.0f );
+	mark.hi.y = mark.lo.y + max( 8, lookPx( 22.0f ) );
+	lookFill( mark, GameMakeColor( 0, 0, 0, 220 ) );
+	lookOutline( mark, enabled ? UIStyle::EDGE_LIT : UIStyle::FRAME );
+}
+
+/// the page's own figures under its rows: Graphics' and Effects' measured cost, the scroll track
+static void lookPageDraw( GameWindow *window, WinInstanceData *instData )
+{
+	Int page = -1;
+	for( Int p = 0; p < OPTIONS_PAGE_COUNT; ++p )
+		if( optionsPage[ p ] == window )
+			page = p;
+	if( page < 0 || page == OPTIONS_PAGE_COUNT - 1 )
+		return;
+	LookPage &p = s_lookPage[ page ];
+
+	// a page taller than the body: a FRAME track at the column's right edge, the thumb cyan
+	if( p.flow.maxScroll > 0 )
+	{
+		const IRegion2D track = lookRect( LOOK_ROWS_RIGHT - 4, LOOK_BODY_TOP, LOOK_ROWS_RIGHT, p.flow.moreTop - 10 );
+		lookFill( track, UIStyle::FRAME );
+		const Int height = track.hi.y - track.lo.y;
+		const Int visible = height * height / max( 1, height + lookPx( (Real)p.flow.maxScroll ) );
+		const Int at = track.lo.y + ( height - visible ) * p.scroll / max( 1, p.flow.maxScroll );
+		UIStyle::litLine( track.lo.x, at, track.hi.x - track.lo.x, max( 4, visible ), UIStyle::EDGE_LIT );
+	}
+
+	// Graphics (1) and Effects (3): what the ticked rows cost a frame, added up
+	if( page != 1 && page != 3 )
+		return;
+	struct Cost { Real ms; Int item; };
+	std::vector< Cost > costs;
+	Real total = 0.0f;
+	for( Int i = 0; i < (Int)p.items.size(); ++i )
+	{
+		Bool on = FALSE;
+		const Real ms = lookCostOf( p.items[ i ], &on );
+		if( p.items[ i ].kind != LOOK_ROW || !lookRowHere( p.items[ i ] ) || !on || ms <= 0.0f )
+			continue;
+		Cost c = { ms, i };
+		costs.push_back( c );
+		total += ms;
+	}
+	Int y = p.flow.end + 22;
+	if( y + 70 > LOOK_BODY_BOTTOM || p.flow.maxScroll > 0 )
+		return;
+	lookCaps( TheGameText->fetch( "GUI:OptionsTabCost" ), lookX( LOOK_ROWS_LEFT + 16 ), lookY( y + 8 ), UIStyle::MUTED );
+	UnicodeString figure;
+	figure.format( u"%s ms", lookMs( total ).str() );
+	const Int fw = lookDraw( figure, UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE, TRUE ), lookX( LOOK_ROWS_LEFT + 16 ), lookY( y + 34 ), UIStyle::INK );
+	lookDraw( TheGameText->fetch( "GUI:OptionsTabCostUnit" ), UIStyle::menuFont( UIStyle::MENU_TEXT_HINT ), lookX( LOOK_ROWS_LEFT + 16 ) + fw + lookPx( 12.0f ),
+		lookY( y + 36 ), UIStyle::MUTED );
+
+	// the bar split by row, the hovered row's part cyan
+	const IRegion2D bar = lookRect( LOOK_ROWS_LEFT + 16, y + 54, LOOK_ROWS_RIGHT - 16, y + 62 );
+	lookFill( bar, UIStyle::withAlpha( UIStyle::FRAME, 120 ) );
+	Int x = bar.lo.x;
+	const Int width = bar.hi.x - bar.lo.x;
+	for( Int c = 0; c < (Int)costs.size(); ++c )
+	{
+		const Int part = total > 0.0f ? REAL_TO_INT_FLOOR( (Real)width * costs[ c ].ms / total + 0.5f ) : 0;
+		const Bool lit = page == s_lookShown && costs[ c ].item == s_lookHover && s_lookRail == 0;
+		TheDisplay->drawFillRect( x, bar.lo.y, max( 1, part - 1 ), bar.hi.y - bar.lo.y, lit ? UIStyle::EDGE_LIT : ( c % 2 ? UIStyle::FRAME : UIStyle::EDGE ) );
+		x += part;
+	}
+
+	// the dearest first, a line each at 28 px as far as the column holds; three on one line where fewer than two fit
+	for( Int a = 0; a < (Int)costs.size(); ++a )
+		for( Int b = a + 1; b < (Int)costs.size(); ++b )
+			if( costs[ b ].ms > costs[ a ].ms )
+				std::swap( costs[ a ], costs[ b ] );
+	y += 78;
+	const Int lines = ( LOOK_BODY_BOTTOM - y ) / 28;
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+	if( lines < 2 )
+	{
+		UnicodeString three;
+		for( Int c = 0; c < (Int)costs.size() && c < 3 && lines > 0; ++c )
+		{
+			if( c > 0 )
+				three.concat( UIStyle::HEADER_JOINER );
+			three.concat( p.items[ costs[ c ].item ].window->winGetText() );
+			three.concat( u" " );
+			three.concat( lookMs( costs[ c ].ms ) );
+		}
+		lookDraw( UIStyle::fitText( three, body, lookPx( (Real)( LOOK_ROWS_RIGHT - LOOK_ROWS_LEFT - 32 ) ) ), body, lookX( LOOK_ROWS_LEFT + 16 ), lookY( y + 14 ), UIStyle::MUTED );
+		return;
+	}
+	const Real dearest = costs.empty() ? 1.0f : costs[ 0 ].ms;
+	for( Int c = 0; c < (Int)costs.size() && c < lines; ++c )
+	{
+		const Int middle = lookY( y + 28 * c + 14 );
+		const LookItem &item = p.items[ costs[ c ].item ];
+		lookDraw( UIStyle::fitText( item.window->winGetText(), body, lookPx( 380.0f ) ), body, lookX( LOOK_ROWS_LEFT + 16 ), middle, UIStyle::INK );
+		const Int barLeft = lookX( LOOK_ROWS_LEFT + 420 ), barRight = lookX( LOOK_ROWS_RIGHT - 90 );
+		const Int len = REAL_TO_INT_FLOOR( (Real)( barRight - barLeft ) * costs[ c ].ms / dearest );
+		const Bool lit = costs[ c ].item == s_lookHover && s_lookRail == 0;
+		TheDisplay->drawFillRect( barLeft, middle - lookPx( 3.0f ), max( 1, len ), max( 2, lookPx( 6.0f ) ), lit ? UIStyle::EDGE_LIT : UIStyle::EDGE );
+		lookDraw( lookMs( costs[ c ].ms ), body, lookX( LOOK_ROWS_RIGHT - 16 ), middle, UIStyle::MUTED, 2 );
+	}
+}
+
+/// the wheel scrolls a page taller than its body; a click on its track pages it
+static WindowMsgHandledType lookPageInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
+{
+	Int page = -1;
+	for( Int p = 0; p < OPTIONS_PAGE_COUNT; ++p )
+		if( optionsPage[ p ] == window )
+			page = p;
+	if( page < 0 || s_lookPage[ page ].flow.maxScroll <= 0 )
+		return MSG_IGNORED;
+	LookPage &p = s_lookPage[ page ];
+	if( msg == GWM_WHEEL_UP || msg == GWM_WHEEL_DOWN )
+	{
+		p.scroll += msg == GWM_WHEEL_UP ? -3 * 34 : 3 * 34;
+		lookLayoutPage( page );
+		return MSG_HANDLED;
+	}
+	if( msg == GWM_LEFT_DOWN )
+	{
+		const Int x = lookBoardOf( (Int)( mData1 & 0xFFFF ), FALSE );
+		const Int y = lookBoardOf( (Int)( ( mData1 >> 16 ) & 0xFFFF ), TRUE );
+		if( x < LOOK_ROWS_RIGHT - 14 || x > LOOK_ROWS_RIGHT + 4 )
+			return MSG_IGNORED;
+		const Int height = max( 1, p.flow.moreTop - 10 - LOOK_BODY_TOP );
+		p.scroll = p.flow.maxScroll * ( y - LOOK_BODY_TOP ) / height;
+		lookLayoutPage( page );
+		return MSG_HANDLED;
+	}
+	return MSG_IGNORED;
+}
+
+//-------------------------------------------------------------------------------------------------
+// the pane
+//-------------------------------------------------------------------------------------------------
+/// a need's line: its mark lit when met, then its words; returns the next line's top
+static Int lookNeedLine( const UnicodeString &words, Bool met, Int y )
+{
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+	const Int middle = lookY( y + 13 );
+	IRegion2D mark;
+	mark.lo.x = lookX( LOOK_PANE_INNER_LEFT );
+	mark.hi.x = mark.lo.x + max( 6, lookPx( 10.0f ) );
+	mark.lo.y = middle - lookPx( 5.0f );
+	mark.hi.y = mark.lo.y + max( 6, lookPx( 10.0f ) );
+	if( met )
+		UIStyle::litLine( mark.lo.x, mark.lo.y, mark.hi.x - mark.lo.x, mark.hi.y - mark.lo.y, UIStyle::ACTIVE );
+	else
+		lookOutline( mark, UIStyle::MUTED );
+	lookDraw( UIStyle::fitText( words, body, lookPx( (Real)( LOOK_PANE_INNER_RIGHT - LOOK_PANE_INNER_LEFT - 24 ) ) ), body,
+		mark.hi.x + lookPx( 12.0f ), middle, met ? UIStyle::INK : UIStyle::MUTED );
+	return y + 26;
+}
+
+/// the value a need asks of the row it waits on (controlling), in words: "Fullscreen", "not Borderless"
+static UnicodeString lookNeedValue( const LookRowNeed &need, const LookItem *controlling )
+{
+	UnicodeString value = controlling && controlling->control && BitTest( controlling->control->winGetStyle(), GWS_COMBO_BOX )
+		? lookEntryText( controlling->control, need.value )
+		: TheGameText->fetch( need.value ? "GUI:OptionsValueOn" : "GUI:OptionsValueOff" );
+	if( need.hideWhenEqual )
+	{
+		UnicodeString negated;
+		negated.format( TheGameText->fetch( "GUI:OptionsNot" ).str(), value.str() );
+		value = negated;
+	}
+	return value;
+}
+
+/// "Cast Shadows: On"
+static UnicodeString lookNeedWords( const LookRowNeed &need, const LookItem *controlling )
+{
+	const UnicodeString value = lookNeedValue( need, controlling );
+	UnicodeString words;
+	words.format( u"%s: %s", controlling ? controlling->window->winGetText().str() : u"", value.str() );
+	return words;
+}
+
+/// a block's head in the pane; returns the first line's top
+static Int lookPaneHead( const char *key, const UnicodeString &arg, Int y )
+{
+	UnicodeString words = TheGameText->fetch( key );
+	if( !arg.isEmpty() )
+	{
+		UnicodeString with;
+		with.format( words.str(), UIStyle::capitals( arg ).str() );
+		words = with;
+	}
+	lookCaps( words, lookX( LOOK_PANE_INNER_LEFT ), lookY( y + 10 ), UIStyle::ACTIVE );
+	return y + 26;
+}
+
+static void lookPaneDraw( GameWindow *window, WinInstanceData *instData )
+{
+	if( s_lookShown == OPTIONS_PAGE_COUNT - 1 )
+		return;
+	const IRegion2D pane = lookRect( LOOK_PANE_LEFT, LOOK_BODY_TOP, LOOK_PANE_RIGHT, LOOK_BODY_BOTTOM );
+	lookFill( pane, GameMakeColor( 0, 0, 0, 90 ) );
+	lookOutline( pane, UIStyle::withAlpha( UIStyle::FRAME, 200 ) );
+
+	LookPage &p = s_lookPage[ s_lookShown ];
+	LookItem *item = s_lookRail == 0 ? lookItem( s_lookShown, s_lookHover ) : NULL;
+	AsciiString stem;
+	UnicodeString label;
+	Int flags = 0;
+	if( s_lookRail == 1 )
+	{
+		stem = "Look";
+		label = TheGameText->fetch( "GUI:OptionsLookName" );
+		flags = lookFlagsOf( stem );
+	}
+	else if( s_lookRail == 2 )
+	{
+		stem = "Quality";
+		label = TheGameText->fetch( "GUI:OptionsQualityName" );
+	}
+	else if( item )
+	{
+		stem = item->stem;
+		label = item->window->winGetText();
+		flags = item->flags;
+		// the line from the row's end into the pane
+		const IRegion2D row = lookWindowRect( item->window );
+		const Int middle = ( row.lo.y + row.hi.y ) / 2;
+		UIStyle::litLine( row.hi.x, middle, max( 1, pane.lo.x - row.hi.x ), 1, UIStyle::EDGE_LIT );
+	}
+	if( stem.isEmpty() )
+		return;
+
+	// the label at 24 px and its badges, the plan's sentences, the cost
+	GameFont *title = UIStyle::menuFont( UIStyle::MENU_TEXT_ROW_FIGURE, TRUE );
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	const Int innerW = lookPx( (Real)( LOOK_PANE_INNER_RIGHT - LOOK_PANE_INNER_LEFT ) );
+	Int y = LOOK_BODY_TOP + 22;
+	const Int tw = lookDraw( UIStyle::fitText( label, title, innerW ), title, lookX( LOOK_PANE_INNER_LEFT ), lookY( y + 14 ), UIStyle::INK );
+	lookBadges( flags, lookX( LOOK_PANE_INNER_LEFT ) + tw + lookPx( 12.0f ), lookY( y + 14 ) );
+	y += 44;
+	AsciiString tipKey;
+	tipKey.format( "OPTIONTIP:%s", stem.str() );
+	if( UIStyle::hasText( tipKey.str() ) )
+	{
+		std::vector< UnicodeString > lines;
+		struct Measure { static Int width( const UnicodeString &text, void *font ) { return lookWidth( text, (GameFont *)font ); } };
+		UIStyle::wrapLines( TheGameText->fetch( tipKey ), innerW, Measure::width, body, lines );
+		for( Int l = 0; l < (Int)lines.size(); ++l, y += 26 )
+			lookDraw( lines[ l ], body, lookX( LOOK_PANE_INNER_LEFT ), lookY( y + 12 ), UIStyle::INK );
+	}
+	if( item && ( s_lookShown == 1 || s_lookShown == 2 || s_lookShown == 3 ) && item->kind == LOOK_ROW )
+	{
+		y += 10;
+		Bool on = FALSE;
+		const Real ms = lookCostOf( *item, &on );
+		const Int middle = lookY( y + 12 );
+		Int x = lookX( LOOK_PANE_INNER_LEFT );
+		x += lookCaps( TheGameText->fetch( "GUI:OptionsCost" ), x, middle, UIStyle::MUTED ) + lookPx( 12.0f );
+		const Int mark = optionCostMark( ms );
+		for( Int b = 0; b < 3; ++b )
+		{
+			IRegion2D block;
+			block.lo.x = x + b * lookPx( 14.0f );
+			block.hi.x = block.lo.x + lookPx( 10.0f );
+			block.lo.y = middle - lookPx( 5.0f );
+			block.hi.y = middle + lookPx( 5.0f );
+			if( b < mark )
+				lookFill( block, UIStyle::EDGE_LIT );
+			else
+				lookOutline( block, UIStyle::FRAME );
+		}
+		x += lookPx( 54.0f );
+		UnicodeString words;
+		if( item->stem == "WaterStyle" )
+			words = TheGameText->fetch( "GUI:OptionsCostWaterStyle" );
+		else if( ms < 0.0f )
+			words = TheGameText->fetch( "GUI:OptionsCostUnmeasured" );
+		else if( ms < 0.15f )
+			words = TheGameText->fetch( "GUI:OptionsCostZero" );
+		else
+		{
+			words.format( TheGameText->fetch( "GUI:OptionsCostMs" ).str(), lookMs( ms ).str() );
+			words.concat( UIStyle::HEADER_JOINER );
+			words.concat( TheGameText->fetch( "GUI:OptionsCostRig" ) );
+		}
+		GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+		lookDraw( UIStyle::fitText( words, hint, lookX( LOOK_PANE_INNER_RIGHT ) - x ), hint, x, middle, UIStyle::MUTED );
+		y += 26;
+	}
+	y += 18;
+
+	// what the row needs, each with its mark lit when met
+	std::vector< std::pair< UnicodeString, Bool > > needs;
+	if( flags & ROW_REFORGED )
+	{
+		UnicodeString words;
+		words.format( u"%s: %s", TheGameText->fetch( "GUI:OptionsLookName" ).str(), TheGameText->fetch( "GUI:OptionsLookReforged" ).str() );
+		needs.push_back( std::make_pair( words, !lookClassicPicked() ) );
+	}
+	if( flags & ROW_D3D11 )
+		needs.push_back( std::make_pair( TheGameText->fetch( "GUI:OptionsNeedD3D11" ), (Bool)TheGlobalData->m_direct3D11 ) );
+	for( Int n = 0; n < ARRAY_SIZE( TheLookRowNeeds ); ++n )
+		if( stem == TheLookRowNeeds[ n ].stem )
+		{
+			LookItem *other = lookFindStem( TheLookRowNeeds[ n ].needs );
+			if( other == NULL )
+				continue;
+			const Bool equal = lookValueOf( other->control ) == TheLookRowNeeds[ n ].value;
+			needs.push_back( std::make_pair( lookNeedWords( TheLookRowNeeds[ n ], other ), TheLookRowNeeds[ n ].hideWhenEqual ? !equal : equal ) );
+		}
+	if( !needs.empty() )
+	{
+		y = lookPaneHead( "GUI:OptionsNeeds", UnicodeString::TheEmptyString, y );
+		for( Int n = 0; n < (Int)needs.size(); ++n )
+			y = lookNeedLine( needs[ n ].first, needs[ n ].second, y );
+		y += 12;
+	}
+
+	// the rows this one greys or hides, each with the value they need
+	Bool headed = FALSE;
+	for( Int n = 0; n < ARRAY_SIZE( TheLookRowNeeds ); ++n )
+		if( stem == TheLookRowNeeds[ n ].needs )
+		{
+			LookItem *other = lookFindStem( TheLookRowNeeds[ n ].stem );
+			if( other == NULL || item == NULL )
+				continue;
+			if( !headed )
+				y = lookPaneHead( "GUI:OptionsNeededBy", UnicodeString::TheEmptyString, y );
+			headed = TRUE;
+			// "Fullscreen Fit · Fullscreen": the other's name, then the value this row has to show
+			UnicodeString words = other->window->winGetText();
+			words.concat( UIStyle::HEADER_JOINER );
+			words.concat( lookNeedValue( TheLookRowNeeds[ n ], item ) );
+			const Bool met = TheLookRowNeeds[ n ].hideWhenEqual
+				? lookValueOf( item->control ) != TheLookRowNeeds[ n ].value : lookValueOf( item->control ) == TheLookRowNeeds[ n ].value;
+			y = lookNeedLine( words, met, y );
+		}
+	if( headed )
+		y += 12;
+
+	// a list's values spelled out, the one in use green, a measured price beside one that has it
+	if( item && item->control && BitTest( item->control->winGetStyle(), GWS_COMBO_BOX ) )
+	{
+		GameWindow *list = GadgetComboBoxGetListBox( item->control );
+		const Int count = list ? GadgetListBoxGetNumEntries( list ) : 0;
+		if( count > 1 && count <= 8 )
+		{
+			y = lookPaneHead( "GUI:OptionsChoices", UnicodeString::TheEmptyString, y );
+			GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+			const Int picked = lookValueOf( item->control );
+			for( Int e = 0; e < count; ++e, y += 26 )
+			{
+				const Int middle = lookY( y + 13 );
+				const Int w = lookDraw( lookEntryText( item->control, e ), hint, lookX( LOOK_PANE_INNER_LEFT + 22 ), middle, e == picked ? UIStyle::ACTIVE : UIStyle::INK );
+				AsciiString costKey;
+				costKey.format( "OPTIONCOST:%s%d", stem.str(), e );
+				if( UIStyle::hasText( costKey.str() ) )
+					lookDraw( TheGameText->fetch( costKey ), hint, lookX( LOOK_PANE_INNER_LEFT + 22 ) + w + lookPx( 14.0f ), middle, UIStyle::MUTED );
+			}
+			y += 12;
+		}
+	}
+
+	// the rest: the whole page as set when it fits at 26 a row, otherwise the row's group; on Graphics,
+	// World and Effects every row's measured price on one scale, elsewhere every row's value
+	const Bool priced = s_lookShown == 1 || s_lookShown == 2 || s_lookShown == 3;
+	Int rows = 0;
+	for( Int i = 0; i < (Int)p.items.size(); ++i )
+		if( p.items[ i ].kind == LOOK_ROW && lookRowHere( p.items[ i ] ) )
+			++rows;
+	const Int room = ( LOOK_BODY_BOTTOM - 16 - y - 26 ) / 26;
+	if( room < 2 )
+		return;
+	const Bool whole = rows <= room;
+	const Int group = item ? item->group : -1;
+	UnicodeString name = optionsTab[ s_lookShown ] ? optionsTab[ s_lookShown ]->winGetText() : UnicodeString::TheEmptyString;
+	if( !whole && group >= 0 )
+		for( Int i = 0; i < (Int)p.items.size(); ++i )
+			if( p.items[ i ].kind == LOOK_HEAD && p.items[ i ].group == group )
+				name = p.items[ i ].window->winGetText();
+	y = lookPaneHead( priced ? "GUI:OptionsGroupCost" : "GUI:OptionsGroupAsSet", name, y );
+	Real dearest = 0.0f;
+	for( Int i = 0; i < (Int)p.items.size(); ++i )
+	{
+		Bool on = FALSE;
+		dearest = max( dearest, lookCostOf( p.items[ i ], &on ) );
+	}
+	GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+	const Int nameRight = lookX( LOOK_PANE_INNER_LEFT + 300 );
+	const Int barLeft = lookX( LOOK_PANE_INNER_LEFT + 316 ), barRight = lookX( LOOK_PANE_INNER_RIGHT - 110 );
+	Int drawn = 0;
+	for( Int i = 0; i < (Int)p.items.size() && drawn < room; ++i )
+	{
+		const LookItem &each = p.items[ i ];
+		if( ( each.kind != LOOK_ROW && each.kind != LOOK_FADER ) || !lookRowHere( each ) || ( !whole && each.group != group ) )
+			continue;
+		if( each.control && BitTest( each.control->winGetStyle(), GWS_PUSH_BUTTON ) )
+			continue;
+		const Int middle = lookY( y + 13 );
+		const Bool lit = &each == item;
+		const Bool dim = lookReasonOf( each ) != NULL || ( each.control && !each.control->winGetEnabled() );
+		lookDraw( UIStyle::fitText( each.window->winGetText(), hint, nameRight - lookX( LOOK_PANE_INNER_LEFT ) ), hint,
+			lookX( LOOK_PANE_INNER_LEFT ), middle, lit ? UIStyle::EDGE_LIT : dim ? UIStyle::MUTED : UIStyle::INK );
+		if( priced )
+		{
+			Bool on = FALSE;
+			const Real ms = lookCostOf( each, &on );
+			if( ms < 0.0f )
+				lookDraw( TheGameText->fetch( "GUI:OptionsNotMeasured" ), hint, lookX( LOOK_PANE_INNER_RIGHT ), middle, UIStyle::MUTED, 2 );
+			else
+			{
+				const Int len = dearest > 0.0f ? REAL_TO_INT_FLOOR( (Real)( barRight - barLeft ) * ms / dearest ) : 0;
+				const Color c = lit ? UIStyle::EDGE_LIT : ( !on || dim ) ? UIStyle::FRAME : UIStyle::EDGE;
+				TheDisplay->drawFillRect( barLeft, middle - lookPx( 3.0f ), max( 1, len ), max( 2, lookPx( 6.0f ) ), c );
+				lookDraw( lookMs( ms ), hint, lookX( LOOK_PANE_INNER_RIGHT ), middle, ( !on || dim ) ? UIStyle::MUTED : UIStyle::INK, 2 );
+			}
+		}
+		else if( each.control && BitTest( each.control->winGetStyle(), GWS_HORZ_SLIDER | GWS_VERT_SLIDER ) )
+		{
+			Int lo = 0, hi = 100;
+			GadgetSliderGetMinMax( each.control, &lo, &hi );
+			const Real frac = hi > lo ? (Real)( GadgetSliderGetPosition( each.control ) - lo ) / (Real)( hi - lo ) : 0.0f;
+			TheDisplay->drawFillRect( barLeft, middle - lookPx( 3.0f ), barRight - barLeft, max( 2, lookPx( 6.0f ) ), UIStyle::withAlpha( UIStyle::FRAME, 120 ) );
+			TheDisplay->drawFillRect( barLeft, middle - lookPx( 3.0f ), max( 1, REAL_TO_INT_FLOOR( frac * (Real)( barRight - barLeft ) ) ),
+				max( 2, lookPx( 6.0f ) ), lit ? UIStyle::EDGE_LIT : UIStyle::EDGE );
+			lookDraw( lookValueText( each ), hint, lookX( LOOK_PANE_INNER_RIGHT ), middle, dim ? UIStyle::MUTED : UIStyle::INK, 2 );
+		}
+		else
+			lookDraw( UIStyle::fitText( lookValueText( each ), hint, lookX( LOOK_PANE_INNER_RIGHT ) - barLeft ), hint, lookX( LOOK_PANE_INNER_RIGHT ), middle,
+				dim ? UIStyle::MUTED : UIStyle::INK, 2 );
+		y += 26;
+		++drawn;
+	}
+}
+
+/// the panel under everything: the glass, frame A, the title row, the rail's captions, the foot
+static void lookFrameDraw( GameWindow *window, WinInstanceData *instData )
+{
+	hideMainMenuColumns();
+	const IRegion2D panel = lookRect( UIStyle::MENU_PANEL_LEFT, UIStyle::MENU_PANEL_TOP, UIStyle::MENU_PANEL_RIGHT, UIStyle::MENU_PANEL_BOTTOM );
+	UIStyle::glass( panel, 168 );
+	UIStyle::frameA( panel );
+	GameFont *titleFont = UIStyle::menuFont( UIStyle::MENU_TEXT_TITLE, TRUE );
+	const UnicodeString title = UIStyle::capitals( s_lookTitle ? s_lookTitle->winGetText() : TheGameText->fetch( "GUI:Options" ) );
+	UIStyle::menuHeader( lookText( title, titleFont ), NULL );
+	if( s_lookVersion )
+		lookDraw( GadgetStaticTextGetText( s_lookVersion ), UIStyle::menuFont( UIStyle::MENU_TEXT_HINT ), lookX( 1860 ), lookY( 70 ), UIStyle::MUTED, 2 );
+
+	// which row the pane explains: the one under the pointer, else the focus, else the last
+	const ICoord2D mouse = TheMouse ? TheMouse->getMouseStatus()->pos : ICoord2D();
+	LookPage &p = s_lookPage[ s_lookShown ];
+	Int hit = -1;
+	for( Int i = 0; i < (Int)p.items.size(); ++i )
+	{
+		const LookItem &item = p.items[ i ];
+		if( ( item.kind == LOOK_ROW || item.kind == LOOK_FADER ) && !item.window->winIsHidden() && item.window->winPointInWindow( mouse.x, mouse.y ) )
+			hit = i;
+	}
+	const IRegion2D look = lookRect( LOOK_RAIL_LEFT, 774, LOOK_RAIL_RIGHT, 840 );
+	const IRegion2D quality = lookRect( LOOK_RAIL_LEFT, 858, LOOK_RAIL_RIGHT, 926 );
+	const Bool inLook = mouse.x >= look.lo.x && mouse.x < look.hi.x && mouse.y >= look.lo.y && mouse.y < look.hi.y;
+	const Bool inQuality = mouse.x >= quality.lo.x && mouse.x < quality.hi.x && mouse.y >= quality.lo.y && mouse.y < quality.hi.y;
+	if( inLook || inQuality )
+		s_lookRail = inLook ? 1 : 2;
+	else if( hit >= 0 )
+	{
+		s_lookRail = 0;
+		s_lookHover = hit;
+	}
+	else if( LookItem *focused = lookItemOfWindow( TheWindowManager->winGetFocus() ) )
+	{
+		s_lookRail = 0;
+		for( Int i = 0; i < (Int)p.items.size(); ++i )
+			if( &p.items[ i ] == focused )
+				s_lookHover = i;
+	}
+	if( s_lookRail == 0 && lookItem( s_lookShown, s_lookHover ) == NULL )
+		for( Int i = 0; i < (Int)p.items.size() && s_lookHover < 0; ++i )
+			if( ( p.items[ i ].kind == LOOK_ROW || p.items[ i ].kind == LOOK_FADER ) && !p.items[ i ].window->winIsHidden() )
+				s_lookHover = i;
+
+	// Look, with its badge; Quality with its word, its notch words, and LOCKED IN A MATCH in one
+	Int x = lookX( LOOK_RAIL_LEFT );
+	x += lookCaps( TheGameText->fetch( "GUI:OptionsLook" ), x, lookY( 784 ), UIStyle::MUTED ) + lookPx( 12.0f );
+	lookBadges( ROW_RESTART, x, lookY( 784 ) );
+	lookCaps( TheGameText->fetch( "GUI:OptionsQuality" ), lookX( LOOK_RAIL_LEFT ), lookY( 868 ), UIStyle::MUTED );
+	Int detail = CUSTOMDETAIL;
+	if( comboBoxDetail )
+		GadgetComboBoxGetSelectedPos( comboBoxDetail, &detail );
+	lookCaps( TheGameText->fetch( detail >= ULTRADETAIL && detail < CUSTOMDETAIL ? TheDetailCaptions[ detail ] : "GUI:Custom" ),
+		lookX( LOOK_RAIL_RIGHT ), lookY( 868 ), UIStyle::INK, 2 );
+	if( s_lookQuality )
+	{
+		const IRegion2D r = lookWindowRect( s_lookQuality );
+		GameWindow *thumb = GadgetSliderGetThumb( s_lookQuality );
+		const Int tw = thumb ? lookWindowRect( thumb ).hi.x - lookWindowRect( thumb ).lo.x : 0;
+		const Int x0 = r.lo.x + tw / 2, x1 = r.hi.x - tw / 2;
+		// HIGH centred on its notch and pushed left only as far as ULTRA needs; an unlit word that would touch goes
+		static const char *const steps[] = { "GUI:OptionsQualityStep0", "GUI:OptionsQualityStep1", "GUI:OptionsQualityStep2", "GUI:OptionsQualityStep3" };
+		Int lefts[ 4 ], rights[ 4 ];
+		for( Int level = 0; level < 4; ++level )
+		{
+			const Int nx = x0 + ( x1 - x0 ) * TheGraphicsQualityAnchors[ level ] / ( GRAPHICS_QUALITY_STEPS - 1 );
+			const Int w = lookCapsWidth( TheGameText->fetch( steps[ level ] ) );
+			lefts[ level ] = level == 0 ? r.lo.x : level == 3 ? r.hi.x - w : nx - w / 2;
+			rights[ level ] = lefts[ level ] + w;
+		}
+		if( rights[ 2 ] > lefts[ 3 ] - lookPx( 6.0f ) )
+		{
+			lefts[ 2 ] -= rights[ 2 ] - ( lefts[ 3 ] - lookPx( 6.0f ) );
+			rights[ 2 ] = lefts[ 3 ] - lookPx( 6.0f );
+		}
+		const Int lit = detail >= ULTRADETAIL && detail < CUSTOMDETAIL ? (Int)detailLevel( detail ) : -1;
+		// where MEDIUM and HIGH would touch, the unlit one goes and its tick stays
+		const Int dropped = rights[ 1 ] > lefts[ 2 ] - lookPx( 4.0f ) ? ( lit == 1 ? 2 : 1 ) : -1;
+		for( Int level = 0; level < 4; ++level )
+			if( level != dropped )
+				lookCaps( TheGameText->fetch( steps[ level ] ), lefts[ level ], lookY( 914 ), level == lit ? UIStyle::ACTIVE : UIStyle::MUTED );
+	}
+	if( s_lookInMatch )
+		lookCaps( TheGameText->fetch( "GUI:OptionsLocked" ), lookX( LOOK_RAIL_LEFT ), lookY( 938 ), UIStyle::MUTED );
+
+	// the foot: a faint rule, the badges' legend beside the keys
+	const IRegion2D foot = lookRect( UIStyle::MENU_PANEL_LEFT + 2, LOOK_FOOT_RULE, UIStyle::MENU_PANEL_RIGHT - 2, LOOK_FOOT_RULE + 1 );
+	lookFill( foot, UIStyle::withAlpha( UIStyle::FRAME, 160 ) );
+	GameFont *hint = UIStyle::menuFont( UIStyle::MENU_TEXT_HINT );
+	const Int middle = lookY( LOOK_KEYS_MIDDLE );
+	x = lookX( LOOK_ROWS_LEFT );
+	x += lookBadge( "GUI:OptionsBadgeRestart", x, middle ) + lookPx( 8.0f );
+	x += lookDraw( TheGameText->fetch( "GUI:OptionsLegendRestart" ), hint, x, middle, UIStyle::MUTED ) + lookPx( 24.0f );
+	x += lookBadge( "GUI:OptionsBadgeNextMap", x, middle ) + lookPx( 8.0f );
+	lookDraw( TheGameText->fetch( "GUI:OptionsLegendNextMap" ), hint, x, middle, UIStyle::MUTED );
+}
+
+/// the screen's look, once its layout is up: fonts, draws, the pages as items
+static void lookStyle( void )
+{
+	s_lookTitle = lookFind( "LabelTitle" );
+	s_lookVersion = lookFind( "LabelVersion" );
+	s_lookPane = lookFind( "OptionsPane" );
+	s_lookQuality = graphicsQualitySlider();
+	s_lookClassic = lookFind( "ButtonLookClassic" );
+	s_lookReforged = lookFind( "ButtonLookReforged" );
+	s_lookFiltering = lookFind( "ComboBoxTextureFiltering" );
+	s_lookReflections = lookFind( "ComboBoxReflections" );
+	static const char *const drawnByTheFrame[] = { "LabelTitle", "LabelVersion", "Line" };
+	for( Int i = 0; i < ARRAY_SIZE( drawnByTheFrame ); ++i )
+		if( GameWindow *w = lookFind( drawnByTheFrame[ i ] ) )
+			w->winHide( TRUE );
+
+	GameWindow *parent = lookFind( "OptionsMenuParent" );
+	if( parent )
+	{
+		parent->winClearStatus( WIN_STATUS_SEE_THRU );
+		parent->winSetDrawFunc( lookFrameDraw );
+	}
+	if( GameWindow *old = lookFind( "OptionsMenuParentOld" ) )
+		old->winSetDrawFunc( lookNothingDraw );
+	if( s_lookPane )
+	{
+		s_lookPane->winClearStatus( WIN_STATUS_SEE_THRU );
+		s_lookPane->winSetDrawFunc( lookPaneDraw );
+	}
+	for( Int page = 0; page < OPTIONS_PAGE_COUNT; ++page )
+	{
+		if( optionsTab[ page ] )
+		{
+			optionsTab[ page ]->winSetDrawFunc( lookTabDraw );
+			optionsTab[ page ]->winSetFont( UIStyle::menuFont( UIStyle::MENU_TEXT_KEY, TRUE ) );
+		}
+		if( optionsPage[ page ] )
+		{
+			optionsPage[ page ]->winClearStatus( WIN_STATUS_SEE_THRU );
+			optionsPage[ page ]->winSetDrawFunc( lookPageDraw );
+			optionsPage[ page ]->winSetInputFunc( lookPageInput );
+		}
+	}
+	if( s_lookQuality )
+	{
+		s_lookQuality->winSetDrawFunc( lookQualityDraw );
+		if( GameWindow *thumb = GadgetSliderGetThumb( s_lookQuality ) )
+			thumb->winSetDrawFunc( lookNothingDraw );
+	}
+	GameWindow *looks[] = { s_lookClassic, s_lookReforged };
+	for( Int i = 0; i < ARRAY_SIZE( looks ); ++i )
+		if( looks[ i ] )
+		{
+			looks[ i ]->winSetDrawFunc( lookLookDraw );
+			GadgetButtonEnableCheckLike( looks[ i ], TRUE, FALSE );
+		}
+	lookShowLook();
+	static const char *const keys[] = { "ButtonDefaults", "ButtonBack", "ButtonFirewallRefresh", "ButtonHotkeyChange", "ButtonHotkeyClear", "ButtonHotkeyDefault" };
+	for( Int i = 0; i < ARRAY_SIZE( keys ); ++i )
+		UIStyle::setMenuKey( lookFind( keys[ i ] ), FALSE );
+	UIStyle::setMenuKey( lookFind( "ButtonAccept" ), TRUE );
+
+	// the merged views' entries; Reflections only where Modern water's reflections draw
+	lookFillView( s_lookFiltering, "GUI:OptionsFiltering%d", TEXTURE_FILTERING_ENTRY_COUNT );
+	lookFillView( s_lookReflections, "GUI:OptionsReflections%d", WATER_REFLECTIONS_ENTRY_COUNT );
+	if( s_lookReflections )
+		s_lookReflections->winHide( !modernWaterSettingsSupported() );
+	// one monitor is no choice
+	if( comboBoxMonitor && menuMonitorCount < 2 )
+		comboBoxMonitor->winHide( TRUE );
+
+	lookBuildPages();
+	GameFont *body = UIStyle::menuFont( UIStyle::MENU_TEXT_BODY );
+	for( Int page = 0; page < OPTIONS_PAGE_COUNT; ++page )
+		for( Int i = 0; i < (Int)s_lookPage[ page ].items.size(); ++i )
+		{
+			LookItem &item = s_lookPage[ page ].items[ i ];
+			item.window->winClearStatus( WIN_STATUS_SEE_THRU );
+			if( item.kind == LOOK_HEAD )
+				item.window->winSetDrawFunc( lookHeadDraw );
+			else if( item.kind == LOOK_MORE )
+				item.window->winSetDrawFunc( lookMoreDraw );
+			else if( item.kind == LOOK_FADER )
+			{
+				item.window->winSetDrawFunc( lookFaderDraw );
+				item.window->winSetInputFunc( lookFaderInput );
+			}
+			else
+			{
+				item.window->winSetDrawFunc( lookRowDraw );
+				if( item.readout )
+				{
+					item.readout->winSetFont( body );
+					item.readout->winSetEnabledTextColors( UIStyle::INK, GameMakeColor( 0, 0, 0, 160 ) );
+					item.readout->winSetDisabledTextColors( UIStyle::MUTED, GameMakeColor( 0, 0, 0, 160 ) );
+				}
+				GameWindow *control = item.control;
+				if( control == NULL )
+					continue;
+				const UnsignedInt style = control->winGetStyle();
+				if( BitTest( style, GWS_CHECK_BOX ) )
+					control->winSetDrawFunc( lookCheckDraw );
+				else if( BitTest( style, GWS_HORZ_SLIDER | GWS_VERT_SLIDER ) )
+				{
+					control->winSetDrawFunc( lookSliderDraw );
+					if( GameWindow *thumb = GadgetSliderGetThumb( control ) )
+						thumb->winSetDrawFunc( lookNothingDraw );
+				}
+				else if( BitTest( style, GWS_COMBO_BOX ) )
+				{
+					UIStyle::setMenuComboBox( control );
+					UIStyle::setMenuComboField( control );
+					GadgetComboBoxSetFont( control, body );
+					if( GameWindow *list = GadgetComboBoxGetListBox( control ) )
+						UIStyle::setMenuListBox( list );
+					lookWrapDraw( control );
+					lookWrapDraw( GadgetComboBoxGetEditBox( control ) );
+					lookWrapDraw( GadgetComboBoxGetDropDownButton( control ) );
+				}
+				else if( BitTest( style, GWS_ENTRY_FIELD ) )
+				{
+					GadgetTextEntrySetFont( control, body );
+					lookWrapDraw( control );
+				}
+			}
+		}
+	// the Hotkeys page's heads and its combos
+	if( optionsPage[ OPTIONS_PAGE_COUNT - 1 ] )
+		for( GameWindow *child = optionsPage[ OPTIONS_PAGE_COUNT - 1 ]->winGetChild(); child; child = child->winGetNext() )
+		{
+			if( lookShortName( child ).startsWith( "Head" ) )
+			{
+				child->winClearStatus( WIN_STATUS_SEE_THRU );
+				child->winSetDrawFunc( lookHeadDraw );
+			}
+			else if( BitTest( child->winGetStyle(), GWS_COMBO_BOX ) )
+			{
+				UIStyle::setMenuComboBox( child );
+				UIStyle::setMenuComboField( child );
+				GadgetComboBoxSetFont( child, body );
+				if( GameWindow *list = GadgetComboBoxGetListBox( child ) )
+					UIStyle::setMenuListBox( list );
+			}
+			else if( BitTest( child->winGetStyle(), GWS_STATIC_TEXT ) )
+				child->winSetFont( UIStyle::menuFont( UIStyle::MENU_TEXT_HINT ) );
+		}
+	lookReadFolds();
+}
+
+/// the page on screen: laid down its column, the pane beside it but on Hotkeys
+static void lookShowPage( Int page )
+{
+	s_lookShown = page;
+	s_lookHover = -1;
+	s_lookRail = 0;
+	if( s_lookPane )
+		s_lookPane->winHide( page == OPTIONS_PAGE_COUNT - 1 );
+	lookLayoutPage( page );
+}
+
+/// the layout is going: nothing here may point into it any more
+static void lookForget( void )
+{
+	lookFreeTexts();
+	s_lookControlDraws.clear();
+	s_lookItemOf.clear();
+	s_lookLocked.clear();
+	s_lookLockedBuilt = FALSE;
+	s_lookBuilt = FALSE;
+	for( Int page = 0; page < OPTIONS_PAGE_COUNT; ++page )
+	{
+		s_lookPage[ page ].items.clear();
+		s_lookPage[ page ].moreBar = -1;
+	}
+	s_lookTitle = s_lookVersion = s_lookPane = s_lookQuality = NULL;
+	s_lookClassic = s_lookReforged = s_lookFiltering = s_lookReflections = NULL;
+}
+
+/// a click the screen's own windows answer: the folds, Look's boxes, the merged Heat Haze, the test.
+/// TRUE when it was one of them.
+static Bool lookClicked( GameWindow *control )
+{
+	for( Int page = 0; page < OPTIONS_PAGE_COUNT; ++page )
+		if( s_lookPage[ page ].moreBar >= 0 && s_lookPage[ page ].items[ s_lookPage[ page ].moreBar ].window == control )
+		{
+			lookToggleFold( page );
+			return TRUE;
+		}
+	if( control == s_lookClassic || control == s_lookReforged )
+	{
+		// the press flipped the box's pushed state; the choice puts both back where they belong
+		lookPickLook( control == s_lookClassic );
+		lookShowLook();
+		return TRUE;
+	}
+	return FALSE;
+}
+
 //-------------------------------------------------------------------------------------------------
 /** Initialize the options menu */
 //-------------------------------------------------------------------------------------------------
@@ -2732,6 +4636,8 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	checkSendDelay				 = TheWindowManager->winGetWindowFromId( NULL, checkSendDelayID);
 	buttonFirewallRefreshID	= TheNameKeyGenerator->nameToKey( AsciiString( "OptionsMenu.wnd:ButtonFirewallRefresh" ) );
 	buttonFirewallRefresh		= TheWindowManager->winGetWindowFromId( NULL, buttonFirewallRefreshID);
+	if( buttonFirewallRefresh && s_lookTested )
+		buttonFirewallRefresh->winEnable( FALSE );
 	checkDrawAnchorID       = TheNameKeyGenerator->nameToKey( AsciiString( "OptionsMenu.wnd:CheckBoxDrawAnchor" ) );
 	checkDrawAnchor				 = TheWindowManager->winGetWindowFromId( NULL, checkDrawAnchorID);
 	checkMoveAnchorID       = TheNameKeyGenerator->nameToKey( AsciiString( "OptionsMenu.wnd:CheckBoxMoveAnchor" ) );
@@ -3126,6 +5032,8 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 
 	fillCatalogWidgets();
 	OptionsHotkeysInit();
+	s_lookInMatch = ( TheGameLogic->isInGame() && TheGameLogic->getGameMode() != GAME_SHELL ) || TheGameSpyInfo;
+	lookStyle();
 	showOptionsPage( 0 );
 
 	// show menu
@@ -3182,9 +5090,9 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	// three looks only the Direct3D 11 picture draws; under -d3d9 their boxes keep the saved value, greyed
 	if( !TheGlobalData->m_direct3D11 )
 	{
-		static const char *const direct3D11Only[] = { "MapLight", "TeamGlow", "WaterFoam", "GroundMarks", "Firelight", "HemiAmbient", "AmbientOcclusion", "InternalHdr", "Weather", "WaterSplashes", "Atmosphere", "StructureCollapse", "HeatHaze", "GroundFoliage", "SunShafts" };
-		for( Int i = 0; i < (Int)( sizeof( direct3D11Only ) / sizeof( direct3D11Only[ 0 ] ) ); ++i )
-			findOptionWidget( *findOptionDef( direct3D11Only[ i ] ) )->winEnable( FALSE );
+		// Heat Haze stays: its box sets EA's heat shimmer too, which -d3d9 draws (TheDirect3D11OnlyRows)
+		for( Int i = 0; i < ARRAY_SIZE( TheDirect3D11OnlyRows ); ++i )
+			findOptionWidget( *findOptionDef( TheDirect3D11OnlyRows[ i ] ) )->winEnable( FALSE );
 	}
 	showSunShaftsAvailable();
 
@@ -3205,6 +5113,10 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	findOptionWidget(*findOptionDef("Weather"))->winEnable(RenderPost::EnvironmentAvailable());
 	findOptionWidget(*findOptionDef("MapLight"))->winEnable(RenderPost::EnvironmentAvailable());
 #endif
+	// what the player cannot change this time is settled; from here a grey is the screen's own
+	lookBuildLocked();
+	lookShowViews();
+	lookRefreshRows();
 
 	// A preset is its own step on the quality slider, whatever step Options.ini kept from a Custom mix,
 	// as long as the boxes show that step.  An Options.ini from before the slider can hold a preset
@@ -3378,7 +5290,10 @@ WindowMsgHandledType OptionsMenuSystem( GameWindow *window, UnsignedInt msg,
 				if( OptionsHotkeysSystem( msg, control, mData2 ) )
 					break;
 
-				if (controlID == comboBoxDetailID)
+				if( lookViewPicked( control ) )
+				{
+				}
+				else if (controlID == comboBoxDetailID)
 				{
 					Int index = CUSTOMDETAIL;
 					GadgetComboBoxGetSelectedPos( comboBoxDetail, &index );
@@ -3403,6 +5318,8 @@ WindowMsgHandledType OptionsMenuSystem( GameWindow *window, UnsignedInt msg,
 				// picking borderless greys the resolution list out, the other two hand it back
 				updateResolutionEnabled();
 				updateResolutionNote();
+				// a choice another row waits on: window mode, water style
+				lookRefreshRows();
 			break;
 		}
 
@@ -3447,6 +5364,14 @@ WindowMsgHandledType OptionsMenuSystem( GameWindow *window, UnsignedInt msg,
 				}
 			if( OptionsHotkeysSystem( msg, control, mData2 ) )
 				return MSG_HANDLED;
+			if( lookClicked( control ) )
+				return MSG_HANDLED;
+			// a box another row waits on: Cast Shadows, Legacy Sound
+			if( BitTest( control->winGetStyle(), GWS_CHECK_BOX ) )
+				lookRefreshRows();
+			// Heat Haze's box is EA's heat shimmer as well, which keeps its own row
+			if( control == findOptionWidget( *findOptionDef( "HeatHaze" ) ) && checkHeatEffects && !lookLocked( checkHeatEffects ) )
+				GadgetCheckBoxSetChecked( checkHeatEffects, GadgetCheckBoxIsChecked( control ) );
 
 			if( controlID == buttonBack )
 			{
@@ -3586,6 +5511,9 @@ WindowMsgHandledType OptionsMenuSystem( GameWindow *window, UnsignedInt msg,
 				AsciiString numstr;
 				numstr = num;
 				(*pref)["FirewallBehavior"] = numstr;
+				s_lookTested = TRUE;
+				// asked once is asked: the key greys and its row says the test waits for the sign-in
+				buttonFirewallRefresh->winEnable( FALSE );
 			}
 			break;
 

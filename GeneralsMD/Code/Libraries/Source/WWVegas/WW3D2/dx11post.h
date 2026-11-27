@@ -349,8 +349,18 @@ public:
 	void Load_Heat_Haze_Program(unsigned index, const void * bytecode, SIZE_T size);
 	void Compile_Heat_Haze_Programs();
 
+	// The backdrop behind a menu's glass (package 2b of the menu redesign).  At the first ask in a frame
+	// the swap chain's back buffer as it stands is copied, boxed down to a quarter in two halvings and
+	// blurred there by the bloom's gaussian to radius (a standard deviation of that many pixels at a
+	// height of 1080, scaled with the height); every ask that frame then draws that one blur into the
+	// rectangle given on the back buffer, so a second panel shows the world and not the first panel.
+	// No target is made and nothing drawn until somebody asks; its program compiles with the chain's,
+	// and a refusal there leaves the chain running and this false.  The caller binds its own target
+	// and viewport again, and forgets its bindings, afterwards.  False when it drew nothing.
+	bool Draw_Backdrop(unsigned x0, unsigned y0, unsigned x1, unsigned y1, float radius);
+
 	// Call once at the very top of a frame, before any scene of it (a mirror's included) begins.
-	// Arms Occlude_Scene again.
+	// Arms Occlude_Scene and the backdrop's blur again.
 	void Open_Frame();
 
 	// One line for the shutdown report: the chain, the size of the buffers, and the reason there is
@@ -377,6 +387,10 @@ private:
 		ID3D11ShaderResourceView * Source;
 		ID3D11ShaderResourceView * Extra;
 		ID3D11RenderTargetView * Destination;
+		// Where in the destination the pass's viewport starts: nought for every pass but the backdrop's,
+		// which covers one panel.
+		unsigned DestinationX;
+		unsigned DestinationY;
 		unsigned DestinationWidth;
 		unsigned DestinationHeight;
 		unsigned SourceWidth;
@@ -539,6 +553,21 @@ private:
 	ID3D11PixelShader * HeatHazeShader;
 	ID3D11BlendState * HeatBlendState;
 	bool HeatHazeRefused;
+	// The menu backdrop's: the frame's blur made (made once a frame, at the first ask), its program, the
+	// back buffer's copy in its own format, the half size step and the two quarter size targets the blur
+	// goes between, which of the two holds the finished blur, the back buffer's size they were made for,
+	// and a refused program (not tried again).  Released with the other targets.
+	bool Blur_Backdrop(float radius);
+	void Release_Backdrop();
+	ID3D11PixelShader * BackdropShader;
+	Target BackdropCopy;
+	Target BackdropHalf;
+	Target BackdropBlur[2];
+	unsigned BackdropSource;
+	unsigned BackdropWidth;
+	unsigned BackdropHeight;
+	bool BackdropBlurred;
+	bool BackdropRefused;
 	char Diagnostic[192];
 };
 

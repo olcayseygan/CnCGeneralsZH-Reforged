@@ -2359,8 +2359,6 @@ void InGameUI::noteGroundMarkerClick( const Coord3D &pos, const SpecialPowerTemp
 	shot.aim.pos = pos;
 	shot.aim.hasPos = TRUE;
 	shot.clickMs = now;
-	shot.clickFrame = TheGameLogic->getFrame();
-	shot.firstNewID = TheGameLogic->getObjectIDCounter();
 	m_markerShots.push_back( shot );
 	// a burst of clicks with nothing taking them (a hidden interface) stays bounded
 	if( m_markerShots.size() > 16 )

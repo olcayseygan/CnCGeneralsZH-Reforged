@@ -72,6 +72,8 @@
 #include "GameNetwork/GameSpy/LadderDefs.h"
 #include "GameNetwork/Online/OnlineQueues.h"
 #include "GameNetwork/GUIUtil.h"
+#include "GameNetwork/GameSpy/LobbyUtils.h"
+#include "GameClient/UIStyle.h"
 #include "Common/CustomMatchPreferences.h"
 #include "Common/LadderPreferences.h"
 
@@ -313,6 +315,31 @@ void PopulateCustomLadderComboBox( void )
 
 // Window Functions -----------------------------------------------------------------------
 
+/* Host Game in the menu language (README-game-lists.md, "lists-host-popup"): the box's shell with the mode
+	 Host Game's question answered and the server after the title, the two field labels, the password's hint,
+	 the armies' line under its box, and "Esc cancels" at the foot.  Every offset is the design's at 1080 from
+	 the box's top left (580, 313). */
+static void drawHostBox( GameWindow *window, WinInstanceData * )
+{
+	IRegion2D box;
+	Int width, height;
+	window->winGetScreenPosition( &box.lo.x, &box.lo.y );
+	window->winGetSize( &width, &height );
+	box.hi.x = box.lo.x + width;
+	box.hi.y = box.lo.y + height;
+	UnicodeString question;
+	question.format( TheGameText->fetch( "GUI:HostQuestion" ), LobbyModeName( TheHostGameMode ).str(), LobbyServerLabel().str() );
+	LobbyDrawBoxHead( box, TheGameText->fetch( "GUI:OnlineLobbyHost" ), question, TheGameText->fetch( "GUI:HintEscCancel" ) );
+	const Int x = box.lo.x + UIStyle::px( 32.0f );
+	LobbyDrawBoxLabel( TheGameText->fetch( "GUI:LobbyFieldName" ), x, box.lo.y + UIStyle::px( 116.0f ) );
+	LobbyDrawBoxLabel( TheGameText->fetch( "GUI:LobbyPassword" ), x, box.lo.y + UIStyle::px( 212.0f ) );
+	LobbyDrawWords( LOBBY_TEXT_BOX + 3, TheGameText->fetch( "GUI:PasswordHint" ), UIStyle::MENU_TEXT_HINT, FALSE,
+		box.hi.x - UIStyle::px( 32.0f ), box.lo.y + UIStyle::px( 212.0f ), UIStyle::MUTED, TRUE );
+	if (checkBoxLimitArmies && !checkBoxLimitArmies->winIsHidden())
+		LobbyDrawWords( LOBBY_TEXT_BOX + 4, TheGameText->fetch( "GUI:LimitArmiesLine" ), UIStyle::MENU_TEXT_HINT, FALSE,
+			x + UIStyle::px( 28.0f ), box.lo.y + UIStyle::px( 350.0f ), UIStyle::MUTED );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** Initialize the PopupHostGameInit menu */
 //-------------------------------------------------------------------------------------------------
@@ -381,7 +408,17 @@ void PopupHostGameInit( WindowLayout *layout, void *userData )
 		checkBoxLimitArmies->winHide( TRUE );
 	}
 
-	TheWindowManager->winSetFocus( parentPopup );
+	// the menu language: the box drawn by code, the fields and keys on its windows, Create Game Enter's key
+	if (parentPopup)
+		parentPopup->winSetDrawFunc( drawHostBox );
+	LobbyMenuEntry( textEntryGameName, UIStyle::MENU_TEXT_ROW_FIGURE, UIStyle::INK );
+	LobbyMenuEntry( textEntryGamePassword, UIStyle::MENU_TEXT_BODY, UIStyle::INK );
+	UIStyle::setMenuCheckBox( checkBoxLimitArmies );
+	UIStyle::setMenuCheckBox( checkBoxUseStats );
+	LobbyMenuKey( buttonCancel, FALSE );
+	LobbyMenuKey( buttonCreateGame, TRUE );
+
+	TheWindowManager->winSetFocus( textEntryGameName ? textEntryGameName : parentPopup );
 	TheWindowManager->winSetModal( parentPopup );
 
 }
@@ -542,12 +579,21 @@ WindowMsgHandledType PopupHostGameSystem( GameWindow *window, UnsignedInt msg, W
 				break;
 			} // case GCM_SELECTED
 
+		//---------------------------------------------------------------------------------------------
+		// Enter in either field is Create Game, the box's lit key
+		case GEM_EDIT_DONE:
+		{
+			if (buttonCreateGame && parentPopup)
+				TheWindowManager->winSendSystemMsg( window, GBM_SELECTED, (WindowMsgData)buttonCreateGame, buttonCreateGameID );
+			break;
+		}
+
     //---------------------------------------------------------------------------------------------
 		case GBM_SELECTED:
 		{
 			GameWindow *control = (GameWindow *)mData1;
 			Int controlID = control->winGetWindowId();
-     
+
       if( controlID == buttonCancelID )
 			{
 				parentPopup = NULL;

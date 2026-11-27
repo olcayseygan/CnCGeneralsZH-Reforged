@@ -22750,3 +22750,1323 @@ END
 GUI:LoadTipApocalypse3
 "İlk dalga %d saniye sonra gelir. Savaşmadan önce kur."
 END
+
+// Menu redesign package 8, the options screen: the rail's tabs and groups, Look and Quality, the fold,
+// the badges and their legend, the reasons a row is greyed, the merged lists, the pane's blocks and
+// every row's OPTIONTIP:<Stem>, the two sentences the pane says about it.  OPTIONCOST:<Stem><entry> is a
+// list entry's measured price where one was measured.  OptionsMenu.cpp, optionsmenu_layout.py.
+GUI:OptionsTabSystem
+"Sistem"
+END
+
+GUI:OptionsTabWorld
+"Dünya"
+END
+
+GUI:OptionsMore
+"Diğer"
+END
+
+GUI:OptionsMoreCount
+"%d tane daha:"
+END
+
+GUI:OptionsLook
+"Görünüm"
+END
+
+GUI:OptionsLookName
+"Görünüm"
+END
+
+GUI:OptionsLookClassic
+"Klasik"
+END
+
+GUI:OptionsLookReforged
+"Reforged"
+END
+
+GUI:OptionsQuality
+"Kalite"
+END
+
+GUI:OptionsQualityName
+"Kalite"
+END
+
+GUI:OptionsQualityStep0
+"Düşük"
+END
+
+GUI:OptionsQualityStep1
+"Orta"
+END
+
+GUI:OptionsQualityStep2
+"Yüksek"
+END
+
+GUI:OptionsQualityStep3
+"Ultra"
+END
+
+GUI:OptionsLocked
+"Maçta kilitli"
+END
+
+GUI:OptionsBadgeRestart
+"Açılışta"
+END
+
+GUI:OptionsBadgeNextMap
+"Sonraki harita"
+END
+
+GUI:OptionsLegendRestart
+"oyun yeniden açılınca"
+END
+
+GUI:OptionsLegendNextMap
+"sonraki haritadan"
+END
+
+GUI:OptionsCost
+"Yük"
+END
+
+GUI:OptionsCostMs
+"Kare başına yaklaşık %s ms"
+END
+
+GUI:OptionsCostZero
+"Ölçülebilir yükü yok"
+END
+
+GUI:OptionsCostUnmeasured
+"Yükü henüz ölçülmedi"
+END
+
+GUI:OptionsCostRig
+"RTX 2060, 1080p"
+END
+
+GUI:OptionsCostWaterStyle
+"Deniz haritasında Klasik 3-6 ms, Modern 11-45 ms"
+END
+
+GUI:OptionsTabCost
+"Bu sekmenin ölçülen yükü"
+END
+
+GUI:OptionsTabCostUnit
+"kare başına, RTX 2060, 1080p"
+END
+
+GUI:OptionsNeeds
+"Gerekenler"
+END
+
+GUI:OptionsNeededBy
+"Buna bağlı olanlar"
+END
+
+GUI:OptionsChoices
+"Seçimler"
+END
+
+GUI:OptionsGroupCost
+"%s · kare başına yük"
+END
+
+GUI:OptionsGroupAsSet
+"%s · şu anki hali"
+END
+
+GUI:OptionsNotMeasured
+"ölçülmedi"
+END
+
+GUI:OptionsNot
+"%s değil"
+END
+
+GUI:OptionsValueOn
+"Açık"
+END
+
+GUI:OptionsValueOff
+"Kapalı"
+END
+
+GUI:OptionsNeedD3D11
+"Direct3D 11"
+END
+
+GUI:OptionsTestNotRun
+"Bağlantı sınaması: açılıştan beri yapılmadı"
+END
+
+GUI:OptionsTestDone
+"Bağlantı sınaması: bir sonraki çevrimiçi girişte yapılacak"
+END
+
+GUI:OptionsReasonReforged
+"Yalnızca Reforged görünüm"
+END
+
+GUI:OptionsReasonD3D11
+"Yalnızca Direct3D 11"
+END
+
+GUI:OptionsReasonClassicWater
+"Yalnızca Klasik su"
+END
+
+GUI:OptionsReasonCastShadows
+"Düşen Gölgeler gerekir"
+END
+
+GUI:OptionsReasonLegacySound
+"Eski Ses açıkken çalışmaz"
+END
+
+GUI:OptionsReasonFullscreen
+"Yalnızca tam ekran"
+END
+
+GUI:OptionsFiltering0
+"Bilineer"
+END
+
+GUI:OptionsFiltering1
+"Trilineer"
+END
+
+GUI:OptionsFiltering2
+"Anizotropik 4x"
+END
+
+GUI:OptionsFiltering3
+"Anizotropik 8x"
+END
+
+GUI:OptionsFiltering4
+"Anizotropik 16x"
+END
+
+GUI:OptionsReflections0
+"Kapalı"
+END
+
+GUI:OptionsReflections1
+"Orijinal"
+END
+
+GUI:OptionsReflections2
+"SSR"
+END
+
+GUI:OptionsReflections3
+"Hibrit"
+END
+
+GUI:OptionsHeadScreen
+"Ekran"
+END
+
+GUI:OptionsHeadFrameRate
+"Kare hızı"
+END
+
+GUI:OptionsHeadFrameRate_Short
+"FPS"
+END
+
+GUI:OptionsHeadNetwork
+"Ağ"
+END
+
+GUI:OptionsHeadShadows
+"Gölgeler"
+END
+
+GUI:OptionsHeadDetail
+"Ayrıntı"
+END
+
+GUI:OptionsHeadLight
+"Işık"
+END
+
+GUI:OptionsHeadSky
+"Gök"
+END
+
+GUI:OptionsHeadGround
+"Zemin"
+END
+
+GUI:OptionsHeadWater
+"Su"
+END
+
+GUI:OptionsHeadParticles
+"Parçacık"
+END
+
+GUI:OptionsHeadFire
+"Ateş"
+END
+
+GUI:OptionsHeadDestruction
+"Yıkım"
+END
+
+GUI:OptionsHeadVolume
+"Ses düzeyi"
+END
+
+GUI:OptionsHeadOutput
+"Çıkış"
+END
+
+GUI:OptionsHeadMix
+"Karışım"
+END
+
+GUI:OptionsHeadCamera
+"Kamera"
+END
+
+GUI:OptionsHeadOrders
+"Emirler"
+END
+
+GUI:OptionsHeadBuilding
+"İnşa"
+END
+
+GUI:OptionsHeadDevices
+"Aygıtlar"
+END
+
+GUI:OptionsHeadBar
+"Çubuk"
+END
+
+GUI:OptionsHeadMarkers
+"İşaretler"
+END
+
+GUI:OptionsHeadGame
+"Oyun"
+END
+
+GUI:OptionsConnectionTest
+"Bağlantı Sınaması"
+END
+
+GUI:OptionsHDTextures
+"HD Kaplamalar"
+END
+
+GUI:OptionsTextureFiltering
+"Filtreleme"
+END
+
+GUI:OptionsKeepDetail
+"Ayrıntıyı Koru"
+END
+
+GUI:OptionsAmbientOcclusion
+"Temas Gölgesi"
+END
+
+GUI:OptionsFireColors
+"Ateş Renkleri"
+END
+
+GUI:OptionsReflections
+"Yansımalar"
+END
+
+GUI:OptionsExplosionDebris
+"Enkaz İzleri"
+END
+
+GUI:OptionsBouncingDebris
+"Seken Parçalar"
+END
+
+GUI:OptionsHeatHaze
+"Isı Titremesi"
+END
+
+GUI:OptionsToxinClouds
+"Zehir Bulutu"
+END
+
+GUI:OptionsDynamicMusic
+"Savaş Müziği"
+END
+
+GUI:OptionsTest
+"Sına"
+END
+
+GUI:OptionsCancel
+"İptal"
+END
+
+GUI:HotkeysPicked
+"Seçili"
+END
+
+GUI:HotkeysAlsoOnKey
+"Bu tuşta ayrıca"
+END
+
+OPTIONCOST:ShadowQuality2
+"yaklaşık 0,25 ms"
+END
+
+OPTIONCOST:ShadowQuality3
+"1,6 ms'ye kadar"
+END
+
+OPTIONCOST:MSAA2
+"yaklaşık 0,4 ms"
+END
+
+OPTIONCOST:SunShafts1
+"Yüksek'in yarısı"
+END
+
+OPTIONCOST:SunShafts2
+"yaklaşık 0,4 ms"
+END
+
+OPTIONCOST:WaterStyle0
+"deniz haritasında 3-6 ms"
+END
+
+OPTIONCOST:WaterStyle1
+"deniz haritasında 11-45 ms"
+END
+
+OPTIONCOST:Smoke2
+"yaklaşık 0,75 ms"
+END
+
+OPTIONTIP:Resolution
+"Oyunun kaç piksel çizdiği. En net görüntü monitörün kendi boyutundadır; daha küçüğü daha hızlı ama daha bulanıktır."
+END
+
+OPTIONTIP:WindowMode
+"Kenarlıksız modda alt-tab ekranı karartmaz. Tam ekran, monitörden küçük bir çözünürlük kullanabilir."
+END
+
+OPTIONTIP:Monitor
+"Oyunun açıldığı monitör. Çözünürlük listesi ona göre değişir."
+END
+
+OPTIONTIP:Gamma
+"Görüntüyü açar ya da koyulaştırır. Gece haritaları okunmayacak kadar karanlıksa artırın."
+END
+
+OPTIONTIP:FullscreenScaling
+"Çözünürlüğün oranı monitörünkiyle tutmuyorsa: ekranı doldurur ya da oranı koruyup kenara siyah şerit koyar."
+END
+
+OPTIONTIP:FrameRateLimit
+"Oyunun saniyede çizdiği en fazla kare; oyun bundan yavaşlamaz. Ekran kartınız ısınıyorsa 60 ya da 144 seçin, daha serin ve sessiz çalışır."
+END
+
+OPTIONTIP:VSync
+"Hızlı kaydırmada görüntünün yırtılmasını önler. Kare hızını monitöre bağlar, kontrollere biraz gecikme ekler."
+END
+
+OPTIONTIP:SmoothMotion
+"Hızlı monitörde birlikler saniyede 30 adım yerine akıcı hareket eder. Hareket size bulanık gelmiyorsa açık bırakın."
+END
+
+OPTIONTIP:LANIP
+"LAN oyunlarında kullanılan ağ kartı. Yalnızca LAN oyuncuları sizi göremiyorsa değiştirin."
+END
+
+OPTIONTIP:FirewallPortOverride
+"Modeminizin bu bilgisayara yönlendirdiği port. Katılma sorunu yoksa boş bırakın."
+END
+
+OPTIONTIP:OnlineIP
+"Eski çevrim içi hizmet için kullanılan adres. Çoğu oyuncunun ihtiyacı olmaz."
+END
+
+OPTIONTIP:SendDelay
+"Bazı katı güvenlik duvarları için gönderimi biraz yavaşlatır. Oyunlar kopmuyorsa kapalı bırakın."
+END
+
+OPTIONTIP:HTTPProxy
+"Eski çevrim içi hizmet için vekil sunucu."
+END
+
+OPTIONTIP:ConnectionTest
+"Modem ya da internet sağlayıcısı değiştirdikten sonra bağlantıyı yeniden sınar."
+END
+
+OPTIONTIP:CastShadows
+"Birlikler, binalar ve ağaçlar yere ve birbirine gölge düşürür. Buradaki en ağır ayardır; büyük savaşlar takılıyorsa önce bunu kapatın."
+END
+
+OPTIONTIP:ShadowQuality
+"Gölge kenarlarının netliği. Işın İzlemeli her yakınlıkta net tutar ama en pahalısıdır; Düşük zayıf kartta bellek açar."
+END
+
+OPTIONTIP:FlatShadows
+"Gerçek gölgesi olmayan birliklerin altında yassı koyu bir leke. Yük getirmez."
+END
+
+OPTIONTIP:InfantryShadows
+"Askerler yuvarlak leke yerine gerçek gölge düşürür. Düşen Gölgeler açık olmalı."
+END
+
+OPTIONTIP:ProjectileShadows
+"Uçan füze ve bombaların yerde gölgesi olur."
+END
+
+OPTIONTIP:PropShadows
+"Çitler, çöpler ve çalılar da gölge düşürür. Dekoru bol haritalarda küçük bir yükü vardır."
+END
+
+OPTIONTIP:ParticleShadows
+"Büyük duman ve toz bulutları yere yumuşak bir gölge düşürür. Yoğun çatışmada küçük bir yükü vardır."
+END
+
+OPTIONTIP:VolumetricSmoke
+"Duman, arkasındaki zemini, birlikleri ve dumanı kalınlığına göre koyulaştırır."
+END
+
+OPTIONTIP:CloudShadows
+"Geçen bulutların gölgesi zeminde kayar. Yük getirmez."
+END
+
+OPTIONTIP:TextureResolution
+"Yakından bakınca kaplamaların netliği. Yalnızca ekran kartının belleği azsa düşürün."
+END
+
+OPTIONTIP:MSAA
+"Model kenarlarındaki merdiven basamaklarını yumuşatır. 2x ya da 4x yeterlidir; fazlası az fark için kare hızı yer."
+END
+
+OPTIONTIP:HDTextures
+"Bütün kaplamalar ve zemin iki kat ayrıntılı. Ekran kartının belleği yetmiyorsa kapatın."
+END
+
+OPTIONTIP:DetailedModels
+"Yeniden yapılmış, daha ayrıntılı birlikler ve binalar. Diğer oyuncular kendi seçimini görür, herkesle oynayabilirsiniz."
+END
+
+OPTIONTIP:TextureFiltering
+"Uzaktaki zemini bulanık ve titrek yerine net tutar. Anizotropik 16x yeni kartlarda neredeyse hiç yük getirmez."
+END
+
+OPTIONTIP:KeepDetail
+"Büyük savaşta oyun yavaşlayınca efektler normalde azaltılır. İşaretlerseniz efektler tam kalır, kare hızı düşer."
+END
+
+OPTIONTIP:FullDetailAtDistance
+"Kameradan uzaktaki birlikler ve binalar hafif model yerine tam ayrıntıda kalır. Küçük bir yükü vardır, en çok uzaktan bakınca görünür."
+END
+
+OPTIONTIP:LightingStyle
+"Reforged her haritaya aynı saatte daha güçlü güneş, daha derin gölge verir. Klasik, 2003'ün düz ışığıdır."
+END
+
+OPTIONTIP:Bloom
+"Ateş, patlama ve lazerlerin ne kadar parlak yandığı. Patlamalar ekranı beyazlatıyorsa kısın."
+END
+
+OPTIONTIP:MapLight
+"Daha sıcak ışık ve uzun gölgelerle alçak bir ikindi güneşi, alçak zeminde hafif pus."
+END
+
+OPTIONTIP:SunShafts
+"Güneş ışığı binalar ve ağaçlar arasındaki tozdan huzme huzme süzülür, en çok sabah ve akşam belli olur. Düşük, Yüksek'in yarısı kadar yük getirir."
+END
+
+OPTIONTIP:AmbientOcclusion
+"Köşeler ve tankların, binaların altındaki zemin koyulaşır; hiçbir şey havada duruyormuş gibi görünmez."
+END
+
+OPTIONTIP:HemiAmbient
+"Modeller yukarıdan gökten, aşağıdan zeminden ışık alır; tankın üstü altından açık görünür."
+END
+
+OPTIONTIP:InternalHdr
+"Ateş, patlama ve lazerler en parlak anında düz beyaza dönmek yerine rengini korur."
+END
+
+OPTIONTIP:TeamGlow
+"Birlik ve binalardaki takım rengi bölgeleri kendi renginde hafifçe parlar."
+END
+
+OPTIONTIP:Atmosphere
+"Uzaktaki zemin gökyüzünün rengine karışır, harita kenarının ötesinde gerçek bir gökyüzü görünür. Savaş sisi karanlık kalır."
+END
+
+OPTIONTIP:Weather
+"Haritaya göre yağmur, kum ya da kar, ağaçları ve dumanı büken rüzgâr. Yalnızca sizin ekranınız; birlikler aynı görür ve vurur."
+END
+
+OPTIONTIP:ShowProps
+"Haritadaki ağaçlar ve çalılar. Ağ oyunlarında hep görünürler."
+END
+
+OPTIONTIP:GroundFoliage
+"Çimenli zeminde otlar ve küçük bitkiler biter, rüzgârda sallanır. Yalnızca görüntüdür, birlikler içinden geçer."
+END
+
+OPTIONTIP:GroundLighting
+"Zemindeki hafif açık-koyu desen tekrar eden karoları gizler. Yük getirmez."
+END
+
+OPTIONTIP:TreeSway
+"Ağaçlar ve çalılar rüzgârda eğilir."
+END
+
+OPTIONTIP:WaterStyle
+"Modern su dalga, kıyı ayrıntısı ve gemi arkasında köpük ekler. Deniz haritalarında ağırdır; zayıf kartta Klasik'te bırakın."
+END
+
+OPTIONTIP:SmoothWater
+"Su, kıyıda keskin bir çizgiyle bitmek yerine yavaşça kaybolur."
+END
+
+OPTIONTIP:WaterFoam
+"Nehir ve göllerde köpük ve kıyı boyunca köpük şeridi olur. Yalnızca Klasik suda."
+END
+
+OPTIONTIP:WaterSplashes
+"Suya düşen mermi ve cesetler su sıçratır, halkalar yayar. Yalnızca Klasik suda; yoğun bombardımanda küçük bir yükü vardır."
+END
+
+OPTIONTIP:WaterFftResolution
+"Modern sudaki dalgaların ince kırışıkları. Düşük daha hızlıdır."
+END
+
+OPTIONTIP:WaterRefractionQuality
+"Tam suyun altını dalgayla kırar, Basit berrak tutar, Kapalı suyu donuk yapar ve en hızlısıdır."
+END
+
+OPTIONTIP:MapAwareWaveHeading
+"Dalgalar kıyıya döner, adaların arkasında söner."
+END
+
+OPTIONTIP:UnderwaterClarity
+"Sığ kayalıklar ve batık yıkıntılar suyun altından görünür."
+END
+
+OPTIONTIP:Reflections
+"Suyun neyi yansıttığı. Kapalı yalnızca gök ve güneş parıltısını bırakır, en hızlısıdır; Hibrit en güzelidir."
+END
+
+OPTIONTIP:WaterReflectionDetail
+"Yansımaların netliği. Düşük daha hızlıdır."
+END
+
+OPTIONTIP:ParticleCap
+"Aynı anda kaç kıvılcım, duman ve alev olabileceği. İkinci en ağır ayardır; patlamalar oyunu yavaşlatıyorsa düşürün."
+END
+
+OPTIONTIP:Smoke
+"Dumanın ne kadar asılı kaldığı ve kalınlığı. Çok Kalın savaş alanını daha çok örter, yanan üslerde kare hızı yer."
+END
+
+OPTIONTIP:DebrisTrails
+"Patlamalar arkasında duman bırakan parçalar savurur, enkazdan yanan şarapnel saçılır."
+END
+
+OPTIONTIP:ParticleBounce
+"Kıvılcım ve parçalar zemine gömülmek yerine yere düşüp seker."
+END
+
+OPTIONTIP:Firelight
+"Yangın ve patlamalar zemine, duvarlara ve birliklere titrek turuncu ışık vurur, en çok gece. Gece savaşları takılıyorsa kapatın."
+END
+
+OPTIONTIP:HeatHaze
+"Yangınların üstünde, lazer ve mikrodalga ışınlarında, füze egzozunun arkasında hava titrer."
+END
+
+OPTIONTIP:SmokeFireLighting
+"Ateşin yanındaki duman onun turuncu ışığını alır. Yük getirmez."
+END
+
+OPTIONTIP:CloudStyle
+"Hacimsel seçenekte zehir ve radyasyon bulutları dalgalanıp akar. Tehlike alanı iki durumda da aynıdır."
+END
+
+OPTIONTIP:GroundMarks
+"Mermiler yanık, yıkılan binalar leke bırakır, palet izleri koyu kalır; yaklaşık dört dakikada silinirler."
+END
+
+OPTIONTIP:StructureCollapse
+"Yıkılan bina bir anda kaybolmak yerine yere gömülür. Yalnızca görüntüdür; üs çökerken takılma oluyorsa kapatın."
+END
+
+OPTIONTIP:Ragdoll
+"Ölen askerler gevşeyip vuruşun ittiği yöne düşer. Yalnızca görüntüdür."
+END
+
+OPTIONTIP:ExtraAnimations
+"Binalar yapılırken iskelenin içinde yükselir."
+END
+
+OPTIONTIP:MasterVolume
+"Oyunun tamamını açar ya da kısar. Diğer sürgüler kendi aralarındaki dengeyi korur."
+END
+
+OPTIONTIP:MusicVolume
+"Müziğin ne kadar yüksek çaldığı."
+END
+
+OPTIONTIP:SFXVolume
+"Silahlar, patlamalar ve savaşın geri kalanı. Ortam seslerinin kendi sürgüsü var."
+END
+
+OPTIONTIP:VoiceVolume
+"Birlik cevapları, duyurular ve videolardaki konuşmalar."
+END
+
+OPTIONTIP:AmbientVolume
+"Kuşlar, rüzgâr, su ve kasaba uğultusu. Savaş yüksek, çevre sessiz kalsın istiyorsanız kısın."
+END
+
+OPTIONTIP:AudioDevice
+"Sesin çıktığı hoparlör ya da kulaklık. Varsayılan, kulaklık takınca Windows'u izler."
+END
+
+OPTIONTIP:SpeakerType
+"Kulaklık seçeneği sesleri arkanıza ve yanınıza yerleştirir; kulaklık takıyorsanız bunu seçin."
+END
+
+OPTIONTIP:MuteInBackground
+"Başka bir pencereye geçince oyun susar."
+END
+
+OPTIONTIP:LegacySound
+"2003'teki özgün ses karışımı; yeni mesafe, yankı ve savaş karışımı olmadan."
+END
+
+OPTIONTIP:DynamicMusic
+"Çatışma ve çevrim içi maçta yakında savaş başlayınca müzik sertleşir, bitince sakinleşir. Eski Ses kapalı olmalı."
+END
+
+OPTIONTIP:ScrollSpeed
+"Kameranın ekran kenarında, ok tuşlarıyla ve sağ tuşla sürüklerken kayma hızı."
+END
+
+OPTIONTIP:ZoomSpeed
+"Fare tekerleğinin bir çentiğinin ne kadar yakınlaştırdığı. 100 özgün oyundur."
+END
+
+OPTIONTIP:ZoomToCursor
+"Tekerlek ekranın ortası yerine imlecin olduğu yere yakınlaştırır."
+END
+
+OPTIONTIP:StartAtMaxZoom
+"Maç, kamera en uzaktayken başlar."
+END
+
+OPTIONTIP:CameraShake
+"Yakındaki nükleer ve büyük patlamalar kamerayı sarsar. Rahatsız ediyorsa kapatın."
+END
+
+OPTIONTIP:IdleWorkerCamera
+"Boştaki işçi tuşu kamerayı seçtiği işçiye de götürür."
+END
+
+OPTIONTIP:EdgeScrollWindowed
+"Pencereli modda da ekran kenarı kamerayı kaydırır. İkinci monitörde işe yarar."
+END
+
+OPTIONTIP:IsometricCamera
+"Uzaktan düz bakış: birlikler ekranın üstünde de altında da aynı boydadır."
+END
+
+OPTIONTIP:SnapCamera45
+"Kamera dönüşü sekiz 45 derecelik yönde durur. Serbest döndürmek için Shift'e basılı tutun."
+END
+
+OPTIONTIP:DrawAnchor
+"Sağ tuşla kaydırmanın başladığı yeri işaretler."
+END
+
+OPTIONTIP:MoveAnchor
+"Kaydırma işareti imleci izler, uzun sürükleme durmadan hızlanmaz."
+END
+
+OPTIONTIP:Retaliation
+"Birlikleriniz saldırana karşılık verir. Kendi başlarına kovalamaya gitmesinler istiyorsanız kapatın."
+END
+
+OPTIONTIP:FormationDrag
+"Hareket ya da saldırarak ilerleme emri hazırken bir çizgi çekin, birlikler o çizgiye dizilir."
+END
+
+OPTIONTIP:DoubleClickAttackMove
+"Yere çift tıklayınca birlikler oraya gider ve bölgeyi korur."
+END
+
+OPTIONTIP:DragTolerance
+"Tıklamanın sürüklemeye dönmesi için farenin ne kadar oynaması gerektiği. Seçim kutusu yanlışlıkla açılıyorsa artırın."
+END
+
+OPTIONTIP:BuildWithoutWorker
+"Hiçbir şey seçili değilken çubuk işçilerin binalarını gösterir, en yakın boştaki işçi gidip yapar."
+END
+
+OPTIONTIP:GridBuild
+"Binalar ızgaraya oturur; göz kararı konan iki bina arasında birliklerin geçemeyeceği boşluk kalmaz."
+END
+
+OPTIONTIP:SnapBuildNeighbour
+"Başka bir binanın hemen yanına konan bina ona yapışır."
+END
+
+OPTIONTIP:NudgeBuild
+"Dolu yere konan bina kırmızıya dönmek yerine en yakın boş yere kayar."
+END
+
+OPTIONTIP:SnapBuild45
+"Yerleştirirken döndürülen bina sekiz 45 derecelik yönde durur; düz duvar ve savunma için."
+END
+
+OPTIONTIP:ChromaLighting
+"Razer klavye ve fareler maç sırasında komuta çubuğunu, elektriği ve parayı ışıkla gösterir."
+END
+
+OPTIONTIP:HudLayout
+"Reforged; sekmeli, üretim listeli, güç tepsili alt çubuktur. Klasik 2003 çubuğudur; Red Alert Tarzı inşayı yan panele taşır, Red Alert 2 tuşlarını kullanır."
+END
+
+OPTIONTIP:MinimapSize
+"Mini haritayı sol alt köşeden savaş alanına doğru büyüterek çizer."
+END
+
+OPTIONTIP:NetBox
+"Sağ üstte maç saati ve kare hızını gösteren kutu. Kapalıyken süper silah sayaçları köşeye çıkar."
+END
+
+OPTIONTIP:HudWidth
+"Çok geniş ekranda arayüzü ortaya toplar, çubuk gözünüzün önünde kalır."
+END
+
+OPTIONTIP:MenuTransitionSpeed
+"Menülerin kayma ve solma hızı. Menülerde daha hızlı ilerlemek için artırın."
+END
+
+OPTIONTIP:HealthBars
+"Akıllı; hasarlı her şeyin, seçili birliklerin ve imlecin altındakinin üstünde çubuk gösterir. Yalnızca Seçili özgün oyundur."
+END
+
+OPTIONTIP:PlayerColors
+"Siz/Dost/Düşman sizi maviye, dostları yeşile, düşmanları kırmızıya boyar. Yalnızca sizin ekranınız değişir."
+END
+
+OPTIONTIP:SelectionOutlines
+"Seçili her birliğin altında sahibinin renginde bir halka, seçili binanın çevresinde bir çizgi."
+END
+
+OPTIONTIP:OrderLines
+"Seçili her birlikten gittiği yere, sıradaki tüm ara noktalardan geçen bir çizgi."
+END
+
+OPTIONTIP:HitFlash
+"Vurulan birlik ya da bina kırmızı yanıp söner, neyin ateş altında olduğunu görürsünüz."
+END
+
+OPTIONTIP:DamageNumbers
+"Her vuruşun hasarı hedefin üstünde kırmızı yükselir."
+END
+
+OPTIONTIP:BehindBuilding
+"Binanın arkasında kalan birlik binanın içinden renkli bir siluet olarak görünür."
+END
+
+OPTIONTIP:HealthBarColors
+"Çubuklar cana göre yeşilden kırmızıya döner ya da sahibinin rengini alır."
+END
+
+OPTIONTIP:AircraftAltitudeLine
+"Uçan her uçaktan yere inen ince çizgi, uçağın asıl yerini ve yüksekliğini gösterir."
+END
+
+OPTIONTIP:EmptyBuildingPips
+"İçinde kimse olmayan binaların üstünde boş yuvalar görünür."
+END
+
+OPTIONTIP:Language
+"Menülerin, emirlerin ve altyazıların dili. Sesler kurulduğu gibi kalır."
+END
+
+OPTIONTIP:GameSpeedMissions
+"Kampanya ve meydan okuma görevlerinin hızı. 1.0x özgün oyundur; çatışmanın hızı lobide seçilir."
+END
+
+OPTIONTIP:SaveCamera
+"Kamera hareketleriniz tek oyunculu ve çatışma tekrarlarına kaydedilir."
+END
+
+OPTIONTIP:UseCamera
+"Tekrar, serbest kamera yerine oyuncunun kaydettiği kamerayı izler."
+END
+
+OPTIONTIP:Look
+"Klasik, oyunun 2003'teki görünümüdür. Reforged daha net çizimler, güneş gölgeleri, yeni ışık ve efektler ekler, alttaki kutuları açar."
+END
+
+OPTIONTIP:Quality
+"Sol en hızlısı, sağ en güzeli; dört hazır ayar sürgünün üstündeki noktalardır. Önce sürgüyü çekin, isterseniz sonra tek tek kutuları değiştirin."
+END
+
+// Menu redesign package 10, game lists: Custom games and the LAN lobby, their rows, the picked game, the
+// Host Game, Join Game and Direct Connect boxes.  GUI:LANLobby is EA's, above.
+GUI:LocalNetwork
+"Yerel ağ"
+END
+
+GUI:LobbyPlayerName
+"Oyuncu adı"
+END
+
+GUI:LobbyModeClassic
+"Klasik"
+END
+
+GUI:LobbyGeneratedIsland
+"Üretilmiş ada"
+END
+
+GUI:LobbyGeneratedBasin
+"Üretilmiş çanak"
+END
+
+GUI:LobbyOtherBuild
+"Başka sürüm"
+END
+
+GUI:LobbyPassword
+"Şifre"
+END
+
+GUI:LobbyEmptyOnline
+"%ls sunucusunda açık oyun yok. Bir tane kur."
+END
+
+GUI:LobbyEmptyLan
+"Bu ağda henüz oyun yok. Bir tane kur."
+END
+
+GUI:LobbyHintJoin
+"Enter seçili oyuna katılır"
+END
+
+GUI:LobbyHintHost
+"Katılacak oyun yok"
+END
+
+GUI:LobbyPickedGame
+"Seçili oyun"
+END
+
+GUI:LobbyHostOf
+"Kurucu %ls"
+END
+
+GUI:LobbyOpenSeats
+"%d boş yer"
+END
+
+GUI:LobbyWinsLosses
+"Galibiyet-mağlubiyet"
+END
+
+GUI:LobbyJoinGame
+"Oyuna katıl"
+END
+
+GUI:LobbyFieldName
+"Oyun adı"
+END
+
+GUI:HostQuestion
+"%ls odası, %ls"
+END
+
+GUI:PasswordHint
+"Boş bırakırsan oyun açık olur"
+END
+
+GUI:LimitArmiesLine
+"Yalnız ABD, Çin ve GLA, general orduları yok"
+END
+
+GUI:JoinPasswordLine
+"Bu oyun şifre istiyor"
+END
+
+GUI:DirectConnectQuestion
+"Bir arkadaşınla adresle oyna"
+END
+
+GUI:YourName
+"Adın"
+END
+
+GUI:YourAddress
+"Senin adresin"
+END
+
+GUI:TheirAddress
+"Onun adresi"
+END
+
+GUI:AddressHint
+"Bunu arkadaşına ver"
+END
+
+// Menu redesign package 12, single player: Generals' Challenge, the replay list, Load Game, the Save
+// Replay and Save / Load boxes.
+GUI:SPChallengeTitle
+"Generallerin Meydan Okuması"
+END
+
+GUI:SPChooseGeneral
+"Generalini seç"
+END
+
+GUI:SPSideUSA
+"ABD"
+END
+
+GUI:SPSideChina
+"Çin"
+END
+
+GUI:SPSideGLA
+"GLA"
+END
+
+GUI:SPTactics
+"Taktik"
+END
+
+GUI:SPStationed
+"Üssü"
+END
+
+GUI:SPTheChallenge
+"Meydan okuma"
+END
+
+GUI:SPBattles
+"%d savaş, sonuncusu %s"
+END
+
+GUI:SPLocationUnknown
+"Yeri bilinmiyor"
+END
+
+GUI:SPYourGeneral
+"Generalin"
+END
+
+GUI:SPThisGeneral
+"Bu general"
+END
+
+GUI:SPBattleInOrder
+"Savaş, sırayla"
+END
+
+GUI:SPDifficulty
+"Zorluk"
+END
+
+GUI:SPPickedOnMenu
+"ana menüde seçildi"
+END
+
+GUI:SPPickedOnMenu_Short
+"ana menü"
+END
+
+GUI:SPFinalBattle
+"Son savaş"
+END
+
+GUI:SPFinalBattle_Short
+"Son"
+END
+
+GUI:SPArmyAirForce
+"Hava Kuvvetleri"
+END
+
+GUI:SPArmyAirForce_Short
+"Hava K."
+END
+
+GUI:SPArmyToxin
+"Toksin"
+END
+
+GUI:SPArmyNuke
+"Nükleer"
+END
+
+GUI:SPArmySuperweapon
+"Süper Silah"
+END
+
+GUI:SPArmyTank
+"Tank"
+END
+
+GUI:SPArmyLaser
+"Lazer"
+END
+
+GUI:SPArmyStealth
+"Gizlilik"
+END
+
+GUI:SPArmyInfantry
+"Piyade"
+END
+
+GUI:SPArmyDemolition
+"Yıkım"
+END
+
+GUI:SPReplays
+"Tekrarlar"
+END
+
+GUI:SPReplayCount
+"%d tekrar"
+END
+
+GUI:SPName
+"Ad"
+END
+
+GUI:SPRecorded
+"Kayıt"
+END
+
+GUI:SPMap
+"Harita"
+END
+
+GUI:SPPlayers
+"Oyuncu"
+END
+
+GUI:SPLength
+"Süre"
+END
+
+GUI:SPVersion
+"Sürüm"
+END
+
+GUI:SPOlder
+"Eski"
+END
+
+GUI:SPOlderLine
+"Eski: başka sürümle kaydedildi, düzgün oynamayabilir"
+END
+
+GUI:SPSpeed
+"Hız"
+END
+
+GUI:SPGame
+"Oyun"
+END
+
+GUI:SPEnded
+"Bitiş"
+END
+
+GUI:SPThisBuild
+", bu sürüm"
+END
+
+GUI:SPOlderBuild
+", eski"
+END
+
+GUI:SPMultiplayer
+"Çok oyunculu"
+END
+
+GUI:SPSinglePlayer
+"Tek oyunculu"
+END
+
+GUI:SPPlayedOut
+"Sonuna kadar"
+END
+
+GUI:SPQuitEarly
+"Erken ayrıldı"
+END
+
+GUI:SPOutOfSync
+"Eşleşme bozuldu"
+END
+
+GUI:SPLeft
+"Ayrıldı"
+END
+
+GUI:SPTeam
+"Takım %d"
+END
+
+GUI:SPCopyToDesktop
+"Masaüstüne kopyala"
+END
+
+GUI:SPCopyToDesktop_Short
+"Kopyala"
+END
+
+GUI:SPDelete
+"Sil"
+END
+
+GUI:SPWatchReplay
+"Tekrarı izle"
+END
+
+GUI:SPWatchReplay_Short
+"İzle"
+END
+
+GUI:SPSaveCount
+"%d kayıtlı oyun"
+END
+
+GUI:SPCampaign
+"Sefer"
+END
+
+GUI:SPMission
+"Görev"
+END
+
+GUI:SPKind
+"Tür"
+END
+
+GUI:SPSaved
+"Kayıt"
+END
+
+GUI:SPKindSaved
+"Elle kayıt"
+END
+
+GUI:SPKindMissionStart
+"Görev başı"
+END
+
+GUI:SPLegendMissionStart
+"Görev başı: oyunun, görev açılırken aldığı kayıt"
+END
+
+GUI:SPLegendOlder
+"Eski: bu sürümün okuyamadığı bir sürümle yazıldı, yüklenmez"
+END
+
+GUI:SPDone
+"Bitti"
+END
+
+GUI:SPThisSave
+"Bu kayıt"
+END
+
+GUI:SPAhead
+"Sırada"
+END
+
+GUI:SPMissionOf
+"Görev %d / %d"
+END
+
+GUI:SPSavedByYou
+"Elle kaydettin"
+END
+
+GUI:SPLoads
+"Yüklenir"
+END
+
+GUI:SPLoadsYes
+"Evet, bu sürüm"
+END
+
+GUI:SPLoadsNo
+"Hayır, eski sürüm"
+END
+
+GUI:SPPlayedFor
+"Oynanan"
+END
+
+GUI:SPFile
+"Dosya"
+END
+
+GUI:SPCampaignZH
+"Zero Hour %s"
+END
+
+GUI:SPCampaignGenerals
+"Generals %s"
+END
+
+GUI:SPCampaignChallenge
+"Meydan: %s"
+END
+
+GUI:SPSkirmish
+"Çatışma"
+END
+
+GUI:SPWontLoad
+"Eski bir sürümle yazıldı. Bu sürüm okuyamıyor."
+END
+
+GUI:SPNoPreview
+"Önizleme yok"
+END
+
+GUI:SPNewSave
+"Yeni kayıt"
+END
+
+GUI:SPSaveLoad
+"Kaydet / Yükle"
+END
+
+GUI:SPHintEscEnterSaves
+"Esc vazgeçer, Enter kaydeder"
+END

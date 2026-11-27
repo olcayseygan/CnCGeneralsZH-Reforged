@@ -137,7 +137,16 @@ enum { BLOOM_LEVEL_COUNT = 5 };						///< off, low, medium, high, ultra
 
 // Texture filtering is a mode too - bilinear, trilinear, anisotropic - and the combo box offers it
 // by those names.  The number in Options.ini is the same 0..2 it was when the key had no control.
-enum { TEXTURE_FILTER_MODE_COUNT = 3 };
+enum { TEXTURE_FILTER_MODE_COUNT = 3, TEXTURE_FILTER_ANISOTROPIC = 2 };
+
+// The options screen shows the filter and its anisotropy as one list (menu package 8): Bilinear,
+// Trilinear, Anisotropic 4x, 8x and 16x.  Options.ini keeps its two rows, TextureFilter and
+// Anisotropy, so the list is a view: an entry read off the two, and the two set from an entry.
+// Anisotropy 0 is the card's own choice, which a recent card makes 16x, and shows as 16x.
+enum { TEXTURE_FILTERING_ENTRY_COUNT = 5 };
+extern Int textureFilteringEntry( Int filter, Int anisotropy );
+/// Bilinear and Trilinear leave the anisotropy as it is, so a picked anisotropic level survives a look at another filter.
+extern void textureFilteringRows( Int entry, Int *filter, Int *anisotropy );
 
 // Smoke is the -smoke switch's thickness offered as original, thick and very thick.  Options.ini
 // stores the level; the thickness each level stands for is in OptionsCatalog.cpp.
@@ -148,6 +157,12 @@ enum { WATER_STYLE_COUNT = 2 };
 
 // SDL Modern water reflection modes.
 enum { WATER_REFLECTION_COUNT = 3 };
+
+// The screen's one Reflections list: Off, then the three modes.  The rows stay two,
+// WaterReflectionEnabled and WaterReflection; Off leaves the mode as it is.
+enum { WATER_REFLECTIONS_ENTRY_COUNT = WATER_REFLECTION_COUNT + 1 };
+extern Int waterReflectionsEntry( Int enabled, Int mode );
+extern void waterReflectionsRows( Int entry, Int *enabled, Int *mode );
 
 // SDL Modern water performance choices. Stored indices are independent of reflection mode.
 enum { WATER_FFT_RESOLUTION_COUNT = 2 }; // Low (128), High (256)
@@ -250,6 +265,48 @@ extern const GraphicsQualityRow *findGraphicsQualityRow( const char *control );
 /** A row the fork added to the picture, as against one of EA's detail settings.  While Classic
 	* Graphics is ticked the slider and the presets move only EA's, and unticking it fills these in. */
 extern Bool graphicsQualityRowIsReforged( const GraphicsQualityRow &row );
+
+/** The options screen's 0 to 3 mark for a measured price (SETTINGS-PLAN.md's cost column): 0 nothing
+	* measurable, 1 under 0.3 ms, 2 up to 1 ms, 3 above.  A negative cost is one never measured. */
+extern Int optionCostMark( Real costMs );
+
+//-----------------------------------------------------------------------------
+// One page of the options screen laid out down its column (menu package 8): group heads and rows one
+// under the other, a gap before every head but the first, Audio's faders taking what the rest leave,
+// then the More bar.  A head whose rows are all gone (folded, or not on this machine) goes with them.
+// When the page is taller than the body it scrolls: the More bar is pinned at the body's foot and an
+// item that would cross the body's top or the bar is not drawn.  Pure, so the test can hold it.
+//-----------------------------------------------------------------------------
+enum OptionsFlowKind { OPTIONS_FLOW_HEAD, OPTIONS_FLOW_ROW, OPTIONS_FLOW_FADER };
+
+struct OptionsFlowItem
+{
+	Int		kind;			///< OptionsFlowKind
+	Int		height;		///< a fader's is ignored: the faders share what is left
+	Bool	shown;		///< a row on this machine and not behind a closed fold; a head's is worked out
+	Int		top;			///< out: where it stands, or -1 when it is not drawn
+	Int		drawnHeight;	///< out: a fader's height; the item's own otherwise
+};
+
+struct OptionsFlowMetrics
+{
+	Int top, bottom;					///< the body
+	Int groupGap;
+	Int faderMin;
+	Int moreGap, moreHeight;	///< the bar's gap under the last item and its height
+	Int pinGap;								///< the pinned bar's distance from the body's foot
+	Bool hasMore;							///< the page has a fold
+};
+
+struct OptionsFlowResult
+{
+	Int moreTop;							///< where the More bar stands
+	Int contentHeight;				///< every shown item and the bar, unscrolled
+	Int maxScroll;						///< 0 when the page fits
+	Int end;									///< the foot of what is drawn: the bar's foot, or the last item's
+};
+
+extern OptionsFlowResult optionsFlow( OptionsFlowItem *items, Int count, const OptionsFlowMetrics &m, Int scroll );
 
 /** Options.ini -> TheWritableGlobalData, for every row.  A key that is absent leaves the field at
 	* whatever GlobalData's constructor put there, which is off for everything the fork added: a detail

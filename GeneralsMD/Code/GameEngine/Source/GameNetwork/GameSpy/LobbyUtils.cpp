@@ -50,6 +50,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetComboBox.h"
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GameText.h"
 #include "GameClient/MapUtil.h"
@@ -94,11 +95,7 @@ enum {
 };
 // at 1080, of the list's width less its scroll bar: the mockup's 390, 270, 120, 120 and 156
 static const Int GAME_COLUMN_PERCENT[ GAME_COLUMNS ] = { 36, 25, 11, 3, 3, 8, 14, 0 };
-// a list narrower than this at the height's scale drops the seats column, as the design's 4:3 rule says
-static const Real GAME_LIST_FULL_WIDTH = 900.0f;
-static const Int GAME_COLUMN_PERCENT_NARROW[ GAME_COLUMNS ] = { 43, 29, 0, 3, 3, 8, 14, 0 };
-static const Real GAME_ROW_HEIGHT = 40.0f;		///< the mockup's, at 1080
-static const Real GAME_HEAD_HEIGHT = 36.0f;		///< the column heads' band over the list
+static const Real GAME_ROW_HEIGHT = 40.0f;		///< the design's, at 1080
 static const Real CELL_PAD = 10.0f;
 
 static NameKeyType buttonSortAlphaID = NAMEKEY_INVALID;
@@ -261,7 +258,11 @@ static void gameTooltip(GameWindow *window,
 		return;
 	}
 
-	if (col == COLUMN_PING || col == COLUMN_LIGHT)
+	// the row is drawn at the board's columns, not the listbox's: the column under the pointer by those
+	const UIStyle::BoardFit fit = UIStyle::boardFit( TheDisplay->getWidth(), TheDisplay->getHeight() );
+	const Int boardX = fit.scale > 0.0f ? REAL_TO_INT( ( x - fit.x ) / fit.scale ) : x;
+	const Int column = LobbyGameColumnAt( boardX, FALSE );
+	if (column == LOBBY_COL_PING)
 	{
 #if 0 //def DEBUG_LOGGING
 		UnicodeString s;
@@ -275,12 +276,12 @@ static void gameTooltip(GameWindow *window,
 #endif
 		return;
 	}
-	if (col == COLUMN_NUMPLAYERS)
+	if (column == LOBBY_COL_PLAYERS)
 	{
 		TheMouse->setCursorTooltip( TheGameText->fetch("TOOLTIP:NumberOfPlayers"), 10, NULL, 2.0f ); // the text and width are the only params used.  the others are the default values.
 		return;
 	}
-	if (col == COLUMN_PASSWORD)
+	if (column == LOBBY_COL_LOCK)
 	{
 		if (room->getHasPassword())
 		{
@@ -350,13 +351,71 @@ static void gameTooltip(GameWindow *window,
 static const Real LIGHT_SIZE = 16.0f;		///< a ping light or a lock in a row, at 1080
 
 static Int s_joiningGame = 0;
-enum { HEAD_GAME, HEAD_MAP, HEAD_PLAYERS, HEAD_PING, HEAD_COUNT };
-static const Int HEAD_COLUMN[ HEAD_COUNT ] = { COLUMN_NAME, COLUMN_MAP, COLUMN_NUMPLAYERS, COLUMN_LIGHT };
-static const char *const HEAD_KEY[ HEAD_COUNT ] = { "GUI:OnlineLobbyColGame", "GUI:OnlineMapLabel", "GUI:OnlineLobbyColPlayers",
-	"GUI:DiplomacyPing" };
-static DisplayString *s_gameHeads[ HEAD_COUNT ];
-static DisplayString *s_noGames = NULL;			///< "No open games on EU1. Host one."
-static DisplayString *s_joiningChip = NULL;
+
+/* The lists' words: one DisplayString a slot, kept between frames, so a word that does not change is not
+	 rendered again.  0 to 15 are the screens', 16 to 63 the picked game's, 64 to 255 the rows', 8 a row, and
+	 LOBBY_TEXT_BOX on a box's over the screen, which draws in the same frame. */
+enum { LOBBY_TEXTS = LOBBY_TEXT_BOX + 32, LOBBY_TEXT_PICKED = 16, LOBBY_TEXT_ROWS = 64, LOBBY_ROW_TEXTS = 8 };
+static DisplayString *s_lobbyText[ LOBBY_TEXTS ];
+static UnicodeString s_lobbySource[ LOBBY_TEXTS ];	///< drawFitted's words before the cut
+static Int s_lobbyWidest[ LOBBY_TEXTS ];
+
+static DisplayString *lobbyWords( Int slot, const UnicodeString &text, GameFont *font )
+{
+	slot = ( slot % LOBBY_TEXTS + LOBBY_TEXTS ) % LOBBY_TEXTS;
+	DisplayString *&s = s_lobbyText[ slot ];
+	if (s == NULL)
+		s = TheDisplayStringManager->newDisplayString();
+	if (s->getFont() != font)
+		s->setFont( font );
+	if (s->getText().compare( text ) != 0)
+	{
+		s->setText( text );
+		s_lobbySource[ slot ].clear();
+	}
+	return s;
+}
+
+void LobbyDrawWords( Int slot, const UnicodeString &text, Int px1080, Bool bold, Int x, Int middle, Color color, Bool right )
+{
+	if (text.isEmpty())
+		return;
+	DisplayString *s = lobbyWords( slot, text, UIStyle::menuFont( px1080, bold ) );
+	Int w, h;
+	s->getSize( &w, &h );
+	s->draw( right ? x - w : x, middle - h / 2, color, UIStyle::withAlpha( GameMakeColor( 0, 0, 0, 255 ), 160 ) );
+}
+
+/// words cut to a width with an ellipsis (a name never shortens otherwise), at a board point
+static void drawFitted( Int slot, const UnicodeString &text, Int px1080, Bool bold, Int x, Int middle, Int widest, Color color )
+{
+	if (text.isEmpty())
+		return;
+	GameFont *font = UIStyle::menuFont( px1080, bold );
+	slot = ( slot % LOBBY_TEXTS + LOBBY_TEXTS ) % LOBBY_TEXTS;
+	DisplayString *s = s_lobbyText[ slot ];
+	// measuring the cut is the dear part: done again only when the words, the width or the face change
+	if (s == NULL || s->getFont() != font || s_lobbyWidest[ slot ] != widest || s_lobbySource[ slot ].compare( text ) != 0)
+	{
+		s = lobbyWords( slot, UIStyle::fitName( text, font, max( widest, 1 ) ), font );
+		s_lobbySource[ slot ] = text;
+		s_lobbyWidest[ slot ] = widest;
+	}
+	Int w, h;
+	s->getSize( &w, &h );
+	s->draw( x, middle - h / 2, color, UIStyle::withAlpha( GameMakeColor( 0, 0, 0, 255 ), 160 ) );
+}
+
+void LobbyFreeText( void )
+{
+	for (Int i = 0; i < LOBBY_TEXTS; ++i)
+	{
+		if (s_lobbyText[ i ])
+			TheDisplayStringManager->freeDisplayString( s_lobbyText[ i ] );
+		s_lobbyText[ i ] = NULL;
+		s_lobbySource[ i ].clear();
+	}
+}
 
 void LobbySetJoiningGame( Int gameID )
 {
@@ -400,39 +459,17 @@ UnicodeString LobbyServerLabel( void )
 	return wide;
 }
 
-/// a selected row in the list's own art: EA's hilite bar, its ends at their width and its middle stretched
+/// the picked row: an EDGE wash and a lit 1 px EDGE_LIT edge round it
 static void drawSelection( GameWindow *list, Int left, Int top, Int right, Int bottom )
 {
-	const Image *leftEnd, *rightEnd, *middle;
-	if (!BitTest( list->winGetStatus(), WIN_STATUS_ENABLED ))
-	{
-		leftEnd = GadgetListBoxGetDisabledSelectedItemImageLeft( list );
-		rightEnd = GadgetListBoxGetDisabledSelectedItemImageRight( list );
-		middle = GadgetListBoxGetDisabledSelectedItemImageCenter( list );
-	}
-	else if (BitTest( list->winGetInstanceData()->getState(), WIN_STATE_HILITED ))
-	{
-		leftEnd = GadgetListBoxGetHiliteSelectedItemImageLeft( list );
-		rightEnd = GadgetListBoxGetHiliteSelectedItemImageRight( list );
-		middle = GadgetListBoxGetHiliteSelectedItemImageCenter( list );
-	}
-	else
-	{
-		leftEnd = GadgetListBoxGetEnabledSelectedItemImageLeft( list );
-		rightEnd = GadgetListBoxGetEnabledSelectedItemImageRight( list );
-		middle = GadgetListBoxGetEnabledSelectedItemImageCenter( list );
-	}
-	if (!leftEnd || !rightEnd || !middle)
-	{
-		TheDisplay->drawOpenRect( left, top, right - left, bottom - top, 1.0f, UIStyle::EDGE );
-		return;
-	}
-	const Int leftWidth = leftEnd->getImageWidth();
-	const Int rightWidth = rightEnd->getImageWidth();
-	TheWindowManager->winDrawImage( leftEnd, left, top, left + leftWidth, bottom );
-	if (right - rightWidth > left + leftWidth)
-		TheWindowManager->winDrawImage( middle, left + leftWidth, top, right - rightWidth, bottom );
-	TheWindowManager->winDrawImage( rightEnd, right - rightWidth, top, right, bottom );
+	(void)list;
+	TheDisplay->drawFillRect( left, top, right - left, bottom - top, UIStyle::withAlpha( UIStyle::EDGE, 70 ) );
+	IRegion2D edge;
+	edge.lo.x = left;
+	edge.lo.y = top;
+	edge.hi.x = right - 1;
+	edge.hi.y = bottom - 1;
+	UIStyle::litEdge( edge, UIStyle::EDGE_LIT );
 }
 
 void LobbyDrawRows( GameWindow *list, LobbyRowDraw draw, Int litRow )
@@ -468,7 +505,7 @@ void LobbyDrawRows( GameWindow *list, LobbyRowDraw draw, Int litRow )
 		if (rect.hi.y <= clip.lo.y)
 			continue;
 
-		Bool selected = row == litRow;
+		Bool selected = FALSE;
 		if (data->multiSelect)
 		{
 			for (Int i = 0; data->selections && i < data->listLength && data->selections[i] >= 0 && !selected; ++i)
@@ -478,8 +515,16 @@ void LobbyDrawRows( GameWindow *list, LobbyRowDraw draw, Int litRow )
 			selected = data->selectPos == row;
 
 		TheDisplay->setClipRegion( &clip );
-		if (selected)
+		// the list's states: the local player's own row gold, the picked one lit, the one under the pointer lifted
+		const MouseIO *mouse = TheMouse ? TheMouse->getMouseStatus() : NULL;
+		const Bool hovered = mouse && mouse->pos.x >= clip.lo.x && mouse->pos.x < clip.hi.x
+			&& mouse->pos.y >= max( rect.lo.y, clip.lo.y ) && mouse->pos.y < min( rect.hi.y, clip.hi.y );
+		if (row == litRow)
+			UIStyle::menuRow( rect, UIStyle::ROW_LOCAL );
+		else if (selected)
 			drawSelection( list, rect.lo.x + 1, rect.lo.y, rect.hi.x, rect.hi.y );
+		if (hovered && row != litRow)
+			UIStyle::menuRow( rect, UIStyle::ROW_HOVER );
 		draw( list, row, rect, clip );
 	}
 	TheDisplay->enableClipping( FALSE );
@@ -594,150 +639,504 @@ void LobbySetColumns( GameWindow *list, Int columns, const Int *percent )
 	list->winSetSize( width, height );
 }
 
-/// a game's row: name and map from the left, seats and the light at the right of theirs, the chip last
+//-------------------------------------------------------------------------------------------------
+// The game lists in the menu language (MENU-REDESIGN.md package 10): every number at 1080 on the board
+//-------------------------------------------------------------------------------------------------
+namespace
+{
+	/// README-game-lists.md "Columns": lock, GAME, MODE, MAP, PLAYERS, PING, STATE, from the list's 60
+	const Int GAME_COLUMN_EDGES[ LOBBY_COL_COUNT ][ 2 ] =
+	{
+		{ 60, 86 }, { 94, 440 }, { 452, 620 }, { 632, 850 }, { 862, 1012 }, { 1024, 1136 }, { 1160, 1286 }
+	};
+	Int bx( Int x1080 ) { return UIStyle::boardX( (Real)x1080 ); }
+	Int by( Int y1080 ) { return UIStyle::boardY( (Real)y1080 ); }
+	/// the board x of a screen x, for a click
+	Int boardOfX( Int x )
+	{
+		const Real scale = UIStyle::boardFit( TheDisplay->getWidth(), TheDisplay->getHeight() ).scale;
+		return REAL_TO_INT( ( x - UIStyle::boardX( 0.0f ) ) / ( scale > 0.0f ? scale : 1.0f ) );
+	}
+	/// words centred on a screen point
+	void drawCentredWords( Int slot, const UnicodeString &text, Int px1080, Bool bold, Int x, Int middle, Color color )
+	{
+		if (text.isEmpty())
+			return;
+		DisplayString *s = lobbyWords( slot, text, UIStyle::menuFont( px1080, bold ) );
+		Int w, h;
+		s->getSize( &w, &h );
+		s->draw( x - w / 2, middle - h / 2, color, GameMakeColor( 0, 0, 0, 160 ) );
+	}
+	/* A listed game's round trip.  -online: every route runs through the relay, so the pinger's figure means
+		 nothing (it reads 1000 for everyone); the host's own round trip to the server, as the server last
+		 reported it, is the part of the lag a game list can tell, and a host whose card the lobby has not heard
+		 is unknown. */
+	Int rowPing( GameSpyStagingRoom *game )
+	{
+		if (!OnlineIsEnabled())
+			return game->getPingAsInt();
+		GameSlot *host = game->getSlot( 0 );
+		OnlinePlayerInfo card;
+		AsciiString hostNick;
+		if (host && host->isHuman())
+			hostNick.translate( host->getName() );
+		return hostNick.isNotEmpty() && OnlineGetPlayerInfo( hostNick, card ) ? card.ping : -1;
+	}
+	const char *const HEAD_KEYS[ LOBBY_COL_COUNT ] = { NULL, "GUI:OnlineLobbyColGame", "GUI:OnlineHeadMode", "GUI:OnlineMapLabel",
+		"GUI:OnlineLobbyColPlayers", "GUI:DiplomacyPing", "GUI:DisconnectState" };
+}
+
+Bool LobbyGameColumnSpan( Int column, Bool lan, Int &left, Int &right )
+{
+	left = right = -1;
+	if (column < 0 || column >= LOBBY_COL_COUNT || ( lan && ( column == LOBBY_COL_LOCK || column == LOBBY_COL_PING ) ))
+		return FALSE;
+	left = GAME_COLUMN_EDGES[ column ][ 0 ];
+	right = GAME_COLUMN_EDGES[ column ][ 1 ];
+	return TRUE;
+}
+
+Int LobbyGameColumnAt( Int x1080, Bool lan )
+{
+	for (Int column = 0; column < LOBBY_COL_COUNT; ++column)
+	{
+		Int left, right;
+		if (LobbyGameColumnSpan( column, lan, left, right ) && x1080 >= left && x1080 < right)
+			return column;
+	}
+	return -1;
+}
+
+LobbyGameState LobbyGameStateOf( Bool joining, Bool playing, Bool otherBuild, Bool full )
+{
+	if (joining)
+		return LOBBY_STATE_JOINING;
+	if (playing)
+		return LOBBY_STATE_PLAYING;
+	if (otherBuild)
+		return LOBBY_STATE_OTHER_BUILD;
+	return full ? LOBBY_STATE_FULL : LOBBY_STATE_OPEN;
+}
+
+Int LobbyMapMode( const AsciiString &map )
+{
+	// the online list's path is GameSpy's portable one, '/' for '\': its leaf names a Direct Strike island
+	const char *leaf = strrchr( map.str(), '/' );
+	if (IsDirectStrikeMap( leaf ? AsciiString( leaf + 1 ) : map ))
+		return HOST_MODE_DIRECT_STRIKE;
+	if (IsApocalypseMap( map ))
+		return HOST_MODE_APOCALYPSE;
+	return HOST_MODE_CLASSIC;
+}
+
+UnicodeString LobbyModeName( Int mode )
+{
+	if (mode == HOST_MODE_DIRECT_STRIKE)
+		return ModeNameWithVersion( "GUI:DirectStrikeLower", "GUI:DirectStrikeVersion" );
+	if (mode == HOST_MODE_APOCALYPSE)
+		return ModeNameWithVersion( "GUI:ApocalypseLower", "GUI:ApocalypseVersion" );
+	return TheGameText->fetch( "GUI:LobbyModeClassic" );
+}
+
+UnicodeString LobbyMapName( const AsciiString &map )
+{
+	const Int mode = LobbyMapMode( map );
+	if (mode == HOST_MODE_DIRECT_STRIKE)
+		return TheGameText->fetch( "GUI:LobbyGeneratedIsland" );
+	if (mode == HOST_MODE_APOCALYPSE)
+		return TheGameText->fetch( "GUI:LobbyGeneratedBasin" );
+	return roomMapName( map );
+}
+
+void LobbyDrawGameRow( Int row, const LobbyGameRow &game, const IRegion2D &rect, Bool lan )
+{
+	const Int slot = LOBBY_TEXT_ROWS + ( row % ( ( LOBBY_TEXT_BOX - LOBBY_TEXT_ROWS ) / LOBBY_ROW_TEXTS ) ) * LOBBY_ROW_TEXTS;
+	const Int mid = ( rect.lo.y + rect.hi.y ) / 2;
+	const Bool dim = game.state == LOBBY_STATE_PLAYING || game.state == LOBBY_STATE_OTHER_BUILD;
+	const Color ink = dim ? UIStyle::MUTED : UIStyle::INK;
+	Int left, right;
+
+	if (!lan && game.password)
+	{
+		const Image *lock = TheMappedImageCollection->findImageByName( "Password" );
+		LobbyGameColumnSpan( LOBBY_COL_LOCK, lan, left, right );
+		const Int side = UIStyle::px( 16.0f );
+		const Int x = ( bx( left ) + bx( right ) - side ) / 2;
+		if (lock)
+			TheWindowManager->winDrawImage( lock, x, mid - side / 2, x + side, mid - side / 2 + side );
+	}
+	LobbyGameColumnSpan( LOBBY_COL_GAME, lan, left, right );
+	drawFitted( slot, game.name, UIStyle::MENU_TEXT_BODY, FALSE, bx( left ), mid, bx( right ) - bx( left ), ink );
+	LobbyGameColumnSpan( LOBBY_COL_MODE, lan, left, right );
+	drawFitted( slot + 1, LobbyModeName( game.mode ), UIStyle::MENU_TEXT_HINT, FALSE, bx( left ), mid, bx( right ) - bx( left ),
+		game.mode != HOST_MODE_CLASSIC && !dim ? UIStyle::INK : UIStyle::MUTED );
+	LobbyGameColumnSpan( LOBBY_COL_MAP, lan, left, right );
+	drawFitted( slot + 2, game.map, UIStyle::MENU_TEXT_HINT, FALSE, bx( left ), mid, bx( right ) - bx( left ), UIStyle::MUTED );
+
+	// the seats: the taken figure, the row's key figure, then "/ m" and a quiet bar
+	UnicodeString figure;
+	figure.format( u"%d", game.seated );
+	LobbyDrawWords( slot + 3, figure, UIStyle::MENU_TEXT_ROW_FIGURE, FALSE, bx( 896 ), mid, ink, TRUE );
+	figure.format( u"/ %d", game.seats );
+	LobbyDrawWords( slot + 4, figure, UIStyle::MENU_TEXT_HINT, FALSE, bx( 900 ), mid + UIStyle::px( 2.0f ), UIStyle::MUTED );
+	UIStyle::track( bx( 942 ), mid, bx( 1008 ) - bx( 942 ), max( 1, UIStyle::px( 2.0f ) ),
+		game.seats > 0 ? (Real)game.seated / game.seats : 0.0f, game.state == LOBBY_STATE_OPEN ? UIStyle::ACTIVE : UIStyle::MUTED );
+
+	if (!lan)
+	{
+		if (game.ping >= 0)
+			figure.format( u"%d", game.ping );
+		else
+			figure = UnicodeString( u"\x2013" );
+		LobbyDrawWords( slot + 5, figure, UIStyle::MENU_TEXT_BODY, FALSE, bx( 1114 ), mid, ink, TRUE );
+		if (const Image *light = UIStyle::pingImage( game.ping ))
+		{
+			const Int side = UIStyle::px( 16.0f );
+			TheWindowManager->winDrawImage( light, bx( 1129 ) - side / 2, mid - side / 2, bx( 1129 ) - side / 2 + side, mid - side / 2 + side );
+		}
+	}
+
+	const char *stateKey = "GUI:Open";
+	Color stateColor = UIStyle::ACTIVE;
+	Bool bold = TRUE;
+	switch (game.state)
+	{
+		case LOBBY_STATE_FULL:				stateKey = "GUI:OnlineLobbyFull"; stateColor = UIStyle::MUTED; bold = FALSE; break;
+		case LOBBY_STATE_PLAYING:			stateKey = "GUI:OnlineLobbyPlaying"; stateColor = UIStyle::MUTED; bold = FALSE; break;
+		case LOBBY_STATE_JOINING:			stateKey = "GUI:OnlineLobbyJoining"; stateColor = UIStyle::EDGE_LIT; break;
+		case LOBBY_STATE_OTHER_BUILD:	stateKey = "GUI:LobbyOtherBuild"; stateColor = UIStyle::MUTED; bold = FALSE; break;
+		default: break;
+	}
+	LobbyGameColumnSpan( LOBBY_COL_STATE, lan, left, right );
+	drawFitted( slot + 6, TheGameText->fetch( stateKey ), UIStyle::MENU_TEXT_HINT, bold, bx( left ), mid, bx( right ) - bx( left ), stateColor );
+}
+
+void LobbyDrawSection( const UnicodeString &words, const UnicodeString &count, Int left, Int top, Int right, Int slot )
+{
+	GameFont *font = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL + 2, TRUE );
+	const Int middle = by( top + 13 );
+	UIStyle::drawTracked( UIStyle::capitals( words ), font, bx( left ), middle - font->height / 2, UIStyle::ACTIVE,
+		UIStyle::MENU_LABEL_TRACKING );
+	LobbyDrawWords( slot, count, UIStyle::MENU_TEXT_BODY, FALSE, bx( right ), middle, UIStyle::MUTED, TRUE );
+}
+
+void LobbyDrawGameHead( Int top1080, Bool lan, const UnicodeString &count, Int sortedColumn )
+{
+	LobbyDrawSection( TheGameText->fetch( "GUI:Games" ), count, UIStyle::ONLINE_LEFT, top1080, 1310, 0 );
+	const Int middle = by( top1080 + 46 );
+	GameFont *font = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	for (Int column = LOBBY_COL_GAME; column < LOBBY_COL_COUNT; ++column)
+	{
+		Int left, right;
+		if (!LobbyGameColumnSpan( column, lan, left, right ))
+			continue;
+		DisplayString *words = lobbyWords( column, UIStyle::capitals( TheGameText->fetch( HEAD_KEYS[ column ] ) ), font );
+		Int x = bx( left );
+		// the ping's figure ends at the light: its word stands right over it
+		if (column == LOBBY_COL_PING)
+			x = bx( right ) - UIStyle::trackedWidth( words->getText(), font, UIStyle::MENU_LABEL_TRACKING );
+		UIStyle::columnHeadAt( words, x, middle, UIStyle::MUTED, column == sortedColumn );
+	}
+	UIStyle::litLine( bx( UIStyle::ONLINE_LEFT ), by( top1080 + 61 ), bx( 1286 ) - bx( UIStyle::ONLINE_LEFT ), 1, UIStyle::FRAME );
+}
+
+void LobbyDrawGameFoot( GameWindow *list, Bool lockShown, const UnicodeString &empty )
+{
+	if (list == NULL)
+		return;
+	Int x, y, width, height;
+	list->winGetScreenPosition( &x, &y );
+	list->winGetSize( &width, &height );
+	if (GadgetListBoxGetNumEntries( list ) == 0 && !empty.isEmpty())
+		drawCentredWords( 8, empty, UIStyle::MENU_TEXT_BODY, FALSE, x + width / 2, y + UIStyle::px( 40.0f ), UIStyle::MUTED );
+	if (lockShown)
+	{
+		const Int middle = y + height + UIStyle::px( 14.0f );
+		const Int side = UIStyle::px( 16.0f );
+		if (const Image *lock = TheMappedImageCollection->findImageByName( "Password" ))
+			TheWindowManager->winDrawImage( lock, bx( 65 ), middle - side / 2, bx( 65 ) + side, middle - side / 2 + side );
+		LobbyDrawWords( 9, TheGameText->fetch( "GUI:LobbyPassword" ), UIStyle::MENU_TEXT_HINT, FALSE, bx( 90 ), middle, UIStyle::MUTED );
+	}
+}
+
+Int LobbySortedColumn( void )
+{
+	return theGameSortType == GAMESORT_PING_ASCENDING || theGameSortType == GAMESORT_PING_DESCENDING ? LOBBY_COL_PING : LOBBY_COL_GAME;
+}
+
+Bool LobbySortByColumn( Int column )
+{
+	if (column == LOBBY_COL_GAME)
+		setSortMode( theGameSortType == GAMESORT_ALPHA_ASCENDING ? GAMESORT_ALPHA_DESCENDING : GAMESORT_ALPHA_ASCENDING );
+	else if (column == LOBBY_COL_PING)
+		setSortMode( theGameSortType == GAMESORT_PING_ASCENDING ? GAMESORT_PING_DESCENDING : GAMESORT_PING_ASCENDING );
+	else
+		return FALSE;
+	return TRUE;
+}
+
+/// the map's preview fitted in its box keeping its shape, edged; a mode game's mode in words on dark glass
+static void drawPicture( const LobbyPicked &game, const IRegion2D &box )
+{
+	TheDisplay->drawFillRect( box.lo.x, box.lo.y, box.hi.x - box.lo.x, box.hi.y - box.lo.y, GameMakeColor( 0, 0, 0, 150 ) );
+	const Int w = box.hi.x - box.lo.x, h = box.hi.y - box.lo.y;
+	if (game.preview && game.preview->getImageWidth() > 0 && game.preview->getImageHeight() > 0)
+	{
+		const Real iw = (Real)game.preview->getImageWidth(), ih = (Real)game.preview->getImageHeight();
+		const Real fit = min( w / iw, h / ih );
+		const Int dw = REAL_TO_INT( iw * fit ), dh = REAL_TO_INT( ih * fit );
+		const Int x = box.lo.x + ( w - dw ) / 2, y = box.lo.y + ( h - dh ) / 2;
+		TheWindowManager->winDrawImage( game.preview, x, y, x + dw, y + dh );
+	}
+	else
+		drawCentredWords( LOBBY_TEXT_PICKED, LobbyModeName( game.mode ), UIStyle::MENU_TEXT_BODY, TRUE, box.lo.x + w / 2,
+			box.lo.y + h / 2, UIStyle::MUTED );
+	TheDisplay->drawOpenRect( box.lo.x, box.lo.y, w, h, 1.0f, UIStyle::FRAME );
+}
+
+void LobbyDrawPicked( const LobbyPicked &game, Int left, Int top, Int right, Int bottom, Bool lan )
+{
+	UnicodeString count;
+	count.format( u"%d / %d", game.seated, game.seats );
+	LobbyDrawSection( TheGameText->fetch( "GUI:LobbyPickedGame" ), count, left, top, right, 10 );
+	Int slot = LOBBY_TEXT_PICKED + 1;
+
+	Int wordsLeft, nameY, seatsTop;
+	if (lan)
+	{
+		drawPicture( game, UIStyle::boardRect( left + 6, top + 38, right - 6, top + 302 ) );
+		wordsLeft = left;
+		nameY = top + 327;
+		seatsTop = top + 404;
+	}
+	else
+	{
+		drawPicture( game, UIStyle::boardRect( left, top + 38, left + 220, top + 151 ) );
+		wordsLeft = left + 236;
+		nameY = top + 54;
+		seatsTop = top + 162;
+	}
+	const Int wordsWidth = bx( right ) - bx( wordsLeft );
+	drawFitted( slot++, game.name, UIStyle::MENU_TEXT_ROW_FIGURE, FALSE, bx( wordsLeft ), by( nameY ), wordsWidth, UIStyle::INK );
+	drawFitted( slot++, game.map, UIStyle::MENU_TEXT_BODY, FALSE, bx( wordsLeft ), by( nameY + 28 ), wordsWidth, UIStyle::INK );
+	drawFitted( slot++, game.line, UIStyle::MENU_TEXT_HINT, FALSE, bx( wordsLeft ), by( nameY + 52 ), wordsWidth, UIStyle::MUTED );
+	if (game.password && !lan)
+	{
+		const Int side = UIStyle::px( 16.0f );
+		const Int middle = by( nameY + 80 );
+		if (const Image *lock = TheMappedImageCollection->findImageByName( "Password" ))
+			TheWindowManager->winDrawImage( lock, bx( wordsLeft ), middle - side / 2, bx( wordsLeft ) + side, middle - side / 2 + side );
+		LobbyDrawWords( slot, TheGameText->fetch( "GUI:LobbyPassword" ), UIStyle::MENU_TEXT_HINT, FALSE, bx( wordsLeft + 24 ),
+			middle, UIStyle::MUTED );
+	}
+	++slot;
+
+	// the seats down to bottom, 28 a row or tighter to fit, and the line under them
+	const Int lineHeight = 26;
+	const Int room = max( 0, bottom - seatsTop - lineHeight );
+	Int shown = min( game.seatCount, room / 18 );
+	const Int pitch = shown > 0 ? min( 28, room / shown ) : 28;
+	for (Int i = 0; i < shown; ++i)
+	{
+		const LobbySeat &seat = game.seat[ i ];
+		const Int top1080 = seatsTop + i * pitch;
+		const IRegion2D r = UIStyle::boardRect( left, top1080, right, top1080 + pitch );
+		const Int middle = ( r.lo.y + r.hi.y ) / 2;
+		if (i % 2)
+			TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, GameMakeColor( 255, 255, 255, 7 ) );
+		const Int bar = UIStyle::px( pitch - 8.0f );
+		TheDisplay->drawFillRect( bx( left + 4 ), middle - bar / 2, max( 2, UIStyle::px( 3.0f ) ), bar,
+			seat.known ? seat.color : UIStyle::MUTED );
+		if (seat.portrait)
+		{
+			const Int side = UIStyle::px( 22.0f );
+			UIStyle::coverImage( seat.portrait, bx( left + 14 ), middle - side / 2, side, side );
+		}
+		drawFitted( slot++, seat.name, UIStyle::MENU_TEXT_BODY, FALSE, bx( left + 52 ), middle, bx( left + 250 ) - bx( left + 52 ),
+			seat.known ? UIStyle::readable( seat.color ) : UIStyle::INK );
+		drawFitted( slot++, seat.army, UIStyle::MENU_TEXT_HINT, FALSE, bx( left + 258 ), middle, bx( right - 70 ) - bx( left + 258 ),
+			UIStyle::MUTED );
+		LobbyDrawWords( slot++, seat.record, UIStyle::MENU_TEXT_HINT, FALSE, bx( right - 8 ), middle, UIStyle::INK, TRUE );
+	}
+	const Int lineMiddle = by( seatsTop + shown * pitch + lineHeight / 2 );
+	const Int open = game.seats - game.seated;
+	if (open > 0)
+	{
+		UnicodeString words;
+		words.format( TheGameText->fetch( "GUI:LobbyOpenSeats" ), open );
+		LobbyDrawWords( LOBBY_TEXT_PICKED + 46, words, UIStyle::MENU_TEXT_HINT, FALSE, bx( left + 52 ), lineMiddle, UIStyle::ACTIVE );
+	}
+	if (!lan)
+	{
+		// the records' legend, for a figure nobody reads unaided
+		GameFont *font = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+		const UnicodeString legend = UIStyle::capitals( TheGameText->fetch( "GUI:LobbyWinsLosses" ) );
+		UIStyle::drawTracked( legend, font, bx( right - 8 ) - UIStyle::trackedWidth( legend, font, UIStyle::MENU_LABEL_TRACKING ),
+			lineMiddle - font->height / 2, UIStyle::MUTED, UIStyle::MENU_LABEL_TRACKING );
+	}
+}
+
+void LobbyPlaceOnBoard( GameWindow *window, Int left, Int top, Int right, Int bottom )
+{
+	if (window == NULL)
+		return;
+	const IRegion2D r = UIStyle::boardRect( left, top, right, bottom );
+	Int x = 0, y = 0;
+	if (GameWindow *above = window->winGetParent())
+		above->winGetScreenPosition( &x, &y );
+	window->winSetPosition( r.lo.x - x, r.lo.y - y );
+	const Int width = r.hi.x - r.lo.x, height = r.hi.y - r.lo.y;
+	window->winSetSize( width, height );
+	// a combo's parts keep their own sizes: the field takes the width less the caret block, a square
+	if (BitTest( window->winGetStyle(), GWS_COMBO_BOX ))
+	{
+		if (GameWindow *button = GadgetComboBoxGetDropDownButton( window ))
+		{
+			button->winSetSize( height, height );
+			button->winSetPosition( width - height, 0 );
+		}
+		if (GameWindow *edit = GadgetComboBoxGetEditBox( window ))
+		{
+			edit->winSetSize( width - height, height );
+			edit->winSetPosition( 0, 0 );
+		}
+		if (GameWindow *list = GadgetComboBoxGetListBox( window ))
+		{
+			Int listWidth, listHeight;
+			list->winGetSize( &listWidth, &listHeight );
+			list->winSetSize( width, listHeight );
+		}
+	}
+}
+
+void LobbyDrawBoxHead( const IRegion2D &box, const UnicodeString &title, const UnicodeString &question, const UnicodeString &hint )
+{
+	DisplayString *words = lobbyWords( LOBBY_TEXT_BOX, UIStyle::capitals( title ), UIStyle::menuFont( UIStyle::MENU_TEXT_BOX_TITLE, TRUE ) );
+	UIStyle::boxShell( box, words, FALSE );
+	Int w, h;
+	words->getSize( &w, &h );
+	LobbyDrawWords( LOBBY_TEXT_BOX + 1, question, UIStyle::MENU_TEXT_BODY, FALSE, box.lo.x + UIStyle::px( UIStyle::BOX_PAD ) + w
+		+ UIStyle::px( 18.0f ), box.lo.y + UIStyle::px( 46.0f ), UIStyle::INK );
+	UIStyle::boxFootRule( box );
+	LobbyDrawWords( LOBBY_TEXT_BOX + 2, hint, UIStyle::MENU_TEXT_HINT, FALSE, box.lo.x + UIStyle::px( UIStyle::BOX_PAD ),
+		box.hi.y - UIStyle::px( 44.0f ), UIStyle::MUTED );
+}
+
+void LobbyDrawBoxLabel( const UnicodeString &words, Int x, Int middle )
+{
+	GameFont *font = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	UIStyle::drawTracked( UIStyle::capitals( words ), font, x, middle - font->height / 2, UIStyle::INK, UIStyle::MENU_LABEL_TRACKING );
+}
+
+void LobbyMenuKey( GameWindow *key, Bool primary )
+{
+	if (key == NULL)
+		return;
+	UIStyle::setMenuKey( key, primary );
+	const UnicodeString words = UIStyle::capitals( key->winGetText() );
+	if (words.compare( key->winGetText() ) != 0)
+		GadgetButtonSetText( key, words );
+}
+
+void LobbyMenuEntry( GameWindow *entry, Int px1080, Color text )
+{
+	if (entry == NULL)
+		return;
+	entry->winClearStatus( WIN_STATUS_IMAGE );
+	entry->winSetDrawFunc( TheWindowManager->getTextEntryDrawFunc() );
+	const Color well = GameMakeColor( 0, 0, 0, 140 );
+	GadgetTextEntrySetEnabledColor( entry, well );
+	GadgetTextEntrySetEnabledBorderColor( entry, UIStyle::FRAME );
+	GadgetTextEntrySetHiliteColor( entry, well );
+	GadgetTextEntrySetHiliteBorderColor( entry, UIStyle::EDGE_LIT );
+	GadgetTextEntrySetDisabledColor( entry, GameMakeColor( 0, 0, 0, 100 ) );
+	GadgetTextEntrySetDisabledBorderColor( entry, UIStyle::withAlpha( UIStyle::FRAME, 140 ) );
+	GadgetTextEntrySetFont( entry, UIStyle::menuFont( px1080 ) );
+	GadgetTextEntrySetTextColor( entry, text );
+}
+
+void LobbyMenuChat( GameWindow *list, Int px1080 )
+{
+	if (list == NULL)
+		return;
+	const Color lift = GameMakeColor( 255, 255, 255, 6 );
+	const Color none = GameMakeColor( 0, 0, 0, 0 );
+	GadgetListBoxSetColors( list,
+		lift, none, lift, none,
+		lift, none, lift, none,
+		lift, none, lift, none );
+	list->winClearStatus( WIN_STATUS_IMAGE );
+	list->winSetDrawFunc( TheWindowManager->getListBoxDrawFunc() );
+	GadgetListBoxSetFont( list, UIStyle::menuFont( px1080 ) );
+}
+
+/// an online row: the staging room behind it as LobbyDrawGameRow wants it
 static void drawGameRow( GameWindow *list, Int row, const IRegion2D &rect, const IRegion2D &clip )
 {
-	LobbyDrawCell( list, row, COLUMN_NAME, rect, clip, LOBBY_ALIGN_LEFT );
-	LobbyDrawCell( list, row, COLUMN_MAP, rect, clip, LOBBY_ALIGN_LEFT );
-	LobbyDrawCell( list, row, COLUMN_NUMPLAYERS, rect, clip, LOBBY_ALIGN_RIGHT );
-	LobbyDrawCell( list, row, COLUMN_PASSWORD, rect, clip, LOBBY_ALIGN_CENTER );
-	LobbyDrawCell( list, row, COLUMN_LIGHT, rect, clip, LOBBY_ALIGN_RIGHT );
-	LobbyDrawCell( list, row, COLUMN_PING, rect, clip, LOBBY_ALIGN_LEFT );
-
-	// Open, Full, or Joining while the join for this game is out
-	Color color = UIStyle::ACTIVE;
-	DisplayString *chip = cellText( list, row, COLUMN_STATE, &color );
-	if (s_joiningGame && s_joiningChip && (Int)(intptr_t)GadgetListBoxGetItemData( list, row ) == s_joiningGame)
-	{
-		chip = s_joiningChip;
-		color = UIStyle::ACTIVE;
-	}
-	if (chip)
-	{
-		GameFont *face = UIStyle::chipFont();
-		if (chip->getFont() != face)
-			chip->setFont( face );
-		Int left, width, w, h;
-		LobbyColumnSpan( list, rect.lo.x, COLUMN_STATE, left, width );
-		chip->getSize( &w, &h );
-		// UIStyle::chip's box round the label
-		const Int chipWidth = w + 2 * UIStyle::tallPx( 8.0f );
-		const Int chipHeight = h + UIStyle::tallPx( 5.0f ) + UIStyle::tallPx( 4.0f );
-		IRegion2D inside = clip;
-		chip->setClipRegion( &inside );
-		UIStyle::chip( chip, left + width - UIStyle::tallPx( CELL_PAD ) - chipWidth,
-			rect.lo.y + ( rect.hi.y - rect.lo.y - chipHeight ) / 2, color, UIStyle::FRAME );
-	}
-
-	if (rect.hi.y <= clip.hi.y)
-		TheDisplay->drawFillRect( rect.lo.x, rect.hi.y - 1, rect.hi.x - rect.lo.x, 1, UIStyle::GRID );
+	(void)clip;
+	const Int id = (Int)(intptr_t)GadgetListBoxGetItemData( list, row );
+	GameSpyStagingRoom *room = TheGameSpyInfo->findStagingRoomByID( id );
+	if (room == NULL)
+		return;
+	LobbyGameRow game;
+	game.name = room->getGameName();
+	game.map = LobbyMapName( room->getMap() );
+	game.mode = LobbyMapMode( room->getMap() );
+	game.seated = room->getReportedNumPlayers();
+	game.seats = room->getReportedMaxPlayers();
+	game.ping = rowPing( room );
+	game.password = room->getHasPassword();
+	game.state = LobbyGameStateOf( s_joiningGame && id == s_joiningGame, room->isGameInProgress(),
+		room->getExeCRC() != TheGlobalData->m_exeCRC || room->getIniCRC() != TheGlobalData->m_iniCRC, LobbyGameFull( room ) );
+	LobbyDrawGameRow( row, game, rect, FALSE );
 }
 
-/// the game list: the column heads on their rule over it, its rows, or the line saying it is empty
+/// the online list: its head over it, its rows, the legend and the empty line under them
 static void drawGameList( GameWindow *window, WinInstanceData *instData )
 {
-	Int x, y, width, height;
-	window->winGetScreenPosition( &x, &y );
-	window->winGetSize( &width, &height );
-	const Int band = UIStyle::tallPx( GAME_HEAD_HEIGHT );
-	const Int pad = UIStyle::tallPx( CELL_PAD );
-	for (Int head = 0; head < HEAD_COUNT; ++head)
+	(void)instData;
+	Int open = 0, playing = 0;
+	Bool locks = FALSE;
+	StagingRoomMap *games = TheGameSpyInfo->getStagingRoomList();
+	for (StagingRoomMap::iterator it = games->begin(); it != games->end(); ++it)
 	{
-		Int left, columnWidth, w, h;
-		LobbyColumnSpan( window, x, HEAD_COLUMN[ head ], left, columnWidth );
-		if (columnWidth <= 0 || s_gameHeads[ head ] == NULL)
+		GameSpyStagingRoom *game = it->second;
+		if (!game)
 			continue;
-		s_gameHeads[ head ]->getSize( &w, &h );
-		Int at = left + pad;
-		if (head == HEAD_PLAYERS)
-			at = left + columnWidth - pad - w;
-		else if (head == HEAD_PING)		// from where the light starts
-			at = left + columnWidth - min( UIStyle::tallPx( LIGHT_SIZE ), UIStyle::tallPx( GAME_ROW_HEIGHT ) );
-		s_gameHeads[ head ]->draw( at, y - band + ( band - h ) / 2, UIStyle::INK, UIStyle::SHADOW );
+		locks = locks || game->getHasPassword();
+		if (game->isGameInProgress())
+			++playing;
+		else if (!LobbyGameFull( game ) && game->getExeCRC() == TheGlobalData->m_exeCRC && game->getIniCRC() == TheGlobalData->m_iniCRC)
+			++open;
 	}
-	Int last, lastWidth;
-	LobbyColumnSpan( window, x, GAME_COLUMNS - 1, last, lastWidth );
-	TheDisplay->drawFillRect( x, y - 1, last + lastWidth - x, 1, UIStyle::FRAME );
+	UnicodeString count;
+	if (playing > 0)
+		count.format( TheGameText->fetch( "GUI:OnlineLobbyCount" ), open, playing );
+	else
+		count.format( TheGameText->fetch( "GUI:OnlineLobbyCountOpen" ), open );
+	LobbyDrawGameHead( 184, FALSE, count, LobbySortedColumn() );
+	LobbyDrawRows( window, drawGameRow );
 
-	if (GadgetListBoxGetNumEntries( window ) > 0)
-	{
-		LobbyDrawRows( window, drawGameRow );
-		return;
-	}
-	if (s_noGames && OnlineIsEnabled())
-	{
-		Int w, h;
-		s_noGames->getSize( &w, &h );
-		s_noGames->draw( x + ( width - w ) / 2, y + ( height - h ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
-	}
+	UnicodeString empty;
+	if (OnlineIsEnabled())
+		empty.format( TheGameText->fetch( "GUI:LobbyEmptyOnline" ), LobbyServerLabel().str() );
+	LobbyDrawGameFoot( window, locks, empty );
 }
 
-/* The list under its column heads.  The layout puts it right under its box's heading, so it moves down by
-	 the heads' band, counted from the box's top: a second call, or a layout that already leaves the band,
-	 lands where it is. */
+/// the list's rows 40 high at the board's scale, drawn by drawGameList
 static void freeGameListText( void );
 static void placeGameList( void )
 {
-	GameWindow *list = listboxLobbyGamesLarge;
 	freeGameListText();
-	if (!list || !parentGameListLarge)
+	if (!listboxLobbyGamesLarge)
 		return;
-	Int boxX, boxY, x, y, width, height;
-	parentGameListLarge->winGetScreenPosition( &boxX, &boxY );
-	list->winGetScreenPosition( &x, &y );
-	list->winGetSize( &width, &height );
-	const Int top = boxY + UIStyle::px( 56.0f ) + UIStyle::tallPx( GAME_HEAD_HEIGHT );
-	const Int bottom = y + height;
-	if (top != y && bottom - top > UIStyle::tallPx( GAME_ROW_HEIGHT ))
-	{
-		Int left, above;
-		list->winGetPosition( &left, &above );
-		list->winSetPosition( left, above + top - y );
-		height = bottom - top;
-		list->winSetSize( width, height );
-	}
-	LobbySetColumns( list, GAME_COLUMNS,
-		width >= UIStyle::tallPx( GAME_LIST_FULL_WIDTH ) ? GAME_COLUMN_PERCENT : GAME_COLUMN_PERCENT_NARROW );
-	list->winSetDrawFunc( drawGameList );
-
-	// the heads fitted to their columns, the empty line, the joining chip
-	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	for (Int head = 0; head < HEAD_COUNT; ++head)
-	{
-		Int left, columnWidth;
-		LobbyColumnSpan( list, x, HEAD_COLUMN[ head ], left, columnWidth );
-		if (head == HEAD_PING)		// the light's column and the milliseconds' together
-		{
-			Int pingLeft, pingWidth;
-			LobbyColumnSpan( list, x, COLUMN_PING, pingLeft, pingWidth );
-			columnWidth += pingWidth;
-		}
-		s_gameHeads[ head ] = TheDisplayStringManager->newDisplayString();
-		s_gameHeads[ head ]->setFont( body );
-		s_gameHeads[ head ]->setText( UIStyle::fitKey( HEAD_KEY[ head ], body, max( columnWidth - 2 * UIStyle::tallPx( CELL_PAD ), 1 ) ) );
-	}
-	const UnicodeString empty = TheGameText->fetch( "GUI:OnlineLobbyEmpty" );
-	s_noGames = TheDisplayStringManager->newDisplayString();
-	s_noGames->setFont( body );
-	s_noGames->setText( UIStyle::fitText( empty, body, max( width - 2 * UIStyle::tallPx( CELL_PAD ), 1 ) ) );
-	s_joiningChip = TheDisplayStringManager->newDisplayString();
-	s_joiningChip->setFont( UIStyle::chipFont() );
-	s_joiningChip->setText( TheGameText->fetch( "GUI:OnlineLobbyJoining" ) );
+	LobbySetColumns( listboxLobbyGamesLarge, GAME_COLUMNS, GAME_COLUMN_PERCENT );
+	listboxLobbyGamesLarge->winSetDrawFunc( drawGameList );
 }
 
 static void freeGameListText( void )
 {
-	for (Int head = 0; head < HEAD_COUNT; ++head)
-	{
-		if (s_gameHeads[ head ])
-			TheDisplayStringManager->freeDisplayString( s_gameHeads[ head ] );
-		s_gameHeads[ head ] = NULL;
-	}
-	if (s_noGames)
-		TheDisplayStringManager->freeDisplayString( s_noGames );
-	if (s_joiningChip)
-		TheDisplayStringManager->freeDisplayString( s_joiningChip );
-	s_noGames = s_joiningChip = NULL;
+	LobbyFreeText();
 	s_joiningGame = 0;
 }
 
@@ -921,9 +1320,7 @@ struct GameSortStruct
 	}
 };
 
-/* A game's row (drawGameRow draws it): an open game in INK with an Open chip, a full one MUTED with a
-	 Full chip, a started one MUTED with a Playing chip, one of another build or data MUTED with no chip (its
-	 tooltip says why it cannot be joined). */
+/* A game's row (drawGameRow draws it, LobbyDrawGameRow's states: Open, Full, Playing, Joining, Other build). */
 static Int insertGame( GameWindow *win, GameSpyStagingRoom *game )
 {
 	game->cleanUpSlotPointers();
@@ -962,57 +1359,11 @@ static Int insertGame( GameWindow *win, GameSpyStagingRoom *game )
 
 
 
-	// a typed name and a map's are cut with an ellipsis, never abbreviated
-	GameFont *font = win->winGetFont();
-	const Int pad = 2 * UIStyle::tallPx( CELL_PAD );
-	Int index = GadgetListBoxAddEntryText(win, UIStyle::fitName(gameName, font, GadgetListBoxGetColumnWidth(win, COLUMN_NAME) - pad),
-		gameColor, -1, COLUMN_NAME);
+	// the row is drawn from the room (drawGameRow); the cells keep its name for the listbox and, with a
+	// blank image a row high, its height of 40 at the board's scale
+	Int index = GadgetListBoxAddEntryText(win, gameName, gameColor, -1, COLUMN_NAME);
 	GadgetListBoxSetItemData(win, (void *)(intptr_t)game->getID(), index);
-
-	UnicodeString s;
-	const UnicodeString mapName = roomMapName(game->getMap());
-	GadgetListBoxAddEntryText(win, UIStyle::fitName(mapName, font, GadgetListBoxGetColumnWidth(win, COLUMN_MAP) - pad),
-		UIStyle::MUTED, index, COLUMN_MAP);
-
-	s.format(u"%d / %d", game->getReportedNumPlayers(), game->getReportedMaxPlayers());
-	GadgetListBoxAddEntryText(win, s, gameColor, index, COLUMN_NUMPLAYERS);
-
-	if (game->getHasPassword())
-	{
-		const Image *img = TheMappedImageCollection->findImageByName("Password");
-		if (img)
-			GadgetListBoxAddEntryImage(win, img, index, COLUMN_PASSWORD, img->getImageHeight(), img->getImageWidth());
-	}
-
-	if (playing)
-		GadgetListBoxAddEntryText(win, TheGameText->fetch("GUI:OnlineLobbyPlaying"), UIStyle::MUTED, index, COLUMN_STATE);
-	else if (!otherBuild)
-		GadgetListBoxAddEntryText(win, TheGameText->fetch(full ? "GUI:OnlineLobbyFull" : "GUI:Open"),
-			full ? UIStyle::MUTED : UIStyle::ACTIVE, index, COLUMN_STATE);
-
-	Int ping = game->getPingAsInt();
-	// -online: every route runs through the relay, so the pinger's figure means nothing (it reads 1000 for
-	// everyone); the host's own round trip to the server, as the server last reported it, is the part of the
-	// lag a game list can tell, and a host whose card the lobby has not heard is a dash with no light
-	if (OnlineIsEnabled())
-	{
-		GameSlot *host = game->getSlot(0);
-		OnlinePlayerInfo card;
-		AsciiString hostNick;
-		if (host && host->isHuman())
-			hostNick.translate(host->getName());
-		ping = hostNick.isNotEmpty() && OnlineGetPlayerInfo(hostNick, card) ? card.ping : -1;
-	}
-	if (ping >= 0)
-		s.format(u"%d", ping);
-	else
-		s = UnicodeString(u"\x2013");
-	GadgetListBoxAddEntryText(win, s, gameColor, index, COLUMN_PING);
-	// the light's cell is a row high, which is what sets the row's height
-	const Image *light = UIStyle::pingImage(ping);
-	GadgetListBoxAddEntryImage(win, light, index, COLUMN_LIGHT, UIStyle::tallPx(GAME_ROW_HEIGHT) - 1,
-		light ? light->getImageWidth() : UIStyle::tallPx(LIGHT_SIZE));
-
+	GadgetListBoxAddEntryImage(win, NULL, index, COLUMN_LIGHT, UIStyle::px(GAME_ROW_HEIGHT) - 1, UIStyle::px(LIGHT_SIZE));
 	return index;
 }
 

@@ -63,6 +63,9 @@
 #include "GameNetwork/IPEnumeration.h"
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/LANGameInfo.h"
+#include "GameNetwork/GameSpy/LobbyUtils.h"
+#include "GameClient/Display.h"
+#include "GameClient/UIStyle.h"
 
 Bool LANisShuttingDown = false;
 Bool LANbuttonPushed = false;
@@ -300,9 +303,8 @@ static GameWindow *textEntryPlayerName = NULL;
 static GameWindow *textEntryChat = NULL;
 static GameWindow *staticTextGameInfo = NULL;
 
-// Create Game makes a classic room; Mods asks the mode (AskGameMode) and its answer comes here too, for a room
-// that stands on a Direct Strike island or an Apocalypse map from the start (TheHostGameMode, spent by the room)
-static NameKeyType buttonModsID = NAMEKEY_INVALID;
+// Create Game asks the three modes (AskGameMode) and its answer comes here, for a Classic room or one that
+// stands on a Direct Strike island or an Apocalypse map from the start (TheHostGameMode, spent by the room)
 static void hostRoom( Int mode )
 {
 	if (TheLAN == NULL)
@@ -359,6 +361,202 @@ static void playerTooltip(GameWindow *window,
 
 
 //-------------------------------------------------------------------------------------------------
+// The lobby in the menu language (MENU-REDESIGN.md package 10, README-game-lists.md "lists-lan"): frame A
+// round the board, the title with "Local network", the player's name at the title row's right end, the
+// games (LobbyUtils.cpp's list), the chat, the picked game (GameInfoWindow.cpp) over the players, the keys.
+// Every number is at 1080 on the board; Tools/lanlobby_layout.py holds the windows' rects.
+//-------------------------------------------------------------------------------------------------
+static GameWinDrawFunc s_panelDraw = NULL;
+static Int s_pickedOffset = -2;			///< the list row the picked block shows, -1 for none
+static Int s_keysLit = -1;					///< which key is lit: 1 Join Game, 2 Create Game
+static Bool s_joinLit = FALSE;
+static Int s_playersTop = 752;			///< the players' head on the board
+
+/// a listed game as its row reads
+static Bool lanRow( LANGameInfo *game, LobbyGameRow &row )
+{
+	if (game == NULL)
+		return FALSE;
+	row.name = game->getPlayerName( 0 );
+	row.mode = LobbyMapMode( game->getMap() );
+	row.map = LobbyMapName( game->getMap() );
+	row.seated = 0;
+	row.seats = 0;
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		const GameSlot *slot = game->getConstSlot( i );
+		if (slot == NULL || slot->getState() == SLOT_CLOSED)
+			continue;
+		++row.seats;
+		if (slot->isOccupied())
+			++row.seated;
+	}
+	row.ping = -1;
+	row.password = FALSE;
+	// a LAN announcement carries no build: the host refuses another build's join, and says so
+	row.state = LobbyGameStateOf( FALSE, game->isGameInProgress(), FALSE, row.seated >= row.seats );
+	return TRUE;
+}
+
+static void drawLanGameRow( GameWindow *list, Int row, const IRegion2D &rect, const IRegion2D &clip )
+{
+	(void)clip;
+	LobbyGameRow game;
+	if (TheLAN && lanRow( TheLAN->LookupGameByListOffset( row ), game ))
+		LobbyDrawGameRow( row, game, rect, TRUE );
+}
+
+static void drawLanGames( GameWindow *window, WinInstanceData * )
+{
+	LobbyDrawRows( window, drawLanGameRow );
+	LobbyDrawGameFoot( window, FALSE, TheGameText->fetch( "GUI:LobbyEmptyLan" ) );
+}
+
+static void drawLanPlayerRow( GameWindow *list, Int row, const IRegion2D &rect, const IRegion2D &clip )
+{
+	IRegion2D inset = rect;
+	inset.lo.x += UIStyle::px( 2.0f );
+	LobbyDrawCell( list, row, 0, inset, clip, LOBBY_ALIGN_LEFT );
+}
+
+/// the players, the local one gold
+static void drawLanPlayers( GameWindow *window, WinInstanceData * )
+{
+	Int local = -1;
+	for (Int row = 0; TheLAN && row < GadgetListBoxGetNumEntries( window ); ++row)
+		if ((UnsignedInt)(uintptr_t)GadgetListBoxGetItemData( window, row, 0 ) == TheLAN->GetLocalIP())
+			local = row;
+	LobbyDrawRows( window, drawLanPlayerRow, local );
+}
+
+/// the panel: frame A on its glass, the head, the games', the chat's and the players' heads, the foot's hint
+static void drawLanPanel( GameWindow *window, WinInstanceData *instData )
+{
+	const IRegion2D panel = UIStyle::boardRect( UIStyle::MENU_PANEL_LEFT, UIStyle::MENU_PANEL_TOP, UIStyle::MENU_PANEL_RIGHT,
+		UIStyle::MENU_PANEL_BOTTOM );
+	UIStyle::glass( panel, 168 );
+	UIStyle::frameA( panel );
+
+	// the title in 40 px bold spaced capitals from the content's 60, "Local network" after it, the lit rule
+	GameFont *titleFont = UIStyle::menuFont( UIStyle::MENU_TEXT_TITLE, TRUE );
+	const Int titleMiddle = UIStyle::boardY( 70.0f );
+	const UnicodeString title = UIStyle::capitals( TheGameText->fetch( "GUI:LANLobby" ) );
+	const Int titleWidth = UIStyle::drawTracked( title, titleFont, UIStyle::boardX( 60.0f ), titleMiddle - titleFont->height / 2,
+		UIStyle::INK, 4.0f );
+	LobbyDrawWords( 13, TheGameText->fetch( "GUI:LocalNetwork" ), 20, FALSE, UIStyle::boardX( 60.0f ) + titleWidth + UIStyle::px( 24.0f ),
+		titleMiddle + UIStyle::px( 4.0f ), UIStyle::MUTED );
+	UIStyle::litLine( panel.lo.x, UIStyle::boardY( (Real)UIStyle::MENU_HEADER_RULE ), panel.hi.x - panel.lo.x, max( 1, UIStyle::px( 2.0f ) ),
+		UIStyle::FRAME );
+	GameFont *label = UIStyle::menuFont( UIStyle::MENU_TEXT_LABEL, TRUE );
+	const UnicodeString nameLabel = UIStyle::capitals( TheGameText->fetch( "GUI:LobbyPlayerName" ) );
+	UIStyle::drawTracked( nameLabel, label, UIStyle::boardX( 1346.0f ) - UIStyle::trackedWidth( nameLabel, label, UIStyle::MENU_LABEL_TRACKING ),
+		titleMiddle - label->height / 2, UIStyle::INK, UIStyle::MENU_LABEL_TRACKING );
+
+	// the games' head with its count; the chat's; the players' with theirs
+	Int open = 0, playing = 0;
+	for (LANGameInfo *game = TheLAN ? TheLAN->LookupGameByListOffset( 0 ) : NULL; game; game = game->getNext())
+	{
+		LobbyGameRow row;
+		lanRow( game, row );
+		if (row.state == LOBBY_STATE_PLAYING)
+			++playing;
+		else if (row.state == LOBBY_STATE_OPEN)
+			++open;
+	}
+	UnicodeString count;
+	if (playing > 0)
+		count.format( TheGameText->fetch( "GUI:OnlineLobbyCount" ), open, playing );
+	else
+		count.format( TheGameText->fetch( "GUI:OnlineLobbyCountOpen" ), open );
+	LobbyDrawGameHead( 132, TRUE, count, -1 );
+	LobbyDrawSection( TheGameText->fetch( "GUI:RoomChat" ), UnicodeString::TheEmptyString, UIStyle::ONLINE_LEFT, 454, 1310, 14 );
+	count.format( u"%d", listboxPlayers ? GadgetListBoxGetNumEntries( listboxPlayers ) : 0 );
+	LobbyDrawSection( TheGameText->fetch( "GUI:Players" ), count, 1334, s_playersTop, 1860, 15 );
+
+	const Int hintLeft = 684;
+	if (!LANbuttonPushed)
+		LobbyDrawWords( 12, TheGameText->fetch( s_joinLit ? "GUI:LobbyHintJoin" : "GUI:LobbyHintHost" ), UIStyle::MENU_TEXT_HINT, FALSE,
+			UIStyle::boardX( (Real)hintLeft ), UIStyle::boardY( 1002.0f ), UIStyle::MUTED );
+	(void)window;
+	(void)instData;
+}
+
+/// the players under the picked game, or the whole column while nothing is picked
+static void placeLanPlayers( Bool picked )
+{
+	s_playersTop = picked ? 752 : 130;
+	LobbyPlaceOnBoard( listboxPlayers, 1334, s_playersTop + 34, 1860, 946 );
+}
+
+/* Each frame: the first game is picked while games exist and none is; the picked block follows the pick; Join
+	 Game takes any game, lit for one it can take, else Create Game is the lit key. */
+static void syncLanPicked( void )
+{
+	if (TheLAN == NULL || listboxGames == NULL || buttonJoin == NULL || buttonHost == NULL)
+		return;
+	Int selected = -1;
+	GadgetListBoxGetSelected( listboxGames, &selected );
+	if (selected < 0 && GadgetListBoxGetNumEntries( listboxGames ) > 0)
+	{
+		GadgetListBoxSetSelected( listboxGames, 0 );
+		selected = 0;
+	}
+	LANGameInfo *game = selected >= 0 ? TheLAN->LookupGameByListOffset( selected ) : NULL;
+	const Int offset = game ? selected : -1;
+	if (offset != s_pickedOffset)
+	{
+		s_pickedOffset = offset;
+		placeLanPlayers( game != NULL );
+		if (game)
+			RefreshGameInfoWindow( game, game->getName() );
+		else
+			HideGameInfoWindow( TRUE );
+	}
+	LobbyGameRow row;
+	s_joinLit = lanRow( game, row ) && row.state == LOBBY_STATE_OPEN;
+	buttonJoin->winEnable( game != NULL );
+	const Int lit = s_joinLit ? 1 : 2;
+	if (lit != s_keysLit)
+	{
+		s_keysLit = lit;
+		LobbyMenuKey( buttonJoin, lit == 1 );
+		LobbyMenuKey( buttonHost, lit == 2 );
+	}
+}
+
+/// the look on the master's windows, from init
+static void initLanLook( void )
+{
+	GameWindow *panel = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "LanLobbyMenu.wnd:GadgetParent" ) );
+	if (panel && panel->winGetDrawFunc() != drawLanPanel)
+	{
+		s_panelDraw = panel->winGetDrawFunc();
+		panel->winSetDrawFunc( drawLanPanel );
+	}
+	(void)s_panelDraw;
+	if (listboxGames)
+	{
+		static const Int percent[ 2 ] = { 100, 0 };
+		LobbySetColumns( listboxGames, 2, percent );
+		listboxGames->winSetDrawFunc( drawLanGames );
+	}
+	if (listboxPlayers)
+	{
+		GadgetListBoxSetFont( listboxPlayers, UIStyle::menuFont( UIStyle::MENU_TEXT_BODY ) );
+		listboxPlayers->winSetDrawFunc( drawLanPlayers );
+	}
+	LobbyMenuChat( listboxChatWindow, UIStyle::MENU_TEXT_LABEL + 2 );
+	LobbyMenuEntry( textEntryChat, UIStyle::MENU_TEXT_BODY, UIStyle::INK );
+	LobbyMenuEntry( textEntryPlayerName, UIStyle::MENU_TEXT_ROW_FIGURE, UIStyle::GOLD );
+	GameWindow *keys[] = { buttonBack, buttonDirectConnect, buttonClear, buttonEmote };
+	for (Int k = 0; k < (Int)ARRAY_SIZE( keys ); ++k)
+		LobbyMenuKey( keys[ k ], FALSE );
+	s_pickedOffset = -2;
+	s_keysLit = -1;
+	s_joinLit = FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Initialize the Lan Lobby Menu */
 //-------------------------------------------------------------------------------------------------
 void LanLobbyMenuInit( WindowLayout *layout, void *userData )
@@ -373,7 +571,6 @@ void LanLobbyMenuInit( WindowLayout *layout, void *userData )
 	buttonClearID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonClear" ) );
 	buttonHostID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonHost" ) );
 	buttonJoinID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonJoin" ) );
-	buttonModsID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonMods" ) );
 	buttonDirectConnectID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonDirectConnect" ) );
 	buttonEmoteID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:ButtonEmote" ) );
 	staticToolTipID = TheNameKeyGenerator->nameToKey( AsciiString( "LanLobbyMenu.wnd:StaticToolTip" ) );
@@ -401,6 +598,7 @@ void LanLobbyMenuInit( WindowLayout *layout, void *userData )
 	listboxGames = TheWindowManager->winGetWindowFromId( NULL, listboxGamesID );
 	staticTextGameInfo = TheWindowManager->winGetWindowFromId( NULL, staticTextGameInfoID );
 	listboxPlayers->winSetTooltipFunc(playerTooltip);
+	initLanLook();
 
 	// Show Menu
 	layout->hide( FALSE );
@@ -539,8 +737,9 @@ static void shutdownComplete( WindowLayout *layout )
 
 	LANisShuttingDown = false;
 
-	// hide the layout
+	// hide the layout; the panel drew through the fade, so its words go only now
 	layout->hide( TRUE );
+	LobbyFreeText();
 
 	// our shutdown is complete
 	TheShell->shutdownComplete( layout, (LANnextScreen != NULL) );
@@ -632,6 +831,8 @@ void LanLobbyMenuUpdate( WindowLayout * layout, void *userData)
 
 	if (TheShell->isAnimFinished() && !LANbuttonPushed && TheLAN)
 		TheLAN->update();
+	if (!LANbuttonPushed)
+		syncLanPicked();
 
 	if (LANSocketErrorDetected == TRUE) {
 		LANSocketErrorDetected = FALSE;
@@ -803,14 +1004,10 @@ WindowMsgHandledType LanLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 				} //if ( controlID == buttonBack )
 				else if ( controlID == buttonHostID )
 				{
-					hostRoom( HOST_MODE_CLASSIC );
+					// which of the three modes the room is for; the answer creates it (hostRoom)
+					AskGameMode( hostRoom, FALSE );
 
 				}//else if ( controlID == buttonHostID )
-				else if ( controlID == buttonModsID )
-				{
-					// which mode the room is for; the answer creates it (hostRoom)
-					AskGameMode( hostRoom );
-				}
 				else if ( controlID == buttonClearID )
 				{
 					GadgetTextEntrySetText(textEntryPlayerName, UnicodeString::TheEmptyString);
@@ -936,6 +1133,9 @@ WindowMsgHandledType LanLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 					// Echo the user's input to the chat window
 					if (!txtInput.isEmpty())
 						TheLAN->RequestChat(txtInput, LANAPIInterface::LANCHAT_NORMAL);
+					else if (s_joinLit && buttonJoin)
+						// Enter on an empty line joins the picked game, as the foot's hint says
+						TheWindowManager->winSendSystemMsg( window, GBM_SELECTED, (WindowMsgData)buttonJoin, buttonJoinID );
 
 				}// if ( controlID == textEntryChatID )
 				/*

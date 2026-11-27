@@ -418,13 +418,22 @@ const char * Direct3D11_Post_Diagnostic();
 // Run the chain into the swap chain's back buffer, now, because the world is drawn and the command
 // bar is about to go on top of it.  Everything drawn after this lands in the swap chain directly.
 // An edge filter over a bitmap font does not antialias the letters, it doubles them, so where this
-// is called from is as much a part of the feature as the shader is.
-void Direct3D11_Finish_Scene();
+// is called from is as much a part of the feature as the shader is.  World is false for the frame
+// that drew no view (W3DDisplay's fallback), so the menu backdrop finds no world to blur on it.
+void Direct3D11_Finish_Scene(bool world = true);
 
 // The scene in front of the player with nothing over it, for a frame that never reached the world:
 // a menu, a loading screen. The present path and the screenshot path both call it and neither knows
 // whether the other has, so the first one to ask pays and the second finds the work done.
 void Direct3D11_Finish_Frame();
+
+// The menu backdrop: the frame on the back buffer as it stands at the first call in a frame, blurred
+// to radius at a height of 1080 (DX11PostProcessClass::Draw_Backdrop), drawn into the rectangle given.
+// Only while the draws go into the swap chain, which is a frame whose world is finished (the shell map
+// or a match behind a menu); a frame whose interface goes into the post chain's target, -d3d9 and
+// SDL3 get false and nothing drawn.  An empty rectangle draws nothing and only says whether a blur
+// could be drawn now.  The interface's target, viewport and bindings are as they were afterwards.
+bool Direct3D11_Draw_Backdrop(int x0, int y0, int x1, int y1, float radius);
 
 // The back buffer as it stands, in the eight-bit blue-green-red-alpha order the screenshot writer
 // wants, top row first.  Has to be called before the present that discards it.  Null when there is

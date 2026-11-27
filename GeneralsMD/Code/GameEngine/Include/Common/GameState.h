@@ -131,6 +131,19 @@ public:
 /// the game speed whose ticks a game second these are (30, 24, 20, 15 at 30 Hz), 0 for none of ours
 Int GameState_speedForTicksPerGameSecond( Int ticksPerGameSecond );
 
+/** What the Load Game list shows of a save beyond SaveGameInfo (docs/plans/MENU-REDESIGN.md, package
+	* 12): the campaign block's campaign and difficulty, the logic block's frame.  Read while the list
+	* is built; when a folder of saves would take longer than SinglePlayerLayout's budget (200 ms for
+	* fifty), none are kept and the details go without them. */
+struct SaveGameExtras
+{
+	AsciiString campaign;					///< the campaign's name, empty for a skirmish
+	Int difficulty;								///< a GameDifficulty
+	UnsignedInt frames;						///< the logic frame the save was made on, 0 when the file holds none
+};
+/// the extras the last populateSaveGameListbox read for this save file (a leaf name), FALSE for none
+Bool GameState_saveExtras( const AsciiString &filename, SaveGameExtras &extras );
+
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 struct AvailableGameInfo

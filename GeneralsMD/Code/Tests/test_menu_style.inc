@@ -110,11 +110,11 @@ TEST( menu_style_box_widths_and_growth )
 	menuCheckRect( boxRect1080( BOX_LIST, 732, TRUE ), 440, 56, 1480, 788 );
 	CHECK( boxRect1080( BOX_LIST, 900, TRUE ).lo.y >= BOX_TOP_MIN );
 
-	// the keys: Enter's at the right, 170 wide, 12 apart, 48 high, 20 over the foot
+	// the keys: Enter's at the right, 170 wide, 16 apart (the 8 px grid), 48 high, 20 over the foot
 	const IRegion2D box = boxRect1080( BOX_QUESTION, questionBoxHeight( 1 ), FALSE );
 	menuCheckRect( boxKeyRect1080( box, 0 ), 1118, 597, 1288, 645 );
-	menuCheckRect( boxKeyRect1080( box, 1 ), 936, 597, 1106, 645 );
-	menuCheckRect( boxKeyRect1080( box, 2 ), 754, 597, 924, 645 );
+	menuCheckRect( boxKeyRect1080( box, 1 ), 932, 597, 1102, 645 );
+	menuCheckRect( boxKeyRect1080( box, 2 ), 746, 597, 916, 645 );
 
 	// the tallest question box still stands on the board
 	const IRegion2D tall = boxRect1080( BOX_QUESTION, questionBoxHeight( questionBoxMaxLines() ), FALSE );

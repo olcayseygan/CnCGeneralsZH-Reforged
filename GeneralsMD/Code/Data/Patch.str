@@ -1946,7 +1946,7 @@ GUI:CampaignMission
 END
 
 GUI:CampaignZeroHour
-"GENERALS ZERO HOUR"
+"ZERO HOUR"
 END
 
 GUI:CampaignGenerals
@@ -8563,4 +8563,1328 @@ END
 
 GUI:LoadTipApocalypse3
 "The first wave comes %d seconds in. Build before you fight."
+END
+
+// Menu redesign package 8, the options screen: the rail's tabs and groups, Look and Quality, the fold,
+// the badges and their legend, the reasons a row is greyed, the merged lists, the pane's blocks and
+// every row's OPTIONTIP:<Stem>, the two sentences the pane says about it.  OPTIONCOST:<Stem><entry> is a
+// list entry's measured price where one was measured.  OptionsMenu.cpp, optionsmenu_layout.py.
+GUI:OptionsTabSystem
+"System"
+END
+
+GUI:OptionsTabWorld
+"World"
+END
+
+GUI:OptionsMore
+"More"
+END
+
+GUI:OptionsMoreCount
+"%d more:"
+END
+
+GUI:OptionsLook
+"Look"
+END
+
+GUI:OptionsLookName
+"Look"
+END
+
+GUI:OptionsLookClassic
+"Classic"
+END
+
+GUI:OptionsLookReforged
+"Reforged"
+END
+
+GUI:OptionsQuality
+"Quality"
+END
+
+GUI:OptionsQualityName
+"Quality"
+END
+
+GUI:OptionsQualityStep0
+"Low"
+END
+
+GUI:OptionsQualityStep1
+"Medium"
+END
+
+GUI:OptionsQualityStep2
+"High"
+END
+
+GUI:OptionsQualityStep3
+"Ultra"
+END
+
+GUI:OptionsLocked
+"Locked in a match"
+END
+
+GUI:OptionsBadgeRestart
+"Restart"
+END
+
+GUI:OptionsBadgeNextMap
+"Next map"
+END
+
+GUI:OptionsLegendRestart
+"after a restart"
+END
+
+GUI:OptionsLegendNextMap
+"from the next map"
+END
+
+GUI:OptionsCost
+"Cost"
+END
+
+GUI:OptionsCostMs
+"About %s ms a frame"
+END
+
+GUI:OptionsCostZero
+"No measurable cost"
+END
+
+GUI:OptionsCostUnmeasured
+"Cost not measured yet"
+END
+
+GUI:OptionsCostRig
+"RTX 2060, 1080p"
+END
+
+GUI:OptionsCostWaterStyle
+"3 to 6 ms Classic, 11 to 45 ms Modern on a sea map"
+END
+
+GUI:OptionsTabCost
+"Measured cost of this tab"
+END
+
+GUI:OptionsTabCostUnit
+"a frame, RTX 2060 at 1080p"
+END
+
+GUI:OptionsNeeds
+"Needs"
+END
+
+GUI:OptionsNeededBy
+"These need it"
+END
+
+GUI:OptionsChoices
+"Choices"
+END
+
+GUI:OptionsGroupCost
+"%s · cost a frame"
+END
+
+GUI:OptionsGroupAsSet
+"%s · as set"
+END
+
+GUI:OptionsNotMeasured
+"not measured"
+END
+
+GUI:OptionsNot
+"not %s"
+END
+
+GUI:OptionsValueOn
+"On"
+END
+
+GUI:OptionsValueOff
+"Off"
+END
+
+GUI:OptionsNeedD3D11
+"Direct3D 11"
+END
+
+GUI:OptionsTestNotRun
+"Connection test: not run since start"
+END
+
+GUI:OptionsTestDone
+"Connection test: runs at your next online sign-in"
+END
+
+GUI:OptionsReasonReforged
+"Reforged look only"
+END
+
+GUI:OptionsReasonD3D11
+"Direct3D 11 only"
+END
+
+GUI:OptionsReasonClassicWater
+"Classic water only"
+END
+
+GUI:OptionsReasonCastShadows
+"Needs Cast Shadows"
+END
+
+GUI:OptionsReasonLegacySound
+"Off while Legacy Sound is on"
+END
+
+GUI:OptionsReasonFullscreen
+"Fullscreen only"
+END
+
+GUI:OptionsFiltering0
+"Bilinear"
+END
+
+GUI:OptionsFiltering1
+"Trilinear"
+END
+
+GUI:OptionsFiltering2
+"Anisotropic 4x"
+END
+
+GUI:OptionsFiltering3
+"Anisotropic 8x"
+END
+
+GUI:OptionsFiltering4
+"Anisotropic 16x"
+END
+
+GUI:OptionsReflections0
+"Off"
+END
+
+GUI:OptionsReflections1
+"Legacy"
+END
+
+GUI:OptionsReflections2
+"SSR"
+END
+
+GUI:OptionsReflections3
+"Hybrid"
+END
+
+GUI:OptionsHeadScreen
+"Screen"
+END
+
+GUI:OptionsHeadFrameRate
+"Frame rate"
+END
+
+GUI:OptionsHeadFrameRate_Short
+"FPS"
+END
+
+GUI:OptionsHeadNetwork
+"Network"
+END
+
+GUI:OptionsHeadShadows
+"Shadows"
+END
+
+GUI:OptionsHeadDetail
+"Detail"
+END
+
+GUI:OptionsHeadLight
+"Light"
+END
+
+GUI:OptionsHeadSky
+"Sky"
+END
+
+GUI:OptionsHeadGround
+"Ground"
+END
+
+GUI:OptionsHeadWater
+"Water"
+END
+
+GUI:OptionsHeadParticles
+"Particles"
+END
+
+GUI:OptionsHeadFire
+"Fire"
+END
+
+GUI:OptionsHeadDestruction
+"Destruction"
+END
+
+GUI:OptionsHeadVolume
+"Volume"
+END
+
+GUI:OptionsHeadOutput
+"Output"
+END
+
+GUI:OptionsHeadMix
+"Mix"
+END
+
+GUI:OptionsHeadCamera
+"Camera"
+END
+
+GUI:OptionsHeadOrders
+"Orders"
+END
+
+GUI:OptionsHeadBuilding
+"Building"
+END
+
+GUI:OptionsHeadDevices
+"Devices"
+END
+
+GUI:OptionsHeadBar
+"Bar"
+END
+
+GUI:OptionsHeadMarkers
+"Markers"
+END
+
+GUI:OptionsHeadGame
+"Game"
+END
+
+GUI:OptionsConnectionTest
+"Connection Test"
+END
+
+GUI:OptionsHDTextures
+"HD Textures"
+END
+
+GUI:OptionsTextureFiltering
+"Texture Filtering"
+END
+
+GUI:OptionsKeepDetail
+"Keep Detail"
+END
+
+GUI:OptionsAmbientOcclusion
+"Ambient Occlusion"
+END
+
+GUI:OptionsFireColors
+"Fire Colors"
+END
+
+GUI:OptionsReflections
+"Reflections"
+END
+
+GUI:OptionsExplosionDebris
+"Explosion Debris"
+END
+
+GUI:OptionsBouncingDebris
+"Bouncing Debris"
+END
+
+GUI:OptionsHeatHaze
+"Heat Haze"
+END
+
+GUI:OptionsToxinClouds
+"Toxin Clouds"
+END
+
+GUI:OptionsDynamicMusic
+"Music Follows the Fight"
+END
+
+GUI:OptionsTest
+"Test"
+END
+
+GUI:OptionsCancel
+"Cancel"
+END
+
+GUI:HotkeysPicked
+"Picked"
+END
+
+GUI:HotkeysAlsoOnKey
+"Also on this key"
+END
+
+OPTIONCOST:ShadowQuality2
+"about 0.25 ms"
+END
+
+OPTIONCOST:ShadowQuality3
+"up to 1.6 ms"
+END
+
+OPTIONCOST:MSAA2
+"about 0.4 ms"
+END
+
+OPTIONCOST:SunShafts1
+"half of High"
+END
+
+OPTIONCOST:SunShafts2
+"about 0.4 ms"
+END
+
+OPTIONCOST:WaterStyle0
+"3 to 6 ms on a sea map"
+END
+
+OPTIONCOST:WaterStyle1
+"11 to 45 ms on a sea map"
+END
+
+OPTIONCOST:Smoke2
+"about 0.75 ms"
+END
+
+OPTIONTIP:Resolution
+"How many pixels the game draws. Your monitor's own size is the sharpest; a smaller one runs faster and looks softer."
+END
+
+OPTIONTIP:WindowMode
+"Borderless lets you alt-tab without the screen going black. Fullscreen can use a smaller resolution than the monitor's."
+END
+
+OPTIONTIP:Monitor
+"The monitor the game plays on. The resolution list follows it."
+END
+
+OPTIONTIP:Gamma
+"Lighter or darker picture. Raise it if night maps are too dark to read."
+END
+
+OPTIONTIP:FullscreenScaling
+"When your resolution is not your monitor's shape: stretch it over the screen, or keep its shape with black bars."
+END
+
+OPTIONTIP:FrameRateLimit
+"The most pictures a second the game draws; the game itself never slows. Pick 60 or 144 to keep a hot graphics card cooler and quieter."
+END
+
+OPTIONTIP:VSync
+"Stops the picture tearing across the screen in fast pans. It holds the frame rate to your monitor and adds a little input delay."
+END
+
+OPTIONTIP:SmoothMotion
+"Units move smoothly on a fast monitor instead of stepping 30 times a second. Leave it on unless motion looks smeared to you."
+END
+
+OPTIONTIP:LANIP
+"The network card used for LAN games. Change it only if LAN players cannot see you."
+END
+
+OPTIONTIP:FirewallPortOverride
+"A port your router forwards to this computer. Leave empty unless joining fails."
+END
+
+OPTIONTIP:OnlineIP
+"The address used for the old online service. Most players never need it."
+END
+
+OPTIONTIP:SendDelay
+"Slows sending a little for some strict firewalls. Leave it off unless games drop."
+END
+
+OPTIONTIP:HTTPProxy
+"A proxy server for the old online service."
+END
+
+OPTIONTIP:ConnectionTest
+"Checks your connection again after you change router or provider."
+END
+
+OPTIONTIP:CastShadows
+"Units, buildings and trees throw shadows on the ground and each other. The heaviest box here: turn it off first if big fights stutter."
+END
+
+OPTIONTIP:ShadowQuality
+"How sharp shadow edges are. Ray Traced keeps them crisp at any zoom but costs the most; Low frees video memory on a weak card."
+END
+
+OPTIONTIP:FlatShadows
+"A flat dark patch under units that have no real shadow. Costs nothing."
+END
+
+OPTIONTIP:InfantryShadows
+"Soldiers cast real shadows instead of a round patch. Needs Cast Shadows."
+END
+
+OPTIONTIP:ProjectileShadows
+"Missiles and bombs in flight get a shadow on the ground."
+END
+
+OPTIONTIP:PropShadows
+"Fences, rubbish and shrubs cast shadows too. Small cost on maps full of props."
+END
+
+OPTIONTIP:ParticleShadows
+"Big smoke and dust clouds lay a soft shadow on the ground. Small cost in heavy fighting."
+END
+
+OPTIONTIP:VolumetricSmoke
+"Smoke darkens the ground, units and smoke behind it by how thick it is."
+END
+
+OPTIONTIP:CloudShadows
+"Shadows of passing clouds drift over the ground. Costs nothing."
+END
+
+OPTIONTIP:TextureResolution
+"How sharp textures are up close. Lower it only on a card with little video memory."
+END
+
+OPTIONTIP:MSAA
+"Smooths the jagged steps along model edges. 2x or 4x is enough; higher costs frame rate for little gain."
+END
+
+OPTIONTIP:HDTextures
+"Every texture and ground tile at twice the detail. Turn it off if your card is short of video memory."
+END
+
+OPTIONTIP:DetailedModels
+"The rebuilt, more detailed units and buildings. Other players see their own choice, so you play with anyone."
+END
+
+OPTIONTIP:TextureFiltering
+"Keeps distant ground sharp instead of blurred and shimmering. Anisotropic 16x costs almost nothing on any recent card."
+END
+
+OPTIONTIP:KeepDetail
+"When a big fight slows the game, effects are normally thinned to keep up. Tick it to keep every effect and let the frame rate drop instead."
+END
+
+OPTIONTIP:FullDetailAtDistance
+"Units and buildings far from the camera keep their full detail instead of a lighter model. Small cost, seen mostly when zoomed out."
+END
+
+OPTIONTIP:LightingStyle
+"Reforged gives each map a stronger sun, deeper shade and darker shadows at the same time of day. Classic is the flat 2003 light."
+END
+
+OPTIONTIP:Bloom
+"How brightly fire, blasts and lasers burn and spill light. Turn it down if explosions wash out the screen."
+END
+
+OPTIONTIP:MapLight
+"A low afternoon sun with warmer light and longer shadows, and haze lying over low ground."
+END
+
+OPTIONTIP:SunShafts
+"Sunlight falls in beams through dust between buildings and trees, strongest at dawn and dusk. Low costs half of High."
+END
+
+OPTIONTIP:AmbientOcclusion
+"Corners and the ground under tanks and buildings darken, so nothing seems to float."
+END
+
+OPTIONTIP:HemiAmbient
+"Models are lit from the sky above and the ground below, so a tank's top is lighter than its belly."
+END
+
+OPTIONTIP:InternalHdr
+"Fire, blasts and lasers keep their colour at full brightness instead of turning flat white."
+END
+
+OPTIONTIP:TeamGlow
+"Each side's colour patches on units and buildings glow softly in that colour."
+END
+
+OPTIONTIP:Atmosphere
+"The far ground fades into the sky's colour and a real sky shows past the map's edge. Fog of war stays dark."
+END
+
+OPTIONTIP:Weather
+"Rain, blowing sand or snow by the map, and wind bending trees and smoke. Only your screen: units see and hit the same."
+END
+
+OPTIONTIP:ShowProps
+"Trees and bushes on the map. Network games always show them."
+END
+
+OPTIONTIP:GroundFoliage
+"Grass and small plants grow on grassy ground and sway in the wind. Looks only; units walk through."
+END
+
+OPTIONTIP:GroundLighting
+"A faint light and dark pattern on the ground hides its repeating tiles. Costs nothing."
+END
+
+OPTIONTIP:TreeSway
+"Trees and shrubs lean in the wind."
+END
+
+OPTIONTIP:WaterStyle
+"Modern adds waves, shore detail and foam behind ships. It is heavy on sea maps; keep Classic on a weak card."
+END
+
+OPTIONTIP:SmoothWater
+"Water fades out at the shore instead of ending in a hard line."
+END
+
+OPTIONTIP:WaterFoam
+"Rivers and lakes carry foam and a foam band along the shore. Classic water only."
+END
+
+OPTIONTIP:WaterSplashes
+"Shells and falling bodies splash and send rings across water. Classic water only; small cost under heavy shelling."
+END
+
+OPTIONTIP:WaterFftResolution
+"Fine ripples on Modern water waves. Low is faster."
+END
+
+OPTIONTIP:WaterRefractionQuality
+"Full bends the view under the surface, Simple keeps it clear, Off makes the water opaque and fastest."
+END
+
+OPTIONTIP:MapAwareWaveHeading
+"Swells turn toward the shore and fade behind islands."
+END
+
+OPTIONTIP:UnderwaterClarity
+"Shallow reefs and sunken ruins show through the sea."
+END
+
+OPTIONTIP:Reflections
+"What the water reflects. Off keeps only the sky and sun glint and is fastest; Hybrid looks best."
+END
+
+OPTIONTIP:WaterReflectionDetail
+"How sharp the reflections are. Low is faster."
+END
+
+OPTIONTIP:ParticleCap
+"How many sparks, smoke puffs and flames can exist at once. The second heaviest setting: lower it if explosions slow the game."
+END
+
+OPTIONTIP:Smoke
+"How long smoke hangs and how thick it looks. Very Thick hides more of the battlefield and costs frame rate over burning bases."
+END
+
+OPTIONTIP:DebrisTrails
+"Blasts throw fragments trailing smoke, and wrecks shed burning shrapnel."
+END
+
+OPTIONTIP:ParticleBounce
+"Sparks and debris land and bounce on the ground instead of sinking into it."
+END
+
+OPTIONTIP:Firelight
+"Fires and explosions throw flickering orange light on the ground, walls and units, most of all at night. Turn it off if night battles stutter."
+END
+
+OPTIONTIP:HeatHaze
+"Air shimmers over fires, along lasers and microwave beams and behind missile exhaust."
+END
+
+OPTIONTIP:SmokeFireLighting
+"Smoke next to a fire picks up its orange light. Costs nothing."
+END
+
+OPTIONTIP:CloudStyle
+"Volumetric makes toxin and radiation clouds roll and drift. The danger zone is the same either way."
+END
+
+OPTIONTIP:GroundMarks
+"Shells leave burns, fallen buildings leave stains and treads stay dark, fading over about four minutes."
+END
+
+OPTIONTIP:StructureCollapse
+"A destroyed building sinks into the ground instead of vanishing at once. Looks only; turn it off if the moment a base falls stutters."
+END
+
+OPTIONTIP:Ragdoll
+"Fallen soldiers go limp and fall the way the hit pushed them. Looks only."
+END
+
+OPTIONTIP:ExtraAnimations
+"Buildings rise inside scaffolding while they are built."
+END
+
+OPTIONTIP:MasterVolume
+"The whole game louder or quieter. The other sliders keep their balance under it."
+END
+
+OPTIONTIP:MusicVolume
+"How loud the music is."
+END
+
+OPTIONTIP:SFXVolume
+"Gunfire, explosions and the rest of the battle. Ambience has its own slider."
+END
+
+OPTIONTIP:VoiceVolume
+"Unit replies, announcements and movie speech."
+END
+
+OPTIONTIP:AmbientVolume
+"Birds, wind, water and town noise. Lower it to keep the battle loud and the world quiet."
+END
+
+OPTIONTIP:AudioDevice
+"The speakers or headset the game plays through. Default follows Windows when you plug in a headset."
+END
+
+OPTIONTIP:SpeakerType
+"Headphones place sounds behind and beside you; pick it whenever you wear them."
+END
+
+OPTIONTIP:MuteInBackground
+"The game goes silent when you switch to another window."
+END
+
+OPTIONTIP:LegacySound
+"The original 2003 sound mix, without the newer distance, echo and battle mixing."
+END
+
+OPTIONTIP:DynamicMusic
+"In skirmish and online, the music turns harder when fighting starts near you and calms down after. Needs Legacy Sound off."
+END
+
+OPTIONTIP:ScrollSpeed
+"How fast the camera pans at the screen edge, with the arrow keys and on a right-drag."
+END
+
+OPTIONTIP:ZoomSpeed
+"How far one mouse-wheel notch zooms. 100 is the original game."
+END
+
+OPTIONTIP:ZoomToCursor
+"The wheel zooms toward the cursor instead of the screen centre."
+END
+
+OPTIONTIP:StartAtMaxZoom
+"A match opens with the camera zoomed all the way out."
+END
+
+OPTIONTIP:CameraShake
+"Nukes and big blasts nearby shake the camera. Turn it off if it bothers you."
+END
+
+OPTIONTIP:IdleWorkerCamera
+"The idle worker button also moves the camera to the worker it picks."
+END
+
+OPTIONTIP:EdgeScrollWindowed
+"The screen edge scrolls the camera in windowed mode too. Useful with a second monitor."
+END
+
+OPTIONTIP:IsometricCamera
+"A flat view from far away: units are the same size at the top and bottom of the screen."
+END
+
+OPTIONTIP:SnapCamera45
+"Camera turns stop at the eight 45 degree directions. Hold Shift to turn freely."
+END
+
+OPTIONTIP:DrawAnchor
+"Marks the spot where a right-drag scroll started."
+END
+
+OPTIONTIP:MoveAnchor
+"The scroll marker follows the cursor, so a long drag does not keep speeding up."
+END
+
+OPTIONTIP:Retaliation
+"Your units fire back at whatever attacks them. Turn it off to keep units from chasing off on their own."
+END
+
+OPTIONTIP:FormationDrag
+"With a move or attack-move order ready, drag a line and the units spread along it."
+END
+
+OPTIONTIP:DoubleClickAttackMove
+"Double-click the ground and units move there, then guard the area."
+END
+
+OPTIONTIP:DragTolerance
+"How far the mouse may move before a click becomes a drag. Raise it if selection boxes open by accident."
+END
+
+OPTIONTIP:BuildWithoutWorker
+"With nothing selected, the bar shows your workers' buildings and the nearest idle worker goes to build."
+END
+
+OPTIONTIP:GridBuild
+"Buildings land on a grid, so two placed by eye leave no gap units cannot pass."
+END
+
+OPTIONTIP:SnapBuildNeighbour
+"A building placed just short of another snaps flush against it."
+END
+
+OPTIONTIP:NudgeBuild
+"A building placed on a blocked spot slides to the nearest free one instead of turning red."
+END
+
+OPTIONTIP:SnapBuild45
+"Turning a building while placing it stops at the eight 45 degree directions, for straight walls and defences."
+END
+
+OPTIONTIP:ChromaLighting
+"Razer keyboards and mice light up your command bar, power and money during a match."
+END
+
+OPTIONTIP:HudLayout
+"Reforged is the bottom bar with tabs, production list and power tray. Classic is the 2003 bar; Red Alert Style moves building into a sidebar and uses Red Alert 2's keys."
+END
+
+OPTIONTIP:MinimapSize
+"Draws the minimap larger, growing up from the bottom left corner over the battlefield."
+END
+
+OPTIONTIP:NetBox
+"A box in the top right with the match clock and frame rate. Off, the superweapon timers move into the corner."
+END
+
+OPTIONTIP:HudWidth
+"On a very wide screen, gathers the interface into the middle so the bar stays in front of you."
+END
+
+OPTIONTIP:MenuTransitionSpeed
+"How fast menus slide and fade. Raise it to get through menus faster."
+END
+
+OPTIONTIP:HealthBars
+"Smart shows a bar over anything hurt, the selection and what is under the cursor. Selection Only is the original game."
+END
+
+OPTIONTIP:PlayerColors
+"You, Allies, Enemies paints you blue, friends green and foes red. Only your screen changes."
+END
+
+OPTIONTIP:SelectionOutlines
+"A ring in the owner's colour under each selected unit and a line round a selected building."
+END
+
+OPTIONTIP:OrderLines
+"A line from each selected unit to where it is going, through every queued waypoint."
+END
+
+OPTIONTIP:HitFlash
+"A unit or building that is hit blinks red, so you see what is under fire."
+END
+
+OPTIONTIP:DamageNumbers
+"The damage of each hit rises over the target in red."
+END
+
+OPTIONTIP:BehindBuilding
+"A unit hidden behind a building shows through it as a coloured outline."
+END
+
+OPTIONTIP:HealthBarColors
+"Bars go green to red by health, or take each owner's colour."
+END
+
+OPTIONTIP:AircraftAltitudeLine
+"A thin line from each flying aircraft to the ground marks where it really is and how high it flies."
+END
+
+OPTIONTIP:EmptyBuildingPips
+"Empty garrison slots show over buildings nobody is inside."
+END
+
+OPTIONTIP:Language
+"The language of menus, orders and subtitles. Voices stay as installed."
+END
+
+OPTIONTIP:GameSpeedMissions
+"How fast campaign and challenge missions play. 1.0x is the original game; skirmish picks its speed in the lobby."
+END
+
+OPTIONTIP:SaveCamera
+"Your camera moves are saved into your single player and skirmish replays."
+END
+
+OPTIONTIP:UseCamera
+"A replay follows the camera its player recorded instead of a free camera."
+END
+
+OPTIONTIP:Look
+"Classic is the game as it looked in 2003. Reforged adds sharper art, sun shadows and the new light and effects, and turns on the boxes below."
+END
+
+OPTIONTIP:Quality
+"Left runs fastest, right looks best; the four presets are points along it. Drag it first, then change single boxes if you want."
+END
+
+// Menu redesign package 10, game lists: Custom games and the LAN lobby, their rows, the picked game, the
+// Host Game, Join Game and Direct Connect boxes.
+GUI:LANLobby
+"LAN Lobby"
+END
+
+GUI:LocalNetwork
+"Local network"
+END
+
+GUI:LobbyPlayerName
+"Player name"
+END
+
+GUI:LobbyModeClassic
+"Classic"
+END
+
+GUI:LobbyGeneratedIsland
+"Generated island"
+END
+
+GUI:LobbyGeneratedBasin
+"Generated basin"
+END
+
+GUI:LobbyOtherBuild
+"Other build"
+END
+
+GUI:LobbyPassword
+"Password"
+END
+
+GUI:LobbyEmptyOnline
+"No open games on %ls. Host one."
+END
+
+GUI:LobbyEmptyLan
+"No games on this network yet. Create one."
+END
+
+GUI:LobbyHintJoin
+"Enter joins the picked game"
+END
+
+GUI:LobbyHintHost
+"Nothing to join yet"
+END
+
+GUI:LobbyPickedGame
+"Picked game"
+END
+
+GUI:LobbyHostOf
+"Host %ls"
+END
+
+GUI:LobbyOpenSeats
+"%d open seats"
+END
+
+GUI:LobbyWinsLosses
+"Wins-losses"
+END
+
+GUI:LobbyJoinGame
+"Join game"
+END
+
+GUI:LobbyFieldName
+"Game name"
+END
+
+GUI:HostQuestion
+"A %ls room on %ls"
+END
+
+GUI:PasswordHint
+"Empty is an open game"
+END
+
+GUI:LimitArmiesLine
+"USA, China and GLA only, no generals' armies"
+END
+
+GUI:JoinPasswordLine
+"This game asks for its password"
+END
+
+GUI:DirectConnectQuestion
+"Play with a friend by address"
+END
+
+GUI:YourName
+"Your name"
+END
+
+GUI:YourAddress
+"Your address"
+END
+
+GUI:TheirAddress
+"Their address"
+END
+
+GUI:AddressHint
+"Give this to your friend"
+END
+
+// Menu redesign package 12, single player: Generals' Challenge, the replay list, Load Game, the Save
+// Replay and Save / Load boxes. Army words are drawn in capitals on the cards and the ladder.
+GUI:SPChallengeTitle
+"Generals' Challenge"
+END
+
+GUI:SPChooseGeneral
+"Choose your general"
+END
+
+GUI:SPSideUSA
+"USA"
+END
+
+GUI:SPSideChina
+"China"
+END
+
+GUI:SPSideGLA
+"GLA"
+END
+
+GUI:SPTactics
+"Tactics"
+END
+
+GUI:SPStationed
+"Stationed"
+END
+
+GUI:SPTheChallenge
+"The challenge"
+END
+
+GUI:SPBattles
+"%d battles, %s last"
+END
+
+GUI:SPLocationUnknown
+"Location unknown"
+END
+
+GUI:SPYourGeneral
+"Your general"
+END
+
+GUI:SPThisGeneral
+"This general"
+END
+
+GUI:SPBattleInOrder
+"Battle, in order"
+END
+
+GUI:SPDifficulty
+"Difficulty"
+END
+
+GUI:SPPickedOnMenu
+"picked on the main menu"
+END
+
+GUI:SPPickedOnMenu_Short
+"main menu"
+END
+
+GUI:SPFinalBattle
+"Final battle"
+END
+
+GUI:SPFinalBattle_Short
+"Final"
+END
+
+GUI:SPArmyAirForce
+"Air Force"
+END
+
+GUI:SPArmyAirForce_Short
+"Air"
+END
+
+GUI:SPArmyToxin
+"Toxin"
+END
+
+GUI:SPArmyNuke
+"Nuke"
+END
+
+GUI:SPArmySuperweapon
+"Superweapon"
+END
+
+GUI:SPArmyTank
+"Tank"
+END
+
+GUI:SPArmyLaser
+"Laser"
+END
+
+GUI:SPArmyStealth
+"Stealth"
+END
+
+GUI:SPArmyInfantry
+"Infantry"
+END
+
+GUI:SPArmyDemolition
+"Demolition"
+END
+
+GUI:SPReplays
+"Replays"
+END
+
+GUI:SPReplayCount
+"%d replays"
+END
+
+GUI:SPName
+"Name"
+END
+
+GUI:SPRecorded
+"Recorded"
+END
+
+GUI:SPMap
+"Map"
+END
+
+GUI:SPPlayers
+"Players"
+END
+
+GUI:SPLength
+"Length"
+END
+
+GUI:SPVersion
+"Version"
+END
+
+GUI:SPOlder
+"Older"
+END
+
+GUI:SPOlderLine
+"Older: recorded by another version, it may not play back right"
+END
+
+GUI:SPSpeed
+"Speed"
+END
+
+GUI:SPGame
+"Game"
+END
+
+GUI:SPEnded
+"Ended"
+END
+
+GUI:SPThisBuild
+", this build"
+END
+
+GUI:SPOlderBuild
+", older"
+END
+
+GUI:SPMultiplayer
+"Multiplayer"
+END
+
+GUI:SPSinglePlayer
+"Single player"
+END
+
+GUI:SPPlayedOut
+"Played out"
+END
+
+GUI:SPQuitEarly
+"Left early"
+END
+
+GUI:SPOutOfSync
+"Out of sync"
+END
+
+GUI:SPLeft
+"Left"
+END
+
+GUI:SPTeam
+"Team %d"
+END
+
+GUI:SPCopyToDesktop
+"Copy to desktop"
+END
+
+GUI:SPCopyToDesktop_Short
+"Copy"
+END
+
+GUI:SPDelete
+"Delete"
+END
+
+GUI:SPWatchReplay
+"Watch replay"
+END
+
+GUI:SPWatchReplay_Short
+"Watch"
+END
+
+GUI:SPSaveCount
+"%d saved games"
+END
+
+GUI:SPCampaign
+"Campaign"
+END
+
+GUI:SPMission
+"Mission"
+END
+
+GUI:SPKind
+"Kind"
+END
+
+GUI:SPSaved
+"Saved"
+END
+
+GUI:SPKindSaved
+"Saved"
+END
+
+GUI:SPKindMissionStart
+"Mission start"
+END
+
+GUI:SPLegendMissionStart
+"Mission start: the save the game makes as a mission opens"
+END
+
+GUI:SPLegendOlder
+"Older: written by a build this one cannot read, it won't load"
+END
+
+GUI:SPDone
+"Done"
+END
+
+GUI:SPThisSave
+"This save"
+END
+
+GUI:SPAhead
+"Ahead"
+END
+
+GUI:SPMissionOf
+"Mission %d of %d"
+END
+
+GUI:SPSavedByYou
+"Saved by you"
+END
+
+GUI:SPLoads
+"Loads"
+END
+
+GUI:SPLoadsYes
+"Yes, this build"
+END
+
+GUI:SPLoadsNo
+"No, older build"
+END
+
+GUI:SPPlayedFor
+"Played for"
+END
+
+GUI:SPFile
+"File"
+END
+
+GUI:SPCampaignZH
+"Zero Hour %s"
+END
+
+GUI:SPCampaignGenerals
+"Generals %s"
+END
+
+GUI:SPCampaignChallenge
+"Challenge: %s"
+END
+
+GUI:SPSkirmish
+"Skirmish"
+END
+
+GUI:SPWontLoad
+"Written by an older build. This one cannot read it."
+END
+
+GUI:SPNoPreview
+"No preview"
+END
+
+GUI:SPNewSave
+"New save"
+END
+
+GUI:SPSaveLoad
+"Save / Load"
+END
+
+GUI:SPHintEscEnterSaves
+"Esc cancels, Enter saves"
 END

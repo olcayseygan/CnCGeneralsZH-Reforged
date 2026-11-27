@@ -3183,6 +3183,13 @@ if(Python3_Interpreter_FOUND)
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/Tools/boxes_layout.py selfcheck)
 
+  # Generals' Challenge, the replay list and Load Game: their callbacks look the cards, lists and
+  # keys up by name and draw over them, so the masters have to carry them at SinglePlayerLayout.h's
+  # rects, authored at 1920x1080, and Patch.str the screens' words.
+  add_test(NAME singleplayer_selfcheck
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/Tools/singleplayer_layout.py selfcheck)
+
   # The lobby settings tab moves the host's settings onto a page of their own in all three lobbies,
   # and takes EA's superweapon checkbox out.  Same three-file agreement, plus one more failure the
   # null checks make silent: a control left behind on the old row would be drawn under the chat log.
@@ -3202,6 +3209,12 @@ if(Python3_Interpreter_FOUND)
   add_test(NAME online_layout_selfcheck
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/Tools/online_layout.py selfcheck)
+
+  # The LAN lobby on frame A's board: every window its callback looks up, nothing overlapping, the keys
+  # on the foot row's pitch.
+  add_test(NAME lanlobby_layout_selfcheck
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/Tools/lanlobby_layout.py selfcheck)
 
   # The map pickers stand where the rooms' seat table and map preview stand, read from the rooms'
   # own layouts, so a room laid out again without the pickers following is caught here.

@@ -421,6 +421,12 @@ void W3DWaypointBuffer::drawWaypoints(RenderInfoClass &rinfo)
 // height, times the zoom scale like the selection rings'
 static const Real ORDER_LINE_WIDTH = 0.75f;		///< about two and a half pixels of colour between the rims
 static const Real ORDER_LINE_OPACITY = 0.9f;
+// the Reforged look's line, a fixed 1.3 world units at GROUND_MARKS_ZOOM: 0.49 lost its colour under a
+// pixel zoomed out and its rims on sand and snow (owner 2026-11-26). Now about four pixels of colour at
+// the default height, one at the ceiling, six at the closest, a solid dark rim either side; Classic keeps
+// the above, which follow the zoom
+static const Real ORDER_LINE_WIDTH_FINE = 2.0f;
+static const Real ORDER_LINE_OPACITY_FINE = 1.0f;
 static const Real ORDER_MARK_WIDTH = 0.6f;
 static const Real ORDER_END_RADIUS = 2.2f;		///< on the last bit of ground a unit is sent to
 static const Real ORDER_JOINT_RADIUS = 1.4f;		///< on a target, and between the points of a shift list
@@ -432,6 +438,11 @@ static const Real ORDER_LINE_SHADE_MATCH = 1.0f / 32.0f;	///< pieces closer in l
 enum { ORDER_MARK_SAMPLES = 24 };
 
 static Real shroudLight( Real x, Real y );		///< the shroud's light on the ground there, 0 black to 1 clear
+
+// the selection ring's width and a target ring's gap outside it, here because an order line starts on a
+// unit's own selection ring (takeReadsForRender); the rings' other constants are with takeSelectionRings
+static const Real RING_WIDTH = 0.65f;			///< the line at the default camera height: two pixels of colour between two dark rims (rimTexture)
+static const Real ORDER_TARGET_GAP = 1.0f;		///< a target's ring outside the selection ring a unit of one's own wears, times the zoom scale
 
 //=============================================================================
 // W3DWaypointBuffer::takeReadsForRender
@@ -468,9 +479,18 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 		const Bool classic = TheGlobalData->m_classicGraphics;
 		const Real endRadius = classic ? ORDER_END_RADIUS : ORDER_END_RADIUS_FINE;
 		const Real jointRadius = classic ? ORDER_JOINT_RADIUS : ORDER_JOINT_RADIUS_FINE;
+		const Real lineWidth = ( classic ? ORDER_LINE_WIDTH : ORDER_LINE_WIDTH_FINE ) * m_orderWidthScale;
+		const Real lineOpacity = classic ? ORDER_LINE_OPACITY : ORDER_LINE_OPACITY_FINE;
 		auto targetRing = [&]( const InGameUI::OrderHint& hint, SelectionCircle& ring ) -> Bool
 		{
 			return hint.onObject && orderTargetRing( hint.target, ring );
+		};
+		// a line cut flat at a ring's outer radius leaves a bare crescent at each corner, the ring's edge
+		// curving away from it; cut where the corners touch that edge, the chord at the line's half width
+		const Real lineHalf = 0.5f * lineWidth;
+		auto ringCut = [&]( Real outer ) -> Real
+		{
+			return (Real)sqrt( MAX( 0.0f, outer * outer - lineHalf * lineHalf ) );
 		};
 		auto markRadius = [&]( const InGameUI::OrderHint& hint ) -> Real
 		{
@@ -478,8 +498,8 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 				return 0.0f;
 			SelectionCircle ring;
 			if( targetRing( hint, ring ) )
-				return ring.r + markHalf;
-			return ( hint.mark == InGameUI::ORDER_MARK_FLAG ? endRadius : jointRadius ) * markScale + markHalf;
+				return ringCut( ring.r + markHalf );
+			return ringCut( ( hint.mark == InGameUI::ORDER_MARK_FLAG ? endRadius : jointRadius ) * markScale + markHalf );
 		};
 		std::vector< std::pair<ObjectID, UnsignedInt> > ringedTargets;
 		const std::vector<InGameUI::OrderHint>& hints = TheInGameUI->getOrderHints();
@@ -498,7 +518,22 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 			points[ 1 ].Set( it->to.x, it->to.y, max( it->to.z, TheTerrainLogic->getGroundHeight( it->to.x, it->to.y ) ) );
 			// a unit at either end: the middle of its ring on the ground, not the spot over its top
 			SelectionCircle fromRing, toRing;
-			const Bool fromOnRing = orderTargetRing( it->fromTarget, fromRing );
+			Bool fromOnRing = orderTargetRing( it->fromTarget, fromRing );
+			Real fromEdge = fromOnRing ? fromRing.r + markHalf : 0.0f;
+			// a unit's first leg starts on the unit itself (no fromTarget: InGameUI sets one on a shift
+			// list's later legs only), so the line ran out of its middle over the hull, drawn over
+			// everything; it starts on the outer edge of the unit's own selection ring instead
+			if( !fromOnRing && it->fromTarget == INVALID_ID && it->step <= 1 && TheGlobalData->m_selectionOutlines
+					&& orderTargetRing( it->owner, fromRing ) )
+			{
+				fromRing.r -= ORDER_TARGET_GAP * m_orderWidthScale;		// the selection ring's circle, not a target's
+				const Real ox = points[ 0 ].X - fromRing.x, oy = points[ 0 ].Y - fromRing.y;
+				if( ox * ox + oy * oy < fromRing.r * fromRing.r )
+				{
+					fromOnRing = TRUE;
+					fromEdge = fromRing.r + 0.5f * RING_WIDTH * m_ringWidthScale;
+				}
+			}
 			const Bool toOnRing = targetRing( *it, toRing );
 			if( fromOnRing )
 				points[ 0 ].Set( fromRing.x, fromRing.y, ringGroundZ( fromRing, fromRing.x, fromRing.y ) );
@@ -529,7 +564,7 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 					}
 				}
 				if( fromOnRing )
-					startCut = MAX( startCut, fromRing.r + markHalf );		// never out of the middle of a unit
+					startCut = MAX( startCut, ringCut( fromEdge ) );		// never out of the middle of a unit
 				const Real endCut = markRadius( *it );
 				const Real dx = points[ 1 ].X - points[ 0 ].X, dy = points[ 1 ].Y - points[ 0 ].Y;
 				const Real flat = (Real)sqrt( dx * dx + dy * dy );
@@ -562,7 +597,7 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 						Vector3 piece[ 2 ];
 						piece[ 0 ] = cut[ 0 ] + run * from;
 						piece[ 1 ] = cut[ 0 ] + run * to;
-						recordRing( DRAW_ORDER_LINE, 2, piece, color * light, ORDER_LINE_WIDTH * m_orderWidthScale, ORDER_LINE_OPACITY );
+						recordRing( DRAW_ORDER_LINE, 2, piece, color * light, lineWidth, lineOpacity );
 						from = to;
 						light = next;
 					}
@@ -1004,7 +1039,6 @@ static const Real RING_STEP = 1.0f;					///< world units between two points of a
 static const Int RING_MIN_SAMPLES = 48;
 static const Real RING_LIFT = 1.0f;					///< over the ground at the default camera height, times the zoom scale
 static const Real RING_MIN_LIFT = 0.6f;			///< never lower, or the ground pokes through between two points on a bump
-static const Real RING_WIDTH = 0.65f;			///< the line at the default camera height: two pixels of colour between two dark rims (rimTexture)
 static const Real RING_OPACITY = 1.0f;
 static const Real RING_GLOW_WIDTH = 1.2f;		///< the soft additive glow under it, a little past the rims
 static const Real RING_GLOW_STRENGTH = 0.35f;	///< the glow's colour, a share of the line's; kept low, the rim is what gives the edge
@@ -1018,7 +1052,6 @@ static const Real RING_JOIN_TOLERANCE = 0.25f;	///< two runs whose crossing poin
 // 310 times ZOOM_OUT_LIMIT_FACTOR 2.9 over CameraHeight 232, a zoom near 3.9, and held at the rings'
 // 3.0 a ribbon came out under two pixels there, its colour under one, and broke into dashes
 static const Real ORDER_MAX_ZOOM_SCALE = 4.5f;
-static const Real ORDER_TARGET_GAP = 1.0f;		///< a target's ring outside the selection ring a unit of one's own wears, times the zoom scale
 
 // an attack order's pulse: copies of the outline rising off the ground and fading (recordRingLoop)
 static const Int PULSE_COUNT = 2;

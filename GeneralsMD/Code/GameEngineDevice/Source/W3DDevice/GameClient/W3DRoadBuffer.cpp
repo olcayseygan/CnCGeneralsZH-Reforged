@@ -3126,7 +3126,9 @@ W3DRoadBuffer::W3DRoadBuffer(void)	:
 	m_maxRoadTypes(8),
 	m_maxRoadVertex(1000),
 	m_maxRoadIndex(2000),
-	m_curRoadType(0)
+	m_curRoadType(0),
+	m_updateBuffers(false),
+	m_relit(false)
 
 {
 	allocateRoadBuffers();
@@ -3300,8 +3302,9 @@ void W3DRoadBuffer::updateLighting(void)
 	// Do road segments.
 	for (curRoad=0; curRoad<m_numRoads; curRoad++) {
 		m_roads[curRoad].updateSegLighting();
-	}	
+	}
 	m_updateBuffers = true;
+	m_relit = true;
 }
 
 //=============================================================================
@@ -3367,11 +3370,15 @@ void W3DRoadBuffer::drawRoads(CameraClass * camera, TextureClass *cloudTexture, 
 
 	Bool loadBuffers = false;
 	if (m_updateBuffers) {
-		if (visibilityChanged(bounds)) {
+		// a relight reaches the buffers too: the reload was gated on visibility alone, so a road the
+		// camera kept in view kept the light it was loaded with (the day and night cycle's night, a
+		// script's hour, the Apocalypse's tint) on Classic and -d3d9, which bake the light into it
+		if (visibilityChanged(bounds) || m_relit) {
 			loadBuffers = true;
 		}
 	}
 	m_updateBuffers = false;
+	m_relit = false;
 
 	for (stacking=0; stacking <= maxStacking; stacking++) {
 		for (i=0; i<m_maxRoadTypes; i++) {

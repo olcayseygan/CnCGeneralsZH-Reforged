@@ -828,6 +828,7 @@ namespace
 		}
 		UnicodeString size, line;
 		size.format( TheGameText->fetch( "GUI:DirectStrikeTeamSize" ), teamSize( 0 ), teamSize( 1 ) );
+		// ·, not the dot itself: the file is read in the machine's code page
 		line.format( u"%ls  ·  %ls", room.str(), size.str() );
 		if( !extra.isEmpty() )
 		{

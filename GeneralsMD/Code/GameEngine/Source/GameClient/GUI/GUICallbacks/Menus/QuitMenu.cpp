@@ -157,6 +157,8 @@ UnicodeString MatchFactsLine( void )
 	UnsignedInt frame = TheVictoryConditions && TheVictoryConditions->getEndFrame() ? TheVictoryConditions->getEndFrame()
 																																							 : TheGameLogic->getFrame();
 	const UnsignedInt seconds = frame / LOGICFRAMES_PER_SECOND;
+	// the dot as ·: this file has no BOM, so the compiler reads it in the machine's code page and a
+	// literal dot came out as its two UTF-8 bytes, "Tournament Desert Ã· 0:08"
 	UnicodeString line;
 	if( seconds >= 3600 )
 		line.format( u"%ls  ·  %d:%02d:%02d", map.str(), seconds / 3600, seconds / 60 % 60, seconds % 60 );

@@ -170,6 +170,7 @@ void CreditsManager::load(void )
 	addLine( CREDIT_STYLE_NORMAL, UnicodeString( u"Olcay Seygan" ) );
 	addBlank();
 	addLine( CREDIT_STYLE_POSITION, TheGameText->fetch( "GUI:CreditsPort" ) );
+	// spelled out: the file is read in the machine's code page, so a literal İ and ı came out as bytes
 	addLine( CREDIT_STYLE_NORMAL, UnicodeString( u"İlyas Akın" ) );
 	addBlank();
 	addBlank();

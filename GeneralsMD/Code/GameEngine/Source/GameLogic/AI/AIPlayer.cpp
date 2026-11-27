@@ -7811,6 +7811,10 @@ Real AIPlayer::nearestChokeDistance( const Coord3D *pos )
 //----------------------------------------------------------------------------------------------------------
 Bool AIPlayer::placeDefense( const ThingTemplate *defense )
 {
+	// the general's own placement first (AIIdentity::placeDefence); buildAIBaseDefenseStructure asks it too,
+	// for what this one could not place
+	if( identityOn() && m_identity->placeDefence( defense, FALSE ) )
+		return TRUE;
 	if( m_persona == AIPERSONA_TURTLE && m_baseCenterSet )
 	{
 		const Int guarded = guardedChokes();

@@ -9734,6 +9734,10 @@ GUI:AddressHint
 "Give this to your friend"
 END
 
+GUI:DirectConnectNoAddress
+"Type their address first"
+END
+
 // Menu redesign package 12, single player: Generals' Challenge, the replay list, Load Game, the Save
 // Replay and Save / Load boxes. Army words are drawn in capitals on the cards and the ladder.
 GUI:SPChallengeTitle

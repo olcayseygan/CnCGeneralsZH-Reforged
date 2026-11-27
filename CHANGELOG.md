@@ -102,6 +102,7 @@ found and fixed, EA's own, not port damage.**
 - The online Custom games page and the LAN lobby are one screen in the new look. The games fill a list with a column each for the game, its mode, its map, the seats taken out of how many with a bar, the host's ping online, and whether it is Open, Full, Playing or from another build; the first game is picked for you, and the picked one shows its map, host and every seat (army, colour and record where the game knows them) in the right column over the players. Click GAME or PING to sort by it.
 - Host Game and Create Game ask which of the three modes the room is for, Classic, Direct Strike or Apocalypse, so the separate Mods key is gone. Join is the lit key while a game you can take is picked, Host Game otherwise, and Enter on an empty chat line joins the picked game.
 - Host Game, the password box and Direct Connect are boxes over the lobby in the same look, with Enter for the lit key and Esc to cancel. Join Game now has a JOIN key; EA's only joined on Enter.
+- Direct Connect's Join with no address, or one mistyped, used to send you after whatever number happened to be in memory and say nothing for five seconds; it now tells you at once to type their address. Host pressed while such a join still waited did nothing at all, and now hosts. In the LAN lobby with no game picked, the player list took no clicks: an invisible piece of EA's old screen lay over it.
 
 ## Ladder, skins and the player card in the new menu look
 

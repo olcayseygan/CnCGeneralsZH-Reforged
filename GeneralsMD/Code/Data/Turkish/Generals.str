@@ -23915,6 +23915,10 @@ GUI:AddressHint
 "Bunu arkadaşına ver"
 END
 
+GUI:DirectConnectNoAddress
+"Önce onun adresini yaz"
+END
+
 // Menu redesign package 12, single player: Generals' Challenge, the replay list, Load Game, the Save
 // Replay and Save / Load boxes.
 GUI:SPChallengeTitle

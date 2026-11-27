@@ -701,6 +701,10 @@ void LanLobbyMenuInit( WindowLayout *layout, void *userData )
 	//TheWindowManager->winSetFocus( parentLanLobby );
 	TheWindowManager->winSetFocus( textEntryChat );
 	CreateLANGameInfoWindow(staticTextGameInfo);
+	/* EA's placeholder only gives the picked game its rect.  Shown, it is a NOINPUT window over the right
+		 column, and with nothing picked the players' list grows up under it, so a click there reached nobody. */
+	if (staticTextGameInfo)
+		staticTextGameInfo->winHide(TRUE);
 
 	//TheShell->showShellMap(FALSE);
 	//shellmapOn = FALSE;

@@ -54,6 +54,7 @@
 #include "GameNetwork/GUIUtil.h"
 #include "GameNetwork/GameSpy/LobbyUtils.h"
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/MessageBox.h"
 #include "GameClient/UIStyle.h"
 
 #ifdef _INTERNAL
@@ -212,6 +213,9 @@ void HostDirectConnectGame()
 
 	while (name.getLength() > g_lanPlayerNameLength)
 		name.removeLastChar();
+	/* Host drops a join still waiting on its answer: RequestGameCreate refuses while one is pending, and
+		 its refusal went to the LAN lobby's chat under this screen, so Host did nothing for five seconds. */
+	TheLAN->reset();
 	TheLAN->RequestSetName(name);
 	TheHostGameMode = HOST_MODE_CLASSIC;	// Direct Connect asks no mode; nothing an earlier host picked carries over
 	TheLAN->RequestGameCreate(localIPString, TRUE);
@@ -234,15 +238,22 @@ void JoinDirectConnectGame()
 	AsciiString ipstring;
 	asciientry.nextToken(&ipstring, "(");
 
-	char ipstr[16];
-	strcpy(ipstr, ipstring.str());
-
-	Int ip1, ip2, ip3, ip4;
-	sscanf(ipstr, "%d.%d.%d.%d", &ip1, &ip2, &ip3, &ip4);
+	/* EA scanned into four unset ints and copied the field into 16 bytes unchecked: an empty or mistyped
+		 address joined whatever the stack held and came back only as a timeout five seconds later, and a long
+		 one ran past the buffer.  A field that is not an address now says so at once. */
+	Int ip1 = -1, ip2 = -1, ip3 = -1, ip4 = -1;
+	const Bool isAddress = sscanf(ipstring.str(), "%d.%d.%d.%d", &ip1, &ip2, &ip3, &ip4) == 4
+		&& ip1 >= 0 && ip1 <= 255 && ip2 >= 0 && ip2 <= 255 && ip3 >= 0 && ip3 <= 255 && ip4 >= 0 && ip4 <= 255
+		&& (ip1 | ip2 | ip3 | ip4) != 0;
+	if (!isAddress)
+	{
+		MessageBoxOk(TheGameText->fetch("LAN:JoinFailed"), TheGameText->fetch("GUI:DirectConnectNoAddress"), NULL);
+		return;
+	}
 
 	DEBUG_LOG(("JoinDirectConnectGame - joining at %d.%d.%d.%d\n", ip1, ip2, ip3, ip4));
 
-	ipaddress = (ip1 << 24) + (ip2 << 16) + (ip3 << 8) + ip4;
+	ipaddress = ((UnsignedInt)ip1 << 24) | ((UnsignedInt)ip2 << 16) | ((UnsignedInt)ip3 << 8) | (UnsignedInt)ip4;
 //	ipaddress = htonl(ipaddress);
 
 	UnicodeString name;
@@ -264,8 +275,9 @@ void JoinDirectConnectGame()
 
 /* Direct Connect as a box of the message box's pattern over the backdrop (README-game-lists.md
 	 "lists-direct-connect"), on EA's screen: the box on the board at 580,295 to 1340,785, YOUR NAME, YOUR ADDRESS
-	 with its hint and THEIR ADDRESS down its left, the fields at 852 to 1308, BACK, HOST and JOIN at its foot,
-	 JOIN lit.  EA's screen stays a screen; its parents are fitted to the box so every gadget inside takes clicks. */
+	 with its hint and THEIR ADDRESS down its left, the fields at 852 to 1308, BACK, HOST and JOIN at its foot
+	 (616, 852 and 1088, 220 wide, 16 apart), JOIN lit.  EA's screen stays a screen; its parents are fitted to the
+	 box so every gadget inside takes clicks. */
 enum { DC_LEFT = 580, DC_TOP = 295, DC_RIGHT = 1340, DC_BOTTOM = 785, DC_FIELD = 852, DC_KEY_TOP = 717 };
 
 static void drawDirectConnect( GameWindow *window, WinInstanceData * )
@@ -297,8 +309,9 @@ static void initDirectConnectLook( GameWindow *root )
 		LobbyPlaceOnBoard( inner, DC_LEFT, DC_TOP, DC_RIGHT, DC_BOTTOM );
 	LobbyPlaceOnBoard( editPlayerName, DC_FIELD, 401, 1308, 449 );
 	LobbyPlaceOnBoard( comboboxRemoteIP, DC_FIELD, 545, 1308, 593 );
-	LobbyPlaceOnBoard( buttonBack, 624, DC_KEY_TOP, 844, DC_KEY_TOP + 48 );
-	LobbyPlaceOnBoard( buttonHost, 856, DC_KEY_TOP, 1076, DC_KEY_TOP + 48 );
+	// 16 apart on the 8 grid, HOST's left edge on the fields'
+	LobbyPlaceOnBoard( buttonBack, DC_FIELD - 16 - 220, DC_KEY_TOP, DC_FIELD - 16, DC_KEY_TOP + 48 );
+	LobbyPlaceOnBoard( buttonHost, DC_FIELD, DC_KEY_TOP, DC_FIELD + 220, DC_KEY_TOP + 48 );
 	LobbyPlaceOnBoard( buttonJoin, 1088, DC_KEY_TOP, 1308, DC_KEY_TOP + 48 );
 	static const char *const drawn[] = { "StaticRemoteIPDescription", "StaticLocalIPDescription", "StaticPlayerNameDescription",
 		"Line", "StaticWindowLabel", "StaticLocalIP" };
@@ -563,7 +576,8 @@ WindowMsgHandledType NetworkDirectConnectSystem( GameWindow *window, UnsignedInt
 
 		case GBM_SELECTED:
 			{
-				if (buttonPushed)
+				// LANbuttonPushed: a join or host already pushed the room, and a second Host would reset its game away
+				if (buttonPushed || LANbuttonPushed)
 					break;
 
 				GameWindow *control = (GameWindow *)mData1;

@@ -7000,6 +7000,8 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 
 	// the roads, a pair of objects a segment, the exemplar's own pair with the end flags most of its pairs carry
 	Int segments = 0;
+	struct PlannedPiece { size_t at; size_t road; YX ends[2]; };
+	std::vector<PlannedPiece> plannedPieces;
 	for( size_t k = 0; k < plan.roads.size(); k++ )
 	{
 		const InvRoad *road = NULL;
@@ -7023,6 +7025,8 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		const std::vector<YX>& points = plan.roads[k].points;
 		for( size_t s = 0; s + 1 < points.size(); s++ )
 		{
+			PlannedPiece piece = { kept.size(), k, { points[s], points[s + 1] } };
+			plannedPieces.push_back( piece );
 			movedObject( src.m, pair, skm.raw, points[s].y, points[s].x, b, ++serial, kept );
 			movedObject( src.m, pair + 1, skm.raw, points[s + 1].y, points[s + 1].x, b, ++serial, kept );
 			for( Int e = 0; e < 2; e++ )
@@ -7043,7 +7047,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	// behind. After each copy its road pairs are peeled from every such loose end back to a junction, and
 	// what is closed inside the copy stays. Shared ends are the exemplar's own points, compared exactly.
 	struct CopiedRoad { size_t at; Int thing; YX ends[2]; };
-	std::vector<CopiedRoad> copiedRoads;
+	std::vector<CopiedRoad> copiedRoads, keptCopies;
 	std::vector<Int> cutRoads;
 	std::vector< std::pair<YX, YX> > emittedRoads;
 	for( size_t k = 0; k < plan.roads.size(); k++ )
@@ -7115,6 +7119,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 			if( alive[k] )
 			{
 				emittedRoads.push_back( std::make_pair( copiedRoads[k].ends[0], copiedRoads[k].ends[1] ) );
+				keptCopies.push_back( copiedRoads[k] );
 				continue;
 			}
 			kept.erase( kept.begin() + copiedRoads[k].at, kept.begin() + copiedRoads[k].at + 2 );
@@ -7258,6 +7263,72 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 			}
 		}
 		peelCutRoads();
+	}
+
+	/* A planned segment over half of whose length lies within a cell of a copied road of its kind is the
+		same road twice, which the renderer draws as two (Tournament City's DirtRoad5, Silent River's
+		TwoLane): it goes, and a neighbour of its chain left with a new end there joins the copied road at
+		its nearest point within ROAD_JOIN_SNAP, or is flagged to fade into it. */
+	{
+		std::vector<Bool> along( plannedPieces.size(), FALSE );
+		for( size_t i = 0; i < plannedPieces.size(); i++ )
+		{
+			const PlannedPiece& piece = plannedPieces[i];
+			const Int steps = std::max( (Int)( 2.0f * hypotr( piece.ends[1].y - piece.ends[0].y, piece.ends[1].x - piece.ends[0].x ) ), 1 );
+			Int near = 0;
+			for( Int s = 0; s <= steps; s++ )
+			{
+				const YX p = yx( piece.ends[0].y + ( piece.ends[1].y - piece.ends[0].y ) * s / steps,
+					piece.ends[0].x + ( piece.ends[1].x - piece.ends[0].x ) * s / steps );
+				for( size_t c = 0; c < keptCopies.size(); c++ )
+					if( src.m.things[keptCopies[c].thing].name == plan.roads[piece.road].name
+						&& offRoad( p, keptCopies[c].ends[0], keptCopies[c].ends[1] ) <= 1.0f ) { near++; break; }
+			}
+			along[i] = 2 * near > steps + 1;
+		}
+		auto sharedByKept = [&]( const YX& p, size_t self ) -> Bool
+		{
+			for( size_t j = 0; j < plannedPieces.size(); j++ )
+				for( Int e = 0; e < 2; e++ )
+					if( j != self && !along[j] && plannedPieces[j].ends[e].y == p.y && plannedPieces[j].ends[e].x == p.x ) return TRUE;
+			return FALSE;
+		};
+		for( size_t i = 0; i < plannedPieces.size(); i++ )
+		{
+			if( along[i] ) continue;
+			const PlannedPiece& piece = plannedPieces[i];
+			for( Int e = 0; e < 2; e++ )
+			{
+				// the chain's neighbour on this end, gone
+				const size_t j = e == 0 ? i - 1 : i + 1;
+				if( ( e == 0 && i == 0 ) || j >= plannedPieces.size() || plannedPieces[j].road != piece.road || !along[j] ) continue;
+				if( sharedByKept( piece.ends[e], i ) ) continue;
+				const AsciiString& name = plan.roads[piece.road].name;
+				Real best = ROAD_JOIN_SNAP;
+				YX to = piece.ends[e];
+				for( size_t c = 0; c < keptCopies.size(); c++ )
+					for( Int g = 0; g < 2; g++ )
+					{
+						const YX& q = keptCopies[c].ends[g];
+						const Real d = hypotr( q.y - piece.ends[e].y, q.x - piece.ends[e].x );
+						if( src.m.things[keptCopies[c].thing].name == name && d < best ) { best = d; to = q; }
+					}
+				Chunk& end = kept[piece.at + e];
+				const Real wx = ( to.x - b ) * MAP_XY, wy = ( to.y - b ) * MAP_XY;
+				memcpy( &end.body[0], &wx, 4 );
+				memcpy( &end.body[4], &wy, 4 );
+				Int flags;
+				memcpy( &flags, &end.body[16], 4 );
+				flags |= FLAG_ROAD_JOIN;
+				memcpy( &end.body[16], &flags, 4 );
+			}
+		}
+		for( size_t i = plannedPieces.size(); i-- > 0; )
+			if( along[i] )
+			{
+				kept.erase( kept.begin() + plannedPieces[i].at, kept.begin() + plannedPieces[i].at + 2 );
+				segments--;
+			}
 	}
 
 	// the chunks: heights, textures, objects, water, the exemplar's light and weather

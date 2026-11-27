@@ -2536,8 +2536,14 @@ void GadgetListBoxSetListLength( GameWindow *listbox, Int newLength )
     if(listboxData->insertPos > newLength)
 			listboxData->insertPos = newLength;
 
-    listboxData->endPos = newLength;
-		//copy only the data that we'll be needing.		
+		/* EA set endPos to the new length here whatever it was, so a list emptied and then shortened (the
+			 skirmish room's presets: Reset, then a length of 62 under the layout's 64) claimed 62 rows it
+			 did not have, and every row added after counted on top of them: 93 rows in a 62-row array.  The
+			 wheel and computeTotalHeight then read past the array's end, garbage that scrolled the list or
+			 not as the memory behind it happened to hold.  endPos only ever comes down to the new length. */
+		if( listboxData->endPos > newLength )
+			listboxData->endPos = newLength;
+		//copy only the data that we'll be needing.
 		memcpy(newData,listboxData->listData,newLength * sizeof( ListEntryRow ) );
 	}
 

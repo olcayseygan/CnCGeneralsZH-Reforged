@@ -19531,6 +19531,12 @@ static const Real SHELL_WALK = 200.0f;
 	* its SCUD Launchers and Inferno Cannons waited with it, a long walk from any defence and never in reach
 	* of one.  Not one gun fired a shell in 54 matches of the turtle bench. */
 static const Real SIEGE_SHELL_WALK = 1500.0f;
+/** The siege lead (-aiknobsoff siegelead): above Hard a siege gun out with a wave walks this much further a rating
+	* point past Hard for a known defence, from SHELL_WALK up to SIEGE_SHELL_WALK (417 at 2200, 1,500 by 4200).  Nothing
+	* past Hard bought fighting: the extra rating went into money and tempo, and Elo 2800 killed fewer defences than
+	* 1800 on the turtle bench (7.5 against 8.8).  Not a rated table: it is SHELL_WALK at Hard and below, where a
+	* table's slope would have to come from Medium. */
+static const Real SIEGE_LEAD_PER_RATING = 0.542f;
 static const Real SHELL_INSET = 10.0f;
 #define SHELL_MAX_FRAMES ((Real)(60.0f * LOGICFRAMES_PER_GAME_SECOND))
 static const Real SHELL_SPOT_SLACK = 60.0f;
@@ -19628,6 +19634,9 @@ void AIPlayer::holdAtDefences( void )
 	const Real odds = aiRatingLerp( m_rating, EDGE_ODDS );
 	if( !edgeTurnNow() )
 		return;
+	// a siege gun out with a wave above Hard: the siege lead, else SHELL_WALK as before
+	const Real siegeLeadWalk = runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_SIEGE_LEAD ) != 0 ) ?
+		min( SIEGE_SHELL_WALK, SHELL_WALK + max( 0.0f, m_rating - AI_RATING_HARD ) * SIEGE_LEAD_PER_RATING ) : SHELL_WALK;
 	AI_SUB_START( holdStart );
 	// read in place, never swapped out: a swap left the look an empty vector to grow again on a worker
 	// every edge turn, a pool allocation inside the job (THREADING-ROADMAP 1.1)
@@ -19681,7 +19690,7 @@ void AIPlayer::holdAtDefences( void )
 				shelled = (Int)d;
 		if( victim == NULL && !walkingHome && (step == NULL || now >= step->leaveAloneUntil) )
 			shelled = shellDefence( m_player, obj, shellRange,
-				isSiegeGun( obj ) && (m_gunHoldSince != 0 || isAtHome( pos )) ? SIEGE_SHELL_WALK : SHELL_WALK, defences );
+				isSiegeGun( obj ) && (m_gunHoldSince != 0 || isAtHome( pos )) ? SIEGE_SHELL_WALK : isSiegeGun( obj ) ? siegeLeadWalk : SHELL_WALK, defences );
 
 		if( !ai->isMoving() )
 		{

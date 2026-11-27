@@ -19223,28 +19223,8 @@ GUI:FactionPickConfirm
 "Onayla: %s"
 END
 
-GUI:FactionPickRandom
-"Rastgele, maç başlarken bu ordulardan birini sizin için seçer."
-END
-
-GUI:FactionPickLeftOut
-"Rastgele şunları hiç seçmez: %s. Eklemek için Özel Seçim'den işaretleyin."
-END
-
-GUI:FactionPickPool
-"Rastgele, solda işaretli %d ordudan birini seçer (toplam %d). Bir orduya tıklayarak onu ekleyin ya da çıkarın."
-END
-
 GUI:FactionPickRandomSide
 "Rastgele %s"
-END
-
-GUI:FactionPickSideHint
-"Bir tarafın kutusu o tarafın tamamını işaretler ya da kaldırır; adına tıklamak çekilişte yalnızca o tarafı bırakır."
-END
-
-GUI:FactionPickSideNameHint
-"Bir tarafın rastgele bir ordusuyla oynamak için o tarafın adına tıklayın."
 END
 
 GUI:SocketRedirected
@@ -24405,4 +24385,205 @@ END
 
 GUI:FriendErrorBuild
 "Bu oda oyunun başka bir sürümünü oynuyor."
+END
+
+// Menu redesign package 7, the pickers
+GUI:MapPlayersCount
+"%d oyuncu"
+END
+
+GUI:MapPlayersChip
+"%d OYUNCU"
+END
+
+GUI:MapSupplies
+"%d ikmal"
+END
+
+GUI:MapTech
+"%d teknoloji"
+END
+
+GUI:MapMedalEasy
+"KOLAY"
+END
+
+GUI:MapMedalMedium
+"ORTA"
+END
+
+GUI:MapMedalHard
+"ZOR"
+END
+
+GUI:MapMedalHardMax
+"ZOR x%d"
+END
+
+GUI:MapNotWon
+"HENÜZ KAZANILMADI"
+END
+
+GUI:MapNextEasy
+"Sıradaki: Kolay"
+END
+
+GUI:MapNextMedium
+"Sıradaki: Orta"
+END
+
+GUI:MapNextHard
+"Sıradaki: Zor"
+END
+
+GUI:MapNextHardMax
+"Sıradaki: Zor x%d"
+END
+
+GUI:MapNextAll
+"Bütün madalyalar alındı"
+END
+
+GUI:MapMedalLegend
+"Madalya: en iyi zaferiniz; bir Kolay, Orta ya da Zor rakibe, ya da her koltukta Zor (x7)"
+END
+
+GUI:MapMedalLegend_Short
+"Madalya: en iyi zafer; Kolay, Orta, Zor ya da her koltukta Zor (x7)"
+END
+
+GUI:MapHintAccept
+"Kabul etmek için haritaya çift tıklayın"
+END
+
+GUI:MapHintAccept_Short
+"Kabul için çift tıklayın"
+END
+
+GUI:MapHintAcceptType
+"Kabul etmek için harita türüne çift tıklayın"
+END
+
+GUI:MapHintAcceptType_Short
+"Kabul için çift tıklayın"
+END
+
+GUI:MapStyleTag
+"TARZ"
+END
+
+GUI:RandomMapName
+"Rastgele harita"
+END
+
+GUI:RandomMapStyleOf
+"%s tarzı"
+END
+
+GUI:RandomMapSpots
+"%d başlangıç noktası"
+END
+
+GUI:RandomMapSpotsLine
+"Noktalar harita kurulunca yerleşir; her Kabul yeni bir harita kurar."
+END
+
+GUI:RandomTabStatsOff
+"istatistik kaydında kapalı"
+END
+
+GUI:MapTenantRandom
+"RASTGELE HARİTA"
+END
+
+GUI:MapTenantRandomLine
+"Bu odaya yeni bir harita"
+END
+
+GUI:MapTenantCount
+"%d harita"
+END
+
+GUI:MapTenantCountOne
+"%d harita"
+END
+
+GUI:MapNoneOwn
+"KENDİ HARİTANIZ YOK"
+END
+
+GUI:MapAddOwn
+"KENDİ HARİTANIZI EKLEYİN"
+END
+
+GUI:MapFolderLine
+"Eklediğiniz haritalar buraya gider: %s"
+END
+
+GUI:FactionPickInDraw
+"Kurada %d / %d"
+END
+
+GUI:FactionPickTheDraw
+"KURA"
+END
+
+GUI:FactionPickOfArmies
+"/ %d ordu"
+END
+
+GUI:FactionPickInTheDraw
+"KURADAKİLER"
+END
+
+GUI:FactionPickCustomLine
+"Rastgele, işaretli ordulardan birini oynar."
+END
+
+GUI:FactionPickAllLine
+"Türkiye kuraya girmez; eklemek için Özel Seçim'de işaretleyin."
+END
+
+GUI:FactionPickTurkiyeLeft
+"Düz Rastgele Türkiye'yi hiç seçmez. Eklemek için işaretleyin."
+END
+
+GUI:FactionPickExperimental
+"DENEYSEL"
+END
+
+GUI:FactionPickObserverHead
+"Kurada değil"
+END
+
+GUI:FactionPickObserverLine
+"Maçı oynamadan izle."
+END
+
+GUI:FactionPickObserverMore
+"Gözlemci bütün haritayı ve her oyuncunun ordusunu görür."
+END
+
+GUI:FactionPickFeatures
+"ÖZELLİKLER"
+END
+
+GUI:FactionPickOthers
+"DİĞER %s ORDULARI"
+END
+
+GUI:FactionPickHintPlay
+"Oynamak için orduya çift tıklayın · Enter onaylar · Esc geri döner"
+END
+
+GUI:FactionPickHintPlay_Short
+"Çift tıkla oyna · Esc geri"
+END
+
+GUI:FactionPickHintTick
+"İşaretlemek için orduya tıklayın · Enter onaylar · Esc geri döner"
+END
+
+GUI:FactionPickHintTick_Short
+"Tıkla işaretle · Esc geri"
 END

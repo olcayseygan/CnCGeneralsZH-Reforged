@@ -4606,29 +4606,9 @@ GUI:FactionPickConfirm
 "Confirm %s"
 END
 
-GUI:FactionPickRandom
-"Random picks one of these armies for you when the match starts."
-END
-
-GUI:FactionPickLeftOut
-"Random never draws: %s. Tick it under Custom Selection to add it."
-END
-
-GUI:FactionPickPool
-"Random picks one of the %d armies ticked on the left, out of %d. Click an army to tick it or take it out."
-END
-
 // %s is a side's name as its heading reads (USA, China, Turkiye): the pool is that side and nothing else.
 GUI:FactionPickRandomSide
 "Random %s"
-END
-
-GUI:FactionPickSideHint
-"A side's box ticks or clears the whole side; its name leaves that side alone in the draw."
-END
-
-GUI:FactionPickSideNameHint
-"Click a side's name to play a random army of that side."
 END
 
 // the fork's player colours (MultiplayerReforged.ini); EA's eight are in the CSF
@@ -10224,4 +10204,208 @@ END
 
 GUI:FriendErrorBuild
 "That room plays another version of the game."
+END
+
+// Menu redesign package 7, the pickers: the map grid's chips, the picked map's facts and medals, the
+// tenants that lead to the other tabs, the Random tab's words, the army screen's rows, THE DRAW and
+// the general's page, the foot's hints.  %d is a count; %s a map's or a side's name, or a folder.
+GUI:MapPlayersCount
+"%d players"
+END
+
+GUI:MapPlayersChip
+"%d PLAYERS"
+END
+
+GUI:MapSupplies
+"%d supplies"
+END
+
+GUI:MapTech
+"%d tech"
+END
+
+GUI:MapMedalEasy
+"EASY"
+END
+
+GUI:MapMedalMedium
+"MEDIUM"
+END
+
+GUI:MapMedalHard
+"HARD"
+END
+
+// Hard in every other seat: %d is that many opponents
+GUI:MapMedalHardMax
+"HARD x%d"
+END
+
+GUI:MapNotWon
+"NOT WON YET"
+END
+
+GUI:MapNextEasy
+"Next: Easy"
+END
+
+GUI:MapNextMedium
+"Next: Medium"
+END
+
+GUI:MapNextHard
+"Next: Hard"
+END
+
+GUI:MapNextHardMax
+"Next: Hard x%d"
+END
+
+GUI:MapNextAll
+"Every medal won"
+END
+
+GUI:MapMedalLegend
+"Medal: your best win, against one Easy, Medium or Hard opponent, or Hard in every seat (x7)"
+END
+
+GUI:MapMedalLegend_Short
+"Medal: best win, Easy, Medium, Hard, or Hard in every seat (x7)"
+END
+
+GUI:MapHintAccept
+"Double-click a map to accept it"
+END
+
+GUI:MapHintAccept_Short
+"Double-click to accept"
+END
+
+GUI:MapHintAcceptType
+"Double-click a map type to accept it"
+END
+
+GUI:MapHintAcceptType_Short
+"Double-click to accept"
+END
+
+GUI:MapStyleTag
+"STYLE"
+END
+
+GUI:RandomMapName
+"Random map"
+END
+
+GUI:RandomMapStyleOf
+"Style of %s"
+END
+
+GUI:RandomMapSpots
+"%d start spots"
+END
+
+GUI:RandomMapSpotsLine
+"Spots are placed when the map is built, a new one at every Accept."
+END
+
+GUI:RandomTabStatsOff
+"off while stats record"
+END
+
+GUI:MapTenantRandom
+"RANDOM MAP"
+END
+
+GUI:MapTenantRandomLine
+"A new map for this room"
+END
+
+GUI:MapTenantCount
+"%d maps"
+END
+
+GUI:MapTenantCountOne
+"%d map"
+END
+
+GUI:MapNoneOwn
+"NO MAPS OF YOUR OWN"
+END
+
+GUI:MapAddOwn
+"ADD YOUR OWN"
+END
+
+GUI:MapFolderLine
+"Maps you add go in %s"
+END
+
+GUI:FactionPickInDraw
+"%d of %d in the draw"
+END
+
+GUI:FactionPickTheDraw
+"THE DRAW"
+END
+
+GUI:FactionPickOfArmies
+"of %d armies"
+END
+
+GUI:FactionPickInTheDraw
+"IN THE DRAW"
+END
+
+GUI:FactionPickCustomLine
+"Random plays one of the ticked armies."
+END
+
+GUI:FactionPickAllLine
+"Turkiye is never drawn; tick it under Custom Selection to add it."
+END
+
+GUI:FactionPickTurkiyeLeft
+"A plain Random never draws Turkiye. Tick it to add it."
+END
+
+GUI:FactionPickExperimental
+"EXPERIMENTAL"
+END
+
+GUI:FactionPickObserverHead
+"Not in the draw"
+END
+
+GUI:FactionPickObserverLine
+"Watch the match without playing."
+END
+
+GUI:FactionPickObserverMore
+"An observer sees the whole map and every player's army."
+END
+
+GUI:FactionPickFeatures
+"FEATURES"
+END
+
+GUI:FactionPickOthers
+"THE OTHER %s ARMIES"
+END
+
+GUI:FactionPickHintPlay
+"Double-click an army to play it · Enter confirms · Esc goes back"
+END
+
+GUI:FactionPickHintPlay_Short
+"Double-click to play it · Esc goes back"
+END
+
+GUI:FactionPickHintTick
+"Click an army to tick it · Enter confirms · Esc goes back"
+END
+
+GUI:FactionPickHintTick_Short
+"Click to tick · Esc goes back"
 END

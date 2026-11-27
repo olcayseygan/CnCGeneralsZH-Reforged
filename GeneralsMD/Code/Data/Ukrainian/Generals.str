@@ -20669,18 +20669,6 @@ GUI:FactionPickCustom
 "Власний вибір"
 END
 
-GUI:FactionPickLeftOut
-"Випадковий вибір ніколи не дасть: %s. Позначте у Власному виборі, щоб додати."
-END
-
-GUI:FactionPickPool
-"Випадковий вибір бере одну з %d армій, позначених ліворуч, із %d. Клацніть армію, щоб позначити її або прибрати."
-END
-
-GUI:FactionPickRandom
-"Випадковий вибір дасть вам одну з цих армій на початку матчу."
-END
-
 GUI:FactionPickRandomAll
 "Будь-яка армія"
 END
@@ -20689,13 +20677,6 @@ GUI:FactionPickRandomSide
 "Випадково: %s"
 END
 
-GUI:FactionPickSideHint
-"Поле сторони позначає або знімає всю сторону; її назва лишає цю сторону в жеребкуванні як є."
-END
-
-GUI:FactionPickSideNameHint
-"Клацніть назву сторони, щоб грати випадковою армією цієї сторони."
-END
 
 GUI:FactionPickTitle
 "Оберіть армію"

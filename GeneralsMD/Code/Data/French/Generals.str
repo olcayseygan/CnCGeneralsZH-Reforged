@@ -18946,7 +18946,7 @@ GUI:RandomMapAnyTemplate
 END
 
 GUI:RandomMapSize
-"Taille de la carte"
+"Taille de carte"
 END
 
 GUI:RandomMapSizeTiny
@@ -18985,28 +18985,8 @@ GUI:FactionPickConfirm
 "Confirmer %s"
 END
 
-GUI:FactionPickRandom
-"Aléatoire choisit pour vous l'une de ces armées au début de la partie."
-END
-
-GUI:FactionPickLeftOut
-"Aléatoire ne tire jamais : %s. Cochez-la sous Sélection personnalisée pour l'ajouter."
-END
-
-GUI:FactionPickPool
-"Aléatoire choisit l'une des %d armées cochées à gauche, sur %d. Cliquez sur une armée pour la cocher ou la retirer."
-END
-
 GUI:FactionPickRandomSide
 "%s aléatoire"
-END
-
-GUI:FactionPickSideHint
-"La case d'un camp coche ou décoche tout le camp ; son nom laisse ce camp tel quel dans le tirage."
-END
-
-GUI:FactionPickSideNameHint
-"Cliquez sur le nom d'un camp pour jouer une armée aléatoire de ce camp."
 END
 
 CONTROLBAR:ToolTipEvacuateAt

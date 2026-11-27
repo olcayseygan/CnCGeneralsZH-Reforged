@@ -242,7 +242,7 @@ CARD_PROFILE = (CARD_X1 - 220 - CARD_KEY_GAP - 380, CARD_Y1 - 68, 380, 48)
 # The ladder's and the skins page's keys (README-online-self.md): Previous and Next at the foot's right, Save
 # where Next stands (the skins page shows it, the ladder hides it), Jump to my page in Your place, the
 # platform's one key under the look's name
-LADDER_JUMP = (1344, 452, 492, 46)
+LADDER_JUMP = (1344, 448, 492, 48)         # top on the table's seventh row (256 + 6 x 32), no near-miss edge
 SKINS_ACTION = (1364, 860, 472, 52)        # 64 over the foot's keys, the 8 px grid
 
 

@@ -1285,6 +1285,7 @@ Data/Cinema/nohud.txt
 Data/Cinema/nukedome.txt
 Data/Cinema/nukefade.txt
 Data/Cinema/nukewarp.txt
+Data/Cinema/pr281reactor.txt
 Data/Cinema/reachhills.txt
 Data/Cinema/readme_water.txt
 Data/Cinema/recedge.txt
@@ -1756,6 +1757,7 @@ Data/Scenarios/piecetower.txt
 Data/Scenarios/piecetowerdirect.txt
 Data/Scenarios/piecetowerfilm.txt
 Data/Scenarios/powerpropcapture.txt
+Data/Scenarios/pr281reactor.txt
 Data/Scenarios/radarbatch.txt
 Data/Scenarios/ragdoll_mixed.txt
 Data/Scenarios/ragdoll_slope.txt

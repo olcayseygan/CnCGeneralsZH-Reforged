@@ -12116,59 +12116,79 @@ void InGameUI::drawDirectorBroadcast( void )
 
 //-------------------------------------------------------------------------------------------------
 /** The Art of Defense panel at the top middle of the world (the owner, 2026-11-28: what is coming now, when the
-	* next comes, what it is).  Two of the side's trays, one under the other, cells as the production queue's:
-	* the first the lives the seats share, the wave under way and its units still to come down the local seat's
-	* lane or walking it, a cameo a kind with its count; the second the next wave, its seconds to go once the last
-	* of this one is out, and its units a lane.  Each cameo wears its rank's chevron, its health as it comes
-	* (rank and the boss's share in), a flying mark on an aircraft and a boss mark on the boss.  Three words,
-	* Lives, Wave and Next, the rest numbers and pictures.  It reads TheAodDirector at the sync point and writes
-	* nothing back; the next wave is drawn a wave ahead in the logic, so what it shows is what comes. */
+	* next comes, what it is; then "too big and crude", so two slim lines).  Each line one of the side's trays: the
+	* first the lives the seats share, the wave under way and its units still to come down the local seat's lane
+	* or walking it; the second the next wave, its seconds to go once the last of this one is out (the panel's
+	* largest figure), and its units a lane.  A kind is a chip, a small cameo with its count over its health
+	* beside it, as it comes (rank and the boss's share in): its rank's chevron on the cameo, AIR after a flyer's
+	* count, BOSS for the boss's count on a red well, and a boss wave's head on a red well.  Text is never under
+	* the 14 pixels a 1080 screen reads, so it stands beside the cameo rather than on it.  It reads TheAodDirector
+	* at the sync point and writes nothing back; the next wave is drawn a wave ahead in the logic, so what it
+	* shows is what comes. */
 //-------------------------------------------------------------------------------------------------
 enum
 {
-	AOD_CAMEO_W					= 46,		///< a kind's cameo, 800x600 units through stripPixels: half again the queue's
-	AOD_CAMEO_H					= 36,
-	AOD_SMALL_POINTS		= 7,		///< the corners' readouts
-	AOD_BIG_POINTS			= 14,		///< the lives, the wave and the next wave's number
-	AOD_ROW_GAP					= 2,		///< between the two trays
-	AOD_PLAY_SHARE			= 70		///< percent of the world's width a tray may take before its cells shrink
+	AOD_CAMEO_W						= 23,		///< a kind's cameo, 800x600 units through stripPixels
+	AOD_CAMEO_H						= 17,
+	AOD_PAD								= 1,		///< round a chip's cameo and its text
+	AOD_HEAD_PAD					= 3,		///< round a head's words and between them
+	AOD_SMALL_POINTS			= 8,		///< words, counts and health: 15 pixels at 1080
+	AOD_NUMBER_POINTS			= 10,		///< the lives, the wave and the next wave's number
+	AOD_COUNTDOWN_POINTS	= 13,		///< the seconds to the next wave
+	AOD_ROW_GAP						= 1,		///< between the two trays
+	AOD_PLAY_SHARE				= 70		///< percent of the world's width a line may take before it shrinks
 };
 
 static IRegion2D s_aodPanel = { { 0, 0 }, { 0, 0 } };		///< the last draw's whole panel, which a click on is the panel's
 static std::vector<DisplayString *> s_aodStrings;				///< kept from draw to draw, used in the same order
 static UnsignedInt s_aodStringsUsed = 0;
 
-static DisplayString *aodString( const AsciiString &fontName, Int points, const UnicodeString &text )
+static DisplayString *aodString( const AsciiString &fontName, Int pixels, const UnicodeString &text )
 {
 	if( s_aodStringsUsed == s_aodStrings.size() )
 		s_aodStrings.push_back( TheDisplayStringManager->newDisplayString() );
 	DisplayString *string = s_aodStrings[ s_aodStringsUsed++ ];
-	GameFont *font = TheFontLibrary->getFont( fontName, max( stripPixels( points ), 6 ), TRUE );
+	GameFont *font = TheFontLibrary->getFont( fontName, max( pixels, 6 ), TRUE );
 	if( string->getFont() != font )
 		string->setFont( font );
 	if( string->getText().compare( text ) != 0 )
 		string->setText( text );
-	// HudReadout_draw clips a string to its plate: one drawn bare is clipped to the screen alone
+	// drawn bare, so clipped to the screen alone
 	IRegion2D screen = { { 0, 0 }, { (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight() } };
 	string->setClipRegion( &screen );
 	return string;
 }
 
-/// one cell of the panel: a kind's cameo, or a number with its word
-struct AodCell
+/// a run of text in one colour and size
+struct AodRun
 {
-	const ThingTemplate *thing;		///< the kind, NULL for a number cell
-	Int count;										///< units of it, or the cell's number
-	Int wave;											///< the wave whose rank and boss share it shows
-	Bool boss;
-	UnicodeString word;						///< a number cell's word
-	UnicodeString big;						///< and its number as written
-	UnicodeString corner;					///< a number cell's bottom right readout (the seconds to go)
-	Color tint;										///< under a number cell's cameo box, 0 for none
+	UnicodeString text;
+	Color color;
+	Int points;
 };
 
-/// the side's tray hanging from a line, open on the right and closed on the left, its foot along the top
-static HudTray aodTray( Int cellW, Int cellH )
+/// one cell of a line: a head of words and numbers, or a kind's chip
+struct AodCell
+{
+	const ThingTemplate *thing;		///< the kind, NULL for a head
+	Int wave;											///< the wave whose rank it shows
+	Bool alarm;										///< the boss, or a boss wave's head: a red well
+	std::vector<AodRun> runs;			///< a head's words, or a chip's top line beside its cameo
+	UnicodeString health;					///< a chip's bottom line
+};
+
+static void aodRun( AodCell &cell, const UnicodeString &text, Color color, Int points )
+{
+	AodRun run;
+	run.text = text;
+	run.color = color;
+	run.points = points;
+	cell.runs.push_back( run );
+}
+
+/// the side's tray hanging from a line, open on the right and closed on the left, its foot along the top, its
+/// edges as thick against a cell `cellH` high as the powers tray's are against its own
+static HudTray aodTray( Int cellH )
 {
 	HudTray tray = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0 };
 	const Image *const *pieces = TheControlBar != NULL ? TheControlBar->getControlBarSchemeManager()->getPowerTray() : NULL;
@@ -12192,13 +12212,18 @@ static HudTray aodTray( Int cellW, Int cellH )
 	tray.close = pieces[ ControlBarScheme::TRAY_EDGE_LEFT ];
 	tray.closeFoot = pieces[ ControlBarScheme::TRAY_CORNER_TL ];
 	tray.closeUncovered = pieces[ ControlBarScheme::TRAY_CORNER_BL ];
-	sizeHudTray( &tray, (Real)cellW / tray.cell->getImageWidth(), (Real)cellH / tray.cell->getImageHeight() );
+	const Real scale = (Real)cellH / tray.cell->getImageHeight();
+	sizeHudTray( &tray, scale, scale );
 	return tray;
 }
 
-/// the kinds of a wave a cell each, the boss first and then in the table's order, with how many of each
+/// the kinds of a wave a chip each, the boss first and then in the table's order, with how many of each
 static void aodKindCells( std::vector<AodCell> &cells, Int wave, const std::vector<Int> *kinds, Int lane )
 {
+	const Color white = GameMakeColor( 245, 245, 245, 255 );
+	const Color red = GameMakeColor( 240, 70, 50, 255 );
+	const Color air = GameMakeColor( 110, 200, 255, 255 );
+	const Int rank = Aod_waveRank( wave );
 	for( Int kind = -1; kind < Aod_kindCount(); ++kind )
 	{
 		Int count = 0;
@@ -12214,124 +12239,194 @@ static void aodKindCells( std::vector<AodCell> &cells, Int wave, const std::vect
 			continue;
 		AodCell cell;
 		cell.thing = thing;
-		cell.count = count;
 		cell.wave = wave;
-		cell.boss = kind < 0;
-		cell.tint = 0;
+		cell.alarm = kind < 0;
+
+		// the count, which for the boss is the word, and what it flies
+		UnicodeString text;
+		text.format( u"x%d", count );
+		if( cell.alarm )
+		{
+			UnicodeString boss = TheGameText->fetch( "GUI:AodBoss" );
+			if( count > 1 )
+			{
+				boss.concat( u' ' );
+				boss.concat( text );
+			}
+			aodRun( cell, boss, red, AOD_SMALL_POINTS );
+		}
+		else
+			aodRun( cell, text, white, AOD_SMALL_POINTS );
+		if( thing->isKindOf( KINDOF_AIRCRAFT ) )
+			aodRun( cell, TheGameText->fetch( "GUI:AodAir" ), air, AOD_SMALL_POINTS );
+
+		// its health as it comes, its rank and the boss's share in
+		Real hp = thing->calcMaxHealth( TRUE ) * TheGlobalData->m_healthBonus[ rank >= 0 && rank < LEVEL_COUNT ? rank : 0 ];
+		if( cell.alarm )
+			hp = hp * (Real)Aod_bossHealthPercent( wave ) / 100.0f;
+		if( hp > 0.0f )
+			cell.health.format( u"%d", REAL_TO_INT( hp + 0.5f ) );
 		cells.push_back( cell );
 	}
 }
 
-/// one row of cells in its tray, its top at `top`, centred on `middle`; the row's bottom
-static Int drawAodRow( const std::vector<AodCell> &cells, Int middle, Int top, Int widest, const HudCellStyle &style,
-											 const AsciiString &fontName )
+/// one line of cells in its tray, its top at `top`, centred on `middle`; the line's bottom
+static Int drawAodRow( const std::vector<AodCell> &cells, Int middle, Int top, Int widest, const AsciiString &fontName )
 {
-	if( cells.empty() )
+	const Int count = (Int)cells.size();
+	if( count == 0 )
 		return top;
 
-	// the queue's cell margins round a bigger cameo, shrunk as a whole when the row is wider than its share
-	Int cameoW = stripPixels( AOD_CAMEO_W ), cameoH = stripPixels( AOD_CAMEO_H );
-	Int marginX = REAL_TO_INT_CEIL( cameoW * ( HUD_CELL_TRAY_CELL_W - HUD_CELL_TRAY_BUTTON_W ) / ( 2.0f * HUD_CELL_TRAY_BUTTON_W ) );
-	Int marginY = REAL_TO_INT_CEIL( cameoH * ( HUD_CELL_TRAY_CELL_H - HUD_CELL_TRAY_BUTTON_H ) / ( 2.0f * HUD_CELL_TRAY_BUTTON_H ) );
-	const Int count = (Int)cells.size();
-	if( ( cameoW + 2 * marginX ) * count > widest && count > 0 )
+	// laid out at the HUD's size, and again smaller as a whole when the line is wider than its share; the
+	// strings each cell draws are made here, its runs and then a chip's health, in that order
+	const Real scale = ControlBarHudPageScale();
+	const UnsignedInt firstString = s_aodStringsUsed;
+	std::vector<Int> widths( count );
+	std::vector<DisplayString *> strings;
+	Real shrink = 1.0f;
+	Int cameoW = 0, cameoH = 0, pad = 0, headPad = 0, total = 0;
+	for( Int pass = 0; pass < 2; ++pass )
 	{
-		const Real shrink = (Real)widest / ( ( cameoW + 2 * marginX ) * count );
-		cameoW = max( REAL_TO_INT( cameoW * shrink ), 8 );
-		cameoH = max( REAL_TO_INT( cameoH * shrink ), 6 );
-		marginX = max( REAL_TO_INT( marginX * shrink ), 1 );
-		marginY = max( REAL_TO_INT( marginY * shrink ), 1 );
+		auto pixels = [ & ]( Int nominal ) { return max( REAL_TO_INT_CEIL( nominal * scale * shrink ), 1 ); };
+		s_aodStringsUsed = firstString;
+		strings.clear();
+		cameoW = pixels( AOD_CAMEO_W );
+		cameoH = pixels( AOD_CAMEO_H );
+		pad = pixels( AOD_PAD );
+		headPad = pixels( AOD_HEAD_PAD );
+		total = 0;
+		for( Int i = 0; i < count; ++i )
+		{
+			const AodCell &c = cells[ i ];
+			Int runsW = 0;
+			for( size_t r = 0; r < c.runs.size(); ++r )
+			{
+				DisplayString *string = aodString( fontName, pixels( c.runs[ r ].points ), c.runs[ r ].text );
+				strings.push_back( string );
+				Int w = 0;
+				string->getSize( &w, NULL );
+				runsW += w;
+			}
+			if( c.thing == NULL )
+				widths[ i ] = runsW + headPad * ( (Int)c.runs.size() + 1 );
+			else
+			{
+				DisplayString *string = aodString( fontName, pixels( AOD_SMALL_POINTS ), c.health );
+				strings.push_back( string );
+				Int healthW = 0;
+				string->getSize( &healthW, NULL );
+				runsW += pad * ( (Int)c.runs.size() - 1 );
+				widths[ i ] = pad + cameoW + pad + max( runsW, healthW ) + 2 * pad;
+			}
+			total += widths[ i ];
+		}
+		if( total <= widest || widest <= 0 )
+			break;
+		shrink = (Real)widest / total;
 	}
-	const Int cellW = cameoW + 2 * marginX, cellH = cameoH + 2 * marginY;
-	const HudTray tray = aodTray( cellW, cellH );
-	const Int left = middle - cellW * count / 2;
-	const Int cellTop = top + tray.footH;
 
+	const Int cellH = cameoH + 2 * pad;
+	const HudTray tray = aodTray( cellH );
+	// a scheme with no tray (Classic's) gets a plate of the bar's steel, a lip round the cells
+	const Int lip = tray.cell != NULL ? 0 : max( pad, 2 );
+	const Int left = middle - total / 2;
+	const Int cellTop = top + tray.footH + lip;
 	std::vector<IRegion2D> boxes( count );
-	for( Int i = 0; i < count; ++i )
+	for( Int i = 0, x = left; i < count; x += widths[ i++ ] )
 	{
-		boxes[ i ].lo.x = left + i * cellW;
-		boxes[ i ].hi.x = boxes[ i ].lo.x + cellW;
+		boxes[ i ].lo.x = x;
+		boxes[ i ].hi.x = x + widths[ i ];
 		boxes[ i ].lo.y = cellTop;
 		boxes[ i ].hi.y = cellTop + cellH;
 	}
-	const Int bottom = cellTop + cellH + tray.uncoveredH;
+	const Int bottom = cellTop + cellH + tray.uncoveredH + lip;
+	const Int side = tray.cell != NULL ? tray.openW : lip;
 	if( tray.cell != NULL )
 		drawHudTray( tray, &boxes[ 0 ], count, count, 1, -1 );
 	else
 	{
-		// a scheme with no tray (Classic's): a plate of the bar's steel under the row
-		const Int pad = max( marginX, 2 );
-		TheDisplay->drawFillRect( left - pad, top, cellW * count + 2 * pad, bottom - top + pad, GameMakeColor( 20, 28, 36, 225 ) );
-		TheDisplay->drawOpenRect( left - pad, top, cellW * count + 2 * pad, bottom - top + pad, 1.0f, GameMakeColor( 112, 132, 150, 235 ) );
+		TheDisplay->drawFillRect( left - lip, top, total + 2 * lip, bottom - top, GameMakeColor( 20, 28, 36, 225 ) );
+		TheDisplay->drawOpenRect( left - lip, top, total + 2 * lip, bottom - top, 1.0f, GameMakeColor( 112, 132, 150, 235 ) );
 	}
 
-	const Color white = GameMakeColor( 245, 245, 245, 255 );
-	const Color health = GameMakeColor( 120, 230, 110, 255 );
-	const Color red = GameMakeColor( 240, 70, 50, 255 );
-	const Color air = GameMakeColor( 110, 200, 255, 255 );
 	const Color hole = GameMakeColor( 2, 4, 5, 255 );
+	const Color alarmWell = GameMakeColor( 90, 14, 10, 255 );
+	const Color red = GameMakeColor( 240, 70, 50, 255 );
+	const Color health = GameMakeColor( 120, 230, 110, 255 );
+	const Color drop = GameMakeColor( 0, 0, 0, 255 );
+	static const char *const CHEVRONS[ LEVEL_COUNT ] = { NULL, "SCVeter1", "SCVeter2", "SCVeter3" };
+	size_t nextString = 0;
 	for( Int i = 0; i < count; ++i )
 	{
 		const AodCell &c = cells[ i ];
-		IRegion2D cameo;
-		cameo.lo.x = boxes[ i ].lo.x + marginX;
-		cameo.lo.y = boxes[ i ].lo.y + marginY;
-		cameo.hi.x = cameo.lo.x + cameoW;
-		cameo.hi.y = cameo.lo.y + cameoH;
+		const IRegion2D &b = boxes[ i ];
+		const Int w = b.hi.x - b.lo.x, h = b.hi.y - b.lo.y;
+		// a dark well inside the cell piece's rim, red under the boss and a boss wave's head
+		TheDisplay->drawFillRect( b.lo.x + 1, b.lo.y + 1, w - 2, h - 2, c.alarm ? alarmWell : hole );
+		if( c.alarm )
+			TheDisplay->drawOpenRect( b.lo.x + 1, b.lo.y + 1, w - 2, h - 2, 1.0f, red );
+
 		if( c.thing == NULL )
 		{
-			// a number cell: its word over its number, the seconds to go in the corner
-			TheDisplay->drawFillRect( cameo.lo.x, cameo.lo.y, cameoW, cameoH, c.tint != 0 ? c.tint : hole );
-			DisplayString *word = aodString( fontName, AOD_SMALL_POINTS, c.word );
-			HudReadout_draw( word, cameo, HUD_READOUT_TOP_LEFT, GameMakeColor( 200, 210, 220, 255 ), style.plate );
-			DisplayString *big = aodString( fontName, AOD_BIG_POINTS, c.big );
-			Int w = 0, h = 0, wordH = 0;
-			big->getSize( &w, &h );
-			word->getSize( NULL, &wordH );
-			const Int below = cameo.lo.y + wordH;
-			big->draw( ( cameo.lo.x + cameo.hi.x - w ) / 2, below + ( cameo.hi.y - below - h ) / 2, white, GameMakeColor( 0, 0, 0, 255 ) );
-			if( !c.corner.isEmpty() )
-				HudReadout_draw( aodString( fontName, AOD_SMALL_POINTS, c.corner ), cameo, HUD_READOUT_BOTTOM_RIGHT, white, style.plate );
-			drawHudCellBorder( cameo, c.tint != 0 ? red : hudCellBorder( COMMAND_BUTTON_BORDER_SYSTEM ) );
+			// a head: its words and numbers on one baseline, about four fifths down the tallest
+			Int tallest = 0;
+			for( size_t r = 0; r < c.runs.size(); ++r )
+			{
+				Int runH = 0;
+				strings[ nextString + r ]->getSize( NULL, &runH );
+				tallest = max( tallest, runH );
+			}
+			const Int baseline = ( b.lo.y + b.hi.y - tallest ) / 2 + tallest * 4 / 5;
+			Int x = b.lo.x + headPad;
+			for( size_t r = 0; r < c.runs.size(); ++r )
+			{
+				DisplayString *string = strings[ nextString++ ];
+				Int runW = 0, runH = 0;
+				string->getSize( &runW, &runH );
+				string->draw( x, baseline - runH * 4 / 5, c.runs[ r ].color, drop );
+				x += runW + headPad;
+			}
 			continue;
 		}
 
+		// a chip: the cameo, the bar's own rank chevrons on it, the count over the health beside it
+		IRegion2D cameo;
+		cameo.lo.x = b.lo.x + pad;
+		cameo.lo.y = b.lo.y + pad;
+		cameo.hi.x = cameo.lo.x + cameoW;
+		cameo.hi.y = cameo.lo.y + cameoH;
 		if( c.thing->getButtonImage() != NULL )
 			TheDisplay->drawImage( c.thing->getButtonImage(), cameo.lo.x, cameo.lo.y, cameo.hi.x, cameo.hi.y );
-		drawHudCellBorder( cameo, c.boss ? red : hudCellBorder( COMMAND_BUTTON_BORDER_BUILD ) );
-
-		// the rank it comes in at, the bar's own chevrons
+		drawHudCellBorder( cameo, c.alarm ? red : hudCellBorder( COMMAND_BUTTON_BORDER_BUILD ) );
 		const Int rank = Aod_waveRank( c.wave );
-		static const char *const CHEVRONS[ LEVEL_COUNT ] = { NULL, "SCVeter1", "SCVeter2", "SCVeter3" };
 		const Image *chevron = rank > LEVEL_REGULAR && rank < LEVEL_COUNT ? TheMappedImageCollection->findImageByName( CHEVRONS[ rank ] ) : NULL;
 		if( chevron != NULL )
 		{
 			const Int size = max( cameoH / 3, 6 );
 			TheDisplay->drawImage( chevron, cameo.lo.x + 1, cameo.lo.y + 1, cameo.lo.x + 1 + size, cameo.lo.y + 1 + size );
 		}
-
-		// what it flies or that it is the boss, its health as it comes, how many
-		if( c.boss )
-			HudReadout_draw( aodString( fontName, AOD_SMALL_POINTS, TheGameText->fetch( "GUI:AodBoss" ) ), cameo, HUD_READOUT_TOP_RIGHT, red, style.plate );
-		else if( c.thing->isKindOf( KINDOF_AIRCRAFT ) )
-			HudReadout_draw( aodString( fontName, AOD_SMALL_POINTS, TheGameText->fetch( "GUI:AodAir" ) ), cameo, HUD_READOUT_TOP_RIGHT, air, style.plate );
-		Real hp = c.thing->calcMaxHealth( TRUE ) * TheGlobalData->m_healthBonus[ rank >= 0 && rank < LEVEL_COUNT ? rank : 0 ];
-		if( c.boss )
-			hp = hp * (Real)Aod_bossHealthPercent( c.wave ) / 100.0f;
-		UnicodeString text;
-		if( hp > 0.0f )
+		const Int textLeft = cameo.hi.x + pad + 1;
+		Int x = textLeft;
+		for( size_t r = 0; r < c.runs.size(); ++r )
 		{
-			text.format( u"%d", REAL_TO_INT( hp + 0.5f ) );
-			HudReadout_draw( aodString( fontName, AOD_SMALL_POINTS, text ), cameo, HUD_READOUT_BOTTOM_LEFT, health, style.plate );
+			DisplayString *string = strings[ nextString++ ];
+			Int runW = 0;
+			string->getSize( &runW, NULL );
+			string->draw( x, b.lo.y + 1, c.runs[ r ].color, drop );
+			x += runW + pad;
 		}
-		text.format( u"x%d", c.count );
-		HudReadout_draw( aodString( fontName, AOD_SMALL_POINTS, text ), cameo, HUD_READOUT_BOTTOM_RIGHT, white, style.plate );
+		DisplayString *string = strings[ nextString++ ];
+		if( !c.health.isEmpty() )
+		{
+			Int healthH = 0;
+			string->getSize( NULL, &healthH );
+			string->draw( textLeft, b.hi.y - 1 - healthH, health, drop );
+		}
 	}
 
-	s_aodPanel.lo.x = s_aodPanel.hi.x > s_aodPanel.lo.x ? min( s_aodPanel.lo.x, left - tray.openW ) : left - tray.openW;
+	s_aodPanel.lo.x = s_aodPanel.hi.x > s_aodPanel.lo.x ? min( s_aodPanel.lo.x, left - side ) : left - side;
 	s_aodPanel.lo.y = s_aodPanel.hi.y > s_aodPanel.lo.y ? min( s_aodPanel.lo.y, top ) : top;
-	s_aodPanel.hi.x = max( s_aodPanel.hi.x, left + cellW * count + tray.openW );
+	s_aodPanel.hi.x = max( s_aodPanel.hi.x, left + total + side );
 	s_aodPanel.hi.y = max( s_aodPanel.hi.y, bottom );
 	return bottom;
 }
@@ -12348,49 +12443,59 @@ static Int drawAodPanel( Int top, const AsciiString &fontName )
 	const IRegion2D play = hudPlay();
 	const Int middle = ( play.lo.x + play.hi.x ) / 2;
 	const Int widest = ( play.hi.x - play.lo.x ) * AOD_PLAY_SHARE / 100;
-	const HudCellStyle style = hudCellStyle();
 	const Int lanes = TheAodDirector->getLaneCount();
 	const Int lane = lanes > 0 ? max( 0, min( local->getMpStartIndex(), lanes - 1 ) ) : 0;
 	const Int wave = TheAodDirector->getWave();
+	const Color white = GameMakeColor( 245, 245, 245, 255 );
+	const Color word = GameMakeColor( 190, 198, 206, 255 );
+	const Color alarmNumber = GameMakeColor( 255, 120, 100, 255 );
 
 	// the lives the seats share and the wave under way, with what of it is left down this seat's lane
 	std::vector<AodCell> now;
-	AodCell number;
-	number.thing = NULL;
-	number.boss = FALSE;
-	number.wave = wave;
-	number.tint = 0;
-	number.word = TheGameText->fetch( "GUI:AodLives" );
-	number.count = TheAodDirector->getLives();
-	number.big.format( u"%d", number.count );
-	now.push_back( number );
+	AodCell head;
+	head.thing = NULL;
+	head.wave = wave;
+	head.alarm = FALSE;
+	UnicodeString number;
+	number.format( u"%d", TheAodDirector->getLives() );
+	aodRun( head, TheGameText->fetch( "GUI:AodLives" ), word, AOD_SMALL_POINTS );
+	aodRun( head, number, white, AOD_NUMBER_POINTS );
+	now.push_back( head );
 	if( wave > 0 )
 	{
-		number.word = TheGameText->fetch( "GUI:AodWave" );
-		number.big.format( u"%d/%d", wave, (Int)AOD_WAVES );
-		number.tint = Aod_isBossWave( wave ) ? GameMakeColor( 90, 14, 10, 255 ) : 0;
-		now.push_back( number );
+		head.runs.clear();
+		head.alarm = Aod_isBossWave( wave );
+		number.format( u"%d/%d", wave, (Int)AOD_WAVES );
+		aodRun( head, TheGameText->fetch( "GUI:AodWave" ), word, AOD_SMALL_POINTS );
+		aodRun( head, number, head.alarm ? alarmNumber : white, AOD_NUMBER_POINTS );
+		now.push_back( head );
 		aodKindCells( now, wave, NULL, lane );
 	}
 
-	// the next wave, the seconds to it once this one is all out, and its units a lane
+	// the next wave, the seconds to it once this one is all out (the largest figure), and its units a lane
 	std::vector<AodCell> next;
 	const Int coming = TheAodDirector->getNextWave();
 	if( coming > 0 )
 	{
-		number.word = TheGameText->fetch( "GUI:AodNext" );
-		number.big.format( u"%d", coming );
-		number.tint = Aod_isBossWave( coming ) ? GameMakeColor( 90, 14, 10, 255 ) : 0;
+		head.runs.clear();
+		head.wave = coming;
+		head.alarm = Aod_isBossWave( coming );
+		number.format( u"%d", coming );
+		aodRun( head, TheGameText->fetch( "GUI:AodNext" ), word, AOD_SMALL_POINTS );
+		aodRun( head, number, head.alarm ? alarmNumber : white, AOD_NUMBER_POINTS );
 		const UnsignedInt at = TheAodDirector->getNextWaveFrame(), frame = TheGameLogic->getFrame();
 		if( at > frame )
-			number.corner.format( u"%ds", (Int)( ( at - frame + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND ) );
-		next.push_back( number );
+		{
+			number.format( u"%ds", (Int)( ( at - frame + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND ) );
+			aodRun( head, number, white, AOD_COUNTDOWN_POINTS );
+		}
+		next.push_back( head );
 		aodKindCells( next, coming, &TheAodDirector->getNextKinds(), lane );
 	}
 
 	TheDisplay->beginBatch2D();
-	Int bottom = drawAodRow( now, middle, top, widest, style, fontName );
-	bottom = drawAodRow( next, middle, bottom + stripPixels( AOD_ROW_GAP ), widest, style, fontName );
+	Int bottom = drawAodRow( now, middle, top, widest, fontName );
+	bottom = drawAodRow( next, middle, bottom + stripPixels( AOD_ROW_GAP ), widest, fontName );
 	TheDisplay->endBatch2D();
 	return bottom;
 }

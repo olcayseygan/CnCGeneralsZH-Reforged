@@ -846,6 +846,7 @@ GlobalData::GlobalData()
 	m_optionsMenuOnStart = FALSE;
 	m_mapLight = FALSE;
 	m_teamGlow = FALSE;
+	m_cleanFftWater = FALSE;
 	m_mapAwareWaveHeading = FALSE;
 	m_underwaterClarity = FALSE;
 	m_waterFoam = FALSE;

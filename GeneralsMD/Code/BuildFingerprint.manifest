@@ -3689,6 +3689,13 @@ Libraries/Include/Platform/WaterBedMaterial.h
 Libraries/Include/Platform/WaterBowLift.h
 Libraries/Include/Platform/WaterBowRefinement.h
 Libraries/Include/Platform/WaterBowShoulder.h
+Libraries/Include/Platform/WaterCleanCollapse.h
+Libraries/Include/Platform/WaterCleanPrecompute.h
+Libraries/Include/Platform/WaterCleanRender.h
+Libraries/Include/Platform/WaterCleanShader.h
+Libraries/Include/Platform/WaterCleanShore.h
+Libraries/Include/Platform/WaterCleanSpectrum.h
+Libraries/Include/Platform/WaterCleanStream.h
 Libraries/Include/Platform/WaterConstants.h
 Libraries/Include/Platform/WaterFftFiltering.h
 Libraries/Include/Platform/WaterFftGeometry.h
@@ -3705,6 +3712,7 @@ Libraries/Include/Platform/WaterHullModel.h
 Libraries/Include/Platform/WaterHullPoseCache.h
 Libraries/Include/Platform/WaterHullVisual.h
 Libraries/Include/Platform/WaterHullVisualLayout.h
+Libraries/Include/Platform/WaterMediumDepth.h
 Libraries/Include/Platform/WaterObstacleIndex.h
 Libraries/Include/Platform/WaterOpticalContext.h
 Libraries/Include/Platform/WaterOpticalModel.h
@@ -4757,6 +4765,7 @@ RTS.dsw
 Stubs/NullAudioManager.h
 Tests/WaterBowShoulderTest.h
 Tests/WaterHullContactFoamTest.h
+Tests/WaterMediumDepthTest.h
 Tests/WaterPreparedViewTest.h
 Tests/WaterProjectedSampleCacheTest.h
 Tests/WaterShoreHistoryReference.h
@@ -4822,6 +4831,10 @@ Tests/test_binkvideo.cpp
 Tests/test_camera_behavior.inc
 Tests/test_cinema.inc
 Tests/test_cinematic_camera.cpp
+Tests/test_clean_fft_gpu.cpp
+Tests/test_clean_fft_shader.cpp
+Tests/test_clean_fft_water.cpp
+Tests/test_clean_water_depth.cpp
 Tests/test_clock.cpp
 Tests/test_cloud_shadow_bake.cpp
 Tests/test_compression.cpp

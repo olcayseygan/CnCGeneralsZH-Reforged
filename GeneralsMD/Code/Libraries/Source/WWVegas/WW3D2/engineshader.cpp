@@ -689,10 +689,11 @@ static bool write_engine_pixel_program(EngineShaderProgram program,
 // SDL map water has a dedicated, explicitly packed uniform block (SdlWaterPixelConstants).
 // Runtime-generated normal detail, terrain depth, refraction and the coloured planar reflection
 // are composed before the existing shore/shroud alpha blend. No additional assets are required.
-static void write_modern_water(std::string &hlsl, bool river, bool sdl = false, bool waveHeading = false)
+static void write_modern_water(std::string &hlsl, bool river, bool sdl = false, bool waveHeading = false, bool cleanMain = false)
 {
 	const auto quality = sdl ? WaterPerformanceSettings::Applied() : WaterPerformanceSettings::Configuration();
 	hlsl.clear();
+	if (cleanMain) hlsl += "#define WATER_CLEAN_MAIN 1\n";
 	if (sdl) {
 		hlsl += std::string("#define WATER_SCENE_REFLECTIONS ") + (quality.sceneReflections ? "1\n" : "0\n");
 		hlsl += "#define WATER_REFRACTION_QUALITY " + std::to_string(int(quality.refraction)) + "\n";
@@ -945,15 +946,17 @@ float4 waterMirrorFiltered(float2 uv, int2 size)
 }
 )HLSL";
 	}
-	hlsl += WaterSurfaceModel::ShaderSource();
-	hlsl += WaterSurfaceModel::OceanShaderSource();
+	if (!cleanMain) {
+		hlsl += WaterSurfaceModel::ShaderSource();
+		hlsl += WaterSurfaceModel::OceanShaderSource();
+	}
 	hlsl += WaterOpticalModel::GetHlslSource();
 	if (sdl) hlsl += WaterOpticalModel::GetClarityHlslSource();
 	hlsl += ModernWaterMaterial::OpticalSource();
 	if (sdl) hlsl += ModernWaterMaterial::SurfaceSource();
 	hlsl += ModernWaterMaterial::BubbleSource();
 	hlsl += WaterHullModel::GetHlslSource();
-	hlsl += WaterFftSampling::PixelSource(WaterFftSpectrum::ForResolution(quality.activeFftResolution),waveHeading,sdl);
+	hlsl += WaterFftSampling::PixelSource(WaterFftSpectrum::ForResolution(quality.activeFftResolution),waveHeading,sdl,cleanMain);
 	hlsl += WaterWaveCageShader::Source(false);
 	char oceanBound[96];
 	snprintf(oceanBound, sizeof(oceanBound), "static const float oceanDisplacementBound = %.9g;\n",
@@ -1061,7 +1064,7 @@ float2 oceanMeshHullEffects(float3 world,float level,float time,float offshore,
 	hlsl += WaterFoamShading::Source();
 	hlsl += WaterFoamShading::MaterialSource();
 	hlsl += WaterFoamEnvironment::HlslSource();
-	hlsl += WaterShoreFoam::Source();
+	if (!cleanMain) hlsl += WaterShoreFoam::Source();
 	hlsl += WaterShoreFoam::HistorySource();
 	hlsl += R"HLSL(
 float4 main(Input input) : SV_Target
@@ -1088,16 +1091,36 @@ float4 main(Input input) : SV_Target
     float3 view = normalize(CameraPosition.xyz - world + float3(0, 0, 0.00001));
     float2 contextUV = (world.xy + TerrainParameters.xx + 5.0) / max(TerrainParameters.y, 1.0);
     float4 opticalContext=Texture4.SampleLevel(Sampler4,contextUV,0);
-    float offshore = opticalContext.r * OpticalParameters.z * (1.0 - WaterParameters.y);
+)HLSL";
+    if(sdl) hlsl+=R"HLSL(    float materialWindGain=modernWaterWindGain(MaterialSurface.w);
+)HLSL";
+    hlsl+=R"HLSL(    float offshore = opticalContext.r * OpticalParameters.z * (1.0 - WaterParameters.y);
     // The mesh and this derivative share every mode, phase, dispersion and crest harmonic.
     // Interpolated attenuation includes shores/structures, and its product derivative is retained.
-    float2 shoreRippleSlope;
+)HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    // Preserve authored edge knots without synthesizing a second wave field.
+    // The CPU residual already includes wind, terrain damping and mesh correction.
+    // It contributes only through the unchanged (1-fftWeight) collar below.
+    float2 shoreRippleSlope=0;
+    float4 oceanSwell=0;float3 oceanWave=0,legacyWave=0;
+    float3 wave=float3(input.Specular.z,fftParameterGradient(input.Specular.z,parameterDx,parameterDy));
+)HLSL";
+    else {
+      hlsl+=R"HLSL(    float2 shoreRippleSlope;
     float3 legacyWave = waterWave(wavePosition, time, shoreRippleSlope);
     float4 oceanSwell;
     float4 oceanSurface = waterOceanSurface(wavePosition, time, oceanSwell);
     float3 oceanWave = oceanSurface.xyz;
-    float3 wave = lerp(legacyWave, oceanWave, offshore);
-    FftSurface spectral=(FftSurface)0;
+)HLSL";
+      if(sdl) hlsl+=R"HLSL(    legacyWave*=materialWindGain;
+    oceanWave*=materialWindGain;
+    oceanSwell.xyz*=materialWindGain;
+    shoreRippleSlope*=materialWindGain;
+)HLSL";
+      hlsl+=R"HLSL(    float3 wave = lerp(legacyWave, oceanWave, offshore);
+)HLSL";
+    }
+    hlsl+=R"HLSL(    FftSurface spectral=(FftSurface)0;
     )HLSL";
     hlsl+=R"HLSL(float3 bowLiftField=0;float3 fftDampingField=float3(0,0,0);float2 fftWeightSlope=0;)HLSL";
     hlsl+=R"HLSL(
@@ -1138,26 +1161,40 @@ float4 main(Input input) : SV_Target
     // Reconstruct the terrain profile at fragment density, avoiding large triangular shading
     // facets from differentiating the coarse mesh's interpolated shore attenuation.
     float surfaceTerrainHeight=TerrainParameters.w>0.5?terrainHeight(world.xy):baseLevel-20.0;
-    float localTerrain = TerrainParameters.w > 0.5
+)HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    float localTerrain = 1.0;
+)HLSL";
+    else hlsl+=R"HLSL(    float localTerrain = TerrainParameters.w > 0.5
         ? terrainWaveAttenuation(baseLevel-surfaceTerrainHeight, offshore) : 1.0;
-    attenuation = lerp(attenuation, min(localTerrain, input.Diffuse.r), offshore);
+)HLSL";
+    hlsl+=R"HLSL(    attenuation = lerp(attenuation, min(localTerrain, input.Diffuse.r), offshore);
     attenuation = min(attenuation,lerp(1.0,hullEffects.z,offshore));
     float determinant = parameterDx.x * parameterDy.y - parameterDx.y * parameterDy.x;
     float invDet = abs(determinant) > 0.000001 ? 1.0 / determinant : 0.0;
-    float ou = ddx(offshore), ov = ddy(offshore);
+)HLSL";
+    if(!cleanMain) hlsl+=R"HLSL(    float ou = ddx(offshore), ov = ddy(offshore);
     float2 offshoreSlope = float2(ou*parameterDy.y-ov*parameterDx.y, ov*parameterDx.x-ou*parameterDy.x)*invDet;
     wave.yz += (oceanWave.x-legacyWave.x)*offshoreSlope;
-    float du = ddx(attenuation), dv = ddy(attenuation);
+)HLSL";
+    hlsl+=R"HLSL(    float du = ddx(attenuation), dv = ddy(attenuation);
     float2 attenuationSlope = float2(du*parameterDy.y - dv*parameterDx.y, dv*parameterDx.x - du*parameterDy.x) * invDet;
     float zu = ddx(baseLevel), zv = ddy(baseLevel);
     float2 baseSlope = float2(zu*parameterDy.y - zv*parameterDx.y, zv*parameterDx.x - zu*parameterDy.x) * invDet;
     float cu=ddx(meshCorrection),cv=ddy(meshCorrection);
     float2 correctionSlope=float2(cu*parameterDy.y-cv*parameterDx.y,cv*parameterDx.x-cu*parameterDy.x)*invDet;
-    float2 slope = baseSlope + wave.yz * attenuation + wave.x * attenuationSlope + correctionSlope;
 )HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    float2 slope=baseSlope+wave.yz;
+)HLSL";
+    else hlsl+=R"HLSL(    float2 slope = baseSlope + wave.yz * attenuation + wave.x * attenuationSlope + correctionSlope;
+)HLSL";
+    hlsl+=R"HLSL()HLSL";
 	hlsl += R"HLSL(    float3 normal = normalize(float3(-slope, 1.0));
-    float continuousHeight=baseLevel+wave.x*attenuation+meshCorrection;
-    WaveCage cage=waveCage(wavePosition,baseLevel);
+)HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    float continuousHeight=baseLevel+wave.x;
+)HLSL";
+    else hlsl+=R"HLSL(    float continuousHeight=baseLevel+wave.x*attenuation+meshCorrection;
+)HLSL";
+    hlsl+=R"HLSL(    WaveCage cage=waveCage(wavePosition,baseLevel);
     float cageAmount=cage.support*FftParameters.x;
     float2 cageAmountSlope=fftParameterGradient(cageAmount,parameterDx,parameterDy);
     float3 cageObstacle=float3(saturate(input.Diffuse.r),fftParameterGradient(input.Diffuse.r,parameterDx,parameterDy));
@@ -1244,14 +1281,22 @@ float4 main(Input input) : SV_Target
     // must still catch light across the shallows. Restore its terrain-damped lighting
     // slopes with the same spectral phases, retaining wet-edge and obstacle/hull shelter.
     // Geometry, refraction and full offshore shading keep their original normals.
-    float shoreRippleLimit = min(smoothstep(0.0,0.75,depth),min(input.Diffuse.r,hullEffects.z));
+)HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    float2 shoreRipple=0;
+)HLSL";
+    else hlsl+=R"HLSL(    float shoreRippleLimit = min(smoothstep(0.0,0.75,depth),min(input.Diffuse.r,hullEffects.z));
     float shoreRippleWeight = opticalContext.b * OpticalParameters.z * TerrainParameters.w
         * (1.0-WaterParameters.y) * (1.0-offshore) * (1.0-cageAmount*fftWeight);
     float2 shoreRipple = shoreRippleWeight * lerp(
         shoreRippleSlope * max(0.0,shoreRippleLimit-max(localTerrain,attenuation)),
         float2(spectral.shadingDerivativeX.z,spectral.shadingDerivativeY.z)
             * max(0.0,shoreRippleLimit-max(localTerrain,fftDamping)),fftWeight);
-    float3 waveLightingNormal = resolvedNormal;
+)HLSL";
+    if(sdl) hlsl+=R"HLSL(    normal=modernWaterDampedNormal(normal,MaterialSurface.z);
+    resolvedNormal=modernWaterDampedNormal(resolvedNormal,MaterialSurface.z);
+    shoreRipple*=lerp(1.0,0.12,saturate(MaterialSurface.z));
+)HLSL";
+    hlsl+=R"HLSL(    float3 waveLightingNormal = resolvedNormal;
     if(any(shoreRipple!=0.0))
         resolvedNormal = normalize(resolvedNormal + float3(-shoreRipple*resolvedNormal.z,0.0));
     float materialBubbleWeight=modernWaterBubbleWeight(MaterialParameters.y,MaterialParameters.z,depth);
@@ -1273,12 +1318,19 @@ float4 main(Input input) : SV_Target
     // Keep the bed readable at the shallow bank instead of covering it with bright sky bands.
     fresnel = 0.025 + (fresnel - 0.025) * lerp(lerp(0.35, 1.0, smoothstep(3.0, 18.0, depth)), 1.0, offshore);
     float variance = dot(ddx(resolvedNormal), ddx(resolvedNormal)) + dot(ddy(resolvedNormal), ddy(resolvedNormal));
-    float roughness = clamp(sqrt(lerp(0.016, 0.036, offshore) + variance * 0.24), 0.126, 0.34);
-    roughness=lerp(roughness,max(roughness,0.27),max(hullEffects.y,historyFoam.z)*0.5);
+)HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    float roughness = clamp(sqrt(0.024 + variance * 0.24), 0.126, 0.34);
+)HLSL";
+    else hlsl+=R"HLSL(    float roughness = clamp(sqrt(lerp(0.016, 0.036, offshore) + variance * 0.24), 0.126, 0.34);
+)HLSL";
+    hlsl+=R"HLSL(    roughness=lerp(roughness,max(roughness,0.27),max(hullEffects.y,historyFoam.z)*0.5);
     // Isotropic missing slope variance broadens alpha-squared (roughness^4 in this GGX
     // convention). Removing unresolved normals must not turn the surface into a mirror.
     if(unresolvedSlopeVariance>0.0) roughness=pow(min(1.0,pow(roughness,4.0)+0.5*unresolvedSlopeVariance),0.25);
-    float a2 = pow(roughness, 4.0);
+)HLSL";
+    if(sdl) hlsl+=R"HLSL(    roughness=modernWaterSurfaceRoughness(roughness,MaterialSurface.y);
+)HLSL";
+    hlsl+=R"HLSL(    float a2 = pow(roughness, 4.0);
     float denominator = nDotH * nDotH * (a2 - 1.0) + 1.0;
     float distribution = a2 / max(3.14159265 * denominator * denominator, 0.0000001);
     float k = roughness * roughness * 0.5;
@@ -1292,17 +1344,26 @@ float4 main(Input input) : SV_Target
     // Integrate the short crossing ripples into the environment lobe. Their shared spectrum
     // still supplies physical height, refraction normals and directional sun glints, while the
     // broad sky follows the resolved swell surface instead of tracing every fine ripple edge.
-    float rippleResolution=0.88/(1.0+footprint*0.18);
+)HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    float3 environmentNormal=waveLightingNormal;
+    float environmentRoughness=roughness;
+)HLSL";
+    else {
+      hlsl+=R"HLSL(    float rippleResolution=0.88/(1.0+footprint*0.18);
     float3 environmentWave=lerp(oceanSwell.xyz,oceanWave,rippleResolution);
     float2 swellSlope=baseSlope+environmentWave.yz*attenuation+environmentWave.x*attenuationSlope+correctionSlope;
-    float3 environmentNormal=normalize(lerp(normal,normalize(float3(-swellSlope,1)),offshore));
+    float3 environmentNormal=normalize(lerp(normal,)HLSL";
+      hlsl+=sdl?"modernWaterDampedNormal(normalize(float3(-swellSlope,1)),MaterialSurface.z)":"normalize(float3(-swellSlope,1))";
+      hlsl+=R"HLSL(,offshore));
     environmentNormal=normalize(lerp(environmentNormal,waveLightingNormal,fftWeight));
     if(any(shoreRipple!=0.0))
         environmentNormal=normalize(environmentNormal+float3(-shoreRipple*environmentNormal.z,0.0));
     // The remaining fine-slope energy is ~0.045 for this spectrum (including its packet
     // envelope); retaining a fraction of its amplitude leaves (1-fraction^2) as roughness.
     float environmentRoughness=sqrt(roughness*roughness+0.045*(1.0-rippleResolution*rippleResolution)*offshore*(1.0-fftWeight));
-    float3 reflectedRay = reflect(-view, environmentNormal);
+)HLSL";
+    }
+    hlsl+=R"HLSL(    float3 reflectedRay = reflect(-view, environmentNormal);
     float3 sky = lerp(float3(0.49, 0.62, 0.68), float3(0.23, 0.38, 0.48), saturate(reflectedRay.z)) * (0.06 + daylight * 0.94);
     float2 reflectionOffset = float2((ReflectionArea.x + 1.0) * 0.5, (1.0 - ReflectionArea.w) * 0.5);
     float2 reflectionScale = max((ReflectionArea.zw - ReflectionArea.xy) * 0.5, float2(0.001, 0.001));
@@ -1361,6 +1422,7 @@ float4 main(Input input) : SV_Target
     mirrorTrust*=1.0-smoothstep(0.5,2.0,abs(baseLevel-WaterParameters.w));
     float ssrWeight=ssr.confidence*lerp(1.0,0.35,saturate(mirrorTrust));
     reflection = lerp(reflection, waterLinear(ssr.colour), ssrWeight);
+    reflection=lerp(reflection,skyRadiance,saturate(MaterialSurface.y)*0.65);
 )HLSL";
 	else hlsl += R"HLSL(    float4 mirror = Texture1.Sample(Sampler1, saturate(reflectionUV + distortion)) * 0.5;
     mirror += Texture1.Sample(Sampler1, saturate(reflectionUV + distortion + blur)) * 0.25;
@@ -1423,8 +1485,12 @@ float4 main(Input input) : SV_Target
     scene *= lerp(1.0, clamp(detail*bedLight*rockVariation, 0.38, 1.65), terrainMask * 0.85);
     // Caustics use the evolving surface curvature at the light's entry point. Keep the modulation
     // restrained and attenuate it by depth/footprint to avoid a painted luminous network at RTS zoom.
-    float3 causticWave = waterWave(bottom.xy-light.xy/max(light.z,0.2)*bedDepth, time);
-    float causticFootprint = max(length(ddx(bottom.xy)), length(ddy(bottom.xy)));
+)HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    float3 causticWave=float3(0,spectral.derivativeX.z,spectral.derivativeY.z);
+)HLSL";
+    else hlsl+=R"HLSL(    float3 causticWave = waterWave(bottom.xy-light.xy/max(light.z,0.2)*bedDepth, time);
+)HLSL";
+    hlsl+=R"HLSL(    float causticFootprint = max(length(ddx(bottom.xy)), length(ddy(bottom.xy)));
     float3 causticNormal = normalize(float3(-causticWave.yz*attenuation, 1));
     float3 sunRay = refract(-light, causticNormal, 0.75);
     float2 bend = sunRay.xy / min(sunRay.z, -0.1) * bedDepth;
@@ -1452,9 +1518,13 @@ float4 main(Input input) : SV_Target
 )HLSL";
 	hlsl += R"HLSL(    // Preserve the current face-light signal, but apply it only to water's in-scattered source.
     // Transmitted terrain/object colour must not receive a second surface-light multiplier.
-    float3 swellNormal=normalize(float3(-oceanSwell.yz*attenuation-correctionSlope,1));
+)HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    float3 swellNormal=normal;
+)HLSL";
+    else hlsl+=R"HLSL(    float3 swellNormal=normalize(float3(-oceanSwell.yz*attenuation-correctionSlope,1));
     swellNormal=normalize(lerp(swellNormal,normal,fftWeight));
-    float swellLight=saturate(dot(swellNormal,light));
+)HLSL";
+    hlsl+=R"HLSL(    float swellLight=saturate(dot(swellNormal,light));
     float3 scatter=WaterOpticalScatteringSource(WaterParameters.y,offshore,daylight*sunVisible,swellLight);
     scatter=modernWaterMaterialSource(scatter,MaterialColor,MaterialParameters.x,daylight*sunVisible,swellLight);
     if(MaterialParameters.y>0.0) {
@@ -1462,7 +1532,19 @@ float4 main(Input input) : SV_Target
         transmission=modernWaterMaterialTransmission(transmission,MaterialColor.rgb,MaterialParameters.y,
             length(bottom-opticalWorld),materialPatch);
     }
-    float3 body=WaterOpticalBody(scene,transmission,scatter,caustic,SceneParameters.x);
+)HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    float4 cleanDepth=spectral.mediumDepth;
+    float3 cleanGains=float3(fftMediumGain(cleanDepth,24).x,fftMediumGain(cleanDepth,12).x,fftMediumGain(cleanDepth,4).x);
+    float cleanRms=max(length(fftCleanRms*cleanGains),.05);
+    float crestColour=smoothstep(0.0,1.8,max(0.0,spectral.shadingDisplacement.z)/cleanRms);
+    float crestAmount=.11*crestColour*(.25+.75*saturate(.5-2*dot(resolvedNormal.xy,light.xy)))
+        *(.35+.65*(1-saturate(nDotV)))*daylight*sunVisible*fftWeight*fftDamping*(1-cageAmount);
+    scatter=lerp(scatter,max(scatter*1.25,float3(.055,.24,.16)),crestAmount);
+)HLSL";
+    if(sdl) hlsl+=R"HLSL(    caustic=lerp(1.0,caustic,materialWindGain);
+    transmission=modernWaterTurbidTransmission(transmission,MaterialSurface.x,length(bottom-opticalWorld));
+)HLSL";
+    hlsl+=R"HLSL(    float3 body=WaterOpticalBody(scene,transmission,scatter,caustic,SceneParameters.x);
     float foamNoise = smoothstep(0.1, 0.8, lerp(wave.x,spectral.contactIncident.x,fftWeight)*0.5+0.5);
     float edgeDistance = depth / max(length(float2(ddx(depth), ddy(depth))), 0.01);
     float contact = (1.0 - smoothstep(0.2, 1.35, edgeDistance)) * saturate(depth * 4.0)
@@ -1494,7 +1576,8 @@ float4 main(Input input) : SV_Target
     foam=max(foam*(1.0-cageAmount*fftWeight*cageTerrainMatch),cageWash*0.72);
 )HLSL";
 	hlsl+=R"HLSL(
-    if(WaterParameters.y<0.5 && OpticalParameters.z>0.5
+)HLSL";
+    if(!cleanMain) hlsl+=R"HLSL(    if(WaterParameters.y<0.5 && OpticalParameters.z>0.5
         && TerrainParameters.w>0.5 && SceneParameters.w>0.5
         && opticalContext.r==0.0 && (opticalContext.a>0.0 || shoreHistory>0.0)) {
         // Test the original raster pixel, not the refracted candidate or bottomPosition's
@@ -1524,13 +1607,17 @@ float4 main(Input input) : SV_Target
             foamWithoutShore*=1.0-saturate(shoreSupport)*saturate(terrainMatch);
         }
     }
-    // At a known hull, use its irregular wave wash instead of also drawing the generic scene
+)HLSL";
+    hlsl+=R"HLSL(    // At a known hull, use its irregular wave wash instead of also drawing the generic scene
     // intersection rim. Otherwise that continuous depth edge fills every intended foam gap.
     foam *= lerp(1.0,hullEffects.z,offshore);
     foamWithoutShore*=lerp(1.0,hullEffects.z,offshore);
     // Curvature of the undamped ocean model selects breaking crests. Including attenuation in
     // this derivative would invent bright rings around a ship's damping footprint.
-    float curvature = -oceanSwell.w;
+)HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    float crestFoam=0,fftFoam=0;
+)HLSL";
+    else hlsl+=R"HLSL(    float curvature = -oceanSwell.w;
     float crest = smoothstep(0.045, 0.11, curvature) * smoothstep(1.0, 2.4, oceanSwell.x);
     // A narrow band at the swell's turning slope forms a crest line, rather than filling the
     // whole high-curvature cap with a disconnected white patch. Pixel derivatives soften its
@@ -1545,7 +1632,13 @@ float4 main(Input input) : SV_Target
     // compression. Fine ripples shape its appearance without triggering whitecaps.
     float fftFoam=saturate(pow(max(0.0,1.2-fftCompression),7.2))
         *smoothstep(0.15,0.65,fftDamping)*saturate(input.Specular.w)*(0.2+0.8*daylight);
-    crestFoam=lerp(crestFoam,fftFoam,fftWeight);
+)HLSL";
+    hlsl+=R"HLSL()HLSL";
+    if(cleanMain) hlsl+=R"HLSL(    float cleanFoamWidth=.08+fwidth(spectral.incidentCompression)*.5;
+    fftFoam=(1-smoothstep(.73-cleanFoamWidth,.73+cleanFoamWidth,spectral.incidentCompression))
+        *min(input.Diffuse.r,hullEffects.z)*(1-cageAmount)*(.2+.8*daylight);
+)HLSL";
+    hlsl+=R"HLSL(    crestFoam=lerp(crestFoam,fftFoam,fftWeight);
     foam = max(foam, crestFoam*0.48);
     foamWithoutShore=max(foamWithoutShore,crestFoam*0.48);
     // Generated bow/stern crests come from the displaced mesh's physical packet. Their
@@ -1669,22 +1762,10 @@ float4 main(Input input) : SV_Target
 		hlsl += "    current = float4(saturate(surface) * edge.rgb, saturate(depth * 2.0) * lerp(input.Diffuse.a * base.a, step(0.001, input.Diffuse.a * base.a), " + std::string(sdl ? "WATER_REFRACTION_QUALITY == 2 ? 1.0 : SceneParameters.x" : "SceneParameters.x") + "));\n";
 	}
 
-	// A ModernWater rule's turbidity, roughness, ripple damping and wind resistance (MaterialSurface,
-	// c189), the SDL text only; all four at zero leave the picture as it was.
-	if (sdl) {
-		const auto replace=[&](const std::string &from,const std::string &to) {for(size_t at=hlsl.find(from);at!=std::string::npos;at=hlsl.find(from,at+to.size()))hlsl.replace(at,from.size(),to);};
-		replace("    float offshore = opticalContext.r","    float materialWindGain=modernWaterWindGain(MaterialSurface.w);\n    float offshore = opticalContext.r");
-		replace("    float3 oceanWave = oceanSurface.xyz;","    float3 oceanWave = oceanSurface.xyz;\n    legacyWave*=materialWindGain;\n    oceanWave*=materialWindGain;\n    oceanSwell.xyz*=materialWindGain;\n    shoreRippleSlope*=materialWindGain;");
-		replace("    float3 waveLightingNormal = resolvedNormal;","    normal=modernWaterDampedNormal(normal,MaterialSurface.z);\n    resolvedNormal=modernWaterDampedNormal(resolvedNormal,MaterialSurface.z);\n    shoreRipple*=lerp(1.0,0.12,saturate(MaterialSurface.z));\n    float3 waveLightingNormal = resolvedNormal;");
-		replace("    float a2 = pow(roughness, 4.0);","    roughness=modernWaterSurfaceRoughness(roughness,MaterialSurface.y);\n    float a2 = pow(roughness, 4.0);");
-		replace("normalize(float3(-swellSlope,1)),offshore)","modernWaterDampedNormal(normalize(float3(-swellSlope,1)),MaterialSurface.z),offshore)");
-		replace("    reflection = lerp(reflection, waterLinear(ssr.colour), ssrWeight);","    reflection = lerp(reflection, waterLinear(ssr.colour), ssrWeight);\n    reflection=lerp(reflection,skyRadiance,saturate(MaterialSurface.y)*0.65);");
-		replace("    float3 body=WaterOpticalBody(scene,transmission,scatter,caustic,SceneParameters.x);","    caustic=lerp(1.0,caustic,materialWindGain);\n    transmission=modernWaterTurbidTransmission(transmission,MaterialSurface.x,length(bottom-opticalWorld));\n    float3 body=WaterOpticalBody(scene,transmission,scatter,caustic,SceneParameters.x);");
-	}
 }
 
 bool EngineShader_Pixel_Program(EngineShaderProgram program,
-	const PixelPipelineDescription & pipeline, std::string & hlsl, CombinerShaderTarget target, bool waveHeading)
+	const PixelPipelineDescription & pipeline, std::string & hlsl, CombinerShaderTarget target, bool waveHeading, bool cleanMain)
 {
 	// As the vertex half: D3D11 only, and SDL3 GPU as the D3D11 text rebound, without the smoke the
 	// SDL3 backend has no map for.
@@ -1696,7 +1777,7 @@ bool EngineShader_Pixel_Program(EngineShaderProgram program,
 	if (target == COMBINER_SHADER_TARGET_SDL3_GPU) {
 #if defined(__linux__)
 		if (modern_water) {
-			write_modern_water(hlsl, program == ENGINE_SHADER_WATER_RIVER, true, waveHeading && program != ENGINE_SHADER_WATER_RIVER);
+			write_modern_water(hlsl, program == ENGINE_SHADER_WATER_RIVER, true, waveHeading && program != ENGINE_SHADER_WATER_RIVER, cleanMain && program != ENGINE_SHADER_WATER_RIVER);
 			if (!CombinerShader_Append_Pixel_Pipeline(pipeline, hlsl)) return false;
 			hlsl += "    return current;\n}\n";
 			return SDL3_Shader_Retarget(hlsl, false);

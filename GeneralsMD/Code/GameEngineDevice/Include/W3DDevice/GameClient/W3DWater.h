@@ -50,6 +50,7 @@
 #include "Platform/ModernWaterBuild.h"
 #include "Platform/WaterScreenReflection.h"
 #include "Platform/WaterOpticalContext.h"
+#include "Platform/WaterCleanPrecompute.h"
 #include "Platform/WaterProjectedMesh.h"
 #include "Platform/WaterHullVisual.h"
 #include "Platform/WaterHullVisualLayout.h"
@@ -369,6 +370,7 @@ protected:
 		Real level; TextureClass *texture;
 		TextureClass *heading = NULL;
 		Real prevailingRotation = 0.0f, swellStep = 0.0f;
+		WaterCleanPrecompute::Atlas cleanAtlas;
 		TextureClass *waveCage=NULL;
 		std::vector<UnsignedByte> waveCageSupport; // same quantized alpha sampled by the shader
 		std::vector<UnsignedByte> ocean;
@@ -377,6 +379,7 @@ protected:
 	};
 	std::vector<ModernOpticalTexture> m_modernOpticalTextures;
 	Bool m_modernHeadingEnabled = FALSE;
+	Bool m_modernCleanEnabled = FALSE;
 	Real m_modernWindGain = 1.0f;		///< a ModernWater rule's WindResistance as a wave height gain (SDL only)
 	std::vector<WaterOpticalContext::Polygon> m_modernOpticalPolygons;
 	Bool m_modernOpticalPolygonsValid = FALSE;
@@ -448,6 +451,7 @@ protected:
 	void clearModernWaterRenderCaches(void);
 	Real modernHullDamping(Real x,Real y,Real level) const;
 	Bool modernHasHull(UnsignedInt objectID) const;
+	Bool cleanWaterApplies(Real level) const;
 	void clearModernWaterOpticalTextures(void);
 	void refreshModernWaterOpticalPolygons(void);
 	TextureClass *modernWaterOpticalTexture(Real level);

@@ -184,6 +184,7 @@ OPTION_BOOL_ACCESSORS( m_explosionDebrisTrails )
 OPTION_BOOL_ACCESSORS( m_mapLight )
 OPTION_BOOL_ACCESSORS( m_teamGlow )
 OPTION_BOOL_ACCESSORS( m_waterFoam )
+OPTION_BOOL_ACCESSORS( m_cleanFftWater )
 OPTION_BOOL_ACCESSORS( m_mapAwareWaveHeading )
 OPTION_BOOL_ACCESSORS( m_underwaterClarity )
 OPTION_BOOL_ACCESSORS( m_groundFoliage )
@@ -644,6 +645,11 @@ const OptionDef TheOptionCatalog[] =
 	{ "WaterReflectionDetail", OPT_WND( "ComboBoxWaterReflectionDetail" ), "GUI:WaterReflectionDetail",
 		OPTION_ENUM, APPLY_LIVE, 0, WATER_REFLECTION_DETAIL_COUNT - 1,
 		get_m_waterReflectionDetail, set_m_waterReflectionDetail },
+
+	// The clean FFT waves: a depth-aware spectrum with filtered light and crest foam (the SDL Modern
+	// water on Linux only, off under Classic graphics).  Options.ini only, no box; off by default.
+	{ "CleanFftWater", "", "", OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_cleanFftWater, set_m_cleanFftWater },
 
 	// Swells that bend toward the shore and drop behind islands (the SDL Modern water only, off under
 	// Classic graphics).  An opt-in of its own, so the quality slider leaves it alone.
@@ -1186,6 +1192,7 @@ Bool isModernWaterOption( const OptionDef& def )
 		|| strcmp( def.iniKey, "WaterRefractionQuality" ) == 0
 		|| strcmp( def.iniKey, "WaterReflectionDetail" ) == 0
 		|| strcmp( def.iniKey, "MapAwareWaveHeading" ) == 0
+		|| strcmp( def.iniKey, "CleanFftWater" ) == 0
 		|| strcmp( def.iniKey, "UnderwaterClarity" ) == 0;
 }
 

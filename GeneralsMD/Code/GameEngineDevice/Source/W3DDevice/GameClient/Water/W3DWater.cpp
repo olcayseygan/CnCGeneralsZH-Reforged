@@ -40,6 +40,7 @@
 #include "Platform/WaterPerformanceSettings.h"
 #include "Platform/ModernWaterMaterial.h"
 #include "Platform/WaterWaveHeading.h"
+#include "Platform/WaterCleanRender.h"
 #include "Platform/WaterUnderwaterClarity.h"
 #include "Platform/WaterShoreOverlay.h"
 #include "Platform/WaterFoamWindow.h"
@@ -1550,12 +1551,19 @@ void WaterRenderObjClass::setupModernWaterShader(Bool river, Bool heightCorrecti
 	DX8Wrapper::Set_DX8_Texture(4, optical ? optical->Peek_D3D_Texture() : NULL);
 #if defined(__linux__)
 	TextureClass *heading=NULL;D3DXVECTOR4 prevailing(0,0,0,0);
-	if(!river && optical && m_modernHeadingEnabled)
-		for(const ModernOpticalTexture &cached:m_modernOpticalTextures)
-			if(cached.level==m_modernOpticalLevel){heading=cached.heading;prevailing.x=cached.prevailingRotation;prevailing.y=cached.swellStep;break;}
-	prevailing.z=heading?1.0f:0.0f;
-	DX8Wrapper::Set_DX8_Texture(WaterWaveHeading::PixelTextureSlot,heading?heading->Peek_D3D_Texture():NULL);
-	setModernWaterConstants(WaterWaveHeading::PrevailingRegister,prevailing,1);
+    const WaterCleanPrecompute::Atlas *atlas=NULL;
+    if(!river && optical && (m_modernHeadingEnabled || m_modernCleanEnabled))
+        for(const ModernOpticalTexture &cached:m_modernOpticalTextures)
+            if(cached.level==m_modernOpticalLevel) {
+                heading=cached.heading;prevailing.x=cached.prevailingRotation;prevailing.y=cached.swellStep;
+                if(cached.cleanAtlas.image.revision)atlas=&cached.cleanAtlas;
+                break;
+            }
+    PosixWaterCleanBind(DX8Wrapper::_Get_D3D_Device(),atlas);
+    // Mode 3 keeps an ineligible level analytic while this map requests clean FFT.
+    prevailing.z=atlas?2.0f:((m_modernCleanEnabled && !river)?3.0f:(heading?1.0f:0.0f));
+    DX8Wrapper::Set_DX8_Texture(WaterWaveHeading::PixelTextureSlot,heading?heading->Peek_D3D_Texture():NULL);
+    setModernWaterConstants(WaterWaveHeading::PrevailingRegister,prevailing,1);
 #endif
 	bindModernWaterFoam(m_modernOpticalLevel, river);
 	TextureClass *heightTexture = m_modernHeightTexture;
@@ -1721,6 +1729,9 @@ void WaterRenderObjClass::clearModernWaterRenderCaches(void)
 
 void WaterRenderObjClass::clearModernWaterOpticalTextures(void)
 {
+#if defined(__linux__)
+	PosixWaterCleanClear(DX8Wrapper::_Get_D3D_Device());
+#endif
 	clearModernWaterRenderCaches();
 	m_modernProjectedSamples.clear();
 	m_modernObstacleIndex.Clear();
@@ -1764,12 +1775,14 @@ void WaterRenderObjClass::refreshModernWaterOpticalPolygons(void)
 TextureClass *WaterRenderObjClass::modernWaterOpticalTexture(Real level)
 {
 #if ZH_MODERN_WATER
-	const Bool headingWanted=TheGlobalData && TheGlobalData->m_mapAwareWaveHeading
-		&& !TheGlobalData->m_classicGraphics && TheGlobalData->m_waterStyle!=0 && WaterWaveHeading::Supported();
-	if(headingWanted!=m_modernHeadingEnabled) {
-		invalidateModernWaterShore();clearModernWaterOpticalTextures();
-		m_modernHeadingEnabled=headingWanted;
-	}
+    const Bool supported=TheGlobalData && !TheGlobalData->m_classicGraphics
+        && TheGlobalData->m_waterStyle!=0 && WaterWaveHeading::Supported();
+    const Bool cleanWanted=supported && TheGlobalData->m_cleanFftWater;
+    const Bool headingWanted=supported && TheGlobalData->m_mapAwareWaveHeading;
+    if(headingWanted!=m_modernHeadingEnabled || cleanWanted!=m_modernCleanEnabled) {
+        invalidateModernWaterShore();clearModernWaterOpticalTextures();
+        m_modernHeadingEnabled=headingWanted;m_modernCleanEnabled=cleanWanted;
+    }
 	if (!m_modernOpticalPolygonsValid) return NULL;
 	for (size_t i=0;i<m_modernOpticalTextures.size();++i)
 		if (m_modernOpticalTextures[i].level==level) return m_modernOpticalTextures[i].texture;
@@ -1780,7 +1793,7 @@ TextureClass *WaterRenderObjClass::modernWaterOpticalTexture(Real level)
 	WaterOpticalContext::Field field;
 	if (!WaterOpticalContext::Build(m_modernHeights.empty()?NULL:m_modernHeights.data(),
 		m_modernHeightWidth,m_modernHeightHeight,m_modernHeightBorder,MAP_XY_FACTOR,MAP_HEIGHT_SCALE,
-		level,m_modernOpticalPolygons,field,m_modernHeadingEnabled)) return NULL;
+		level,m_modernOpticalPolygons,field,m_modernHeadingEnabled || m_modernCleanEnabled)) return NULL;
 	m_modernOpticalTextures.back().shoreContext=field;
 	TextureClass *texture=NEW_REF(TextureClass,(m_modernHeightSide,m_modernHeightSide,WW3D_FORMAT_A8R8G8B8,MIP_LEVELS_1));
 	SurfaceClass *surface=texture->Get_Surface_Level();
@@ -1797,10 +1810,22 @@ TextureClass *WaterRenderObjClass::modernWaterOpticalTexture(Real level)
 	ModernOpticalTexture &cached=m_modernOpticalTextures.back();
 	cached.texture=texture;
 #if defined(__linux__)
-	if(m_modernHeadingEnabled) {
+    try {
+	if(m_modernHeadingEnabled || m_modernCleanEnabled) {
 		WaterWaveHeading::Field heading;
 		if(WaterWaveHeading::Build(field.wet.data(),field.exposure.data(),
 			m_modernHeightWidth,m_modernHeightHeight,m_modernHeightBorder,MAP_XY_FACTOR,heading,field.links.data())) {
+            // An empty field has no clean medium. Valid inland lakes still use clean
+            // depth even when no wet cell reaches the playable boundary.
+            const Bool cleanLevel=m_modernCleanEnabled && std::any_of(field.wet.begin(),field.wet.end(),[](uint8_t wet){return wet!=0;});
+            if(cleanLevel) {
+                WaterMediumDepth::Field depth;
+                if(WaterMediumDepth::Build(m_modernHeights.data(),field.wet.data(),field.shore.data(),
+                    m_modernHeightWidth,m_modernHeightHeight,MAP_XY_FACTOR,MAP_HEIGHT_SCALE,level,depth)
+                    && WaterCleanShore::Build(depth,field.wet.data(),MAP_XY_FACTOR))
+                    WaterCleanPrecompute::BuildAtlas(depth,heading,m_modernHeightSide,m_modernHeightBorder,MAP_XY_FACTOR,m_modernHeadingEnabled,cached.cleanAtlas);
+            }
+            if(m_modernHeadingEnabled && !cached.cleanAtlas.image.revision) {
 			TextureClass *headingTexture=NEW_REF(TextureClass,(2*m_modernHeightSide,m_modernHeightSide,WW3D_FORMAT_A8R8G8B8,MIP_LEVELS_1));
 			SurfaceClass *headingSurface=headingTexture?headingTexture->Get_Surface_Level():NULL;
 			Int headingPitch=0;void *headingBits=headingSurface?headingSurface->Lock(&headingPitch):NULL;
@@ -1815,8 +1840,14 @@ TextureClass *WaterRenderObjClass::modernWaterOpticalTexture(Real level)
 			REF_PTR_RELEASE(headingSurface);
 			if(uploaded){cached.heading=headingTexture;cached.prevailingRotation=WaterWaveHeading::Rotation(heading.prevailing);cached.swellStep=heading.uStep;}
 			else REF_PTR_RELEASE(headingTexture);
+            }
 		}
 	}
+    } catch(const std::bad_alloc &) {
+        // Optional steering/depth caches may fail independently of optical water.
+        // A missing clean atlas selects the complete analytic picture for this level.
+        cached.cleanAtlas=WaterCleanPrecompute::Atlas{};
+    }
 #endif
 
 	{
@@ -4778,16 +4809,18 @@ Real WaterRenderObjClass::modernWaterDamping(Real x, Real y, Real z, Real offsho
 	// Early zero returns remain zero for both the complete CPU fallback and the FFT envelope.
 	if (hullFreeDamping) *hullFreeDamping=0.0f;
 	WorldHeightMap *map=TheTerrainRenderObject?TheTerrainRenderObject->getMap():NULL;
-	Real damping=1.0f;
+	Real damping=1.0f,cleanObstacle=1.0f;
+	// The clean FFT envelope ignores terrain damping, so a dry-damped point still owes it its obstacles.
+	const Bool clean=hullFreeDamping && cleanWaterApplies(z);
 	if (cachedTerrain) {
 		if (terrainDepth) *terrainDepth=cachedTerrain[0];
 		damping=cachedTerrain[1];
-		if (damping<=0.0f && !hullFreeObstacle) return 0.0f;
+		if (damping<=0.0f && !hullFreeObstacle && !clean) return 0.0f;
 	} else if (map && map->getXExtent()>1 && map->getYExtent()>1) {
 		const Real depth=WaterTerrainDepth(map,x,y,z);
 		if (terrainDepth) *terrainDepth=depth;
 		damping=WaterSurfaceModel::TerrainDamping(depth,offshore);
-		if (damping<=0.0f && !hullFreeObstacle) return 0.0f;
+		if (damping<=0.0f && !hullFreeObstacle && !clean) return 0.0f;
 	}
 	// The broad phase only omits objects whose exact narrow phase returns one. River points
 	// and failed/oversized index builds retain the original ordered full list.
@@ -4812,6 +4845,7 @@ Real WaterRenderObjClass::modernWaterDamping(Real x, Real y, Real z, Real offsho
 				obstacleDamping=legacy+(obstacleDamping-legacy)*offshore;
 			}
 		} else obstacleDamping=WaterSurfaceModel::ShoreDamping(sqrtf(dx*dx+dy*dy)-o.radius);
+		if(!o.hasHull)cleanObstacle=min(cleanObstacle,obstacleDamping);
 		// Cage displacement applies the exact rendered hull in the shader, including R0.
 		// Its independent object envelope must not inherit the legacy circular hull proxy.
 		if (hullFreeObstacle && !o.hasHull) *hullFreeObstacle=min(*hullFreeObstacle,obstacleDamping);
@@ -4821,9 +4855,9 @@ Real WaterRenderObjClass::modernWaterDamping(Real x, Real y, Real z, Real offsho
 			if (obstacleAttenuation) *obstacleAttenuation=min(*obstacleAttenuation,obstacleDamping);
 			damping=min(damping,obstacleDamping);
 		}
-		if (damping<=0.0f && !hullFreeObstacle) return 0.0f;
+		if (damping<=0.0f && !hullFreeObstacle && !clean) return 0.0f;
 	}
-	if (hullFreeDamping) *hullFreeDamping=damping;
+	if (hullFreeDamping) *hullFreeDamping=clean?cleanObstacle:damping;
 	if (offshore>0.0f && damping>0.0f) {
 		const Real hull=1.0f+(modernHullDamping(x,y,z)-1.0f)*offshore;
 		damping=min(damping,hull);
@@ -6339,4 +6373,12 @@ bool Supported()
 	return PosixWaterGpuAvailable(DX8Wrapper::_Get_D3D_Device());
 #endif
 }
+}
+
+Bool WaterRenderObjClass::cleanWaterApplies(Real level) const
+{
+    if(!m_modernCleanEnabled)return FALSE;
+    for(const auto &field:m_modernOpticalTextures)
+        if(field.level==level)return field.cleanAtlas.image.revision!=0;
+    return FALSE;
 }

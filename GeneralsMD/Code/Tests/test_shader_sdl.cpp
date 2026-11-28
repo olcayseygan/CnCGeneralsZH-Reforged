@@ -408,7 +408,9 @@ const WaterUniformMember WaterUniformMembers[] = {
     WATER_UNIFORM_MEMBER(MaterialParameters),
     WATER_UNIFORM_MEMBER(MaterialOptics),
     WATER_UNIFORM_MEMBER(MaterialSurface),
-    WATER_UNIFORM_MEMBER(ClipFromWorld)
+    WATER_UNIFORM_MEMBER(ClipFromWorld),
+    WATER_UNIFORM_MEMBER(CleanAtlasInfo),
+    WATER_UNIFORM_MEMBER(CleanAtlasOrigin)
 };
 #undef WATER_COMBINER_MEMBER
 #undef WATER_UNIFORM_MEMBER
@@ -485,15 +487,6 @@ void checkCompiledWaterUniformLayout(const std::string &source, bool vertex,
 
 TEST(modern_water_compiled_uniform_layout_matches_every_cpu_upload_field)
 {
-    for (const EngineShaderProgram program : {ENGINE_SHADER_WATER_TRAPEZOID, ENGINE_SHADER_WATER_RIVER}) {
-        PixelPipelineDescription pipeline = {};
-        std::string source;
-        const bool generated = EngineShader_Pixel_Program(program, pipeline, source,
-            COMBINER_SHADER_TARGET_SDL3_GPU);
-        CHECK(generated);
-        if (generated) checkCompiledWaterUniformLayout(source, false, "CombinerConstants", true);
-    }
-
     VertexPipelineDescription description = shader_cases_detail::plain_vertex();
     description.FVF = 0x252;
     description.LightingEnabled = false;
@@ -502,11 +495,22 @@ TEST(modern_water_compiled_uniform_layout_matches_every_cpu_upload_field)
         description.Stages[i].TextureCoordinateIndex = i < 2 ? i : 0;
         description.Stages[i].TextureTransformFlags = FF_TTFF_DISABLE;
     }
-    std::string vertex;
-    const bool generated = VertexShader_Generate(description, VERTEX_SHADER_TARGET_D3D11, vertex)
-        && WaterFftSampling::WrapVertex(vertex,true) && SDL3_Shader_Retarget(vertex, true);
-    CHECK(generated);
-    if (generated) checkCompiledWaterUniformLayout(vertex, true, "WaterVertexParameters", false);
+    for (bool clean : {false, true}) {
+        for (const EngineShaderProgram program : {ENGINE_SHADER_WATER_TRAPEZOID, ENGINE_SHADER_WATER_RIVER}) {
+            PixelPipelineDescription pipeline = {};
+            std::string source;
+            const bool generated = EngineShader_Pixel_Program(program, pipeline, source,
+                COMBINER_SHADER_TARGET_SDL3_GPU, false, clean);
+            CHECK(generated);
+            if (generated) checkCompiledWaterUniformLayout(source, false, "CombinerConstants", true);
+        }
+
+        std::string vertex;
+        const bool generated = VertexShader_Generate(description, VERTEX_SHADER_TARGET_D3D11, vertex)
+            && WaterFftSampling::WrapVertex(vertex,true,false,clean) && SDL3_Shader_Retarget(vertex, true);
+        CHECK(generated);
+        if (generated) checkCompiledWaterUniformLayout(vertex, true, "WaterVertexParameters", false);
+    }
 }
 
 #endif // __linux__

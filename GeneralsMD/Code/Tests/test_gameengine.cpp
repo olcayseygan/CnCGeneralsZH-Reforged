@@ -24297,6 +24297,36 @@ TEST(order_lines_are_a_live_check_box_that_starts_off)
 	TheWritableGlobalData = saved;
 }
 
+TEST(clean_fft_water_is_a_persisted_live_opt_in_independent_of_steering)
+{
+    GlobalData *saved=TheWritableGlobalData;
+    GlobalData *scratch=NEW GlobalData;
+    TheWritableGlobalData=scratch;
+    const OptionDef *clean=findOptionDef("CleanFftWater");
+    const OptionDef *heading=findOptionDef("MapAwareWaveHeading");
+    CHECK(clean!=NULL && heading!=NULL);
+    if(clean && heading) {
+        CHECK_EQ(clean->kind,OPTION_BOOL);CHECK_EQ(clean->apply,APPLY_LIVE);
+        CHECK_EQ(clean->lo,0);CHECK_EQ(clean->hi,1);CHECK_EQ(clean->get(),0);
+        UserPreferences preferences;
+        loadOptionsFromPreferences(preferences);CHECK_EQ(clean->get(),0);
+        preferences["CleanFftWater"]="yes";preferences["MapAwareWaveHeading"]="no";
+        loadOptionsFromPreferences(preferences);
+        CHECK_EQ(clean->get(),1);CHECK_EQ(heading->get(),0);
+        CHECK(scratch->m_cleanFftWater && !scratch->m_mapAwareWaveHeading);
+        heading->set(1);CHECK_EQ(clean->get(),1);
+        clean->set(0);CHECK_EQ(heading->get(),1);
+        saveOptionsToPreferences(preferences);
+        CHECK_STR(preferences["CleanFftWater"].str(),"no");
+        clean->set(1);saveOptionsToPreferences(preferences);
+        CHECK_STR(preferences["CleanFftWater"].str(),"yes");
+        preferences["CleanFftWater"]="no";loadOptionsFromPreferences(preferences);
+        CHECK_EQ(clean->get(),0);CHECK_EQ(heading->get(),1);
+    }
+    delete scratch;
+    TheWritableGlobalData=saved;
+}
+
 TEST(water_style_defaults_to_classic_and_preserves_an_explicit_modern_choice)
 {
     GlobalData *saved=TheWritableGlobalData;
@@ -25319,6 +25349,7 @@ TEST(no_options_file_is_the_classic_game_with_every_added_row_off)
 
 	static const char *const off[] =
 	{
+		"CleanFftWater",
 		"CameraBoundaryMargin", "EdgeScrollInWindowedMode", "CameraSnapTo45", "BuildGrid", "BuildSnapTo45",
 		"BuildSnapToNeighbour", "BuildNudge", "WheelZoomToCursor", "IsometricCamera", "OpenAtMaxZoom",
 		"DynamicMusic", "FormationDrag", "BuildWithoutWorker", "ChromaLighting", "TextureFilter", "Bloom", "MSAA",

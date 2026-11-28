@@ -2325,7 +2325,7 @@ static void check_gpu_water_vertex_uniform_order(SdlGpuFrame *frame)
 	const unsigned contactRegister=offsetof(SdlWaterPixelConstants,ContactHullData)/16;
 	const unsigned lastContactRegister=contactRegister+79;
 	const unsigned fillRegister=offsetof(SdlWaterPixelConstants,FoamFillLights)/16;
-	CHECK(contactRegister==100 && fillRegister==180 && sizeof(SdlWaterPixelConstants)==192*16);
+	CHECK(contactRegister==100 && fillRegister==180 && sizeof(SdlWaterPixelConstants)==194*16);
 	std::string block="cbuffer WaterBlock : register(b1,space1) { float4 Water[";
 	block+=std::to_string(sizeof(SdlWaterPixelConstants)/16)+"]; };\n";
 	const std::string output="struct Output { float4 Position:SV_Position; [[vk::location(0)]] float4 Value:TEXCOORD0; };\n";
@@ -2434,7 +2434,7 @@ static void check_gpu_water_vertex_uniform_order(SdlGpuFrame *frame)
 		matched &= std::isfinite(values[(row*width+x)*4+c]) && std::abs(values[(row*width+x)*4+c]-expected)<0.00001f;
 	}
 	CHECK(matched);
-	printf("sdl_gpu_frame_selfcheck: GPU water VS slot1: %u queued draws, shared 186-float4 pixel snapshot, mean/FFT/history/contact/fill-light tails in both stages, explicit zero contact/light fallback, intervening non-water and rectangle clear checked\n",rows);
+	printf("sdl_gpu_frame_selfcheck: GPU water VS slot1: %u queued draws, shared 194-float4 pixel snapshot, mean/FFT/history/contact/fill-light tails in both stages, explicit zero contact/light fallback, intervening non-water and rectangle clear checked\n",rows);
 }
 
 static void check_gpu_water_visual_uniform_order(SdlGpuFrame *frame)
@@ -2448,7 +2448,7 @@ static void check_gpu_water_visual_uniform_order(SdlGpuFrame *frame)
 	std::string vs=std::string(output)+WaterFftSampling::UniformSource("WaterVertex",1,false,true)+
 		"cbuffer FixedBlock:register(b0){float4 Fixed;};\n"+
 		"Output main(uint id:SV_VertexID){"+position+
-		"o.Value=float4(WaterParameters.x,ContactHullData[79].w,FoamFillLights[3].z,1)+Fixed;return o;}\n";
+		"o.Value=float4(WaterParameters.x,ContactHullData[79].w,FoamFillLights[3].z,1)+Fixed+CleanAtlasInfo;return o;}\n";
 	std::string ps=WaterFftSampling::UniformSource("WaterFragment",0,true,true)+R"HLSL(
 float4 main(float4 position:SV_Position,[[vk::location(0)]] float4 value:TEXCOORD0):SV_Target0 {
     int x=(int)position.x;
@@ -2457,9 +2457,9 @@ float4 main(float4 position:SV_Position,[[vk::location(0)]] float4 value:TEXCOOR
         if(x<256) packet=VisualHullBlock0[x];
         else if(x<512) packet=VisualHullBlock1[x-256];
         else packet=VisualHullBlock2[x-512];
-        return packet+VisualHullMeta[x/88]+value;
+        return packet+VisualHullMeta[x/88]+value+CleanAtlasOrigin;
     }
-    return VisualHullMeta[x-704]+value;
+    return VisualHullMeta[x-704]+value+CleanAtlasOrigin;
 }
 )HLSL";
 	const std::string plainVS=std::string(output)+"Output main(uint id:SV_VertexID){"+position+
@@ -2525,6 +2525,10 @@ float4 main(float4 position:SV_Position,[[vk::location(0)]] float4 value:TEXCOOR
 			draw.VertexConstants=frame->Constants(0,fixed,sizeof(fixed));draw.VertexConstantsSize=sizeof(fixed);
 			water.Water.WaterParameters[0]=state+.125f;water.Water.ContactHullData[79][3]=state*2+.25f;
 			water.Water.FoamFillLights[3][2]=state*3+.5f;
+            for(unsigned c=0;c<4;++c) {
+                water.Water.CleanAtlasInfo[c]=state?float(state*10+c)+.125f:0;
+                water.Water.CleanAtlasOrigin[c]=state?float(state*20+c)+.25f:0;
+            }
 			for(unsigned h=0;h<MaxHulls;++h)for(unsigned c=0;c<4;++c)
 				water.VisualHullMeta[h][c]=state?float(state*100+h*4+c)+.5f:0;
 			for(unsigned r=0;r<PacketRegisters;++r)for(unsigned c=0;c<4;++c)
@@ -2554,7 +2558,8 @@ float4 main(float4 position:SV_Position,[[vk::location(0)]] float4 value:TEXCOOR
 		double expected=9-c;
 		if(waterRows[row]) {
 			const double prefix=c==0?state+.125:c==1?state*2+.25:c==2?state*3+.5:1;
-			expected=prefix+(c+1)*.0625+(state?state*100+h*4+c+.5:0);
+			expected=prefix+(c+1)*.0625+(state?state*100+h*4+c+.5:0)
+                +(state?state*30+2*c+.375:0);
 			if(x<PacketRegisters)expected+=state?state*10000+x*4+c+.25:0;
 		}
 		const double actual=values[(row*width+x)*4+c],error=std::abs(actual-expected);maxError=std::max(maxError,error);
@@ -2563,7 +2568,7 @@ float4 main(float4 position:SV_Position,[[vk::location(0)]] float4 value:TEXCOOR
 		if(waterRows[row] && state && (x==256 || x==512))armedBoundary+=std::abs(actual-(expected-1024))>100;
 	}
 	CHECK(matched && armedLatest>0 && armedBoundary>0);
-	printf("sdl_gpu_frame_selfcheck: visual hull transport: all704 packet float4s +8 metadata, PS slots0..3, 192-register VS alias and 200-register PS common, queued A/B/zero, non-water, clear, new batch, resize; max error %.9g, armed %u/%u\n",maxError,armedLatest,armedBoundary);
+	printf("sdl_gpu_frame_selfcheck: visual hull transport: all704 packet float4s +8 metadata, PS slots0..3, 194-register VS alias and 202-register PS common, queued A/B/zero, non-water, clear, new batch, resize; max error %.9g, armed %u/%u\n",maxError,armedLatest,armedBoundary);
 }
 
 static void check_gpu_water_visual_query(SdlGpuFrame *frame)
@@ -6324,6 +6329,54 @@ static void check_gpu_fft_quality_switch(SdlGpuFrame *frame)
     printf("sdl_gpu_frame_selfcheck: FFT128 direct Fourier max %.9g; all mip extents, queued old reader, same-time boundary switches and deterministic restoration checked\n",maximum);
 }
 
+static void check_gpu_clean_water_transport_and_mode(SdlGpuFrame *frame)
+{
+    using namespace WaterCleanPrecompute;
+    Atlas first;first.info[0]=4;first.info[1]=first.info[2]=2;first.info[3]=1;
+    first.image.width=4;first.image.height=6;first.image.revision=NextRevision();
+    first.image.pixels.resize(24);
+    for(unsigned i=0;i<24;++i)first.image.pixels[i]={float(i),float(i)*.25f,-float(i),1};
+    CHECK(frame->Prepare_Clean_Water(first));
+    SDL_GPUTexture *old=frame->Clean_Water_Texture();CHECK(old && frame->Clean_Water_Sampler());
+    const auto actual=read_float_targets(frame,&old,1,4,6);
+    CHECK(actual.size()==24*4 && memcmp(actual.data(),first.image.pixels.data(),actual.size()*sizeof(float))==0);
+    const auto pending=frame->Pending_Upload_Bytes();
+    CHECK(frame->Prepare_Clean_Water(first) && frame->Clean_Water_Texture()==old);
+    CHECK(frame->Pending_Upload_Bytes()==pending);
+    Atlas second=first;second.image.revision=NextRevision();second.image.pixels[0].r=99;
+    CHECK(frame->Prepare_Clean_Water(second));
+    CHECK(frame->Clean_Water_Texture()!=old);
+    CHECK(frame->Prepare_Clean_Water(first) && frame->Clean_Water_Texture()==old);
+    // Map invalidation must retain resources referenced by the queued copy.
+    SDL_GPUTextureCreateInfo info={};info.type=SDL_GPU_TEXTURETYPE_2D;
+    info.format=SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT;info.usage=SDL_GPU_TEXTUREUSAGE_SAMPLER|SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    info.width=4;info.height=6;info.layer_count_or_depth=info.num_levels=1;
+    SDL_GPUTexture *reader=SDL_CreateGPUTexture(frame->Device(),&info);CHECK(reader);
+    const int32_t rect[4]={0,0,4,6};frame->Record_Blit(old,rect,reader,rect,false);
+    frame->Clear_Clean_Water();CHECK(!frame->Clean_Water_Texture());
+    const auto preserved=read_float_targets(frame,&reader,1,4,6);CHECK(preserved==actual);
+    SDL_ReleaseGPUTexture(frame->Device(),reader);
+    Atlas invalid=first;invalid.image.revision=NextRevision();invalid.image.pixels.clear();
+    CHECK(!frame->Prepare_Clean_Water(invalid));invalid.image.pixels=first.image.pixels;
+    CHECK(!frame->Prepare_Clean_Water(invalid)); // failure is latched for this revision
+    frame->Clear_Clean_Water();CHECK(frame->Prepare_Clean_Water(invalid));
+    frame->Clear_Clean_Water();
+    // Providers are separate cache keys even at identical paused time/resolution.
+    CHECK(frame->Present(NULL));CHECK(frame->Prepare_Ocean(2.25f,128,false));
+    const auto ordinary=read_ocean(frame);CHECK(!frame->Ocean_Is_Clean());
+    CHECK(frame->Present(NULL));frame->Fail_Next_Ocean_Rebuild_For_Test();
+    CHECK(frame->Prepare_Ocean(2.25f,128,true));
+    CHECK(!frame->Ocean_Is_Clean() && read_ocean(frame)==ordinary); // callers must reject this mismatch
+    CHECK(frame->Prepare_Ocean(2.25f,128,false));
+    CHECK(frame->Present(NULL));CHECK(frame->Prepare_Ocean(2.25f,128,true));
+    CHECK(frame->Ocean_Is_Clean());const auto clean=read_ocean(frame);CHECK(clean!=ordinary);
+    const auto updates=frame->Ocean_Updates();CHECK(frame->Prepare_Ocean(2.25f,128,true));
+    CHECK(frame->Ocean_Updates()==updates && read_ocean(frame)==clean);
+    CHECK(frame->Present(NULL));CHECK(frame->Prepare_Ocean(2.25f,128,false));
+    CHECK(!frame->Ocean_Is_Clean() && read_ocean(frame)==ordinary);
+    printf("sdl_gpu_frame_selfcheck: clean atlas float transport, per-level reuse, invalidation lifetime, failure reset and spectrum provider matching checked\n");
+}
+
 static void check_gpu_water_opaque_alpha(SdlGpuFrame *frame)
 {
     // Execute each generated program's actual final coverage block, then actual
@@ -7153,6 +7206,7 @@ int main()
 	check_scene_depth_snapshot(frame);
 	check_gpu_fft_ocean(frame);
 	check_gpu_fft_quality_switch(frame);
+	check_gpu_clean_water_transport_and_mode(frame);
 	check_gpu_water_opaque_alpha(frame);
 	check_gpu_water_vertex_uniform_order(frame);
 	check_gpu_modern_water_material(frame);

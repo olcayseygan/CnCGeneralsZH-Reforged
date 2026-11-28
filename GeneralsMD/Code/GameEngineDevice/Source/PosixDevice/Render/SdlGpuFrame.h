@@ -37,6 +37,7 @@
 
 #include "Platform/RenderTypes.h"
 #include "Platform/WaterFftSpectrum.h"
+#include "Platform/WaterCleanPrecompute.h"
 
 #include <stdint.h>
 #include <string>
@@ -303,7 +304,13 @@ public:
 	SDL_GPUTexture * Ready_Scene_Depth(const SdlTarget &source, uint64_t &serial) const;
 	/// Lazy, GPU-only Phillips spectrum/IFFT. Previous draws finish recording before maps change;
 	/// repeated paused times reuse the same field. Failure leaves the analytic water fallback usable.
-	bool Prepare_Ocean(float time, unsigned resolution = WaterFftSpectrum::Resolution);
+	bool Prepare_Ocean(float time, unsigned resolution = WaterFftSpectrum::Resolution, bool clean = false);
+	bool Ocean_Is_Clean() const;
+    bool Prepare_Clean_Water(const WaterCleanPrecompute::Atlas &atlas);
+    void Clear_Clean_Water();
+    SDL_GPUTexture *Clean_Water_Texture() const {return CleanWaterTexture;}
+    SDL_GPUSampler *Clean_Water_Sampler() const {return CleanWaterSampler;}
+
 	WaterFftSpectrum::Configuration Ocean_Configuration() const;
 	void Fail_Next_Ocean_Rebuild_For_Test() { FailNextOceanRebuild = true; }
 	uint64_t Water_Colour_Captures() const { return WaterColourCaptures; }
@@ -405,6 +412,11 @@ private:
 	SDL_GPUShader *SceneDepthVertex = NULL, *SceneDepthPixel = NULL;
 	SDL_GPUGraphicsPipeline *SceneDepthPipeline = NULL;
 	SDL_GPUSampler *SceneDepthSampler = NULL;
+    struct CleanWaterEntry {uint64_t revision;SDL_GPUTexture *texture;};
+    std::vector<CleanWaterEntry> CleanWaterEntries;
+    std::vector<uint64_t> CleanWaterFailed;
+    SDL_GPUTexture *CleanWaterTexture=nullptr;
+    SDL_GPUSampler *CleanWaterSampler=nullptr;
 	struct OceanResources;
 	OceanResources *Ocean = NULL;
 	bool OceanFailed = false, OceanReady = false;
@@ -412,8 +424,9 @@ private:
 	uint64_t OceanUpdates = 0;
 	uint64_t OceanPrepareFrame = UINT64_MAX;
 	unsigned OceanFailedResolution = 0, OceanRequestedResolution = 0;
+	bool OceanRequestedClean = false;
 	bool FailNextOceanRebuild = false;
-	bool Create_Ocean(WaterFftSpectrum::Configuration configuration);
+	bool Create_Ocean(WaterFftSpectrum::Configuration configuration, bool clean);
 	void Release_Ocean();
 	bool Fail_Ocean(const char *reason);
 

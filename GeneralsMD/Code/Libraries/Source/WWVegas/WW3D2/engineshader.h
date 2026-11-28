@@ -102,7 +102,7 @@ bool EngineShader_Vertex_Program(EngineShaderProgram program, std::string & hlsl
 // D3D11 applies neither.
 bool EngineShader_Pixel_Program(EngineShaderProgram program,
 	const PixelPipelineDescription & pipeline, std::string & hlsl,
-	CombinerShaderTarget target = COMBINER_SHADER_TARGET_D3D11, bool waveHeading = false);
+	CombinerShaderTarget target = COMBINER_SHADER_TARGET_D3D11, bool waveHeading = false, bool cleanMain = false);
 
 // Which transcribed programs paint the ground, and so read the sun's shadow map.  The water and
 // the trees are not among them: both have shadows of their own.

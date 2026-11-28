@@ -2755,9 +2755,20 @@ endif()
 # T1c (defect 17): the water grid's step, moved to the top of each logic frame, against the original
 # code's output under EA's one-pass-per-frame loop (Tests/water_grid_oracle.cpp), under catch-up too.
 if(ZH_PLATFORM_LINUX)
+  add_lib_test(test_clean_fft_gpu sdl3shadercompile)
+  target_link_libraries(test_clean_fft_gpu PRIVATE SDL3::SDL3-static)
+  set_target_properties(test_clean_fft_gpu PROPERTIES CXX_STANDARD 17)
+  set_tests_properties(test_clean_fft_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
+  add_lib_test(test_clean_fft_shader ffvertex engineshader sdl3shadercompile)
+  set_target_properties(test_clean_fft_shader PROPERTIES CXX_STANDARD 17)
   add_lib_test(test_water_heading_shader ffvertex engineshader sdl3shadercompile)
   set_target_properties(test_water_heading_shader PROPERTIES CXX_STANDARD 17)
 endif()
+
+add_lib_test(test_clean_fft_water)
+set_target_properties(test_clean_fft_water PROPERTIES CXX_STANDARD 17)
+add_lib_test(test_clean_water_depth)
+set_target_properties(test_clean_water_depth PROPERTIES CXX_STANDARD 17)
 
 add_lib_test(test_water_wave_heading)
 set_target_properties(test_water_wave_heading PROPERTIES CXX_STANDARD 17)

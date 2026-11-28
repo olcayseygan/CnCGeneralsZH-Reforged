@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include "Platform/WaterWaveHeading.h"
+#include "Platform/WaterCleanShader.h"
 #include "Platform/WaterFftGeometry.h"
 #include "Platform/WaterVesselWaves.h"
 #include "Platform/WaterFftFiltering.h"
@@ -46,7 +47,7 @@ inline std::string UniformSource(const char *name,unsigned slot,bool visual_hull
 #define MODERN_WATER_HLSL_UNIFORM(name) "    float4 " #name ";\n"
     source+=MODERN_WATER_MATERIAL_UNIFORMS(MODERN_WATER_HLSL_UNIFORM);
 #undef MODERN_WATER_HLSL_UNIFORM
-    if(sdl) source+="    float4 MaterialOptics;\n    float4 MaterialSurface;\n    row_major float4x4 ClipFromWorld;\n";
+    if(sdl) source+="    float4 MaterialOptics;\n    float4 MaterialSurface;\n    row_major float4x4 ClipFromWorld;\n    float4 CleanAtlasInfo;\n    float4 CleanAtlasOrigin;\n";
     if(visual_hull) source+="    float4 VisualHullMeta[8];\n";
     source+="};\n";
     if(visual_hull) source+=R"HLSL(
@@ -275,7 +276,7 @@ void fftRawAndShadingSurface(float2 p,float3 lod,out FftSurface physical,out Fft
 }
 )HLSL";
 }
-inline std::string VertexSource(bool waveHeading=false,bool materialSurface=false)
+inline std::string VertexSource(bool waveHeading=false,bool materialSurface=false,bool cleanMain=false)
 {
     std::string source=std::string(R"HLSL(
 Texture2D FftDisplacement0 : register(t0);
@@ -284,7 +285,9 @@ Texture2D FftDisplacement1 : register(t1);
 SamplerState FftSampler1 : register(s1);
 Texture2D FftDisplacement2 : register(t2);
 SamplerState FftSampler2 : register(s2);
-)HLSL")+CommonSource()+WaterBowLift::Source()+WaterVesselWaves::Source()+R"HLSL(
+)HLSL")+CommonSource()+WaterBowLift::Source()+WaterVesselWaves::Source();
+    if(cleanMain) source+=WaterCleanShader::VertexSource();
+    else source+=R"HLSL(
 float3 fftRawDisplacement(float2 p) {
     float3 a=FftDisplacement0.SampleLevel(FftSampler0,p/(450.0*fftWorldScale),0).xyz;
     float3 b=FftDisplacement1.SampleLevel(FftSampler1,p/(103.0*fftWorldScale),0).xyz;
@@ -292,16 +295,21 @@ float3 fftRawDisplacement(float2 p) {
     return (a.xzy*float3(-1.2,-1.2,1)+b.xzy*float3(-1.5,-1.5,1)
         +c.xzy*float3(-1.5,-1.5,1))*fftWorldScale;
 }
-float3 fftVertexBowDisplacement(float2 p,float level,float horizontalScale,out float bowHeight) {
+)HLSL";
+    source+=R"HLSL(float3 fftVertexBowDisplacement(float2 p,float level,float horizontalScale,out float bowHeight) {
     bowHeight=0;
-    float3 displacement=fftRawDisplacement(p);
+    float3 displacement=fftRawDisplacement(p))HLSL";
+    if(materialSurface) source+="*modernWaterWindGain(MaterialSurface.w)";
+    source+=R"HLSL(;
     {
         int count=clamp((int)HullParameters.x,0,8);
         float3 oldBow[8];
         for(int h=0;h<count;++h) {
             VesselReflection reflected=vesselReflection(p,level,h);
             if(reflected.weight>0.0)
-                displacement+=vesselReflectedValue(fftRawDisplacement(reflected.samplePosition),reflected);
+                displacement+=vesselReflectedValue(fftRawDisplacement(reflected.samplePosition))HLSL";
+    if(materialSurface) source+="*modernWaterWindGain(MaterialSurface.w)";
+    source+=R"HLSL(,reflected);
             displacement.z+=vesselGeneratedWave(p,level,WaterParameters.x,h,oldBow[h]).x;
         }
         {
@@ -319,25 +327,18 @@ float3 fftVertexDisplacement(float2 p,float level,float horizontalScale) {
 float3 fftVertexDisplacement(float2 p,float level) {return fftVertexDisplacement(p,level,0.0);}
 float3 fftVertexDisplacement(float2 p) {return fftVertexDisplacement(p,WaterParameters.w);}
 )HLSL";
-    if(waveHeading) {
+    if(waveHeading && !cleanMain) {
         const std::string entry="float3 fftRawDisplacement(float2 p)";
         source.replace(source.find(entry),entry.size(),"float3 fftUnrotatedDisplacement(float2 p)");
         const size_t end=source.find("\n}",source.find("float3 fftUnrotatedDisplacement"))+3;
         source.insert(end,HeadingSource(true)+HeadingVertexSource());
     }
-    if(materialSurface) {
-        source=std::string(ModernWaterMaterial::WindSource())+source;
-        const auto replace=[&](const std::string &from,const std::string &to) {
-            for(size_t at=source.find(from);at!=std::string::npos;at=source.find(from,at+to.size())) source.replace(at,from.size(),to);
-        };
-        replace("float3 displacement=fftRawDisplacement(p);","float3 displacement=fftRawDisplacement(p)*modernWaterWindGain(MaterialSurface.w);");
-        replace("fftRawDisplacement(reflected.samplePosition)","fftRawDisplacement(reflected.samplePosition)*modernWaterWindGain(MaterialSurface.w)");
-    }
+    if(materialSurface) source=std::string(ModernWaterMaterial::WindSource())+source;
     return source;
 }
 // Add a water-only wrapper to the generated fixed vertex program. It retains the engine's
 // original projection, shroud coordinate generation and fog after moving the actual vertex.
-inline bool WrapVertex(std::string &hlsl,bool sdl=false,bool waveHeading=false)
+inline bool WrapVertex(std::string &hlsl,bool sdl=false,bool waveHeading=false,bool cleanMain=false)
 {
     const std::string entry="Output main(Input input)";
     const size_t at=hlsl.find(entry);
@@ -345,7 +346,7 @@ inline bool WrapVertex(std::string &hlsl,bool sdl=false,bool waveHeading=false)
         || hlsl.find("float2 TexCoord1")==std::string::npos) return false;
     hlsl.replace(at,entry.size(),"Output waterFixedVertex(Input input)");
     hlsl+=UniformSource("WaterVertexParameters",1,false,sdl);
-    hlsl+=VertexSource(waveHeading,sdl);
+    hlsl+=VertexSource(waveHeading,sdl,cleanMain);
     hlsl+=WaterWaveCageShader::Source(true);
     hlsl+=R"HLSL(
 Output main(Input input)
@@ -386,9 +387,9 @@ Output main(Input input)
 )HLSL";
     return true;
 }
-inline std::string PixelSource(WaterFftSpectrum::Configuration configuration=WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution),bool waveHeading=false,bool materialSurface=false)
+inline std::string PixelSource(WaterFftSpectrum::Configuration configuration=WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution),bool waveHeading=false,bool materialSurface=false,bool cleanMain=false)
 {
-    std::string source=CommonSource()+WaterBowLift::Source()+WaterVesselWaves::Source()+WaterFftFiltering::Source(configuration)+R"HLSL(
+    std::string source=CommonSource()+WaterBowLift::Source()+WaterVesselWaves::Source()+WaterFftFiltering::Source(configuration,cleanMain)+R"HLSL(
 struct FftSurface {
     float3 bow;
     float3 displacement;
@@ -401,7 +402,9 @@ struct FftSurface {
     float3 shadingDerivativeX;
     float3 shadingDerivativeY;
     float unresolvedSlopeVariance;
-};
+)HLSL";
+    if(cleanMain) source+="    float4 mediumDepth;\n";
+    source+=R"HLSL(};
 struct FftMapSamples { float4 a,ad,b,bd,c,cd; };
 FftMapSamples fftMapSamples(float2 p,float3 lod) {
     FftMapSamples samples;
@@ -413,7 +416,9 @@ FftMapSamples fftMapSamples(float2 p,float3 lod) {
     samples.cd=Texture13.SampleLevel(Sampler13,p/(13.0*fftWorldScale),lod[2]);
     return samples;
 }
-FftSurface fftDecodeSamples(FftMapSamples samples) {
+)HLSL";
+    if(cleanMain) source+=WaterCleanShader::PixelSource(configuration);
+    else source+=R"HLSL(FftSurface fftDecodeSamples(FftMapSamples samples) {
     float4 a=samples.a,ad=samples.ad,b=samples.b,bd=samples.bd,c=samples.c,cd=samples.cd;
     // Keep the same decode operations across paired and independent shader contexts.
     // Reassociation/FMA contraction must not make physical geometry depend on footprint.
@@ -472,12 +477,41 @@ void fftRawAndShadingSurface(float2 p,float3 lod,out FftSurface physical,out Fft
         shading=fftDecodeSamples(samples);
     }
 }
-FftSurface fftSurface(float2 p,float level,float footprint,float3 horizontalScale) {
-    float3 shadingLod=fftShadingLod(footprint);
+)HLSL";
+    if(materialSurface) source=std::string(ModernWaterMaterial::WindSource())+source+R"HLSL(
+void fftResistWind(inout FftSurface surface,float gain) {
+    if(gain>=1.0)return;
+    surface.displacement*=gain;
+    surface.derivativeX*=gain;
+    surface.derivativeY*=gain;
+)HLSL";
+    if(materialSurface) source+=cleanMain?R"HLSL(    // Incident contact and foam describe the same wind-scaled, limited field
+    // as the geometry. Apply the limiter after amplitude resistance.
+    float3 limit=fftLimitDerivative(surface.displacement);
+    float2 x=surface.derivativeX.xy*limit.xy,y=surface.derivativeY.xy*limit.xy;
+    surface.incidentCompression=(1+x.x)*(1+y.y)-x.y*y.x;
+    surface.contactIncident=float3(fftLimit(surface.displacement).z,
+        float2(surface.derivativeX.z,surface.derivativeY.z)*limit.z);
+)HLSL":R"HLSL(    surface.contactIncident*=gain;
+    surface.incidentCompression=(1.0+surface.derivativeX.x)*(1.0+surface.derivativeY.y)
+        -surface.derivativeX.y*surface.derivativeY.x;
+)HLSL";
+    if(materialSurface) source+=R"HLSL(}
+)HLSL";
+    source+=R"HLSL(FftSurface fftSurface(float2 p,float level,float footprint,float3 horizontalScale) {
+    float3 shadingLod=fftShadingLod(footprint);)HLSL";
+    if(cleanMain) {
+        char threshold[128];std::snprintf(threshold,sizeof(threshold),
+            "shadingLod*=step(%.9g,shadingLod);",double(WaterCleanCollapse::ShadingLod));
+        source+=threshold;
+    }
+    source+=R"HLSL(
     bool filtered=any(shadingLod>0.0);
     FftSurface value,shading;
     fftRawAndShadingSurface(p,shadingLod,value,shading);
-    float reflectionVariance=1.0;
+)HLSL";
+    if(materialSurface) source+="    float windGain=modernWaterWindGain(MaterialSurface.w);\n    fftResistWind(value,windGain);fftResistWind(shading,windGain);\n";
+    source+=R"HLSL(    float reflectionVariance=1.0;
     // Mirroring a field around a hull changes its parameterization; a compressed mirror
     // Jacobian alone is not a breaking wave. Preserve incident whitecaps and add only the
     // restrained bow/wake crest signal below, while using full derivatives for the normals.
@@ -491,7 +525,9 @@ FftSurface fftSurface(float2 p,float level,float footprint,float3 horizontalScal
             if(reflected.weight>0.0) {
                 FftSurface incident,shadingIncident;
                 fftRawAndShadingSurface(reflected.samplePosition,shadingLod,incident,shadingIncident);
-                if(filtered) {
+)HLSL";
+    if(materialSurface) source+="                fftResistWind(incident,windGain);fftResistWind(shadingIncident,windGain);\n";
+    source+=R"HLSL(                if(filtered) {
                     shading.displacement+=vesselReflectedValue(shadingIncident.displacement,reflected);
                     shading.derivativeX+=vesselReflectedDerivative(shadingIncident.displacement,shadingIncident.derivativeX,
                         shadingIncident.derivativeY,float2(1,0),reflected);
@@ -551,7 +587,11 @@ FftSurface fftSurface(float2 p,float level,float footprint,float3 horizontalScal
         value.shadingDerivativeY=shading.derivativeY*shadingLimit;
         // Expected missing slope power, with local limiter attenuation. Reflected copies use
         // an independent-energy approximation; this does not claim a full covariance solver.
-        value.unresolvedSlopeVariance=fftShadingVariance(shadingLod)*reflectionVariance*shadingLimit.z*shadingLimit.z;
+        value.unresolvedSlopeVariance=)HLSL";
+    source+=cleanMain?"shading.unresolvedSlopeVariance":"fftShadingVariance(shadingLod)";
+    source+="*reflectionVariance*shadingLimit.z*shadingLimit.z";
+    if(materialSurface) source+="*windGain*windGain";
+    source+=R"HLSL(;
     } else {
         value.shadingDisplacement=value.displacement;
         value.shadingDerivativeX=value.derivativeX;
@@ -569,7 +609,7 @@ float2 fftParameterGradient(float value,float2 px,float2 py) {
     return float2(ddx(value)*py.y-ddy(value)*px.y,ddy(value)*px.x-ddx(value)*py.x)*inverse;
 }
 )HLSL";
-    if(waveHeading) {
+    if(waveHeading && !cleanMain) {
         // Only rename the position entry points, never fftMapSamples / fftDecodeSamples.
         const size_t begin=source.find("FftSurface fftRawSurface(float2 p,float3 lod)");
         const size_t end=source.find("FftSurface fftSurface(float2 p,float level,float footprint",begin);
@@ -582,26 +622,6 @@ float2 fftParameterGradient(float value,float2 px,float2 py) {
         const std::string variance="fftShadingVariance(shadingLod)*";
         source.replace(source.find(variance),variance.size(),
             "(fftShadingVariance(float3(0,shadingLod.yz))+shading.unresolvedSlopeVariance)*");
-    }
-    if(materialSurface) {
-        source=std::string(ModernWaterMaterial::WindSource())+source;
-        source.insert(source.find("FftSurface fftSurface(float2 p,float level,float footprint,"),R"HLSL(
-void fftResistWind(inout FftSurface surface,float gain) {
-    if(gain>=1.0)return;
-    surface.displacement*=gain;
-    surface.derivativeX*=gain;
-    surface.derivativeY*=gain;
-    surface.contactIncident*=gain;
-    surface.incidentCompression=(1.0+surface.derivativeX.x)*(1.0+surface.derivativeY.y)
-        -surface.derivativeX.y*surface.derivativeY.x;
-}
-)HLSL");
-        const auto replace=[&](const std::string &from,const std::string &to) {
-            for(size_t at=source.find(from);at!=std::string::npos;at=source.find(from,at+to.size())) source.replace(at,from.size(),to);
-        };
-        replace("    float reflectionVariance=1.0;","    float windGain=modernWaterWindGain(MaterialSurface.w);\n    fftResistWind(value,windGain);fftResistWind(shading,windGain);\n    float reflectionVariance=1.0;");
-        replace("fftRawAndShadingSurface(reflected.samplePosition,shadingLod,incident,shadingIncident);","fftRawAndShadingSurface(reflected.samplePosition,shadingLod,incident,shadingIncident);\n                fftResistWind(incident,windGain);fftResistWind(shadingIncident,windGain);");
-        replace("reflectionVariance*shadingLimit.z*shadingLimit.z;","reflectionVariance*shadingLimit.z*shadingLimit.z*windGain*windGain;");
     }
     return source;
 }

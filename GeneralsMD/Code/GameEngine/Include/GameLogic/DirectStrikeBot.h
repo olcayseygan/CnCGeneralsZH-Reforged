@@ -65,7 +65,8 @@ enum { DIRECTSTRIKE_BOT_NEVER_TICK = 40 };		///< twenty minutes of ticks: what a
 extern void DirectStrikeBot_planAt( Real rating, DirectStrikeBotPlan *plan );
 
 /** Whether the plan wants the next step of a track (DIRECTSTRIKE_TRACK_INCOME or DIRECTSTRIKE_TRACK_TECH) by now:
-	  `level` is the one to be bought (income 1 to 4, tech 2 or 3), `tick` the spawn ticks so far. */
+	  `level` is the one to be bought (income 1 to 4, tech 2 or 3), `tick` the spawn ticks so far.  Never an income
+	  level that would pay its price back after a typical match has ended. */
 extern Bool DirectStrikeBot_wantsTier( const DirectStrikeBotPlan &plan, Int track, Int level, UnsignedInt tick );
 
 /** The rows a unit of `size` slots tries, best first, for its role in a grid `rows` deep (row 0 is the

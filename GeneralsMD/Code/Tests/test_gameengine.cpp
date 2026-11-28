@@ -13847,10 +13847,18 @@ TEST(direct_strike_bot_plan_follows_the_rating_and_looks_for_room_from_the_middl
 	DirectStrikeBot_planAt( 2600.0f, &past );
 	CHECK_EQ( AILevelAboveHardRating[ 0 ], aiRatingToHundredths( AI_RATING_BRUTAL ) );	// the lobby's Brutal is the plan's fourth level
 
-	// the four lobby levels are points on the curve: no level buys income, which never pays back inside
-	// a match; Easy opens tier 2 on tick 12 and Medium on tick 4
+	// the four lobby levels are points on the curve: Easy buys no income; Medium buys the first level from
+	// tick 5 and Brutal from tick 3, and no plan a level it cannot get back by tick 19 (the third's 1500
+	// takes 15 ticks, the fourth's 2000 20); Easy opens tier 2 on tick 12 and Medium on tick 4
 	for( Int level = 1; level <= DIRECTSTRIKE_INCOME_TIERS; ++level )
-		CHECK( !DirectStrikeBot_wantsTier( brutal, DIRECTSTRIKE_TRACK_INCOME, level, 100 ) && !DirectStrikeBot_wantsTier( easy, DIRECTSTRIKE_TRACK_INCOME, level, 100 ) );
+		CHECK( !DirectStrikeBot_wantsTier( easy, DIRECTSTRIKE_TRACK_INCOME, level, 9 ) );
+	CHECK( !DirectStrikeBot_wantsTier( medium, DIRECTSTRIKE_TRACK_INCOME, 1, 4 ) );
+	CHECK( DirectStrikeBot_wantsTier( medium, DIRECTSTRIKE_TRACK_INCOME, 1, 5 ) );
+	CHECK( !DirectStrikeBot_wantsTier( brutal, DIRECTSTRIKE_TRACK_INCOME, 1, 2 ) );
+	CHECK( DirectStrikeBot_wantsTier( brutal, DIRECTSTRIKE_TRACK_INCOME, 1, 3 ) );
+	CHECK( DirectStrikeBot_wantsTier( brutal, DIRECTSTRIKE_TRACK_INCOME, 2, 9 ) );
+	CHECK( !DirectStrikeBot_wantsTier( brutal, DIRECTSTRIKE_TRACK_INCOME, 2, 10 ) );
+	CHECK( !DirectStrikeBot_wantsTier( past, DIRECTSTRIKE_TRACK_INCOME, 3, 0 ) && !DirectStrikeBot_wantsTier( past, DIRECTSTRIKE_TRACK_INCOME, 4, 0 ) );
 	CHECK( !DirectStrikeBot_wantsTier( easy, DIRECTSTRIKE_TRACK_TECH, 2, 11 ) );
 	CHECK( DirectStrikeBot_wantsTier( easy, DIRECTSTRIKE_TRACK_TECH, 2, 12 ) );
 	CHECK( !DirectStrikeBot_wantsTier( easy, DIRECTSTRIKE_TRACK_TECH, 3, 100 ) );

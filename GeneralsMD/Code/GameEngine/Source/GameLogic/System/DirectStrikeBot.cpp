@@ -62,20 +62,25 @@ namespace
 	};
 
 	const PlanRow STEP_SECONDS	= { { 6.0f, 3.0f, 2.0f, 1.0f },			0.5f, 12.0f };
-	/* An income level pays 100 a tick for its 1000, back in 10 ticks, and every seat starts on 2000 and
-		 is paid 400 a tick; bot matches on 30 second ticks lasted about 18 ticks, and 45 second ticks are
-		 not measured yet.
-		 A unit bought goes out in every wave after it, so money held is the worst buy there is: the
+	/* A unit bought goes out in every wave after it, so money held is the worst buy there is: the
 		 stronger plans differ in how little they leave idle, how well they pick, and how early they tidy
-		 and sell.  Income does not pay back in time. */
+		 and sell.
+		 An income level pays 100 a tick: the first two cost 1000 and are back in 10 ticks, the third 1500
+		 in 15, the fourth 2000 in 20 (DirectStrike_tierPrice).  Every seat starts on 2000 and is paid 400
+		 a tick, and a match on 45 second ticks runs about 19 ticks at any game speed (21.5 minutes at 1.0x,
+		 2026-11-24).  Easy never buys one; Medium up buys the first two once its opening and tech tier 2
+		 are out, the stronger plans earlier, and no plan buys a level it cannot get back before the match
+		 is over (INCOME_PAID_BACK_BY_TICK).  Until 2026-11-28 no plan bought any, and against a player
+		 who did the computer seats fell behind by the middle of every match. */
 	const PlanRow RESERVE				= { { 600.0f, 300.0f, 100.0f, 0.0f },	0.0f, 800.0f };
 	const PlanRow INCOME_TICK[ DIRECTSTRIKE_INCOME_TIERS ] =
 	{
-		{ { NO_TICK, NO_TICK, NO_TICK, NO_TICK },	0.0f, NO_TICK },
-		{ { NO_TICK, NO_TICK, NO_TICK, NO_TICK },	0.0f, NO_TICK },
+		{ { NO_TICK, 5.0f, 4.0f, 3.0f },	0.0f, NO_TICK },
+		{ { NO_TICK, 8.0f, 6.0f, 5.0f },	0.0f, NO_TICK },
 		{ { NO_TICK, NO_TICK, NO_TICK, NO_TICK },	0.0f, NO_TICK },
 		{ { NO_TICK, NO_TICK, NO_TICK, NO_TICK },	0.0f, NO_TICK },
 	};
+	const UnsignedInt INCOME_PAID_BACK_BY_TICK = 19;	///< the tick a typical match ends on: a level that pays its price back later is never bought
 	const PlanRow TECH_TICK[ DIRECTSTRIKE_TECH_TIERS - 1 ] =
 	{
 		{ { 12.0f, 4.0f, 3.0f, 2.0f },		0.0f, NO_TICK },
@@ -798,7 +803,8 @@ void DirectStrikeBot_planAt( Real rating, DirectStrikeBotPlan *plan )
 Bool DirectStrikeBot_wantsTier( const DirectStrikeBotPlan &plan, Int track, Int level, UnsignedInt tick )
 {
 	Real from = NO_TICK;
-	if( track == DIRECTSTRIKE_TRACK_INCOME && level >= 1 && level <= DIRECTSTRIKE_INCOME_TIERS )
+	if( track == DIRECTSTRIKE_TRACK_INCOME && level >= 1 && level <= DIRECTSTRIKE_INCOME_TIERS
+			&& tick + DirectStrike_tierPrice( track, level ) / DIRECTSTRIKE_INCOME_TIER_PAYS <= INCOME_PAID_BACK_BY_TICK )
 		from = plan.incomeTick[ level - 1 ];
 	else if( track == DIRECTSTRIKE_TRACK_TECH && level >= 2 && level <= DIRECTSTRIKE_TECH_TIERS )
 		from = plan.techTick[ level - 2 ];

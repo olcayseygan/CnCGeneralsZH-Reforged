@@ -32657,6 +32657,7 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 			below stays sealed; the deck crosses lane floor between its ends, so it joins two sides; and no stop
 			stands within five cells of its middle, so no wave is sent up to the deck's layer. */
 		Int bridgeCount = 0;
+		std::vector< std::pair<Coord3D, Coord3D> > decks;
 		for( size_t o = 0; o + 1 < theRMGParse.m_objectFlags.size(); o++ )
 		{
 			if( !( theRMGParse.m_objectFlags[o] & 0x10 ) || !( theRMGParse.m_objectFlags[o + 1] & 0x20 ) )
@@ -32664,6 +32665,20 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 			++bridgeCount;
 			const Coord3D& e1 = theRMGParse.m_objectPositions[o];
 			const Coord3D& e2 = theRMGParse.m_objectPositions[o + 1];
+			/* No two bridges side by side over one stretch of trench: middles within 10 cells of each other along
+				the deck (the same trench under both) must stand 30 cells apart along it. */
+			for( size_t d = 0; d < decks.size(); d++ )
+			{
+				const Real dx = 0.5f * ( decks[d].first.x + decks[d].second.x - e1.x - e2.x ) / MAP_XY_FACTOR;
+				const Real dy = 0.5f * ( decks[d].first.y + decks[d].second.y - e1.y - e2.y ) / MAP_XY_FACTOR;
+				const Real ux = e2.x - e1.x, uy = e2.y - e1.y, u = sqrtf( ux * ux + uy * uy );
+				const Real deck = fabsf( dx * ux + dy * uy ) / u, trench = fabsf( dx * uy - dy * ux ) / u;
+				if( deck < 10.0f && trench < 30.0f )
+					printf( "  aod %s at %d seats: bridges %d and %d stand %.0f cells apart over one trench\n",
+						RandomMapGenerator::aodFamilyName( got ), clamped.m_numPlayers, (Int)d + 1, bridgeCount, trench );
+				CHECK( !( deck < 10.0f && trench < 30.0f ) );
+			}
+			decks.push_back( std::make_pair( e1, e2 ) );
 			for( Int e = 0; e < 2; e++ )
 			{
 				const Int c = cellOf( e == 0 ? e1 : e2 );

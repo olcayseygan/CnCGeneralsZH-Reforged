@@ -11119,6 +11119,7 @@ void RMGLayout::buildApocalypse( void )
 #define RMG_AOD_BRIDGE_SNOW		"EuropeanBridgeSNOW"
 #define RMG_AOD_BRIDGE_HALF		10.0f	///< cells from a lane's middle to each end of a bridge over it
 #define RMG_AOD_POCKET			60		///< cells of walkable plateau a region needs before it must have a bridge to it
+#define RMG_AOD_BRIDGE_APART	30.0f	///< cells at the least between two bridges over one stretch of trench, middle to middle
 #define RMG_AOD_APEX			24.0f	///< cells of flat at every turn of a family whose legs would meet in a point
 #define RMG_AOD_SLIVER			2.0f	///< cells: plateau less than twice this wide between two trenches goes down to the floor
 #define RMG_AOD_RUN_HALF		5.5f	///< cells from a lane's middle to its wall along a run north or south
@@ -12295,10 +12296,30 @@ void RMGLayout::buildAod( void )
 		const Real every = theAodBridgeEvery[family];
 		Real lastAt = -0.5f * every;
 		std::vector< std::pair<RMGPoint, RMGPoint> > picked;
+		/* Whether a bridge from e1 to e2 would stand beside one already picked over the same stretch of trench: their
+			middles less than RMG_AOD_BRIDGE_APART cells apart along the trench and within 10 across it (along either's
+			deck). Two bridges a ring apart on a spiral's ray are a gap apart along their decks and are not beside each
+			other. A pair 23 cells apart on the one-seat spiral's outer ring stood almost side by side (2026-11-28). */
+		auto beside = [&]( const RMGPoint& e1, const RMGPoint& e2 ) -> Bool
+		{
+			for( UnsignedInt k = 0; k < picked.size(); k++ )
+			{
+				const RMGPoint& f1 = picked[k].first;
+				const RMGPoint& f2 = picked[k].second;
+				const Real dx = 0.5f * ( f1.m_cellX + f2.m_cellX - e1.m_cellX - e2.m_cellX ), dy = 0.5f * ( f1.m_cellY + f2.m_cellY - e1.m_cellY - e2.m_cellY );
+				const Real ux = e2.m_cellX - e1.m_cellX, uy = e2.m_cellY - e1.m_cellY, u = sqrtf( ux * ux + uy * uy );
+				if( u < 0.01f )
+					continue;
+				const Real deck = fabsf( dx * ux + dy * uy ) / u, trench = fabsf( dx * uy - dy * ux ) / u;
+				if( deck < 10.0f && trench < RMG_AOD_BRIDGE_APART )
+					return TRUE;
+			}
+			return FALSE;
+		};
 		for( Int i = 6; i + 6 < (Int)lane.size(); i++ )
 		{
 			RMGPoint e1, e2;
-			if( lane[i].at < lastAt + every || !candidateAt( i, e1, e2 ) )
+			if( lane[i].at < lastAt + every || !candidateAt( i, e1, e2 ) || beside( e1, e2 ) )
 				continue;
 			picked.push_back( std::make_pair( e1, e2 ) );
 			lastAt = lane[i].at;
@@ -12328,13 +12349,7 @@ void RMGLayout::buildAod( void )
 					RMGPoint e1, e2;
 					if( at < 6 || at + 6 >= (Int)lane.size() || !candidateAt( at, e1, e2 ) )
 						continue;
-					Bool crowded = FALSE;
-					for( UnsignedInt k = 0; k < picked.size() && !crowded; k++ )
-						crowded = ( picked[k].first.m_cellX - e1.m_cellX ) * ( picked[k].first.m_cellX - e1.m_cellX )
-							+ ( picked[k].first.m_cellY - e1.m_cellY ) * ( picked[k].first.m_cellY - e1.m_cellY ) < 12.0f * 12.0f
-							|| ( picked[k].second.m_cellX - e1.m_cellX ) * ( picked[k].second.m_cellX - e1.m_cellX )
-							+ ( picked[k].second.m_cellY - e1.m_cellY ) * ( picked[k].second.m_cellY - e1.m_cellY ) < 12.0f * 12.0f;
-					if( !crowded )
+					if( !beside( e1, e2 ) )
 						picked.push_back( std::make_pair( e1, e2 ) );
 					break;
 				}
@@ -12426,7 +12441,7 @@ void RMGLayout::buildAod( void )
 					RMGPoint e1, e2;
 					if( !candidateAt( i, e1, e2 ) )
 						continue;
-					Bool crowded = FALSE;		// not beside a bridge already there
+					Bool crowded = beside( e1, e2 );		// not beside a bridge already there, nor its end by another's
 					for( UnsignedInt k = 0; k < picked.size() && !crowded; k++ )
 						crowded = ( picked[k].first.m_cellX - e1.m_cellX ) * ( picked[k].first.m_cellX - e1.m_cellX )
 							+ ( picked[k].first.m_cellY - e1.m_cellY ) * ( picked[k].first.m_cellY - e1.m_cellY ) < 12.0f * 12.0f;

@@ -1848,7 +1848,7 @@ TEST(fxlist_reforged_ini_parses_and_keeps_its_light)
 	}
 	fclose( fp );
 
-	CHECK_EQ( blocks, 138 );
+	CHECK_EQ( blocks, 139 );		// 139 with Art of Defense's FX_AodExit
 	CHECK_EQ( lit, blocks );
 }
 
@@ -32616,6 +32616,66 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 					CHECK( dx * dx + dy * dy > 50.0f * 50.0f );
 				}
 			o++;
+		}
+		/* Every region of walkable plateau of 60 cells or more (the mountain past a ring's rim aside) is one a seat
+			reaches from its start, over the ground and the bridges: no pocket a lane cuts off is out of reach. */
+		{
+			auto plateau = [&]( Int c ) { const Int x = c % W, y = c / W; return x >= b && y >= b && x < W - b - 1 && y < H - b - 1
+				&& theRMGParse.m_heights[c] >= 50 && theRMGParse.m_heights[c] < 90 && !cliff( c ); };
+			std::vector<Int> region( W * H, -1 );
+			std::vector<Int> sizes;
+			for( Int c0 = 0; c0 < W * H; c0++ )
+			{
+				if( region[c0] >= 0 || !plateau( c0 ) )
+					continue;
+				std::vector<Int> queue( 1, c0 );
+				region[c0] = (Int)sizes.size();
+				for( size_t head = 0; head < queue.size(); head++ )
+				{
+					const Int x = queue[head] % W, y = queue[head] / W;
+					const Int nb[4] = { queue[head] - 1, queue[head] + 1, queue[head] - W, queue[head] + W };
+					for( Int k = 0; k < 4; k++ )
+						if( nb[k] >= 0 && nb[k] < W * H && ( k >= 2 || ( nb[k] / W ) == y ) && region[nb[k]] < 0 && plateau( nb[k] ) )
+						{
+							region[nb[k]] = region[c0];
+							queue.push_back( nb[k] );
+						}
+					(void)x;
+				}
+				sizes.push_back( (Int)queue.size() );
+			}
+			std::vector<char> reachedRegion( sizes.size(), 0 );
+			for( Int s = 0; s < clamped.m_numPlayers && s < (Int)starts.size(); s++ )
+				if( region[cellOf( starts[s] )] >= 0 )
+					reachedRegion[region[cellOf( starts[s] )]] = 1;
+			for( Bool grew = TRUE; grew; )
+			{
+				grew = FALSE;
+				for( size_t o = 0; o + 1 < theRMGParse.m_objectFlags.size(); o++ )
+				{
+					if( !( theRMGParse.m_objectFlags[o] & 0x10 ) || !( theRMGParse.m_objectFlags[o + 1] & 0x20 ) )
+						continue;
+					const Int r1 = region[cellOf( theRMGParse.m_objectPositions[o] )], r2 = region[cellOf( theRMGParse.m_objectPositions[o + 1] )];
+					if( r1 >= 0 && r2 >= 0 && reachedRegion[r1] != reachedRegion[r2] )
+					{
+						reachedRegion[r1] = reachedRegion[r2] = 1;
+						grew = TRUE;
+					}
+				}
+			}
+			Int bigRegions = 0;
+			for( size_t r = 0; r < sizes.size(); r++ )
+				bigRegions += sizes[r] >= 60 ? 1 : 0;
+			if( getenv( "ZH_AOD_REGIONS" ) != NULL )
+				printf( "  aod %s at %d seats: %d plateau regions of 60 cells or more, %d bridges\n", RandomMapGenerator::aodFamilyName( got ),
+					clamped.m_numPlayers, bigRegions, bridgeCount );
+			for( size_t r = 0; r < sizes.size(); r++ )
+			{
+				if( sizes[r] >= 60 && !reachedRegion[r] )
+					printf( "  aod %s at %d seats: a pocket of %d plateau cells no seat reaches\n", RandomMapGenerator::aodFamilyName( got ),
+						clamped.m_numPlayers, sizes[r] );
+				CHECK( sizes[r] < 60 || reachedRegion[r] );
+			}
 		}
 		CHECK( bridgeCount % std::max( 1, lanes ) == 0 );
 		if( bridgeCount == 0 )

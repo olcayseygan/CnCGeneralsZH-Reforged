@@ -134,6 +134,8 @@ public:
 	static Int aodFamilyCount( void );
 	static const char *aodFamilyName( Int family );
 	static Int aodFamilyOf( const RandomMapSettings& settings );
+	/// how many families that map gave way past from the seed's own; aodFamilyCount() when none fit and it fell back
+	static Int aodFamiliesSkipped( const RandomMapSettings& settings );
 	static AsciiString aodThemeName( Int seed );
 	/** For the tests and the variants sheet alone: build every aod map with this family first, -1 the seed's.
 		Nothing else may call it: the family is not in the map's name. */

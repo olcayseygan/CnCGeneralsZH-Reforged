@@ -967,6 +967,10 @@ void ShutdownLobbyTabs(void)
 
 // The personality box stands under a computer's level and only a computer's seat shows it (the room
 // look places both); it goes with the seat's army box, which a map list over the seats hides.
+// Both are kept by the layout's row, and the row is found from the personality box itself: a
+// skirmish room hands its boxes over by seat, and after the room's seat visuals shut down
+// theSeatRow says seat 20 is on row 20, which has no army box (report 5025).
+static GameWindow *thePersonaRowBox[MAX_SLOTS];
 static GameWindow *thePersonaSeatArmy[MAX_SLOTS];
 // the arrays above and the seat windows below are kept by the layout's row; this says which row a
 // seat is on (SetLobbySeatRows)
@@ -991,9 +995,19 @@ static GameWindow *findSeatWindow(GameWindow *parent, const char *layoutFilename
 	return TheWindowManager->winGetWindowFromId(parent, NAMEKEY(full));
 }
 
-static void measurePersonaSeat(GameWindow *parent, const char *layoutFilename, GameWindow *persona, Int seat)
+static void measurePersonaSeat(GameWindow *parent, const char *layoutFilename, GameWindow *persona, Int row)
 {
-	thePersonaSeatArmy[seat] = findSeatWindow(parent, layoutFilename, "ComboBoxPlayerTemplate", seat);
+	thePersonaRowBox[row] = persona;
+	thePersonaSeatArmy[row] = findSeatWindow(parent, layoutFilename, "ComboBoxPlayerTemplate", row);
+}
+
+/// the army box on the personality box's own row, NULL when the layout has none
+static GameWindow *personaArmyBox(GameWindow *persona)
+{
+	for (Int row = 0; row < MAX_SLOTS; ++row)
+		if (thePersonaRowBox[row] == persona)
+			return thePersonaSeatArmy[row];
+	return NULL;
 }
 
 static UnicodeString personaTooltip(Int persona)
@@ -1037,6 +1051,8 @@ void InitAIPersonaComboBoxes(GameWindow *parent, const char *layoutFilename,
 {
 	resetSeatRows();
 	for (Int i = 0; i < MAX_SLOTS; ++i)
+		thePersonaRowBox[i] = thePersonaSeatArmy[i] = NULL;	// the last screen's windows are gone
+	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
 		AsciiString name;
 		name.format("%s:ComboBoxAIPersona%d", layoutFilename, i);
@@ -1079,15 +1095,15 @@ void UpdateAIPersonaComboBoxes(GameInfo *myGame, GameWindow *comboPersona[])
 		return;
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
-		const Int row = theSeatRow[i];
-		if (!comboPersona[i] || row < 0)
+		if (!comboPersona[i])
 			continue;
 		const GameSlot *slot = myGame->getConstSlot(i);
 		// a takeover seat has no AI behind it, so nothing for a personality to steer
 		const Bool computer = slot->isAI() && !slot->isTakeover();
 		// the personality goes with the seat's army box, which ShowUnderlyingGUIElements hides while a
 		// map list lies over the seats, so a network update then cannot bring it back through the list
-		comboPersona[i]->winHide(!computer || thePersonaSeatArmy[row]->winIsHidden());
+		GameWindow *army = personaArmyBox(comboPersona[i]);
+		comboPersona[i]->winHide(!computer || (army && army->winIsHidden()));
 		// the room lays the player box out over the personality itself (the room look); a Direct
 		// Strike lobby lies over both
 		if (!computer)

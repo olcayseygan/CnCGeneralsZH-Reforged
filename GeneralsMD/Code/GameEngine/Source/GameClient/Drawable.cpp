@@ -1078,11 +1078,20 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	* on, taken away by the destructor.  updateDrawable also runs from the tick (StealthUpdate's disguise
 	* calls it), so a call on the logic thread or one of its workers returns at once: the map and the
 	* floating text list are the main thread's alone, and its next walk counts the drop.  The frames are
-	* logic frames read on the client side; nothing here is written back. */
+	* logic frames read on the client side; nothing here is written back.
+	*
+	* Only units and structures a weapon can hurt take a figure.  Helpers carry bodies too, and lose
+	* health no player would call damage: a Dragon Tank's fire wall is a row of UNATTACKABLE segments
+	* with an ImmortalBody that burn each other down to 1 health (a field of figures over bare ground),
+	* and a crate's parachute (UNATTACKABLE, 100000 health) is killed the moment it lands, on the
+	* Supply Drop Zone's pad.  A change of max health is no hit either: a body rescaled with
+	* PRESERVE_RATIO (a lobby handicap when a garrison hands a building to its new owner, Hold the Line
+	* ending on a whole army) loses health in proportion, and that drop only moves the mark. */
 //-------------------------------------------------------------------------------------------------
 struct DamageNumberState
 {
 	Real lastHealth;
+	Real lastMaxHealth;
 	Real pending;
 	UnsignedInt shownFrame;
 };
@@ -1095,20 +1104,27 @@ static void showDamageNumber( Drawable *draw, const Object *obj, UnsignedInt now
 	const BodyModuleInterface *body = obj->getBodyModule();
 	if( body == NULL || TheInGameUI == NULL || TheGlobalData->m_headless )
 		return;
+	if( obj->isKindOf( KINDOF_UNATTACKABLE ) || !( obj->isKindOf( KINDOF_INFANTRY ) || obj->isKindOf( KINDOF_VEHICLE )
+			|| obj->isKindOf( KINDOF_AIRCRAFT ) || obj->isKindOf( KINDOF_STRUCTURE ) ) )
+		return;
 	const UnsignedInt gather = LOGICFRAMES_PER_SECOND * 2 / 5;		// at most a figure every 0.4 wall seconds
 	const Real health = body->getHealth();
+	const Real maxHealth = body->getMaxHealth();
 	std::map<DrawableID, DamageNumberState>::iterator it = theDamageNumbers.find( draw->getID() );
 	if( it == theDamageNumbers.end() )
 	{
 		// first sight sets the mark and shows nothing; shownFrame a whole gather back (unsigned, so it
 		// wraps alike early on) lets the first hit rise at once
-		DamageNumberState fresh = { health, 0.0f, now - gather };
+		DamageNumberState fresh = { health, maxHealth, 0.0f, now - gather };
 		theDamageNumbers.insert( std::make_pair( draw->getID(), fresh ) );
 		return;
 	}
 	DamageNumberState &state = it->second;
-	state.pending += max( 0.0f, state.lastHealth - health );
+	// a hit landing on the very look the max health changed goes uncounted; the rescale is the likelier drop
+	if( maxHealth == state.lastMaxHealth )
+		state.pending += max( 0.0f, state.lastHealth - health );
 	state.lastHealth = health;
+	state.lastMaxHealth = maxHealth;
 	if( state.pending > 0.0f && now - state.shownFrame >= gather )
 	{
 		// what the player cannot see takes no figure: a stealthed unit, or one under fog or shroud

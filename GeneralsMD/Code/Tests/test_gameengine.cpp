@@ -32383,7 +32383,7 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 {
 	CHECK( bootOnce() );
 	CHECK( RandomMapGenerator::styleNamed( "aod" ) != 0 );
-	CHECK_EQ( RandomMapGenerator::aodFamilyCount(), 12 );
+	CHECK_EQ( RandomMapGenerator::aodFamilyCount(), 13 );
 	static const Int theSeats[] = { 1, 2, 4, 9 };
 	const Int perFamily = (Int)( sizeof( theSeats ) / sizeof( theSeats[0] ) );
 	const Int forcedCases = RandomMapGenerator::aodFamilyCount() * perFamily;
@@ -32480,10 +32480,18 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 			exitHi.y = std::max( exitHi.y, theRMGParse.m_areaPolygons[area][p].y );
 		}
 		const Real middle = 0.5f * (Real)clamped.m_playableCells * MAP_XY_FACTOR;
-		if( clamped.m_numPlayers == 1 )
+		if( clamped.m_numPlayers == 1 && exitHi.y - exitLo.y > 1000.0f )
 		{
 			CHECK_NEAR( exitHi.x, 2.0f * middle, 1.0f );
 			CHECK_NEAR( exitHi.x - exitLo.x, 140.0f, 1.0f );
+		}
+		else if( clamped.m_numPlayers == 1 )
+		{
+			// a spiral's pit, 12 cells round its middle somewhere in the band
+			CHECK_NEAR( exitHi.x - exitLo.x, 240.0f, 2.0f );
+			CHECK_NEAR( exitHi.y - exitLo.y, 240.0f, 2.0f );
+			CHECK( strcmp( RandomMapGenerator::aodFamilyName( RandomMapGenerator::aodFamilyOf( settings ) ), "spiral" ) == 0
+				|| strcmp( RandomMapGenerator::aodFamilyName( RandomMapGenerator::aodFamilyOf( settings ) ), "mixed" ) == 0 );
 		}
 		else
 		{
@@ -32875,6 +32883,70 @@ TEST(aod_variants_sheet_dump)
 		}
 	}
 	fclose( list );
+	RandomMapGenerator::setAodFamilyForTests( -1 );
+}
+
+/** Not a check: with ZH_AOD_MIXRATE set, how often a lane stays the family it was drawn, at one to six seats over
+	100 seeds each: the mixed lane forced, then the seed alone (how many drew mixed and how many of those kept it);
+	ZH_AOD_MIXRATE=all forces every family in turn as well. The rate item 2 of 2026-11-28 was argued with. */
+TEST(aod_mixed_fit_rate)
+{
+	const char *mode = getenv( "ZH_AOD_MIXRATE" );
+	if( mode == NULL )
+		return;
+	CHECK( bootOnce() );
+	const Int seeds = 100, families = RandomMapGenerator::aodFamilyCount(), mixed = families - 1;
+	const Bool all = strcmp( mode, "all" ) == 0;
+	if( strcmp( mode, "list" ) == 0 )
+	{
+		// ZH_AOD_MIXRATE=list: the family seeds 1 to 30 come out with at each seat count, for picking a seed to play
+		for( Int seats = 1; seats <= 6; seats++ )
+		{
+			printf( "  aod %dp:", seats );
+			for( Int seed = 1; seed <= 30; seed++ )
+			{
+				RandomMapSettings settings;
+				settings.m_seed = seed;
+				settings.m_numPlayers = seats;
+				settings.m_style = RandomMapGenerator::styleNamed( "aod" );
+				printf( " %d %s,", seed, RandomMapGenerator::aodFamilyName( RandomMapGenerator::aodFamilyOf( settings ) ) );
+			}
+			printf( "\n" );
+		}
+		return;
+	}
+	for( Int seats = 1; seats <= 6; seats++ )
+	{
+		Int kept[16] = { 0 };
+		for( Int f = all ? 0 : mixed; f < families; f++ )
+			for( Int i = 0; i < seeds; i++ )
+			{
+				RandomMapGenerator::setAodFamilyForTests( f );
+				RandomMapSettings settings;
+				settings.m_seed = 2000 + i;
+				settings.m_numPlayers = seats;
+				settings.m_style = RandomMapGenerator::styleNamed( "aod" );
+				kept[f] += RandomMapGenerator::aodFamilyOf( settings ) == f ? 1 : 0;
+			}
+		Int drewMixed = 0, keptMixed = 0;
+		RandomMapGenerator::setAodFamilyForTests( -1 );
+		for( Int i = 0; i < seeds; i++ )
+		{
+			RandomMapSettings settings;
+			settings.m_seed = 2000 + i;
+			settings.m_numPlayers = seats;
+			settings.m_style = RandomMapGenerator::styleNamed( "aod" );
+			const Int got = RandomMapGenerator::aodFamilyOf( settings ), skipped = RandomMapGenerator::aodFamiliesSkipped( settings );
+			const Int seeded = ( got - skipped + 2 * families ) % families;
+			drewMixed += seeded == mixed ? 1 : 0;
+			keptMixed += seeded == mixed && skipped == 0 ? 1 : 0;
+		}
+		printf( "  aod %dp: mixed forced kept %d of %d; seed alone drew mixed %d, kept %d; per family", seats, kept[mixed], seeds, drewMixed, keptMixed );
+		for( Int f = all ? 0 : mixed; f < families; f++ )
+			printf( " %s %d", RandomMapGenerator::aodFamilyName( f ), kept[f] );
+		printf( "\n" );
+		fflush( stdout );
+	}
 	RandomMapGenerator::setAodFamilyForTests( -1 );
 }
 

@@ -1,11 +1,14 @@
-# Art of Defense: a dozer crosses a lane on a bridge, and the waves walk on under it.
-# Proves the generator's bridges load as logic bridges: the dozer starts south of bridge 1 of
-# -randommap 3 1 aod (hairpins, bridge 1 from 1011,844 to 1011,1044 over the lane at y 944) and is sent
-# north of it; the lane's cliffs leave it no other way across. Wave 1 passes under the deck and still
-# leaves by the exit (HEADLESS AOD ... got out).
-#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit -randommap 3 1 aod
-#     -autoskirmish 1 -side 1 FactionAmerica -scenario aodbridge -maxframes 3000 -logPrefix aodbridge
-# grep "arrive" and "got out".
-30 spawn 1 AmericaVehicleDozer 1 1011 760
-40 move 1 AmericaVehicleDozer 1011 1130
-900 arrive 1 AmericaVehicleDozer 1011 1130 60
+# Art of Defense: dozers cross a lane on the stone bridges, and the waves walk on under them.
+# Proves the generator's bridges (EuropeanBridge) load as logic bridges: -randommap 6 1 aod is the
+# spiral, its rings bridged on a ray south from the pit (world 1721,1700) to the start (1700,360):
+# bridge 3 from 1707,923 to 1695,1123 over the outer ring, bridge 4 from 1740,1315 to 1705,1512 over
+# the next. A dozer spawned south of the outer ring and the seat's own dozer from its start are sent
+# between the two rings; on the ground alone that is a walk round a whole ring of the plateau's own
+# spiral, more than 3000 units, so arriving by frame 900 is the bridge. Wave 1 passes under the decks
+# and still leaves by the pit (HEADLESS AOD PAY ... leaked).
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit -randommap 6 1 aod
+#     -autoskirmish 1 -side 1 FactionAmerica -scenario aodbridge -maxframes 3600 -logPrefix aodbridge
+# grep "ARRIVE" and "AOD PAY".
+30 spawn 1 AmericaVehicleDozer 1 1700 700
+40 move 1 AmericaVehicleDozer 1700 1260
+900 arrive 1 AmericaVehicleDozer 1700 1260 60

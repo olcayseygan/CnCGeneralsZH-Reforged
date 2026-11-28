@@ -11112,7 +11112,11 @@ void RMGLayout::buildApocalypse( void )
 /* Cells a trench wall rises over: 30 bytes a cell, 19 world units, a cliff twice the pathfinder's 9.8. At 1.6
 	cells, 24 bytes, a wall turned to some angles of a five- or six-way mirror left a cell or two walkable. */
 #define RMG_AOD_FACE			1.25f
-#define RMG_AOD_BRIDGE			"Concrete"	///< the bridge every lane gets (Roads.ini), stretched end to end
+/* The bridges every lane gets (Roads.ini): EA's stone arch, its snow dress on a winter map. Its two ends and one
+	arch span measure 202 units at scale 1 (CBBridgeArc: ends -105 to -32 and 24 to 97, the span 56 between), so the
+	20-cell deck takes one span at its own size; the Concrete before it, 209 units of ends alone, was squeezed. */
+#define RMG_AOD_BRIDGE			"EuropeanBridge"
+#define RMG_AOD_BRIDGE_SNOW		"EuropeanBridgeSNOW"
 #define RMG_AOD_BRIDGE_HALF		10.0f	///< cells from a lane's middle to each end of a bridge over it
 #define RMG_AOD_POCKET			60		///< cells of walkable plateau a region needs before it must have a bridge to it
 #define RMG_AOD_APEX			24.0f	///< cells of flat at every turn of a family whose legs would meet in a point
@@ -11160,31 +11164,39 @@ struct RMGAodShape
 	RMG_AOD_LANE_LENGTH with every stretch of trench clear of every other. A family no k or s fits gives way to
 	the next. side holds trench off the waves' way: a fork's other branch, a comb's bays.
 	The owner, 2026-11-28 later: "yollar oldukları yerde daire de çizebilirler", so "circles" winds a switchback
-	whose every run turns a near full circle where it is, round an island of plateau a bridge reaches. */
-enum { RMG_AOD_FAMILIES = 12, RMG_AOD_MIXED = 11 };
+	whose every run turns a near full circle where it is, round an island of plateau a bridge reaches.
+	"spiral" winds in to the middle (an owner's reference, 2026-11-28: a community map whose one lane spirals in to
+	the centre under a stone bridge): one seat's from the band's west edge round and round in to an exit in the
+	band's middle, a ring's lanes as interleaved arms round the pit, every ring of it bridged on a ray from the
+	middle (buildAod). */
+enum { RMG_AOD_FAMILIES = 13, RMG_AOD_SPIRAL = 11, RMG_AOD_MIXED = 12 };
 /* "mixed" is a lane of two or three stretches of other families in a row (the owner, 2026-11-28: "karışımları da
 	olabilir hem kare hem daire vs"); a third of the seeds draw it (buildAod), the rest one family alone. */
 static const char *const theAodFamilies[RMG_AOD_FAMILIES] =
-	{ "switchback", "zigzag", "wide S", "wiggle", "hairpins", "terraces", "comb", "fork", "sawtooth", "loops", "circles", "mixed" };
-/// cells of lane walked between two bridges over it, each family's: fewer where the lane winds tight
-static const Real theAodBridgeEvery[RMG_AOD_FAMILIES] = { 150.0f, 150.0f, 170.0f, 170.0f, 190.0f, 150.0f, 150.0f, 130.0f, 150.0f, 190.0f, 110.0f, 140.0f };
+	{ "switchback", "zigzag", "wide S", "wiggle", "hairpins", "terraces", "comb", "fork", "sawtooth", "loops", "circles", "spiral", "mixed" };
+/// cells of lane walked between two bridges over it, each family's: fewer where the lane winds tight (the spiral's rings take theirs on rays)
+static const Real theAodBridgeEvery[RMG_AOD_FAMILIES] = { 150.0f, 150.0f, 170.0f, 170.0f, 190.0f, 150.0f, 150.0f, 130.0f, 150.0f, 190.0f, 110.0f, 320.0f, 140.0f };
 static Int theAodFamilyForTests = -1;		///< RandomMapGenerator::setAodFamilyForTests; -1, the seed's
 
 struct RMGAodPlan
 {
 	std::vector<RMGPoint> path;							///< m_cellX is u, m_cellY is v
 	std::vector< std::vector<RMGPoint> > side;
+	Bool pit;		///< the lane ends inside the room, at its last point (one seat's spiral): the exit is a pit round it
+	Bool spiral;	///< it winds a spiral, whose rings buildAod bridges on a ray from the middle
 };
 
 /** the repeat counts a family tries; its reach across is bisected to the length. Circles stops at 4: past it a ring's
-	runs stand too close for a loop of 14 cells (0.3 of the step), and the lane would be a plain switchback. */
+	runs stand too close for a loop of 14 cells (0.3 of the step), and the lane would be a plain switchback. The spiral
+	has one (its reach is how far round it winds); 2 is its count inside a mixed lane, no room left for the starts. */
 static void rmgAodRepeats( Int family, std::vector<Int>& repeats )
 {
 	static const Int theRepeats[RMG_AOD_FAMILIES][8] =
 	{
 		{ 3, 4, 5, 6, 7, 8, 0, 0 }, { 3, 4, 5, 6, 7, 9, 11, 14 }, { 2, 3, 4, 0, 0, 0, 0, 0 }, { 5, 6, 7, 8, 10, 12, 14, 0 },
 		{ 3, 5, 7, 0, 0, 0, 0, 0 }, { 1, 2, 3, 4, 0, 0, 0, 0 }, { 3, 4, 5, 6, 7, 8, 0, 0 }, { 2, 3, 4, 5, 6, 0, 0, 0 },
-		{ 2, 3, 4, 5, 6, 7, 0, 0 }, { 3, 5, 7, 0, 0, 0, 0, 0 }, { 4, 3, 2, 0, 0, 0, 0, 0 }, { 3, 2, 0, 0, 0, 0, 0, 0 },
+		{ 2, 3, 4, 5, 6, 7, 0, 0 }, { 3, 5, 7, 0, 0, 0, 0, 0 }, { 4, 3, 2, 0, 0, 0, 0, 0 }, { 1, 0, 0, 0, 0, 0, 0, 0 },
+		{ 3, 2, 0, 0, 0, 0, 0, 0 },
 	};
 	repeats.clear();
 	for( Int i = 0; i < 8 && theRepeats[family][i] > 0; i++ )
@@ -11200,10 +11212,12 @@ static void rmgAodRepeats( Int family, std::vector<Int>& repeats )
 	gives each its own reach across, and turns each corner square, cut at 45 degrees or round, so two seeds of one
 	family wind apart. The draws are hashed from the seed and the run's number, never from k or s, so the reach the
 	caller bisects for still grows the lane smoothly. */
-static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, UnsignedInt variety, RMGAodPlan& plan )
+/* sectorV: a seat's sector of a ring in units of v (the lanes repeat that far round), nought on one seat's band. */
+static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, Real sectorV, UnsignedInt variety, RMGAodPlan& plan )
 {
 	plan.path.clear();
 	plan.side.clear();
+	plan.pit = plan.spiral = FALSE;
 	std::vector<RMGPoint>& p = plan.path;
 	auto add = [&]( std::vector<RMGPoint>& line, Real u, Real v ) { const RMGPoint q = { u, v }; line.push_back( q ); };
 	// hashed twice: once, neighbouring seeds drew alike for the first runs
@@ -11479,29 +11493,113 @@ static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, Uns
 			add( p, 1.0f, v );
 			break;
 		}
+		case RMG_AOD_SPIRAL:	// spiral: round and round in to the middle
+		{
+			plan.spiral = TRUE;
+			const Bool whole = k <= 1;		///< the whole lane, not a mixed lane's last stretch
+			// the seed's wobble of the winding: the gap between two rings grows and shrinks by up to a fifth along it
+			const Real wobble = ( rnd( 0, 30 ) - 0.5f ) * 0.4f;
+			if( sectorV > 0.0f )
+			{
+				/* A ring: lane 0 is one arm of a spiral of as many arms as seats, its v winding on past its sector into
+					the others' (the frame is polar, so a straight line in u and v is an Archimedean spiral), the other
+					lanes the arms between. The arm before it passes a gap g = R sectorV / sweep further in, R the cells
+					the arm winds in over. The seats stand on the rim 20 cells in from where the arms start, half a sector
+					round, so a whole lane's arm first runs straight in from the mountain until it passes the first seat
+					START_FLAT + 8 cells and 4 more clear of it: prefix + g / 2 >= 58. */
+				const Real sweep = 16.0f * s;
+				const Real share = sectorV / sweep;
+				Real prefix = 0.0f;
+				if( whole )
+				{
+					const Real need = RMG_AOD_START_FLAT + 8.0f + 20.0f + 4.0f;
+					prefix = share < 1.9f ? ( need - 0.5f * uCells * share ) / ( 1.0f - 0.5f * share ) : 10.0f;
+					prefix = std::max( 10.0f, std::min( prefix, 0.6f * uCells ) );
+				}
+				// the entry moved back from the seat the arm turns towards, up to 0.3 of the room
+				const Real f = prefix / uCells, v0 = whole ? -0.3f * rnd( 0, 31 ) : 0.0f;
+				add( p, 0.0f, v0 );
+				if( f > 0.0f )
+					add( p, f, v0 );
+				// a point every 8 cells or so, so no piece of the winding counts as a narrow place
+				const Int points = std::max( 64, (Int)( 24.0f * sweep ) );
+				for( Int i = 1; i <= points; i++ )
+				{
+					const Real t = (Real)i / (Real)points;
+					add( p, f + ( 1.0f - f ) * ( t + wobble * Sin( 2.0f * PI * t ) / ( 2.0f * PI ) ), v0 + sweep * t );
+				}
+				break;
+			}
+			/* One seat: an ellipse wound in from the band's edge to a pit in the middle, the lane coming along the band's
+				middle from the west edge to the ellipse's west point. The middle stands where the stretch has room, the
+				width drawn 1.1 to 1.7 times the height (less where the stretch is narrow), the inner end 20 cells out,
+				then straight in to the middle, where the exit is. */
+			const Real inner = RMG_AOD_PIT + 8.0f;
+			const Real rx = std::min( ( 1.1f + 0.6f * rnd( 0, 32 ) ) * 0.95f * vCells, 0.5f * uCells - 30.0f );
+			const Real ry = std::min( 0.95f * vCells, rx / 0.8f );
+			const Real cx = 0.5f * uCells + ( rnd( 0, 33 ) - 0.5f ) * 2.0f * std::max( 0.0f, 0.5f * uCells - rx - 30.0f );
+			const Real sweep = 7.0f * PI * s;
+			add( p, 0.0f, 0.0f );
+			const Int points = std::max( 48, (Int)( 12.0f * sweep ) );
+			for( Int i = 0; i <= points; i++ )
+			{
+				const Real t = (Real)i / (Real)points, th = PI + sweep * t;
+				const Real shrink = 1.0f - ( 1.0f - inner / ry ) * ( t + wobble * Sin( 2.0f * PI * t ) / ( 2.0f * PI ) );
+				add( p, ( cx + rx * shrink * Cos( th ) ) / uCells, ry * shrink * Sin( th ) / vCells );
+			}
+			add( p, cx / uCells, 0.0f );
+			plan.pit = TRUE;
+			break;
+		}
 		case RMG_AOD_MIXED:	// mixed: k stretches (two or three) of other families one after the other along the room
 		{
 			/* Each stretch a family the seed picks (never the one before it), drawn with its own draws in its share of
 				the room and its own cells, so its turns and loops keep their size. A run straight across the room joins
 				two stretches, 20 cells clear of each. The fork, the comb, the hairpins and the loops stay out: a
-				fork's branch or a comb's bay at a joint, and runs the room's whole width, would meet the next stretch. */
-			static const Int theMix[7] = { 0, 1, 2, 3, 5, 8, 10 };
-			static const Int theMixK[7] = { 3, 3, 2, 4, 1, 3, 2 };
-			const Int parts = std::max( 2, std::min( 3, k ) );
+				fork's branch or a comb's bay at a joint, and runs the room's whole width, would meet the next stretch.
+				The spiral comes only last, since it ends in its middle, and on one seat's band only where its stretch
+				has 140 cells to wind in. */
+			/* Each stretch takes as many repeats as its cells hold (mixK), the runs, legs or half waves far enough apart
+				that the seed's jitter and warp leave them clear of each other; a family the stretch is too short for
+				gives way to the next. Fixed counts crowded the short stretches: of every failed mixed lane at 1, 4 and 6
+				seats the fits gave crowding as the reason (2026-11-28). A ring's room is short along u (164 cells in
+				from the rim at most), so a ring's mixed lane has two stretches. */
+			static const Int theMix[8] = { 0, 1, 2, 3, 5, 8, 10, RMG_AOD_SPIRAL };
+			auto mixK = [&]( Int f, Real cells ) -> Int
+			{
+				const Real room = 0.88f * cells;		///< what lies between a family's first run and its last, b - a
+				switch( f )
+				{
+					case 0:	return room >= 40.0f ? std::min( 5, (Int)( room / 40.0f ) + 1 ) : 0;		// runs 40 apart, 24 after the jitter
+					case 1:	return room >= 36.0f ? std::min( 6, (Int)( room / 36.0f ) ) : 0;			// legs
+					case 2:	return room >= 45.0f ? std::min( 3, (Int)( room / 45.0f ) ) : 0;			// half waves, warped by up to 0.3
+					case 3:	return room >= 110.0f ? std::min( 6, (Int)( room / 55.0f ) ) : 0;		// warped by up to 0.6
+					case 5:	return room >= 230.0f ? 2 : room >= 110.0f ? 1 : 0;						// risers 12 apart
+					case 8:	return room >= 80.0f ? std::min( 5, (Int)( room / 40.0f ) - 1 ) : 0;		// teeth
+					case 10: return room >= 50.0f ? std::min( 3, (Int)( room / 50.0f ) + 1 ) : 0;	// a loop of 14 cells is 0.3 of a step
+					case RMG_AOD_SPIRAL: return sectorV > 0.0f ? ( cells >= 50.0f ? 2 : 0 ) : ( cells >= 140.0f ? 2 : 0 );
+				}
+				return 0;
+			};
+			const Int parts = sectorV > 0.0f ? 2 : std::max( 2, std::min( 3, k ) );
 			const Real margin = 20.0f / uCells;
 			Int last = -1;
 			RMGAodPlan sub;
 			for( Int j = 0; j < parts; j++ )
 			{
-				Int pick = (Int)( hashCell( variety, j, 40 ) % 7U );
-				if( theMix[pick] == last )
-					pick = ( pick + 1 ) % 7;
-				last = theMix[pick];
 				const Real u0 = (Real)j / (Real)parts, u1 = (Real)( j + 1 ) / (Real)parts;
 				const Real lo = u0 + ( j > 0 ? margin : 0.0f ), hi = u1 - ( j + 1 < parts ? margin : 0.0f );
-				rmgAodPlan( theMix[pick], theMixK[pick], s, uCells * ( hi - lo ), vCells, hashCell( variety, j, 41 ), sub );
+				Int pick = (Int)( hashCell( variety, j, 40 ) % 8U );
+				for( Int tries = 0; tries < 8 && ( theMix[pick] == last || mixK( theMix[pick], uCells * ( hi - lo ) ) == 0
+					|| ( theMix[pick] == RMG_AOD_SPIRAL && j + 1 < parts ) ); tries++ )
+					pick = ( pick + 1 ) % 8;
+				last = theMix[pick];
+				rmgAodPlan( theMix[pick], std::max( 1, mixK( theMix[pick], uCells * ( hi - lo ) ) ), s, uCells * ( hi - lo ), vCells, sectorV,
+					hashCell( variety, j, 41 ), sub );
 				if( sub.path.empty() )
 					continue;
+				plan.pit = sub.pit;
+				plan.spiral = plan.spiral || sub.spiral;
 				if( !p.empty() )
 				{
 					add( p, u0, p.back().m_cellY );
@@ -11518,7 +11616,7 @@ static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, Uns
 		of either. The smooth waves and the loops' half circles have no such corners, and the hairpins keep theirs
 		square: cut, their runs side by side on a four- or six-seat ring came too near at every turn. Worked in cells;
 		a draw keyed on the corner's place along the room, so a fork's two branches turn alike. */
-	if( family != 2 && family != 3 && family != 4 && family != 9 && family != RMG_AOD_MIXED )
+	if( family != 2 && family != 3 && family != 4 && family != 9 && family != RMG_AOD_SPIRAL && family != RMG_AOD_MIXED )
 	{
 		auto cornerize = [&]( std::vector<RMGPoint>& line )
 		{
@@ -11727,6 +11825,7 @@ void RMGLayout::buildAod( void )
 	const Real uCells = ring ? rOut - rIn : eastEnd - RMG_AOD_ENTRY_IN;
 	const Real vCells = ring ? roomAngle * 0.5f * ( rOut + rIn ) : bandReach;
 	const UnsignedInt variety = hashCell( seed, 71031, 7 );		///< rmgAodPlan's draws within a family, the seed's own
+	const Real sectorV = ring ? sector / roomAngle : 0.0f;
 	auto frame =[&]( Real u, Real v ) -> RMGPoint
 	{
 		if( !ring )
@@ -11743,10 +11842,12 @@ void RMGLayout::buildAod( void )
 		if( spotsOut != NULL )
 			spotsOut->clear();
 		Real along = 0.0f, sinceSpot = 0.0f;
+		const RMGPoint pitAt = frame( plan.path.back().m_cellX, plan.path.back().m_cellY );
 		auto spot = [&]( const RMGPoint& q, Bool last )
 		{
-			// no stop in the one seat's exit strip but the last
-			if( spotsOut != NULL && ( last || ring || q.m_cellX < side - RMG_AOD_EXIT - 2.0f ) )
+			// no stop in the one seat's exit strip but the last, nor in or near (its box's corners) a pit the lane ends in
+			const Real px = q.m_cellX - pitAt.m_cellX, py = q.m_cellY - pitAt.m_cellY, nearPit = 1.42f * RMG_AOD_PIT + 1.0f;
+			if( spotsOut != NULL && ( last || ( ( ring || q.m_cellX < side - RMG_AOD_EXIT - 2.0f ) && !( plan.pit && px * px + py * py < nearPit * nearPit ) ) ) )
 				spotsOut->push_back( q );
 		};
 		auto add = [&]( const RMGPoint& q, Real halfWidth, Real at )
@@ -11829,6 +11930,8 @@ void RMGLayout::buildAod( void )
 			walk( plan.side[n], FALSE, at0, at1 );
 		}
 		const RMGPoint last = frame( plan.path.back().m_cellX, plan.path.back().m_cellY );
+		if( plan.pit )
+			return along;		// a dead end in the pit round its last point
 		if( !ring )
 		{
 			for( Real o = 0.5f; o <= 2.0f * RMG_AOD_EXIT; o += 0.5f )
@@ -11893,12 +11996,13 @@ void RMGLayout::buildAod( void )
 		return 0;
 	};
 	// the seed's family, or the next one that fits, with the repeat and reach that come nearest the length
-	// a third of the seeds a mixed lane, the rest one of the eleven families alone
+	// a third of the seeds a mixed lane, the rest one of the twelve families alone
 	const Int seeded = theAodFamilyForTests >= 0 ? theAodFamilyForTests % RMG_AOD_FAMILIES
 		: hashCell( seed + 71021U, 1, 0 ) % 3U == 0U ? (Int)RMG_AOD_MIXED
 		: (Int)( hashCell( seed + 71021U, 0, 0 ) % (UnsignedInt)( RMG_AOD_FAMILIES - 1 ) );
 	Int family = -1, chosenK = 4;
 	Real chosenS = 1.0f;
+	UnsignedInt chosenVariety = variety;
 	{
 		RMGAodPlan plan;
 		std::vector<AodSample> trial;
@@ -11907,39 +12011,46 @@ void RMGLayout::buildAod( void )
 		{
 			const Int candidate = ( seeded + f ) % RMG_AOD_FAMILIES;
 			rmgAodRepeats( candidate, repeats );
-			Real best = 1.0e9f;
 			Int why[6] = { 0, 0, 0, 0, 0, 0 };
-			/* Circles takes the most loops that fit, not the length nearest the mark: its counts come most first, and
-				the first that fits is kept. Taken by length, the one-seat band chose two runs and a single loop. */
-			for( UnsignedInt r = 0; r < repeats.size() && !( candidate == 10 && family == candidate ); r++ )
+			// a mixed lane whose stretches do not fit draws its stretches again, three times more, before it gives way
+			const Int draws = candidate == RMG_AOD_MIXED ? 4 : 1;
+			for( Int draw = 0; draw < draws && family < 0; draw++ )
 			{
-				/* The reach that brings the lane to the length: it grows with the reach, so halve the gap eight
-					times between 0.15 and 1, then try that reach and two a little either side of it. */
-				Real lo = 0.15f, hi = 1.0f;
-				for( Int step = 0; step < 8; step++ )
+				const UnsignedInt drawn = draw == 0 ? variety : hashCell( variety, draw, 43 );
+				Real best = 1.0e9f;
+				/* Circles takes the most loops that fit, not the length nearest the mark: its counts come most first, and
+					the first that fits is kept. Taken by length, the one-seat band chose two runs and a single loop. */
+				for( UnsignedInt r = 0; r < repeats.size() && !( candidate == 10 && family == candidate ); r++ )
 				{
-					const Real mid = 0.5f * ( lo + hi );
-					rmgAodPlan( candidate, repeats[r], mid, uCells, vCells, variety, plan );
-					if( layLane( plan, trial, NULL ) < RMG_AOD_LANE_LENGTH )
-						lo = mid;
-					else
-						hi = mid;
-				}
-				const Real reaches[3] = { 0.5f * ( lo + hi ), std::max( 0.15f, 0.5f * ( lo + hi ) - 0.08f ), std::min( 1.0f, 0.5f * ( lo + hi ) + 0.08f ) };
-				for( Int t = 0; t < 3; t++ )
-				{
-					rmgAodPlan( candidate, repeats[r], reaches[t], uCells, vCells, variety, plan );
-					const Real length = layLane( plan, trial, NULL );
-					if( fabsf( length - RMG_AOD_LANE_LENGTH ) >= best )
-						continue;
-					const Int reason = fits( trial, length );
-					++why[reason];
-					if( reason == 0 )
+					/* The reach that brings the lane to the length: it grows with the reach, so halve the gap eight
+						times between 0.15 and 1, then try that reach and two a little either side of it. */
+					Real lo = 0.15f, hi = 1.0f;
+					for( Int step = 0; step < 8; step++ )
 					{
-						best = fabsf( length - RMG_AOD_LANE_LENGTH );
-						family = candidate;
-						chosenK = repeats[r];
-						chosenS = reaches[t];
+						const Real mid = 0.5f * ( lo + hi );
+						rmgAodPlan( candidate, repeats[r], mid, uCells, vCells, sectorV, drawn, plan );
+						if( layLane( plan, trial, NULL ) < RMG_AOD_LANE_LENGTH )
+							lo = mid;
+						else
+							hi = mid;
+					}
+					const Real reaches[3] = { 0.5f * ( lo + hi ), std::max( 0.15f, 0.5f * ( lo + hi ) - 0.08f ), std::min( 1.0f, 0.5f * ( lo + hi ) + 0.08f ) };
+					for( Int t = 0; t < 3; t++ )
+					{
+						rmgAodPlan( candidate, repeats[r], reaches[t], uCells, vCells, sectorV, drawn, plan );
+						const Real length = layLane( plan, trial, NULL );
+						if( fabsf( length - RMG_AOD_LANE_LENGTH ) >= best )
+							continue;
+						const Int reason = fits( trial, length );
+						++why[reason];
+						if( reason == 0 )
+						{
+							best = fabsf( length - RMG_AOD_LANE_LENGTH );
+							family = candidate;
+							chosenK = repeats[r];
+							chosenS = reaches[t];
+							chosenVariety = drawn;
+						}
 					}
 				}
 			}
@@ -11958,11 +12069,11 @@ void RMGLayout::buildAod( void )
 	std::vector<AodSample> lane;
 	std::vector<RMGPoint> laneSpots;
 	Real way = 0.0f;
-	{
-		RMGAodPlan plan;
-		rmgAodPlan( family, chosenK, chosenS, uCells, vCells, variety, plan );
-		way = layLane( plan, lane, &laneSpots );
-	}
+	RMGAodPlan chosenPlan;
+	rmgAodPlan( family, chosenK, chosenS, uCells, vCells, sectorV, chosenVariety, chosenPlan );
+	way = layLane( chosenPlan, lane, &laneSpots );
+	// the pit a lane ends in inside one seat's band (a spiral's middle), as the exit
+	const RMGPoint pitAt = frame( chosenPlan.path.back().m_cellX, chosenPlan.path.back().m_cellY );
 	// every lane: lane 0 turned into its sector
 	std::vector<AodSample> samples;
 	std::vector< std::vector<RMGPoint> > spots( shape.m_lanes );
@@ -12080,6 +12191,14 @@ void RMGLayout::buildAod( void )
 			for( Int k = 0; k < 24; k++ )
 				exit.m_polygon.push_back( polar( RMG_AOD_PIT, 2.0f * PI * (Real)k / 24.0f ) );
 		}
+		else if( chosenPlan.pit )
+		{
+			for( Int k = 0; k < 24; k++ )
+			{
+				const RMGPoint corner = { pitAt.m_cellX + RMG_AOD_PIT * Cos( 2.0f * PI * (Real)k / 24.0f ), pitAt.m_cellY + RMG_AOD_PIT * Sin( 2.0f * PI * (Real)k / 24.0f ) };
+				exit.m_polygon.push_back( corner );
+			}
+		}
 		else
 		{
 			const RMGPoint corners[4] = { { side - RMG_AOD_EXIT, 0.0f }, { side, 0.0f }, { side, side }, { side - RMG_AOD_EXIT, side } };
@@ -12183,6 +12302,43 @@ void RMGLayout::buildAod( void )
 				continue;
 			picked.push_back( std::make_pair( e1, e2 ) );
 			lastAt = lane[i].at;
+		}
+		/* A spiral's every ring gets a bridge on one ray from its middle towards the seats, so a dozer walks in ring
+			by ring and not the length of the plateau's own spiral between them: one seat's ray runs south from the
+			band's middle to the start, a ring's from the pit out to each seat between two entries. Lane 0 crosses
+			every ray a sector apart, and its turned copies make up the rest. Each crossing takes the nearest place
+			within six cells along that a bridge may stand, not beside one already there. */
+		if( chosenPlan.spiral )
+		{
+			const RMGPoint centre = ring ? RMGPoint{ half, half } : pitAt;
+			const Real ray = ring ? turn + 0.5f * sector : -0.5f * PI, period = ring ? sector : 2.0f * PI;
+			auto offRay = [&]( Int i ) -> Real
+			{
+				Real a = ATan2( lane[i].y - centre.m_cellY, lane[i].x - centre.m_cellX ) - ray;
+				return a - period * floorf( a / period + 0.5f );
+			};
+			for( Int i = 7; i + 18 < (Int)lane.size(); i++ )
+			{
+				const Real a0 = offRay( i - 1 ), a1 = offRay( i );
+				if( ( a0 < 0.0f ) == ( a1 < 0.0f ) || fabsf( a1 - a0 ) > 0.5f )
+					continue;
+				for( Int d = 0; d <= 12; d++ )
+				{
+					const Int at = i + ( ( d & 1 ) ? -( d + 1 ) / 2 : d / 2 );
+					RMGPoint e1, e2;
+					if( at < 6 || at + 6 >= (Int)lane.size() || !candidateAt( at, e1, e2 ) )
+						continue;
+					Bool crowded = FALSE;
+					for( UnsignedInt k = 0; k < picked.size() && !crowded; k++ )
+						crowded = ( picked[k].first.m_cellX - e1.m_cellX ) * ( picked[k].first.m_cellX - e1.m_cellX )
+							+ ( picked[k].first.m_cellY - e1.m_cellY ) * ( picked[k].first.m_cellY - e1.m_cellY ) < 12.0f * 12.0f
+							|| ( picked[k].second.m_cellX - e1.m_cellX ) * ( picked[k].second.m_cellX - e1.m_cellX )
+							+ ( picked[k].second.m_cellY - e1.m_cellY ) * ( picked[k].second.m_cellY - e1.m_cellY ) < 12.0f * 12.0f;
+					if( !crowded )
+						picked.push_back( std::make_pair( e1, e2 ) );
+					break;
+				}
+			}
 		}
 		/* Then every pocket of plateau a lane cuts off (a circle's island, the land between a comb's bays, the far
 			side of a one-seat map) gets a bridge from land a seat already reaches: the plateau's walkable regions
@@ -12308,7 +12464,7 @@ void RMGLayout::buildAod( void )
 				for( Int e = 0; e < 2; e++ )
 				{
 					RMGObject point;
-					point.m_templateName = RMG_AOD_BRIDGE;
+					point.m_templateName = m_snowy ? RMG_AOD_BRIDGE_SNOW : RMG_AOD_BRIDGE;
 					bridgeID.format( "AOD Bridge %d %d %c", n + 1, (Int)k + 1, e == 0 ? 'a' : 'b' );
 					point.m_uniqueID = bridgeID;
 					point.m_worldX = ends[e].m_cellX * MAP_XY_FACTOR;

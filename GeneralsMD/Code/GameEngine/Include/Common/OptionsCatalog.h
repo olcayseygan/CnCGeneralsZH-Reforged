@@ -219,6 +219,12 @@ inline Bool hudLayoutHasCommandTabs( Int layout ) { return layout != HUD_LAYOUT_
 // Strings: GUI:HudWidth, GUI:HudWidth0..2, TOOLTIP:HudWidth.
 enum { HUD_WIDTH_FULL, HUD_WIDTH_21_9, HUD_WIDTH_16_9, HUD_WIDTH_COUNT };
 
+// The income beside the money on the command bar ("IncomeReadout", GlobalData m_incomeReadout): 0 none,
+// the default, 1 "+40/s", 2 "+2400/min", over the last half minute (IncomeReadings, ScoreScreenLayout.h).
+// Client only: it reads the score keeper's money earned and nothing reads it back.
+// Strings: GUI:IncomeReadout, GUI:IncomeReadout0..2, GUI:IncomeReadoutSecond, GUI:IncomeReadoutMinute.
+enum { INCOME_READOUT_OFF, INCOME_READOUT_PER_SECOND, INCOME_READOUT_PER_MINUTE, INCOME_READOUT_COUNT };
+
 // The keyboard scheme (GlobalData m_hotkeyScheme): 0 Classic, today's keys, the default; 1 Red Alert,
 // Red Alert 2's defaults fitted to this game, kept in its own HotkeysRedAlert.ini
 // (docs/plans/HOTKEY-SCHEME-RA.md).  The table is GameClient/HotkeyScheme.h.  It has no Options.ini key

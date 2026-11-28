@@ -365,4 +365,52 @@ inline std::vector< Int > ScoreScreen_incomePerMinute( const std::vector< Unsign
 	return income;
 }
 
+/** The income beside the money on the command bar (the IncomeReadout option), counted the way the
+	* chart above counts it: one player's money earned so far, read once a second, the last half minute
+	* kept, the rate over it per `unitFrames`.  A span shorter than the half minute is shared over the
+	* whole of it, so the first truck of a match reads as a trickle and not a fortune.  A reading older
+	* than the last one (a new match) starts the count again. */
+struct IncomeReadings
+{
+	enum { WINDOW_SECONDS = 30, MOST = WINDOW_SECONDS + 1 };
+
+	UnsignedInt frame[ MOST ];
+	Int earned[ MOST ];
+	Int count;
+
+	IncomeReadings() : count( 0 ) {}
+
+	void clear( void ) { count = 0; }
+
+	void sample( UnsignedInt now, Int total, UnsignedInt framesPerSecond )
+	{
+		if( count > 0 && now < frame[ count - 1 ] )
+			count = 0;
+		if( count > 0 && now - frame[ count - 1 ] < framesPerSecond )
+			return;
+		if( count == MOST )
+		{
+			for( Int each = 1; each < MOST; each++ )
+			{
+				frame[ each - 1 ] = frame[ each ];
+				earned[ each - 1 ] = earned[ each ];
+			}
+		}
+		else
+			count++;
+		frame[ count - 1 ] = now;
+		earned[ count - 1 ] = total;
+	}
+
+	Int rate( UnsignedInt unitFrames, UnsignedInt framesPerSecond ) const
+	{
+		if( count < 2 )
+			return 0;
+		const UnsignedInt held = frame[ count - 1 ] - frame[ 0 ];
+		const UnsignedInt span = max( held, (UnsignedInt)WINDOW_SECONDS * framesPerSecond );
+		const Int came = max( earned[ count - 1 ] - earned[ 0 ], 0 );
+		return (Int)( ( (Int64)came * unitFrames + span / 2 ) / span );
+	}
+};
+
 #endif // _SCORESCREENLAYOUT_H_

@@ -254,6 +254,7 @@ GROUP_LAYOUT = [
             check("GridKeys", "CheckGridKeys"),
             slider("MinimapSize", "LabelMinimapSize", "SliderMinimapSize", "ValueMinimapSize"),
             check("NetBox", "CheckNetBox"),
+            combo("IncomeReadout", "LabelIncomeReadout", "ComboBoxIncomeReadout"),
             combo("HudWidth", "LabelHudWidth", "ComboBoxHudWidth", MORE),
             slider("MenuTransitionSpeed", "LabelMenuTransitionSpeed", "SliderMenuTransitionSpeed",
                    "ValueMenuTransitionSpeed", MORE)]),
@@ -324,6 +325,9 @@ NEW_VIEWS = [
     ("CHECK", "CheckTerrainRelief", "GUI:TerrainRelief"),
     # the catalog's IncomeSound row, the cash ding on a deposit (2026-11-28)
     ("CHECK", "CheckIncomeSound", "GUI:IncomeSound"),
+    # the catalog's IncomeReadout row, the income beside the bar's money (2026-11-28)
+    ("LABEL", "LabelIncomeReadout", "GUI:IncomeReadout"),
+    ("COMBO", "ComboBoxIncomeReadout", None),
 ]
 
 # Renamed captions (the plan's renames and the two Turkish words the writing rule forced), and the
@@ -859,9 +863,10 @@ def selfcheck():
 
     # every row, fader and rail choice has its pane sentences in both languages, and its name
     stems = [row[0] for _page, groups in GROUP_LAYOUT for _h, rs in groups for row in rs] + RAIL_STEMS
-    # the plan's 118, Key Grid's Grid Keys and Ground Relief (2026-11-27), Income Sound (2026-11-28)
-    if len(stems) != 121:
-        problems.append("%d settings on the screen, the plan's tooltip table holds 118, Grid Keys, Ground Relief and Income Sound" % len(stems))
+    # the plan's 118, Key Grid's Grid Keys and Ground Relief (2026-11-27), Income Sound and Income
+    # Readout (2026-11-28)
+    if len(stems) != 122:
+        problems.append("%d settings on the screen, the plan's tooltip table holds 118, Grid Keys, Ground Relief, Income Sound and Income Readout" % len(stems))
     for stem in stems:
         for table, language in ((keys, "Patch.str"), (turkish, "Turkish/Generals.str")):
             if "OPTIONTIP:%s" % stem not in table:

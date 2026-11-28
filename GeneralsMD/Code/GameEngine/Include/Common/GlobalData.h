@@ -522,6 +522,7 @@ public:
 	Int m_textureFilterMode;			///< 0 bilinear, 1 trilinear, 2 anisotropic
 	Int m_anisotropyLevel;				///< samples anisotropic filtering may take; 0 = whatever the card offers
 	Bool m_showNetBox;					///< the player's own switch for the top right info strip (InGameUI::drawHudOverlay)
+	Int m_incomeReadout;				///< "IncomeReadout": INCOME_READOUT_OFF, _PER_SECOND or _PER_MINUTE beside the bar's money (InGameUI::update); client only
 	Int m_minimapSize;					///< percent of its own size the radar is drawn at, growing up from the bar's corner (ControlBar::fitRadarToMap); 100 = as the bar has it
 	Bool m_showEmptyBuildingPips;		///< the row of empty slots over a building nobody is in
 	Bool m_hitFlash;					///< a struck unit or building lights up for a blink (Drawable::updateDrawable); client only, logic never reads it

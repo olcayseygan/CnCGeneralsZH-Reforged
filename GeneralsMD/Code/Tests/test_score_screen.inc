@@ -231,6 +231,47 @@ TEST(score_screen_income_is_smoothed_over_its_window)
 	CHECK( income[ 14 ] > 0 && income[ 14 ] < 5000 );
 }
 
+TEST(income_readout_counts_the_last_half_minute)
+{
+	// 30 frames a second: $45 a second for a minute, read every frame as the bar does
+	IncomeReadings readings;
+	CHECK_EQ( readings.rate( 30u, 30u ), 0 );
+	for( UnsignedInt frame = 0; frame <= 1800u; frame++ )
+		readings.sample( frame, (Int)( frame / 30u ) * 45, 30u );
+	CHECK_EQ( readings.count, (Int)IncomeReadings::MOST );
+	CHECK_EQ( readings.rate( 30u, 30u ), 45 );
+	CHECK_EQ( readings.rate( 1800u, 30u ), 2700 );
+
+	// $135 a minute is "+2/s" per second, and losing a third of it still is; per minute tells them apart
+	IncomeReadings slow, slower;
+	for( UnsignedInt frame = 0; frame <= 1800u; frame += 120u )
+	{
+		slow.sample( frame, (Int)( frame / 30u ) * 135 / 60, 30u );
+		slower.sample( frame, (Int)( frame / 30u ) * 90 / 60, 30u );
+	}
+	CHECK_EQ( slow.rate( 30u, 30u ), 2 );
+	CHECK_EQ( slower.rate( 30u, 30u ), 2 );
+	CHECK_EQ( slow.rate( 1800u, 30u ), 135 );
+	CHECK_EQ( slower.rate( 1800u, 30u ), 90 );
+
+	// the first truck of a match, $300 five seconds in, is shared over the half minute
+	IncomeReadings start;
+	start.sample( 0u, 0, 30u );
+	start.sample( 150u, 300, 30u );
+	CHECK_EQ( start.rate( 30u, 30u ), 10 );
+
+	// a frame behind the last reading is the next match: the count starts again
+	start.sample( 30u, 0, 30u );
+	CHECK_EQ( start.count, 1 );
+	CHECK_EQ( start.rate( 30u, 30u ), 0 );
+
+	// spending never reads as negative income
+	IncomeReadings odd;
+	odd.sample( 0u, 500, 30u );
+	odd.sample( 30u, 400, 30u );
+	CHECK_EQ( odd.rate( 30u, 30u ), 0 );
+}
+
 TEST(score_screen_charts_end_where_the_match_did)
 {
 	// the end a decided match carries wins; without one, the logic's frame; with the logic torn down

@@ -932,6 +932,30 @@ TOOLTIP:NetBox
 "The box in the top right corner with the match clock, the frame rates and the connection. Off, the superweapon timers move up into the corner."
 END
 
+GUI:IncomeReadout
+"Income"
+END
+
+GUI:IncomeReadout0
+"Off"
+END
+
+GUI:IncomeReadout1
+"Per Second"
+END
+
+GUI:IncomeReadout2
+"Per Minute"
+END
+
+GUI:IncomeReadoutSecond
+"+%d/s"
+END
+
+GUI:IncomeReadoutMinute
+"+%d/min"
+END
+
 GUI:MinimapSize
 "Minimap Size"
 END
@@ -9520,6 +9544,10 @@ END
 
 OPTIONTIP:NetBox
 "A box in the top right with the match clock and frame rate. Off, the superweapon timers move into the corner."
+END
+
+OPTIONTIP:IncomeReadout
+"What you earned over the last half minute, beside your money on the command bar. Per Minute shows a slow supply line that per second rounds away."
 END
 
 OPTIONTIP:HudWidth

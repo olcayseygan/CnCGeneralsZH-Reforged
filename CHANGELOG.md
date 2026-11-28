@@ -82,6 +82,7 @@ Buildings of the USA, China and the GLA, every general's too, no longer just sin
 
 - The grown minimap's frame showed a dark line down its right edge every few inches, and at 125 and 150 percent its top edge met the corner with a seam. The frame is one clean piece at every size now.
 - Minimap Size jumped to a big radar on tall maps and then did nothing along the rest of the slider. The radar now grows a little with every step.
+- Your income is back beside your money on the command bar, where it went missing when the game moved to one interface in October. Pick Per Second or Per Minute under Options > Interface > Income; it is off until you do. Per Minute is the one a slow start wants: a supply line bringing in $135 a minute reads "+2/s" per second, and so does one that has lost a third of its trucks, while per minute reads 135 and 90. The figure is what you earned over the last half minute, counted the way the score screen's income chart counts it, and on a bar too narrow for both the money stays whole and the income stands down.
 - Some random maps built from a shipped map drew the same road twice, one on top of the other. Each road is drawn once.
 - Saving over an existing save showed no Overwrite? question, and its buttons did not answer the mouse. The question is back and its buttons take clicks, and answering it no longer leaves the menus ignoring the mouse.
 - Play vs AI turned down clean 4.4.0 installs. It accepts them now, and its warning shows as a full sentence.

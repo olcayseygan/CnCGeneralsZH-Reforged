@@ -1286,6 +1286,7 @@ GlobalData::GlobalData()
 	m_buildPlacementOpacity = PLACEMENT_SILHOUETTE_OPACITY;
 	m_buildPlacementShadows = TRUE;
 	m_showNetBox = FALSE;
+	m_incomeReadout = 0;		// INCOME_READOUT_OFF: the money alone, as retail
 	m_minimapSize = 100;
 	m_showEmptyBuildingPips = TRUE;
 	m_hitFlash = FALSE;

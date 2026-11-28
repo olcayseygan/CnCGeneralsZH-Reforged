@@ -15703,6 +15703,30 @@ TOOLTIP:NetBox
 "Sağ üst köşedeki kutu: maç saati, kare hızları ve bağlantı. Kapalıyken süper silah sayaçları köşeye çıkar."
 END
 
+GUI:IncomeReadout
+"Gelir"
+END
+
+GUI:IncomeReadout0
+"Kapalı"
+END
+
+GUI:IncomeReadout1
+"Saniyelik"
+END
+
+GUI:IncomeReadout2
+"Dakikalık"
+END
+
+GUI:IncomeReadoutSecond
+"+%d/sn"
+END
+
+GUI:IncomeReadoutMinute
+"+%d/dk"
+END
+
 GUI:MinimapSize
 "Mini Harita"
 END
@@ -23703,6 +23727,10 @@ END
 
 OPTIONTIP:NetBox
 "Sağ üstte maç saati ve kare hızını gösteren kutu. Kapalıyken süper silah sayaçları köşeye çıkar."
+END
+
+OPTIONTIP:IncomeReadout
+"Son yarım dakikada kazandığın para, komuta çubuğunda paranın yanında. Dakikalık, saniyelikte yuvarlanıp kaybolan yavaş bir ikmal hattını da gösterir."
 END
 
 OPTIONTIP:HudWidth

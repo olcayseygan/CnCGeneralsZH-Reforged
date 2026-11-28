@@ -90,6 +90,7 @@
 #include "GameClient/Image.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/PlayerColorScheme.h"
+#include "GameClient/ScoreScreenLayout.h"
 #include "GameClient/Shell.h"
 #include "GameClient/VideoPlayer.h"
 #include "GameClient/Mouse.h"
@@ -411,6 +412,54 @@ static UnicodeString groupThousands( const UnicodeString& text )
 			out.concat( (WideChar)u',' );
 	}
 	return out;
+}
+
+/** The IncomeReadout option's readings: the bar's own player's money earned, once a second, read on
+	* every pass whether the option is on or not so that switching it on mid-match shows a figure at
+	* once.  The score keeper is only read; nothing here reaches the logic.  Another player, or a frame
+	* behind the last reading (the next match), starts them again. */
+static IncomeReadings s_incomeReadings;
+static const Player *s_incomePlayer = NULL;
+static Int s_incomeShown = -1;			///< the figure last written beside the money, -1 for none
+static Int s_incomeModeShown = -1;	///< and the IncomeReadout it was written for
+
+/// the income a second or a minute for `player` (NULL: none, which also forgets the readings), and in
+/// `mode` which of the two, INCOME_READOUT_OFF when the option is off
+static Int incomeReadoutRate( const Player *player, Int *mode )
+{
+	*mode = INCOME_READOUT_OFF;
+	if( player != s_incomePlayer )
+	{
+		s_incomeReadings.clear();
+		s_incomePlayer = player;
+	}
+	if( player == NULL )
+		return -1;
+	s_incomeReadings.sample( TheGameLogic->getFrameForClient(),
+		const_cast< Player * >( player )->getScoreKeeper()->getTotalMoneyEarned(), LOGICFRAMES_PER_SECOND );
+	const Int option = TheGlobalData->m_incomeReadout;
+	if( option != INCOME_READOUT_PER_SECOND && option != INCOME_READOUT_PER_MINUTE )
+		return -1;
+	*mode = option;
+	const UnsignedInt unit = ( option == INCOME_READOUT_PER_MINUTE ? 60 : 1 ) * LOGICFRAMES_PER_SECOND;
+	return s_incomeReadings.rate( unit, LOGICFRAMES_PER_SECOND );
+}
+
+/// whether `text` stands on one line in the static text `window`, in the window's font: the gadget
+/// wraps ten pixels inside its width, and a left-aligned one starts at its margin
+static Bool fitsMoneyWindow( GameWindow *window, const UnicodeString &text )
+{
+	TextData *data = (TextData *)window->winGetUserData();
+	Int width = 0, height = 0;
+	window->winGetSize( &width, &height );
+	const Int room = width - 10 - ( data != NULL && !data->centered ? data->leftMargin : 0 );
+	DisplayString *measure = TheDisplayStringManager->newDisplayString();
+	measure->setFont( window->winGetFont() );
+	measure->setText( text );
+	Int textW = 0, textH = 0;
+	measure->getSize( &textW, &textH );
+	TheDisplayStringManager->freeDisplayString( measure );
+	return textW <= room;
 }
 
 UnicodeString HudMoney_format( Int amount )
@@ -3725,7 +3774,13 @@ void InGameUI::update( void )
 			currentMoney = stepMoneyShown( m_lastMoneyDisplayed, purse, nowMs - m_moneyShownMs );
 		m_moneyShownPlayer = moneyPlayer;
 		m_moneyShownMs = nowMs;
-		if( m_lastMoneyDisplayed != currentMoney )
+		// the IncomeReadout option: "+40/s" after the figure, on the player's own bar only (an observer's
+		// box is sized to the figure alone) and never beside Unlimited
+		Int incomeMode = INCOME_READOUT_OFF;
+		const Int income = incomeReadoutRate( TheControlBar->isObserverControlBarOn() ? NULL : moneyPlayer, &incomeMode );
+		if( unlimited )
+			incomeMode = INCOME_READOUT_OFF;
+		if( m_lastMoneyDisplayed != currentMoney || income != s_incomeShown || incomeMode != s_incomeModeShown )
 		{
 			UnicodeString buffer;
 			if( unlimited )
@@ -3734,10 +3789,29 @@ void InGameUI::update( void )
 				buffer.format( TheGameText->fetch( "GUI:ControlBarMoneyDisplay" ), currentMoney );
 			if( !unlimited && TheControlBar->getControlBarSchemeManager()->isMoneySignPainted() )
 				buffer = amountOnly( buffer );
+			UnicodeString withIncome;
+			if( incomeMode != INCOME_READOUT_OFF )
+			{
+				UnicodeString figure;
+				figure.format( TheGameText->fetch( incomeMode == INCOME_READOUT_PER_MINUTE ? "GUI:IncomeReadoutMinute" : "GUI:IncomeReadoutSecond" ),
+											 income );
+				withIncome = buffer;
+				withIncome.concat( (WideChar)u' ' );
+				withIncome.concat( figure );
+			}
 			if( !unlimited && TheControlBar->getControlBarSchemeManager()->isMoneyGrouped() )
+			{
 				buffer = groupThousands( buffer );
+				if( !withIncome.isEmpty() )
+					withIncome = groupThousands( withIncome );
+			}
+			// a box too narrow for both keeps the money whole and drops the income
+			if( !withIncome.isEmpty() && fitsMoneyWindow( moneyWin, withIncome ) )
+				buffer = withIncome;
 			GadgetStaticTextSetText( moneyWin, buffer );
 			m_lastMoneyDisplayed = currentMoney;
+			s_incomeShown = income;
+			s_incomeModeShown = incomeMode;
 
 		}  // end if
 

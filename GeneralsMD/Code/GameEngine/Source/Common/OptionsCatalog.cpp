@@ -166,6 +166,7 @@ OPTION_BOOL_ACCESSORS( m_showOrderLines )
 OPTION_BOOL_ACCESSORS( m_aircraftAltitudeLine )
 OPTION_BOOL_ACCESSORS( m_selectionOutlines )
 OPTION_BOOL_ACCESSORS( m_showNetBox )
+OPTION_INT_ACCESSORS( m_incomeReadout )
 OPTION_INT_ACCESSORS( m_minimapSize )
 OPTION_BOOL_ACCESSORS( m_showEmptyBuildingPips )
 OPTION_BOOL_ACCESSORS( m_hitFlash )
@@ -770,6 +771,13 @@ const OptionDef TheOptionCatalog[] =
 	{ "ShowNetBox",								OPT_WND( "CheckNetBox" ), "GUI:NetBox",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_showNetBox, set_m_showNetBox },
+	// The income beside the money on the command bar, over the last half minute: off, the default,
+	// per second or per minute, the second for a supply line that reads "+2/s" either way at $135 a
+	// minute (GitHub #15).  A new key: the launcher's old IncomeRate row counted 0 as per second,
+	// and a line left from it stays a key nothing reads.  Client only, no quality row.
+	{ "IncomeReadout",						OPT_WND( "ComboBoxIncomeReadout" ), "GUI:IncomeReadout",
+		OPTION_ENUM, APPLY_LIVE, 0, INCOME_READOUT_COUNT - 1,
+		get_m_incomeReadout, set_m_incomeReadout },
 
 	// The radar's size, in percent of what the bar gives it.  It grows up and to the right from the
 	// bar's bottom left corner, the rest of the bar staying as it is, so a map wider than the room

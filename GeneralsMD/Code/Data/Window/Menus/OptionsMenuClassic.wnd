@@ -20872,8 +20872,8 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 302, BOTTOMRIGHT: 1124 336, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:RowHudWidth";
-          TEXT = "GUI:HudWidth";
+          NAME = "OptionsMenu.wnd:RowIncomeReadout";
+          TEXT = "GUI:IncomeReadout";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
           STYLE = USER;
           SYSTEMCALLBACK = "PassMessagesToParentSystem";
@@ -20917,7 +20917,7 @@ WINDOW
           WINDOW
             WINDOWTYPE = STATICTEXT;
             SCREENRECT = UPPERLEFT: 388 302, BOTTOMRIGHT: 816 336, CREATIONRESOLUTION: 1920 1080;
-            NAME = "OptionsMenu.wnd:LabelHudWidth";
+            NAME = "OptionsMenu.wnd:LabelIncomeReadout";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
             SYSTEMCALLBACK = "[None]";
@@ -20927,7 +20927,7 @@ WINDOW
             FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
             HEADERTEMPLATE = "MinorTitle";
             TOOLTIPDELAY = -1;
-            TEXT = "GUI:HudWidth";
+            TEXT = "GUI:IncomeReadout";
             TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
                         DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
                         HILITE:   128 128 255 255, HILITEBORDER:   0 0 128 255;
@@ -20964,7 +20964,7 @@ WINDOW
           WINDOW
             WINDOWTYPE = COMBOBOX;
             SCREENRECT = UPPERLEFT: 824 304, BOTTOMRIGHT: 1114 334, CREATIONRESOLUTION: 1920 1080;
-            NAME = "OptionsMenu.wnd:ComboBoxHudWidth";
+            NAME = "OptionsMenu.wnd:ComboBoxIncomeReadout";
             STATUS = ENABLED+IMAGE;
             STYLE = MOUSETRACK+COMBOBOX;
             SYSTEMCALLBACK = "[None]";
@@ -21205,6 +21205,339 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 336, BOTTOMRIGHT: 1124 370, CREATIONRESOLUTION: 1920 1080;
+          NAME = "OptionsMenu.wnd:RowHudWidth";
+          TEXT = "GUI:HudWidth";
+          STATUS = ENABLED+NOFOCUS+SEE_THRU;
+          STYLE = USER;
+          SYSTEMCALLBACK = "PassMessagesToParentSystem";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Times New Roman", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "[NONE]";
+          TOOLTIPDELAY = -1;
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  255 255 255 255,
+                      DISABLED: 255 255 255 255, DISABLEDBORDER: 255 255 255 255,
+                      HILITE:   255 255 255 255, HILITEBORDER:   255 255 255 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 0 0 0 255, BORDERCOLOR: 47 55 168 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 128 128 255 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
+          CHILD
+          WINDOW
+            WINDOWTYPE = STATICTEXT;
+            SCREENRECT = UPPERLEFT: 388 336, BOTTOMRIGHT: 816 370, CREATIONRESOLUTION: 1920 1080;
+            NAME = "OptionsMenu.wnd:LabelHudWidth";
+            STATUS = ENABLED;
+            STYLE = STATICTEXT+MOUSETRACK;
+            SYSTEMCALLBACK = "[None]";
+            INPUTCALLBACK = "[None]";
+            TOOLTIPCALLBACK = "[None]";
+            DRAWCALLBACK = "[None]";
+            FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+            HEADERTEMPLATE = "MinorTitle";
+            TOOLTIPDELAY = -1;
+            TEXT = "GUI:HudWidth";
+            TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                        DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                        HILITE:   128 128 255 255, HILITEBORDER:   0 0 128 255;
+            ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 0 0 0 0, BORDERCOLOR: 0 0 0 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                              IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                              IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                              IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                              IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                              IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                              IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                              IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
+            DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 64 64 64 255, BORDERCOLOR: 192 192 192 255,
+                               IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                               IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                               IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                               IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                               IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                               IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                               IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                               IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
+            HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 128 0 255, BORDERCOLOR: 128 255 128 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
+            STATICTEXTDATA = CENTERED: 0;
+          END
+          CHILD
+          WINDOW
+            WINDOWTYPE = COMBOBOX;
+            SCREENRECT = UPPERLEFT: 824 338, BOTTOMRIGHT: 1114 368, CREATIONRESOLUTION: 1920 1080;
+            NAME = "OptionsMenu.wnd:ComboBoxHudWidth";
+            STATUS = ENABLED+IMAGE;
+            STYLE = MOUSETRACK+COMBOBOX;
+            SYSTEMCALLBACK = "[None]";
+            INPUTCALLBACK = "[None]";
+            TOOLTIPCALLBACK = "[None]";
+            DRAWCALLBACK = "[None]";
+            FONT = NAME: "Arial", SIZE: 10, BOLD: 0;
+            HEADERTEMPLATE = "ComboBoxEntry";
+            TOOLTIPDELAY = -1;
+            TEXTCOLOR = ENABLED:  254 254 254 255, ENABLEDBORDER:  0 0 0 255,
+                        DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                        HILITE:   128 128 255 255, HILITEBORDER:   0 0 128 255;
+            ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                              IMAGE: NoImage, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                               IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
+                             IMAGE: ListBoxHiliteSelectedItemLeftEnd, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
+                             IMAGE: ListBoxHiliteSelectedItemRightEnd, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: ListBoxHiliteSelectedItemRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: ListBoxHiliteSelectedItemSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            COMBOBOXDATA = ISEDITABLE: 0,
+                          MAXCHARS: 16,
+                          MAXDISPLAY: 5,
+                          ASCIIONLY: 0,
+                          LETTERSANDNUMBERS: 0;
+            COMBOBOXDROPDOWNBUTTONENABLEDDRAWDATA = IMAGE: VSliderDownButtonEnabled, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                                                    IMAGE: VSliderDownButtonHiliteSelected, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                                                    IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                    IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                    IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                    IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                    IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                    IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                    IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            COMBOBOXDROPDOWNBUTTONDISABLEDDRAWDATA = IMAGE: VSliderDownButtonDisabled, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                                                     IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 128 128 128 255,
+                                                     IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                     IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                     IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                     IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                     IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                     IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                     IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            COMBOBOXDROPDOWNBUTTONHILITEDRAWDATA = IMAGE: VSliderDownButtonHilite, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
+                                                   IMAGE: VSliderDownButtonHiliteSelected, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            COMBOBOXEDITBOXENABLEDDRAWDATA = IMAGE: TextEntryEnabledLeftEnd, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                                             IMAGE: TextEntryEnabledRightEnd, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                                             IMAGE: TextEntryEnabledRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: TextEntryEnabledSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            COMBOBOXEDITBOXDISABLEDDRAWDATA = IMAGE: TextEntryDisabledLeftEnd, COLOR: 128 128 128 255, BORDERCOLOR: 0 0 0 255,
+                                              IMAGE: TextEntryDisabledRightEnd, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
+                                              IMAGE: TextEntryDisabledRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: TextEntryDisabledSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            COMBOBOXEDITBOXHILITEDRAWDATA = IMAGE: TextEntryHiliteLeftEnd, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
+                                            IMAGE: TextEntryHiliteRightEnd, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
+                                            IMAGE: TextEntryHiliteRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: TextEntryHiliteSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            COMBOBOXLISTBOXENABLEDDRAWDATA = IMAGE: BlackSquare, COLOR: 0 0 0 255, BORDERCOLOR: 49 55 168 255,
+                                             IMAGE: ListBoxHiliteItemLeftEnd, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                                             IMAGE: ListBoxHiliteItemRightEnd, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: ListBoxHiliteItemRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: ListBoxHiliteItemSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            COMBOBOXLISTBOXDISABLEDDRAWDATA = IMAGE: BlackSquare, COLOR: 0 0 0 255, BORDERCOLOR: 49 55 168 255,
+                                              IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            COMBOBOXLISTBOXHILITEDRAWDATA = IMAGE: BlackSquare, COLOR: 0 0 0 255, BORDERCOLOR: 49 55 168 255,
+                                            IMAGE: ListBoxHiliteSelectedItemLeftEnd, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
+                                            IMAGE: ListBoxHiliteSelectedItemRightEnd, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: ListBoxHiliteSelectedItemRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: ListBoxHiliteSelectedItemSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            LISTBOXENABLEDUPBUTTONDRAWDATA = IMAGE: VSliderUpButtonEnabled, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                                             IMAGE: VSliderUpButtonHiliteSelected, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            LISTBOXDISABLEDUPBUTTONDRAWDATA = IMAGE: VSliderUpButtonDisabled, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                                              IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            LISTBOXHILITEUPBUTTONDRAWDATA = IMAGE: VSliderUpButtonHilite, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
+                                            IMAGE: VSliderUpButtonHiliteSelected, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            LISTBOXENABLEDDOWNBUTTONDRAWDATA = IMAGE: VSliderDownButtonEnabled, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                                               IMAGE: VSliderDownButtonHiliteSelected, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            LISTBOXDISABLEDDOWNBUTTONDRAWDATA = IMAGE: VSliderDownButtonDisabled, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                                                IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
+                                                IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                                IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            LISTBOXHILITEDOWNBUTTONDRAWDATA = IMAGE: VSliderDownButtonHilite, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
+                                              IMAGE: VSliderDownButtonHiliteSelected, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            LISTBOXENABLEDSLIDERDRAWDATA = IMAGE: NoImage, COLOR: 168 255 12 0, BORDERCOLOR: 47 55 168 255,
+                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            LISTBOXDISABLEDSLIDERDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 0, BORDERCOLOR: 148 112 0 255,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            LISTBOXHILITESLIDERDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 0, BORDERCOLOR: 49 55 168 255,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            SLIDERTHUMBENABLEDDRAWDATA = IMAGE: ScrollBarThumbEnabled, COLOR: 255 4 0 0, BORDERCOLOR: 255 243 28 255,
+                                         IMAGE: ScrollBarThumbHiliteSelected, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            SLIDERTHUMBDISABLEDDRAWDATA = IMAGE: ScrollBarThumbDisabled, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                                          IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            SLIDERTHUMBHILITEDRAWDATA = IMAGE: ScrollBarThumbHilite, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
+                                        IMAGE: ScrollBarThumbHiliteSelected, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
+                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          END
+          ENDALLCHILDREN
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = USER;
+          SCREENRECT = UPPERLEFT: 372 370, BOTTOMRIGHT: 1124 404, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowMenuTransitionSpeed";
           TEXT = "GUI:MenuTransitionSpeed";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -21249,7 +21582,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = STATICTEXT;
-            SCREENRECT = UPPERLEFT: 388 336, BOTTOMRIGHT: 816 370, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 388 370, BOTTOMRIGHT: 816 404, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:LabelMenuTransitionSpeed";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
@@ -21296,7 +21629,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = HORZSLIDER;
-            SCREENRECT = UPPERLEFT: 828 341, BOTTOMRIGHT: 1028 365, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 828 375, BOTTOMRIGHT: 1028 399, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:SliderMenuTransitionSpeed";
             STATUS = ENABLED+IMAGE+TABSTOP;
             STYLE = HORZSLIDER+MOUSETRACK;
@@ -21369,7 +21702,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = STATICTEXT;
-            SCREENRECT = UPPERLEFT: 1044 336, BOTTOMRIGHT: 1114 370, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 1044 370, BOTTOMRIGHT: 1114 404, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:ValueMenuTransitionSpeed";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
@@ -21417,7 +21750,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = STATICTEXT;
-          SCREENRECT = UPPERLEFT: 372 374, BOTTOMRIGHT: 1124 408, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 408, BOTTOMRIGHT: 1124 442, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:HeadInterface1";
           STATUS = ENABLED;
           STYLE = STATICTEXT+MOUSETRACK;
@@ -21464,7 +21797,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 408, BOTTOMRIGHT: 1124 442, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 442, BOTTOMRIGHT: 1124 476, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowHealthBars";
           TEXT = "GUI:HealthBars";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -21509,7 +21842,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = STATICTEXT;
-            SCREENRECT = UPPERLEFT: 388 408, BOTTOMRIGHT: 816 442, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 388 442, BOTTOMRIGHT: 816 476, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:LabelHealthBars";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
@@ -21556,7 +21889,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = COMBOBOX;
-            SCREENRECT = UPPERLEFT: 824 410, BOTTOMRIGHT: 1114 440, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 824 444, BOTTOMRIGHT: 1114 474, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:ComboBoxHealthBars";
             STATUS = ENABLED+IMAGE;
             STYLE = MOUSETRACK+COMBOBOX;
@@ -21797,7 +22130,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 442, BOTTOMRIGHT: 1124 476, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 476, BOTTOMRIGHT: 1124 510, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowPlayerColors";
           TEXT = "GUI:PlayerColors";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -21842,7 +22175,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = STATICTEXT;
-            SCREENRECT = UPPERLEFT: 388 442, BOTTOMRIGHT: 816 476, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 388 476, BOTTOMRIGHT: 816 510, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:LabelPlayerColors";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
@@ -21889,7 +22222,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = COMBOBOX;
-            SCREENRECT = UPPERLEFT: 824 444, BOTTOMRIGHT: 1114 474, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 824 478, BOTTOMRIGHT: 1114 508, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:ComboBoxPlayerColors";
             STATUS = ENABLED+IMAGE;
             STYLE = MOUSETRACK+COMBOBOX;
@@ -22130,7 +22463,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 476, BOTTOMRIGHT: 1124 510, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 510, BOTTOMRIGHT: 1124 544, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowSelectionOutlines";
           TEXT = "GUI:SelectionOutlines";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -22175,7 +22508,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 476, BOTTOMRIGHT: 1124 510, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 510, BOTTOMRIGHT: 1124 544, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckSelectionOutlines";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -22223,7 +22556,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 510, BOTTOMRIGHT: 1124 544, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 544, BOTTOMRIGHT: 1124 578, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowOrderLines";
           TEXT = "GUI:OrderLines";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -22268,7 +22601,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 510, BOTTOMRIGHT: 1124 544, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 544, BOTTOMRIGHT: 1124 578, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckOrderLines";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -22316,7 +22649,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 544, BOTTOMRIGHT: 1124 578, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 578, BOTTOMRIGHT: 1124 612, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowHitFlash";
           TEXT = "GUI:HitFlash";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -22361,7 +22694,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 544, BOTTOMRIGHT: 1124 578, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 578, BOTTOMRIGHT: 1124 612, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckHitFlash";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -22409,7 +22742,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 578, BOTTOMRIGHT: 1124 612, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 612, BOTTOMRIGHT: 1124 646, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowDamageNumbers";
           TEXT = "GUI:DamageNumbers";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -22454,7 +22787,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 578, BOTTOMRIGHT: 1124 612, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 612, BOTTOMRIGHT: 1124 646, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckDamageNumbers";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -22502,7 +22835,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 612, BOTTOMRIGHT: 1124 646, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 646, BOTTOMRIGHT: 1124 680, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowBehindBuilding";
           TEXT = "GUI:BehindBuilding";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -22547,7 +22880,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 612, BOTTOMRIGHT: 1124 646, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 646, BOTTOMRIGHT: 1124 680, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckBehindBuilding";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -22595,7 +22928,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 646, BOTTOMRIGHT: 1124 680, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 680, BOTTOMRIGHT: 1124 714, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowHealthBarColors";
           TEXT = "GUI:HealthBarColors";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -22640,7 +22973,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = STATICTEXT;
-            SCREENRECT = UPPERLEFT: 388 646, BOTTOMRIGHT: 816 680, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 388 680, BOTTOMRIGHT: 816 714, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:LabelHealthBarColors";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
@@ -22687,7 +23020,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = COMBOBOX;
-            SCREENRECT = UPPERLEFT: 824 648, BOTTOMRIGHT: 1114 678, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 824 682, BOTTOMRIGHT: 1114 712, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:ComboBoxHealthBarColors";
             STATUS = ENABLED+IMAGE;
             STYLE = MOUSETRACK+COMBOBOX;
@@ -22928,7 +23261,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 680, BOTTOMRIGHT: 1124 714, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 714, BOTTOMRIGHT: 1124 748, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowAircraftAltitudeLine";
           TEXT = "GUI:AircraftAltitudeLine";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -22973,7 +23306,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 680, BOTTOMRIGHT: 1124 714, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 714, BOTTOMRIGHT: 1124 748, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckAircraftAltitudeLine";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -23021,7 +23354,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 714, BOTTOMRIGHT: 1124 748, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 748, BOTTOMRIGHT: 1124 782, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowEmptyBuildingPips";
           TEXT = "GUI:EmptyBuildingPips";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -23066,7 +23399,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 714, BOTTOMRIGHT: 1124 748, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 748, BOTTOMRIGHT: 1124 782, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckEmptyBuildingPips";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -23114,7 +23447,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = STATICTEXT;
-          SCREENRECT = UPPERLEFT: 372 752, BOTTOMRIGHT: 1124 786, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 786, BOTTOMRIGHT: 1124 820, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:HeadInterface2";
           STATUS = ENABLED;
           STYLE = STATICTEXT+MOUSETRACK;
@@ -23161,7 +23494,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 786, BOTTOMRIGHT: 1124 820, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 820, BOTTOMRIGHT: 1124 854, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowLanguage";
           TEXT = "GUI:Language";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -23206,7 +23539,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = STATICTEXT;
-            SCREENRECT = UPPERLEFT: 388 786, BOTTOMRIGHT: 816 820, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 388 820, BOTTOMRIGHT: 816 854, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:LabelLanguage";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
@@ -23253,7 +23586,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = COMBOBOX;
-            SCREENRECT = UPPERLEFT: 824 788, BOTTOMRIGHT: 1114 818, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 824 822, BOTTOMRIGHT: 1114 852, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:ComboBoxLanguage";
             STATUS = ENABLED+IMAGE;
             STYLE = MOUSETRACK+COMBOBOX;
@@ -23494,7 +23827,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 820, BOTTOMRIGHT: 1124 854, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 854, BOTTOMRIGHT: 1124 888, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowGameSpeedMissions";
           TEXT = "GUI:GameSpeedMissions";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -23539,7 +23872,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = STATICTEXT;
-            SCREENRECT = UPPERLEFT: 388 820, BOTTOMRIGHT: 816 854, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 388 854, BOTTOMRIGHT: 816 888, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:LabelGameSpeedMissions";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
@@ -23586,7 +23919,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = COMBOBOX;
-            SCREENRECT = UPPERLEFT: 824 822, BOTTOMRIGHT: 1114 852, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 824 856, BOTTOMRIGHT: 1114 886, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:ComboGameSpeedMissions";
             STATUS = ENABLED+IMAGE;
             STYLE = MOUSETRACK+COMBOBOX;
@@ -23827,7 +24160,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 854, BOTTOMRIGHT: 1124 888, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 888, BOTTOMRIGHT: 1124 922, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowSaveCamera";
           TEXT = "GUI:SaveCamera";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -23872,7 +24205,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 854, BOTTOMRIGHT: 1124 888, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 888, BOTTOMRIGHT: 1124 922, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckBoxSaveCamera";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -23920,7 +24253,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 888, BOTTOMRIGHT: 1124 922, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 922, BOTTOMRIGHT: 1124 956, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowUseCamera";
           TEXT = "GUI:UseCamera";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -23965,7 +24298,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 888, BOTTOMRIGHT: 1124 922, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 922, BOTTOMRIGHT: 1124 956, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckBoxUseCamera";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;

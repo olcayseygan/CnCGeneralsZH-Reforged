@@ -153,14 +153,32 @@ namespace
 	};
 	std::vector<Letter> s_letters;
 
-	/// what hideRoom changed in the room, so the detach gives the room back as it was found
+	/// what hideRoom changed in the room, so the detach gives the room back as it was found.  A window is
+	/// kept by its id under its room, never by pointer: a room's gadgets can go and come back between the
+	/// detach and the restore, and a freed window's memory is soon another window (crash 5057, a seat's
+	/// static text drawn as the old chat entry).  The room itself is safe to hold: roomSystem drops
+	/// everything about it when it is destroyed
 	struct Drawn
 	{
-		GameWindow *window;
+		GameWindow *root;
+		Int id;
 		GameWinDrawFunc draw;
 	};
-	std::vector<GameWindow *> s_hidden;
+	struct Hidden
+	{
+		GameWindow *root;
+		Int id;
+	};
+	std::vector<Hidden> s_hidden;
 	std::vector<Drawn> s_blanked;
+
+	/// a room the lobby has been on, and the system function it had before roomSystem took it
+	struct Hook
+	{
+		GameWindow *root;
+		GameWinSystemFunc system;
+	};
+	std::vector<Hook> s_hooks;
 
 	//-----------------------------------------------------------------------------------------------
 	GameWindow *named( const char *what, Int seat = -1 )
@@ -175,6 +193,18 @@ namespace
 
 	Bool isNetwork( void ) { return s_room != ROOM_SKIRMISH; }
 	Bool amHost( void ) { return !isNetwork() || s_game->amIHost(); }
+
+	/// the room's game as it is now, NULL once it went.  The lobby asks before every draw and click: a LAN
+	/// host's leave pops the room, which fades out still drawing, and deletes the game at once (crashes
+	/// 4776, 4797, 4798 read it freed)
+	const GameInfo *liveGame( void )
+	{
+		if( s_room == ROOM_LAN )
+			return TheLAN != NULL ? TheLAN->GetMyGame() : NULL;
+		if( s_room == ROOM_ONLINE )
+			return TheGameSpyInfo != NULL ? TheGameSpyInfo->getCurrentStagingRoom() : NULL;
+		return TheSkirmishGameInfo;
+	}
 
 	Int localSlot( void )
 	{
@@ -680,35 +710,98 @@ namespace
 		return FALSE;
 	}
 
-	/// every window of the room hidden but the chat entry; the windows that hold it stay, drawing nothing
-	void hideRoom( GameWindow *window, GameWindow *keep )
+	/// every window of the room hidden but the chat entry; the windows that hold it stay, drawing nothing.
+	/// A window with no id cannot be found again at the restore, so it is hidden without a record
+	void hideUnder( GameWindow *root, GameWindow *window, GameWindow *keep )
 	{
 		for( GameWindow *child = window->winGetChild(); child != NULL; child = child->winGetNext() )
 		{
+			const Int id = child->winGetWindowId();
 			if( child == keep || holds( child, keep ) )
 			{
 				if( child->winIsHidden() )
 					child->winHide( FALSE );
 				if( child->winGetDrawFunc() != drawNothing )
 				{
-					const Drawn was = { child, child->winGetDrawFunc() };
-					s_blanked.push_back( was );
+					if( id != 0 )
+					{
+						const Drawn was = { root, id, child->winGetDrawFunc() };
+						s_blanked.push_back( was );
+					}
 					child->winSetDrawFunc( drawNothing );
 				}
 				if( child != keep )
-					hideRoom( child, keep );
+					hideUnder( root, child, keep );
 			}
 			else if( !child->winIsHidden() )
 			{
-				if( std::find( s_hidden.begin(), s_hidden.end(), child ) == s_hidden.end() )
-					s_hidden.push_back( child );
+				Bool known = id == 0;
+				for( size_t i = 0; i < s_hidden.size() && !known; ++i )
+					known = s_hidden[ i ].root == root && s_hidden[ i ].id == id;
+				if( !known )
+				{
+					const Hidden was = { root, id };
+					s_hidden.push_back( was );
+				}
 				child->winHide( TRUE );
 			}
 		}
 	}
 
+	void hideRoom( GameWindow *room, GameWindow *keep )
+	{
+		hideUnder( room, room, keep );
+	}
+
 	GameWindow *s_fading = NULL;				///< the room the lobby left as its layout fades out
 	GameWinDrawFunc s_fadingDraw = NULL;		///< that room's own draw, back at DirectStrikeLobby_restoreRoom
+
+	/// the room's own system function, and when the room is destroyed everything the lobby kept about it goes
+	WindowMsgHandledType roomSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
+	{
+		GameWinSystemFunc system = NULL;
+		for( size_t i = 0; i < s_hooks.size(); ++i )
+			if( s_hooks[ i ].root == window )
+			{
+				system = s_hooks[ i ].system;
+				if( msg == GWM_DESTROY )
+					s_hooks.erase( s_hooks.begin() + i );
+				break;
+			}
+		if( msg == GWM_DESTROY )
+		{
+			if( window == s_parent )
+				DirectStrikeLobby_detach();
+			if( window == s_fading )
+			{
+				s_fading = NULL;
+				s_fadingDraw = NULL;
+			}
+			for( size_t i = s_blanked.size(); i-- > 0; )
+				if( s_blanked[ i ].root == window )
+					s_blanked.erase( s_blanked.begin() + i );
+			for( size_t i = s_hidden.size(); i-- > 0; )
+				if( s_hidden[ i ].root == window )
+					s_hidden.erase( s_hidden.begin() + i );
+		}
+		return system != NULL ? system( window, msg, mData1, mData2 ) : MSG_IGNORED;
+	}
+
+	/// the window of this id inside the room only: a NULL start would search every window there is
+	GameWindow *inRoom( GameWindow *room, Int id )
+	{
+		GameWindow *first = room->winGetChild();
+		return first != NULL ? TheWindowManager->winGetWindowFromId( first, id ) : NULL;
+	}
+
+	void hookRoom( GameWindow *room )
+	{
+		if( room->winGetSystemFunc() == roomSystem )
+			return;
+		const Hook hook = { room, room->winGetSystemFunc() };
+		s_hooks.push_back( hook );
+		room->winSetSystemFunc( roomSystem );
+	}
 
 	/// the left room's draw through the fade-out: the shell's transition shows the stock gadgets again, so they go every frame
 	void fadingDraw( GameWindow *window, WinInstanceData * )
@@ -1623,8 +1716,12 @@ namespace
 	//-----------------------------------------------------------------------------------------------
 	void lobbyDraw( GameWindow *window, WinInstanceData *instData )
 	{
+		s_game = liveGame();
 		if( s_game == NULL )
+		{
+			hideRoom( window, NULL );	// the game went before the detach: the room fades out bare, as after it
 			return;
+		}
 		s_frame = DirectStrike_frame( (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight() );
 		begin( SIDE_COMMON, s_frame.k );
 		placeSeats();
@@ -1927,6 +2024,7 @@ namespace
 
 	WindowMsgHandledType lobbyInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
 	{
+		s_game = liveGame();
 		if( msg == GWM_LEFT_DOWN && s_game != NULL )
 		{
 			// SHORTTOLONG's halves
@@ -1981,6 +2079,7 @@ void DirectStrikeLobby_attach( GameWindow *parent, const char *layoutFilename, c
 	s_room = (Room)room;
 	s_roomDraw = parent->winGetDrawFunc();
 	s_roomInput = parent->winGetInputFunc();
+	hookRoom( parent );
 	parent->winSetDrawFunc( lobbyDraw );
 	parent->winSetInputFunc( lobbyInput );
 	parent->winClearStatus( WIN_STATUS_NO_INPUT );
@@ -1997,10 +2096,20 @@ void DirectStrikeLobby_restoreRoom( void )
 		s_fading->winSetDrawFunc( s_fadingDraw );
 	s_fading = NULL;
 	s_fadingDraw = NULL;
+	// each window found again by id under its room, which roomSystem guarantees is still alive; one that
+	// went with its gadget since is skipped
 	for( size_t i = 0; i < s_blanked.size(); ++i )
-		s_blanked[ i ].window->winSetDrawFunc( s_blanked[ i ].draw );
+	{
+		GameWindow *window = inRoom( s_blanked[ i ].root, s_blanked[ i ].id );
+		if( window != NULL && window->winGetDrawFunc() == drawNothing )
+			window->winSetDrawFunc( s_blanked[ i ].draw );
+	}
 	for( size_t i = 0; i < s_hidden.size(); ++i )
-		s_hidden[ i ]->winHide( FALSE );
+	{
+		GameWindow *window = inRoom( s_hidden[ i ].root, s_hidden[ i ].id );
+		if( window != NULL )
+			window->winHide( FALSE );
+	}
 	s_blanked.clear();
 	s_hidden.clear();
 }

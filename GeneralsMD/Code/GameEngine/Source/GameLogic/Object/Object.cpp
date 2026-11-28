@@ -3009,8 +3009,10 @@ void Object::setTriggerAreaFlagsForChangeInPosition()
 	Int i;
 	for (i=0; i<m_numTriggerAreasActive; i++)
 	{
-		// A load whose area name the map no longer has stores NULL (getTriggerAreaByName in xfer); crash
-		// report 4742 died here on one.  Left alone, as compares against a real area never match it.
+		// A load whose area name the map no longer has stores NULL (getTriggerAreaByName in xfer).  Left
+		// alone, as compares against a real area never match it.  Crash report 4742 died here on no load:
+		// a fresh shell-map object at its first setPosition, a count of 1 or more over the constructor's NULL entry,
+		// which no trigger code writes; something else wrote the count.
 		if (m_triggerInfo[i].pTrigger == NULL)
 			continue;
 		if (!m_triggerInfo[i].pTrigger->pointInTrigger(m_iPos))

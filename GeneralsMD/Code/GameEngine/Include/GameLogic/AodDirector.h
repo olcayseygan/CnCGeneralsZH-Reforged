@@ -93,6 +93,10 @@ extern Int Aod_wavePoints( Int wave );
 extern Bool Aod_isBossWave( Int wave );
 /// The rank a wave's units come in at: regular, then veteran, elite and heroic as the waves go on.
 extern Int Aod_waveRank( Int wave );
+/** The reference defence's share of a seat's pay, percent: what this run's -aodreference asks (0 without
+	  it), and what a replay being played back recorded ("AR=" in its header). */
+extern Int Aod_referencePercentAsked( void );
+extern void Aod_setReplayReferencePercent( Int percent );
 
 class AodDirector : public Snapshot
 {
@@ -113,7 +117,7 @@ public:
 protected:
 	virtual void crc( Xfer *xfer );
 	virtual void xfer( Xfer *xfer );
-	virtual void loadPostProcess( void ) { }
+	virtual void loadPostProcess( void );
 
 private:
 	enum { OVER_NOT = 0, OVER_WON, OVER_LOST };
@@ -160,7 +164,7 @@ private:
 	UnsignedInt m_spawned, m_kills, m_leaks;
 	Int m_waveLeaks[ AOD_WAVES + 1 ];		///< lives lost to each wave's units
 
-	// the reference defence's book, per lane; a dev aid, not saved
+	// the reference defence's book, per lane; a dev aid, saved (version 3), its spots found again on a load
 	Int m_refPercent;
 	Int m_refEarned[ AOD_LANES_MOST ], m_refSpent[ AOD_LANES_MOST ], m_refBought[ AOD_LANES_MOST ];
 	Bool m_refStarted;

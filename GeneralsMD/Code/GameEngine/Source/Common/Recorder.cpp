@@ -50,6 +50,7 @@
 
 #include <string>
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/AodDirector.h"
 #include "Common/RandomValue.h"
 #include "Common/CRCDebug.h"
 #include "Common/version.h"
@@ -753,6 +754,15 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	// refuses another rate and plays the speed back
 	m_recordedOptions = theSlotList;
 	theSlotList.concat(replayLogicRateField(gameSpeedPercent));
+	/* A skirmish played with the Art of Defense reference defence (-aodreference, a dev aid) is a different
+		 game: "AR=<percent>;" after the speed carries it, so the replay plays it back with or without the
+		 switch.  Never written for a network game, which never runs the reference; readReplayHeader cuts it. */
+	if (!TheNetwork && TheSkirmishGameInfo && Aod_referencePercentAsked() > 0)
+	{
+		AsciiString reference;
+		reference.format("AR=%d;", Aod_referencePercentAsked());
+		theSlotList.concat(reference);
+	}
 	logGameStart(theSlotList);
 	DEBUG_LOG(("RecorderClass::startRecording - theSlotList = %s\n", theSlotList.str()));
 
@@ -1010,6 +1020,8 @@ Bool RecorderClass::readReplayHeader(ReplayHeader& header)
 
 	// Read in the GameInfo
 	header.gameOptions = readAsciiString();
+	// the Art of Defense reference defence's share, absent (0) for every replay but such a dev skirmish's
+	Aod_setReplayReferencePercent(takeReplayHeaderField(header.gameOptions, "AR=", 0));
 	const Int recordedSpeed = takeReplayGameSpeed(header.gameOptions);
 	const Int recordedRate = takeReplayLogicRate(header.gameOptions);
 	header.gameSpeedPercent = recordedSpeed;

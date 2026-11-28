@@ -102,6 +102,22 @@ static UnsignedInt gameSecond( void )
 	return frames > 0 ? frames : 1;
 }
 
+/// the reference defence's share as the replay being played back recorded it (RecorderClass::readReplayHeader)
+static Int theReplayReferencePercent = 0;
+
+Int Aod_referencePercentAsked( void )
+{
+	char percent[16];
+	if( !findEarlyCommandLineValue( L"-aodreference", percent, sizeof( percent ) ) )
+		return 0;
+	return max( 0, min( 100, atoi( percent ) ) );
+}
+
+void Aod_setReplayReferencePercent( Int percent )
+{
+	theReplayReferencePercent = max( 0, min( 100, percent ) );
+}
+
 /// a seat: a playable side that is not watching
 static Bool isSeat( const Player *player )
 {
@@ -217,13 +233,14 @@ void AodDirector::newMap( Bool loadingSaveGame )
 	}
 
 	/* The reference defence: a skirmish dev aid that plays every seat with a fixed share of the money the
-		 mode pays it, to tune the waves against (no human can play a test).  Dead in a network game. */
-	char percent[16];
-	if( TheGameLogic->isInSkirmishGame() && findEarlyCommandLineValue( L"-aodreference", percent, sizeof( percent ) ) )
-	{
-		m_refPercent = max( 0, min( 100, atoi( percent ) ) );
+		 mode pays it, to tune the waves against (no human can play a test).  Dead in a network game.  The
+		 skirmish's replay carries the share ("AR=" in its header, RecorderClass) and plays it back. */
+	if( TheGameLogic->isInSkirmishGame() )
+		m_refPercent = Aod_referencePercentAsked();
+	else if( TheGameLogic->isInReplayGame() )
+		m_refPercent = theReplayReferencePercent;
+	if( m_refPercent > 0 )
 		DEBUG_LOG(( "HEADLESS AOD: the reference defence plays every seat with %d%% of what it is paid\n", m_refPercent ));
-	}
 
 	m_nextWaveFrame = TheGameLogic->getFrame() + AOD_FIRST_WAVE_SECONDS * gameSecond();
 	DEBUG_LOG(( "HEADLESS AOD: on; %d seats, %d lanes, waves of player %d, first wave at frame %u\n",
@@ -651,10 +668,13 @@ void AodDirector::crc( Xfer *xfer )
 /** Version 1: the wave clock, the wave's units still to come, the walking units, lives and counts.
 	  The lanes, the exit, the owner and the templates come from the map and the data on every load.
 	  Version 2 adds each walking unit's lane and wave, and the lives lost to each wave: the waves walk
-	  entry to exit, every lane at once (version 1 walked to a base; its units read lane 1, wave 0). */
+	  entry to exit, every lane at once (version 1 walked to a base; its units read lane 1, wave 0).
+	  Version 3 adds the reference defence's book (a dev aid's, so a reloaded reference game does not buy
+	  again on spots it took); its spots come from the map again (loadPostProcess).  Older saves keep
+	  the book newMap began with. */
 void AodDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -697,4 +717,26 @@ void AodDirector::xfer( Xfer *xfer )
 	if( version >= 2 )
 		for( Int w = 0; w <= AOD_WAVES; ++w )
 			xfer->xferInt( &m_waveLeaks[w] );
+
+	if( version >= 3 )
+	{
+		xfer->xferInt( &m_refPercent );
+		xfer->xferBool( &m_refStarted );
+		for( Int n = 0; n < AOD_LANES_MOST; ++n )
+		{
+			xfer->xferInt( &m_refEarned[n] );
+			xfer->xferInt( &m_refSpent[n] );
+			xfer->xferInt( &m_refBought[n] );
+			xfer->xferInt( &m_refNextSpot[n] );
+			xfer->xferInt( &m_refPlants[n] );
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void AodDirector::loadPostProcess( void )
+{
+	// the reference's spots are the map's: found again, the same ones, so the saved next spot points where it did
+	if( m_active && m_refStarted && m_refSpots.empty() )
+		findReferenceSpots();
 }

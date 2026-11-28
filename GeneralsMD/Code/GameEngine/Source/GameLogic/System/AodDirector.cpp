@@ -31,6 +31,7 @@
 #include "Common/Team.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"
 #include "Common/Xfer.h"
 #include "GameClient/FXList.h"
 #include "GameLogic/AI.h"
@@ -771,29 +772,86 @@ void AodDirector::referenceDefence( UnsignedInt now )
 		if( seat == NULL || !seat->hasAnyObjects() )
 			continue;
 		const AsciiString side = seat->getBaseSide();
-		/* The side's defences, taken in turn, and the power plant they need.  China's base guns are the Gattling
-			 cannon alone, which tanks shrug off, so its tanks stand guard too, two Overlords to a cannon (Battlemasters
-			 instead let the wave 5 boss through on every whole-budget run). */
-		const char *buys[3] = { "GLAStingerSite", "GLATankMarauder", "GLATankMarauder" };
+		/* The side's defences, taken in turn, the power plant they need, and the upgrades a player buys for them, one
+			 for every four guns.  China's Gattling cannons and Overlords get Chain Guns and Uranium Shells; the GLA's
+			 Stinger sites and Marauders AP Rockets, Junk Repair and fortified structures, with a tunnel's gun in the
+			 turn.  Without upgrades China and the GLA fell at waves 8-12 with the whole budget (#869).  The Inferno
+			 cannon and the Rocket Buggy were tried in their place (batch e10) and did worse: from the rim the lane is
+			 inside their shortest reach.  America's Patriots and Fire Bases held longest and are left as they were. */
+		const char *gla[5] = { "GLAStingerSite", "GLATankMarauder", "GLAStingerSite", "GLATankMarauder", "GLATunnelNetwork" };
+		const char *glaUp[3] = { "Upgrade_GLAAPRockets", "Upgrade_GLAJunkRepair", "Upgrade_GLAFortifiedStructure" };
+		const char *usa[3] = { "AmericaPatriotBattery", "AmericaFireBase", "AmericaPatriotBattery" };
+		const char *china[3] = { "ChinaGattlingCannon", "ChinaTankOverlord", "ChinaTankOverlord" };
+		const char *chinaUp[2] = { "Upgrade_ChinaChainGuns", "Upgrade_ChinaUraniumShells" };
+		const char **buys = gla, **ups = glaUp;
+		Int buyCount = 5, upCount = 3;
 		const char *plant = NULL;
 		if( side.compareNoCase( "USA" ) == 0 || side.compareNoCase( "America" ) == 0 )
 		{
-			buys[0] = "AmericaPatriotBattery";
-			buys[1] = "AmericaFireBase";
-			buys[2] = "AmericaPatriotBattery";
+			buys = usa;
+			buyCount = 3;
+			ups = NULL;
+			upCount = 0;
 			plant = "AmericaPowerPlant";
 		}
 		else if( side.compareNoCase( "China" ) == 0 )
 		{
-			buys[0] = "ChinaTankOverlord";
-			buys[1] = "ChinaGattlingCannon";
-			buys[2] = "ChinaTankOverlord";
+			buys = china;
+			buyCount = 3;
+			ups = chinaUp;
+			upCount = 2;
 			plant = "ChinaPowerPlant";
 		}
-		for( Int guard = 0; guard < 8; ++guard )
+		/* One repair a second, as a player's one dozer or worker does: the most hurt of the seat's guns gets back 3% of
+			 its health, free, as a repair is.  A gun at the rim trades fire with every wave that passes it. */
+		{
+			Object *hurt = NULL;
+			Real worst = 1.0f;
+			for( UnsignedInt s = 0; s < m_refHeld[n].size(); ++s )
+			{
+				Object *gun = m_refHeld[n][s] != INVALID_ID ? TheGameLogic->findObjectByID( m_refHeld[n][s] ) : NULL;
+				if( gun == NULL || gun->isEffectivelyDead() || gun->getBodyModule() == NULL || gun->getBodyModule()->getMaxHealth() <= 0.0f )
+					continue;
+				const Real share = gun->getBodyModule()->getHealth() / gun->getBodyModule()->getMaxHealth();
+				if( share < worst )
+				{
+					worst = share;
+					hurt = gun;
+				}
+			}
+			if( hurt != NULL )
+				hurt->attemptHealing( 0.03f * hurt->getBodyModule()->getMaxHealth(), NULL );
+		}
+		// the next upgrade the seat lacks, once it has four guns for every upgrade it owns; saved up for before another gun
+		Bool saving = FALSE;
+		for( Int u = 0, owned = 0; u < upCount; ++u )
+		{
+			const UpgradeTemplate *up = TheUpgradeCenter->findUpgrade( ups[u] );
+			if( up == NULL )
+				continue;
+			if( seat->hasUpgradeComplete( up ) )
+			{
+				++owned;
+				continue;
+			}
+			const Int cost = up->calcCostToBuild( seat );
+			if( m_refBought[n] < 4 * ( owned + 1 ) )
+				break;
+			saving = cost > m_refEarned[n] * m_refPercent / 100 - m_refSpent[n] || cost > (Int)seat->getMoney()->countMoney();
+			if( !saving )
+			{
+				seat->getMoney()->withdraw( (UnsignedInt)cost, FALSE );
+				m_refSpent[n] += cost;
+				seat->addUpgrade( up, UPGRADE_STATUS_COMPLETE );
+				DEBUG_LOG(( "HEADLESS AOD REF: frame %u lane %d buys '%s' for %d, spent %d of %d earned\n", now, n + 1, ups[u], cost,
+										m_refSpent[n], m_refEarned[n] ));
+			}
+			break;
+		}
+		for( Int guard = 0; guard < 8 && !saving; ++guard )
 		{
 			const Bool needPower = plant != NULL && !seat->getEnergy()->hasSufficientPower();
-			const ThingTemplate *tmpl = TheThingFactory->findTemplate( needPower ? plant : buys[ m_refBought[n] % 3 ], FALSE );
+			const ThingTemplate *tmpl = TheThingFactory->findTemplate( needPower ? plant : buys[ m_refBought[n] % buyCount ], FALSE );
 			if( tmpl == NULL )
 				break;
 			const Int cost = tmpl->calcCostToBuild( seat );

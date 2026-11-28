@@ -271,6 +271,9 @@ Int ApocalypseSeatState(Int seat, Int seats, Int state);
 // a generated Apocalypse map ("rmg_v<n>_<seed>_<n>p_<cells>c_apocalypse"), by its name or its folder's,
 // '\' or '/' paths alike: how a joiner, a game list and a network room know the mode
 Bool IsApocalypseMap(const AsciiString &map);
+// A generated Art of Defense map (its name's "_aod" tail). Humans only (the owner, 2026-11-28): a room on
+// one has no computer seats, FitRandomMapToRoom opens any it finds, and the map is built for the humans.
+Bool IsAodMap(const AsciiString &map);
 // An Apocalypse room shows its four seats only: every window of the layout's seat rows from this row on
 // hidden.  A room calls it after each slot list repaint, which would show them again
 void HideLobbySeatRowsFrom(GameWindow *parent, const char *layoutFilename, Int firstHiddenRow);

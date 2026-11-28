@@ -52,6 +52,7 @@
 #include "GameClient/CampaignManager.h"
 
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/AodDirector.h"
 #include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/ObjectTypes.h"
@@ -5817,6 +5818,12 @@ void ScriptEngine::update( void )
 		// EA's "Give AI money to cover bug" alone handed a computer seat 2200 (America), 1600 (China) or
 		// 200 (GLA) on frame 0, over the director's start money.
 		if (TheDirectStrikeDirector->isActive() && m_currentPlayer != NULL && m_currentPlayer->isPlayableSide()) {
+			m_currentPlayer = NULL;
+			continue;
+		}
+		// An Art of Defense computer seat (a headless test's; a room has none) runs none either: it builds nothing
+		if (TheAodDirector->isActive() && m_currentPlayer != NULL && m_currentPlayer->isPlayableSide()
+				&& m_currentPlayer->getPlayerType() == PLAYER_COMPUTER) {
 			m_currentPlayer = NULL;
 			continue;
 		}

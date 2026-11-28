@@ -17,11 +17,14 @@
 */
 
 // FILE: AodDirector.cpp //////////////////////////////////////////////////////////////////////////
-// Art of Defense: waves down the generated paths to the seats' shared base (AodDirector.h).
+// Art of Defense: waves down the generated lanes to their exits (AodDirector.h).
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/EarlyCommandLine.h"
+#include "Common/Energy.h"
+#include "Common/Money.h"
 #include "Common/NameKeyGenerator.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
@@ -29,6 +32,7 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "GameClient/FXList.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/AodDirector.h"
@@ -48,31 +52,39 @@ AodDirector *TheAodDirector = &theAodDirector;
 
 //-------------------------------------------------------------------------------------------------
 /* The waves' units: retail ones every side builds without an upgrade, no transport, no hacker, nothing
-	that carries a crew out with it.  Points are about a unit's worth against a defence. */
+	that carries a crew out with it.  Infantry, vehicles and, late, a helicopter, so no one kind of defence
+	holds a lane alone.  Points are about a unit's worth against a defence.  Wave 1 is Technicals, which
+	walk a lane in about 70 game seconds (a Rebel takes five minutes). */
 static const AodKind theKinds[] =
 {
-	{ "GLAInfantryRebel",				1, 1 },
-	{ "ChinaInfantryRedguard",	1, 1 },
-	{ "AmericaInfantryRanger",	1, 2 },
-	{ "GLAVehicleTechnical",		3, 3 },
-	{ "AmericaVehicleHumvee",		4, 4 },
-	{ "GLATankScorpion",				5, 6 },
-	{ "ChinaTankBattleMaster",	6, 7 },
-	{ "AmericaTankCrusader",		7, 9 },
-	{ "ChinaTankGattling",			7, 11 },
-	{ "AmericaTankPaladin",			9, 13 },
+	{ "GLAVehicleTechnical",				3, 1 },
+	{ "GLAInfantryRebel",						1, 2 },
+	{ "ChinaInfantryRedguard",			1, 2 },
+	{ "AmericaInfantryRanger",			1, 3 },
+	{ "AmericaVehicleHumvee",				4, 3 },
+	{ "GLAInfantryTunnelDefender",	2, 4 },
+	{ "GLATankScorpion",						5, 5 },
+	{ "ChinaTankBattleMaster",			6, 6 },
+	{ "AmericaTankCrusader",				7, 8 },
+	{ "ChinaTankGattling",					7, 10 },
+	{ "AmericaVehicleComanche",			8, 12 },
+	{ "AmericaTankPaladin",					9, 13 },
 };
 
 Int Aod_kindCount( void ) { return (Int)( sizeof( theKinds ) / sizeof( theKinds[0] ) ); }
 const AodKind &Aod_kind( Int kind ) { return theKinds[kind]; }
 const char *Aod_bossName( void ) { return "ChinaTankOverlord"; }
-Int Aod_bossHealthPercent( Int seats ) { return 300 + 150 * ( seats > 1 ? seats - 1 : 0 ); }
+/* An Overlord three times over at wave 5, nine times at wave 20.  The reference batches (-aodreference): at three
+	 times throughout half the money the waves pay stopped the wave 5 boss on two of four runs; at five times
+	 throughout the whole of it let China's wave 5 boss through. */
+Int Aod_bossHealthPercent( Int wave ) { return 100 + 40 * wave; }
 Bool Aod_isBossWave( Int wave ) { return wave > 0 && wave % AOD_BOSS_EVERY == 0; }
 
-Int Aod_wavePoints( Int wave, Int seats )
+/* 6 + 4w + w*w/3 on the first batches let China's and the GLA's whole-budget reference defences fall between
+	 waves 7 and 12 (America's held to 16); this curve is a quarter lighter by wave 10. */
+Int Aod_wavePoints( Int wave )
 {
-	const Int base = 6 + 4 * wave + wave * wave / 3;
-	return base * ( 100 + 50 * ( seats > 1 ? seats - 1 : 0 ) ) / 100;
+	return 6 + 3 * wave + wave * wave / 4;
 }
 
 Int Aod_waveRank( Int wave )
@@ -107,14 +119,14 @@ AodDirector::AodDirector( void )
 void AodDirector::reset( void )
 {
 	m_active = FALSE;
-	m_base.zero();
-	m_baseRadius = 0.0f;
+	m_exit = NULL;
 	m_enemyPlayer = -1;
 	m_seats = 0;
-	m_spawnNames.clear();
 	m_paths.clear();
+	m_stops.clear();
 	m_kinds.clear();
 	m_boss = NULL;
+	m_exitFX = NULL;
 	m_wave = 0;
 	m_nextWaveFrame = 0;
 	m_nextSpawnFrame = 0;
@@ -124,6 +136,13 @@ void AodDirector::reset( void )
 	m_over = OVER_NOT;
 	m_spawnTurn = 0;
 	m_spawned = m_kills = m_leaks = 0;
+	for( Int w = 0; w <= AOD_WAVES; ++w )
+		m_waveLeaks[w] = 0;
+	m_refPercent = 0;
+	m_refStarted = FALSE;
+	m_refSpots.clear();
+	for( Int n = 0; n < AOD_LANES_MOST; ++n )
+		m_refEarned[n] = m_refSpent[n] = m_refBought[n] = m_refNextSpot[n] = m_refPlants[n] = 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -131,54 +150,39 @@ void AodDirector::newMap( Bool loadingSaveGame )
 {
 	reset();
 
-	const Waypoint *base = TheTerrainLogic->getWaypointByName( "AOD_Base" );
-	if( base == NULL )
+	PolygonTrigger *exit = TheTerrainLogic->getTriggerAreaByName( "AOD_Exit" );
+	if( exit == NULL )
 		return;
-	for( Int n = 1; ; ++n )
+	for( Int n = 1; n <= AOD_LANES_MOST; ++n )
 	{
 		AsciiString name;
-		name.format( "AOD_Spawn_%d", n );
-		const Waypoint *spawn = TheTerrainLogic->getWaypointByName( name );
-		if( spawn == NULL )
+		name.format( "AOD_Entry_%d", n );
+		const Waypoint *entry = TheTerrainLogic->getWaypointByName( name );
+		if( entry == NULL )
 			break;
-		m_spawnNames.push_back( name );
-		// the path's stops in order, down the single link each has, for the log
+		// the lane's stops in order, down the single link each has
 		std::vector<Coord3D> stops;
-		for( const Waypoint *way = spawn; way != NULL && stops.size() < 1000; way = way->getNumLinks() > 0 ? way->getLink( 0 ) : NULL )
+		std::vector<AsciiString> names;
+		for( const Waypoint *way = entry; way != NULL && stops.size() < 1000; way = way->getNumLinks() > 0 ? way->getLink( 0 ) : NULL )
+		{
 			stops.push_back( *way->getLocation() );
+			names.push_back( way->getName() );
+		}
 		m_paths.push_back( stops );
+		m_stops.push_back( names );
 	}
 	Player *civilian = ThePlayerList->findPlayerWithNameKey( NAMEKEY( "PlyrCivilian" ) );
-	if( m_spawnNames.empty() || civilian == NULL )
+	if( m_paths.empty() || civilian == NULL )
 	{
-		DEBUG_LOG(( "HEADLESS AOD: the map has AOD_Base but %s, so the mode stays off\n",
-								m_spawnNames.empty() ? "no AOD_Spawn_1" : "no PlyrCivilian to own the waves" ));
-		m_spawnNames.clear();
+		DEBUG_LOG(( "HEADLESS AOD: the map has AOD_Exit but %s, so the mode stays off\n",
+								m_paths.empty() ? "no AOD_Entry_1" : "no PlyrCivilian to own the waves" ));
 		m_paths.clear();
+		m_stops.clear();
 		return;
 	}
 
 	m_active = TRUE;
-	m_base = *base->getLocation();
-	// the base's reach is its area's outline; without the area, half the way to the nearest spawn
-	PolygonTrigger *area = TheTerrainLogic->getTriggerAreaByName( "AOD_Base" );
-	if( area != NULL && area->getNumPoints() >= 3 )
-	{
-		for( Int p = 0; p < area->getNumPoints(); ++p )
-		{
-			const Real dx = (Real)area->getPoint( p )->x - m_base.x, dy = (Real)area->getPoint( p )->y - m_base.y;
-			m_baseRadius = max( m_baseRadius, (Real)sqrtf( dx * dx + dy * dy ) );
-		}
-	}
-	else
-	{
-		m_baseRadius = 1.0e9f;
-		for( UnsignedInt n = 0; n < m_paths.size(); ++n )
-		{
-			const Real dx = m_paths[n][0].x - m_base.x, dy = m_paths[n][0].y - m_base.y;
-			m_baseRadius = min( m_baseRadius, 0.5f * (Real)sqrtf( dx * dx + dy * dy ) );
-		}
-	}
+	m_exit = exit;
 	m_enemyPlayer = civilian->getPlayerIndex();
 	for( Int k = 0; k < Aod_kindCount(); ++k )
 	{
@@ -187,6 +191,7 @@ void AodDirector::newMap( Bool loadingSaveGame )
 			DEBUG_LOG(( "HEADLESS AOD: no '%s' template in the data, the waves come without it\n", Aod_kind( k ).name ));
 	}
 	m_boss = TheThingFactory->findTemplate( Aod_bossName(), FALSE );
+	m_exitFX = TheFXListStore != NULL ? TheFXListStore->findFXList( "FX_ParticleUplinkDeathInitial" ) : NULL;
 
 	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 		if( isSeat( ThePlayerList->getNthPlayer( i ) ) )
@@ -211,60 +216,81 @@ void AodDirector::newMap( Bool loadingSaveGame )
 		}
 	}
 
+	/* The reference defence: a skirmish dev aid that plays every seat with a fixed share of the money the
+		 mode pays it, to tune the waves against (no human can play a test).  Dead in a network game. */
+	char percent[16];
+	if( TheGameLogic->isInSkirmishGame() && findEarlyCommandLineValue( L"-aodreference", percent, sizeof( percent ) ) )
+	{
+		m_refPercent = max( 0, min( 100, atoi( percent ) ) );
+		DEBUG_LOG(( "HEADLESS AOD: the reference defence plays every seat with %d%% of what it is paid\n", m_refPercent ));
+	}
+
 	m_nextWaveFrame = TheGameLogic->getFrame() + AOD_FIRST_WAVE_SECONDS * gameSecond();
-	DEBUG_LOG(( "HEADLESS AOD: on; %d seats, %d spawns, base (%.0f,%.0f) radius %.0f, waves of player %d, first wave at frame %u\n",
-							m_seats, (Int)m_spawnNames.size(), m_base.x, m_base.y, m_baseRadius, m_enemyPlayer, m_nextWaveFrame ));
+	DEBUG_LOG(( "HEADLESS AOD: on; %d seats, %d lanes, waves of player %d, first wave at frame %u\n",
+							m_seats, (Int)m_paths.size(), m_enemyPlayer, m_nextWaveFrame ));
 	for( UnsignedInt n = 0; n < m_paths.size(); ++n )
-		DEBUG_LOG(( "HEADLESS AOD: path %d from (%.0f,%.0f), %d stops to the base\n", (Int)n + 1, m_paths[n][0].x, m_paths[n][0].y,
-								(Int)m_paths[n].size() - 1 ));
+		DEBUG_LOG(( "HEADLESS AOD: lane %d from (%.0f,%.0f) to (%.0f,%.0f), %d stops\n", (Int)n + 1, m_paths[n].front().x, m_paths[n].front().y,
+								m_paths[n].back().x, m_paths[n].back().y, (Int)m_paths[n].size() - 1 ));
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool AodDirector::inBase( const Object *obj ) const
+Bool AodDirector::inExit( const Object *obj ) const
 {
-	const Real dx = obj->getPosition()->x - m_base.x, dy = obj->getPosition()->y - m_base.y;
-	return dx * dx + dy * dy < m_baseRadius * m_baseRadius;
+	ICoord3D at;
+	at.x = (Int)obj->getPosition()->x;
+	at.y = (Int)obj->getPosition()->y;
+	at.z = 0;
+	return m_exit != NULL && m_exit->pointInTrigger( at );
 }
 
 //-------------------------------------------------------------------------------------------------
-Int AodDirector::nearestPathStop( const Object *obj, Int *spawnOut ) const
+Int AodDirector::nearestStop( const Object *obj, Int lane ) const
 {
-	Int best = -1;
+	Int best = 0;
 	Real least = 1.0e30f;
-	for( UnsignedInt n = 0; n < m_paths.size(); ++n )
-		for( UnsignedInt k = 0; k < m_paths[n].size(); ++k )
+	const std::vector<Coord3D> &stops = m_paths[lane];
+	for( UnsignedInt k = 0; k < stops.size(); ++k )
+	{
+		const Real dx = obj->getPosition()->x - stops[k].x, dy = obj->getPosition()->y - stops[k].y;
+		if( dx * dx + dy * dy < least )
 		{
-			const Real dx = obj->getPosition()->x - m_paths[n][k].x, dy = obj->getPosition()->y - m_paths[n][k].y;
-			if( dx * dx + dy * dy < least )
-			{
-				least = dx * dx + dy * dy;
-				best = (Int)k;
-				*spawnOut = (Int)n;
-			}
+			least = dx * dx + dy * dy;
+			best = (Int)k;
 		}
+	}
 	return best;
 }
 
 //-------------------------------------------------------------------------------------------------
-void AodDirector::paySeats( Int amount ) const
+/// The map stands seat n's start in lane n's sector (RMGLayout::buildAod), so a lane's seat is the one on its start.
+Player *AodDirector::seatOfLane( Int lane ) const
 {
-	if( amount <= 0 )
-		return;
 	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 	{
 		Player *player = ThePlayerList->getNthPlayer( i );
-		if( isSeat( player ) && player->hasAnyObjects() )
-			player->getMoney()->deposit( (UnsignedInt)amount, FALSE );
+		if( isSeat( player ) && player->getMpStartIndex() == lane )
+			return player;
 	}
+	return NULL;
 }
 
 //-------------------------------------------------------------------------------------------------
-/// The wave's units drawn by points out of the kinds it has reached, the boss first on its wave.
+void AodDirector::pay( Player *seat, Int lane, Int amount )
+{
+	if( amount <= 0 || seat == NULL || !seat->hasAnyObjects() )
+		return;
+	seat->getMoney()->deposit( (UnsignedInt)amount, FALSE );
+	if( lane >= 0 && lane < AOD_LANES_MOST )
+		m_refEarned[lane] += amount;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The wave's units, drawn by points out of the kinds it has reached, the boss first on its wave.  One draw
+	  serves every lane: each seat meets the same units in the same order (the map is a mirror too). */
 void AodDirector::startWave( UnsignedInt now )
 {
 	++m_wave;
-	const Int seats = max( m_seats, 1 );
-	Int points = Aod_wavePoints( m_wave, seats );
+	Int points = Aod_wavePoints( m_wave );
 	m_pending.clear();
 	if( Aod_isBossWave( m_wave ) && m_boss != NULL )
 		m_pending.push_back( -1 );
@@ -280,28 +306,30 @@ void AodDirector::startWave( UnsignedInt now )
 		m_pending.push_back( k );
 		points -= Aod_kind( k ).points;
 	}
-	const Int pay = AOD_WAVE_PAY + AOD_WAVE_PAY_PER_WAVE * ( m_wave - 1 );
-	paySeats( pay );
+	const Int wavePay = AOD_WAVE_PAY + AOD_WAVE_PAY_PER_WAVE * ( m_wave - 1 );
+	for( Int n = 0; n < (Int)m_paths.size(); ++n )
+		pay( seatOfLane( n ), n, wavePay );
 	m_nextSpawnFrame = now;
-	DEBUG_LOG(( "HEADLESS AOD: frame %u wave %d of %d starts, %d units for %d points%s, %d to every seat, lives %d\n", now, m_wave, (Int)AOD_WAVES,
-							(Int)m_pending.size(), Aod_wavePoints( m_wave, seats ), Aod_isBossWave( m_wave ) && m_boss != NULL ? " with a boss" : "",
-							pay, m_lives ));
+	DEBUG_LOG(( "HEADLESS AOD: frame %u wave %d of %d starts, %d units a lane for %d points%s, %d to every seat, lives %d\n", now, m_wave, (Int)AOD_WAVES,
+							(Int)m_pending.size(), Aod_wavePoints( m_wave ), Aod_isBossWave( m_wave ) && m_boss != NULL ? " with a boss" : "",
+							wavePay, m_lives ));
 }
 
 //-------------------------------------------------------------------------------------------------
-Object *AodDirector::spawn( Int kind, Int spawnIndex )
+Object *AodDirector::spawn( Int kind, Int lane )
 {
 	const ThingTemplate *tmpl = kind < 0 ? m_boss : m_kinds[kind];
-	const Waypoint *start = TheTerrainLogic->getWaypointByName( m_spawnNames[spawnIndex] );
+	const Waypoint *start = TheTerrainLogic->getWaypointByName( m_stops[lane][0] );
 	if( tmpl == NULL || start == NULL )
 		return NULL;
 	Team *team = ThePlayerList->getNthPlayer( m_enemyPlayer )->getDefaultTeam();
 	Object *obj = TheThingFactory->newObject( tmpl, team );
 	if( obj == NULL )
 		return NULL;
+	// a little scatter, inside the trench's floor (5.5 cells, 55 units, either side of its middle)
 	Coord3D pos = *start->getLocation();
-	pos.x += GameLogicRandomValueReal( -20.0f, 20.0f );
-	pos.y += GameLogicRandomValueReal( -20.0f, 20.0f );
+	pos.x += GameLogicRandomValueReal( -15.0f, 15.0f );
+	pos.y += GameLogicRandomValueReal( -15.0f, 15.0f );
 	pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
 	obj->setOrientation( 0.0f );
 	obj->setPosition( &pos );
@@ -315,7 +343,7 @@ Object *AodDirector::spawn( Int kind, Int spawnIndex )
 	if( rank > LEVEL_REGULAR && obj->getExperienceTracker() != NULL )
 		obj->getExperienceTracker()->setVeterancyLevel( (VeterancyLevel)rank, FALSE );
 	if( kind < 0 && obj->getBodyModule() != NULL )
-		obj->getBodyModule()->setMaxHealth( obj->getBodyModule()->getMaxHealth() * (Real)Aod_bossHealthPercent( m_seats ) / 100.0f, FULLY_HEAL );
+		obj->getBodyModule()->setMaxHealth( obj->getBodyModule()->getMaxHealth() * (Real)Aod_bossHealthPercent( m_wave ) / 100.0f, FULLY_HEAL );
 	team->setActive();
 	TheAI->pathfinder()->addObjectToPathfindMap( obj );
 	if( obj->getAI() != NULL )
@@ -324,11 +352,13 @@ Object *AodDirector::spawn( Int kind, Int spawnIndex )
 	Unit unit;
 	unit.id = obj->getID();
 	unit.kind = kind;
+	unit.lane = lane;
+	unit.wave = m_wave;
 	m_units.push_back( unit );
 	++m_spawned;
-	if( m_spawned == 1 || kind < 0 )
+	if( m_spawned == 1 || ( kind < 0 && lane == 0 ) )
 		DEBUG_LOG(( "HEADLESS AOD: frame %u %s '%s' %d out of %s\n", TheGameLogic->getFrame(), kind < 0 ? "the boss" : "the first unit",
-								tmpl->getName().str(), (Int)unit.id, m_spawnNames[spawnIndex].str() ));
+								tmpl->getName().str(), (Int)unit.id, m_stops[lane][0].str() ));
 	return obj;
 }
 
@@ -337,6 +367,7 @@ void AodDirector::lose( UnsignedInt now )
 {
 	m_over = OVER_LOST;
 	DEBUG_LOG(( "HEADLESS AOD: frame %u lost at wave %d, %u leaks, %u kills\n", now, m_wave, m_leaks, m_kills ));
+	logWaves( now );
 	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 	{
 		Player *player = ThePlayerList->getNthPlayer( i );
@@ -346,39 +377,69 @@ void AodDirector::lose( UnsignedInt now )
 }
 
 //-------------------------------------------------------------------------------------------------
+void AodDirector::logWaves( UnsignedInt now ) const
+{
+	AsciiString line, one;
+	for( Int w = 1; w <= m_wave && w <= AOD_WAVES; ++w )
+	{
+		one.format( " %d", m_waveLeaks[w] );
+		line.concat( one );
+	}
+	DEBUG_LOG(( "HEADLESS AOD WAVES: frame %u lives lost to waves 1..%d:%s; lives %d\n", now, m_wave, line.str(), m_lives ));
+}
+
+//-------------------------------------------------------------------------------------------------
 void AodDirector::update( void )
 {
 	if( !m_active )
 		return;
 	const UnsignedInt now = TheGameLogic->getFrame();
 	const UnsignedInt second = gameSecond();
+	const Int lanes = (Int)m_paths.size();
 
-	// the dead come off the list and pay, the ones in the base leak, the idle are sent on
+	// the dead come off the list and pay, the ones that got out leak, the idle are sent on down their lane
 	const UnsignedInt retarget = AOD_RETARGET_SECONDS * second;
+	Int walking[ AOD_LANES_MOST ] = { 0 };
 	UnsignedInt kept = 0;
 	for( UnsignedInt i = 0; i < m_units.size(); ++i )
 	{
-		const Unit unit = m_units[i];
+		Unit unit = m_units[i];
+		if( unit.lane < 0 || unit.lane >= lanes )
+			unit.lane = 0;		// a save's lane this map does not have
 		Object *obj = TheGameLogic->findObjectByID( unit.id );
 		if( obj == NULL || obj->isEffectivelyDead() )
 		{
 			++m_kills;
-			paySeats( AOD_KILL_PAY_PER_POINT * ( unit.kind < 0 ? 4 * Aod_wavePoints( m_wave, max( m_seats, 1 ) ) / 10 : Aod_kind( unit.kind ).points ) );
+			const Int points = unit.kind < 0 ? 4 * Aod_wavePoints( max( 1, unit.wave ) ) / 10 : Aod_kind( unit.kind ).points;
+			pay( seatOfLane( unit.lane ), unit.lane, AOD_KILL_PAY_PER_POINT * points );
 			continue;
 		}
-		if( inBase( obj ) )
+		if( inExit( obj ) )
 		{
+			const Int cost = unit.kind < 0 ? AOD_BOSS_LEAK : 1;
 			++m_leaks;
-			m_lives -= unit.kind < 0 ? AOD_BOSS_LEAK : 1;
+			m_lives -= cost;
+			if( unit.wave >= 0 && unit.wave <= AOD_WAVES )
+				m_waveLeaks[unit.wave] += cost;
 			if( m_leaks <= 3 || m_leaks % 10 == 0 || unit.kind < 0 )
-				DEBUG_LOG(( "HEADLESS AOD: frame %u '%s' %d leaked into the base, lives %d\n", now, obj->getTemplate()->getName().str(),
-										(Int)unit.id, m_lives ));
+				DEBUG_LOG(( "HEADLESS AOD: frame %u '%s' %d of wave %d got out of lane %d at (%.0f,%.0f), lives %d\n", now,
+										obj->getTemplate()->getName().str(), (Int)unit.id, unit.wave, unit.lane + 1, obj->getPosition()->x, obj->getPosition()->y, m_lives ));
+			// it goes in a flare (the client draws it; nothing in the logic reads it back)
+			FXList::doFXPos( m_exitFX, obj->getPosition() );
 			TheGameLogic->destroyObject( obj );
 			continue;
 		}
+		/* One that has stopped (a fight it was in is over, or a target it chased is gone) picks its lane up at
+			the stop after the nearest one; the trench walls keep it from going anywhere else. */
 		AIUpdateInterface *ai = obj->getAI();
 		if( ai != NULL && ai->isIdle() && ( now + (UnsignedInt)unit.id ) % retarget == 0 )
-			ai->aiAttackMoveToPosition( &m_base, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+		{
+			const Int last = (Int)m_stops[unit.lane].size() - 1;
+			const Waypoint *next = TheTerrainLogic->getWaypointByName( m_stops[unit.lane][ min( nearestStop( obj, unit.lane ) + 1, last ) ] );
+			if( next != NULL )
+				ai->aiAttackFollowWaypointPath( next, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+		}
+		++walking[unit.lane];
 		m_units[kept++] = unit;
 	}
 	m_units.resize( kept );
@@ -394,41 +455,189 @@ void AodDirector::update( void )
 		{
 			m_over = OVER_WON;
 			DEBUG_LOG(( "HEADLESS AOD: frame %u won, every wave seen off, lives %d, %u leaks, %u kills\n", now, m_lives, m_leaks, m_kills ));
+			logWaves( now );
 			return;
 		}
 		if( m_wave < AOD_WAVES && now >= m_nextWaveFrame )
 			startWave( now );
 	}
-	// one unit out at a time, the spawns taking turns, under the cap
-	if( !m_pending.empty() && now >= m_nextSpawnFrame && (Int)m_units.size() < AOD_ALIVE_CAP )
+	/* The next unit out of every entry at once, while every lane is under its share of the cap: no lane gets
+		 its units sooner because another lane's are slow to die. */
+	Bool room = !m_pending.empty() && now >= m_nextSpawnFrame;
+	for( Int n = 0; n < lanes && room; ++n )
+		room = walking[n] < AOD_ALIVE_CAP / lanes;
+	if( room )
 	{
 		const Int kind = m_pending.front();
 		m_pending.erase( m_pending.begin() );
-		spawn( kind, m_spawnTurn % (Int)m_spawnNames.size() );
-		m_spawnTurn = ( m_spawnTurn + 1 ) % (Int)m_spawnNames.size();
+		for( Int n = 0; n < lanes; ++n )
+			spawn( kind, n );
 		m_nextSpawnFrame = now + AOD_SPAWN_GAP_FRAMES;
 		if( m_pending.empty() )
 			m_nextWaveFrame = now + AOD_WAVE_GAP_SECONDS * second;
 	}
 
+	if( m_refPercent > 0 && now % second == 0 )
+		referenceDefence( now );
+
 	if( now % ( AOD_LOG_SECONDS * second ) == 0 )
 	{
-		// the oldest walker's place on its path: how far down it the waves have got
-		Int stop = -1, path = 0;
-		Real toBase = 0.0f;
+		// the oldest walker's place on its lane: how far down it the waves have got
+		Int stop = -1, lane = 0;
 		Coord3D at;
 		at.zero();
 		const Object *oldest = m_units.empty() ? NULL : TheGameLogic->findObjectByID( m_units[0].id );
 		if( oldest != NULL )
 		{
-			stop = nearestPathStop( oldest, &path );
+			lane = m_units[0].lane;
+			stop = nearestStop( oldest, lane );
 			at = *oldest->getPosition();
-			const Real dx = at.x - m_base.x, dy = at.y - m_base.y;
-			toBase = sqrtf( dx * dx + dy * dy );
 		}
-		DEBUG_LOG(( "HEADLESS AOD: frame %u wave %d walking %d to come %d spawned %u kills %u leaks %u lives %d; oldest at (%.0f,%.0f) stop %d of %d on path %d, %.0f from the base\n",
+		DEBUG_LOG(( "HEADLESS AOD: frame %u wave %d walking %d to come %d spawned %u kills %u leaks %u lives %d; oldest at (%.0f,%.0f) stop %d of %d on lane %d\n",
 								now, m_wave, (Int)m_units.size(), (Int)m_pending.size(), m_spawned, m_kills, m_leaks, m_lives, at.x, at.y, stop,
-								oldest != NULL ? (Int)m_paths[path].size() - 1 : 0, path + 1, toBase ));
+								(Int)m_paths[lane].size() - 1, lane + 1 ));
+		if( now % ( 6 * AOD_LOG_SECONDS * second ) == 0 )
+			logWaves( now );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// The reference defence: a dev aid.  It stands in for a human on every seat so the waves can be tuned
+// without one: whatever share of the money the mode has paid a seat it is allowed, it spends on its side's
+// standard defences, put on the rim beside the seat's lane from the exit back, a power plant first whenever
+// the side runs short.  The rest of the seat's money stays in the bank.
+//-------------------------------------------------------------------------------------------------
+
+/// spots on the high ground beside each lane, either side of every stop, the exit's end first
+void AodDirector::findReferenceSpots( void )
+{
+	m_refSpots.assign( m_paths.size(), std::vector<Coord3D>() );
+	for( UnsignedInt n = 0; n < m_paths.size(); ++n )
+	{
+		const std::vector<Coord3D> &stops = m_paths[n];
+		for( Int k = (Int)stops.size() - 2; k >= 1; --k )
+		{
+			const Real dx = stops[k + 1].x - stops[k - 1].x, dy = stops[k + 1].y - stops[k - 1].y;
+			const Real length = sqrtf( dx * dx + dy * dy );
+			if( length <= 0.0f )
+				continue;
+			for( Int side = -1; side <= 1; side += 2 )
+			{
+				for( Real out = 130.0f; out <= 190.0f; out += 30.0f )
+				{
+					Coord3D spot;
+					spot.x = stops[k].x - dy / length * out * (Real)side;
+					spot.y = stops[k].y + dx / length * out * (Real)side;
+					spot.z = TheTerrainLogic->getGroundHeight( spot.x, spot.y );
+					// on the plateau (the floor is 24 bytes, the plateau 62: 15 units over the stop is well up the wall)
+					if( spot.z < stops[k].z + 15.0f )
+						continue;
+					Bool clear = TRUE;
+					for( UnsignedInt s = 0; s < m_refSpots[n].size() && clear; ++s )
+					{
+						const Real sx = spot.x - m_refSpots[n][s].x, sy = spot.y - m_refSpots[n][s].y;
+						clear = sx * sx + sy * sy > 90.0f * 90.0f;
+					}
+					if( clear )
+					{
+						m_refSpots[n].push_back( spot );
+						break;
+					}
+				}
+			}
+		}
+	}
+}
+
+void AodDirector::referenceDefence( UnsignedInt now )
+{
+	if( !m_refStarted )
+	{
+		m_refStarted = TRUE;
+		findReferenceSpots();
+		for( Int n = 0; n < (Int)m_paths.size() && n < AOD_LANES_MOST; ++n )
+		{
+			Player *seat = seatOfLane( n );
+			m_refEarned[n] += seat != NULL ? (Int)seat->getMoney()->countMoney() : 0;		// the start money
+			DEBUG_LOG(( "HEADLESS AOD REF: lane %d seat %s, start money %d, %d spots\n", n + 1,
+									seat != NULL ? seat->getBaseSide().str() : "none", m_refEarned[n], (Int)m_refSpots[n].size() ));
+		}
+	}
+	for( Int n = 0; n < (Int)m_paths.size() && n < AOD_LANES_MOST; ++n )
+	{
+		Player *seat = seatOfLane( n );
+		if( seat == NULL || !seat->hasAnyObjects() )
+			continue;
+		const AsciiString side = seat->getBaseSide();
+		/* The side's defences, taken in turn, and the power plant they need.  China's base guns are the Gattling
+			 cannon alone, which tanks shrug off, so its tanks stand guard too, two Overlords to a cannon (Battlemasters
+			 instead let the wave 5 boss through on every whole-budget run). */
+		const char *buys[3] = { "GLAStingerSite", "GLATankMarauder", "GLATankMarauder" };
+		const char *plant = NULL;
+		if( side.compareNoCase( "USA" ) == 0 || side.compareNoCase( "America" ) == 0 )
+		{
+			buys[0] = "AmericaPatriotBattery";
+			buys[1] = "AmericaFireBase";
+			buys[2] = "AmericaPatriotBattery";
+			plant = "AmericaPowerPlant";
+		}
+		else if( side.compareNoCase( "China" ) == 0 )
+		{
+			buys[0] = "ChinaTankOverlord";
+			buys[1] = "ChinaGattlingCannon";
+			buys[2] = "ChinaTankOverlord";
+			plant = "ChinaPowerPlant";
+		}
+		for( Int guard = 0; guard < 8; ++guard )
+		{
+			const Bool needPower = plant != NULL && !seat->getEnergy()->hasSufficientPower();
+			const ThingTemplate *tmpl = TheThingFactory->findTemplate( needPower ? plant : buys[ m_refBought[n] % 3 ], FALSE );
+			if( tmpl == NULL )
+				break;
+			const Int cost = tmpl->calcCostToBuild( seat );
+			const Int allowed = m_refEarned[n] * m_refPercent / 100 - m_refSpent[n];
+			if( cost > allowed || cost > (Int)seat->getMoney()->countMoney() )
+				break;
+			Coord3D pos;
+			if( needPower )
+			{
+				// beside the start, a ring of plants
+				AsciiString name;
+				name.format( "Player_%d_Start", n + 1 );
+				const Waypoint *start = TheTerrainLogic->getWaypointByName( name );
+				if( start == NULL )
+					break;
+				// a row of five, rows going on: any spread will do, the plants only have to stand apart and clear of the start
+				const Int plants = m_refPlants[n]++;
+				pos = *start->getLocation();
+				pos.x += 70.0f * (Real)( ( plants % 5 ) - 2 );
+				pos.y -= 160.0f + 70.0f * (Real)( plants / 5 );
+			}
+			else
+			{
+				if( m_refNextSpot[n] >= (Int)m_refSpots[n].size() )
+					break;
+				pos = m_refSpots[n][ m_refNextSpot[n]++ ];
+			}
+			pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+			Object *obj = TheThingFactory->newObject( tmpl, seat->getDefaultTeam() );
+			if( obj == NULL )
+				break;
+			obj->setPosition( &pos );
+			for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
+			{
+				CreateModuleInterface *create = (*m)->getCreate();
+				if( create )
+					create->onBuildComplete();
+			}
+			TheAI->pathfinder()->addObjectToPathfindMap( obj );
+			seat->getMoney()->withdraw( (UnsignedInt)cost, FALSE );
+			m_refSpent[n] += cost;
+			if( !needPower )
+				++m_refBought[n];
+			DEBUG_LOG(( "HEADLESS AOD REF: frame %u lane %d buys '%s' for %d at (%.0f,%.0f), spent %d of %d earned\n", now, n + 1,
+									tmpl->getName().str(), cost, pos.x, pos.y, m_refSpent[n], m_refEarned[n] ));
+		}
 	}
 }
 
@@ -440,10 +649,12 @@ void AodDirector::crc( Xfer *xfer )
 
 //-------------------------------------------------------------------------------------------------
 /** Version 1: the wave clock, the wave's units still to come, the walking units, lives and counts.
-	  The base, the spawns, the owner and the templates come from the map and the data on every load. */
+	  The lanes, the exit, the owner and the templates come from the map and the data on every load.
+	  Version 2 adds each walking unit's lane and wave, and the lives lost to each wave: the waves walk
+	  entry to exit, every lane at once (version 1 walked to a base; its units read lane 1, wave 0). */
 void AodDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -472,5 +683,18 @@ void AodDirector::xfer( Xfer *xfer )
 	{
 		xfer->xferObjectID( &m_units[i].id );
 		xfer->xferInt( &m_units[i].kind );
+		if( version >= 2 )
+		{
+			xfer->xferInt( &m_units[i].lane );
+			xfer->xferInt( &m_units[i].wave );
+		}
+		else
+		{
+			m_units[i].lane = 0;
+			m_units[i].wave = 0;
+		}
 	}
+	if( version >= 2 )
+		for( Int w = 0; w <= AOD_WAVES; ++w )
+			xfer->xferInt( &m_waveLeaks[w] );
 }

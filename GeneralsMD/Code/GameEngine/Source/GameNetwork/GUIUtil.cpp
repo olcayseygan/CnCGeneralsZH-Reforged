@@ -1583,7 +1583,15 @@ static AsciiString stageRoomRandomMap(const GameInfo *game, Int size, const Asci
 	settings.m_seed = (Int)((Clock_Milliseconds() + 7919u * ++theRolls) & 0x7fffffff);
 	settings.m_numPlayers = players;
 	if (templatePath == theAodRow)
-		settings.m_style = RandomMapGenerator::styleNamed("aod");	// its own ground: the size is the style's
+	{
+		// its own ground, the size the style's, for the humans in the room: no computer seat plays it
+		settings.m_style = RandomMapGenerator::styleNamed("aod");
+		Int humans = 0;
+		for (Int i = 0; i < MAX_SLOTS; ++i)
+			if (game->getConstSlot(i) != NULL && game->getConstSlot(i)->isHuman() && game->getConstSlot(i)->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
+				++humans;
+		settings.m_numPlayers = max(1, humans);
+	}
 	else
 	{
 		settings.m_playableCells = RandomMapGenerator::cellsFor((RandomMapSize)size, players, templatePath);
@@ -1696,24 +1704,40 @@ void RandomMapTabShutdown(void)
 
 Bool FitRandomMapToRoom(GameInfo *game)
 {
+	// Art of Defense is for people alone: a computer seat in the room opens again, and the map is the humans'
+	Bool opened = FALSE;
+	const Bool aod = IsAodMap(game->getMap());
+	if (aod)
+	{
+		for (Int i = 0; i < MAX_SLOTS; ++i)
+		{
+			GameSlot *slot = game->getSlot(i);
+			if (slot != NULL && slot->isAI())
+			{
+				slot->setState(SLOT_OPEN);
+				opened = TRUE;
+			}
+		}
+	}
+
 	// the rooms ask every frame; a map and a count already answered cost a compare
 	static AsciiString theFittedMap;
 	static Int theFittedPlayers = 0;
-	const Int players = roomRandomMapPlayers(game);
+	const Int players = aod ? max(1, game->getNumNonObserverPlayers()) : roomRandomMapPlayers(game);
 	if (players == theFittedPlayers && game->getMap().compareNoCase(theFittedMap) == 0)
-		return FALSE;
+		return opened;
 	theFittedMap = game->getMap();
 	theFittedPlayers = players;
 
 	AsciiString map;
 	if (!restageRandomMap(game->getMap(), players, map) || map.compareNoCase(game->getMap()) == 0)
-		return FALSE;
+		return opened;
 	map.toLower();
 	TheMapCache->updateCache();
 	const MapMetaData *md = TheMapCache->findMap(map);
 	// a template that built nothing leaves no map under the new name; the room keeps the one it has
 	if (md == NULL)
-		return FALSE;
+		return opened;
 	game->setMap(map);
 	game->setMapCRC(md->m_CRC);
 	game->setMapSize(md->m_filesize);
@@ -2071,6 +2095,22 @@ Bool IsApocalypseMap(const AsciiString &map)
 		return FALSE;
 	const AsciiString tail(leaf + 5 + rest);
 	return tail.compareNoCase("apocalypse") == 0 || tail.compareNoCase("apocalypse.map") == 0;
+}
+
+Bool IsAodMap(const AsciiString &map)
+{
+	const char *path = map.str();
+	const char *leaf = path;
+	for (const char *c = path; *c; ++c)
+		if (*c == '\\' || *c == '/')
+			leaf = c + 1;
+	if (!AsciiString(leaf).startsWithNoCase("rmg_v"))
+		return FALSE;
+	Int version = 0, seed = 0, players = 0, cells = 0, rest = -1;
+	if (sscanf(leaf + 5, "%d_%d_%dp_%dc_%n", &version, &seed, &players, &cells, &rest) != 4 || rest < 0)
+		return FALSE;
+	const AsciiString tail(leaf + 5 + rest);
+	return tail.compareNoCase("aod") == 0 || tail.compareNoCase("aod.map") == 0;
 }
 
 /// what AskGameMode's box answers with; GameModeBoxSystem deletes it with the box

@@ -47,6 +47,7 @@
 #include "GameLogic/VictoryConditions.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/ApocalypseDirector.h"
+#include "GameLogic/AodDirector.h"
 #include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/AISkirmishPlayer.h"
@@ -1341,6 +1342,10 @@ static void pickTalents( Player *player )
  */
 void AISkirmishPlayer::update( void )
 {
+	// Art of Defense is for people alone (the owner, 2026-11-28): a computer seat that got in anyway, a
+	// headless test's, does nothing; the director's reference defence plays it when asked
+	if (TheAodDirector->isActive())
+		return;
 	if (!m_defenseRequests.empty()) {
 		const Bool flank = m_defenseRequests.front();
 		m_defenseRequests.erase(m_defenseRequests.begin());

@@ -32246,24 +32246,26 @@ TEST(apocalypse_waves_build_to_a_peak_with_a_theme)
 #include "GameLogic/AodDirector.h"
 
 //-------------------------------------------------------------------------------------------------
-/** The Art of Defense map: every spawn's waypoints linked one to the next down to AOD_Base, every stop
-	on ground the pathfinder walks, each spawn walking to the base down its trench, the paths long and
-	apart, the starts inside the base area. Six seeds at least, and on until every spawn count, one to three,
-	has come up. */
-TEST(an_aod_map_walks_every_spawn_down_its_own_path_to_the_base)
+/** The Art of Defense map: a lane a seat, every lane's waypoints linked one to the next from its entry to a
+	last stop in the AOD_Exit area (the east edge's strip for one seat, the pit in the middle for more),
+	every stop on ground the pathfinder walks, the entry walking to the exit, no start walking down into a
+	lane (the seats only shoot into it from the rim), the lanes long and apart, and the map a mirror: every
+	lane as long and its stops as far from the middle as lane 1's. One to six seats, nine asked for six. */
+TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 {
 	CHECK( bootOnce() );
 	CHECK( RandomMapGenerator::styleNamed( "aod" ) != 0 );
-	Bool counts[4] = { FALSE, FALSE, FALSE, FALSE };
-	for( Int seed = 1; seed <= 24 && ( seed <= 6 || !( counts[1] && counts[2] && counts[3] ) ); seed++ )
+	static const Int theSeats[] = { 1, 2, 3, 4, 5, 9 };
+	for( Int c = 0; c < (Int)( sizeof( theSeats ) / sizeof( theSeats[0] ) ); c++ )
 	{
+		const Int seed = c + 1;
 		RandomMapSettings settings;
 		settings.m_seed = seed;
-		settings.m_numPlayers = seed <= 3 ? 2 : 9;
+		settings.m_numPlayers = theSeats[c];
 		settings.m_style = RandomMapGenerator::styleNamed( "aod" );
 		RandomMapSettings clamped = settings;
 		RandomMapGenerator::clampSettings( clamped );
-		CHECK( clamped.m_numPlayers == ( seed <= 3 ? 2 : 6 ) );
+		CHECK_EQ( clamped.m_numPlayers, std::min( theSeats[c], 6 ) );
 		CHECK( RandomMapGenerator::isPlayable( settings ) );
 		std::vector<char> bytes;
 		RandomMapGenerator::generate( settings, bytes );
@@ -32284,31 +32286,48 @@ TEST(an_aod_map_walks_every_spawn_down_its_own_path_to_the_base)
 				byID[theRMGParse.m_waypointIDs[i]] = std::make_pair( theRMGParse.m_waypointNames[named], theRMGParse.m_waypointPositions[named] );
 				named++;
 			}
-		Int baseID = 0;
-		for( std::map<Int, std::pair<AsciiString, Coord3D> >::iterator it = byID.begin(); it != byID.end(); ++it )
-			if( it->second.first == "AOD_Base" )
-				baseID = it->first;
-		CHECK( baseID != 0 );
+		// the exit: a strip along the east edge 14 cells deep for one seat, a pit 12 cells round the middle for more
 		Int area = -1;
 		for( Int i = 0; i < (Int)theRMGParse.m_areaNames.size(); i++ )
-			if( theRMGParse.m_areaNames[i] == "AOD_Base" )
+			if( theRMGParse.m_areaNames[i] == "AOD_Exit" )
 				area = i;
 		CHECK( area >= 0 );
-		if( baseID == 0 || area < 0 )
+		if( area < 0 )
 			continue;
-		const Coord3D base = byID[baseID].second;
-		Real baseRadius = 0.0f;
+		Coord3D exitLo, exitHi;
+		exitLo.x = exitLo.y = 1.0e9f;
+		exitHi.x = exitHi.y = -1.0e9f;
 		for( size_t p = 0; p < theRMGParse.m_areaPolygons[area].size(); p++ )
-			baseRadius = std::max( baseRadius, (Real)sqrtf( ( theRMGParse.m_areaPolygons[area][p].x - base.x ) * ( theRMGParse.m_areaPolygons[area][p].x - base.x )
-				+ ( theRMGParse.m_areaPolygons[area][p].y - base.y ) * ( theRMGParse.m_areaPolygons[area][p].y - base.y ) ) );
-		for( Int s = 0; s < clamped.m_numPlayers; s++ )
+		{
+			exitLo.x = std::min( exitLo.x, theRMGParse.m_areaPolygons[area][p].x );
+			exitLo.y = std::min( exitLo.y, theRMGParse.m_areaPolygons[area][p].y );
+			exitHi.x = std::max( exitHi.x, theRMGParse.m_areaPolygons[area][p].x );
+			exitHi.y = std::max( exitHi.y, theRMGParse.m_areaPolygons[area][p].y );
+		}
+		const Real middle = 0.5f * (Real)clamped.m_playableCells * MAP_XY_FACTOR;
+		if( clamped.m_numPlayers == 1 )
+		{
+			CHECK_NEAR( exitHi.x, 2.0f * middle, 1.0f );
+			CHECK_NEAR( exitHi.x - exitLo.x, 140.0f, 1.0f );
+		}
+		else
+		{
+			CHECK_NEAR( 0.5f * ( exitLo.x + exitHi.x ), middle, 2.0f );
+			CHECK_NEAR( 0.5f * ( exitLo.y + exitHi.y ), middle, 2.0f );
+			CHECK( exitHi.x - exitLo.x < 250.0f );
+		}
+		auto inExit = [&]( const Coord3D& at ) { return at.x > exitLo.x && at.x < exitHi.x && at.y > exitLo.y && at.y < exitHi.y; };
+		// a start a seat; the one-seat map a spare one besides, or the map list would take it for a mission's
+		std::vector<Coord3D> starts;
+		for( Int s = 0; s < 8; s++ )
 		{
 			AsciiString wanted;
 			wanted.format( "Player_%d_Start", s + 1 );
 			for( std::map<Int, std::pair<AsciiString, Coord3D> >::iterator it = byID.begin(); it != byID.end(); ++it )
 				if( it->second.first == wanted )
-					CHECK( sqrtf( ( it->second.second.x - base.x ) * ( it->second.second.x - base.x ) + ( it->second.second.y - base.y ) * ( it->second.second.y - base.y ) ) < baseRadius );
+					starts.push_back( it->second.second );
 		}
+		CHECK_EQ( (Int)starts.size(), std::max( 2, clamped.m_numPlayers ) );
 
 		// the flood over walkable ground from a cell
 		auto flood = [&]( Int from, std::vector<char>& seen )
@@ -32334,23 +32353,29 @@ TEST(an_aod_map_walks_every_spawn_down_its_own_path_to_the_base)
 			}
 		};
 
-		Int spawns = 0;
+		Int lanes = 0;
 		std::vector< std::vector<Coord3D> > stops;
-		for( Int n = 1; n <= 3; n++ )
+		for( Int n = 1; n <= 7; n++ )
 		{
 			AsciiString wanted;
-			wanted.format( "AOD_Spawn_%d", n );
+			wanted.format( "AOD_Entry_%d", n );
 			Int at = 0;
 			for( std::map<Int, std::pair<AsciiString, Coord3D> >::iterator it = byID.begin(); it != byID.end(); ++it )
 				if( it->second.first == wanted )
 					at = it->first;
 			if( at == 0 )
 				break;
-			spawns++;
-			// down the links: one out of every stop, each the next AOD_Path_N_k, the last into the base
+			lanes++;
+			// in at the west edge for one seat, at the rim, far out from the pit, for more
+			if( clamped.m_numPlayers == 1 )
+				CHECK( byID[at].second.x < 10.0f * MAP_XY_FACTOR );
+			else
+				CHECK( sqrtf( ( byID[at].second.x - middle ) * ( byID[at].second.x - middle ) + ( byID[at].second.y - middle ) * ( byID[at].second.y - middle ) )
+					> 0.7f * middle );
+			// down the links: one out of every stop but the last, each the next AOD_Path_N_k
 			std::vector<Coord3D> path;
 			Real length = 0.0f;
-			for( Int k = 0; at != baseID && k < 1000; k++ )
+			for( Int k = 0; at != 0 && k < 1000; k++ )
 			{
 				const Coord3D& here = byID[at].second;
 				CHECK( !cliff( cellOf( here ) ) );
@@ -32364,8 +32389,8 @@ TEST(an_aod_map_walks_every_spawn_down_its_own_path_to_the_base)
 						next = theRMGParse.m_waypointLinks[l].second;
 						links++;
 					}
-				CHECK_EQ( links, 1 );
-				if( next != baseID )
+				CHECK( links <= 1 );
+				if( next != 0 )
 				{
 					AsciiString name;
 					name.format( "AOD_Path_%d_%d", n, k + 1 );
@@ -32373,48 +32398,77 @@ TEST(an_aod_map_walks_every_spawn_down_its_own_path_to_the_base)
 				}
 				at = next;
 			}
-			CHECK( at == baseID );
-			CHECK( length > 250.0f && length < 900.0f );
+			// the last stop in the exit; every other one short of it
+			CHECK( path.size() > 2 && inExit( path.back() ) );
+			for( size_t k = 0; k + 1 < path.size(); k++ )
+			{
+				if( inExit( path[k] ) )
+					printf( "  aod seats %d lane %d stop %d of %d at (%.0f,%.0f) is in the exit\n", clamped.m_numPlayers, n, (Int)k,
+						(Int)path.size(), path[k].x, path[k].y );
+				CHECK( !inExit( path[k] ) );
+			}
+			if( length <= 500.0f || length >= 850.0f )
+				printf( "  aod seats %d lane %d is %.0f cells long\n", clamped.m_numPlayers, n, length );
+			CHECK( length > 500.0f && length < 850.0f );
 			stops.push_back( path );
 
-			// the spawn walks to the base, and no start walks down into the trench but through it
+			// the entry walks to the exit, and the lane is sealed: no start walks down into it
 			std::vector<char> seen;
 			flood( cellOf( path[0] ), seen );
-			CHECK( seen[cellOf( base )] );
+			CHECK( seen[cellOf( path.back() )] );
+			for( size_t s = 0; s < starts.size(); s++ )
+				CHECK( !seen[cellOf( starts[s] )] );
 		}
-		CHECK( spawns >= 1 && spawns <= 3 );
-		counts[spawns] = TRUE;
-		// two paths never come near: twenty cells between any stop of one and any of another, out of the base
+		CHECK_EQ( lanes, clamped.m_numPlayers );
+		// a mirror: every lane has lane 1's stops, each as far from the middle as lane 1's
+		for( size_t p = 1; p < stops.size(); p++ )
+		{
+			CHECK_EQ( stops[p].size(), stops[0].size() );
+			for( size_t i = 0; i < stops[p].size() && i < stops[0].size(); i++ )
+			{
+				const Real r0 = sqrtf( ( stops[0][i].x - middle ) * ( stops[0][i].x - middle ) + ( stops[0][i].y - middle ) * ( stops[0][i].y - middle ) );
+				const Real rp = sqrtf( ( stops[p][i].x - middle ) * ( stops[p][i].x - middle ) + ( stops[p][i].y - middle ) * ( stops[p][i].y - middle ) );
+				CHECK_NEAR( rp, r0, 1.0f );
+			}
+		}
+		// two lanes never come near, twenty cells between any stop of one and any of another, but where they
+		// run into the pit together
 		for( size_t p = 0; p < stops.size(); p++ )
 			for( size_t q = p + 1; q < stops.size(); q++ )
 				for( size_t i = 0; i < stops[p].size(); i++ )
 					for( size_t j = 0; j < stops[q].size(); j++ )
 					{
+						const Real mx = ( stops[p][i].x - middle ) / MAP_XY_FACTOR, my = ( stops[p][i].y - middle ) / MAP_XY_FACTOR;
+						if( mx * mx + my * my < 30.0f * 30.0f )
+							continue;
 						const Real dx = ( stops[p][i].x - stops[q][j].x ) / MAP_XY_FACTOR, dy = ( stops[p][i].y - stops[q][j].y ) / MAP_XY_FACTOR;
-						const Real ix = ( stops[p][i].x - base.x ) / MAP_XY_FACTOR, iy = ( stops[p][i].y - base.y ) / MAP_XY_FACTOR;
-						if( ix * ix + iy * iy > ( baseRadius / MAP_XY_FACTOR ) * ( baseRadius / MAP_XY_FACTOR ) )
-							CHECK( dx * dx + dy * dy > 400.0f );
+						CHECK( dx * dx + dy * dy > 400.0f );
 					}
 	}
-	CHECK( counts[1] && counts[2] && counts[3] );
 }
 
-TEST(aod_waves_grow_with_the_wave_and_the_seats_and_bring_a_boss_every_fifth)
+TEST(aod_waves_grow_mix_their_kinds_and_bring_a_boss_every_fifth)
 {
 	for( Int wave = 1; wave < AOD_WAVES; wave++ )
 	{
-		CHECK( Aod_wavePoints( wave + 1, 2 ) > Aod_wavePoints( wave, 2 ) );
-		CHECK( Aod_wavePoints( wave, 4 ) > Aod_wavePoints( wave, 2 ) );
+		CHECK( Aod_wavePoints( wave + 1 ) > Aod_wavePoints( wave ) );
 		CHECK( Aod_isBossWave( wave ) == ( wave % 5 == 0 ) );
 		CHECK( Aod_waveRank( wave + 1 ) >= Aod_waveRank( wave ) );
 	}
-	CHECK_EQ( Aod_wavePoints( 1, 1 ), 10 );
-	CHECK_EQ( Aod_wavePoints( 20, 2 ), ( 6 + 80 + 133 ) * 150 / 100 );
-	// every wave can be paid for from the first: a one-point kind from wave 1
-	Int cheapest = 1000;
+	CHECK_EQ( Aod_wavePoints( 1 ), 9 );
+	CHECK_EQ( Aod_wavePoints( 20 ), 6 + 60 + 100 );
+	// wave 1 has a kind to draw; by wave 12 infantry, vehicles and a helicopter all come
+	Int first = 0;
+	Bool infantry = FALSE, air = FALSE;
 	for( Int k = 0; k < Aod_kindCount(); k++ )
-		if( Aod_kind( k ).firstWave == 1 )
-			cheapest = std::min( cheapest, Aod_kind( k ).points );
-	CHECK_EQ( cheapest, 1 );
-	CHECK( Aod_bossHealthPercent( 3 ) > Aod_bossHealthPercent( 2 ) );
+	{
+		first += Aod_kind( k ).firstWave == 1 ? 1 : 0;
+		infantry = infantry || ( strstr( Aod_kind( k ).name, "Infantry" ) != NULL && Aod_kind( k ).firstWave <= 12 );
+		air = air || ( strstr( Aod_kind( k ).name, "Comanche" ) != NULL && Aod_kind( k ).firstWave <= 12 );
+		CHECK( Aod_kind( k ).points >= 1 && Aod_kind( k ).points <= Aod_wavePoints( Aod_kind( k ).firstWave ) );
+	}
+	CHECK( first >= 1 && infantry && air );
+	// every boss sturdier than the last: 300% of an Overlord on wave 5, 900% on wave 20
+	CHECK_EQ( Aod_bossHealthPercent( 5 ), 300 );
+	CHECK_EQ( Aod_bossHealthPercent( 20 ), 900 );
 }

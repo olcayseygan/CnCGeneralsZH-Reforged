@@ -20,17 +20,21 @@
 //
 // Art of Defense: the logic system that runs the tower defence mode on a map the random map
 // generator's aod style wrote ("-randommap <seed> [players] [size] aod").  It switches itself on when
-// the map carries AOD_Base and at least one AOD_Spawn_N waypoint; every other game never sees it, and
-// its state goes into the CRC only while it is on.
+// the map carries the AOD_Exit area and at least one AOD_Entry_N waypoint; every other game never sees
+// it.  Its state goes into the CRC only while it is on, and into every save (GameLogic version 25).
 //
-// The seats share one base on the plateau in the middle, all allied.  The civilian player owns the
-// waves: on a new game the director makes it every seat's enemy.  A wave is drawn from a table of
-// retail units by points, more each wave and more for every seat, and comes out of the spawns a unit
-// at a time under a cap on how many may walk at once (issue #92: an AOD map with no cap crashed on
-// its tank count).  Every unit attack-follows its spawn's waypoint path, AOD_Spawn_N through the
-// AOD_Path_N_k to AOD_Base.  One that crosses the AOD_Base area leaks: it is taken off the map and
-// costs the seats a life, a boss more.  A kill pays every seat; so does every wave as it starts.
-// No lives left: every seat is out.  Every wave seen off: the seats win.
+// A lane a seat, the map a mirror of itself (RMGLayout::buildAod): one seat's lane runs edge to edge,
+// two to six seats' lanes run in from the rim to the pit in the middle.  The seats build on the plateau
+// beside their lanes, all allied, humans only; the civilian player owns the waves and the director makes
+// it every seat's enemy on a new game.  A wave is drawn from a table of retail units by points, more
+// each wave, once for every lane alike, and comes out of every entry at once a unit at a time under a cap
+// on how many may walk (issue #92: an AOD map with no cap crashed on its tank count).  Every unit
+// attack-follows its lane, AOD_Entry_N through the AOD_Path_N_k, so it shoots back at what shoots it from
+// the rim and walks on; the trench's cliffs keep it in the lane, and one that stops picks the lane up
+// again at its next stop.  One that reaches the AOD_Exit area has got out: it goes in a flare and costs
+// the seats a life, a boss more, out of the lives they share.  A kill pays the seat whose lane it died
+// in; every wave pays every seat as it starts.  No lives left: every seat is out.  Every wave seen off:
+// the seats win.
 //
 // Pure logic state, fed only by the map, the frame and the logic random stream.  Nothing here reads
 // the client.
@@ -49,22 +53,26 @@
 
 class Object;
 class ThingTemplate;
+class PolygonTrigger;
+class FXList;
+class Player;
 
 enum
 {
 	AOD_WAVES = 20,							///< waves to see off for the win
-	AOD_LIVES = 20,							///< leaks the seats can take
+	AOD_LIVES = 20,							///< leaks the seats can take, together
 	AOD_BOSS_EVERY = 5,					///< every fifth wave brings a boss at its head
 	AOD_BOSS_LEAK = 5,						///< lives a boss costs when it leaks
-	AOD_ALIVE_CAP = 80,					///< wave units walking at once at the most
+	AOD_ALIVE_CAP = 80,					///< wave units walking at once at the most, every lane together
 	AOD_FIRST_WAVE_SECONDS = 60,		///< game seconds to build before the first wave
 	AOD_WAVE_GAP_SECONDS = 30,			///< and between the last of one wave out and the next
-	AOD_SPAWN_GAP_FRAMES = 12,			///< logic frames between two units out of the spawns, taking turns
-	AOD_KILL_PAY_PER_POINT = 15,		///< credits a wave unit's point pays every seat when it dies
+	AOD_SPAWN_GAP_FRAMES = 12,			///< logic frames between two units out of an entry
+	AOD_KILL_PAY_PER_POINT = 15,		///< credits a wave unit's point pays the seat whose lane it died in
 	AOD_WAVE_PAY = 200,					///< credits every seat gets as a wave starts
 	AOD_WAVE_PAY_PER_WAVE = 50,		///< and that much more for each wave before it
 	AOD_LOG_SECONDS = 10,				///< game seconds between two HEADLESS AOD status lines
 	AOD_RETARGET_SECONDS = 4,			///< game seconds between two looks at an idle wave unit
+	AOD_LANES_MOST = 6,					///< a lane a seat
 };
 
 /// One kind of wave unit: a retail template, what it costs a wave, the first wave it comes in.
@@ -77,11 +85,11 @@ struct AodKind
 
 extern Int Aod_kindCount( void );
 extern const AodKind &Aod_kind( Int kind );
-/// The boss's template, and its health as a share of the template's for this many seats, percent.
+/// The boss's template, and its health on that wave as a share of the template's, percent.
 extern const char *Aod_bossName( void );
-extern Int Aod_bossHealthPercent( Int seats );
-/// The points wave (1 on) is worth for this many seats.
-extern Int Aod_wavePoints( Int wave, Int seats );
+extern Int Aod_bossHealthPercent( Int wave );
+/// The points wave (1 on) is worth on one lane; every lane gets the same wave.
+extern Int Aod_wavePoints( Int wave );
 extern Bool Aod_isBossWave( Int wave );
 /// The rank a wave's units come in at: regular, then veteran, elite and heroic as the waves go on.
 extern Int Aod_waveRank( Int wave );
@@ -113,36 +121,51 @@ private:
 	{
 		ObjectID id;
 		Int kind;												///< into the kind table, -1 for the boss
+		Int lane;												///< the lane it walks, from 0
+		Int wave;												///< the wave it came with
 	};
 
-	Object *spawn( Int kind, Int spawnIndex );
-	Bool inBase( const Object *obj ) const;
-	Int nearestPathStop( const Object *obj, Int *spawnOut ) const;	///< for the log alone
+	Object *spawn( Int kind, Int lane );
+	Bool inExit( const Object *obj ) const;
+	Int nearestStop( const Object *obj, Int lane ) const;	///< the stop of its lane nearest a unit
+	Player *seatOfLane( Int lane ) const;		///< the seat on the start of that lane's sector, or NULL
 	void startWave( UnsignedInt now );
-	void paySeats( Int amount ) const;
+	void pay( Player *seat, Int lane, Int amount );
 	void lose( UnsignedInt now );
+	void logWaves( UnsignedInt now ) const;
+	// the reference defence (-aodreference <percent>, a skirmish dev aid, dead in any network game)
+	void referenceDefence( UnsignedInt now );
+	void findReferenceSpots( void );
 
 	// from the map and the data, on every newMap; not saved
 	Bool m_active;
-	Coord3D m_base;
-	Real m_baseRadius;									///< the AOD_Base area's reach from the waypoint
+	PolygonTrigger *m_exit;							///< the map's AOD_Exit area
 	Int m_enemyPlayer;									///< the civilian player's index, who owns the waves
 	Int m_seats;
-	std::vector<AsciiString> m_spawnNames;
-	std::vector< std::vector<Coord3D> > m_paths;	///< each spawn's waypoints in order, for the log
+	std::vector< std::vector<Coord3D> > m_paths;	///< each lane's waypoints in order, its entry first
+	std::vector< std::vector<AsciiString> > m_stops;	///< and their names
 	std::vector<const ThingTemplate *> m_kinds;
 	const ThingTemplate *m_boss;
+	const FXList *m_exitFX;							///< what a unit that gets out goes in
 
 	// saved
 	Int m_wave;													///< the last wave started, 0 before the first
 	UnsignedInt m_nextWaveFrame;
 	UnsignedInt m_nextSpawnFrame;
-	std::vector<Int> m_pending;					///< kinds still to come out this wave, the next first; -1 the boss
+	std::vector<Int> m_pending;					///< kinds still to come out on every lane this wave, the next first; -1 the boss
 	std::vector<Unit> m_units;					///< wave units walking
 	Int m_lives;
 	Int m_over;
-	Int m_spawnTurn;										///< the spawn the next unit comes out of
+	Int m_spawnTurn;										///< unused since version 2 (every lane gets each unit at once); kept in the save
 	UnsignedInt m_spawned, m_kills, m_leaks;
+	Int m_waveLeaks[ AOD_WAVES + 1 ];		///< lives lost to each wave's units
+
+	// the reference defence's book, per lane; a dev aid, not saved
+	Int m_refPercent;
+	Int m_refEarned[ AOD_LANES_MOST ], m_refSpent[ AOD_LANES_MOST ], m_refBought[ AOD_LANES_MOST ];
+	Bool m_refStarted;
+	std::vector< std::vector<Coord3D> > m_refSpots;
+	Int m_refNextSpot[ AOD_LANES_MOST ], m_refPlants[ AOD_LANES_MOST ];
 };
 
 extern AodDirector *TheAodDirector;

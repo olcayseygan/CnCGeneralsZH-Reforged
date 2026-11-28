@@ -1,0 +1,19 @@
+# Tunnel shortcut for a spread selection (issue 221): one order to twelve rebels in two bunches, six
+# beside the home tunnel and six already most of the way to the goal.  The group's middle is nearest
+# the home tunnel, so the group picks it, and it pays for the six beside it.  The six up front used to
+# turn round and walk back to it, about 1070 to get on a trip whose walk is 380.  Each member now goes
+# down only when its own trip beats its own walk.  tunnelsplit.txt is the tight group, which still all
+# goes down.
+#
+# Read HEADLESS ARRIVE: first and mean arrival drop when the front six walk straight in.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 2 small -autoskirmish 2 -takeover -side 0 FactionGLA -side 1 FactionAmerica
+#     -seed 3 -maxframes 3000 -scenario tunnelspread -logPrefix tunnelspread_
+
+30    spawn       0  GLATunnelNetwork       1  start0:0:300
+30    spawn       0  GLATunnelNetwork       1  start1:0:300
+30    spawn       0  GLAInfantryRebel       6  start0:250:300  25
+30    spawn       0  GLAInfantryRebel       6  900 800  25
+90    playermove  0  GLAInfantryRebel          start1:150:300
+90    arrive      0  GLAInfantryRebel          start1:150:300  250

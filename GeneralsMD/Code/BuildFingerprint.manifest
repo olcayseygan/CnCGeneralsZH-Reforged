@@ -1853,6 +1853,7 @@ Data/Scenarios/tunnelgap.txt
 Data/Scenarios/tunnelqueue.txt
 Data/Scenarios/tunnelshortcut.txt
 Data/Scenarios/tunnelsplit.txt
+Data/Scenarios/tunnelspread.txt
 Data/Scenarios/tunnelunderfire.txt
 Data/Scenarios/tunnelwalk.txt
 Data/Scenarios/underfire_building.txt

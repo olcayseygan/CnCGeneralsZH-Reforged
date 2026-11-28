@@ -1922,6 +1922,19 @@ static const Object *tunnelWalker( const std::list<Object *> &members )
 	return NULL;
 }
 
+/** Whether the tunnel the group picked from its middle also beats `member`'s own walk to `dest`
+		(TunnelTracker::isTunnelShortcut).  A tight group all agree with its middle and all go down, which
+		is what the group decision is for; an army spread across the map has its middle near the central
+		tunnel, and every flank used to walk sideways to it and queue there (issue 221).  Now the ones the
+		trip does not pay for walk. */
+static Bool tunnelPaysFor( const Object *member, const Object *entrance, const Coord3D *dest )
+{
+	const Coord3D *at = member->getPosition();
+	const Real dx = dest->x - at->x;
+	const Real dy = dest->y - at->y;
+	return TunnelTracker::isTunnelShortcut( member, entrance, at, dest, (Real)sqrt( dx * dx + dy * dy ) );
+}
+
 /**
  * Move to given position(s)
  */
@@ -2289,7 +2302,8 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 			else if (airCursor < (Int)airMembers.size() && airMembers[airCursor] == theUnit)
 				dest = airGoals[airCursor++];
 
-			if (tunnelEntrance != NULL && ai->takeTunnelTrip( tunnelEntrance, &dest, TUNNEL_TRIP_MOVE, cmdSource ))
+			if (tunnelEntrance != NULL && tunnelPaysFor( theUnit, tunnelEntrance, &dest )
+					&& ai->takeTunnelTrip( tunnelEntrance, &dest, TUNNEL_TRIP_MOVE, cmdSource ))
 			{
 				ai->clearCrowdLane();
 				continue;
@@ -3019,7 +3033,8 @@ void AIGroup::groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire,
 			computeIndividualDestination( &dest, &goalPos, theUnit, &center, FALSE );
 
 		const TunnelTripEnd tripEnd = theUnit->isAbleToAttack() ? TUNNEL_TRIP_ATTACK_MOVE : TUNNEL_TRIP_MOVE;
-		if (tunnelEntrance != NULL && ai->takeTunnelTrip( tunnelEntrance, &dest, tripEnd, cmdSource ))
+		if (tunnelEntrance != NULL && tunnelPaysFor( theUnit, tunnelEntrance, &dest )
+				&& ai->takeTunnelTrip( tunnelEntrance, &dest, tripEnd, cmdSource ))
 		{
 			ai->clearCrowdLane();
 			continue;

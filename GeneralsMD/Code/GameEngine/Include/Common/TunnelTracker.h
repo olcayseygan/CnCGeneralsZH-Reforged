@@ -72,6 +72,7 @@ public:
 	Object *findTunnelNear( const Coord3D *pos, const Object *walker = NULL, const Coord3D *reachPos = NULL ) const;	///< the finished tunnel nearest pos, under fire or not, and, given a walker, that it can walk between and reachPos (pos by default), or NULL
 	Bool hasTunnelTraveller() const;	///< is anybody inside only passing through, and so about to free their place?
 	Int getResidentCount() const;	///< the ones inside to stay: what the network shows, since a traveller is gone the next frame
+	static Bool isTunnelShortcut( const Object *walker, const Object *entrance, const Coord3D *from, const Coord3D *to, Real walk );	///< does going down `entrance` and up the mouth nearest `to` beat a walk `walk` long from `from`, or does no walk get there at all
 	static Object *findTunnelShortcut( const Object *walker, const Coord3D *from, const Coord3D *to, Real walk );	///< the mouth of its controlling player's network for `walker` to go down to get from `from` to `to` quicker than a walk `walk` long, or where no walk gets there, or NULL
 
 	Object *getCurNemesis(void);

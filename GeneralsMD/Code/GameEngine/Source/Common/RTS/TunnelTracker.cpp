@@ -371,23 +371,37 @@ Object *TunnelTracker::findTunnelShortcut( const Object *walker, const Coord3D *
 		return NULL;
 
 	Object *entrance = tunnels->findTunnelNear( from, walker, walker->getPosition() );
-	Object *exit = tunnels->findTunnelNear( to, walker );
-	if( entrance == NULL || exit == NULL || exit == entrance )
+	if( entrance == NULL || !isTunnelShortcut( walker, entrance, from, to, walk ) )
 		return NULL;
+
+	return entrance;
+}
+
+// ------------------------------------------------------------------------
+/** findTunnelShortcut's test for one mouth already chosen.  A group that decided from its middle asks
+		it again for each member from where that member stands (AIGroup's move and attack move): a whole
+		army told to cross the map has its middle somewhere in the map's centre, and every man went down
+		the tunnel there, the ones on the flanks walking half the map sideways to reach it (issue 221). */
+Bool TunnelTracker::isTunnelShortcut( const Object *walker, const Object *entrance, const Coord3D *from, const Coord3D *to, Real walk )
+{
+	const TunnelTracker *tunnels = walker->getControllingPlayer()->getTunnelSystem();
+	if( tunnels == NULL )
+		return FALSE;
+
+	Object *exit = tunnels->findTunnelNear( to, walker );
+	if( exit == NULL || exit == entrance )
+		return FALSE;
 
 	if( !TheAI->pathfinder()->clientSafeQuickDoesPathExistForUI( walker->getAI()->getLocomotorSet(), walker->getPosition(), to ) )
 	{
 		DEBUG_LOG(("TUNNELSHORTCUT frame %d: %d cannot walk to (%.0f,%.0f), goes down %d and up %d\n", TheGameLogic->getFrame(),
 			walker->getID(), to->x, to->y, entrance->getID(), exit->getID()));
-		return entrance;
+		return TRUE;
 	}
 
 	const Real toEntrance = (Real)sqrt( ThePartitionManager->getDistanceSquared( entrance, from, FROM_CENTER_2D ) );
 	const Real fromExit = (Real)sqrt( ThePartitionManager->getDistanceSquared( exit, to, FROM_CENTER_2D ) );
-	if( toEntrance + fromExit >= walk )
-		return NULL;
-
-	return entrance;
+	return toEntrance + fromExit < walk;
 }
 
 // ------------------------------------------------------------------------

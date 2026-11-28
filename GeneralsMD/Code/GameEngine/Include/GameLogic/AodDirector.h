@@ -33,8 +33,9 @@
 // the rim and walks on; the trench's cliffs keep it in the lane, and one that stops picks the lane up
 // again at its next stop.  One that reaches the AOD_Exit area has got out: it goes in a flare and costs
 // the seats a life, a boss more, out of the lives they share.  A kill pays the seat whose lane it died
-// in; every wave pays every seat as it starts.  No lives left: every seat is out.  Every wave seen off:
-// the seats win.
+// in; every wave pays every seat a stipend as it starts, more to a seat that leaked, and a bonus for a wave
+// its lane let none of through (AOD_START_CASH and on).  Twenty lives a seat.  No lives left: every seat
+// is out.  Every wave seen off: the seats win.
 //
 // Pure logic state, fed only by the map, the frame and the logic random stream.  Nothing here reads
 // the client.
@@ -60,18 +61,32 @@ class Player;
 enum
 {
 	AOD_WAVES = 20,							///< waves to see off for the win
-	AOD_LIVES = 20,							///< leaks the seats can take, together
+	AOD_LIVES = 20,							///< leaks the seats can take together, for every seat
 	AOD_BOSS_EVERY = 5,					///< every fifth wave brings a boss at its head
 	AOD_BOSS_LEAK = 5,						///< lives a boss costs when it leaks
 	AOD_ALIVE_CAP = 80,					///< wave units walking at once at the most, every lane together
 	AOD_FIRST_WAVE_SECONDS = 60,		///< game seconds to build before the first wave
-	AOD_WAVE_GAP_SECONDS = 30,			///< and between the last of one wave out and the next
+	AOD_WAVE_GAP_SECONDS = 40,			///< and between the last of one wave out and the next (30 stacked five waves in a lane by wave 8)
 	AOD_SPAWN_GAP_FRAMES = 12,			///< logic frames between two units out of an entry
-	AOD_KILL_PAY_PER_POINT = 15,		///< credits a wave unit's point pays the seat whose lane it died in
-	AOD_WAVE_PAY = 200,					///< credits every seat gets as a wave starts
-	AOD_WAVE_PAY_PER_WAVE = 50,		///< and that much more for each wave before it
+	/* The money (the owner, 2026-11-28: no harvesting, kills pay): the map has no supply, so a seat lives on
+		 what dies in its lane, a stipend as every wave starts, and a bonus for a wave its lane let none of
+		 through.  A kill pays about 60 to 90 percent of what the unit costs to build (100 a point: a Paladin
+		 900), so the money tracks the waves' strength.  A seat whose lane leaked gets a catch-up on the next
+		 stipend, so a lane that falls behind can build back; the bonus is a tenth of a clean wave's kills, so
+		 a strong seat does not run away.  The reference batches of 2026-11-28 found kill pay 40, 60 and 100
+		 a point nearly alike at the whole budget: what holds a lane is where its guns stand and that they
+		 are built again, more than the money. */
+	AOD_START_CASH = 6000,				///< every seat's money at the start, whatever the room set
+	AOD_KILL_PAY_PER_POINT = 100,	///< credits a wave unit's point pays the seat whose lane it died in
+	AOD_STIPEND = 150,						///< credits every seat gets as a wave starts
+	AOD_CATCHUP_PER_POINT = 30,		///< and that much a point of the new wave more if its lane leaked the last one it finished
+	AOD_CLEAN_PER_POINT = 10,			///< credits a point of a wave its lane let none of through
 	AOD_LOG_SECONDS = 10,				///< game seconds between two HEADLESS AOD status lines
 	AOD_RETARGET_SECONDS = 4,			///< game seconds between two looks at an idle wave unit
+	/* game seconds a wave unit may go without reaching a stop further down its lane before it is sent on again,
+		 and three times that before it is taken off the map: a unit caught chasing a gun it cannot reach held its
+		 lane's share of the walking cap and stopped every wave after it (a GLA four-seat reference run, 2026-11-28) */
+	AOD_STUCK_SECONDS = 40,
 	AOD_LANES_MOST = 6,					///< a lane a seat
 };
 
@@ -90,6 +105,8 @@ extern const char *Aod_bossName( void );
 extern Int Aod_bossHealthPercent( Int wave );
 /// The points wave (1 on) is worth on one lane; every lane gets the same wave.
 extern Int Aod_wavePoints( Int wave );
+/// A kind's weight in that wave's draw: even early, leaning to the dearer kinds as the waves go on.
+extern Int Aod_kindWeight( Int kind, Int wave );
 extern Bool Aod_isBossWave( Int wave );
 /// The rank a wave's units come in at: regular, then veteran, elite and heroic as the waves go on.
 extern Int Aod_waveRank( Int wave );
@@ -127,6 +144,8 @@ private:
 		Int kind;												///< into the kind table, -1 for the boss
 		Int lane;												///< the lane it walks, from 0
 		Int wave;												///< the wave it came with
+		Int best;												///< the furthest stop it has been nearest (version 4)
+		UnsignedInt since;							///< the frame it got there or spawned (version 4)
 	};
 
 	Object *spawn( Int kind, Int lane );
@@ -137,6 +156,7 @@ private:
 	void pay( Player *seat, Int lane, Int amount );
 	void lose( UnsignedInt now );
 	void logWaves( UnsignedInt now ) const;
+	void settleWaves( UnsignedInt now, const Int alive[][ AOD_LANES_MOST ] );
 	// the reference defence (-aodreference <percent>, a skirmish dev aid, dead in any network game)
 	void referenceDefence( UnsignedInt now );
 	void findReferenceSpots( void );
@@ -163,6 +183,12 @@ private:
 	Int m_spawnTurn;										///< unused since version 2 (every lane gets each unit at once); kept in the save
 	UnsignedInt m_spawned, m_kills, m_leaks;
 	Int m_waveLeaks[ AOD_WAVES + 1 ];		///< lives lost to each wave's units
+	Int m_laneLeaked[ AOD_WAVES + 1 ][ AOD_LANES_MOST ];	///< units of each wave that got out of each lane
+	Bool m_settled[ AOD_WAVES + 1 ][ AOD_LANES_MOST ];		///< each wave's last unit in each lane gone, its bonus paid or not
+	Bool m_catchUp[ AOD_LANES_MOST ];		///< the lane leaked the last wave it finished: its next stipend carries the catch-up
+	Bool m_cashSet;											///< the seats' start money set
+	// what each wave paid each lane's seat, for the log alone; not saved
+	Int m_paidKills[ AOD_WAVES + 1 ][ AOD_LANES_MOST ], m_paidStipend[ AOD_WAVES + 1 ][ AOD_LANES_MOST ];
 
 	// the reference defence's book, per lane; a dev aid, saved (version 3), its spots found again on a load
 	Int m_refPercent;
@@ -170,6 +196,7 @@ private:
 	Bool m_refStarted;
 	std::vector< std::vector<Coord3D> > m_refSpots;
 	Int m_refNextSpot[ AOD_LANES_MOST ], m_refPlants[ AOD_LANES_MOST ];
+	std::vector<ObjectID> m_refHeld[ AOD_LANES_MOST ];	///< the gun on each spot, gone or never built a spot to build on (version 4)
 };
 
 extern AodDirector *TheAodDirector;

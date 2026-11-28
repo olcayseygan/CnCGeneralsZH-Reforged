@@ -32667,7 +32667,22 @@ TEST(aod_waves_grow_mix_their_kinds_and_bring_a_boss_every_fifth)
 		CHECK( Aod_kind( k ).points >= 1 && Aod_kind( k ).points <= Aod_wavePoints( Aod_kind( k ).firstWave ) );
 	}
 	CHECK( first >= 1 && infantry && air );
-	// every boss sturdier than the last: 300% of an Overlord on wave 5, 900% on wave 20
-	CHECK_EQ( Aod_bossHealthPercent( 5 ), 300 );
-	CHECK_EQ( Aod_bossHealthPercent( 20 ), 900 );
+	// the draw is even to wave 3 and leans to the dear kinds after: a 9-point kind over a 1-point one
+	Int cheap = 0, dear = 0;
+	for( Int k = 0; k < Aod_kindCount(); k++ )
+	{
+		if( Aod_kind( k ).points < Aod_kind( cheap ).points ) cheap = k;
+		if( Aod_kind( k ).points > Aod_kind( dear ).points ) dear = k;
+	}
+	CHECK_EQ( Aod_kindWeight( dear, 3 ), Aod_kindWeight( cheap, 3 ) );
+	CHECK( Aod_kindWeight( dear, 10 ) > 5 * Aod_kindWeight( cheap, 10 ) );
+	CHECK( Aod_kindWeight( dear, 20 ) * Aod_kindWeight( cheap, 10 ) > Aod_kindWeight( dear, 10 ) * Aod_kindWeight( cheap, 20 ) );
+	// every boss sturdier than the last: 150% of an Overlord on wave 5, 450% on wave 20
+	CHECK_EQ( Aod_bossHealthPercent( 5 ), 150 );
+	CHECK_EQ( Aod_bossHealthPercent( 20 ), 450 );
+	CHECK( Aod_bossHealthPercent( 10 ) > Aod_bossHealthPercent( 5 ) && Aod_bossHealthPercent( 15 ) > Aod_bossHealthPercent( 10 ) );
+	// the money: a kill pays about what the unit costs to build (a Paladin, 9 points, 900), and the start covers waves 1 to 3
+	CHECK_EQ( AOD_KILL_PAY_PER_POINT * 9, 900 );
+	CHECK( AOD_START_CASH >= AOD_KILL_PAY_PER_POINT * ( Aod_wavePoints( 1 ) + Aod_wavePoints( 2 ) + Aod_wavePoints( 3 ) ) );
+	CHECK( AOD_CLEAN_PER_POINT * 5 <= AOD_KILL_PAY_PER_POINT );
 }

@@ -12119,17 +12119,18 @@ void InGameUI::drawDirectorBroadcast( void )
 	* next comes, what it is; then "too big and crude", so two slim lines).  Each line one of the side's trays: the
 	* first the lives the seats share, the wave under way and its units still to come down the local seat's lane
 	* or walking it; the second the next wave, its seconds to go once the last of this one is out (the panel's
-	* largest figure), and its units a lane.  A kind is a chip, a small cameo with its count over its health
-	* beside it, as it comes (rank and the boss's share in): its rank's chevron on the cameo, AIR after a flyer's
-	* count, BOSS for the boss's count on a red well, and a boss wave's head on a red well.  Text is never under
-	* the 14 pixels a 1080 screen reads, so it stands beside the cameo rather than on it.  It reads TheAodDirector
+	* largest figure), and its units a lane.  A kind is a chip, a small cameo with one line beside it, its count
+	* and then its health as it comes (rank and the boss's share in): its rank's chevron on the cameo, AIR after a
+	* flyer's count, BOSS for the boss's count on a red well, and a boss wave's head on a red well.  Text is never
+	* under the 14 pixels a 1080 screen reads, so it stands beside the cameo rather than on it, every string
+	* measured and laid end to end, and a line as tall as its tallest chip text or cameo.  It reads TheAodDirector
 	* at the sync point and writes nothing back; the next wave is drawn a wave ahead in the logic, so what it
 	* shows is what comes. */
 //-------------------------------------------------------------------------------------------------
 enum
 {
-	AOD_CAMEO_W						= 23,		///< a kind's cameo, 800x600 units through stripPixels
-	AOD_CAMEO_H						= 17,
+	AOD_CAMEO_W						= 27,		///< a kind's cameo, 800x600 units through stripPixels
+	AOD_CAMEO_H						= 20,
 	AOD_PAD								= 1,		///< round a chip's cameo and its text
 	AOD_HEAD_PAD					= 3,		///< round a head's words and between them
 	AOD_SMALL_POINTS			= 8,		///< words, counts and health: 15 pixels at 1080
@@ -12173,8 +12174,7 @@ struct AodCell
 	const ThingTemplate *thing;		///< the kind, NULL for a head
 	Int wave;											///< the wave whose rank it shows
 	Bool alarm;										///< the boss, or a boss wave's head: a red well
-	std::vector<AodRun> runs;			///< a head's words, or a chip's top line beside its cameo
-	UnicodeString health;					///< a chip's bottom line
+	std::vector<AodRun> runs;			///< a head's words, or a chip's line beside its cameo
 };
 
 static void aodRun( AodCell &cell, const UnicodeString &text, Color color, Int points )
@@ -12265,7 +12265,10 @@ static void aodKindCells( std::vector<AodCell> &cells, Int wave, const std::vect
 		if( cell.alarm )
 			hp = hp * (Real)Aod_bossHealthPercent( wave ) / 100.0f;
 		if( hp > 0.0f )
-			cell.health.format( u"%d", REAL_TO_INT( hp + 0.5f ) );
+		{
+			text.format( u"%d", REAL_TO_INT( hp + 0.5f ) );
+			aodRun( cell, text, GameMakeColor( 120, 230, 110, 255 ), AOD_SMALL_POINTS );
+		}
 		cells.push_back( cell );
 	}
 }
@@ -12278,13 +12281,14 @@ static Int drawAodRow( const std::vector<AodCell> &cells, Int middle, Int top, I
 		return top;
 
 	// laid out at the HUD's size, and again smaller as a whole when the line is wider than its share; the
-	// strings each cell draws are made here, its runs and then a chip's health, in that order
+	// strings each cell draws are made here, its runs in order, and measured: every run stands after the last
+	// one's width, and the line is as tall as the tallest chip text or the cameo, so nothing overlaps
 	const Real scale = ControlBarHudPageScale();
 	const UnsignedInt firstString = s_aodStringsUsed;
 	std::vector<Int> widths( count );
 	std::vector<DisplayString *> strings;
 	Real shrink = 1.0f;
-	Int cameoW = 0, cameoH = 0, pad = 0, headPad = 0, total = 0;
+	Int cameoW = 0, cameoH = 0, pad = 0, headPad = 0, total = 0, chipTextH = 0;
 	for( Int pass = 0; pass < 2; ++pass )
 	{
 		auto pixels = [ & ]( Int nominal ) { return max( REAL_TO_INT_CEIL( nominal * scale * shrink ), 1 ); };
@@ -12295,6 +12299,7 @@ static Int drawAodRow( const std::vector<AodCell> &cells, Int middle, Int top, I
 		pad = pixels( AOD_PAD );
 		headPad = pixels( AOD_HEAD_PAD );
 		total = 0;
+		chipTextH = 0;
 		for( Int i = 0; i < count; ++i )
 		{
 			const AodCell &c = cells[ i ];
@@ -12303,21 +12308,17 @@ static Int drawAodRow( const std::vector<AodCell> &cells, Int middle, Int top, I
 			{
 				DisplayString *string = aodString( fontName, pixels( c.runs[ r ].points ), c.runs[ r ].text );
 				strings.push_back( string );
-				Int w = 0;
-				string->getSize( &w, NULL );
+				Int w = 0, h = 0;
+				string->getSize( &w, &h );
 				runsW += w;
+				if( c.thing != NULL )
+					chipTextH = max( chipTextH, h );
 			}
+			const Int gaps = headPad * max( (Int)c.runs.size() - 1, 0 );
 			if( c.thing == NULL )
-				widths[ i ] = runsW + headPad * ( (Int)c.runs.size() + 1 );
+				widths[ i ] = headPad + runsW + gaps + headPad;
 			else
-			{
-				DisplayString *string = aodString( fontName, pixels( AOD_SMALL_POINTS ), c.health );
-				strings.push_back( string );
-				Int healthW = 0;
-				string->getSize( &healthW, NULL );
-				runsW += pad * ( (Int)c.runs.size() - 1 );
-				widths[ i ] = pad + cameoW + pad + max( runsW, healthW ) + 2 * pad;
-			}
+				widths[ i ] = pad + cameoW + pad + runsW + gaps + 2 * pad;
 			total += widths[ i ];
 		}
 		if( total <= widest || widest <= 0 )
@@ -12325,7 +12326,7 @@ static Int drawAodRow( const std::vector<AodCell> &cells, Int middle, Int top, I
 		shrink = (Real)widest / total;
 	}
 
-	const Int cellH = cameoH + 2 * pad;
+	const Int cellH = max( cameoH, chipTextH ) + 2 * pad;
 	const HudTray tray = aodTray( cellH );
 	// a scheme with no tray (Classic's) gets a plate of the bar's steel, a lip round the cells
 	const Int lip = tray.cell != NULL ? 0 : max( pad, 2 );
@@ -12352,7 +12353,6 @@ static Int drawAodRow( const std::vector<AodCell> &cells, Int middle, Int top, I
 	const Color hole = GameMakeColor( 2, 4, 5, 255 );
 	const Color alarmWell = GameMakeColor( 90, 14, 10, 255 );
 	const Color red = GameMakeColor( 240, 70, 50, 255 );
-	const Color health = GameMakeColor( 120, 230, 110, 255 );
 	const Color drop = GameMakeColor( 0, 0, 0, 255 );
 	static const char *const CHEVRONS[ LEVEL_COUNT ] = { NULL, "SCVeter1", "SCVeter2", "SCVeter3" };
 	size_t nextString = 0;
@@ -12389,10 +12389,10 @@ static Int drawAodRow( const std::vector<AodCell> &cells, Int middle, Int top, I
 			continue;
 		}
 
-		// a chip: the cameo, the bar's own rank chevrons on it, the count over the health beside it
+		// a chip: the cameo, the bar's own rank chevrons on it, the count and the health beside it on one line
 		IRegion2D cameo;
 		cameo.lo.x = b.lo.x + pad;
-		cameo.lo.y = b.lo.y + pad;
+		cameo.lo.y = ( b.lo.y + b.hi.y - cameoH ) / 2;
 		cameo.hi.x = cameo.lo.x + cameoW;
 		cameo.hi.y = cameo.lo.y + cameoH;
 		if( c.thing->getButtonImage() != NULL )
@@ -12405,22 +12405,14 @@ static Int drawAodRow( const std::vector<AodCell> &cells, Int middle, Int top, I
 			const Int size = max( cameoH / 3, 6 );
 			TheDisplay->drawImage( chevron, cameo.lo.x + 1, cameo.lo.y + 1, cameo.lo.x + 1 + size, cameo.lo.y + 1 + size );
 		}
-		const Int textLeft = cameo.hi.x + pad + 1;
-		Int x = textLeft;
+		Int x = cameo.hi.x + pad + 1;
 		for( size_t r = 0; r < c.runs.size(); ++r )
 		{
 			DisplayString *string = strings[ nextString++ ];
-			Int runW = 0;
-			string->getSize( &runW, NULL );
-			string->draw( x, b.lo.y + 1, c.runs[ r ].color, drop );
-			x += runW + pad;
-		}
-		DisplayString *string = strings[ nextString++ ];
-		if( !c.health.isEmpty() )
-		{
-			Int healthH = 0;
-			string->getSize( NULL, &healthH );
-			string->draw( textLeft, b.hi.y - 1 - healthH, health, drop );
+			Int runW = 0, runH = 0;
+			string->getSize( &runW, &runH );
+			string->draw( x, ( b.lo.y + b.hi.y - runH ) / 2, c.runs[ r ].color, drop );
+			x += runW + headPad;
 		}
 	}
 

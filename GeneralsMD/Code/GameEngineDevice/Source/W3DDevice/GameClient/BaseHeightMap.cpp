@@ -4342,7 +4342,7 @@ void BaseHeightMapRenderObjClass::drawSkirtFade(void)
 	const Vector3 rim = getSkirtRimColour();
 	// The device's: the wrapper's record of this state can be its unknown marker, whose bits written back
 	// left only alpha writing and the whole -d3d9 frame its clear colour.
-	DWORD oldColourWrites = D3DCOLORWRITEENABLE_RED|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_ALPHA;
+	RenderUInt32 oldColourWrites = D3DCOLORWRITEENABLE_RED|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_ALPHA;
 	DX8Wrapper::_Get_D3D_Device()->GetRenderState(D3DRS_COLORWRITEENABLE, &oldColourWrites);
 	const unsigned oldTextureFactor = DX8Wrapper::Get_DX8_Render_State(D3DRS_TEXTUREFACTOR);
 	if (!m_skirtChunks.empty() && m_skirtIndices != NULL && !m_skirtVisible.empty()) {
@@ -4388,7 +4388,7 @@ void BaseHeightMapRenderObjClass::drawSkirtBackdrop(void)
 	m_skirtBackdropPending = FALSE;
 	if (W3DShaderManager::isAtmosphereDrawn() || TheTacticalView == NULL)
 		return;
-	DWORD oldColourWrites = D3DCOLORWRITEENABLE_RED|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_ALPHA;
+	RenderUInt32 oldColourWrites = D3DCOLORWRITEENABLE_RED|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_ALPHA;
 	DX8Wrapper::_Get_D3D_Device()->GetRenderState(D3DRS_COLORWRITEENABLE, &oldColourWrites);	// as drawSkirtFade
 	ShaderClass backdrop(ShaderClass::_PresetOpaqueSolidShader);
 	backdrop.Set_Depth_Compare(ShaderClass::PASS_LEQUAL);

@@ -15,8 +15,27 @@ TEST(the_skirt_meets_the_edge_at_the_edge_height)
 	for (int i = 0; i < 50; ++i)
 	{
 		const float edge = 10.0f + 3.0f * i;
-		CHECK_NEAR(height(edge, 80.0f, 40.0f, 0.0f, 37.0f * i, -11.0f * i), edge, 1e-4f);
+		CHECK_NEAR(height(edge, edge, edge, 80.0f, 40.0f, 0.0f, 37.0f * i, -11.0f * i), edge, 1e-4f);
+		// an edge under water (a river with no sea strip past it) meets its own bed, not its surface
+		CHECK_NEAR(height(edge, edge, edge + 12.0f, 80.0f, 40.0f, 0.0f, 37.0f * i, -11.0f * i), edge, 1e-4f);
 	}
+}
+
+TEST(a_river_bed_at_the_edge_digs_no_trench_past_it)
+{
+	// bed 10 on a flat floor, surface 20 over it: the ground past the edge climbs from the bed to just
+	// over the water and never dips under the bed, where mixing bed and surface in one mirror dug a trench
+	const float bed = 10.0f, dry = 20.0f + SHORE_RISE;
+	float last = bed;
+	for (int i = 1; i <= 30; ++i)
+	{
+		const float z = carried(bed, bed, dry, CELL * i, 120.0f, -340.0f);
+		CHECK(z >= bed - 1e-4f);
+		CHECK(z >= last - 1e-4f);
+		CHECK(z <= dry + 1e-4f);
+		last = z;
+	}
+	CHECK_NEAR(last, dry, 1e-4f);
 }
 
 TEST(far_out_it_settles_on_the_edge_mean_plus_low_hills)
@@ -24,11 +43,85 @@ TEST(far_out_it_settles_on_the_edge_mean_plus_low_hills)
 	for (int i = 0; i < 200; ++i)
 	{
 		const float x = -500.0f - 13.7f * i, y = 2000.0f + 7.3f * i;
-		const float z = height(150.0f, 120.0f, 50.0f, REACH, x, y);
+		const float z = height(150.0f, 200.0f, 200.0f, 120.0f, 50.0f, REACH, x, y);
 		CHECK(z >= 50.0f - 1e-3f);
 		CHECK(z <= 50.0f + HILL_HEIGHT + 1e-3f);
-		CHECK_EQ(z, height(150.0f, 120.0f, 50.0f, REACH, x, y));
+		CHECK_EQ(z, height(150.0f, 200.0f, 200.0f, 120.0f, 50.0f, REACH, x, y));
+		// the mirrored map no longer counts past the carried relief's reach
+		CHECK_EQ(height(150.0f, 0.0f, 0.0f, 120.0f, 50.0f, CARRY_HOLD + CARRY_RAMP, x, y),
+			height(150.0f, 255.0f, 255.0f, 120.0f, 50.0f, CARRY_HOLD + CARRY_RAMP, x, y));
 	}
+}
+
+TEST(the_mirror_folds_every_sample_onto_the_map)
+{
+	const int last = 10;
+	CHECK_EQ(mirrorSample(0, last), 0);
+	CHECK_EQ(mirrorSample(last, last), last);
+	CHECK_EQ(mirrorSample(-3, last), 3);
+	CHECK_EQ(mirrorSample(last + 3, last), last - 3);
+	CHECK_EQ(mirrorSample(-last - 4, last), last - 4);	// past the far side too, on a small map
+	for (int x = -200; x <= 200; ++x)
+	{
+		const int m = mirrorSample(x, last);
+		CHECK(m >= 0 && m <= last);
+		const int step = mirrorSample(x + 1, last) - m;
+		CHECK(step == 1 || step == -1);	// neighbours stay neighbours: no step
+	}
+}
+
+// A map 61 samples square, the south edge at y 0: a ridge 40 samples wide in x runs north-south
+// across the edge, 120 high on a floor of 20, sloping up toward the edge by 0.5 a sample.  Its height
+// past the south edge as skirtHeight works it out (no water).
+static float ridgeMap(int x, int y)
+{
+	const float across = (float)(x - 30) / 6.0f;
+	return 20.0f + 120.0f * expf(-across * across) + 0.5f * (60 - y) * 0.25f;
+}
+
+static float pastSouthEdge(int x, int y)
+{
+	const int last = 60;
+	const int cx = clampCell(x, last), cy = clampCell(y, last);
+	const float edge = ridgeMap(cx, cy);
+	const float mirrored = ridgeMap(mirrorSample(x, last), mirrorSample(y, last));
+	const float dx = (float)(x - cx), dy = (float)(y - cy);
+	const float outside = sqrtf(dx * dx + dy * dy) * CELL;
+	float blurred = 0.0f;	// blurRing along the south row, near enough
+	for (int k = -PROFILE_RADIUS; k <= PROFILE_RADIUS; ++k)
+		blurred += ridgeMap(clampCell(cx + k, last), cy) / (2 * PROFILE_RADIUS + 1);
+	return height(edge, mirrored, mirrored, blurred, 40.0f, outside, x * CELL, y * CELL);
+}
+
+TEST(a_ridge_at_the_edge_runs_on_past_it)
+{
+	// it meets the map with no step: one cell out moves no more than a cell in does, either side of the
+	// ridge, and the slope into the edge carries on rather than folding back
+	for (int x = 0; x <= 60; ++x)
+	{
+		const float in = ridgeMap(x, 1) - ridgeMap(x, 0);
+		const float out = pastSouthEdge(x, -1) - ridgeMap(x, 0);
+		CHECK(fabsf(out) <= fabsf(in) + 0.5f);
+		if (fabsf(in) > 0.05f)
+			CHECK(out * in <= 0.0f);	// down where the map climbs away from the edge: the same slope on
+	}
+	// the ridge still stands 250 units out, most of its height over the floor beside it, where the old
+	// pull to the blurred edge had flattened it within 150
+	for (int y = -5; y >= -25; --y)
+	{
+		const float crest = pastSouthEdge(30, y), flank = pastSouthEdge(5, y);
+		CHECK(crest - flank > 0.8f * 120.0f);
+	}
+	// and no step anywhere past the edge, round the corners too
+	for (int y = -40; y <= 0; ++y)
+		for (int x = -40; x <= 100; ++x)
+		{
+			if (x >= 0 && x <= 60 && y >= 0)
+				continue;
+			const float z = pastSouthEdge(x, y);
+			CHECK(fabsf(pastSouthEdge(x + 1, y) - z) < 45.0f);
+			CHECK(fabsf(pastSouthEdge(x, y - 1) - z) < 45.0f);
+		}
 }
 
 TEST(past_a_sea_edge_it_stays_under_the_water)

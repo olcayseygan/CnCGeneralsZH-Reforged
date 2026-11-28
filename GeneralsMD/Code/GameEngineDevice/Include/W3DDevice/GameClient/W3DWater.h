@@ -146,6 +146,8 @@ public:
 	Real getWaterHeight(Real x, Real y);	///<return water height at given point - for use by WB.
 	/// The level of the sea drawn past the heightmap's edge (addSkirtSeas) at a point, INVALID_WATER_HEIGHT where none is.
 	Real getSkirtSeaLevel(Real x, Real y) const;
+	/// The highest map water area over a point, INVALID_WATER_HEIGHT where none is: the render's own copy of the polygons where it keeps one.
+	Real getDrawnWaterLevel(Real x, Real y);
 
 	void replaceSkyboxTexture(const AsciiString& oldTexName, const AsciiString& newTextName);
 	TextureClass *getSkyTexture(void) const { return m_settings[m_tod].skyTexture; }	///< the time of day's sky, as WaterSet names it

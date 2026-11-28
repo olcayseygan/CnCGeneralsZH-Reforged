@@ -3526,7 +3526,10 @@ Real BaseHeightMapRenderObjClass::skirtHeight(Int x, Int y, const SkirtEdge &edg
 	if (ring < 0 || ring >= (Int)edge.blurred.size())
 		return edgeZ;
 	const Int border = m_map->getBorderSizeInline();
-	const Real land = TerrainSkirt::height(edgeZ, edge.blurred[ring], edge.landMean, outside, (x - border)*MAP_XY_FACTOR, (y - border)*MAP_XY_FACTOR);
+	const Int mirrorAt = TerrainSkirt::mirrorSample(y, h-1)*w + TerrainSkirt::mirrorSample(x, w-1);
+	const Real mirrored = data[mirrorAt]*MAP_HEIGHT_SCALE;
+	const Real dry = mirrorAt < (Int)edge.mirror.size() ? edge.mirror[mirrorAt] : mirrored;
+	const Real land = TerrainSkirt::height(edgeZ, mirrored, dry, edge.blurred[ring], edge.landMean, outside, (x - border)*MAP_XY_FACTOR, (y - border)*MAP_XY_FACTOR);
 	// under a sea strip, all sea floor; beside one, land that goes down to the water and no further
 	if (edge.water[ring] > INVALID_WATER_HEIGHT)
 		return TerrainSkirt::seaHeight(edgeZ, edge.blurred[ring], edge.water[ring], outside);
@@ -3616,6 +3619,21 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 	edge.landMean = landCount > 0 ? landSum/(Real)landCount : edge.seaZ - TerrainSkirt::SEA_MARGIN;
 	edge.blurred = TerrainSkirt::blurRing(ring);
 	edge.seaShare = TerrainSkirt::blurRing(sea);
+	// The heights the relief past the edge mirrors.  A lake or a river near the edge comes up to just
+	// over its surface (SHORE_RISE, which a coast keeps off the water too), or its bed mirrored out would
+	// lie dry where no water is drawn.  Only near enough the edge to be read.
+	edge.mirror.resize(w*h);
+	for (Int y = 0; y < h; y++)
+		for (Int x = 0; x < w; x++) {
+			Real z = data[y*w + x]*MAP_HEIGHT_SCALE;
+			const Int fromEdge = min(min(x, w-1 - x), min(y, h-1 - y));
+			if (TheWaterRenderObj && fromEdge <= TerrainSkirt::CARRY_CELLS) {
+				const Real waterZ = TheWaterRenderObj->getDrawnWaterLevel((x - border)*MAP_XY_FACTOR, (y - border)*MAP_XY_FACTOR);
+				if (waterZ > INVALID_WATER_HEIGHT)
+					z = max(z, waterZ + TerrainSkirt::SHORE_RISE);
+			}
+			edge.mirror[y*w + x] = z;
+		}
 	m_skirtEdge = edge;
 	m_skirtEdgeValid = TRUE;
 

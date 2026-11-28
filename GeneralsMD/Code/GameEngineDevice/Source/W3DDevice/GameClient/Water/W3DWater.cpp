@@ -745,6 +745,27 @@ Real WaterRenderObjClass::getSkirtSeaLevel(Real x, Real y) const
 	return level;
 }
 
+Real WaterRenderObjClass::getDrawnWaterLevel(Real x, Real y)
+{
+	Real level = INVALID_WATER_HEIGHT;
+	for (size_t p = 0; p < m_skirtSeasFirst && p < m_waterPolygonsForDraw.size(); ++p) {
+		const WaterPolygonForDraw &polygon = m_waterPolygonsForDraw[p];
+		const Real dx = x - polygon.center.x, dy = y - polygon.center.y;
+		if (dx*dx + dy*dy > (polygon.radius + 1.0f)*(polygon.radius + 1.0f) || (Real)polygon.getPoint(0)->z <= level)
+			continue;
+		const std::vector<ICoord3D> &points = polygon.points;
+		Bool inside = FALSE;	// even-odd, as getSkirtSeaLevel
+		for (size_t i = 0, j = points.size() - 1; i < points.size(); j = i++) {
+			const Real xi = (Real)points[i].x, yi = (Real)points[i].y, xj = (Real)points[j].x, yj = (Real)points[j].y;
+			if ((yi > y) != (yj > y) && x < xi + (xj - xi)*(y - yi)/(yj - yi))
+				inside = !inside;
+		}
+		if (inside)
+			level = (Real)points[0].z;
+	}
+	return level;
+}
+
 void WaterRenderObjClass::takeMotionReadsForRender(void)
 {
 	m_modernMotionFrame=TheGameLogic ? TheGameLogic->getFrame() : 0;
@@ -803,6 +824,11 @@ void WaterRenderObjClass::takeReadsForRender(void)
 Real WaterRenderObjClass::getSkirtSeaLevel(Real, Real) const
 {
 	return INVALID_WATER_HEIGHT;	// no draw copy of the polygons to extend: the skirt stays land
+}
+
+Real WaterRenderObjClass::getDrawnWaterLevel(Real x, Real y)
+{
+	return getWaterHeight(x, y);	// no draw copy here: logic's list, as the skirt's shore read takes it
 }
 #endif
 

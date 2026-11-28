@@ -22,8 +22,9 @@
 //
 // It is picture only.  Nothing in logic, the pick or the pathfinder knows it is there, and its
 // hills come from a hash of the world position, never a game random stream.  Leaving the edge it
-// starts on the edge sample's own height, slides over to a blur of the edge round it, then to the
-// mean of the edge's land, and low hills grow out of that.  Past an edge under water it stays sea
+// carries the map's own relief on, mirrored about the edge (carried), so a ridge or a mountain at the
+// border goes on past it; a few hundred units out that gives way to a blur of the edge round it, then
+// to the mean of the edge's land, and low hills grow out of that.  Past an edge under water it stays sea
 // floor under the water instead (seaHeight), and a coast mixes the two.  Toward the rim it fades
 // into the horizon's colour, which drawSkirtFade also lays over the void past it in the tactical view,
 // so it ends in what lies past it.
@@ -58,15 +59,29 @@ namespace TerrainSkirt
 	const float LEVEL_RAMP = 450.0f;	///< 900 carried the edge's own ridges out as long parallel ribs
 	/// Samples either way along the edge the blur averages.
 	const int PROFILE_RADIUS = 12;
+	/** The map's relief carried past the edge (carried): whole out to CARRY_HOLD, gone CARRY_RAMP further,
+		where the blur, the mean and the hills have it.  Pulled to the blur from the edge as before, a
+		mountain at the border died within LEVEL_RAMP, cut off along the heightmap's edge (owner, 2026-11-27). */
+	const float CARRY_HOLD = 250.0f;
+	const float CARRY_RAMP = 450.0f;
+	/// How many cells in from the edge the carried relief reads at most.
+	const int CARRY_CELLS = (int)((CARRY_HOLD + CARRY_RAMP) / CELL);
+	/** Out of the edge the slope goes on and turns into the mirror over about CREST units, between half
+		and one and a half of it by a slow noise of CREST_WAVELENGTH, so the turn wanders: a plain mirror
+		creased every slope into a ridge or a gully straight down the heightmap's edge. */
+	const float CREST = 80.0f;
+	const float CREST_WAVELENGTH = 330.0f;
 	/** The texture past the edge (tileLayers).  Beside the edge, a band PATCH_NEAR tiles deep give or
 		take half carries the edge on as it is.  Past it the ground is patches about PATCH_TILES tiles
-		across, each one texture class, taken from the edge near the patch's centre and moved along the
-		edge by up to PATCH_SHIFT cells plus PATCH_SPREAD of the centre's distance out, in cells; never
-		further in than PATCH_SHIFT.  Neighbours blend over 2 PATCH_BLEND tiles along borders wandering by
-		PATCH_WOBBLE tiles on a PATCH_WOBBLE_SIZE lattice. */
+		across, each one texture class, taken from the mirror of the patch's centre as the relief is
+		(carried), never further in than PATCH_SHIFT, moved by up to PATCH_SHIFT_NEAR cells each way and,
+		past the carried relief's reach, along the edge by PATCH_SPREAD of the distance beyond it, in
+		cells.  Neighbours blend over 2 PATCH_BLEND tiles along borders wandering by PATCH_WOBBLE tiles on
+		a PATCH_WOBBLE_SIZE lattice. */
 	const float PATCH_NEAR = 1.5f;
 	const float PATCH_TILES = 12.0f;
 	const float PATCH_SHIFT = 12.0f;
+	const float PATCH_SHIFT_NEAR = 4.0f;	///< 12 along the edge put grass on a mountain carried out of rock
 	const float PATCH_SPREAD = 0.6f;
 	const float PATCH_BLEND = 1.5f;
 	const float PATCH_WOBBLE = 1.5f;
@@ -129,6 +144,17 @@ namespace TerrainSkirt
 	inline int cellsOut(int cell, int last)
 	{
 		return cell < 0 ? -cell : (cell > last ? cell - last : 0);
+	}
+
+	/** Sample `x` of a row whose samples run 0 to `last`, mirrored about either end and again past the
+		other, so a sample any way out has one on the map and a corner mirrors through its sample. */
+	inline int mirrorSample(int x, int last)
+	{
+		if (last <= 0)
+			return 0;
+		const int period = 2 * last;
+		const int m = (x % period + period) % period;
+		return m > last ? period - m : m;
 	}
 
 	/** One texture layer of a skirt tile: the map cell (lower left, on a width by height heightmap) its
@@ -227,28 +253,45 @@ namespace TerrainSkirt
 		return h == 0 ? 1u : h;
 	}
 
-	/** The cell a patch reads: from the edge its centre lies past (or, over the map, nearest), a little
-		in from it, moved along the edge by up to PATCH_SHIFT plus PATCH_SPREAD of the centre's distance
-		out; past a corner, along one of the two.  The centre alone decides, so a patch is one picture on
-		every tile it covers; decided by the tile, a patch over a corner's diagonal changed class across it. */
+	/// How far in a patch reads for a centre `depth` cells out (or in), moved by `across`: its mirror, at most PATCH_SHIFT.
+	inline int patchDepth(int depth, float across)
+	{
+		const float d = (depth < (int)PATCH_SHIFT ? (float)depth : PATCH_SHIFT) + across;
+		return clampCell((int)floorf(d + 0.5f), (int)PATCH_SHIFT);
+	}
+
+	/** The cell a patch reads: the mirror of its centre about the edge it lies past (or, over the map,
+		is nearest), as the relief is carried, but never deeper in than PATCH_SHIFT, moved by up to
+		PATCH_SHIFT_NEAR each way and, past the carried relief, along the edge by PATCH_SPREAD of the
+		centre's distance beyond it; past a corner, along one of the two.  The centre alone decides, so a
+		patch is one picture on every tile it covers; decided by the tile, a patch over a corner's
+		diagonal changed class across it.  Moved along the edge by 12 cells and more, a patch beside a
+		mountain carried out of the map's rock read the grass beside it. */
 	inline PatchLayer siteLayer(const PatchSite &site, int width, int height)
 	{
 		const int cx = (int)floorf(2.0f * site.x + 0.5f), cy = (int)floorf(2.0f * site.y + 0.5f);
 		const int outX = cellsOut(cx, width - 2), outY = cellsOut(cy, height - 2);
+		const int out = outX > outY ? outX : outY;
 		const float along = (lattice(site.i + 5, site.j + 9) - 0.5f) * 2.0f
-			* (PATCH_SHIFT + PATCH_SPREAD * (float)(outX > outY ? outX : outY));
-		const int inward = (int)(lattice(site.i - 3, site.j + 11) * PATCH_SHIFT);
+			* (PATCH_SHIFT_NEAR + PATCH_SPREAD * (float)(out > CARRY_CELLS ? out - CARRY_CELLS : 0));
+		const float across = (lattice(site.i - 3, site.j + 11) - 0.5f) * 2.0f * PATCH_SHIFT_NEAR;
 		int sx = clampCell(cx, width - 2), sy = clampCell(cy, height - 2);
 		const int toX = sx < width - 2 - sx ? sx : width - 2 - sx, toY = sy < height - 2 - sy ? sy : height - 2 - sy;
 		const bool alongX = outX == 0 && outY == 0 ? toY < toX : outY > 0 && (outX == 0 || lattice(site.i, site.j - 7) < 0.5f);
 		if (alongX)
 		{
+			if (outX > 0)	// past a corner, mirrored both ways
+				sx = cx < 0 ? patchDepth(outX, 0.0f) : width - 2 - patchDepth(outX, 0.0f);
 			sx += (int)floorf(along + 0.5f);
+			const int inward = patchDepth(outY > 0 ? outY : toY, across);
 			sy = 2 * sy < height - 2 ? inward : height - 2 - inward;
 		}
 		else
 		{
+			if (outY > 0)
+				sy = cy < 0 ? patchDepth(outY, 0.0f) : height - 2 - patchDepth(outY, 0.0f);
 			sy += (int)floorf(along + 0.5f);
+			const int inward = patchDepth(outX > 0 ? outX : toX, across);
 			sx = 2 * sx < width - 2 ? inward : width - 2 - inward;
 		}
 		PatchLayer layer;
@@ -594,14 +637,33 @@ namespace TerrainSkirt
 		return (n1 + 0.4f * n2 + 0.12f * n3) / 1.52f;
 	}
 
+	/** The map's relief carried on past the edge: `mirrored` is the map's height at the point mirrored
+		about the edge (mirrorSample both ways), `dry` the same up to any water over it, `edge` the nearest
+		edge sample.  Beside the edge it is the point mirrored through the edge sample, so the slope the
+		map meets the edge with goes on; it turns into the plain mirror over about CREST, so a hill climbing
+		to the edge crests a little past it and comes down as it went up, a ridge across the edge runs
+		straight on, and nothing leaves the map's own range by more than the slope times an eighth of the
+		turn.  The slope from the bare heights, the mirror from the dry ones: a river bed meeting the edge
+		mixed with its own surface dug a trench past where the water stops. */
+	inline float carried(float edge, float mirrored, float dry, float outside, float worldX, float worldY)
+	{
+		const float crest = CREST * (0.5f + valueNoise(worldX / CREST_WAVELENGTH + 3.7f, worldY / CREST_WAVELENGTH - 8.1f));
+		const float turn = smooth(outside / crest);
+		return turn * dry + (1.0f - turn) * (2.0f * edge - mirrored);
+	}
+
 	/** The skirt's height, world units, at a world point `outside` units past the edge: `edge` is the
-		nearest edge sample, `blurred` the edge round it, `mean` the whole edge's.  At the edge itself it
-		is the edge sample, so the skirt meets the ground. */
-	inline float height(float edge, float blurred, float mean, float outside, float worldX, float worldY)
+		nearest edge sample, `mirrored` and `dry` the map's height mirrored about the edge (carried),
+		`blurred` the edge round it, `mean` the whole edge's.  The map's relief carried on out to
+		CARRY_HOLD, then over CARRY_RAMP the edge's blur, its mean and the hills.  At the edge itself it is
+		the edge sample, so the skirt meets the ground. */
+	inline float height(float edge, float mirrored, float dry, float blurred, float mean, float outside, float worldX, float worldY)
 	{
 		float base = edge + (blurred - edge) * smooth(outside / PROFILE_RAMP);
 		base += (mean - base) * smooth(outside / LEVEL_RAMP);
-		return base + HILL_HEIGHT * hills(worldX, worldY) * smooth(outside / HILL_RAMP);
+		const float level = base + HILL_HEIGHT * hills(worldX, worldY) * smooth(outside / HILL_RAMP);
+		const float carry = 1.0f - smooth((outside - CARRY_HOLD) / CARRY_RAMP);
+		return level + (carried(edge, mirrored, dry, outside, worldX, worldY) - level) * carry;
 	}
 
 	/// The least a sea floor past the edge keeps under the water, world units (seaHeight).

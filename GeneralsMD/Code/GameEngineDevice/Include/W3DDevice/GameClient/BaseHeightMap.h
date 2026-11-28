@@ -537,6 +537,7 @@ protected:
 		std::vector<Real> water;
 		std::vector<Real> seaShare;
 		std::vector<Real> shore;	///< the water at the playable point nearest each sample, where no sea is drawn past the edge
+		std::vector<Real> mirror;	///< every map sample's world z, up to the water over it within TerrainSkirt::CARRY_CELLS of the edge, for the relief carried past it
 		Real landMean;
 		Real seaZ;
 	};

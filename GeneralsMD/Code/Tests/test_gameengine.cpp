@@ -32350,7 +32350,7 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 {
 	CHECK( bootOnce() );
 	CHECK( RandomMapGenerator::styleNamed( "aod" ) != 0 );
-	CHECK_EQ( RandomMapGenerator::aodFamilyCount(), 10 );
+	CHECK_EQ( RandomMapGenerator::aodFamilyCount(), 11 );
 	static const Int theSeats[] = { 1, 2, 4, 9 };
 	const Int perFamily = (Int)( sizeof( theSeats ) / sizeof( theSeats[0] ) );
 	const Int cases = RandomMapGenerator::aodFamilyCount() * perFamily + 2;
@@ -32465,6 +32465,7 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 
 		Int lanes = 0;
 		std::vector< std::vector<Coord3D> > stops;
+		std::vector<char> laneReach( W * H, 0 );		///< every cell a wave walks to from any lane's entry, on the ground
 		for( Int n = 1; n <= 7; n++ )
 		{
 			AsciiString wanted;
@@ -32526,6 +32527,8 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 			std::vector<char> seen;
 			flood( cellOf( path[0] ), seen );
 			CHECK( seen[cellOf( path.back() )] );
+			for( Int c = 0; c < W * H; c++ )
+				laneReach[c] |= seen[c];
 			for( size_t s = 0; s < starts.size(); s++ )
 			{
 				if( seen[cellOf( starts[s] )] )
@@ -32574,6 +32577,50 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 			}
 		}
 		CHECK_EQ( lanes, clamped.m_numPlayers );
+		/* The bridges: pairs of objects with the bridge flags, as many on every lane (the mirror). Each end stands
+			on walkable plateau that no wave reaches on the ground, so the deck leads a wave nowhere and the lane
+			below stays sealed; the deck crosses lane floor between its ends, so it joins two sides; and no stop
+			stands within five cells of its middle, so no wave is sent up to the deck's layer. */
+		Int bridgeCount = 0;
+		for( size_t o = 0; o + 1 < theRMGParse.m_objectFlags.size(); o++ )
+		{
+			if( !( theRMGParse.m_objectFlags[o] & 0x10 ) || !( theRMGParse.m_objectFlags[o + 1] & 0x20 ) )
+				continue;
+			++bridgeCount;
+			const Coord3D& e1 = theRMGParse.m_objectPositions[o];
+			const Coord3D& e2 = theRMGParse.m_objectPositions[o + 1];
+			for( Int e = 0; e < 2; e++ )
+			{
+				const Int c = cellOf( e == 0 ? e1 : e2 );
+				CHECK( theRMGParse.m_heights[c] >= 50 && !cliff( c ) );
+				if( laneReach[c] )
+					printf( "  aod %s at %d seats: a wave walks to bridge %d's end\n", RandomMapGenerator::aodFamilyName( got ), clamped.m_numPlayers, bridgeCount );
+				CHECK( !laneReach[c] );
+			}
+			Bool overFloor = FALSE;
+			for( Int k = 1; k < 20; k++ )
+			{
+				Coord3D at = e1;
+				at.x += ( e2.x - e1.x ) * (Real)k / 20.0f;
+				at.y += ( e2.y - e1.y ) * (Real)k / 20.0f;
+				overFloor = overFloor || theRMGParse.m_heights[cellOf( at )] < 30;
+			}
+			CHECK( overFloor );
+			Coord3D mid;
+			mid.x = 0.5f * ( e1.x + e2.x );
+			mid.y = 0.5f * ( e1.y + e2.y );
+			for( size_t n = 0; n < stops.size(); n++ )
+				for( size_t k = 0; k < stops[n].size(); k++ )
+				{
+					const Real dx = stops[n][k].x - mid.x, dy = stops[n][k].y - mid.y;
+					CHECK( dx * dx + dy * dy > 50.0f * 50.0f );
+				}
+			o++;
+		}
+		CHECK( bridgeCount % std::max( 1, lanes ) == 0 );
+		if( bridgeCount == 0 )
+			printf( "  aod %s at %d seats: no bridge\n", RandomMapGenerator::aodFamilyName( got ), clamped.m_numPlayers );
+		CHECK( bridgeCount >= lanes );
 		// a mirror: every lane has lane 1's stops, each as far from the middle as lane 1's
 		for( size_t p = 1; p < stops.size(); p++ )
 		{
@@ -32658,6 +32705,19 @@ TEST(aod_variants_sheet_dump)
 							rgb[o] = r; rgb[o + 1] = g; rgb[o + 2] = bl;
 						}
 			};
+			// the bridges, yellow end to end
+			for( size_t o = 0; o + 1 < theRMGParse.m_objectFlags.size(); o++ )
+			{
+				if( !( theRMGParse.m_objectFlags[o] & 0x10 ) || !( theRMGParse.m_objectFlags[o + 1] & 0x20 ) )
+					continue;
+				for( Int k = 0; k <= 40; k++ )
+				{
+					Coord3D at = theRMGParse.m_objectPositions[o];
+					at.x += ( theRMGParse.m_objectPositions[o + 1].x - at.x ) * (Real)k / 40.0f;
+					at.y += ( theRMGParse.m_objectPositions[o + 1].y - at.y ) * (Real)k / 40.0f;
+					dot( at, 1, 250, 210, 40 );
+				}
+			}
 			for( size_t i = 0; i < theRMGParse.m_waypointNames.size(); i++ )
 			{
 				if( theRMGParse.m_waypointNames[i].startsWith( "Player_" ) )

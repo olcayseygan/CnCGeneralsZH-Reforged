@@ -1,0 +1,11 @@
+# Art of Defense: a dozer crosses a lane on a bridge, and the waves walk on under it.
+# Proves the generator's bridges load as logic bridges: the dozer starts south of bridge 1 of
+# -randommap 3 1 aod (hairpins, bridge 1 from 1011,844 to 1011,1044 over the lane at y 944) and is sent
+# north of it; the lane's cliffs leave it no other way across. Wave 1 passes under the deck and still
+# leaves by the exit (HEADLESS AOD ... got out).
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit -randommap 3 1 aod
+#     -autoskirmish 1 -side 1 FactionAmerica -scenario aodbridge -maxframes 3000 -logPrefix aodbridge
+# grep "arrive" and "got out".
+30 spawn 1 AmericaVehicleDozer 1 1011 760
+40 move 1 AmericaVehicleDozer 1011 1130
+900 arrive 1 AmericaVehicleDozer 1011 1130 60

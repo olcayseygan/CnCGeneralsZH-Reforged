@@ -11111,6 +11111,8 @@ void RMGLayout::buildApocalypse( void )
 /* Cells a trench wall rises over: 30 bytes a cell, 19 world units, a cliff twice the pathfinder's 9.8. At 1.6
 	cells, 24 bytes, a wall turned to some angles of a five- or six-way mirror left a cell or two walkable. */
 #define RMG_AOD_FACE			1.25f
+#define RMG_AOD_BRIDGE			"Concrete"	///< the bridge every lane gets (Roads.ini), stretched end to end
+#define RMG_AOD_BRIDGE_HALF		10.0f	///< cells from a lane's middle to each end of a bridge over it
 #define RMG_AOD_APEX			24.0f	///< cells of flat at every turn of a family whose legs would meet in a point
 #define RMG_AOD_SLIVER			2.0f	///< cells: plateau less than twice this wide between two trenches goes down to the floor
 #define RMG_AOD_RUN_HALF		5.5f	///< cells from a lane's middle to its wall along a run north or south
@@ -11154,10 +11156,14 @@ struct RMGAodShape
 	across the lane's room from -1 to 1, with a repeat count k and a reach s across; buildAod lays that frame over
 	the band (one seat) or the sector (a ring), tries each k and s, and keeps the one whose lane comes nearest
 	RMG_AOD_LANE_LENGTH with every stretch of trench clear of every other. A family no k or s fits gives way to
-	the next. side holds trench off the waves' way: a fork's other branch, a comb's bays. */
-enum { RMG_AOD_FAMILIES = 10 };
+	the next. side holds trench off the waves' way: a fork's other branch, a comb's bays.
+	The owner, 2026-11-28 later: "yollar oldukları yerde daire de çizebilirler", so "circles" winds a switchback
+	whose every run turns a near full circle where it is, round an island of plateau a bridge reaches. */
+enum { RMG_AOD_FAMILIES = 11 };
 static const char *const theAodFamilies[RMG_AOD_FAMILIES] =
-	{ "switchback", "zigzag", "wide S", "wiggle", "hairpins", "terraces", "comb", "fork", "sawtooth", "loops" };
+	{ "switchback", "zigzag", "wide S", "wiggle", "hairpins", "terraces", "comb", "fork", "sawtooth", "loops", "circles" };
+/// cells of lane walked between two bridges over it, each family's: fewer where the lane winds tight
+static const Real theAodBridgeEvery[RMG_AOD_FAMILIES] = { 150.0f, 150.0f, 170.0f, 170.0f, 190.0f, 150.0f, 150.0f, 130.0f, 150.0f, 190.0f, 110.0f };
 static Int theAodFamilyForTests = -1;		///< RandomMapGenerator::setAodFamilyForTests; -1, the seed's
 
 struct RMGAodPlan
@@ -11173,23 +11179,25 @@ static void rmgAodRepeats( Int family, std::vector<Int>& repeats )
 	{
 		{ 3, 4, 5, 6, 7, 8, 0, 0 }, { 3, 4, 5, 6, 7, 9, 11, 14 }, { 2, 3, 4, 0, 0, 0, 0, 0 }, { 5, 6, 7, 8, 10, 12, 14, 0 },
 		{ 3, 5, 7, 0, 0, 0, 0, 0 }, { 1, 2, 3, 4, 0, 0, 0, 0 }, { 3, 4, 5, 6, 7, 8, 0, 0 }, { 2, 3, 4, 5, 6, 0, 0, 0 },
-		{ 2, 3, 4, 5, 6, 7, 0, 0 }, { 3, 5, 7, 0, 0, 0, 0, 0 },
+		{ 2, 3, 4, 5, 6, 7, 0, 0 }, { 3, 5, 7, 0, 0, 0, 0, 0 }, { 2, 3, 4, 5, 0, 0, 0, 0 },
 	};
 	repeats.clear();
 	for( Int i = 0; i < 8 && theRepeats[family][i] > 0; i++ )
 		repeats.push_back( theRepeats[family][i] );
 }
 
-/* flat: RMG_AOD_APEX cells in u. Two straight legs meeting at a sharp point leave a wedge of plateau between
-	them too thin to build on, its tip a sliver that buildAod cuts away; so a family whose legs meet at a point
-	(zigzag, sawtooth, the fork's branches) runs a flat stretch that long at every turn instead. */
-static void rmgAodPlan( Int family, Int k, Real s, Real flat, RMGAodPlan& plan )
+/* uCells and vCells: the cells one unit of u and of v spans (v at the room's middle on a ring). Two straight legs
+	meeting at a sharp point leave a wedge of plateau between them too thin to build on, its tip a sliver that
+	buildAod cuts away; so a family whose legs meet at a point (zigzag, sawtooth, the fork's branches) runs a flat
+	stretch RMG_AOD_APEX cells long at every turn instead. */
+static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, RMGAodPlan& plan )
 {
 	plan.path.clear();
 	plan.side.clear();
 	std::vector<RMGPoint>& p = plan.path;
 	auto add = [&]( std::vector<RMGPoint>& line, Real u, Real v ) { const RMGPoint q = { u, v }; line.push_back( q ); };
 	const Real a = 0.06f, b = 0.94f;
+	const Real flat = RMG_AOD_APEX / uCells;
 	const Real half = 0.5f * std::min( flat, 0.5f * ( b - a ) / (Real)std::max( 1, k ) );		///< half an apex flat, in u
 	switch( family )
 	{
@@ -11348,6 +11356,38 @@ static void rmgAodPlan( Int family, Int k, Real s, Real flat, RMGAodPlan& plan )
 			add( p, 1.0f, -s );
 			break;
 		}
+		case 10:	// circles: a switchback whose every run turns a near full circle at its middle
+		{
+			/* A loop of 280 degrees, the 80 left open at the run, so the trench coming in and the trench going out
+				stand 1.29 radii apart there: from 14 cells of radius that is past the 17.5 the lanes keep. Every loop
+				but the last run's bulges towards the next run (one bulging back met the loop before it), at most 0.3
+				of the step between runs and 20 cells short of the run's end. Drawn in cells and turned into u and v. */
+			const Real step = ( b - a ) / (Real)std::max( 1, k - 1 );
+			const Real radius = std::min( 26.0f, std::min( 0.3f * step * uCells, s * vCells - 20.0f ) );
+			const Real gap = 40.0f * PI / 180.0f;
+			Real v = -s;
+			add( p, 0.0f, v );
+			for( Int i = 0; i < k; i++ )
+			{
+				const Real u = a + step * (Real)i;
+				add( p, u, v );
+				const Real dir = v < 0.0f ? 1.0f : -1.0f, side = 1.0f;
+				if( i + 1 < k && radius >= 14.0f )
+				{
+					// the run's direction d is along v (dir), the loop's side n along u (side); the centre stands off the run
+					const Real centreU = u + side * radius * Cos( gap ) / uCells;
+					for( Int q = 0; q <= 28; q++ )
+					{
+						const Real t = -0.5f * PI - gap - ( 2.0f * PI - 2.0f * gap ) * (Real)q / 28.0f;
+						add( p, centreU + side * radius * Sin( t ) / uCells, dir * radius * Cos( t ) / vCells );
+					}
+				}
+				v = -v;
+				add( p, u, v );
+			}
+			add( p, 1.0f, v );
+			break;
+		}
 	}
 }
 
@@ -11498,7 +11538,9 @@ void RMGLayout::buildAod( void )
 	const Real rOut = shape.m_rim - 8.0f, rIn = shape.m_inner, roomAngle = 0.35f * sector;
 	const Real bandMid = shape.m_strip + 0.5f * shape.m_band, bandReach = 0.5f * shape.m_band - RMG_AOD_BAND_MARGIN;
 	const Real eastEnd = side - 0.5f * RMG_AOD_EXIT;
-	const Real apexFlat = RMG_AOD_APEX / ( ring ? rOut - rIn : eastEnd - RMG_AOD_ENTRY_IN );		///< rmgAodPlan's flat, in u
+	// the cells a unit of u spans, and a unit of v (at the room's middle on a ring): rmgAodPlan draws turns and circles in cells
+	const Real uCells = ring ? rOut - rIn : eastEnd - RMG_AOD_ENTRY_IN;
+	const Real vCells = ring ? roomAngle * 0.5f * ( rOut + rIn ) : bandReach;
 	auto frame =[&]( Real u, Real v ) -> RMGPoint
 	{
 		if( !ring )
@@ -11687,7 +11729,7 @@ void RMGLayout::buildAod( void )
 				for( Int step = 0; step < 8; step++ )
 				{
 					const Real mid = 0.5f * ( lo + hi );
-					rmgAodPlan( candidate, repeats[r], mid, apexFlat, plan );
+					rmgAodPlan( candidate, repeats[r], mid, uCells, vCells, plan );
 					if( layLane( plan, trial, NULL ) < RMG_AOD_LANE_LENGTH )
 						lo = mid;
 					else
@@ -11696,7 +11738,7 @@ void RMGLayout::buildAod( void )
 				const Real reaches[3] = { 0.5f * ( lo + hi ), std::max( 0.15f, 0.5f * ( lo + hi ) - 0.08f ), std::min( 1.0f, 0.5f * ( lo + hi ) + 0.08f ) };
 				for( Int t = 0; t < 3; t++ )
 				{
-					rmgAodPlan( candidate, repeats[r], reaches[t], apexFlat, plan );
+					rmgAodPlan( candidate, repeats[r], reaches[t], uCells, vCells, plan );
 					const Real length = layLane( plan, trial, NULL );
 					if( fabsf( length - RMG_AOD_LANE_LENGTH ) >= best )
 						continue;
@@ -11727,7 +11769,7 @@ void RMGLayout::buildAod( void )
 	Real way = 0.0f;
 	{
 		RMGAodPlan plan;
-		rmgAodPlan( family, chosenK, chosenS, apexFlat, plan );
+		rmgAodPlan( family, chosenK, chosenS, uCells, vCells, plan );
 		way = layLane( plan, lane, &laneSpots );
 	}
 	// every lane: lane 0 turned into its sector
@@ -11867,6 +11909,112 @@ void RMGLayout::buildAod( void )
 		}
 	}
 
+	/* Bridges over the lanes (the owner, 2026-11-28: "köprü at aralara ki diğer tarafa geçebilsin workerlar
+		birimler"), so a seat's dozers and units reach the plateau across a lane: the far side of a one-seat map,
+		a neighbour's slice, the island inside a circle. A bridge is the map's own kind, a pair of objects with
+		the bridge flags that W3DBridgeBuffer::loadBridges turns into a logic bridge on its own pathfinding layer.
+		Its ends stand on the plateau RMG_AOD_BRIDGE_HALF cells either side of the lane's middle, so the deck
+		runs 24 units over the floor: the waves walk on under it (PathfindLayer::classifyLayerMapCell blocks
+		the ground below a deck only within 10 units of it) and cannot reach its ends up the cliffs, and nobody
+		on it can get down into the lane. Lane 0's bridges are found on straight stretches clear of every stop
+		(a stop under a deck could send a wave to the deck's layer), every theAodBridgeEvery cells of the way,
+		and kept only if every lane's turned copy also lands on plateau at both ends and crosses its own lane
+		alone. */
+	Int bridges = 0;
+	std::vector<RMGPoint> bridgeEnds;		///< every end, kept clear of trees
+	{
+		const Int bridgePoint1 = 0x00000010, bridgePoint2 = 0x00000020;		// FLAG_BRIDGE_POINT1 and 2, MapObject.h
+		auto okEnd = [&]( const RMGPoint& e ) -> Bool
+		{
+			const Int x = (Int)floorf( e.m_cellX + 0.5f ) + RMG_BORDER_CELLS, y = (Int)floorf( e.m_cellY + 0.5f ) + RMG_BORDER_CELLS;
+			if( x < RMG_BORDER_CELLS + 4 || y < RMG_BORDER_CELLS + 4 || x >= RMG_BORDER_CELLS + m_settings.m_playableCells - 4
+				|| y >= RMG_BORDER_CELLS + m_settings.m_playableCells - 4 )
+				return FALSE;
+			if( !ring && ( e.m_cellX < RMG_AOD_ENTRY_IN + 4.0f || e.m_cellX > side - RMG_AOD_EXIT - 4.0f ) )
+				return FALSE;
+			if( ring && ( e.m_cellX - half ) * ( e.m_cellX - half ) + ( e.m_cellY - half ) * ( e.m_cellY - half ) > ( shape.m_rim - 6.0f ) * ( shape.m_rim - 6.0f ) )
+				return FALSE;
+			const Int i = cellIndex( x, y );
+			return nearPath[i] > 2.5f && heights[i] >= RMG_AOD_HIGH - 8.0f;
+		};
+		// the deck from end to end crosses floor only within the lane it is for
+		auto crossesOne = [&]( const RMGPoint& e1, const RMGPoint& e2, const RMGPoint& mid ) -> Bool
+		{
+			for( Int k = 0; k <= 40; k++ )
+			{
+				const Real t = (Real)k / 40.0f;
+				const Real cx = e1.m_cellX + ( e2.m_cellX - e1.m_cellX ) * t, cy = e1.m_cellY + ( e2.m_cellY - e1.m_cellY ) * t;
+				const Int x = (Int)floorf( cx + 0.5f ) + RMG_BORDER_CELLS, y = (Int)floorf( cy + 0.5f ) + RMG_BORDER_CELLS;
+				if( nearPath[cellIndex( x, y )] <= 0.0f && ( cx - mid.m_cellX ) * ( cx - mid.m_cellX ) + ( cy - mid.m_cellY ) * ( cy - mid.m_cellY ) > 8.0f * 8.0f )
+					return FALSE;
+			}
+			return TRUE;
+		};
+		const Real every = theAodBridgeEvery[family];
+		Real lastAt = -0.5f * every;
+		std::vector< std::pair<RMGPoint, RMGPoint> > picked;
+		for( Int i = 6; i + 6 < (Int)lane.size(); i++ )
+		{
+			const AodSample& here = lane[i];
+			if( here.at < lastAt + every || here.at < 40.0f || here.at > way - 40.0f )
+				continue;
+			// a straight stretch of the way: twelve half-cell steps either side, six cells apart
+			const AodSample& back = lane[i - 6];
+			const AodSample& ahead = lane[i + 6];
+			if( fabsf( ahead.at - back.at - 6.0f ) > 0.6f )
+				continue;
+			const Real dx = ahead.x - back.x, dy = ahead.y - back.y, length = sqrtf( dx * dx + dy * dy );
+			if( length < 5.5f )
+				continue;
+			Bool nearStop = FALSE;
+			for( UnsignedInt s = 0; s < laneSpots.size() && !nearStop; s++ )
+				nearStop = ( laneSpots[s].m_cellX - here.x ) * ( laneSpots[s].m_cellX - here.x )
+					+ ( laneSpots[s].m_cellY - here.y ) * ( laneSpots[s].m_cellY - here.y ) < 6.0f * 6.0f;
+			if( nearStop )
+				continue;
+			const RMGPoint mid = { here.x, here.y };
+			const RMGPoint e1 = { here.x + dy / length * RMG_AOD_BRIDGE_HALF, here.y - dx / length * RMG_AOD_BRIDGE_HALF };
+			const RMGPoint e2 = { here.x - dy / length * RMG_AOD_BRIDGE_HALF, here.y + dx / length * RMG_AOD_BRIDGE_HALF };
+			Bool ok = TRUE;
+			for( Int n = 0; n < shape.m_lanes && ok; n++ )
+			{
+				const Real angle = sector * (Real)n;
+				const RMGPoint a1 = n == 0 ? e1 : turned( e1, angle ), a2 = n == 0 ? e2 : turned( e2, angle ), am = n == 0 ? mid : turned( mid, angle );
+				ok = okEnd( a1 ) && okEnd( a2 ) && crossesOne( a1, a2, am );
+			}
+			if( !ok )
+				continue;
+			picked.push_back( std::make_pair( e1, e2 ) );
+			lastAt = here.at;
+			DEBUG_LOG(( "random map: aod bridge %d over lane 1 at %.0f cells of its way, world (%.0f,%.0f) to (%.0f,%.0f)\n", (Int)picked.size(),
+				here.at, e1.m_cellX * MAP_XY_FACTOR, e1.m_cellY * MAP_XY_FACTOR, e2.m_cellX * MAP_XY_FACTOR, e2.m_cellY * MAP_XY_FACTOR ));
+		}
+		AsciiString bridgeID;
+		for( Int n = 0; n < shape.m_lanes; n++ )
+		{
+			const Real angle = sector * (Real)n;
+			for( UnsignedInt k = 0; k < picked.size(); k++ )
+			{
+				const RMGPoint ends[2] = { n == 0 ? picked[k].first : turned( picked[k].first, angle ), n == 0 ? picked[k].second : turned( picked[k].second, angle ) };
+				for( Int e = 0; e < 2; e++ )
+				{
+					RMGObject point;
+					point.m_templateName = RMG_AOD_BRIDGE;
+					bridgeID.format( "AOD Bridge %d %d %c", n + 1, (Int)k + 1, e == 0 ? 'a' : 'b' );
+					point.m_uniqueID = bridgeID;
+					point.m_worldX = ends[e].m_cellX * MAP_XY_FACTOR;
+					point.m_worldY = ends[e].m_cellY * MAP_XY_FACTOR;
+					point.m_angle = 0.0f;
+					point.m_waypointID = 0;
+					point.m_flags = e == 0 ? bridgePoint1 : bridgePoint2;
+					m_objects.push_back( point );
+					bridgeEnds.push_back( ends[e] );
+				}
+				++bridges;
+			}
+		}
+	}
+
 	/* The ground: the floors bare dirt, the walls and the rim along them rock, the ground round a start
 		worn, the plateau grass broken by patches of the second class. */
 	m_terrain.assign( cells, (UnsignedByte)RMG_TERRAIN_GRASS );
@@ -11903,6 +12051,12 @@ void RMGLayout::buildAod( void )
 		if( !m_passable[i] || nearPath[i] < 5.0f
 			|| nearStart( (Real)( x - RMG_BORDER_CELLS ) + 0.5f, (Real)( y - RMG_BORDER_CELLS ) + 0.5f ) < RMG_AOD_START_FLAT + 12.0f )
 			return PROP_NONE;
+		for( UnsignedInt e = 0; e < bridgeEnds.size(); e++ )
+		{
+			const Real ex = (Real)( x - RMG_BORDER_CELLS ) + 0.5f - bridgeEnds[e].m_cellX, ey = (Real)( y - RMG_BORDER_CELLS ) + 0.5f - bridgeEnds[e].m_cellY;
+			if( ex * ex + ey * ey < 8.0f * 8.0f )
+				return PROP_NONE;
+		}
 		// read in sector 0: every sector's woods stand alike, within a cell
 		const RMGPoint m = mirrored( (Real)( x - RMG_BORDER_CELLS ) + 0.5f, (Real)( y - RMG_BORDER_CELLS ) + 0.5f );
 		const Int mx = (Int)floorf( m.m_cellX ) + RMG_BORDER_CELLS, my = (Int)floorf( m.m_cellY ) + RMG_BORDER_CELLS;
@@ -11937,9 +12091,9 @@ void RMGLayout::buildAod( void )
 		}
 	}
 
-	DEBUG_LOG(( "random map: aod %d lanes, %s, %d cells, %s lanes (%d, %.1f) %.0f cells long, theme %s, %d props\n",
+	DEBUG_LOG(( "random map: aod %d lanes, %s, %d cells, %s lanes (%d, %.1f) %.0f cells long, %d bridges, theme %s, %d props\n",
 		shape.m_lanes, ring ? "a ring into the middle" : "west edge to east", m_settings.m_playableCells, theAodFamilies[family],
-		chosenK, chosenS, lengths[0], RandomMapGenerator::aodThemeName( m_settings.m_seed ).str(), propID - 1 ));
+		chosenK, chosenS, lengths[0], bridges, RandomMapGenerator::aodThemeName( m_settings.m_seed ).str(), propID - 1 ));
 
 	buildBlends();
 }

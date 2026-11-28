@@ -248,11 +248,8 @@ static void keyGridSlotOf( const CommandButton *command, KeyGridSlot *slot )
 	slot->family = KEY_GRID_FAMILY_POWER;
 	if( slot->type == GUI_COMMAND_SWITCH_WEAPON || slot->type == GUI_COMMAND_TOGGLE_OVERCHARGE )
 		slot->family = KEY_GRID_FAMILY_MODE;
-	// a battle plan, but Bombardment (the owner's of 2026-11-28) stands with the other powers: the plan a
-	// button picks is its option bit, OPTION_ONE Bombardment, as BattlePlanUpdate reads it
 	else if( slot->type == GUI_COMMAND_SPECIAL_POWER && command->getSpecialPowerTemplate() != NULL
-					 && command->getSpecialPowerTemplate()->getSpecialPowerType() == SPECIAL_CHANGE_BATTLE_PLANS
-					 && !BitTest( command->getOptions(), OPTION_ONE ) )
+					 && command->getSpecialPowerTemplate()->getSpecialPowerType() == SPECIAL_CHANGE_BATTLE_PLANS )
 		slot->family = KEY_GRID_FAMILY_PLAN;
 	if( slot->role == KEY_GRID_ROLE_OTHER )
 		return;

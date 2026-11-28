@@ -81,7 +81,7 @@ enum KeyGridRole
 enum KeyGridSkillFamily
 {
 	KEY_GRID_FAMILY_POWER = 0,	///< a one-shot power or weapon, and anything that is no skill
-	KEY_GRID_FAMILY_PLAN,				///< a battle plan (SPECIAL_CHANGE_BATTLE_PLANS) but Bombardment (OPTION_ONE), a power
+	KEY_GRID_FAMILY_PLAN,				///< a battle plan (SPECIAL_CHANGE_BATTLE_PLANS)
 	KEY_GRID_FAMILY_MODE,				///< a weapon mode or toggle (SWITCH_WEAPON, TOGGLE_OVERCHARGE)
 	KEY_GRID_FAMILY_COUNT
 };

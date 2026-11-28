@@ -18,6 +18,7 @@
 #include "Common/PlayerList.h"
 #include "Common/ProductionPrerequisite.h"
 #include "Common/Radar.h"
+#include "Common/SpecialPower.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "GameClient/ControlBar.h"
@@ -244,6 +245,12 @@ static void keyGridSlotOf( const CommandButton *command, KeyGridSlot *slot )
 	slot->depth = 0;
 	slot->refs = 0;
 	slot->mirror = -1;
+	slot->family = KEY_GRID_FAMILY_POWER;
+	if( slot->type == GUI_COMMAND_SWITCH_WEAPON || slot->type == GUI_COMMAND_TOGGLE_OVERCHARGE )
+		slot->family = KEY_GRID_FAMILY_MODE;
+	else if( slot->type == GUI_COMMAND_SPECIAL_POWER && command->getSpecialPowerTemplate() != NULL
+					 && command->getSpecialPowerTemplate()->getSpecialPowerType() == SPECIAL_CHANGE_BATTLE_PLANS )
+		slot->family = KEY_GRID_FAMILY_PLAN;
 	if( slot->role == KEY_GRID_ROLE_OTHER )
 		return;
 	const ThingTemplate *thing = command->getThingTemplate();

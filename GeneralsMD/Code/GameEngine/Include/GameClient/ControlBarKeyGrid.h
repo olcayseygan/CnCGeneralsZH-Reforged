@@ -77,6 +77,15 @@ enum KeyGridRole
 	KEY_GRID_ROLE_COMMAND_CENTER
 };
 
+/** A skill's family, each on a row of its own (the owner's of 2026-11-28): plans, modes, then powers, top down. */
+enum KeyGridSkillFamily
+{
+	KEY_GRID_FAMILY_POWER = 0,	///< a one-shot power or weapon, and anything that is no skill
+	KEY_GRID_FAMILY_PLAN,				///< a battle plan (SPECIAL_CHANGE_BATTLE_PLANS)
+	KEY_GRID_FAMILY_MODE,				///< a weapon mode or toggle (SWITCH_WEAPON, TOGGLE_OVERCHARGE)
+	KEY_GRID_FAMILY_COUNT
+};
+
 /** One command slot as ControlBar_keyGridPlaces reads it. */
 struct KeyGridSlot
 {
@@ -87,6 +96,7 @@ struct KeyGridSlot
 	Int depth;		///< the structure's prerequisite depth (0 for none)
 	Int refs;			///< how many objects name the structure in their Prerequisites; 0 for a superweapon
 	Int mirror;		///< the place the real building of a GLA fake has on the real set, or -1
+	Int family;		///< KeyGridSkillFamily; left out of an initializer it is KEY_GRID_FAMILY_POWER
 };
 
 /** The passengers' places on a set that builds nothing: along the Z row from N leftward, then along
@@ -108,10 +118,12 @@ extern const Int KEY_GRID_RIDER_PLACES[ 11 ];
 	* A set that builds nothing: ControlBar_commandPlaces for everything but the passengers, then the
 	* passengers on KEY_GRID_RIDER_PLACES.  One with a skill (a special power, a weapon to fire or switch,
 	* a hijack and the like, by command type), or with a unit or an upgrade to make and no attack move (the
-	* owner's of 2026-11-28): the pinned and fixed buttons and A, C, V kept as above, the skills along Q
-	* from the left and down a row each time a row fills, the upgrades along Z from the left and up a row
-	* each time, then the rest a column at a time from the left (Q A W S ...) over the rows neither stands
-	* on, and whatever is left on any free place. */
+	* owner's of 2026-11-28): the pinned and fixed buttons and A, C, V kept as above; the skills a family
+	* at a time (battle plans, weapon modes, then the other powers), each family from the left of the row
+	* under the last one's and down a row when it fills, starting along Q; the upgrades along Z from the
+	* left and up a row each time, so on a tall set they finish a family's row after its skills; then the
+	* rest a column at a time from the left (Q A W S ...) over the rows none of those stands on, and
+	* whatever is left on any free place. */
 //-------------------------------------------------------------------------------------------------
 Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places );
 

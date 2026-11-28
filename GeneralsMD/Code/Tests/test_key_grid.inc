@@ -408,6 +408,75 @@ TEST(key_grid_puts_skills_on_a_row_from_the_top)
 		}
 }
 
+/* Skill families (the owner's of 2026-11-28, on the Strategy Center): the battle plans on one row, the
+   other powers (the scan) on the next, never mixed; the upgrades still climb from Z and finish the
+   powers' row after them on a tall set.  A unit's weapon modes and its one-shot powers split the same way */
+TEST(key_grid_splits_skills_by_family)
+{
+	enum { SLOTS = MAX_COMMANDS_PER_SET };
+	const KeyGridSlot empty = { GUI_COMMAND_NONE, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot plan = { GUI_COMMAND_SPECIAL_POWER, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1, KEY_GRID_FAMILY_PLAN };
+	const KeyGridSlot scan = { GUI_COMMAND_SPECIAL_POWER, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1, KEY_GRID_FAMILY_POWER };
+	const KeyGridSlot upgrade = { GUI_COMMAND_PLAYER_UPGRADE, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot stop = { GUI_COMMAND_STOP, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot sell = { GUI_COMMAND_SELL, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot mode = { GUI_COMMAND_SWITCH_WEAPON, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1, KEY_GRID_FAMILY_MODE };
+	const KeyGridSlot fire = { GUI_COMMAND_FIRE_WEAPON, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot attackMove = { GUI_COMMAND_ATTACK_MOVE, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot guard = { GUI_COMMAND_GUARD, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	Int places[ SLOTS ];
+
+	// the Strategy Center: Bombardment, the scan, Hold the Line, Search and Destroy, six upgrades, stop, sell
+	KeyGridSlot center[ SLOTS ];
+	for( Int i = 0; i < SLOTS; i++ )
+		center[ i ] = empty;
+	center[ 0 ] = plan;
+	center[ 1 ] = scan;
+	center[ 2 ] = plan;
+	center[ 3 ] = plan;
+	for( Int i = 4; i < 10; i++ )
+		center[ i ] = upgrade;
+	center[ 10 ] = stop;
+	center[ 11 ] = sell;
+	CHECK( !ControlBar_keyGridPlaces( center, SLOTS, places ) );
+	CHECK_EQ( places[ 0 ], (Int)COMMAND_PLACE_Q );
+	CHECK_EQ( places[ 2 ], (Int)COMMAND_PLACE_W );
+	CHECK_EQ( places[ 3 ], (Int)COMMAND_PLACE_E );
+	CHECK_EQ( places[ 1 ], (Int)COMMAND_PLACE_A );
+	static const Int CLIMB[ 6 ] = { COMMAND_PLACE_Z, COMMAND_PLACE_X, COMMAND_PLACE_C, COMMAND_PLACE_V, COMMAND_PLACE_B, COMMAND_PLACE_D };
+	for( Int i = 0; i < 6; i++ )
+		CHECK_EQ( places[ 4 + i ], CLIMB[ i ] );
+	CHECK_EQ( places[ 10 ], (Int)COMMAND_PLACE_STOP );
+	CHECK_EQ( places[ 11 ], (Int)COMMAND_PLACE_SELL );
+
+	// four plans: the plans' row is Q alone, the scan still starts the next row
+	center[ 12 ] = plan;
+	ControlBar_keyGridPlaces( center, SLOTS, places );
+	CHECK_EQ( places[ 12 ], (Int)COMMAND_PLACE_R );
+	CHECK_EQ( places[ 1 ], (Int)COMMAND_PLACE_A );
+
+	// a unit with two weapon modes and two one-shot weapons: modes Q W, the weapons down on the A row
+	// round A (held), S (stop) and D (attack move)
+	KeyGridSlot soldier[ SLOTS ];
+	for( Int i = 0; i < SLOTS; i++ )
+		soldier[ i ] = empty;
+	soldier[ 0 ] = fire;
+	soldier[ 1 ] = mode;
+	soldier[ 2 ] = fire;
+	soldier[ 3 ] = mode;
+	soldier[ 10 ] = attackMove;
+	soldier[ 11 ] = guard;
+	soldier[ 12 ] = stop;
+	CHECK( ControlBar_keyGridPlaces( soldier, SLOTS, places ) );
+	CHECK_EQ( places[ 1 ], (Int)COMMAND_PLACE_Q );
+	CHECK_EQ( places[ 3 ], (Int)COMMAND_PLACE_W );
+	CHECK_EQ( places[ 0 ], (Int)COMMAND_PLACE_F );
+	CHECK_EQ( places[ 2 ], (Int)COMMAND_PLACE_G );
+	CHECK_EQ( places[ 12 ], (Int)COMMAND_PLACE_STOP );
+	CHECK_EQ( places[ 10 ], (Int)COMMAND_PLACE_ATTACK_MOVE );
+	CHECK_EQ( places[ 11 ], (Int)COMMAND_PLACE_GUARD );
+}
+
 /* The squad tray on the deck: entries on the places in reading order, none past N */
 TEST(key_grid_tray_fills_the_places_in_reading_order)
 {

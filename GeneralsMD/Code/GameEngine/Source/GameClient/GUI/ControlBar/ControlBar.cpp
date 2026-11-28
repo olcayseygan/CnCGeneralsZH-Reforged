@@ -500,15 +500,18 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 				}
 			}
 			Bool ownRow[ ROWS ] = { FALSE };
-			auto rowOfTheirOwn = [ & ]( Bool upgrades )
+			// a family's skills (or with -1 the upgrades) onto the first free place of the rows from `first` on,
+			// read down (or up), left to right in each; the last row one landed on, or -1
+			auto rowsOfTheirOwn = [ & ]( Int family, Int first, Bool up ) -> Int
 			{
+				Int last = -1;
 				for( Int slot = 0; slot < count; slot++ )
 				{
-					if( places[ slot ] >= 0 || ( upgrades ? !isUpgrade( types[ slot ] ) : !isSkill( types[ slot ] ) ) )
+					const Bool wanted = family < 0 ? isUpgrade( types[ slot ] )
+						: isSkill( types[ slot ] ) && slots[ slot ].family == family;
+					if( places[ slot ] >= 0 || !wanted )
 						continue;
-					for( Int step = 0; step < ROWS && places[ slot ] < 0; step++ )
-					{
-						const Int row = upgrades ? ROWS - 1 - step : step;
+					for( Int row = first; row >= 0 && row < ROWS && places[ slot ] < 0; row += up ? -1 : 1 )
 						for( Int column = 0; column < COMMAND_PLACE_COLUMNS && places[ slot ] < 0; column++ )
 						{
 							const Int place = row * COMMAND_PLACE_COLUMNS + column;
@@ -517,13 +520,23 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 								places[ slot ] = place;
 								used[ place ] = TRUE;
 								ownRow[ row ] = TRUE;
+								last = row;
 							}
 						}
-					}
 				}
+				return last;
 			};
-			rowOfTheirOwn( FALSE );
-			rowOfTheirOwn( TRUE );
+			// a family of skills to a row: plans, modes, then the other powers, each from the row under the
+			// last family's; a family that finds no row left goes with the leftovers below
+			static const Int FAMILIES[ KEY_GRID_FAMILY_COUNT ] = { KEY_GRID_FAMILY_PLAN, KEY_GRID_FAMILY_MODE, KEY_GRID_FAMILY_POWER };
+			Int nextRow = 0;
+			for( Int each = 0; each < KEY_GRID_FAMILY_COUNT; each++ )
+			{
+				const Int last = rowsOfTheirOwn( FAMILIES[ each ], nextRow, FALSE );
+				if( last >= 0 )
+					nextRow = last + 1;
+			}
+			rowsOfTheirOwn( -1, ROWS - 1, TRUE );
 			for( Int pass = 0; pass < 2; pass++ )
 				for( Int slot = 0; slot < count; slot++ )
 				{

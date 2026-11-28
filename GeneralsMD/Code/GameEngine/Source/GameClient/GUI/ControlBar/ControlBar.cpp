@@ -448,7 +448,27 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 	{
 		Int types[ MAX_COMMANDS_PER_SET ], groups[ MAX_COMMANDS_PER_SET ], pinned[ MAX_COMMANDS_PER_SET ];
 		auto isUpgrade = []( Int type ) { return type == GUI_COMMAND_PLAYER_UPGRADE || type == GUI_COMMAND_OBJECT_UPGRADE; };
-		Bool fights = FALSE, makes = FALSE;
+		auto isSkill = []( Int type )
+		{
+			switch( type )
+			{
+				case GUI_COMMAND_FIRE_WEAPON:
+				case GUI_COMMAND_SPECIAL_POWER:
+				case GUI_COMMAND_SPECIAL_POWER_FROM_SHORTCUT:
+				case GUI_COMMAND_SPECIAL_POWER_CONSTRUCT:
+				case GUI_COMMAND_SPECIAL_POWER_CONSTRUCT_FROM_SHORTCUT:
+				case GUI_COMMAND_HACK_INTERNET:
+				case GUI_COMMAND_TOGGLE_OVERCHARGE:
+				case GUI_COMMAND_COMBATDROP:
+				case GUI_COMMAND_SWITCH_WEAPON:
+				case GUICOMMANDMODE_HIJACK_VEHICLE:
+				case GUICOMMANDMODE_CONVERT_TO_CARBOMB:
+				case GUICOMMANDMODE_SABOTAGE_BUILDING:
+					return TRUE;
+			}
+			return FALSE;
+		};
+		Bool fights = FALSE, makes = FALSE, skills = FALSE;
 		for( Int slot = 0; slot < count; slot++ )
 		{
 			const Bool rider = slots[ slot ].type == GUI_COMMAND_EXIT_CONTAINER;
@@ -457,14 +477,18 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 			pinned[ slot ] = rider ? -1 : slots[ slot ].pinned;
 			fights = fights || slots[ slot ].type == GUI_COMMAND_ATTACK_MOVE;
 			makes = makes || isUpgrade( slots[ slot ].type ) || slots[ slot ].type == GUI_COMMAND_UNIT_BUILD;
+			skills = skills || ( pinned[ slot ] < 0 && isSkill( types[ slot ] ) );
 		}
 		Bool used[ COMMAND_PLACE_COUNT ] = { FALSE };
-		if( makes && !fights )
+		if( skills || ( makes && !fights ) )
 		{
-			// A factory or a tech building (the owner's of 2026-11-28): the pinned and fixed buttons, then
-			// the upgrades on a row of their own, Z from the left and up a row when it fills, then the rest
-			// (the units, the powers) a column at a time from the left over the rows no upgrade is on, so a
-			// long list makes a block under the left hand instead of one row running off to the right
+			// The owner's of 2026-11-28: the pinned and fixed buttons (and A, C, V on a set that attack moves),
+			// then the skills on a row of their own, Q from the left and down a row when it fills, the upgrades
+			// on theirs, Z from the left and up a row when it fills, then the rest (the units) a column at a
+			// time from the left over the rows neither stands on, so a long list makes a block under the left
+			// hand instead of one row running off to the right; whatever is left takes any free place
+			if( fights )
+				used[ COMMAND_PLACE_ATTACK ] = used[ COMMAND_PLACE_HOLD ] = used[ COMMAND_PLACE_MOVE ] = TRUE;
 			for( Int slot = 0; slot < count; slot++ )
 			{
 				places[ slot ] = -1;
@@ -475,23 +499,31 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 					used[ place ] = TRUE;
 				}
 			}
-			Bool upgradeRow[ ROWS ] = { FALSE };
-			for( Int slot = 0; slot < count; slot++ )
+			Bool ownRow[ ROWS ] = { FALSE };
+			auto rowOfTheirOwn = [ & ]( Bool upgrades )
 			{
-				if( places[ slot ] >= 0 || !isUpgrade( types[ slot ] ) )
-					continue;
-				for( Int row = ROWS - 1; row >= 0 && places[ slot ] < 0; row-- )
-					for( Int column = 0; column < COMMAND_PLACE_COLUMNS && places[ slot ] < 0; column++ )
+				for( Int slot = 0; slot < count; slot++ )
+				{
+					if( places[ slot ] >= 0 || ( upgrades ? !isUpgrade( types[ slot ] ) : !isSkill( types[ slot ] ) ) )
+						continue;
+					for( Int step = 0; step < ROWS && places[ slot ] < 0; step++ )
 					{
-						const Int place = row * COMMAND_PLACE_COLUMNS + column;
-						if( !used[ place ] )
+						const Int row = upgrades ? ROWS - 1 - step : step;
+						for( Int column = 0; column < COMMAND_PLACE_COLUMNS && places[ slot ] < 0; column++ )
 						{
-							places[ slot ] = place;
-							used[ place ] = TRUE;
-							upgradeRow[ row ] = TRUE;
+							const Int place = row * COMMAND_PLACE_COLUMNS + column;
+							if( !used[ place ] )
+							{
+								places[ slot ] = place;
+								used[ place ] = TRUE;
+								ownRow[ row ] = TRUE;
+							}
 						}
 					}
-			}
+				}
+			};
+			rowOfTheirOwn( FALSE );
+			rowOfTheirOwn( TRUE );
 			for( Int pass = 0; pass < 2; pass++ )
 				for( Int slot = 0; slot < count; slot++ )
 				{
@@ -501,7 +533,7 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 						for( Int row = 0; row < ROWS && places[ slot ] < 0; row++ )
 						{
 							const Int place = row * COMMAND_PLACE_COLUMNS + column;
-							if( !used[ place ] && ( pass == 1 || !upgradeRow[ row ] ) )
+							if( !used[ place ] && ( pass == 1 || !ownRow[ row ] ) )
 							{
 								places[ slot ] = place;
 								used[ place ] = TRUE;

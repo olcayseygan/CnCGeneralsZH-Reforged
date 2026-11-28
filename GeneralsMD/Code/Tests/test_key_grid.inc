@@ -310,6 +310,104 @@ TEST(key_grid_packs_a_factorys_units_left_and_its_upgrades_on_a_row)
 	}
 }
 
+/* Skills (the owner's of 2026-11-28): special powers, weapons to fire and the like on a row of their own,
+   Q from the left and down a row when it fills; upgrades keep Z climbing; the units pack left in the rows
+   neither takes.  A fighting unit's abilities go the same way round its fixed keys and A, C, V */
+TEST(key_grid_puts_skills_on_a_row_from_the_top)
+{
+	enum { SLOTS = MAX_COMMANDS_PER_SET };
+	const KeyGridSlot empty = { GUI_COMMAND_NONE, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot unit = { GUI_COMMAND_UNIT_BUILD, COMMAND_GROUP_PRODUCTION, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot upgrade = { GUI_COMMAND_PLAYER_UPGRADE, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot power = { GUI_COMMAND_SPECIAL_POWER, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot fire = { GUI_COMMAND_FIRE_WEAPON, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot rally = { GUI_COMMAND_SET_RALLY_POINT, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot sell = { GUI_COMMAND_SELL, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot attackMove = { GUI_COMMAND_ATTACK_MOVE, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot guard = { GUI_COMMAND_GUARD, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot stop = { GUI_COMMAND_STOP, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	Int places[ SLOTS ];
+
+	// a factory with powers: powers Q W, upgrades Z X, its four units along the free A row
+	KeyGridSlot factory[ SLOTS ];
+	for( Int i = 0; i < SLOTS; i++ )
+		factory[ i ] = empty;
+	factory[ 0 ] = unit;
+	factory[ 1 ] = power;
+	factory[ 2 ] = unit;
+	factory[ 3 ] = upgrade;
+	factory[ 4 ] = unit;
+	factory[ 5 ] = power;
+	factory[ 6 ] = unit;
+	factory[ 7 ] = upgrade;
+	factory[ 12 ] = rally;
+	factory[ 13 ] = sell;
+	CHECK( !ControlBar_keyGridPlaces( factory, SLOTS, places ) );
+	CHECK_EQ( places[ 1 ], (Int)COMMAND_PLACE_Q );
+	CHECK_EQ( places[ 5 ], (Int)COMMAND_PLACE_W );
+	CHECK_EQ( places[ 3 ], (Int)COMMAND_PLACE_Z );
+	CHECK_EQ( places[ 7 ], (Int)COMMAND_PLACE_X );
+	CHECK_EQ( places[ 0 ], (Int)COMMAND_PLACE_A );
+	CHECK_EQ( places[ 2 ], (Int)COMMAND_PLACE_S );
+	CHECK_EQ( places[ 4 ], (Int)COMMAND_PLACE_D );
+	CHECK_EQ( places[ 6 ], (Int)COMMAND_PLACE_F );
+	CHECK_EQ( places[ 12 ], (Int)COMMAND_PLACE_RALLY );
+	CHECK_EQ( places[ 13 ], (Int)COMMAND_PLACE_SELL );
+
+	// a hero with four abilities: Q W E R, his orders on their keys, A C V left for the held orders
+	KeyGridSlot hero[ SLOTS ];
+	for( Int i = 0; i < SLOTS; i++ )
+		hero[ i ] = empty;
+	hero[ 0 ] = fire;
+	hero[ 1 ] = fire;
+	hero[ 2 ] = power;
+	hero[ 3 ] = fire;
+	hero[ 10 ] = attackMove;
+	hero[ 11 ] = guard;
+	hero[ 12 ] = stop;
+	CHECK( ControlBar_keyGridPlaces( hero, SLOTS, places ) );
+	CHECK_EQ( places[ 0 ], (Int)COMMAND_PLACE_Q );
+	CHECK_EQ( places[ 1 ], (Int)COMMAND_PLACE_W );
+	CHECK_EQ( places[ 2 ], (Int)COMMAND_PLACE_E );
+	CHECK_EQ( places[ 3 ], (Int)COMMAND_PLACE_R );
+	CHECK_EQ( places[ 10 ], (Int)COMMAND_PLACE_ATTACK_MOVE );
+	CHECK_EQ( places[ 11 ], (Int)COMMAND_PLACE_GUARD );
+	CHECK_EQ( places[ 12 ], (Int)COMMAND_PLACE_STOP );
+
+	// eight abilities: the Q row full, then down round A (held), S (stop) and D (attack move) to F G
+	for( Int i = 4; i < 8; i++ )
+		hero[ i ] = power;
+	CHECK( ControlBar_keyGridPlaces( hero, SLOTS, places ) );
+	for( Int i = 0; i < 6; i++ )
+		CHECK_EQ( places[ i ], i );
+	CHECK_EQ( places[ 6 ], (Int)COMMAND_PLACE_F );
+	CHECK_EQ( places[ 7 ], (Int)COMMAND_PLACE_G );
+	for( Int i = 0; i < SLOTS; i++ )
+		CHECK( places[ i ] != (Int)COMMAND_PLACE_ATTACK && places[ i ] != (Int)COMMAND_PLACE_HOLD && places[ i ] != (Int)COMMAND_PLACE_MOVE );
+
+	// a full set: five skills Q..T, five upgrades Z..B, seven units along A and then the one free key, Y
+	KeyGridSlot full[ SLOTS ];
+	for( Int i = 0; i < SLOTS; i++ )
+		full[ i ] = i < 5 ? power : i < 10 ? upgrade : unit;
+	full[ 17 ] = sell;
+	ControlBar_keyGridPlaces( full, SLOTS, places );
+	for( Int i = 0; i < 5; i++ )
+		CHECK_EQ( places[ i ], (Int)COMMAND_PLACE_Q + i );
+	for( Int i = 0; i < 5; i++ )
+		CHECK_EQ( places[ 5 + i ], (Int)COMMAND_PLACE_Z + i );
+	for( Int i = 0; i < 6; i++ )
+		CHECK_EQ( places[ 10 + i ], (Int)COMMAND_PLACE_A + i );
+	CHECK_EQ( places[ 16 ], (Int)COMMAND_PLACE_Y );
+	CHECK_EQ( places[ 17 ], (Int)COMMAND_PLACE_SELL );
+	Bool seen[ COMMAND_PLACE_COUNT ] = { FALSE };
+	for( Int i = 0; i < SLOTS; i++ )
+		if( places[ i ] >= 0 && places[ i ] < COMMAND_PLACE_COUNT )
+		{
+			CHECK( !seen[ places[ i ] ] );
+			seen[ places[ i ] ] = TRUE;
+		}
+}
+
 /* The squad tray on the deck: entries on the places in reading order, none past N */
 TEST(key_grid_tray_fills_the_places_in_reading_order)
 {

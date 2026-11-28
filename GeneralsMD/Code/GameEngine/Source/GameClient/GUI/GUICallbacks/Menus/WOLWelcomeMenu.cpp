@@ -1221,13 +1221,15 @@ static void makeCards( void )
 	s_recentStale = TRUE;
 }
 
-/// a card's status line (a refusal, the Quick Match lock) over its key, empty for none, cut to the card
+/// a card's status line (a refusal, the Quick Match lock) over its key, empty for none; a sentence, so it
+/// wraps to the card and is never abbreviated (two lines fit between LAST 5 and the key)
 static void setCardStatus( HubCard &card, const UnicodeString &text, Int reserve1080 = 0 )
 {
 	Int w = 0, h = 0;
 	if (card.window)
 		card.window->winGetSize( &w, &h );
-	card.status->setText( text.isEmpty() ? text : UIStyle::fitText( text, bodyFont(), w - hpx( 48.0f + reserve1080 ) ) );
+	card.status->setWordWrap( w - hpx( 48.0f + reserve1080 ) );
+	card.status->setText( text );
 }
 
 /// the three cards' numbers, laid out again when the player's numbers, the counts or the army change

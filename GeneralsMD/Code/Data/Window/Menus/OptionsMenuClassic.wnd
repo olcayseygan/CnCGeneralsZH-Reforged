@@ -19042,6 +19042,99 @@ WINDOW
         WINDOW
           WINDOWTYPE = USER;
           SCREENRECT = UPPERLEFT: 372 646, BOTTOMRIGHT: 1124 680, CREATIONRESOLUTION: 1920 1080;
+          NAME = "OptionsMenu.wnd:RowAlternateMouse";
+          TEXT = "GUI:AlternateMouse";
+          STATUS = ENABLED+NOFOCUS+SEE_THRU;
+          STYLE = USER;
+          SYSTEMCALLBACK = "PassMessagesToParentSystem";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Times New Roman", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "[NONE]";
+          TOOLTIPDELAY = -1;
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  255 255 255 255,
+                      DISABLED: 255 255 255 255, DISABLEDBORDER: 255 255 255 255,
+                      HILITE:   255 255 255 255, HILITEBORDER:   255 255 255 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 0 0 0 255, BORDERCOLOR: 47 55 168 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 128 128 255 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
+          CHILD
+          WINDOW
+            WINDOWTYPE = CHECKBOX;
+            SCREENRECT = UPPERLEFT: 372 646, BOTTOMRIGHT: 1124 680, CREATIONRESOLUTION: 1920 1080;
+            NAME = "OptionsMenu.wnd:CheckAlternateMouse";
+            STATUS = ENABLED+IMAGE+BORDER;
+            STYLE = CHECKBOX+MOUSETRACK;
+            SYSTEMCALLBACK = "[None]";
+            INPUTCALLBACK = "[None]";
+            TOOLTIPCALLBACK = "[None]";
+            DRAWCALLBACK = "[None]";
+            FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+            HEADERTEMPLATE = "MinorTitle";
+            TOOLTIPDELAY = -1;
+            TEXT = "GUI:AlternateMouse";
+            TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                        DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                        HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+            ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                              IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                              IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                               IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                               IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                               IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+            HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                             IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                             IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          END
+          ENDALLCHILDREN
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = USER;
+          SCREENRECT = UPPERLEFT: 372 680, BOTTOMRIGHT: 1124 714, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowDoubleClickAttackMove";
           TEXT = "GUI:DoubleClickAttackMove";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -19086,7 +19179,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 646, BOTTOMRIGHT: 1124 680, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 680, BOTTOMRIGHT: 1124 714, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckDoubleClickAttackMove";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -19134,7 +19227,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 680, BOTTOMRIGHT: 1124 714, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 714, BOTTOMRIGHT: 1124 748, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowDragTolerance";
           TEXT = "GUI:DragTolerance";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -19179,7 +19272,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = STATICTEXT;
-            SCREENRECT = UPPERLEFT: 388 680, BOTTOMRIGHT: 816 714, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 388 714, BOTTOMRIGHT: 816 748, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:LabelDragTolerance";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
@@ -19226,7 +19319,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = HORZSLIDER;
-            SCREENRECT = UPPERLEFT: 828 685, BOTTOMRIGHT: 1028 709, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 828 719, BOTTOMRIGHT: 1028 743, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:SliderDragTolerance";
             STATUS = ENABLED+IMAGE+TABSTOP;
             STYLE = HORZSLIDER+MOUSETRACK;
@@ -19299,7 +19392,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = STATICTEXT;
-            SCREENRECT = UPPERLEFT: 1044 680, BOTTOMRIGHT: 1114 714, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 1044 714, BOTTOMRIGHT: 1114 748, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:ValueDragTolerance";
             STATUS = ENABLED;
             STYLE = STATICTEXT+MOUSETRACK;
@@ -19347,7 +19440,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = STATICTEXT;
-          SCREENRECT = UPPERLEFT: 372 718, BOTTOMRIGHT: 1124 752, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 752, BOTTOMRIGHT: 1124 786, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:HeadControls2";
           STATUS = ENABLED;
           STYLE = STATICTEXT+MOUSETRACK;
@@ -19394,7 +19487,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 752, BOTTOMRIGHT: 1124 786, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 786, BOTTOMRIGHT: 1124 820, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowBuildWithoutWorker";
           TEXT = "GUI:BuildWithoutWorker";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -19439,7 +19532,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 752, BOTTOMRIGHT: 1124 786, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 786, BOTTOMRIGHT: 1124 820, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckBuildWithoutWorker";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -19487,7 +19580,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 786, BOTTOMRIGHT: 1124 820, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 820, BOTTOMRIGHT: 1124 854, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowGridBuild";
           TEXT = "GUI:GridBuild";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -19532,7 +19625,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 786, BOTTOMRIGHT: 1124 820, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 820, BOTTOMRIGHT: 1124 854, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckGridBuild";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -19580,7 +19673,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 820, BOTTOMRIGHT: 1124 854, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 854, BOTTOMRIGHT: 1124 888, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowSnapBuildNeighbour";
           TEXT = "GUI:SnapBuildNeighbour";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -19625,7 +19718,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 820, BOTTOMRIGHT: 1124 854, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 854, BOTTOMRIGHT: 1124 888, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckSnapBuildNeighbour";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -19673,7 +19766,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 854, BOTTOMRIGHT: 1124 888, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 888, BOTTOMRIGHT: 1124 922, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowNudgeBuild";
           TEXT = "GUI:NudgeBuild";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -19718,7 +19811,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 854, BOTTOMRIGHT: 1124 888, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 888, BOTTOMRIGHT: 1124 922, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckNudgeBuild";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -19766,7 +19859,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 888, BOTTOMRIGHT: 1124 922, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 922, BOTTOMRIGHT: 1124 956, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowSnapBuild45";
           TEXT = "GUI:SnapBuild45";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -19811,7 +19904,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 888, BOTTOMRIGHT: 1124 922, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 922, BOTTOMRIGHT: 1124 956, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckSnapBuild45";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -19859,7 +19952,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = STATICTEXT;
-          SCREENRECT = UPPERLEFT: 372 926, BOTTOMRIGHT: 1124 960, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 960, BOTTOMRIGHT: 1124 994, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:HeadControls3";
           STATUS = ENABLED;
           STYLE = STATICTEXT+MOUSETRACK;
@@ -19906,7 +19999,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = USER;
-          SCREENRECT = UPPERLEFT: 372 960, BOTTOMRIGHT: 1124 994, CREATIONRESOLUTION: 1920 1080;
+          SCREENRECT = UPPERLEFT: 372 994, BOTTOMRIGHT: 1124 1028, CREATIONRESOLUTION: 1920 1080;
           NAME = "OptionsMenu.wnd:RowChromaLighting";
           TEXT = "GUI:ChromaLighting";
           STATUS = ENABLED+NOFOCUS+SEE_THRU;
@@ -19951,7 +20044,7 @@ WINDOW
           CHILD
           WINDOW
             WINDOWTYPE = CHECKBOX;
-            SCREENRECT = UPPERLEFT: 372 960, BOTTOMRIGHT: 1124 994, CREATIONRESOLUTION: 1920 1080;
+            SCREENRECT = UPPERLEFT: 372 994, BOTTOMRIGHT: 1124 1028, CREATIONRESOLUTION: 1920 1080;
             NAME = "OptionsMenu.wnd:CheckChromaLighting";
             STATUS = ENABLED+IMAGE+BORDER;
             STYLE = CHECKBOX+MOUSETRACK;
@@ -19995,53 +20088,6 @@ WINDOW
                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
           END
           ENDALLCHILDREN
-        END
-        CHILD
-        WINDOW
-          WINDOWTYPE = CHECKBOX;
-          SCREENRECT = UPPERLEFT: 372 132, BOTTOMRIGHT: 392 152, CREATIONRESOLUTION: 1920 1080;
-          NAME = "OptionsMenu.wnd:CheckAlternateMouse";
-          STATUS = ENABLED+IMAGE+BORDER+HIDDEN;
-          STYLE = CHECKBOX+MOUSETRACK;
-          SYSTEMCALLBACK = "[None]";
-          INPUTCALLBACK = "[None]";
-          TOOLTIPCALLBACK = "[None]";
-          DRAWCALLBACK = "[None]";
-          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
-          HEADERTEMPLATE = "MinorTitle";
-          TOOLTIPTEXT = "TOOLTIP:AlternateMouse";
-          TOOLTIPDELAY = -1;
-          TEXT = "GUI:AlternateMouse";
-          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
-                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
-                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
-          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
-                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
-                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
-                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
-                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
         END
         ENDALLCHILDREN
       END

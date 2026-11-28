@@ -1322,6 +1322,14 @@ GameMessageDisposition SelectionTranslator::translateGameMessage(const GameMessa
 			}
 			// The right button used to deselect here in the classic mouse mode.  It does not any
 			// more: it is the order button, and an order that hits nothing is simply no order.
+			// With the Alternate Mouse Setup off the left button orders, so the right one is the
+			// cancel again and deselects, as Classic's does; an armed key or Ctrl's force fire only
+			// goes down (CommandXlat), keeping the group.
+			else if( TheGlobalData->leftButtonOrders() && !TheInGameUI->isOrderKeyArmed()
+							 && !TheInGameUI->isInForceAttackMode() )
+			{
+				deselectAll();
+			}
 
 			break;
 		}

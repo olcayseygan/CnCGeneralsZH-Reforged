@@ -2649,8 +2649,10 @@ GameMessage::Type CommandTranslator::evaluateContextCommand( Drawable *draw,
 		// A right click on a selected building takes the rally point away from everything selected.
 		// Only the click is answered: the hover and SelectionXlat's EVALUATE_ONLY fall through as
 		// they always did, so the building keeps its selection cursor.  The game as shipped had no
-		// such order, and the Classic mouse sends none.
+		// such order, and the Classic mouse sends none.  Nor does the Reforged mouse with its Alternate
+		// Mouse Setup off, where the left click is the order and a left click on the building selects.
 		else if( type == DO_COMMAND && draw && draw->isSelected() && !TheGlobalData->isClassicMouse()
+						 && TheGlobalData->rightButtonOrders()
 						 && TheInGameUI->canSelectedObjectsDoAction( InGameUI::ACTIONTYPE_SET_RALLY_POINT, NULL, InGameUI::SELECTION_ALL, FALSE ) )
 		{
 			msgType = GameMessage::MSG_CLEAR_RALLY_POINT;
@@ -4611,8 +4613,10 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 		{
 			// The Classic right button orders only under EA's Alternate Mouse Setup, and then exactly
 			// as 1.04 did: the click below and nothing else.  Without it it scrolls and deselects,
-			// which LookAtXlat and SelectionXlat do, as the game shipped.
-			if( !TheGlobalData->rightButtonOrders() )
+			// which LookAtXlat and SelectionXlat do, as the game shipped.  The Reforged mouse with its
+			// Alternate Mouse Setup off orders with the left too, but its right click still puts an armed
+			// key down, below.
+			if( !TheGlobalData->rightButtonOrders() && TheGlobalData->isClassicMouse() )
 				break;
 
 			// A right click is an order.  A right drag pans the camera (LookAtXlat), so a release that
@@ -4632,6 +4636,9 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 				disp = DESTROY_MESSAGE;
 				break;
 			}
+
+			if( !TheGlobalData->rightButtonOrders() )
+				break;
 
 			if (isRightClick)
 			{

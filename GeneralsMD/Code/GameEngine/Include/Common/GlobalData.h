@@ -235,7 +235,8 @@ public:
 	Bool m_noDynamicLODOverride;	// "-noDynamicLOD": off for this run, whatever the static preset or Options.ini set
 	Bool m_enableStaticLOD;
 	Int m_terrainLODTargetTimeMS;
-	Bool m_useAlternateMouse;			///< EA's Alternate Mouse Setup, Options.ini UseAlternateMouse: Classic only, Reforged never reads it (client only)
+	Bool m_useAlternateMouse;			///< EA's Alternate Mouse Setup under the Classic mouse, Options.ini UseAlternateMouse, off by default (client only)
+	Bool m_useAlternateMouseReforged;	///< the same box under the Reforged mouse, Options.ini UseAlternateMouseReforged, on by default (client only)
 	Bool m_clientRetaliationModeEnabled;
 	Bool m_doubleClickAttackMove;
 	Bool m_rightMouseAlwaysScrolls;
@@ -420,9 +421,13 @@ public:
 	Bool m_gridKeys;							///< "GridKeys": command buttons pressed by where they stand (OptionsCatalog.cpp, client only)
 	Int m_mouseStyle;							///< MOUSE_STYLE_CLASSIC or MOUSE_STYLE_REFORGED, set by -mouse only (client only, never GameLogic)
 	Bool isClassicMouse() const { return m_mouseStyle == MOUSE_STYLE_CLASSIC; }
-	/// which button gives a click on the ground its order.  Reforged mouse: the right.  Classic: the left,
-	/// as 1.04 shipped, or the right under EA's Alternate Mouse Setup, where the left only selects
-	Bool leftButtonOrders() const { return isClassicMouse() && !m_useAlternateMouse; }
+	/// EA's Alternate Mouse Setup for the mouse of this run: each mouse keeps its own box, so Classic's
+	/// default (off, the left orders, as 1.04 shipped) and Reforged's (on, the right orders) never move
+	/// each other
+	Bool alternateMouse() const { return isClassicMouse() ? m_useAlternateMouse : m_useAlternateMouseReforged; }
+	/// which button gives a click on the ground its order: the right under the Alternate Mouse Setup,
+	/// where the left only selects, and the left without it
+	Bool leftButtonOrders() const { return !alternateMouse(); }
 	Bool rightButtonOrders() const { return !leftButtonOrders(); }
 	Int m_playerColorScheme;			///< PlayerColorSchemeType: whose colour the client draws (client only)
 	Int m_textLanguage;						///< TextLanguageType: the translation GameText lays over the CSF, read once at startup (client only)

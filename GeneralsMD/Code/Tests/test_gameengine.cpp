@@ -2925,13 +2925,15 @@ TEST(hotkeys_every_fixed_order_takes_the_players_letter)
 	}
 }
 
-/* GlobalData.h: which button orders.  The classic mouse is 1.04's left button, or the right under EA's
-   Alternate Mouse Setup (UseAlternateMouse, off out of the box); Reforged is the right whatever Options.ini says. */
-TEST(alternate_mouse_moves_the_order_button_in_classic_only)
+/* GlobalData.h: which button orders.  EA's Alternate Mouse Setup moves the order to the right button in
+   both mice, and each mouse keeps its own box: Classic's UseAlternateMouse, off out of the box (1.04's left
+   button), and Reforged's UseAlternateMouseReforged, on out of the box (the right).  One never moves the other. */
+TEST(alternate_mouse_moves_the_order_button_in_each_mouse)
 {
 	GlobalData *saved = TheWritableGlobalData;
 	TheWritableGlobalData = NEW GlobalData;
 	CHECK( !TheGlobalData->m_useAlternateMouse );
+	CHECK(  TheGlobalData->m_useAlternateMouseReforged );
 
 	TheWritableGlobalData->m_mouseStyle = MOUSE_STYLE_CLASSIC;
 	CHECK(  TheGlobalData->leftButtonOrders() );
@@ -2942,11 +2944,18 @@ TEST(alternate_mouse_moves_the_order_button_in_classic_only)
 	CHECK(  TheGlobalData->rightButtonOrders() );
 
 	TheWritableGlobalData->m_mouseStyle = MOUSE_STYLE_REFORGED;
-	CHECK( !TheGlobalData->leftButtonOrders() );
-	CHECK(  TheGlobalData->rightButtonOrders() );
 	TheWritableGlobalData->m_useAlternateMouse = FALSE;
 	CHECK( !TheGlobalData->leftButtonOrders() );
 	CHECK(  TheGlobalData->rightButtonOrders() );
+
+	TheWritableGlobalData->m_useAlternateMouseReforged = FALSE;
+	CHECK(  TheGlobalData->leftButtonOrders() );
+	CHECK( !TheGlobalData->rightButtonOrders() );
+	TheWritableGlobalData->m_useAlternateMouse = TRUE;
+	CHECK(  TheGlobalData->leftButtonOrders() );
+
+	TheWritableGlobalData->m_mouseStyle = MOUSE_STYLE_CLASSIC;
+	CHECK( !TheGlobalData->leftButtonOrders() );
 
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;

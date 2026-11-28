@@ -522,16 +522,20 @@ void OptionPreferences::setOnlineIPAddress( UnsignedInt IP )
 	(*this)["GameSpyIPAddress"] = tmp;
 }
 
-Bool OptionPreferences::getAlternateMouseModeEnabled(void)
+/// Each mouse keeps its own Alternate Mouse Setup line: every file already holds Classic's
+/// UseAlternateMouse = no, which must not take the Reforged mouse's right-button orders away
+static const char *alternateMouseKey( Bool reforged )
 {
-	OptionPreferences::const_iterator it = find("UseAlternateMouse");
-	if (it == end())
-		return TheGlobalData->m_useAlternateMouse;
+	return reforged ? "UseAlternateMouseReforged" : "UseAlternateMouse";
+}
 
-	if (strcasecmp(it->second.str(), "yes") == 0) {
-		return TRUE;
-	}
-	return FALSE;
+Bool OptionPreferences::getAlternateMouseModeEnabled(Bool reforged)
+{
+	OptionPreferences::const_iterator it = find( alternateMouseKey( reforged ) );
+	if (it == end())
+		return reforged ? TheGlobalData->m_useAlternateMouseReforged : TheGlobalData->m_useAlternateMouse;
+
+	return strcasecmp(it->second.str(), "yes") == 0;
 }
 
 Bool OptionPreferences::getRetaliationModeEnabled(void)
@@ -1040,7 +1044,8 @@ static void setDefaults( void )
 	
 	//-------------------------------------------------------------------------------------------------
 	// Mouse Mode
-	GadgetCheckBoxSetChecked(checkAlternateMouse, FALSE);
+	// the box's default is the mouse's: off for Classic, on for Reforged
+	GadgetCheckBoxSetChecked(checkAlternateMouse, !TheGlobalData->isClassicMouse());
 	GadgetCheckBoxSetChecked(checkRetaliation, TRUE );
 	GadgetCheckBoxSetChecked( checkDoubleClickAttackMove, FALSE );
 
@@ -1921,8 +1926,16 @@ static void saveOptions( void )
 
 	//-------------------------------------------------------------------------------------------------
 	// mouse mode
-	TheWritableGlobalData->m_useAlternateMouse = GadgetCheckBoxIsChecked(checkAlternateMouse);
-	(*pref)["UseAlternateMouse"] = TheWritableGlobalData->m_useAlternateMouse ? AsciiString("yes") : AsciiString("no");
+	// the box is the running mouse's, and only that mouse's line is written
+	{
+		const Bool reforged = !TheGlobalData->isClassicMouse();
+		const Bool alternate = GadgetCheckBoxIsChecked(checkAlternateMouse);
+		if( reforged )
+			TheWritableGlobalData->m_useAlternateMouseReforged = alternate;
+		else
+			TheWritableGlobalData->m_useAlternateMouse = alternate;
+		(*pref)[ alternateMouseKey( reforged ) ] = alternate ? AsciiString("yes") : AsciiString("no");
+	}
 
 	TheWritableGlobalData->m_clientRetaliationModeEnabled = GadgetCheckBoxIsChecked(checkRetaliation);
 	(*pref)["Retaliation"] = TheWritableGlobalData->m_clientRetaliationModeEnabled? AsciiString("yes") : AsciiString("no");
@@ -5116,7 +5129,7 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 //	GadgetCheckBoxSetChecked(checkAudioSurround, TheAudio->getSpeakerSurround());
 
 	// set the mouse mode
-	GadgetCheckBoxSetChecked(checkAlternateMouse, TheGlobalData->m_useAlternateMouse);
+	GadgetCheckBoxSetChecked(checkAlternateMouse, TheGlobalData->alternateMouse());
 	GadgetCheckBoxSetChecked(checkRetaliation, TheGlobalData->m_clientRetaliationModeEnabled);
 	GadgetCheckBoxSetChecked( checkDoubleClickAttackMove, TheGlobalData->m_doubleClickAttackMove );
 

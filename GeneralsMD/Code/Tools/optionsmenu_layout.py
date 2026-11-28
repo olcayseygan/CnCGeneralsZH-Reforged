@@ -237,6 +237,8 @@ GROUP_LAYOUT = [
         ("GUI:OptionsHeadOrders", [
             check("Retaliation", "Retaliation"),
             check("FormationDrag", "CheckFormationDrag"),
+            # EA's Alternate Mouse Setup, each mouse's own box (2026-11-28), not a catalog row
+            check("AlternateMouse", "CheckAlternateMouse"),
             check("DoubleClickAttackMove", "CheckDoubleClickAttackMove", MORE),
             slider("DragTolerance", "LabelDragTolerance", "SliderDragTolerance", "ValueDragTolerance", MORE)]),
         ("GUI:OptionsHeadBuilding", [
@@ -284,7 +286,7 @@ RAIL_STEMS = ["Look", "Quality"]
 # (README-settings.md and the plan's "Merge, rename, drop").  The detail preset and its slider are
 # Quality in the rail; Classic Graphics is Look's two boxes; Texture Filtering and Anisotropic Samples
 # are one list; EA's Heat Effects is the second half of Heat Haze; Scene reflections and Reflection
-# mode are one list; Alternate Mouse leaves the screen; EA's hidden leftovers stay hidden.
+# mode are one list; EA's hidden leftovers stay hidden.
 #   (page, name)
 HIDDEN_MODELS = [
     ("PageSystem", "ResolutionNote"),
@@ -306,7 +308,6 @@ HIDDEN_MODELS = [
     ("PageWorld", "LabelWaterReflection"),
     ("PageWorld", "ComboBoxWaterReflection"),
     ("PageEffects", "CheckHeatEffects"),
-    ("PageControls", "CheckAlternateMouse"),
 ]
 # merged models the quality slider still sets though hidden (OptionsMenu.cpp, isMergedModel)
 MERGED_MODELS = ["ComboBoxTextureFilter", "SliderAnisotropy", "CheckHeatEffects",
@@ -863,10 +864,10 @@ def selfcheck():
 
     # every row, fader and rail choice has its pane sentences in both languages, and its name
     stems = [row[0] for _page, groups in GROUP_LAYOUT for _h, rs in groups for row in rs] + RAIL_STEMS
-    # the plan's 118, Key Grid's Grid Keys and Ground Relief (2026-11-27), Income Sound and Income
-    # Readout (2026-11-28)
-    if len(stems) != 122:
-        problems.append("%d settings on the screen, the plan's tooltip table holds 118, Grid Keys, Ground Relief, Income Sound and Income Readout" % len(stems))
+    # the plan's 118, Key Grid's Grid Keys and Ground Relief (2026-11-27), Income Sound, Income
+    # Readout and Alternate Mouse (2026-11-28)
+    if len(stems) != 123:
+        problems.append("%d settings on the screen, the plan's tooltip table holds 118, Grid Keys, Ground Relief, Income Sound, Income Readout and Alternate Mouse" % len(stems))
     for stem in stems:
         for table, language in ((keys, "Patch.str"), (turkish, "Turkish/Generals.str")):
             if "OPTIONTIP:%s" % stem not in table:

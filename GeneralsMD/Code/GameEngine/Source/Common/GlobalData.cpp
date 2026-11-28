@@ -1360,6 +1360,7 @@ GlobalData::GlobalData()
 
 	m_clientRetaliationModeEnabled = TRUE; //On by default.
 	m_useAlternateMouse = FALSE;
+	m_useAlternateMouseReforged = TRUE;	// the Reforged mouse orders with the right button out of the box
 
 	computeExeCRC();
 
@@ -1751,7 +1752,9 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 
 	// override INI values with user preferences
 	OptionPreferences optionPref;
-	TheWritableGlobalData->m_useAlternateMouse = optionPref.getAlternateMouseModeEnabled();
+	// both mice's boxes: this runs before parseCommandLine, so -mouse is not known yet
+	TheWritableGlobalData->m_useAlternateMouse = optionPref.getAlternateMouseModeEnabled( FALSE );
+	TheWritableGlobalData->m_useAlternateMouseReforged = optionPref.getAlternateMouseModeEnabled( TRUE );
 	TheWritableGlobalData->m_clientRetaliationModeEnabled = optionPref.getRetaliationModeEnabled();
 	TheWritableGlobalData->m_doubleClickAttackMove = optionPref.getDoubleClickAttackMoveEnabled();
 	TheWritableGlobalData->m_keyboardScrollFactor = optionPref.getScrollFactor();

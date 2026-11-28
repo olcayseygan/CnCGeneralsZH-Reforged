@@ -23717,6 +23717,10 @@ OPTIONTIP:FormationDrag
 "Hareket ya da saldırarak ilerleme emri hazırken bir çizgi çekin, birlikler o çizgiye dizilir."
 END
 
+OPTIONTIP:AlternateMouse
+"Sağ tık emir verir, sol tık sadece seçer. Kapatırsanız emir sol tıkla verilir."
+END
+
 OPTIONTIP:DoubleClickAttackMove
 "Yere çift tıklayınca birlikler oraya gider ve bölgeyi korur."
 END

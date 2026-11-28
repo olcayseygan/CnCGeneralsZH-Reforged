@@ -9534,6 +9534,10 @@ OPTIONTIP:FormationDrag
 "With a move or attack-move order ready, drag a line and the units spread along it."
 END
 
+OPTIONTIP:AlternateMouse
+"Right-click gives orders and left-click only selects. Untick it to give orders with left-click."
+END
+
 OPTIONTIP:DoubleClickAttackMove
 "Double-click the ground and units move there, then guard the area."
 END

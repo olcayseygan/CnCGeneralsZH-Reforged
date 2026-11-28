@@ -134,15 +134,24 @@ typedef MultiListIterator<PolyRemover>		PolyRemoverListIterator;
 ** for this frame.  Since MeshClass instances can share meshmodels
 ** (and therefore their dx8 polygon renderers) this record contains
 ** a pointer to the polygon renderer and the MeshClass instance that
-** it is being rendered for. 
+** it is being rendered for.
+**
+** Crash reports 4651 (a task with no mesh) and 5081 (a mesh whose vtable pointer was a heap
+** address, v4.4.0, paused, quit menu open) read tasks that were never tasks of that category.
+** A MeshClass pool slot, freed or not, holds a MeshClass vtable (the pool keeps its blobs and its
+** free link sits in the block header), so 5081's pointer came out of memory that was no task.  A task now names the category that queued it and the W3D frame it was
+** queued in; the destructor clears the category, which the pool's free link (the first eight
+** bytes) does not reach, so a task given back and still linked fails Belongs_To too.
 */
 class PolyRenderTaskClass : public AutoPoolClass<PolyRenderTaskClass, 256>
 {
 public:
-	PolyRenderTaskClass(DX8PolygonRendererClass * p_renderer,MeshClass * p_mesh) :
+	PolyRenderTaskClass(DX8PolygonRendererClass * p_renderer,MeshClass * p_mesh,DX8TextureCategoryClass * p_category) :
 		Renderer(p_renderer),
 		Mesh(p_mesh),
-		NextVisible(NULL)
+		NextVisible(NULL),
+		Category(p_category),
+		QueuedFrame(WW3D::Get_Frame_Count())
 	{
 		WWASSERT(Renderer != NULL);
 		WWASSERT(Mesh != NULL);
@@ -151,11 +160,16 @@ public:
 
 	~PolyRenderTaskClass(void)
 	{
-		Mesh->Release_Ref();
+		if (Mesh != NULL) Mesh->Release_Ref();
+		// volatile: a store into an object about to be freed is otherwise a dead store
+		*(DX8TextureCategoryClass * volatile *)&Category = NULL;
 	}
 
 	DX8PolygonRendererClass *	Peek_Polygon_Renderer(void)							{ return Renderer; }
 	MeshClass *						Peek_Mesh(void)											{ return Mesh; }
+	void								Forget_Mesh(void)											{ Mesh = NULL; }	// a freed mesh: no Release_Ref
+	bool								Belongs_To(const DX8TextureCategoryClass * c)	{ return Category == c; }
+	unsigned							Get_Queued_Frame(void)									{ return QueuedFrame; }
 
 	PolyRenderTaskClass *		Get_Next_Visible(void)									{ return NextVisible; }
 	void								Set_Next_Visible(PolyRenderTaskClass * prtc)		{ NextVisible = prtc; }
@@ -165,6 +179,8 @@ protected:
 	DX8PolygonRendererClass *	Renderer;
 	MeshClass *						Mesh;
 	PolyRenderTaskClass *		NextVisible;
+	DX8TextureCategoryClass *	Category;
+	unsigned							QueuedFrame;
 
 };
 
@@ -265,7 +281,7 @@ DX8TextureCategoryClass::~DX8TextureCategoryClass()
 
 void DX8TextureCategoryClass::Add_Render_Task(DX8PolygonRendererClass * p_renderer,MeshClass * p_mesh)
 {
-	PolyRenderTaskClass * new_prt = new PolyRenderTaskClass(p_renderer,p_mesh);
+	PolyRenderTaskClass * new_prt = new PolyRenderTaskClass(p_renderer,p_mesh,this);
 	new_prt->Set_Next_Visible(render_task_head);
 	render_task_head = new_prt;
 
@@ -1343,6 +1359,13 @@ DX8SkinFVFCategoryContainer::DX8SkinFVFCategoryContainer(bool sorting)
 
 DX8SkinFVFCategoryContainer::~DX8SkinFVFCategoryContainer()
 {
+	// An Invalidate (or the pending delete list) can take a skin container with skins queued.  Left
+	// linked, each of those meshes kept its NextVisibleSkin, Add_Visible_Skin refused it in every
+	// later container, and its skin draws were gone for good.  The meshes are alive here: every one
+	// in the chain was queued first (MeshClass::Render: a render task, or a material pass task in
+	// this container), and those tasks, leaked with this container and its categories, still hold
+	// their references.
+	clearVisibleSkinList();
 }
 
 // ----------------------------------------------------------------------------
@@ -1851,11 +1874,66 @@ void DX8TextureCategoryClass::Render(void)
 
 	while (prt) {
 
+		// Not a task this category queued (crash reports 4651, 5081): a freed task still linked, or
+		// the walk came here through freed memory.  Nothing past it is trusted: the list is cut here,
+		// and the rest of it is left where it lies (leaked) rather than read.
+		if (!prt->Belongs_To(this)) {
+			static int s_saidForeign = 0;
+			if (s_saidForeign < 4) {
+				++s_saidForeign;
+				WWRELEASE_SAY(("DX8TextureCategoryClass::Render: cut the list at a task this category never queued "
+					"(task %p, category %p pass %d, W3D frame %u)\n", (void *)prt, (void *)this, pass,
+					WW3D::Get_Frame_Count()));
+			}
+			if (last_prt == NULL) {
+				render_task_head = NULL;
+			} else {
+				last_prt->Set_Next_Visible(NULL);
+			}
+			break;
+		}
+
 		/*
 		** Dig out the parameters for this render task
 		*/
 		DX8PolygonRendererClass * renderer = prt->Peek_Polygon_Renderer();
 		MeshClass * mesh = prt->Peek_Mesh();
+
+		// A real task whose mesh has no reference left was over-released somewhere: the task's own
+		// reference should keep it at one at least.  A W3D pool never hands a blob back, so the count
+		// reads safely; the mesh is forgotten (no Release_Ref into a freed slot) and the task freed.
+		// A task queued in an earlier W3D frame was meant for a pass that has ended (a skin stuck
+		// waiting for room, or a draw queued after its pass flushed): said once and dropped.
+		const bool freed_mesh = (mesh != NULL && mesh->Num_Refs() <= 0);
+		// Anything that queues meshes before the frame's first flush (W3DDisplay.cpp:3051, updateRenderTargetTextures) and leaves the flush to a later pass is dropped here.
+		const bool old_task = mesh != NULL && !freed_mesh && prt->Get_Queued_Frame() != WW3D::Get_Frame_Count();
+		if (freed_mesh || old_task) {
+			static int s_saidFreedMesh = 0;
+			static bool s_saidOldTask = false;
+			if (freed_mesh && s_saidFreedMesh < 4) {
+				++s_saidFreedMesh;
+				WWRELEASE_SAY(("DX8TextureCategoryClass::Render: dropped a render task whose mesh %p has %d references "
+					"(task %p, category %p pass %d, queued W3D frame %u, now %u)\n", (void *)mesh, mesh->Num_Refs(),
+					(void *)prt, (void *)this, pass, prt->Get_Queued_Frame(), WW3D::Get_Frame_Count()));
+			}
+			if (old_task && !s_saidOldTask) {
+				s_saidOldTask = true;
+				WWRELEASE_SAY(("DX8TextureCategoryClass::Render: dropped a render task queued in W3D frame %u, now %u "
+					"(mesh '%s', task %p, category %p pass %d), said once\n", prt->Get_Queued_Frame(),
+					WW3D::Get_Frame_Count(), mesh->Get_Name() != NULL ? mesh->Get_Name() : "?",
+					(void *)prt, (void *)this, pass));
+			}
+			PolyRenderTaskClass * next_prt = prt->Get_Next_Visible();
+			if (last_prt == NULL) {
+				render_task_head = next_prt;
+			} else {
+				last_prt->Set_Next_Visible(next_prt);
+			}
+			if (freed_mesh) prt->Forget_Mesh();
+			delete prt;
+			prt = next_prt;
+			continue;
+		}
 
 		// Crash report 4651 (v4.3.2, AV read 0x324, mesh->Get_Base_Vertex_Offset below) reached a task
 		// with no mesh.  Add_Render_Task never builds one (the constructor refs the mesh unguarded) and a
@@ -2975,11 +3053,22 @@ void DX8MeshRendererClass::Invalidate( bool shutdown)
 	WWMEMLOG(MEM_RENDERER);
 	// Asked from inside Flush's walk: run when the walk ends (FlushWindowClass), not under it.
 	if (!shutdown && _FlushDepth > 0) {
-		static int s_saidDeferred = 0;
-		if (!_InvalidateDeferred && s_saidDeferred < 4) {
-			++s_saidDeferred;
-			WWRELEASE_SAY(("DX8MeshRendererClass::Invalidate asked mid-flush, put off to its end (W3D frame %u)\n",
-				WW3D::Get_Frame_Count()));
+		// Each is the moment a walk would have lost its containers (reports 4651, 5081).  The first 8
+		// are said in full; after that a card short of memory refuses every create inside a flush, so
+		// at most one line a second carries the running count.
+		static unsigned s_deferredCount = 0;
+		static unsigned s_lastSummaryMs = 0;
+		++s_deferredCount;
+		if (s_deferredCount <= 8) {
+			WWRELEASE_SAY(("DX8MeshRendererClass::Invalidate asked mid-flush, put off to its end (W3D frame %u, flush depth %d%s)\n",
+				WW3D::Get_Frame_Count(), _FlushDepth, _InvalidateDeferred ? ", one already waiting" : ""));
+		} else {
+			const unsigned now = WWProfile_Get_System_Time();
+			if (now - s_lastSummaryMs >= 1000) {
+				s_lastSummaryMs = now;
+				WWRELEASE_SAY(("DX8MeshRendererClass::Invalidate asked mid-flush %u times so far (W3D frame %u)\n",
+					s_deferredCount, WW3D::Get_Frame_Count()));
+			}
 		}
 		_InvalidateDeferred = true;
 		return;

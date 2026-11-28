@@ -80,7 +80,7 @@ Options > Interface also has a Grid Keys box for the other layouts, after Age of
 
 ## Every faction building breaks apart under fire
 
-Buildings of the USA, China and the GLA, every general's too, no longer just sink when they die. Shoot one and chunks fall out of the walls where your shots land, the killing blow brings the rest down onto the stumps, and a repair puts the pieces back. The pieces keep the building's damaged, night and snow looks and its general's colours. The Turkiye buildings stay whole for now. The pieces come in an art download of about 102 MB that arrives with the next update.
+Buildings of the USA, China and the GLA, every general's too, no longer just sink when they die. Shoot one and chunks fall out of the walls where your shots land, the killing blow brings the rest down onto the stumps, and a repair puts the pieces back. A building still going up, or a plan whose builder has not arrived yet, takes its hits without breaking, and one you sell after it was shot stands whole again while the sale takes it down. The pieces keep the building's damaged, night and snow looks and its general's colours. The Turkiye buildings stay whole for now. The pieces come in an art download of about 102 MB that arrives with the next update.
 
 ## Fixes from the bug reports of November 24 and 28
 

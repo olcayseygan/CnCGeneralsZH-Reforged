@@ -652,12 +652,15 @@ Bool castsVolumeWhole( const Drawable *draw )
 
 /** Placed and not started, going up, left half built or being sold.  The model then is NONE (the draw
 	after it shows the scaffold) or clipped by the construction share, and the fragments are the whole
-	building: no fragments are made then, and no fall is staged. */
+	building: no fragments are made then, and no fall is staged.  A plan waiting for its builder carries
+	no construction condition at all (DozerAIUpdate draws it as a translucent silhouette of the finished
+	model), so the walk's awaitingBuilder answers for it. */
 Bool underConstruction( const Drawable *draw )
 {
 	const ModelConditionFlags &flags = draw->getModelConditionFlags();
 	return flags.test( MODELCONDITION_AWAITING_CONSTRUCTION ) || flags.test( MODELCONDITION_PARTIALLY_CONSTRUCTED )
-		|| flags.test( MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED ) || flags.test( MODELCONDITION_SOLD );
+		|| flags.test( MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED ) || flags.test( MODELCONDITION_SOLD )
+		|| draw->getObjectForDraw().awaitingBuilder;
 }
 
 /** The W3DModelDraw the fragments stand in for, picked once when they are made and kept for good (a

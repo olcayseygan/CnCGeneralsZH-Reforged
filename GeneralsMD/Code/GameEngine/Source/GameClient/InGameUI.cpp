@@ -420,8 +420,9 @@ static UnicodeString groupThousands( const UnicodeString& text )
 	* behind the last reading (the next match), starts them again. */
 static IncomeReadings s_incomeReadings;
 static const Player *s_incomePlayer = NULL;
-static Int s_incomeShown = -1;			///< the figure last written beside the money, -1 for none
-static Int s_incomeModeShown = -1;	///< and the IncomeReadout it was written for
+static Int s_incomeShown = -1;			///< the figure drawIncomeReadout puts beside the money
+static Int s_incomeModeShown = 0;		///< and how, INCOME_READOUT_OFF for not at all
+static DisplayString *s_incomeText = NULL;	///< its words, made on first use
 
 /// the income a second or a minute for `player` (NULL: none, which also forgets the readings), and in
 /// `mode` which of the two, INCOME_READOUT_OFF when the option is off
@@ -443,23 +444,6 @@ static Int incomeReadoutRate( const Player *player, Int *mode )
 	*mode = option;
 	const UnsignedInt unit = ( option == INCOME_READOUT_PER_MINUTE ? 60 : 1 ) * LOGICFRAMES_PER_SECOND;
 	return s_incomeReadings.rate( unit, LOGICFRAMES_PER_SECOND );
-}
-
-/// whether `text` stands on one line in the static text `window`, in the window's font: the gadget
-/// wraps ten pixels inside its width, and a left-aligned one starts at its margin
-static Bool fitsMoneyWindow( GameWindow *window, const UnicodeString &text )
-{
-	TextData *data = (TextData *)window->winGetUserData();
-	Int width = 0, height = 0;
-	window->winGetSize( &width, &height );
-	const Int room = width - 10 - ( data != NULL && !data->centered ? data->leftMargin : 0 );
-	DisplayString *measure = TheDisplayStringManager->newDisplayString();
-	measure->setFont( window->winGetFont() );
-	measure->setText( text );
-	Int textW = 0, textH = 0;
-	measure->getSize( &textW, &textH );
-	TheDisplayStringManager->freeDisplayString( measure );
-	return textW <= room;
 }
 
 UnicodeString HudMoney_format( Int amount )
@@ -3774,13 +3758,12 @@ void InGameUI::update( void )
 			currentMoney = stepMoneyShown( m_lastMoneyDisplayed, purse, nowMs - m_moneyShownMs );
 		m_moneyShownPlayer = moneyPlayer;
 		m_moneyShownMs = nowMs;
-		// the IncomeReadout option: "+40/s" after the figure, on the player's own bar only (an observer's
-		// box is sized to the figure alone) and never beside Unlimited
-		Int incomeMode = INCOME_READOUT_OFF;
-		const Int income = incomeReadoutRate( TheControlBar->isObserverControlBarOn() ? NULL : moneyPlayer, &incomeMode );
+		// the IncomeReadout option, which drawIncomeReadout puts on a plate of its own at the money box:
+		// the player's own bar only (an observer's box is fitted to the figure) and never by Unlimited
+		s_incomeShown = incomeReadoutRate( TheControlBar->isObserverControlBarOn() ? NULL : moneyPlayer, &s_incomeModeShown );
 		if( unlimited )
-			incomeMode = INCOME_READOUT_OFF;
-		if( m_lastMoneyDisplayed != currentMoney || income != s_incomeShown || incomeMode != s_incomeModeShown )
+			s_incomeModeShown = INCOME_READOUT_OFF;
+		if( m_lastMoneyDisplayed != currentMoney )
 		{
 			UnicodeString buffer;
 			if( unlimited )
@@ -3789,29 +3772,10 @@ void InGameUI::update( void )
 				buffer.format( TheGameText->fetch( "GUI:ControlBarMoneyDisplay" ), currentMoney );
 			if( !unlimited && TheControlBar->getControlBarSchemeManager()->isMoneySignPainted() )
 				buffer = amountOnly( buffer );
-			UnicodeString withIncome;
-			if( incomeMode != INCOME_READOUT_OFF )
-			{
-				UnicodeString figure;
-				figure.format( TheGameText->fetch( incomeMode == INCOME_READOUT_PER_MINUTE ? "GUI:IncomeReadoutMinute" : "GUI:IncomeReadoutSecond" ),
-											 income );
-				withIncome = buffer;
-				withIncome.concat( (WideChar)u' ' );
-				withIncome.concat( figure );
-			}
 			if( !unlimited && TheControlBar->getControlBarSchemeManager()->isMoneyGrouped() )
-			{
 				buffer = groupThousands( buffer );
-				if( !withIncome.isEmpty() )
-					withIncome = groupThousands( withIncome );
-			}
-			// a box too narrow for both keeps the money whole and drops the income
-			if( !withIncome.isEmpty() && fitsMoneyWindow( moneyWin, withIncome ) )
-				buffer = withIncome;
 			GadgetStaticTextSetText( moneyWin, buffer );
 			m_lastMoneyDisplayed = currentMoney;
-			s_incomeShown = income;
-			s_incomeModeShown = incomeMode;
 
 		}  // end if
 
@@ -3827,6 +3791,7 @@ void InGameUI::update( void )
 		moneyWin->winHide(TRUE);
 		powerWin->winHide(TRUE);
 		m_moneyShownPlayer = NULL;
+		s_incomeModeShown = INCOME_READOUT_OFF;
 	}
 	
 	// Update the floating Text;
@@ -8819,12 +8784,66 @@ void InGameUI::disregardDrawable( Drawable *draw )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The IncomeReadout option's figure, "+2,400/min", on a readout plate of the side's own at the money
+	* box's right end: over the box's top edge on a bar along the bottom of the screen, under its foot
+	* on the sidebar, whose box stands at the top.  Its own plate and not the box's text, because the
+	* box is sized for the money: at 1920x1080 the Reforged bar's glass is about 151 pixels and
+	* "$ 15,400" already takes 100 of them, so "+2,400/min" beside it never fitted. */
+//-------------------------------------------------------------------------------------------------
+static Int hudReadoutFrame( void );
+static void drawIncomeReadout( void )
+{
+	if( s_incomeModeShown != INCOME_READOUT_PER_SECOND && s_incomeModeShown != INCOME_READOUT_PER_MINUTE )
+		return;
+	if( TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
+		return;
+	static const NameKeyType moneyKey = NAMEKEY( "ControlBar.wnd:MoneyDisplay" );
+	GameWindow *money = TheWindowManager->winGetWindowFromId( NULL, moneyKey );
+	for( GameWindow *up = money; up != NULL; up = up->winGetParent() )
+		if( up->winIsHidden() )
+			return;
+	if( money == NULL )
+		return;
+
+	UnicodeString text;
+	text.format( TheGameText->fetch( s_incomeModeShown == INCOME_READOUT_PER_MINUTE ? "GUI:IncomeReadoutMinute" : "GUI:IncomeReadoutSecond" ),
+							 s_incomeShown );
+	text = groupThousands( text );
+	if( s_incomeText == NULL )
+		s_incomeText = TheDisplayStringManager->newDisplayString();
+	GameFont *font = TheFontLibrary->getFont( "Arial", max( REAL_TO_INT( 9.0f * TheDisplay->getHeight() / 1080.0f ), 7 ), TRUE );
+	if( s_incomeText->getFont() != font )
+		s_incomeText->setFont( font );
+	if( s_incomeText->getText().compare( text ) != 0 )
+		s_incomeText->setText( text );
+	Int textW = 0, textH = 0;
+	s_incomeText->getSize( &textW, &textH );
+
+	Int x, y, w, h;
+	money->winGetScreenPosition( &x, &y );
+	money->winGetSize( &w, &h );
+	// clear of the box's frame above it, which stands a third of the glass's height over the glass;
+	// the sidebar's box has a 16 pixel gap at 1080 to the radar under it, so a hair under its foot
+	const Bool above = y > TheDisplay->getHeight() / 2;
+	const Int air = above ? h / 3 : 1;
+	const Int tall = textH + 2 * hudReadoutFrame();
+	IRegion2D cell;
+	cell.lo.x = x;
+	cell.hi.x = x + w;
+	cell.lo.y = above ? y - air - tall : y + h + air;
+	cell.hi.y = cell.lo.y + tall;
+	HudReadout_draw( s_incomeText, cell, above ? HUD_READOUT_BOTTOM_RIGHT : HUD_READOUT_TOP_RIGHT,
+									 GameMakeColor( 120, 230, 90, 255 ), hudCellStyle().plate );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** This is called after the UI has been drawn. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::postDraw( void )
 {
 	// drawHudOverlay is NOT called here - it goes on top of everything, see W3DInGameUI::draw
 	m_hudCellDrawnPass = m_hudCellPass;
+	drawIncomeReadout();
 	drawRadarAlarmPointers();
 	drawProductionList();
 	drawClassicMessages();

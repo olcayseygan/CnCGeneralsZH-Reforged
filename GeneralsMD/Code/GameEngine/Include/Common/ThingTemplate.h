@@ -638,8 +638,10 @@ public:
 	/// calculate how much money it will take the given player to build this unit
 	Int calcCostToBuild( const Player* player) const;
 
-	/// the health it is built with, before any upgrade; 0 for a body that cannot be hurt
-	Real calcMaxHealth( void ) const;
+	/** the health it is built with, before any upgrade; 0 for a body that cannot be hurt.  asBuilt follows a
+		* template with BuildVariations to the chassis actually built (the Technical has no body of its own);
+		* the skirmish AI asks without it */
+	Real calcMaxHealth( Bool asBuilt = FALSE ) const;
 
 	/// Used only by Skirmish AI. Everyone else should call calcCostToBuild.
 	Int friend_getBuildCost() const { return getBuildCost(); }

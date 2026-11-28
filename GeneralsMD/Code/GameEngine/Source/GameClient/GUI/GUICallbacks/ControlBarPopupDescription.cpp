@@ -387,7 +387,7 @@ static WeaponFigures weaponFigures( const ThingTemplate *thing, const WeaponTemp
 static UnitFigures figuresOf( const ThingTemplate *thing, const UpgradeEffect &effect )
 {
 	UnitFigures figures = {};
-	figures.health = thing->calcMaxHealth() + effect.addHealth;
+	figures.health = thing->calcMaxHealth( TRUE ) + effect.addHealth;
 
 	WeaponSetFlags setFlags;
 	if( effect.weaponSet )

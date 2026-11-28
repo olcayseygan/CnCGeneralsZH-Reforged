@@ -12316,7 +12316,7 @@ static Int drawAodRow( const std::vector<AodCell> &cells, Int middle, Int top, I
 			HudReadout_draw( aodString( fontName, AOD_SMALL_POINTS, TheGameText->fetch( "GUI:AodBoss" ) ), cameo, HUD_READOUT_TOP_RIGHT, red, style.plate );
 		else if( c.thing->isKindOf( KINDOF_AIRCRAFT ) )
 			HudReadout_draw( aodString( fontName, AOD_SMALL_POINTS, TheGameText->fetch( "GUI:AodAir" ) ), cameo, HUD_READOUT_TOP_RIGHT, air, style.plate );
-		Real hp = c.thing->calcMaxHealth() * TheGlobalData->m_healthBonus[ rank >= 0 && rank < LEVEL_COUNT ? rank : 0 ];
+		Real hp = c.thing->calcMaxHealth( TRUE ) * TheGlobalData->m_healthBonus[ rank >= 0 && rank < LEVEL_COUNT ? rank : 0 ];
 		if( c.boss )
 			hp = hp * (Real)Aod_bossHealthPercent( c.wave ) / 100.0f;
 		UnicodeString text;

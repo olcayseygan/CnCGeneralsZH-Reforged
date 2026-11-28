@@ -1758,9 +1758,13 @@ Int ThingTemplate::calcCostToBuild( const Player* player) const
 
 //-------------------------------------------------------------------------------------------------
 /** Every body module that can be hurt keeps its health in ActiveBodyModuleData; the one that
-	* cannot, InactiveBody, is not on the list and answers zero. */
+	* cannot, InactiveBody, is not on the list and answers zero.  A template with BuildVariations has no
+	* body of its own (GLAVehicleTechnical: ThingFactory::newObject builds one of its three chassis);
+	* asked as built, it answers its first variation's.  The skirmish AI asks the template itself: its
+	* Technical reads zero, and taking the chassis moves its play (classic seed 0's replay pin), which is
+	* the AI's to weigh. */
 //-------------------------------------------------------------------------------------------------
-Real ThingTemplate::calcMaxHealth( void ) const
+Real ThingTemplate::calcMaxHealth( Bool asBuilt ) const
 {
 	static const char *BODIES_WITH_HEALTH[] =
 		{ "ActiveBody", "StructureBody", "HiveStructureBody", "UndeadBody", "HighlanderBody", "ImmortalBody", NULL };
@@ -1774,6 +1778,9 @@ Real ThingTemplate::calcMaxHealth( void ) const
 				return static_cast<const ActiveBodyModuleData *>( modules.getNthData( m ) )->m_maxHealth;
 		}
 	}
+	const ThingTemplate *built = !asBuilt || m_buildVariations.empty() || TheThingFactory == NULL ? NULL : TheThingFactory->findTemplate( m_buildVariations.front(), FALSE );
+	if( built != NULL && built != this )
+		return built->calcMaxHealth( TRUE );
 	return 0.0f;
 }
 

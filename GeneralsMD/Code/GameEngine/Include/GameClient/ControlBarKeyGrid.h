@@ -119,9 +119,10 @@ extern const Int KEY_GRID_RIDER_PLACES[ 11 ];
 	* A set that builds nothing: ControlBar_commandPlaces for everything but the passengers, then the
 	* passengers on KEY_GRID_RIDER_PLACES.  One with a skill (a special power, a weapon to fire or switch,
 	* a hijack and the like, by command type), or with a unit or an upgrade to make and no attack move (the
-	* owner's of 2026-11-28): the pinned and fixed buttons and A, C, V kept as above; the skills a family
-	* at a time (battle plans, weapon modes, then the other powers), each family from the left of the row
-	* under the last one's and down a row when it fills, starting along Q; the upgrades along Z from the
+	* owner's of 2026-11-28): the pinned and fixed buttons and A, C, V kept as above; the units it trains on
+	* the fewest top rows that hold them, a column at a time from the left; the skills a family at a time
+	* (battle plans, weapon modes, then the other powers), each family from the left of the row under the
+	* last one's (the first under the units, along Q with none) and down a row when it fills; the upgrades along Z from the
 	* left and up a row each time, so on a tall set they finish a family's row after its skills; then the
 	* rest a column at a time from the left (Q A W S ...) over the rows none of those stands on, and
 	* whatever is left on any free place. */

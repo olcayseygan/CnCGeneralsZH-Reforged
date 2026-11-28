@@ -483,10 +483,9 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 		if( skills || ( makes && !fights ) )
 		{
 			// The owner's of 2026-11-28: the pinned and fixed buttons (and A, C, V on a set that attack moves),
-			// then the skills on a row of their own, Q from the left and down a row when it fills, the upgrades
-			// on theirs, Z from the left and up a row when it fills, then the rest (the units) a column at a
-			// time from the left over the rows neither stands on, so a long list makes a block under the left
-			// hand instead of one row running off to the right; whatever is left takes any free place
+			// then the units on the top rows as a block, the skills a family to a row under them, down a row
+			// when one fills, the upgrades on theirs, Z from the left and up a row when it fills; whatever is
+			// left a column at a time over the rows none of those stands on, then on any free place
 			if( fights )
 				used[ COMMAND_PLACE_ATTACK ] = used[ COMMAND_PLACE_HOLD ] = used[ COMMAND_PLACE_MOVE ] = TRUE;
 			for( Int slot = 0; slot < count; slot++ )
@@ -528,10 +527,35 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 				}
 				return last;
 			};
+			// the units a building trains first (the owner's of 2026-11-28): the fewest top rows that hold them,
+			// a column at a time from the left, so a long list is a block under the left hand
+			Int units = 0;
+			for( Int slot = 0; slot < count; slot++ )
+				units += places[ slot ] < 0 && types[ slot ] == GUI_COMMAND_UNIT_BUILD ? 1 : 0;
+			Int unitRows = 0;
+			for( Int room = 0; unitRows < ROWS && room < units; unitRows++ )
+				for( Int column = 0; column < COMMAND_PLACE_COLUMNS; column++ )
+					room += used[ unitRows * COMMAND_PLACE_COLUMNS + column ] ? 0 : 1;
+			for( Int slot = 0; slot < count; slot++ )
+			{
+				if( places[ slot ] >= 0 || types[ slot ] != GUI_COMMAND_UNIT_BUILD )
+					continue;
+				for( Int column = 0; column < COMMAND_PLACE_COLUMNS && places[ slot ] < 0; column++ )
+					for( Int row = 0; row < unitRows && places[ slot ] < 0; row++ )
+					{
+						const Int place = row * COMMAND_PLACE_COLUMNS + column;
+						if( !used[ place ] )
+						{
+							places[ slot ] = place;
+							used[ place ] = TRUE;
+							ownRow[ row ] = TRUE;
+						}
+					}
+			}
 			// a family of skills to a row: plans, modes, then the other powers, each from the row under the
-			// last family's; a family that finds no row left goes with the leftovers below
+			// last family's (under the units'); a family that finds no row left goes with the leftovers below
 			static const Int FAMILIES[ KEY_GRID_FAMILY_COUNT ] = { KEY_GRID_FAMILY_PLAN, KEY_GRID_FAMILY_MODE, KEY_GRID_FAMILY_POWER };
-			Int nextRow = 0;
+			Int nextRow = unitRows;
 			for( Int each = 0; each < KEY_GRID_FAMILY_COUNT; each++ )
 			{
 				const Int last = rowsOfTheirOwn( FAMILIES[ each ], nextRow, FALSE );

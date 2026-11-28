@@ -32,8 +32,12 @@ inline Rules Defaults() {
     rule.colors.push_back(Color{50, 75, 50});
     rule.textures.push_back("TSWater03.tga");
     rule.replacement = Color{45, 58, 11};
-    rule.brightness = 0.67f;
-    rule.pollution = 0.80f;
+    rule.brightness = 0.55f;
+    rule.pollution = 0.70f;
+    rule.turbidity = 1.0f;
+    rule.surfaceRoughness = 0.69f;
+    rule.rippleDamping = 0.34f;
+    rule.windResistance = 0.55f;
     rule.bubbles = true;
     return Rules(1, rule);
 }

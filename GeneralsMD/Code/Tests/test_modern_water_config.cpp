@@ -43,8 +43,12 @@ void CheckDefaults(const Rules &rules) {
     CHECK(rules[0].colors[0] == (Color{50, 75, 50}));
     CHECK_STR(rules[0].textures[0].c_str(), "TSWater03.tga");
     CHECK(rules[0].replacement == (Color{45, 58, 11}));
-    CHECK_NEAR(rules[0].brightness, .67f, 0.00001f);
-    CHECK_NEAR(rules[0].pollution, .80f, 0.00001f);
+    CHECK_NEAR(rules[0].brightness, .55f, 0.00001f);
+    CHECK_NEAR(rules[0].pollution, .70f, 0.00001f);
+    CHECK_NEAR(rules[0].turbidity, 1.0f, .00001f);
+    CHECK_NEAR(rules[0].surfaceRoughness, .69f, .00001f);
+    CHECK_NEAR(rules[0].rippleDamping, .34f, .00001f);
+    CHECK_NEAR(rules[0].windResistance, .55f, .00001f);
     CHECK(rules[0].bubbles);
     CHECK(rules[0].enabled);
 }
@@ -170,8 +174,8 @@ TEST(modern_water_resolution_never_carries_pollution_to_next_map)
     const Rules rules = Defaults();
     Material material = Resolve(rules, Color{50, 75, 50}, "TSWater03.tga");
     CHECK(material.color == (Color{45, 58, 11}));
-    CHECK_NEAR(material.brightness, .67f, .00001f);
-    CHECK_NEAR(material.pollution, .80f, .00001f);
+    CHECK_NEAR(material.brightness, .55f, .00001f);
+    CHECK_NEAR(material.pollution, .70f, .00001f);
     CHECK_EQ(material.tintAmount, 1.0f);
     CHECK(material.bubbles);
     CHECK_STR(material.ruleName.c_str(), "PollutedWater");
@@ -234,7 +238,7 @@ TEST(modern_water_surface_controls_are_optional_independent_and_transactional)
 TEST(modern_water_wind_response_is_neutral_finite_and_physical)
 {
     const auto rules=Defaults();
-    for(const auto &material : {Resolve(rules,Color{50,75,50},"TSWater03.tga"),
+    for(const auto &material : {Resolve(rules,Color{50,75,50},"Other.tga"),
         Resolve(rules,Color{255,255,255},"TWWater01.tga")}) {
         CHECK(material.turbidity==0 && material.surfaceRoughness==0 && material.rippleDamping==0 && material.windResistance==0);
     }
@@ -261,4 +265,32 @@ TEST(modern_water_resisted_analytic_mesh_keeps_height_and_slopes_consistent)
         if(resistance==0)CHECK(resisted.height==original.height && resisted.dx==original.dx && resisted.dy==original.dy);
         if(resistance==1)CHECK(resisted.height==0 && resisted.dx==0 && resisted.dy==0);
     }
+}
+
+// The stock rule's surface comes from the four lines written in it, never from its name: a player's
+// own PollutedWater rule without them stays neutral, and the stock values written as zero stay zero.
+TEST(modern_water_surface_comes_from_the_rule_text_not_its_name)
+{
+    Rules rules;
+    std::string error;
+    for (const char *name : {"First", "PollutedWater", "POLLUTEDWATER"}) {
+        CHECK(Parse(Changed("First", name), rules, error));
+        CHECK_EQ(rules.size(), 1u);
+        if (rules.empty()) continue;
+        CHECK(rules[0].turbidity == 0 && rules[0].surfaceRoughness == 0 &&
+              rules[0].rippleDamping == 0 && rules[0].windResistance == 0);
+        CHECK_NEAR(rules[0].brightness, .67f, .00001f);
+        CHECK_NEAR(rules[0].pollution, .80f, .00001f);
+    }
+    std::string tuned = Changed("First", "PollutedWater");
+    tuned.insert(tuned.rfind("End"), " Turbidity = 0\n SurfaceRoughness = 0\n RippleDamping = 0\n WindResistance = 0\n");
+    CHECK(Parse(tuned, rules, error));
+    const Material neutral = Resolve(rules, Color{50,75,50}, "TSWater03.tga");
+    CHECK(neutral.turbidity == 0 && neutral.surfaceRoughness == 0 &&
+          neutral.rippleDamping == 0 && neutral.windResistance == 0);
+    tuned.insert(tuned.rfind("End"), " Enabled = No\n");
+    CHECK(Parse(tuned, rules, error));
+    CHECK(Match(rules, Color{50,75,50}, "TSWater03.tga") == NULL);
+    CHECK(Parse("; disable all rules\n", rules, error));
+    CHECK(rules.empty());
 }

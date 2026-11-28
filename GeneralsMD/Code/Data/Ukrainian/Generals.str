@@ -17682,7 +17682,7 @@ GUI:AIPersonaTooltipSneaky
 END
 
 GUI:AIPersonaTooltipRandom
-"Раннер, Економіст або Черепаха, обраний на початку матчу за генералом."
+"Один із п'яти характерів вище, обраний на початку матчу за генералом."
 END
 
 GUI:AIPersona

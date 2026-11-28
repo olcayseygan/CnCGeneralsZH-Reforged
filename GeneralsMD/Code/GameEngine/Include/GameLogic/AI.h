@@ -318,6 +318,10 @@ AIPersonality aiPersonalityFromName( const char *name );
 	* save or -aipersona, and a lobby shows them as the nearest one it offers. */
 AIPersonality aiPersonalityOffered( AIPersonality persona );
 
+/** What a Random seat plays: one of the five offered personalities for a roll of 0..99, by the lean
+	* of its general (an AIGeneral; out of range is AIGENERAL_NONE, all five alike). */
+AIPersonality aiRandomPersona( Int general, Int roll );
+
 //-------------------------------------------------------------------------------------------------
 /** One rung of the ladder.  Every new AI behaviour adds a field here rather than a
 	* switch(difficulty) somewhere, so the whole ladder can be read, tuned and measured in one place.

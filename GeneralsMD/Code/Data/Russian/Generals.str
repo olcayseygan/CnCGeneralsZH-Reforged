@@ -17746,7 +17746,7 @@ GUI:AIPersonaTooltipSneaky
 END
 
 GUI:AIPersonaTooltipRandom
-"Раннее нападение, Экономист или Черепаха, выбирается в начале матча по генералу."
+"Одна из пяти личностей выше, выбирается в начале матча по генералу."
 END
 
 GUI:AIPersona

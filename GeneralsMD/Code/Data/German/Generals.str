@@ -18566,7 +18566,7 @@ GUI:AIPersonaTooltipNormal
 END
 
 GUI:AIPersonaTooltipRandom
-"Rusher, Ökonom oder Igel, beim Start der Partie je nach General ausgelost."
+"Einer der fünf oben, beim Start der Partie je nach General ausgelost."
 END
 
 GUI:AIPersonaTooltipRusher

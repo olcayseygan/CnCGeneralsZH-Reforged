@@ -42,6 +42,7 @@
 #include "Common/XferCRC.h"
 
 #include "GameLogic/AI.h"
+#include "GameLogic/AIIdentity.h"	// AIGENERAL_COUNT, for aiRandomPersona's lean
 #include "GameLogic/Armor.h"
 #include "GameLogic/ArmorSet.h"
 #include "GameLogic/PartitionManager.h"
@@ -2796,6 +2797,41 @@ AIPersonality aiPersonalityOffered( AIPersonality persona )
 		case AIPERSONA_RAIDER: return AIPERSONA_SNEAKY;		// around the army, at the soft spots
 		default: return AIPERSONA_NORMAL;		// Air, Armor, Opportunist, Supporter, Counter: Normal's play with a lean
 	}
+}
+
+AIPersonality aiRandomPersona( Int general, Int roll )
+{
+	// percent Rusher, Economist, Turtle, Infantry, Sneaky; each row sums to 100.  The first three keep the
+	// old three-plan lean (Demolitions rushes most, Nuke, Superweapon and Turkiye dig in); Infantry and
+	// Sneaky go where the army has them: the Infantry General and the GLA's rebels, stealth for the Stealth
+	// General and the USA's Pathfinders and Burton, little of either for the Tank General.  Before this a
+	// Random seat drew only the first three; before that any of thirteen alike
+	static const Int LEAN[ AIGENERAL_COUNT ][ 5 ] =
+	{
+		{ 20, 20, 20, 20, 20 },		// none
+		{ 20, 25, 20, 15, 20 },		// USA
+		{ 15, 30, 25, 10, 20 },		// Laser
+		{ 10, 30, 35, 10, 15 },		// Superweapon
+		{ 20, 30, 25, 10, 15 },		// Air Force
+		{ 20, 25, 20, 25, 10 },		// China
+		{ 30, 30, 25,  5, 10 },		// Tank
+		{ 25, 20, 10, 40,  5 },		// Infantry
+		{ 10, 30, 40, 10, 10 },		// Nuke
+		{ 25, 20, 15, 25, 15 },		// GLA
+		{ 25, 20, 20, 25, 10 },		// Toxin
+		{ 40, 15, 10, 20, 15 },		// Demolition
+		{ 20, 20, 10, 20, 30 },		// Stealth
+		{ 15, 25, 40, 10, 10 },		// Turkiye
+	};
+	static const AIPersonality PICK[ 5 ] = { AIPERSONA_RUSHER, AIPERSONA_ECONOMIST, AIPERSONA_TURTLE, AIPERSONA_INFANTRY, AIPERSONA_SNEAKY };
+	const Int *lean = LEAN[ ( general >= 0 && general < AIGENERAL_COUNT ) ? general : AIGENERAL_NONE ];
+	for( Int i = 0; i < 4; ++i )
+	{
+		if( roll < lean[ i ] )
+			return PICK[ i ];
+		roll -= lean[ i ];
+	}
+	return PICK[ 4 ];
 }
 
 //-------------------------------------------------------------------------------------------------

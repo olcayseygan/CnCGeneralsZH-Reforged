@@ -178,6 +178,7 @@ static int GetSystemMetrics( int which )
 #include "GameClient/GroupPanel.h"
 #include "GameClient/Display.h"
 #include "GameLogic/AI.h"
+#include "GameLogic/AIIdentity.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
@@ -21430,6 +21431,39 @@ TEST(ai_persona_lobby_offers_seven)
 	CHECK_EQ( (Int)aiPersonalityOffered( AIPERSONA_RANDOM ), (Int)AIPERSONA_RANDOM );
 	CHECK_EQ( (Int)aiPersonalityOffered( AIPERSONA_ATTACKER ), (Int)AIPERSONA_RUSHER );
 	CHECK_EQ( (Int)aiPersonalityOffered( AIPERSONA_COUNTER ), (Int)AIPERSONA_NORMAL );
+}
+
+/** Random draws one of the five offered, never Normal, by the general's lean. */
+TEST(ai_persona_random_draws_the_offered_five_by_the_general)
+{
+	for( Int g = -1; g <= AIGENERAL_COUNT; ++g )
+	{
+		Int count[ AIPERSONA_COUNT ] = { 0 };
+		for( Int roll = 0; roll < 100; ++roll )
+			++count[ aiRandomPersona( g, roll ) ];
+		CHECK_EQ( count[ AIPERSONA_NORMAL ] + count[ AIPERSONA_RANDOM ], 0 );
+		for( Int p = 0; p < AIPERSONA_COUNT; ++p )
+			if( count[ p ] )
+				CHECK_EQ( (Int)aiPersonalityOffered( (AIPersonality)p ), p );
+		CHECK( count[ AIPERSONA_RUSHER ] > 0 && count[ AIPERSONA_ECONOMIST ] > 0 && count[ AIPERSONA_TURTLE ] > 0 &&
+			count[ AIPERSONA_INFANTRY ] > 0 && count[ AIPERSONA_SNEAKY ] > 0 );
+	}
+	// the row's ends: the first roll is its first column, the last roll its last
+	CHECK_EQ( (Int)aiRandomPersona( AIGENERAL_NONE, 99 ), (Int)AIPERSONA_SNEAKY );
+	CHECK_EQ( (Int)aiRandomPersona( AIGENERAL_NONE, 0 ), (Int)AIPERSONA_RUSHER );
+	// the leans: the Infantry General's favourite is Infantry, the Stealth General's Sneaky, Demolitions' the rush
+	Int infantry = 0, sneaky = 0, rush = 0, nukeTurtle = 0;
+	for( Int roll = 0; roll < 100; ++roll )
+	{
+		infantry += aiRandomPersona( AIGENERAL_CHINA_INFANTRY, roll ) == AIPERSONA_INFANTRY;
+		sneaky += aiRandomPersona( AIGENERAL_GLA_STEALTH, roll ) == AIPERSONA_SNEAKY;
+		rush += aiRandomPersona( AIGENERAL_GLA_DEMOLITION, roll ) == AIPERSONA_RUSHER;
+		nukeTurtle += aiRandomPersona( AIGENERAL_CHINA_NUKE, roll ) == AIPERSONA_TURTLE;
+	}
+	CHECK_EQ( infantry, 40 );
+	CHECK_EQ( sneaky, 30 );
+	CHECK_EQ( rush, 40 );
+	CHECK_EQ( nukeTurtle, 40 );
 }
 
 TEST(ai_persona_leans_the_way_its_name_says)

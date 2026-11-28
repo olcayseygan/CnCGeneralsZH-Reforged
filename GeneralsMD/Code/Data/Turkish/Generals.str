@@ -17684,7 +17684,7 @@ GUI:AIPersonaTooltipSneaky
 END
 
 GUI:AIPersonaTooltipRandom
-"Baskıncı, Ekonomist ya da Kaplumbağa, maç başlarken generale göre çekilir."
+"Yukarıdaki beşten biri, maç başlarken generale göre çekilir."
 END
 
 GUI:AIPersona

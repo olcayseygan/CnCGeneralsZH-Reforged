@@ -25890,30 +25890,9 @@ void AIPlayer::setAIPersonality( AIPersonality persona )
 	m_personaFromRandom = persona == AIPERSONA_RANDOM;
 	if( m_personaFromRandom && runsOwnAI() && !( knobsOffHere() && ( TheGlobalData->m_aiKnobsOffMask & AIKNOB_PLANS ) != 0 ) )
 	{
-		// three plans per general (-aiknobsoff plans): a rush, an economy or a fortress, by the general's own lean.
-		// One draw, as the thirteen-way draw below takes.  Before this a Random seat drew any of thirteen personalities
-		// alike, and a Demolitions General turtled as often as a Nuke General rushed
-		static const Int PLAN_LEAN[ AIGENERAL_COUNT ][ 2 ] =
-		{	// percent Rusher, percent Economist; the rest Turtle
-			{ 34, 33 },		// none
-			{ 34, 33 },		// USA
-			{ 25, 35 },		// Laser
-			{ 15, 35 },		// Superweapon
-			{ 30, 40 },		// Air Force
-			{ 30, 40 },		// China
-			{ 35, 35 },		// Tank
-			{ 45, 30 },		// Infantry
-			{ 15, 35 },		// Nuke
-			{ 40, 35 },		// GLA
-			{ 35, 35 },		// Toxin
-			{ 55, 25 },		// Demolition
-			{ 45, 35 },		// Stealth
-			{ 20, 35 },		// Turkiye
-		};
-		const AIGeneral general = AIIdentity::generalOfSide( m_player->getSide() );
-		const Int *lean = PLAN_LEAN[ (general >= 0 && general < AIGENERAL_COUNT) ? general : AIGENERAL_NONE ];
+		// the lobby's five by the general's own lean (-aiknobsoff plans), one draw, as the thirteen-way draw below takes
 		const Int roll = GameLogicRandomValue( 0, 99 );
-		persona = roll < lean[ 0 ] ? AIPERSONA_RUSHER : roll < lean[ 0 ] + lean[ 1 ] ? AIPERSONA_ECONOMIST : AIPERSONA_TURTLE;
+		persona = aiRandomPersona( AIIdentity::generalOfSide( m_player->getSide() ), roll );
 	}
 	else if( m_personaFromRandom )
 		persona = (AIPersonality)GameLogicRandomValue( AIPERSONA_ATTACKER, AIPERSONA_COUNTER );

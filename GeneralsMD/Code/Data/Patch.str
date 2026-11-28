@@ -3045,7 +3045,7 @@ GUI:AIPersonaTooltipSneaky
 END
 
 GUI:AIPersonaTooltipRandom
-"A Rusher, an Economist or a Turtle, drawn when the match starts, leaning by the general."
+"One of the five above, drawn when the match starts, leaning by the general."
 END
 
 GUI:AIPersona

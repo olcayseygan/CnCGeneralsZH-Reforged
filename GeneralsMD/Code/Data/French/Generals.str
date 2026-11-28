@@ -17762,7 +17762,7 @@ GUI:AIPersonaTooltipSneaky
 END
 
 GUI:AIPersonaTooltipRandom
-"Un Fonceur, un Économiste ou une Tortue, tiré au début de la partie selon le général."
+"Une des cinq ci-dessus, tirée au début de la partie selon le général."
 END
 
 GUI:AIPersona

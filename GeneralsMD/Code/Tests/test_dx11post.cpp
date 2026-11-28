@@ -893,8 +893,8 @@ TEST(dx11post_full_grade_holds_black_white_and_the_pivot_and_bends_the_rest)
 	DX11Post_Set_Grade(0.0f);
 
 	// The S turns about black, white and the pivot, so red and green stay where they were.  Blue
-	// takes the split toning alone, the shade pushed cool and the light warm by five hundredths of
-	// how far each is from the pivot: a few levels at black and white, none at the pivot.
+	// takes the split toning alone, the shade pushed cool by five hundredths of how far it is under
+	// the pivot and the light left as it was: a few levels at black, none at the pivot or white.
 	const unsigned BLACK = 0, PIVOT = 1, SHADE = 2, LIGHT = 3, WHITE = 4;
 	for (unsigned channel = 0; channel < 3; ++channel) {
 		CHECK(level_gap(off[PIVOT][channel], on[PIVOT][channel]) <= 1);
@@ -904,7 +904,9 @@ TEST(dx11post_full_grade_holds_black_white_and_the_pivot_and_bends_the_rest)
 		CHECK(level_gap(off[WHITE][channel], on[WHITE][channel]) <= 1);
 	}
 	CHECK(level_gap(off[BLACK][CHANNEL_BLUE], on[BLACK][CHANNEL_BLUE]) <= 10);
-	CHECK(level_gap(off[WHITE][CHANNEL_BLUE], on[WHITE][CHANNEL_BLUE]) <= 10);
+	CHECK(level_gap(off[WHITE][CHANNEL_RED], on[WHITE][CHANNEL_RED]) <= 1);
+	// A grey over the pivot stays grey: leaning it warm turned lit snow cream.
+	CHECK(level_gap(on[LIGHT][CHANNEL_RED], on[LIGHT][CHANNEL_BLUE]) <= 1);
 	CHECK_EQ(0, off[BLACK][CHANNEL_RED]);
 	CHECK_EQ(255, off[WHITE][CHANNEL_RED]);
 

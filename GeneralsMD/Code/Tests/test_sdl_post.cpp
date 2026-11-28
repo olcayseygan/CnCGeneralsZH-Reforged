@@ -283,7 +283,8 @@ static int check_gpu()
         CHECK(channel(graded, w, 3, 3, 0) < channel(legacy, w, 3, 3, 0));
         CHECK(channel(graded, w, w - 3, 3, 0) > channel(legacy, w, w - 3, 3, 0));
         CHECK(channel(graded, w, 3, 3, 2) > channel(graded, w, 3, 3, 0));
-        CHECK(channel(graded, w, w - 3, 3, 0) > channel(graded, w, w - 3, 3, 2));
+        // a light over the pivot keeps its hue: a warm lean there turned lit snow cream
+        CHECK(std::abs(int(channel(graded, w, w - 3, 3, 0)) - int(channel(graded, w, w - 3, 3, 2))) <= 1);
 
         pixels.assign(size_t(w) * h, {0.2f, 0.2f, 0.2f});
         for (unsigned y = 0; y < h; ++y) for (unsigned x = 0; x < w; ++x)

@@ -175,8 +175,8 @@ const float BLOOM_INTENSITY = 1.5f;
 const float TONE_CURVE_KNEE = 0.8f;
 
 // How far the grade bends the picture at full strength: the power the S raises each side of its
-// pivot to, less one, what is left of the colour around its grey, and how far a channel moves warm
-// or cool for each step away from the pivot.
+// pivot to, less one, what is left of the colour around its grey, and how far a channel moves cool
+// for each step under the pivot (a step over it moves nothing).
 const float GRADE_CONTRAST = 0.18f;
 const float GRADE_SATURATION = 0.86f;
 const float GRADE_SPLIT = 0.05f;

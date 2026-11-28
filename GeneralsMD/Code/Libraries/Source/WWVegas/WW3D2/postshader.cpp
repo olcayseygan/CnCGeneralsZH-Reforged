@@ -73,8 +73,8 @@ static const char * const PIXEL_SHADER_PROLOGUE =
 	// white, not a half, or the whole picture goes darker; at a third a forest and a snowed-in town
 	// still lost an eighth of their brightness): black, white and that grey stay where they
 	// are, what is below it sinks and what is above it rises.  Then the colour goes toward its own
-	// grey, and a pixel brighter than the pivot leans to red, a darker one to blue, by how far it is
-	// from it.
+	// grey, and a pixel darker than the pivot leans to blue by how far it is under it.  A brighter one
+	// keeps its hue: leaning those to red pushed the brightest pixels, lit snow first, toward cream.
 	"static const float GRADE_PIVOT = 0.28;\n"
 	"float3 grade(float3 colour)\n"
 	"{\n"
@@ -86,7 +86,7 @@ static const char * const PIXEL_SHADER_PROLOGUE =
 	"    float3 graded = (c < GRADE_PIVOT) ? low : high;\n"
 	"    float grey = dot(graded, float3(0.299, 0.587, 0.114));\n"
 	"    graded = lerp(grey.xxx, graded, Grade.z);\n"
-	"    graded += float3(1.0, 0.25, -1.0) * (grey - GRADE_PIVOT) * Grade.w;\n"
+	"    graded += float3(1.0, 0.25, -1.0) * min(grey - GRADE_PIVOT, 0.0) * Grade.w;\n"
 	"    return lerp(c, saturate(graded), Grade.x);\n"
 	"}\n"
 	"\n";

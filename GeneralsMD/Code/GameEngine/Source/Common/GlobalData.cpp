@@ -1436,8 +1436,9 @@ static void scaleLight( RGBColor &c, Real s )
 	other sides, so the shadow side of a tank is two thirds as bright as its lit side and nothing has
 	a form.  The style moves weight from the ambient and the fills to the sun and leaves the sum a
 	sunlit surface receives where it was, so the picture keeps its exposure and gains its contrast.
-	The ambient goes a little toward the sky's blue and the sun a little toward late light's yellow,
-	by how much of a sun there is: a moonlit night keeps its own cast. */
+	The ambient goes a little toward the sky's blue by how much of a sun there is, so a moonlit night
+	keeps its own cast.  The sun keeps the map's own colour: tinted toward yellow it clipped red first
+	on lit snow and turned Winter Wolf cream (2026-11-28). */
 static const Real REFORGED_AMBIENT_SHARE = 0.72f;	// what is left of the flat ambient under a full sun
 static const Real REFORGED_NIGHT_AMBIENT_KEPT = 0.16f;	// how much more of it a sunless map keeps
 static const Real REFORGED_FILL_SHARE = 0.6f;			// what is left of the two fill lights
@@ -1474,7 +1475,6 @@ void reforgeLighting( GlobalData::TerrainLighting lights[MAX_GLOBAL_LIGHTS] )
 			gain = REFORGED_SUN_MOST;
 		scaleLight( sun.diffuse, gain );
 	}
-	tintLight( sun.diffuse, 1.0f + 0.06f * warmth, 1.0f, 1.0f - 0.10f * warmth );
 
 	for( Int i = 1; i < MAX_GLOBAL_LIGHTS; ++i )
 	{

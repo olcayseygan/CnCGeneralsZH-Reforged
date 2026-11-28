@@ -133,8 +133,8 @@ float DX11Post_Additive_Gain()
 }
 
 // How far the grade bends the picture at full strength: the power the S raises each side of its
-// pivot to, less one, what is left of the colour around its grey, and how far a channel moves warm
-// or cool for each step away from the pivot.
+// pivot to, less one, what is left of the colour around its grey, and how far a channel moves cool
+// for each step under the pivot (a step over it moves nothing).
 static const float GRADE_CONTRAST = 0.18f;
 static const float GRADE_SATURATION = 0.86f;
 static const float GRADE_SPLIT = 0.05f;

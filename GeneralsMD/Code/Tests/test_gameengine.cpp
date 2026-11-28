@@ -28306,8 +28306,9 @@ TEST(gpu_particle_ring_in_force_is_the_switch_else_the_preset)
 
 /** The Reforged lighting style keeps what a sunlit surface receives and takes it out of the shade:
 	 on an ordinary afternoon (ambient half the sun, a fill on each side) the lit side of flat ground
-	 lands within a few percent of where it was, the shadow side loses a quarter, the sun turns warmer
-	 than the ambient, and a dim moon keeps its blue. */
+	 lands within a few percent of where it was, the shadow side loses a quarter, the ambient turns
+	 cool while the sun keeps the map's own colour (a yellow tint made lit snow cream), and a dim moon
+	 keeps its blue. */
 TEST(reforged_lighting_keeps_the_lit_side_and_darkens_the_shade)
 {
 	GlobalData::TerrainLighting lights[MAX_GLOBAL_LIGHTS];
@@ -28326,7 +28327,8 @@ TEST(reforged_lighting_keeps_the_lit_side_and_darkens_the_shade)
 	CHECK_NEAR( ambient, 0.4f * 0.72f, 0.01f );
 	CHECK( ambient + sun * incidence >= litBefore );
 	CHECK( ambient + sun * incidence <= litBefore * 1.06f );
-	CHECK( lights[0].diffuse.red > lights[0].diffuse.blue );
+	CHECK_NEAR( lights[0].diffuse.red, lights[0].diffuse.blue, 0.0001f );
+	CHECK_NEAR( lights[0].diffuse.green, lights[0].diffuse.blue, 0.0001f );
 	CHECK( lights[0].ambient.blue > lights[0].ambient.red );
 	CHECK_NEAR( lights[1].diffuse.green, 0.3f * 0.6f, 0.0001f );
 

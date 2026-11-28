@@ -97,8 +97,8 @@ enum TextLanguageType
 };
 
 /** The LightingStyle option.  Classic draws a map's lights as the map gives them; Reforged takes
-	* the same lights and moves weight from the flat ambient and the fill lights to the sun, warms the
-	* sun and cools the ambient (reforgeLighting), deepens the sun's shadow to match, and grades the
+	* the same lights and moves weight from the flat ambient and the fill lights to the sun, cools the
+	* ambient (reforgeLighting), deepens the sun's shadow to match, and grades the
 	* Direct3D 11 picture.  Client only: nothing in GameLogic reads a light. */
 enum LightingStyleType
 {

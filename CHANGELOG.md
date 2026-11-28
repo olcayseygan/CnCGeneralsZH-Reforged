@@ -8,6 +8,8 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+<!-- Art of Defense is held back from this release; the section comes back with its mode button.
+
 ## Art of Defense (Work in Progress), a first playable version
 
 Art of Defense is a Work in Progress mode, and the game says so wherever you meet it: the online and LAN game lists read "Art of Defense (Work in Progress)", and the map picker, the room and the loading screen, where the name has less room, read "Art of Defense (WIP)". It plays alone from the skirmish room and with one to six people in a LAN or online room; matches are never rated. Pick Art of Defense in the Random tab's list of map types, or start `-randommap <seed> [players] aod`, and you get a new tower defence map every seed, built for the people in the room: it is a humans-only mode, and a computer seat in the room opens again. Every player gets a lane of his own, and the map is a mirror, so every lane and every patch of ground beside it is the same as everyone else's. Alone, your lane runs from one edge of the map to the other. With two to six players the map is a round plateau ringed by mountains, and each lane comes in from the mountains and winds through its own slice of the plateau to a pit in the middle, where every lane ends. A lane is a trench with cliff walls: the waves cannot climb out of it and you cannot drive down into it, so you build on the high ground beside it and shoot down into the lane, and every narrow turn is a place to hold.
@@ -21,6 +23,8 @@ There is nothing to harvest: the map has no supplies and no oil. You start on 6,
 Two slim lines hang at the top middle of the screen in your side's own tray steel, whichever layout and HUD width you play, about 100 pixels tall at 1080 where the first draft took 180. The top line is the lives you share, the wave under way and what of it is still coming down your lane, a small cameo for each kind with how many are left and their health on one line beside it. The line under it is the next wave: its number, then the seconds until it starts once the last of this one is out, the biggest figure on the panel, and every kind it brings with the count for your lane, its rank chevron, its health as it arrives and AIR beside the Comanches. A boss wave turns the next wave's head red and gives the Overlord a red chip reading BOSS, with its health already multiplied. The preview is the wave itself: the game draws each wave one wave early and sends exactly that, so a seed's waves differ from the earlier builds and their replays no longer play. The Technical showed no health anywhere, on this panel or on its build button's card in any match: the game builds one of three chassis and was asking the plain Technical, which has none. It reads 180 now.
 
 This is the prototype. Saves from before this change still load; the new mode needs this build on every machine.
+
+-->
 
 ## Key Grid: the command bar laid out like your keyboard
 

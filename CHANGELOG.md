@@ -121,6 +121,7 @@ Buildings of the USA, China and the GLA, every general's too, no longer just sin
 - The Technical takes the two slots it really fills in Direct Strike, and you can move it on the plot again.
 - A Helix with its Battle Bunker offers its seats to your infantry in Direct Strike.
 - The Toxin General starts a Direct Strike match with toxin shells and Anthrax Beta, the upgrades his Command Center hands him in a normal game.
+- A Bomb Truck in your Direct Strike wave drives at its target at full speed and blows up on it. Before, it charged for a moment, gave up halfway and crawled the rest at the slowest unit's pace. Other short-range units in your wave no longer break off a fight halfway either, so player waves fight like a bot's.
 - Direct Strike replays recorded before this version no longer play back.
 - A long skirmish could drop to the desktop in the middle of a fight, while the game drew its see-through units and glass. One report on 4.3.2 came in at logic frame 25,200, and two on 4.0.0 died in the same corner. A model caught between two sets of paint in that moment is now left out of the picture for one frame instead of taking the game with it. If the graphics card runs short of memory mid-frame, the models' buffers are cleared once the frame is drawn, not halfway through drawing it. Nothing has proven which of these took those three games down, so the next report from such a moment will say which one it was.
 ## The game room in the new menu look

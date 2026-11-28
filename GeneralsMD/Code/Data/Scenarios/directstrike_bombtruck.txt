@@ -1,0 +1,32 @@
+# Direct Strike proof that a Bomb Truck in a mixed wave drives at its target at its own speed. GLA (slot 0,
+# team A) buys one Bomb Truck and three blocks of Rebels, so the wave marches at the Rebels' walk;
+# China (slot 1, team B) sends Battlemasters for the truck to blow up. Player report B8 (2026-11-28):
+# the truck charged for half a second when its target came in range, then crawled the rest of the way.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionGLA -side 1 FactionChina
+#     -seed 1 -maxframes 4600 -scenario directstrike_bombtruck -tracemove <truck id>
+#     -logPrefix directstrike_bombtruck_
+#
+# The truck is copy 1203 on this seed (its TARGET PICK line at frame 3777 names it). Passes when its
+# MOVETRACE lines from that pick to the blast keep the desired speed (column 6) at 999999, the truck's
+# own top speed, and the KILLXP lines credit it with the Battlemasters.
+#
+# 2026-11-28 before the fix: the attack-move leash, a human player's rule, broke at frame 3824 once the
+# truck was 120 from where it picked (it picks from further than that), the wave's speed cap came back
+# with the march, and the truck crawled at 1.0 a frame (the Rebels' pace) for 120 frames, blew up at
+# 3947 at 18% health and killed nothing: 245 travelled in 171 frames, 1.43 a frame. After: no leash in
+# a Direct Strike match, 304 in 124 frames, 2.45 a frame, one capped frame, blast at 3900, both
+# Battlemasters dead.
+
+30    lanecash   0  20000
+30    lanetier   0  1 2
+30    lanetier   0  1 3
+30    laneplace  0  GLAVehicleBombTruck           6 0
+30    laneplace  0  GLAInfantryRebel              0 4
+30    laneplace  0  GLAInfantryRebel              4 4
+30    laneplace  0  GLAInfantryRebel              8 4
+30    lanecash   1  20000
+30    lanetier   1  1 2
+30    laneplace  1  ChinaTankBattleMaster         0 0
+30    laneplace  1  ChinaTankBattleMaster         4 0

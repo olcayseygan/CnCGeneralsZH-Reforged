@@ -1578,6 +1578,7 @@ Data/Scenarios/deploypullaway.txt
 Data/Scenarios/deploystall.txt
 Data/Scenarios/directstrike.txt
 Data/Scenarios/directstrike_air.txt
+Data/Scenarios/directstrike_bombtruck.txt
 Data/Scenarios/directstrike_buy.txt
 Data/Scenarios/directstrike_cargo.txt
 Data/Scenarios/directstrike_cashhack.txt

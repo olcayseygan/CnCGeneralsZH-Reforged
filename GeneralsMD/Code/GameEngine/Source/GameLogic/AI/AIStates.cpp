@@ -57,6 +57,7 @@
 #include "GameLogic/AITNGuard.h"
 #include "GameLogic/AIStateMachine.h"
 #include "GameLogic/AIPathfind.h"
+#include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/PolygonTrigger.h"
@@ -4159,9 +4160,13 @@ Bool AIAttackMoveToState::hasLeftTheLeash( void )
 	if (!m_isEngaging)
 		return FALSE;
 
+	/* Direct Strike: nobody's hand is on a wave unit, every attack move there is the director's march, so a
+		 human seat's copies fight as a computer seat's do.  Leashed, a Bomb Truck that picked its target from
+		 further than the leash broke off half way there and crawled on at the wave's slowest pace (player
+		 report B8, 2026-11-28). */
 	Object *owner = getMachineOwner();
 	return AIAttackMove_leashBroken(
-						owner->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN,
+						owner->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN && !TheDirectStrikeDirector->isActive(),
 						owner->isUsingAirborneLocomotor(),
 						owner->getPosition()->x - m_engageOrigin.x,
 						owner->getPosition()->y - m_engageOrigin.y,

@@ -4574,7 +4574,11 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	// that cannot make the rays' buffers draws the map alone.
 	Direct3D11_Set_Ray_Traced_Shadows( rayTraced != FALSE );
 #endif
-	if (TheGlobalData->m_shadowMap && captureShadows && TheTacticalView != NULL)
+	/* The box is built on the ground the terrain draws, so no map loaded means no pass.  The SDL
+		 device captures on the shadow options alone and reached here at launch, before any map was
+		 loaded, where getDrawnExtent read a null heightmap. */
+	const Bool terrainLoaded = TheTerrainRenderObject != NULL && TheTerrainRenderObject->getMap() != NULL;
+	if (TheGlobalData->m_shadowMap && captureShadows && TheTacticalView != NULL && terrainLoaded)
 	{
 		if (wholeMap && !wholeMapRefused && SunShadow::Begin( DX8Wrapper::_Get_D3D_Device(), SHADOW_MAP_WHOLE_MAP_TEXELS ))
 		{

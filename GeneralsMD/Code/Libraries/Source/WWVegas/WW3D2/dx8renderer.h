@@ -100,6 +100,12 @@ public:
 
 	void									Add_Render_Task(DX8PolygonRendererClass * p_renderer,MeshClass * p_mesh);
 
+	/* The queue sites' way in.  A polygon renderer with no category (crash reports 3839, 4137: one
+		 between categories, or leaving with its model) is skipped and said, a few times a run, instead
+		 of read through.  Queue_Render_Task returns false and Peek_Container_Of NULL for one. */
+	static bool							Queue_Render_Task(DX8PolygonRendererClass * p_renderer,MeshClass * p_mesh);
+	static DX8FVFCategoryContainer *	Peek_Container_Of(DX8PolygonRendererClass * p_renderer,MeshClass * p_mesh);
+
 	void									Render(void);
 	bool									Anything_To_Render() { return (render_task_head != NULL); }
 	void									Clear_Render_List() { render_task_head = NULL; }

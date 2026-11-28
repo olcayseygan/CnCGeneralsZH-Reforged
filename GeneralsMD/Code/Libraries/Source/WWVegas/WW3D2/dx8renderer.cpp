@@ -89,6 +89,31 @@ static MultiListClass<MeshModelClass>			_RegisteredMeshList;
 static TextureCategoryList							texture_category_delete_list;
 static FVFCategoryList								fvf_category_container_delete_list;
 
+/* A texture or render target the device refuses for want of memory calls _Invalidate_Mesh_Cache
+	 (dx8wrapper.cpp), and a texture is made the first time a draw applies it: inside Flush's walk of
+	 the containers and their categories, which Invalidate deletes under it (crash report 4651's
+	 candidate).  While a walk runs, Invalidate only notes the wish, and the outermost Flush runs it as
+	 it ends.  Flush_Shadow_Casters leaves the wish for the Flush that follows it (its one caller,
+	 W3DVolumetricShadow's sun pass): run between the two, it would delete the categories holding the
+	 casters it had just queued.  Outside a walk nothing changes. */
+static int													_FlushDepth = 0;
+static bool													_InvalidateDeferred = false;
+
+class FlushWindowClass
+{
+public:
+	FlushWindowClass(bool runs_deferred) : RunsDeferred(runs_deferred) { ++_FlushDepth; }
+	~FlushWindowClass(void)
+	{
+		if (--_FlushDepth == 0 && RunsDeferred && _InvalidateDeferred) {
+			_InvalidateDeferred = false;
+			TheDX8MeshRenderer.Invalidate();
+		}
+	}
+private:
+	bool RunsDeferred;
+};
+
 // helper data structure
 class PolyRemover : public MultiListObjectClass
 {
@@ -245,6 +270,33 @@ void DX8TextureCategoryClass::Add_Render_Task(DX8PolygonRendererClass * p_render
 	render_task_head = new_prt;
 
 	container->Add_Visible_Texture_Category(this,pass);
+}
+
+static DX8TextureCategoryClass * Category_Or_Say(DX8PolygonRendererClass * p_renderer,MeshClass * p_mesh)
+{
+	DX8TextureCategoryClass * category = (p_renderer != NULL) ? p_renderer->Get_Texture_Category() : NULL;
+	static int s_saidNoCategory = 0;
+	if (category == NULL && s_saidNoCategory < 4) {
+		++s_saidNoCategory;
+		WWRELEASE_SAY(("DX8TextureCategoryClass: mesh '%s' skipped, polygon renderer %p has no texture category "
+			"(W3D frame %u)\n", (p_mesh != NULL && p_mesh->Get_Name() != NULL) ? p_mesh->Get_Name() : "?",
+			(void *)p_renderer, WW3D::Get_Frame_Count()));
+	}
+	return category;
+}
+
+bool DX8TextureCategoryClass::Queue_Render_Task(DX8PolygonRendererClass * p_renderer,MeshClass * p_mesh)
+{
+	DX8TextureCategoryClass * category = Category_Or_Say(p_renderer,p_mesh);
+	if (category == NULL) return false;
+	category->Add_Render_Task(p_renderer,p_mesh);
+	return true;
+}
+
+DX8FVFCategoryContainer * DX8TextureCategoryClass::Peek_Container_Of(DX8PolygonRendererClass * p_renderer,MeshClass * p_mesh)
+{
+	DX8TextureCategoryClass * category = Category_Or_Say(p_renderer,p_mesh);
+	return (category != NULL) ? category->Get_Container() : NULL;
 }
 
 void DX8TextureCategoryClass::Add_Polygon_Renderer(DX8PolygonRendererClass* p_renderer,DX8PolygonRendererClass* add_after_this)
@@ -1804,7 +1856,31 @@ void DX8TextureCategoryClass::Render(void)
 		*/
 		DX8PolygonRendererClass * renderer = prt->Peek_Polygon_Renderer();
 		MeshClass * mesh = prt->Peek_Mesh();
-		
+
+		// Crash report 4651 (v4.3.2, AV read 0x324, mesh->Get_Base_Vertex_Offset below) reached a task
+		// with no mesh.  Add_Render_Task never builds one (the constructor refs the mesh unguarded) and a
+		// pooled slot given back keeps its old pointer, so this was never a task: the list got here
+		// through a freed or overwritten link.  How is not known yet.  It is unlinked and not deleted
+		// (that would release a mesh it never held and free a slot the pool may still own).
+		if (mesh == NULL || renderer == NULL) {
+			static int s_saidBadTasks = 0;
+			if (s_saidBadTasks < 4) {
+				++s_saidBadTasks;
+				WWRELEASE_SAY(("DX8TextureCategoryClass::Render: dropped a render task with no %s (task %p, renderer %p, "
+					"mesh '%s', category %p pass %d, W3D frame %u)\n", mesh == NULL ? "mesh" : "renderer", (void *)prt,
+					(void *)renderer, (mesh != NULL && mesh->Get_Name() != NULL) ? mesh->Get_Name() : "?", (void *)this,
+					pass, WW3D::Get_Frame_Count()));
+			}
+			PolyRenderTaskClass * next_prt = prt->Get_Next_Visible();
+			if (last_prt == NULL) {
+				render_task_head = next_prt;
+			} else {
+				last_prt->Set_Next_Visible(next_prt);
+			}
+			prt = next_prt;
+			continue;
+		}
+
 		if (mesh->Get_Base_Vertex_Offset() == VERTEX_BUFFER_OVERFLOW)	//check if this mesh is valid
 		{	//skip this mesh so it gets rendered later after vertices are filled in.
 			last_prt = prt;
@@ -2421,6 +2497,10 @@ static int Describe_Shadow_Caster_Piece(DX8PolygonRendererClass * renderer, bool
 	ShadowCasterPiece & record)
 {
 	DX8TextureCategoryClass * category = renderer->Get_Texture_Category();
+	if (category == NULL) {
+		// between categories (crash reports 3839, 4137): the old way, where Queue_Render_Task skips it
+		return DX8MeshRendererClass::SHADOW_OLD_NO_BASE_PASS;
+	}
 	const ShaderClass shader = category->Get_Shader();
 	DX8FVFCategoryContainer * container = category->Get_Container();
 	if (shader.Get_Src_Blend_Func() != ShaderClass::SRCBLEND_ONE
@@ -2631,6 +2711,7 @@ void DX8MeshRendererClass::Flush_Shadow_Casters()
 		return;
 	}
 	WWPROFILE("DX8MeshRenderer::Flush_Shadow_Casters");
+	FlushWindowClass window(false);	// the pieces name renderers an Invalidate would delete; the Flush after runs it
 
 	// The sun's view is set but waits in the wrapper for the next draw; the backend reads it here.
 	DX8Wrapper::Apply_Render_State_Changes();
@@ -2762,7 +2843,7 @@ void DX8MeshRendererClass::Flush_Shadow_Casters()
 					const DX11ShadowCasterRun & refused = _ShadowCasterRuns[run];
 					DX8PolygonRendererClass * renderer = _ShadowCasterPieces[_ShadowCasterRunPieces[run]].Renderer;
 					for (unsigned instance = 0; instance < refused.InstanceCount; ++instance) {
-						renderer->Get_Texture_Category()->Add_Render_Task(renderer,
+						DX8TextureCategoryClass::Queue_Render_Task(renderer,
 							_ShadowCasterOrdered[refused.FirstInstance + instance]);
 						++Shadow_Old_Meshes[SHADOW_OLD_REFUSED];
 					}
@@ -2779,11 +2860,14 @@ void DX8MeshRendererClass::Flush_Shadow_Casters()
 			MeshModelClass * model = mesh->Peek_Model();
 			DX8PolygonRendererListIterator it(&(model->PolygonRendererList));
 			for (; !it.Is_Done(); it.Next()) {
-				it.Peek_Obj()->Get_Texture_Category()->Add_Render_Task(it.Peek_Obj(), mesh);
+				DX8TextureCategoryClass::Queue_Render_Task(it.Peek_Obj(), mesh);
 			}
 			if (model->Get_Flag(MeshGeometryClass::SKIN)) {
-				DX8FVFCategoryContainer * container = model->PolygonRendererList.Peek_Head()->Get_Texture_Category()->Get_Container();
-				static_cast<DX8SkinFVFCategoryContainer *>(container)->Add_Visible_Skin(mesh);
+				DX8FVFCategoryContainer * container = DX8TextureCategoryClass::Peek_Container_Of(
+					model->PolygonRendererList.Peek_Head(), mesh);
+				if (container != NULL) {
+					static_cast<DX8SkinFVFCategoryContainer *>(container)->Add_Visible_Skin(mesh);
+				}
 			}
 			++Shadow_Old_Meshes[SHADOW_OLD_REFUSED];
 		}
@@ -2801,7 +2885,8 @@ void DX8MeshRendererClass::Flush(void)
 
 	WWPROFILE("DX8MeshRenderer::Flush");
 	if (!camera) return;
-	Log_Statistics_String(true);	
+	FlushWindowClass window(true);
+	Log_Statistics_String(true);
 
 	/*
 	** Render the FVF categories.  Note that it is critical that skins be 
@@ -2888,6 +2973,18 @@ static void Invalidate_FVF_Category_Container_List(FVFCategoryList& list)
 void DX8MeshRendererClass::Invalidate( bool shutdown)
 {
 	WWMEMLOG(MEM_RENDERER);
+	// Asked from inside Flush's walk: run when the walk ends (FlushWindowClass), not under it.
+	if (!shutdown && _FlushDepth > 0) {
+		static int s_saidDeferred = 0;
+		if (!_InvalidateDeferred && s_saidDeferred < 4) {
+			++s_saidDeferred;
+			WWRELEASE_SAY(("DX8MeshRendererClass::Invalidate asked mid-flush, put off to its end (W3D frame %u)\n",
+				WW3D::Get_Frame_Count()));
+		}
+		_InvalidateDeferred = true;
+		return;
+	}
+	_InvalidateDeferred = false;	// this one does what a put-off one would
 	// The other NULL-writing way (crash reports 4137, 3839): every category goes, and a mesh queued
 	// for this frame keeps renderers that point at none.  Map loads land here too, so the first few
 	// calls are said, with the frame, and a mid-match one reads as such beside the crash.

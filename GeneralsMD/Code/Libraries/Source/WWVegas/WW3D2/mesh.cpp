@@ -665,9 +665,9 @@ int MeshClass::Get_Num_Polys(void) const
  *=============================================================================================*/
 /* The FVF container a mesh's model is in, looked up only where it is used: a caster the sun's depth
 	 pass takes never reads it, and the walk to it is three loads a mesh. */
-static DX8FVFCategoryContainer * Peek_FVF_Container(DX8PolygonRendererList & renderers)
+static DX8FVFCategoryContainer * Peek_FVF_Container(DX8PolygonRendererList & renderers, MeshClass * mesh)
 {
-	return renderers.Peek_Head()->Get_Texture_Category()->Get_Container();
+	return DX8TextureCategoryClass::Peek_Container_Of(renderers.Peek_Head(), mesh);
 }
 
 void MeshClass::Render(RenderInfoClass & rinfo)
@@ -785,7 +785,7 @@ void MeshClass::Render(RenderInfoClass & rinfo)
 					DX8PolygonRendererListIterator it(&(Model->PolygonRendererList));
 					while (!it.Is_Done()) {
 						DX8PolygonRendererClass* polygon_renderer=it.Peek_Obj();
-						polygon_renderer->Get_Texture_Category()->Add_Render_Task(polygon_renderer,this);
+						DX8TextureCategoryClass::Queue_Render_Task(polygon_renderer,this);
 						it.Next();
 					}
 				}
@@ -801,9 +801,9 @@ void MeshClass::Render(RenderInfoClass & rinfo)
 			for (int i=0; i<rinfo.Additional_Pass_Count(); i++) {
 
 				MaterialPassClass * matpass = rinfo.Peek_Additional_Pass(i);
-				DX8FVFCategoryContainer * fvf_container = Peek_FVF_Container(Model->PolygonRendererList);
+				DX8FVFCategoryContainer * fvf_container = Peek_FVF_Container(Model->PolygonRendererList, this);
 
-				if ((!Is_Translucent()) || (matpass->Is_Enabled_On_Translucent_Meshes())) {
+				if (fvf_container != NULL && ((!Is_Translucent()) || (matpass->Is_Enabled_On_Translucent_Meshes()))) {
 					
 					/*
 					** If the base pass for this mesh has been disabled, we have to make sure
@@ -825,7 +825,10 @@ void MeshClass::Render(RenderInfoClass & rinfo)
 			*/
 			if (rendered_something && !lean_caster && Model->Get_Flag(MeshGeometryClass::SKIN)) {
 				//WWASSERT(dynamic_cast<DX8SkinFVFCategoryContainer *>(fvf_container) != NULL);
-				static_cast<DX8SkinFVFCategoryContainer*>(Peek_FVF_Container(Model->PolygonRendererList))->Add_Visible_Skin(this);
+				DX8FVFCategoryContainer * skin_container = Peek_FVF_Container(Model->PolygonRendererList, this);
+				if (skin_container != NULL) {
+					static_cast<DX8SkinFVFCategoryContainer*>(skin_container)->Add_Visible_Skin(this);
+				}
 			}
 
 			/*

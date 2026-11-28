@@ -277,6 +277,7 @@ DX8FVFCategoryContainer* MeshModelClass::Peek_FVF_Category_Container()
 	WWASSERT(polygon_renderer);
 	DX8TextureCategoryClass* texture_category=polygon_renderer->Get_Texture_Category();
 	WWASSERT(texture_category);
+	if (texture_category == NULL) return NULL;	// between categories (crash reports 3839, 4137)
 	DX8FVFCategoryContainer* fvf_category=texture_category->Get_Container();
 	WWASSERT(fvf_category);
 	return fvf_category;

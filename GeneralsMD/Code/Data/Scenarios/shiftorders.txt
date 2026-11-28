@@ -46,7 +46,7 @@
 # is a walk, a capture and a walk on, and a capture at the door runs about 650 frames: the arrive
 # lines say each finished, the tallies whose buildings they are. The Ranger is China's here so
 # nobody in this file fires on anybody else.
-30    spawn          0  ChinaBarracks             1  400 700
+30    spawn          0  ChinaBarracks             1  start0:-350:300
 31    shiftupgrade   0  ChinaBarracks             Upgrade_InfantryCaptureBuilding
 30    spawn          0  ChinaInfantryRedguard     1  600 850
 30    spawn          0  AmericaInfantryRanger     1  600 1000
@@ -68,3 +68,26 @@
 4490  tally          1  AmericaPowerPlant
 4490  tally          0  AmericaBarracks
 4490  tally          1  AmericaBarracks
+
+# Two captures in a row. A capture recharges for 15 s once it is over, so the second building comes
+# up while the power is still charging; the power used to turn it down without a word, the Rebel
+# stood where the first one fell and the rest of his list went the same way. The queue holds the
+# second capture now, walks him up to it meanwhile and sends it once the power is ready: both
+# tallies must show slot 0 owning the building, and the arrive line that he walked on after them.
+# Placed off China's start, on ground the spawn guard takes, unlike the fixed spots above.
+30    spawn          0  GLAInfantryRebel          1  start0:0:300
+30    spawn          1  AmericaWarFactory         1  start0:0:-450
+30    spawn          1  AmericaSupplyDropZone     1  start0:350:0
+
+# The list goes out at 2000, once Capture Building is surely researched on an unpowered barracks, and
+# two captures, the recharge and the walks take most of the run, so these tallies come last.
+2000  shiftpower     0  GLAInfantryRebel          1 AmericaWarFactory SpecialAbilityRebelCaptureBuilding
+2001  shiftpower     0  GLAInfantryRebel          1 AmericaSupplyDropZone SpecialAbilityRebelCaptureBuilding
+2002  shiftmove      0  GLAInfantryRebel          start0:200:300
+
+2005  arrive         0  GLAInfantryRebel          start0:200:300 150
+
+6700  tally          0  AmericaWarFactory
+6700  tally          1  AmericaWarFactory
+6700  tally          0  AmericaSupplyDropZone
+6700  tally          1  AmericaSupplyDropZone

@@ -25,6 +25,7 @@
 #include "GameLogic/OrderQueue.h"
 
 #include "Common/Player.h"
+#include "Common/SpecialPower.h"
 #include "Common/Xfer.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/AIStateMachine.h"
@@ -34,6 +35,7 @@
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/DozerAIUpdate.h"
 #include "GameLogic/Module/JetAIUpdate.h"
+#include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/SpecialPowerUpdateModule.h"
 
 #include <algorithm>
@@ -965,23 +967,91 @@ Bool OrderQueue::isStepOver( OrderChain& chain, Player *owner )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Is a queued special power still recharging for anyone in the chain?  A second building to capture
+	* comes up the moment the first is taken, and a capture recharges only once it is over
+	* (SpecialAbilityUpdate restarts the clock all through it), so the power turned the order down
+	* without a word (ActionManager::canDoSpecialPower*), the unit stood idle and every capture after it
+	* went the same way. */
+//-------------------------------------------------------------------------------------------------
+static Bool OrderQueue_isPowerCharging( const QueuedOrder& order, const std::vector<ObjectID>& members )
+{
+	switch( order.getType() )
+	{
+		case GameMessage::MSG_DO_SPECIAL_POWER:
+		case GameMessage::MSG_DO_SPECIAL_POWER_AT_LOCATION:
+		case GameMessage::MSG_DO_SPECIAL_POWER_AT_OBJECT:
+			break;
+		default:
+			return FALSE;
+	}
+
+	// the power's ID is the first argument of all three
+	const SpecialPowerTemplate *power = TheSpecialPowerStore->findSpecialPowerTemplateByID( (UnsignedInt)order.getArgument( 0 ).integer );
+	if( power == NULL )
+		return FALSE;
+
+	for( std::vector<ObjectID>::const_iterator id = members.begin(); id != members.end(); ++id )
+	{
+		const Object *obj = TheGameLogic->findObjectByID( *id );
+		const SpecialPowerModuleInterface *module = obj ? obj->getSpecialPowerModule( power ) : NULL;
+		if( module != NULL && module->getPercentReady() < 1.0f )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Send the next order that still makes sense.  A queued attack on something that has died since
-	* is skipped, and a run of moves goes out as one path so the units do not stop at every point. */
+	* is skipped, and a run of moves goes out as one path so the units do not stop at every point.  A
+	* special power still recharging waits at the front of the list, the units walking up to the
+	* building it is for meanwhile, and goes out once it is ready. */
 //-------------------------------------------------------------------------------------------------
 Bool OrderQueue::advance( OrderChain& chain, Player *owner )
 {
 	while( !chain.m_pending.empty() )
 	{
 		const QueuedOrder next = chain.m_pending.front();
-		chain.m_pending.erase( chain.m_pending.begin() );
 
 		const ObjectID targetID = next.getTargetID();
-		if( targetID != INVALID_ID )
+		const Object *target = targetID != INVALID_ID ? TheGameLogic->findObjectByID( targetID ) : NULL;
+		if( targetID != INVALID_ID && ( target == NULL || target->isEffectivelyDead() ) )
 		{
-			const Object *target = TheGameLogic->findObjectByID( targetID );
-			if( target == NULL || target->isEffectivelyDead() )
-				continue;
+			chain.m_pending.erase( chain.m_pending.begin() );
+			continue;
+		}
 
+		if( OrderQueue_isPowerCharging( next, chain.m_members ) )
+		{
+			// The walk is the step in front while they wait, so it is sent once: arrived and idle, the
+			// chain comes back here every frame (isStepOver stays over) until the power is ready.  A
+			// capture or a charge walks up to its building anyway; anything else waits where it is.
+			Coord3D walked;
+			if( next.getType() == GameMessage::MSG_DO_SPECIAL_POWER_AT_OBJECT && target != NULL && target->isKindOf( KINDOF_STRUCTURE )
+					&& !( chain.m_active.getType() == GameMessage::MSG_DO_MOVETO && chain.m_active.getDestination( &walked )
+								&& walked.x == target->getPosition()->x && walked.y == target->getPosition()->y ) )
+			{
+				GameMessage *msg = newInstance( GameMessage )( GameMessage::MSG_DO_MOVETO );
+				msg->friend_setPlayerIndex( owner->getPlayerIndex() );
+				msg->appendLocationArgument( *target->getPosition() );
+				OrderQueue_dispatch( msg, chain.m_members );
+				chain.m_active.copyFrom( msg );
+				msg->deleteInstance();
+				chain.m_settledFrames = 0;
+				chain.m_waitingForRearm = FALSE;
+				chain.m_armedThisStep = FALSE;
+				OrderQueue_log( "power recharging, walking up to its target", chain, owner );
+			}
+			else if( chain.m_settledFrames++ == STEP_SETTLE_FRAMES )
+			{
+				OrderQueue_log( "power recharging, waiting", chain, owner );
+			}
+			return TRUE;
+		}
+
+		chain.m_pending.erase( chain.m_pending.begin() );
+
+		if( target != NULL )
+		{
 			// the list was copied when the chain split, and the upgrade belongs to whichever half has the unit
 			if( next.getType() == GameMessage::MSG_QUEUE_UPGRADE
 					&& !std::binary_search( chain.m_members.begin(), chain.m_members.end(), targetID ) )

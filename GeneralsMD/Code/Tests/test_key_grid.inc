@@ -234,6 +234,82 @@ TEST(key_grid_places_riders_from_the_corner)
 	CHECK_EQ( places[ 10 ], (Int)COMMAND_PLACE_Z );
 }
 
+/* A factory (the owner's of 2026-11-28): its upgrades on a row of their own along Z, up a row when it
+   fills; the units a column at a time from the left over the rows with no upgrade, a block under the
+   left hand rather than one row; rally point B and sell N where they always are; no key twice */
+TEST(key_grid_packs_a_factorys_units_left_and_its_upgrades_on_a_row)
+{
+	enum { SLOTS = MAX_COMMANDS_PER_SET };
+	const KeyGridSlot empty = { GUI_COMMAND_NONE, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot unit = { GUI_COMMAND_UNIT_BUILD, COMMAND_GROUP_PRODUCTION, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot upgrade = { GUI_COMMAND_PLAYER_UPGRADE, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot own = { GUI_COMMAND_OBJECT_UPGRADE, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot power = { GUI_COMMAND_SPECIAL_POWER, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot rally = { GUI_COMMAND_SET_RALLY_POINT, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+	const KeyGridSlot sell = { GUI_COMMAND_SELL, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
+
+	// nine units and three upgrades, interleaved in EA's slots, rally point and sell last
+	KeyGridSlot factory[ SLOTS ];
+	for( Int i = 0; i < SLOTS; i++ )
+		factory[ i ] = empty;
+	static const Int UNITS[ 9 ] = { 0, 1, 2, 4, 5, 7, 8, 10, 11 };
+	for( Int i = 0; i < 9; i++ )
+		factory[ UNITS[ i ] ] = unit;
+	factory[ 3 ] = upgrade;
+	factory[ 6 ] = own;
+	factory[ 9 ] = upgrade;
+	factory[ 12 ] = rally;
+	factory[ 13 ] = sell;
+	Int places[ SLOTS ];
+	CHECK( !ControlBar_keyGridPlaces( factory, SLOTS, places ) );
+	static const Int COLUMNS[ 9 ] = { COMMAND_PLACE_Q, COMMAND_PLACE_A, COMMAND_PLACE_W, COMMAND_PLACE_S, COMMAND_PLACE_E,
+		COMMAND_PLACE_D, COMMAND_PLACE_R, COMMAND_PLACE_F, COMMAND_PLACE_T };
+	for( Int i = 0; i < 9; i++ )
+		CHECK_EQ( places[ UNITS[ i ] ], COLUMNS[ i ] );
+	CHECK_EQ( places[ 3 ], (Int)COMMAND_PLACE_Z );
+	CHECK_EQ( places[ 6 ], (Int)COMMAND_PLACE_X );
+	CHECK_EQ( places[ 9 ], (Int)COMMAND_PLACE_C );
+	CHECK_EQ( places[ 12 ], (Int)COMMAND_PLACE_RALLY );
+	CHECK_EQ( places[ 13 ], (Int)COMMAND_PLACE_SELL );
+	CHECK_EQ( places[ 14 ], -1 );
+
+	// a tech building: six upgrades fill Z X C V B and climb to A; its three powers keep off both rows
+	KeyGridSlot tech[ SLOTS ];
+	for( Int i = 0; i < SLOTS; i++ )
+		tech[ i ] = empty;
+	for( Int i = 0; i < 6; i++ )
+		tech[ i ] = upgrade;
+	tech[ 6 ] = power;
+	tech[ 7 ] = power;
+	tech[ 8 ] = power;
+	tech[ 9 ] = sell;
+	ControlBar_keyGridPlaces( tech, SLOTS, places );
+	static const Int CLIMB[ 6 ] = { COMMAND_PLACE_Z, COMMAND_PLACE_X, COMMAND_PLACE_C, COMMAND_PLACE_V, COMMAND_PLACE_B, COMMAND_PLACE_A };
+	for( Int i = 0; i < 6; i++ )
+		CHECK_EQ( places[ i ], CLIMB[ i ] );
+	CHECK_EQ( places[ 6 ], (Int)COMMAND_PLACE_Q );
+	CHECK_EQ( places[ 7 ], (Int)COMMAND_PLACE_W );
+	CHECK_EQ( places[ 8 ], (Int)COMMAND_PLACE_E );
+	CHECK_EQ( places[ 9 ], (Int)COMMAND_PLACE_SELL );
+
+	// a full set of seventeen: every one on a place, no place twice
+	KeyGridSlot full[ SLOTS ];
+	for( Int i = 0; i < SLOTS; i++ )
+		full[ i ] = i < 8 ? upgrade : unit;
+	full[ 17 ] = sell;
+	ControlBar_keyGridPlaces( full, SLOTS, places );
+	Bool seen[ COMMAND_PLACE_COUNT ] = { FALSE };
+	for( Int i = 0; i < SLOTS; i++ )
+	{
+		CHECK( places[ i ] >= 0 && places[ i ] < COMMAND_PLACE_COUNT );
+		if( places[ i ] >= 0 && places[ i ] < COMMAND_PLACE_COUNT )
+		{
+			CHECK( !seen[ places[ i ] ] );
+			seen[ places[ i ] ] = TRUE;
+		}
+	}
+}
+
 /* The squad tray on the deck: entries on the places in reading order, none past N */
 TEST(key_grid_tray_fills_the_places_in_reading_order)
 {

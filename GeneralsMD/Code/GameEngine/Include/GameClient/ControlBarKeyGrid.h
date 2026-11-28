@@ -106,7 +106,10 @@ extern const Int KEY_GRID_RIDER_PLACES[ 11 ];
 	* fills goes on in the next row the order names.
 	*
 	* A set that builds nothing: ControlBar_commandPlaces for everything but the passengers, then the
-	* passengers on KEY_GRID_RIDER_PLACES. */
+	* passengers on KEY_GRID_RIDER_PLACES.  One with a unit or an upgrade to make and no attack move (a
+	* factory, a tech building; the owner's of 2026-11-28): the pinned and fixed buttons, the upgrades
+	* along Z from the left and up a row each time a row fills, then the rest a column at a time from the
+	* left (Q A W S ...) over the rows no upgrade stands on, and whatever is left on any free place. */
 //-------------------------------------------------------------------------------------------------
 Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places );
 

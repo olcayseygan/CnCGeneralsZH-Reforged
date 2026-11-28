@@ -447,20 +447,77 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 	if( !builder )
 	{
 		Int types[ MAX_COMMANDS_PER_SET ], groups[ MAX_COMMANDS_PER_SET ], pinned[ MAX_COMMANDS_PER_SET ];
+		auto isUpgrade = []( Int type ) { return type == GUI_COMMAND_PLAYER_UPGRADE || type == GUI_COMMAND_OBJECT_UPGRADE; };
+		Bool fights = FALSE, makes = FALSE;
 		for( Int slot = 0; slot < count; slot++ )
 		{
 			const Bool rider = slots[ slot ].type == GUI_COMMAND_EXIT_CONTAINER;
 			types[ slot ] = rider ? (Int)GUI_COMMAND_NONE : slots[ slot ].type;
 			groups[ slot ] = slots[ slot ].group;
 			pinned[ slot ] = rider ? -1 : slots[ slot ].pinned;
+			fights = fights || slots[ slot ].type == GUI_COMMAND_ATTACK_MOVE;
+			makes = makes || isUpgrade( slots[ slot ].type ) || slots[ slot ].type == GUI_COMMAND_UNIT_BUILD;
 		}
-		const Bool fights = ControlBar_commandPlaces( types, groups, pinned, count, places );
 		Bool used[ COMMAND_PLACE_COUNT ] = { FALSE };
-		for( Int slot = 0; slot < count; slot++ )
-			if( places[ slot ] >= 0 )
-				used[ places[ slot ] ] = TRUE;
-		if( fights )
-			used[ COMMAND_PLACE_ATTACK ] = used[ COMMAND_PLACE_HOLD ] = used[ COMMAND_PLACE_MOVE ] = TRUE;
+		if( makes && !fights )
+		{
+			// A factory or a tech building (the owner's of 2026-11-28): the pinned and fixed buttons, then
+			// the upgrades on a row of their own, Z from the left and up a row when it fills, then the rest
+			// (the units, the powers) a column at a time from the left over the rows no upgrade is on, so a
+			// long list makes a block under the left hand instead of one row running off to the right
+			for( Int slot = 0; slot < count; slot++ )
+			{
+				places[ slot ] = -1;
+				const Int place = pinned[ slot ] >= 0 ? pinned[ slot ] : fixedCommandPlace( types[ slot ] );
+				if( types[ slot ] != GUI_COMMAND_NONE && place >= 0 && !used[ place ] )
+				{
+					places[ slot ] = place;
+					used[ place ] = TRUE;
+				}
+			}
+			Bool upgradeRow[ ROWS ] = { FALSE };
+			for( Int slot = 0; slot < count; slot++ )
+			{
+				if( places[ slot ] >= 0 || !isUpgrade( types[ slot ] ) )
+					continue;
+				for( Int row = ROWS - 1; row >= 0 && places[ slot ] < 0; row-- )
+					for( Int column = 0; column < COMMAND_PLACE_COLUMNS && places[ slot ] < 0; column++ )
+					{
+						const Int place = row * COMMAND_PLACE_COLUMNS + column;
+						if( !used[ place ] )
+						{
+							places[ slot ] = place;
+							used[ place ] = TRUE;
+							upgradeRow[ row ] = TRUE;
+						}
+					}
+			}
+			for( Int pass = 0; pass < 2; pass++ )
+				for( Int slot = 0; slot < count; slot++ )
+				{
+					if( places[ slot ] >= 0 || types[ slot ] == GUI_COMMAND_NONE )
+						continue;
+					for( Int column = 0; column < COMMAND_PLACE_COLUMNS && places[ slot ] < 0; column++ )
+						for( Int row = 0; row < ROWS && places[ slot ] < 0; row++ )
+						{
+							const Int place = row * COMMAND_PLACE_COLUMNS + column;
+							if( !used[ place ] && ( pass == 1 || !upgradeRow[ row ] ) )
+							{
+								places[ slot ] = place;
+								used[ place ] = TRUE;
+							}
+						}
+				}
+		}
+		else
+		{
+			fights = ControlBar_commandPlaces( types, groups, pinned, count, places );
+			for( Int slot = 0; slot < count; slot++ )
+				if( places[ slot ] >= 0 )
+					used[ places[ slot ] ] = TRUE;
+			if( fights )
+				used[ COMMAND_PLACE_ATTACK ] = used[ COMMAND_PLACE_HOLD ] = used[ COMMAND_PLACE_MOVE ] = TRUE;
+		}
 		Int next = 0;
 		for( Int slot = 0; slot < count; slot++ )
 		{

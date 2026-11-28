@@ -2099,7 +2099,7 @@ GUI:LightingStyle1
 END
 
 TOOLTIP:LightingStyle
-"Reforged gives each map a stronger, warmer sun, darker shade and deeper shadows, keeping its time of day. Classic is the flat light of 2003, and Classic Graphics always uses it. Applies from the next map."
+"Reforged gives each map a stronger sun, darker shade and deeper shadows, keeping its time of day. Classic is the flat light of 2003, and Classic Graphics always uses it. Applies from the next map."
 END
 
 GUI:SmokeFireLighting
@@ -9267,7 +9267,7 @@ OPTIONTIP:Bloom
 END
 
 OPTIONTIP:MapLight
-"A low afternoon sun with warmer light and longer shadows, and haze lying over low ground."
+"A low afternoon sun with longer shadows, warmer under Classic lighting, and haze lying over low ground."
 END
 
 OPTIONTIP:SunShafts

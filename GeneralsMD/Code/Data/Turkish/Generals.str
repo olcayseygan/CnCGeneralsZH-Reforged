@@ -16729,7 +16729,7 @@ GUI:LightingStyle1
 END
 
 TOOLTIP:LightingStyle
-"Reforged her haritaya günün saatini bozmadan daha güçlü ve sıcak bir güneş, daha koyu gölgeli yüzler ve daha derin gölgeler verir. Klasik 2003'ün düz ışığıdır ve Klasik Grafikler hep onu kullanır. Bir sonraki haritada geçerli olur."
+"Reforged her haritaya günün saatini bozmadan daha güçlü bir güneş, daha koyu gölgeli yüzler ve daha derin gölgeler verir. Klasik 2003'ün düz ışığıdır ve Klasik Grafikler hep onu kullanır. Bir sonraki haritada geçerli olur."
 END
 
 GUI:SmokeFireLighting
@@ -23450,7 +23450,7 @@ OPTIONTIP:Bloom
 END
 
 OPTIONTIP:MapLight
-"Daha sıcak ışık ve uzun gölgelerle alçak bir ikindi güneşi, alçak zeminde hafif pus."
+"Uzun gölgelerle alçak bir ikindi güneşi, Klasik aydınlatmada daha sıcak ışık, alçak zeminde hafif pus."
 END
 
 OPTIONTIP:SunShafts

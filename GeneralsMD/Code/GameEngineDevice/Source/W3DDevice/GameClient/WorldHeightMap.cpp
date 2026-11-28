@@ -382,60 +382,6 @@ Real WorldHeightMap::getBilinearSampleSeismicZVelocity( Int x, Int y)
 *	Input: DataChunkInput 
 *		
 */
-/* The Warm Light option's sun (MapLight): late afternoon light.  A sun higher than PROTO_SUN_SINE (the sine of its
-	height over the horizon, about 26 degrees, where a shadow runs twice as long as its caster is
-	tall) is brought down to it on the same bearing, a straight-down sun takes a bearing of its own,
-	and the sun is brightened by what the flatter angle took off level ground, at most
-	PROTO_SUN_MOST.  Then the sun goes gold and the ambient a little toward blue, by how much
-	daylight there is and with the brightness of each kept, so a moonlit map keeps its cast.  The
-	sun alone: the two fill lights stay.  Client only, the logic never reads these tables. */
-static const Real PROTO_SUN_SINE = 0.44f;
-static const Real PROTO_SUN_MOST = 1.3f;
-
-static void protoTint( RGBColor &c, Real r, Real g, Real b )
-{
-	const Real before = 0.299f * c.red + 0.587f * c.green + 0.114f * c.blue;
-	c.red *= r;
-	c.green *= g;
-	c.blue *= b;
-	const Real after = 0.299f * c.red + 0.587f * c.green + 0.114f * c.blue;
-	if (after > 0.0001f) {
-		c.red *= before / after;
-		c.green *= before / after;
-		c.blue *= before / after;
-	}
-}
-
-static void mapLightSun( GlobalData::TerrainLighting &sun )
-{
-	const Real daylight = (0.299f * sun.diffuse.red + 0.587f * sun.diffuse.green + 0.114f * sun.diffuse.blue - 0.25f) / 0.5f;
-	const Real warmth = (daylight < 0.0f) ? 0.0f : (daylight > 1.0f) ? 1.0f : daylight;
-
-	Coord3D &ray = sun.lightPos;
-	const Real length = (Real)sqrt(ray.x * ray.x + ray.y * ray.y + ray.z * ray.z);
-	const Real sine = -ray.z / length;
-	if (sine > PROTO_SUN_SINE) {
-		Real flat = (Real)sqrt(ray.x * ray.x + ray.y * ray.y);
-		if (flat < 0.0001f) {
-			ray.x = 0.7071f;
-			ray.y = -0.7071f;
-			flat = 1.0f;
-		}
-		const Real cosine = (Real)sqrt(1.0f - PROTO_SUN_SINE * PROTO_SUN_SINE);
-		ray.x = ray.x / flat * cosine * length;
-		ray.y = ray.y / flat * cosine * length;
-		ray.z = -PROTO_SUN_SINE * length;
-		Real gain = sine / PROTO_SUN_SINE;
-		if (gain > PROTO_SUN_MOST)
-			gain = PROTO_SUN_MOST;
-		sun.diffuse.red *= gain;
-		sun.diffuse.green *= gain;
-		sun.diffuse.blue *= gain;
-	}
-
-	protoTint(sun.diffuse, 1.0f + 0.16f * warmth, 1.0f + 0.02f * warmth, 1.0f - 0.26f * warmth);
-	protoTint(sun.ambient, 1.0f - 0.05f * warmth, 1.0f, 1.0f + 0.10f * warmth);
-}
 
 Bool WorldHeightMap::ParseLightingDataChunk(DataChunkInput &file, DataChunkInfo *info, void *userData)
 {
@@ -534,12 +480,14 @@ Bool WorldHeightMap::ParseLightingDataChunk(DataChunkInput &file, DataChunkInfo 
 		}
 		// a Direct3D 11 look like the haze that goes with it, so -d3d9 keeps the map's own sun
 		if (TheGlobalData->m_mapLight && TheGlobalData->m_direct3D11) {
+			// the Reforged style keeps the sun's own colour: gold on top of it turned lit snow cream
+			const Bool goldSun = TheGlobalData->m_lightingStyle != LIGHTING_STYLE_REFORGED;
 			for (i=TIME_OF_DAY_FIRST; i<TIME_OF_DAY_COUNT; i++) {
 				// the Reforged moon is bright enough to read as late daylight here, and would turn gold
 				if (i == TIME_OF_DAY_NIGHT && TheGlobalData->m_lightingStyle == LIGHTING_STYLE_REFORGED)
 					continue;
-				mapLightSun(TheWritableGlobalData->m_terrainLighting[i][0]);
-				mapLightSun(TheWritableGlobalData->m_terrainObjectsLighting[i][0]);
+				warmLightSun(TheWritableGlobalData->m_terrainLighting[i][0], goldSun);
+				warmLightSun(TheWritableGlobalData->m_terrainObjectsLighting[i][0], goldSun);
 			}
 		}
 	DEBUG_ASSERTCRASH(file.atEndOfChunk(), ("Unexpected data left over."));

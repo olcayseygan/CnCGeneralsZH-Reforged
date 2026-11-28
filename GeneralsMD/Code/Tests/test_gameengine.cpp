@@ -28367,6 +28367,35 @@ TEST(reforged_lighting_keeps_the_lit_side_and_darkens_the_shade)
 	CHECK( moon[0].diffuse.blue > 1.8f * moon[0].diffuse.red );
 }
 
+/** The Warm Light option's sun: a high sun comes down to a late afternoon angle on its own bearing
+	 and is brightened for it, the ambient goes a little blue, and the sun turns gold only for Classic
+	 lighting.  Under the Reforged style a grey sun stays grey: gold there clipped red on lit snow. */
+TEST(warm_light_sun_goes_gold_only_when_asked)
+{
+	GlobalData::TerrainLighting gold, plain;
+	memset( &gold, 0, sizeof(gold) );
+	gold.ambient.red = gold.ambient.green = gold.ambient.blue = 0.3f;
+	gold.diffuse.red = gold.diffuse.green = gold.diffuse.blue = 0.8f;
+	gold.lightPos.x = -0.5f; gold.lightPos.y = 0.0f; gold.lightPos.z = -0.866f;
+	plain = gold;
+
+	warmLightSun( gold, TRUE );
+	warmLightSun( plain, FALSE );
+
+	CHECK( gold.diffuse.red > gold.diffuse.blue + 0.1f );
+	CHECK_NEAR( plain.diffuse.red, plain.diffuse.blue, 0.0001f );
+	CHECK_NEAR( plain.diffuse.green, plain.diffuse.blue, 0.0001f );
+	// the same sun either way, only its colour differs
+	const Real goldLuma = 0.299f * gold.diffuse.red + 0.587f * gold.diffuse.green + 0.114f * gold.diffuse.blue;
+	CHECK_NEAR( goldLuma, plain.diffuse.green, 0.001f );
+	CHECK( plain.diffuse.green > 0.8f );
+	CHECK_NEAR( plain.lightPos.z, gold.lightPos.z, 0.0001f );
+	CHECK_NEAR( -plain.lightPos.z / (Real)sqrt( plain.lightPos.x * plain.lightPos.x + plain.lightPos.z * plain.lightPos.z ), 0.44f, 0.001f );
+	CHECK( plain.lightPos.x < 0.0f );
+	CHECK( plain.ambient.blue > plain.ambient.red );
+	CHECK_NEAR( plain.ambient.blue, gold.ambient.blue, 0.0001f );
+}
+
 /** A night map's moon under the Reforged style: a map with no moon (a black light straight down) gets
 	 a blue key at 40 degrees and a blue sky ambient; a dim moon keeps its bearing and is raised to the
 	 floors with its own hue in; a bright night keeps every number it had. */

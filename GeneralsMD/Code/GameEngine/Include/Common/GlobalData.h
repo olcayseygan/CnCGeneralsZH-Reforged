@@ -632,7 +632,7 @@ public:
 	Bool m_lanLobbyOnStart;						///< -lanlobby: open the LAN lobby instead of stopping at the main menu
 	Bool m_skirmishLobbyOnStart;			///< -skirmishlobby: open the skirmish staging room instead of stopping at the main menu
 	Bool m_optionsMenuOnStart;				///< -optionsmenu: open the options screen over the main menu at startup
-	Bool m_mapLight;								///< "MapLight": warm low sun and a still ground haze (Direct3D 11, client only)
+	Bool m_mapLight;								///< "MapLight": low sun (gold only under Classic lighting) and a still ground haze (Direct3D 11, client only)
 	Bool m_teamGlow;								///< "TeamGlow": bright house colour glows (Direct3D 11, client only)
 	Bool m_mapAwareWaveHeading;			///< "MapAwareWaveHeading": swells follow shores and channels (SDL Modern water, client only)
 	Bool m_underwaterClarity;				///< "UnderwaterClarity": shallow shelves and ruins show through Modern water (SDL, client only)
@@ -905,5 +905,10 @@ extern void reforgeLighting( GlobalData::TerrainLighting lights[MAX_GLOBAL_LIGHT
 	* from a moon at most REFORGED_MOON_SINE high and a blue sky ambient, each raised to a floor where
 	* the map's own is dimmer, so a night map reads under moonlight instead of near black. */
 extern void reforgeMoonlight( GlobalData::TerrainLighting lights[MAX_GLOBAL_LIGHTS] );
+
+/** The Warm Light option's sun (MapLight), on one time of day's first light: lowered to a late
+	* afternoon angle and brightened to match, the ambient a little bluer, and the sun gold only when
+	* goldSun is set (Classic lighting; the Reforged style keeps the sun's own colour). */
+extern void warmLightSun( GlobalData::TerrainLighting &sun, Bool goldSun );
 
 #endif

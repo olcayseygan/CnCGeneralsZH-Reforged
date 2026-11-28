@@ -1521,7 +1521,7 @@ void reforgeMoonlight( GlobalData::TerrainLighting lights[MAX_GLOBAL_LIGHTS] )
 	}
 	if( -ray.z / length > REFORGED_MOON_STEEPEST )
 	{
-		// on the map's own bearing, or from the south-west where it has none (mapLightSun's)
+		// on the map's own bearing, or from the south-west where it has none (warmLightSun's)
 		Real flat = (Real)sqrt( ray.x * ray.x + ray.y * ray.y );
 		Real x = ray.x, y = ray.y;
 		if( flat < 0.0001f )
@@ -1537,6 +1537,49 @@ void reforgeMoonlight( GlobalData::TerrainLighting lights[MAX_GLOBAL_LIGHTS] )
 	}
 	moonFloor( moon.diffuse, REFORGED_MOON_KEY );
 	moonFloor( moon.ambient, REFORGED_MOON_SKY );
+}
+
+/* The Warm Light option's sun (MapLight): late afternoon light.  A sun higher than WARM_SUN_SINE (the sine of its
+	height over the horizon, about 26 degrees, where a shadow runs twice as long as its caster is
+	tall) is brought down to it on the same bearing, a straight-down sun takes a bearing of its own,
+	and the sun is brightened by what the flatter angle took off level ground, at most
+	WARM_SUN_MOST.  Then the ambient goes a little toward blue and, unless goldSun is off, the sun
+	gold, by how much daylight there is and with the brightness of each kept, so a moonlit map keeps
+	its cast.  The Reforged style passes goldSun off: its sun on top of the gold clipped red on lit
+	snow and turned Winter Wolf cream (2026-11-28).  The sun alone: the two fill lights stay. */
+static const Real WARM_SUN_SINE = 0.44f;
+static const Real WARM_SUN_MOST = 1.3f;
+
+void warmLightSun( GlobalData::TerrainLighting &sun, Bool goldSun )
+{
+	const Real daylight = (lightLuminance( sun.diffuse ) - 0.25f) / 0.5f;
+	const Real warmth = (daylight < 0.0f) ? 0.0f : (daylight > 1.0f) ? 1.0f : daylight;
+
+	Coord3D &ray = sun.lightPos;
+	const Real length = (Real)sqrt( ray.x * ray.x + ray.y * ray.y + ray.z * ray.z );
+	const Real sine = -ray.z / length;
+	if( sine > WARM_SUN_SINE )
+	{
+		Real flat = (Real)sqrt( ray.x * ray.x + ray.y * ray.y );
+		if( flat < 0.0001f )
+		{
+			ray.x = 0.7071f;
+			ray.y = -0.7071f;
+			flat = 1.0f;
+		}
+		const Real cosine = (Real)sqrt( 1.0f - WARM_SUN_SINE * WARM_SUN_SINE );
+		ray.x = ray.x / flat * cosine * length;
+		ray.y = ray.y / flat * cosine * length;
+		ray.z = -WARM_SUN_SINE * length;
+		Real gain = sine / WARM_SUN_SINE;
+		if( gain > WARM_SUN_MOST )
+			gain = WARM_SUN_MOST;
+		scaleLight( sun.diffuse, gain );
+	}
+
+	if( goldSun )
+		tintLight( sun.diffuse, 1.0f + 0.16f * warmth, 1.0f + 0.02f * warmth, 1.0f - 0.26f * warmth );
+	tintLight( sun.ambient, 1.0f - 0.05f * warmth, 1.0f, 1.0f + 0.10f * warmth );
 }
 
 //-------------------------------------------------------------------------------------------------

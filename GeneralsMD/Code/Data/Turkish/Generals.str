@@ -19300,7 +19300,7 @@ GUI:SocketRedirected
 END
 
 CONTROLBAR:ToolTipEvacuateAt
-"Seçtiğiniz yere gidip tüm birliklere çıkma emri verin\nAlt: burada indir"
+"Seçtiğiniz yere gidip tüm birliklere çıkma emri verin\nAlt veya tekrar basın: burada indir"
 END
 
 GUI:OptionsTabWater

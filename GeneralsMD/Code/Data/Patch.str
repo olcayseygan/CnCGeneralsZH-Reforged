@@ -5027,7 +5027,7 @@ END
 
 // A vehicle transport's Evacuate asks for a spot, the transport goes there and empties; Alt empties it where it stands
 CONTROLBAR:ToolTipEvacuateAt
-"Go to the chosen spot and order all units to exit\nAlt: unload here"
+"Go to the chosen spot and order all units to exit\nAlt or press again: unload here"
 END
 
 GUI:OptionsTabWater

@@ -1030,8 +1030,11 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 		{
 			// A vehicle transport asks where: Command_EvacuateAt's cursor takes the spot, and the
 			// transport drives or flies there and unloads (AIGroup::groupEvacuate).  Alt held, here or
-			// with the button's key (HotKeyTranslator), empties it where it stands, as a building does
+			// with the button's key (HotKeyTranslator), empties it where it stands, as a building does.
+			// So does a second press while the spot is still being asked for
 			const CommandButton *evacuateAt = TheKeyboard->isAlt() ? NULL : findCommandButton( "Command_EvacuateAt" );
+			if( evacuateAt && TheInGameUI->getGUICommand() == evacuateAt )
+				evacuateAt = NULL;
 			if( evacuateAt )
 			{
 				const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();

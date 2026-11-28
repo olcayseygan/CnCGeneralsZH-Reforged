@@ -271,3 +271,116 @@ TEST(fracture_a_ruin_piece_over_air_drops_and_takes_its_load_with_it)
 	dropGaps( std::vector<Box>( corner, corner + 2 ), std::vector<float>( 2, 0.0f ), 1.5f, 0.5f, gaps );
 	CHECK_NEAR( 6.0f, gaps[1], 1e-6f );
 }
+
+namespace {
+
+MeshLook mesh( const char *full, const char *texture0, const char *texture1 = NULL )
+{
+	MeshLook m;
+	m.mesh = meshKey( full );
+	m.textures.push_back( textureKey( texture0 ) );
+	if( texture1 )
+		m.textures.push_back( textureKey( texture1 ) );
+	return m;
+}
+
+}	// namespace
+
+/// Names as the look follows them: a mesh past its container, a texture without its extension, a model past the asset manager's prefix.
+TEST(fracture_look_keys_drop_container_extension_and_copy_prefix)
+{
+	CHECK( meshKey( "ABBtCmdHQ_D.WALL01" ) == "wall01" );
+	CHECK( meshKey( "ABBtCmdHQ.Wall01" ) == meshKey( "abbtcmdhq_dn.WALL01" ) );
+	CHECK( meshKey( "NOCONTAINER" ) == "nocontainer" );
+	CHECK( textureKey( "ABBtCmdHQ_D.tga" ) == "abbtcmdhq_d" );
+	CHECK( textureKey( "abbtcmdhq_d.dds" ) == textureKey( "ABBtCmdHQ_D.TGA" ) );
+	CHECK( modelKey( "UBScudStrm_A1" ) == "ubscudstrm_a1" );
+	CHECK( modelKey( "#16711680!1!>#ubscudstrm_a1" ) == "ubscudstrm_a1" );
+	CHECK( modelKey( "#K3#16711680!1!>#ubscudstrm_a1" ) == "ubscudstrm_a1" );
+}
+
+/** A damaged or night copy keeps the meshes: each takes its namesake's texture in the same slot, a copy
+	with an extra plane first is matched by name and not by place, and only a copy renamed throughout is
+	matched by place. */
+TEST(fracture_look_finds_each_meshs_counterpart_by_name_then_by_place)
+{
+	std::vector<MeshLook> cut;
+	cut.push_back( mesh( "UBCmdHQ.WALL01", "UBCmdHQ.tga", "UBCmdHQ2.tga" ) );
+	cut.push_back( mesh( "UBCmdHQ.ROOF", "UBCmdHQ2.tga" ) );
+	unsigned at = 9, slot = 9;
+	CHECK( findTexture( cut, textureKey( "ubcmdhq2.TGA" ), at, slot ) );
+	CHECK_EQ( 0u, at );
+	CHECK_EQ( 1u, slot );
+	CHECK( !findTexture( cut, textureKey( "LWFrag_InnerStone.tga" ), at, slot ) );
+
+	std::vector<MeshLook> damaged;
+	damaged.push_back( mesh( "UBCmdHQ_D.ROOF", "UBCmdHQ2_D.tga" ) );
+	damaged.push_back( mesh( "UBCmdHQ_D.WALL01", "UBCmdHQ_D.tga", "UBCmdHQ2_D.tga" ) );
+	CHECK_EQ( 1, counterpart( cut, 0, damaged ) );
+	CHECK_EQ( 0, counterpart( cut, 1, damaged ) );
+	CHECK_EQ( 2u, sharedMeshes( cut, damaged ) );
+
+	// UBCmdHQC: an extra PLANE01 first shifts every place by one; the names still find them
+	std::vector<MeshLook> shifted;
+	shifted.push_back( mesh( "UBCmdHQC.PLANE01", "Decal.tga" ) );
+	shifted.push_back( mesh( "UBCmdHQC.WALL01", "UBCmdHQC.tga", "UBCmdHQ2.tga" ) );
+	shifted.push_back( mesh( "UBCmdHQC.ROOF", "UBCmdHQ2.tga" ) );
+	CHECK_EQ( 1, counterpart( cut, 0, shifted ) );
+	CHECK_EQ( 2, counterpart( cut, 1, shifted ) );
+
+	// a door state's other model: as many meshes, one name shared, the other mesh is not there
+	std::vector<MeshLook> door;
+	door.push_back( mesh( "NBNMissle_A2.DOOR", "Door.tga" ) );
+	door.push_back( mesh( "NBNMissle_A2.ROOF", "UBCmdHQ2.tga" ) );
+	CHECK_EQ( -1, counterpart( cut, 0, door ) );
+	CHECK_EQ( 1, counterpart( cut, 1, door ) );
+
+	// renamed throughout, as many meshes: by place; a different count: nothing
+	std::vector<MeshLook> renamed;
+	renamed.push_back( mesh( "ABBtCmdHQ_A.M1", "A.tga", "B.tga" ) );
+	renamed.push_back( mesh( "ABBtCmdHQ_A.M2", "B.tga" ) );
+	CHECK_EQ( 0u, sharedMeshes( cut, renamed ) );
+	CHECK_EQ( 1, counterpart( cut, 1, renamed ) );
+	renamed.pop_back();
+	CHECK_EQ( -1, counterpart( cut, 0, renamed ) );
+	CHECK_EQ( -1, counterpart( cut, 5, damaged ) );
+}
+
+/** The draw the fragments stand in for: the highest score, the first of equals, never one with no
+	model now (the scaffold's draw outside construction, a main draw at NONE), and with every score 0
+	the first that has a model. */
+TEST(fracture_picks_the_draw_by_score_not_by_module_order)
+{
+	std::vector<int> scud;			// ReplaceModule put the main draw last: the missile's draw first
+	scud.push_back( 2 );
+	scud.push_back( 27 + 28 );
+	CHECK_EQ( 1, pickDraw( scud ) );
+	std::vector<int> awaiting;	// placed, not started: main at NONE, the scaffold shares nothing
+	awaiting.push_back( -1 );
+	awaiting.push_back( 0 );
+	CHECK_EQ( 1, pickDraw( awaiting ) );		// the rule's fallback; makeFracture refuses before it asks
+	std::vector<int> ties;
+	ties.push_back( -1 );
+	ties.push_back( 5 );
+	ties.push_back( 5 );
+	CHECK_EQ( 1, pickDraw( ties ) );
+	std::vector<int> renamed;
+	renamed.push_back( -1 );
+	renamed.push_back( 0 );
+	renamed.push_back( 0 );
+	CHECK_EQ( 1, pickDraw( renamed ) );
+	CHECK_EQ( -1, pickDraw( std::vector<int>( 2, -1 ) ) );
+	CHECK_EQ( -1, pickDraw( std::vector<int>() ) );
+}
+
+/// Retail's damaged sheets are <name>_D; the lane art's <name>D comes second.
+TEST(fracture_damaged_sheet_names_try_retail_first)
+{
+	std::string names[2];
+	CHECK( damagedNames( "ABBtCmdHQ.tga", names ) );
+	CHECK( names[0] == "ABBtCmdHQ_D.tga" );
+	CHECK( names[1] == "ABBtCmdHQD.tga" );
+	CHECK( damagedNames( "LWFort_Stone.dds", names ) );
+	CHECK( names[1] == "LWFort_StoneD.dds" );
+	CHECK( !damagedNames( "NoExtension", names ) );
+}

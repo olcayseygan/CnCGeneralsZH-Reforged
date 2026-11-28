@@ -178,6 +178,8 @@ struct Shared
 	std::vector<Matrix3D> boneInverse;							///< per slot: the bone's built pose, inverted
 	std::vector<TextureClass *> textures, damaged;	///< per material; damaged is the D sheet the damaged models wear
 	std::vector<ShaderClass> shaders;
+	std::vector<Fracture::MeshLook> cutLook;				///< the cut model's meshes and their textures, sub-object order
+	std::vector<Int> lookMesh, lookSlot;						///< per material: where its texture sits in cutLook, -1 nowhere (an inner face)
 	VertexMaterialClass *material;
 	Int users;																			///< structures drawn from it now
 	std::vector<VolumeEdge> edges;									///< the stencil volumes', made at the first need
@@ -402,19 +404,55 @@ ShaderClass shaderFor( const Fracture::Material &m )
 	return shader;
 }
 
-/// The damaged models' sheet for a texture, LWFort_Stone.tga to LWFort_StoneD.tga, when there is one.
+/** The damaged models' sheet for a texture when there is one: retail's ABBtCmdHQ.tga to ABBtCmdHQ_D.tga,
+	or the lane art's LWFort_Stone.tga to LWFort_StoneD.tga.  Only for a material the live model's own
+	look does not reach (takeLook). */
 TextureClass *damagedTexture( const char *name )
 {
-	AsciiString damaged = name;
-	const char *dot = strrchr( name, '.' );
-	if( dot == NULL )
+	std::string names[2];
+	if( !Fracture::damagedNames( name, names ) )
 		return NULL;
-	damaged.format( "%.*sD%s", (int)( dot - name ), name, dot );
-	AsciiString path;
-	path.format( "Art/Textures/%s", damaged.str() );
-	if( !TheFileSystem->doesFileExist( path.str() ) )
-		return NULL;
-	return WW3DAssetManager::Get_Instance()->Get_Texture( damaged.str() );
+	for( Int k = 0; k < 2; ++k )
+	{
+		// the asset manager serves a .tga name from a .dds beside it
+		const size_t dot = names[k].rfind( '.' );
+		const std::string dds = names[k].substr( 0, dot ) + ".dds";
+		AsciiString path, ddsPath;
+		path.format( "Art/Textures/%s", names[k].c_str() );
+		ddsPath.format( "Art/Textures/%s", dds.c_str() );
+		if( TheFileSystem->doesFileExist( path.str() ) || TheFileSystem->doesFileExist( ddsPath.str() ) )
+			return WW3DAssetManager::Get_Instance()->Get_Texture( names[k].c_str() );
+	}
+	return NULL;
+}
+
+/** A model's meshes as the fragments' look follows them, in sub-object order (every level of an HLOD),
+	and in textures, when asked, each texture they wear, peeked: good while the model lives. */
+void modelLook( RenderObjClass *model, std::vector<Fracture::MeshLook> &out, std::vector< std::vector<TextureClass *> > *textures )
+{
+	out.clear();
+	if( textures )
+		textures->clear();
+	for( Int i = 0; model && i < model->Get_Num_Sub_Objects(); ++i )
+	{
+		RenderObjClass *sub = model->Get_Sub_Object( i );
+		out.push_back( Fracture::MeshLook() );
+		if( textures )
+			textures->push_back( std::vector<TextureClass *>() );
+		if( sub == NULL )
+			continue;
+		out.back().mesh = Fracture::meshKey( sub->Get_Name() );
+		MaterialInfoClass *info = sub->Get_Material_Info();
+		for( Int k = 0; info && k < info->Texture_Count(); ++k )
+		{
+			TextureClass *texture = info->Peek_Texture( k );
+			out.back().textures.push_back( Fracture::textureKey( texture ? texture->Get_Texture_Name().Peek_Buffer() : "" ) );
+			if( textures )
+				textures->back().push_back( texture );
+		}
+		REF_PTR_RELEASE( info );
+		REF_PTR_RELEASE( sub );
+	}
 }
 
 /** The fragments cut from the model the file system serves.  A Reforged batch's rebuilt model (Detailed
@@ -477,6 +515,7 @@ Bool load( Shared &s )
 		}
 		slotOfPart[p] = (Int)slot;
 	}
+	modelLook( model, s.cutLook, NULL );
 	REF_PTR_RELEASE( model );
 
 	// chunks of whole fragments, the triangles of each by material
@@ -555,6 +594,11 @@ Bool load( Shared &s )
 		s.textures.push_back( WW3DAssetManager::Get_Instance()->Get_Texture( a.materials[m].texture ) );
 		s.damaged.push_back( ( a.materials[m].flags & Fracture::MATERIAL_INNER ) ? NULL : damagedTexture( a.materials[m].texture ) );
 		s.shaders.push_back( shaderFor( a.materials[m] ) );
+		unsigned mesh = 0, slot = 0;
+		const Bool worn = !( a.materials[m].flags & Fracture::MATERIAL_INNER )
+			&& Fracture::findTexture( s.cutLook, Fracture::textureKey( a.materials[m].texture ), mesh, slot );
+		s.lookMesh.push_back( worn ? (Int)mesh : -1 );
+		s.lookSlot.push_back( worn ? (Int)slot : -1 );
 	}
 	s.material = NEW_REF( VertexMaterialClass, () );		// the art's "default": white ambient and diffuse, lit
 	s.material->Set_Lighting( true );
@@ -606,15 +650,47 @@ Bool castsVolumeWhole( const Drawable *draw )
 		&& !tmplate->isKindOf( KINDOF_PROJECTILE );
 }
 
-W3DModelDraw *modelDrawOf( Drawable *draw )
+/** Placed and not started, going up, left half built or being sold.  The model then is NONE (the draw
+	after it shows the scaffold) or clipped by the construction share, and the fragments are the whole
+	building: no fragments are made then, and no fall is staged. */
+Bool underConstruction( const Drawable *draw )
 {
+	const ModelConditionFlags &flags = draw->getModelConditionFlags();
+	return flags.test( MODELCONDITION_AWAITING_CONSTRUCTION ) || flags.test( MODELCONDITION_PARTIALLY_CONSTRUCTED )
+		|| flags.test( MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED ) || flags.test( MODELCONDITION_SOLD );
+}
+
+/** The W3DModelDraw the fragments stand in for, picked once when they are made and kept for good (a
+	door or attack state's other model then stays this draw's): of the draws with a model now, the one
+	drawing the cut model itself, else the one sharing the most meshes with it, the first in module
+	order of equals; with none sharing a mesh (a general's copy renamed throughout), the first with a
+	model.  Module order alone is no rule: ReplaceModule removes and appends, so the Scud Storm's main
+	draw comes after the one that draws its missile, and the scaffold's draw comes after the main one. */
+W3DModelDraw *pickModelDraw( Drawable *draw, const Shared &s )
+{
+	std::vector<W3DModelDraw *> draws;
+	std::vector<int> shared;
+	std::vector<Fracture::MeshLook> look;
 	for( DrawModule **dm = draw->getDrawModulesNonDirty(); *dm; ++dm )
 	{
 		ObjectDrawInterface *di = (*dm)->getObjectDrawInterface();
-		if( di && ( (W3DModelDraw *)di )->getRenderObject() )
-			return (W3DModelDraw *)di;
+		if( di == NULL )
+			continue;
+		W3DModelDraw *modelDraw = (W3DModelDraw *)di;
+		RenderObjClass *model = modelDraw->getRenderObject();
+		Int score = -1;
+		if( model )
+		{
+			modelLook( model, look, NULL );
+			score = (Int)Fracture::sharedMeshes( s.cutLook, look );
+			if( model->Get_Name() && Fracture::modelKey( model->Get_Name() ) == Fracture::modelKey( s.name.str() ) )
+				score += (Int)s.cutLook.size() + 1;
+		}
+		draws.push_back( modelDraw );
+		shared.push_back( score );
 	}
-	return NULL;
+	const int pick = Fracture::pickDraw( shared );
+	return pick < 0 ? NULL : draws[pick];
 }
 
 }	// namespace
@@ -627,7 +703,7 @@ class FractureRenderObjClass : public RenderObjClass
 {
 public:
 
-	FractureRenderObjClass( Shared *shared, Drawable *drawable, const std::vector<AsciiString> &gunBones );
+	FractureRenderObjClass( Shared *shared, Drawable *drawable, W3DModelDraw *modelDraw, const std::vector<AsciiString> &gunBones );
 	~FractureRenderObjClass();
 
 	virtual RenderObjClass *Clone( void ) const { return NULL; }		///< never copied: a ghost copies the model
@@ -636,7 +712,8 @@ public:
 	virtual void Get_Obj_Space_Bounding_Sphere( SphereClass &sphere ) const;
 	virtual void Get_Obj_Space_Bounding_Box( AABoxClass &box ) const;
 
-	void follow( RenderObjClass *model );		///< the W3DModelDraw's model as it stands this frame
+	void follow( void );										///< the picked W3DModelDraw's model as it stands this frame
+	void standDown( void );									///< sold after a hit: the model back, shown and casting, before this goes
 	void hit( const Coord3D &pos, Real radius );
 	void heardFrom( const Coord3D &source ) { m_hasSource = TRUE; m_source.Set( source.x, source.y, source.z ); }	///< who fired the last hit
 	void collapse( Bool over );									///< over: it fell before a load, straight to the ruin
@@ -688,6 +765,7 @@ private:
 	};
 
 	void computeSlots( void );
+	void takeLook( void );
 	Matrix3D fragmentWorld( unsigned fragment ) const { return m_slotWorld[m_shared->slotOf[fragment]]; }
 	Matrix3D movingWorld( const Moving &m ) const;
 	Bool castRayAt( RayCollisionTestClass &raytest, unsigned fragment, const Matrix3D &world ) const;
@@ -713,7 +791,9 @@ private:
 	Vector3 m_source;
 	Bool m_hasSource;
 	Drawable *m_drawable;
+	W3DModelDraw *m_modelDraw;						///< the drawable's draw it stands in for (pickModelDraw), NULL once orphaned
 	RenderObjClass *m_model;
+	std::vector<TextureClass *> m_look;		///< per material: the texture the live model wears there, NULL for the file's own (takeLook)
 	std::vector<Int> m_modelBones;				///< per slot, in m_model
 	std::vector<Matrix3D> m_slotWorld;
 	Matrix3D m_root;
@@ -743,8 +823,9 @@ private:
 };
 
 //-------------------------------------------------------------------------------------------------
-FractureRenderObjClass::FractureRenderObjClass( Shared *shared, Drawable *drawable, const std::vector<AsciiString> &gunBones ) :
-	m_shared( shared ), m_collapse( NULL ), m_way( -1 ), m_source( 0, 0, 0 ), m_hasSource( FALSE ), m_drawable( drawable ), m_model( NULL ), m_root( true ), m_pileOrigin( 0, 0, 0 ),
+FractureRenderObjClass::FractureRenderObjClass( Shared *shared, Drawable *drawable, W3DModelDraw *modelDraw, const std::vector<AsciiString> &gunBones ) :
+	m_shared( shared ), m_collapse( NULL ), m_way( -1 ), m_source( 0, 0, 0 ), m_hasSource( FALSE ), m_drawable( drawable ), m_modelDraw( modelDraw ),
+	m_model( NULL ), m_look( shared->asset.materials.size(), (TextureClass *)NULL ), m_root( true ), m_pileOrigin( 0, 0, 0 ),
 	m_now( -1.0f ), m_deathTime( 0.0f ), m_removedVolume( 0.0f ), m_dustLeft( MAX_DUST ), m_dirty( TRUE ),
 	m_collapsing( FALSE ), m_dropped( FALSE ), m_settled( FALSE ), m_ruin( FALSE ), m_damagedLook( FALSE ),
 	m_houseMaterial( NULL ), m_ruinRoot( true ), m_ruinAt( -1.0f ), m_shownVersion( 0 ), m_movingVolumeAt( 0.0f ), m_castsVolume( castsVolumeWhole( drawable ) )
@@ -769,6 +850,8 @@ FractureRenderObjClass::~FractureRenderObjClass()
 {
 	REF_PTR_RELEASE( m_model );
 	REF_PTR_RELEASE( m_houseMaterial );
+	for( size_t m = 0; m < m_look.size(); ++m )
+		REF_PTR_RELEASE( m_look[m] );
 	for( size_t c = 0; c < m_standingIndices.size(); ++c )
 		REF_PTR_RELEASE( m_standingIndices[c] );
 	for( size_t c = 0; c < m_ruinVertices.size(); ++c )
@@ -931,13 +1014,17 @@ void FractureRenderObjClass::Get_Obj_Space_Bounding_Sphere( SphereClass &sphere 
 
 //-------------------------------------------------------------------------------------------------
 /** Hide the model it stands in for and take its place: its root and its bones this frame.  Animation
-	hidden, which nothing else sets on a whole model, so the drawable's own hiding stays its own. */
+	hidden, which nothing else sets on a whole model, so the drawable's own hiding stays its own.  Only
+	the picked draw's model: one that went to NONE leaves the fragments where it last stood, and the
+	draw after it (a scaffold) is never taken for it. */
 //-------------------------------------------------------------------------------------------------
-void FractureRenderObjClass::follow( RenderObjClass *model )
+void FractureRenderObjClass::follow( void )
 {
+	RenderObjClass *model = m_modelDraw ? m_modelDraw->getRenderObject() : NULL;
 	if( model != m_model )
 	{
 		REF_PTR_SET( m_model, model );
+		takeLook();
 		for( size_t s = 1; s < m_modelBones.size(); ++s )
 			m_modelBones[s] = model ? model->Get_Bone_Index( m_shared->boneNames[s].str() ) : 0;
 		// the side's colour as the model wears it (the asset manager tints a HOUSECOLOR mesh's vertex
@@ -974,6 +1061,18 @@ void FractureRenderObjClass::follow( RenderObjClass *model )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A structure sold after a hit goes down by its construction share, which the fragments cannot show:
+	its model comes back whole for the sale, its own shadow with it (holdModelVolume turned it off). */
+//-------------------------------------------------------------------------------------------------
+void FractureRenderObjClass::standDown( void )
+{
+	if( m_model )
+		m_model->Set_Animation_Hidden( false );
+	if( m_modelDraw && m_drawable )
+		m_modelDraw->setShadowsEnabled( m_drawable->getShadowsEnabled() );
+}
+
+//-------------------------------------------------------------------------------------------------
 void FractureRenderObjClass::computeSlots( void )
 {
 	m_slotWorld[0] = m_root;
@@ -984,6 +1083,47 @@ void FractureRenderObjClass::computeSlots( void )
 		else
 			m_slotWorld[s] = m_root;		// a model without the bone (the rubble): where it was built
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The look of the model the fragments stand in for, taken at each model swap: a fragment's part is a
+	mesh of the cut model, and its damaged, night, snow and garrisoned copies and a general's own keep
+	those meshes, so each material takes the texture the live model's counterpart mesh wears in the
+	same place (Fracture::counterpart).  Team colour and a skin come along, since the live model's
+	textures carry them.  Only a material the live model does not reach keeps the file's texture and the
+	damaged sheet rule.  A model gone to NONE keeps the last. */
+//-------------------------------------------------------------------------------------------------
+void FractureRenderObjClass::takeLook( void )
+{
+	if( m_model == NULL )
+		return;
+	for( size_t m = 0; m < m_look.size(); ++m )
+		REF_PTR_RELEASE( m_look[m] );
+	std::vector<Fracture::MeshLook> look;
+	std::vector< std::vector<TextureClass *> > worn;
+	modelLook( m_model, look, &worn );
+	const Fracture::Asset &a = m_shared->asset;
+	Int taken = 0, reached = 0;
+	for( size_t m = 0; m < m_look.size(); ++m )
+	{
+		if( m_shared->lookMesh[m] < 0 )
+			continue;
+		// a counterpart listing other textures than the cut mesh did is another mesh under the name: no slot of it is taken
+		const int mesh = Fracture::counterpart( m_shared->cutLook, (unsigned)m_shared->lookMesh[m], look );
+		if( mesh < 0 || look[mesh].textures.size() != m_shared->cutLook[m_shared->lookMesh[m]].textures.size()
+			|| worn[mesh][m_shared->lookSlot[m]] == NULL )
+			continue;
+		TextureClass *texture = worn[mesh][m_shared->lookSlot[m]];
+		if( texture->Get_Asset_Type() != TextureBaseClass::TEX_REGULAR )
+			continue;		// an environment or cube map in that slot: another mesh under the name
+		// kept even when it is the file's own sheet, so a damaged state the live model shows clean stays clean
+		REF_PTR_SET( m_look[m], texture );
+		++reached;
+		if( look[mesh].textures[m_shared->lookSlot[m]] != Fracture::textureKey( a.materials[m].texture ) )
+			++taken;
+	}
+	DEBUG_LOG( ( "FRACTURE LOOK %s from %s: %d of %d materials reached, %d of them on another sheet than the file's\n", m_shared->name.str(),
+		m_model->Get_Name(), reached, (Int)m_look.size(), taken ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1748,6 +1888,7 @@ void FractureRenderObjClass::tick( void )
 void FractureRenderObjClass::orphan( void )
 {
 	m_drawable = NULL;
+	m_modelDraw = NULL;				// the drawable's module, going with it
 	Set_User_Data( NULL );		// the drawable's info goes with it: the scene draws this as plain scenery
 	Set_Collision_Type( 0 );	// and nothing picks it
 }
@@ -1786,10 +1927,12 @@ Bool FractureRenderObjClass::orphanTick( void )
 //-------------------------------------------------------------------------------------------------
 void FractureRenderObjClass::applyMaterial( unsigned short m )
 {
-	TextureClass *damaged = m_damagedLook ? m_shared->damaged[m] : NULL;
+	TextureClass *texture = m_look[m];
+	if( texture == NULL )
+		texture = m_damagedLook && m_shared->damaged[m] ? m_shared->damaged[m] : m_shared->textures[m];
 	const Bool house = m_houseMaterial && ( m_shared->asset.materials[m].flags & Fracture::MATERIAL_HOUSE );
 	DX8Wrapper::Set_Material( house ? m_houseMaterial : m_shared->material );
-	DX8Wrapper::Set_Texture( 0, damaged ? damaged : m_shared->textures[m] );
+	DX8Wrapper::Set_Texture( 0, texture );
 	DX8Wrapper::Set_Shader( m_shared->shaders[m] );
 }
 
@@ -1894,8 +2037,7 @@ Bool FractureRenderObjClass::castsShadow( void )
 	if( !Is_In_Scene() || ( m_drawable && m_drawable->isDrawableEffectivelyHidden() ) )
 		return FALSE;		// an orphan (no drawable) casts while it lies
 	// a building in the fog keeps its shadow under its ghost, by the model's own rule
-	const W3DModelDraw *modelDraw = m_drawable ? modelDrawOf( m_drawable ) : NULL;
-	return modelDraw == NULL || !modelDraw->isShadowHiddenByShroud();
+	return m_modelDraw == NULL || !m_modelDraw->isShadowHiddenByShroud();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1972,9 +2114,8 @@ void FractureRenderObjClass::holdModelVolume( void )
 	m_castsVolume = castsVolumeWhole( m_drawable );
 	if( !m_castsVolume || ( TheGlobalData->m_shadowMapOnly && SunShadow::OwnsSceneShadows( DX8Wrapper::_Get_D3D_Device() ) ) )
 		return;		// the sun's map alone: the hidden model is in no shadow pass
-	W3DModelDraw *modelDraw = modelDrawOf( m_drawable );
-	if( modelDraw )
-		modelDraw->holdShadowOff();
+	if( m_modelDraw )
+		m_modelDraw->holdShadowOff();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2132,14 +2273,6 @@ W3DFractureDraw::~W3DFractureDraw( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/// The model the drawable's W3DModelDraw shows this frame, which the fragments stand in for.
-static RenderObjClass *modelOf( Drawable *draw )
-{
-	W3DModelDraw *modelDraw = modelDrawOf( draw );
-	return modelDraw ? modelDraw->getRenderObject() : NULL;
-}
-
-//-------------------------------------------------------------------------------------------------
 void W3DFractureDraw::doDrawModule( const Matrix3D *transformMtx )
 {
 	Drawable *draw = getDrawable();
@@ -2158,7 +2291,16 @@ void W3DFractureDraw::doDrawModule( const Matrix3D *transformMtx )
 	m_loadedKnockedAt.clear();
 	if( m_fracture == NULL )
 		return;
-	m_fracture->follow( modelOf( draw ) );
+	if( !m_fracture->isCollapsing() && underConstruction( draw ) )
+	{
+		// sold after a hit: the model takes the sale down as it would have, holes and debris gone
+		m_fracture->standDown();
+		s_modules.erase( std::remove( s_modules.begin(), s_modules.end(), this ), s_modules.end() );
+		m_fracture->Remove();
+		REF_PTR_RELEASE( m_fracture );
+		return;
+	}
+	m_fracture->follow();
 	if( rubble )
 		m_fracture->collapse( FALSE );
 	if( m_fracture->isCollapsing() && !SunShadow::OwnsSceneShadows( DX8Wrapper::_Get_D3D_Device() ) )
@@ -2174,19 +2316,21 @@ void W3DFractureDraw::doDrawModule( const Matrix3D *transformMtx )
 }
 
 //-------------------------------------------------------------------------------------------------
-/// The fragments in the model's place, from its pose now.  FALSE with nothing drawn or no art.
+/** The fragments in the model's place, from its pose now.  FALSE with nothing drawn, no art, or the
+	building not finished (underConstruction).  The draw they stand in for is picked here, once. */
 Bool W3DFractureDraw::makeFracture( void )
 {
 	if( m_fracture )
 		return TRUE;
-	if( TheGlobalData->m_headless || W3DDisplay::m_3DScene == NULL || W3DDisplay::m_assetManager == NULL )
+	if( TheGlobalData->m_headless || W3DDisplay::m_3DScene == NULL || W3DDisplay::m_assetManager == NULL || underConstruction( getDrawable() ) )
 		return FALSE;
 	Shared *shared = sharedFor( getW3DFractureDrawModuleData()->m_fractureFile );
-	RenderObjClass *model = modelOf( getDrawable() );
-	if( shared == NULL || model == NULL )
+	W3DModelDraw *modelDraw = shared ? pickModelDraw( getDrawable(), *shared ) : NULL;
+	RenderObjClass *model = modelDraw ? modelDraw->getRenderObject() : NULL;
+	if( model == NULL )
 		return FALSE;
-	m_fracture = NEW_REF( FractureRenderObjClass, ( shared, getDrawable(), getW3DFractureDrawModuleData()->m_gunBones ) );
-	m_fracture->follow( model );
+	m_fracture = NEW_REF( FractureRenderObjClass, ( shared, getDrawable(), modelDraw, getW3DFractureDrawModuleData()->m_gunBones ) );
+	m_fracture->follow();
 	// what the swap trades: the fragments have one level, the model may have been drawing a coarser one
 	const Bool levels = model->Class_ID() == RenderObjClass::CLASSID_HLOD;
 	DEBUG_LOG( ( "FRACTURE TAKES OVER %s frame %d: the model drew level %d of %d, %d triangles; the fragments draw %d\n",
@@ -2312,8 +2456,15 @@ Bool W3DFractureDraw::stagesCollapse( const Drawable *draw )
 {
 	static const NameKeyType key = NAMEKEY( "W3DFractureDraw" );
 	for( const DrawModule **dm = draw->getDrawModules(); *dm; ++dm )
-		if( (*dm)->getModuleNameKey() == key )
-			return sharedFor( ( (const W3DFractureDraw *)*dm )->getW3DFractureDrawModuleData()->m_fractureFile ) != NULL;
+	{
+		if( (*dm)->getModuleNameKey() != key )
+			continue;
+		const W3DFractureDraw *fracture = (const W3DFractureDraw *)*dm;
+		if( fracture->m_fracture )
+			return TRUE;
+		// unfinished, no fragments will be made for it: the Collapse option takes it down as before
+		return !underConstruction( draw ) && sharedFor( fracture->getW3DFractureDrawModuleData()->m_fractureFile ) != NULL;
+	}
 	return FALSE;
 }
 

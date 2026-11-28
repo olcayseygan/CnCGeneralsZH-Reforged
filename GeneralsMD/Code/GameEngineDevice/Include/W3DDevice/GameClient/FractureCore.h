@@ -34,7 +34,9 @@
 #define FRACTURE_CORE_H
 
 #include <algorithm>
+#include <ctype.h>
 #include <math.h>
+#include <string>
 #include <string.h>
 #include <vector>
 
@@ -508,6 +510,120 @@ inline void knockOut( const Asset &a, std::vector<unsigned char> &standing, cons
 		else
 			standing[i] = 1;
 	}
+}
+
+/** A W3D name as the fragments' look follows it, lower case: a mesh by its part after the container's
+	dot (ABBtCmdHQ_D.WALL01 and ABBtCmdHQ.WALL01 are both wall01), a texture without its extension. */
+inline std::string meshKey( const char *full )
+{
+	const char *dot = full ? strchr( full, '.' ) : NULL;
+	std::string key = dot ? dot + 1 : ( full ? full : "" );
+	for( size_t i = 0; i < key.size(); ++i )
+		key[i] = (char)tolower( (unsigned char)key[i] );
+	return key;
+}
+
+inline std::string textureKey( const char *name )
+{
+	std::string key = name ? name : "";
+	const size_t dot = key.rfind( '.' );
+	if( dot != std::string::npos )
+		key.resize( dot );
+	for( size_t i = 0; i < key.size(); ++i )
+		key[i] = (char)tolower( (unsigned char)key[i] );
+	return key;
+}
+
+/// One mesh of a model, in its sub-object order: its key and its textures' keys, as its material info lists them.
+struct MeshLook
+{
+	std::string mesh;
+	std::vector<std::string> textures;
+};
+
+/// Where a texture sits in a model's meshes, the first mesh that wears it.  FALSE when none does.
+inline bool findTexture( const std::vector<MeshLook> &model, const std::string &texture, unsigned &mesh, unsigned &slot )
+{
+	for( size_t m = 0; m < model.size(); ++m )
+		for( size_t k = 0; k < model[m].textures.size(); ++k )
+			if( model[m].textures[k] == texture )
+			{
+				mesh = (unsigned)m;
+				slot = (unsigned)k;
+				return true;
+			}
+	return false;
+}
+
+/** A model's name as the asset manager's copies carry it, lower case: a team coloured, scaled or
+	retextured copy is "#<colour>!<scale>!<old>><new>#<name>", a skin's "#K<skin>" before that. */
+inline std::string modelKey( const char *name )
+{
+	const char *hash = name ? strrchr( name, '#' ) : NULL;
+	std::string key = hash ? hash + 1 : ( name ? name : "" );
+	for( size_t i = 0; i < key.size(); ++i )
+		key[i] = (char)tolower( (unsigned char)key[i] );
+	return key;
+}
+
+/// How many of the cut model's meshes have a namesake in another model.
+inline unsigned sharedMeshes( const std::vector<MeshLook> &cut, const std::vector<MeshLook> &other )
+{
+	unsigned shared = 0;
+	for( size_t c = 0; c < cut.size(); ++c )
+		for( size_t m = 0; m < other.size(); ++m )
+			if( other[m].mesh == cut[c].mesh )
+			{
+				++shared;
+				break;
+			}
+	return shared;
+}
+
+/** The mesh of another model (the damaged, night, snow or garrisoned copy, a general's own) that stands
+	for mesh `mesh` of the model the fragments were cut from: the first of its name.  Only a model that
+	shares no mesh name at all (renamed throughout) is matched by place, and then only when both list as
+	many meshes; a model that shares some names and lacks this one (a door state's other model, a copy
+	with an extra plane first) has no counterpart for it.  -1 for none. */
+inline int counterpart( const std::vector<MeshLook> &cut, unsigned mesh, const std::vector<MeshLook> &other )
+{
+	if( mesh >= cut.size() )
+		return -1;
+	for( size_t m = 0; m < other.size(); ++m )
+		if( other[m].mesh == cut[mesh].mesh )
+			return (int)m;
+	return other.size() == cut.size() && sharedMeshes( cut, other ) == 0 ? (int)mesh : -1;
+}
+
+/** The draw a structure's fragments stand in for, from each of its model draws in module order: a
+	score, -1 for one drawing no model now (pickModelDraw: the meshes it shares with the cut model, and
+	more than all of them for the cut model itself).  The highest wins and the first of equals; with
+	every score 0 the first that draws a model.  -1 when none draws one. */
+inline int pickDraw( const std::vector<int> &shared )
+{
+	int best = -1, first = -1;
+	for( size_t i = 0; i < shared.size(); ++i )
+	{
+		if( shared[i] < 0 )
+			continue;
+		if( first < 0 )
+			first = (int)i;
+		if( shared[i] > 0 && ( best < 0 || shared[i] > shared[best] ) )
+			best = (int)i;
+	}
+	return best >= 0 ? best : first;
+}
+
+/// The damaged sheets a texture may have, in the order to try them: retail's <name>_D, then <name>D.
+inline bool damagedNames( const char *name, std::string out[2] )
+{
+	const char *dot = name ? strrchr( name, '.' ) : NULL;
+	if( dot == NULL )
+		return false;
+	const std::string base( name, dot - name );
+	out[0] = base + "_D" + dot;
+	out[1] = base + "D" + dot;
+	return true;
 }
 
 }	// namespace Fracture

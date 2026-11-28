@@ -25,6 +25,11 @@
 // it landed (FractureCore.h) and throws them as debris; at zero health the whole structure comes down
 // by its baked collapse, or by a plain fall when it has none, and the fragments lie as its ruin.
 // Client only: the logic says where a hit landed (Drawable::reactToImpact) and nothing goes back.
+// The W3DModelDraw it stands in for is picked once, when the fragments are made: the one drawing the
+// FractureFile's model, else the one sharing most of its mesh names, never by module order (pickModelDraw
+// in the .cpp).  Nothing is made while the building is unfinished or being sold (a sale after a hit hands
+// the model back whole), and the fragments wear the textures the picked draw's live model wears on the
+// same meshes (damaged, night, snow, team colour).
 // The pick follows the fragments' boxes, a save keeps the holes (the drawable's xfer), and the
 // fragments cast the shadow in the sun's map and in the stencil volumes alike once they stand in for it.
 

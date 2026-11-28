@@ -33,6 +33,7 @@
 #include "Lib/Clock.h"
 
 #include "strtok_r.h"
+#include "Common/EarlyCommandLine.h"
 #include "Common/GameEngine.h"
 #include "Common/GlobalData.h"
 #include "Common/MessageStream.h"
@@ -203,6 +204,14 @@ void LANAPI::OnHasMap( UnsignedInt playerIP, Bool status )
  * needs its own address (-netslot picks which one it is).  Two copies on one machine therefore
  * want two addresses out of 127.0.0.0/8, which Windows routes to loopback in its entirety.
  */
+/// the next automated game's speed in percent, set by -control's "netagain <percent>"; 0 takes -gamespeed or retail's
+static Int theAutomatedGameSpeed = 0;
+
+void LANAPI_setAutomatedGameSpeed( Int percent )
+{
+	theAutomatedGameSpeed = percent;
+}
+
 Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedInt *slotIPs,
 																 Int numSlots, Int localSlot )
 {
@@ -291,6 +300,14 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 	game->setIncomeSharing( TheGlobalData->m_incomeSharing );
 	game->setTechRespawn( TheGlobalData->m_techRespawn );
 	game->setSupplyPileLimit( TheGlobalData->m_supplyPileLimit );
+	/* -daynight and -gamespeed play a room whose host ticked the cycle or picked a speed: every copy is
+		 handed the same switches, so DN= and SP= go into every options string alike.  Without -gamespeed
+		 the room keeps a LAN room's own pace. */
+	game->setDayNight( TheGlobalData->m_dayNight );
+	Int speed = theAutomatedGameSpeed;
+	if (speed <= 0)
+		speed = findEarlyCommandLineOption( L"-gamespeed" ) != NULL ? TheGlobalData->m_autoSkirmishGameSpeedPercent : RETAIL_GAME_SPEED_PERCENT;
+	game->setGameSpeedPercent( speed );
 	game->setIsDirectConnect( FALSE );
 	game->setLastHeard( Clock_Milliseconds() );
 	game->setLocalIP( m_localIP );
@@ -340,7 +357,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 	msg->appendIntegerArgument( GAME_LAN );
 	msg->appendIntegerArgument( DIFFICULTY_NORMAL );	// not used; there so the speed can go last
 	msg->appendIntegerArgument( 0 );
-	GameEngine_appendNewGameRates( msg, RETAIL_GAME_SPEED_PERCENT );	// a LAN game plays retail's pace
+	GameEngine_appendNewGameRates( msg, m_currentGame->getGameSpeedPercent() );	// retail's pace unless -gamespeed
 
 	InitRandom( seed );
 

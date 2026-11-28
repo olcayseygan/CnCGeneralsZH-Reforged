@@ -338,6 +338,8 @@ static const Int STEP_MAX_FRAMES = 300;
 static const Int OBJECTS_MAX = 600;
 static UnsignedInt theSaveAtFrame = 0;		///< saveat: the first poll at or past this frame saves, 0 for none
 static AsciiString theSaveAtName;
+static Bool theNetAgainPending = FALSE;	///< netagain: clear this -netgame match, then start the next one
+static Bool theNetAgainCleared = FALSE;	///< and the clear has been posted
 
 static void closeClient( void )
 {
@@ -2175,6 +2177,40 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
+	/* netagain [<speed percent>] [map]: a -netgame copy plays a second match in the same process, on its
+		 slot list and seed, at that speed (or -gamespeed's, or retail's) on that map (or the last one).
+		 The match under way is cleared locally (no surrender, the room is meant to follow suit or be a
+		 fresh copy at the same address) and the next starts from ControlServer_poll once nothing is in
+		 game.  A test route for what one match leaves the next. */
+	if (command == "netagain" || strncmp( command.str(), "netagain ", 9 ) == 0)
+	{
+		if (TheGlobalData->m_netGameHosts.isEmpty())
+		{
+			replyError( "netagain needs a -netgame run" );
+			return;
+		}
+		const char *rest = command.getLength() > 9 ? command.str() + 9 : "";
+		Int speed = 0;
+		Int used = 0;
+		if (sscanf( rest, "%d%n", &speed, &used ) == 1)
+		{
+			rest += used;
+			while (*rest == ' ')
+				++rest;
+		}
+		else
+			speed = 0;
+		extern void LANAPI_setAutomatedGameSpeed( Int percent );
+		LANAPI_setAutomatedGameSpeed( speed );
+		if (*rest != 0)
+			TheWritableGlobalData->m_mapName.set( rest );
+		theNetAgainPending = TRUE;
+		theNetAgainCleared = FALSE;
+		theLockstep = FALSE;
+		replyOk( "\"starting\":true" );
+		return;
+	}
+
 	/* Anything else is a world command, and world commands are the scenario grammar with the frame
 		 number left off - so put one back on and hand it to the same parser the files go through. One
 		 grammar, two front ends, and a line that works in a file works down the socket. */
@@ -2251,6 +2287,26 @@ void ControlServer_poll( void )
 		const Bool saved = saveTo( theSaveAtName );
 		DEBUG_LOG(("CONTROL: saveat %s %s at frame %u\n", theSaveAtName.str(), saved ? "saved" : "FAILED", TheGameLogic->getFrame()));
 		theSaveAtFrame = 0;
+	}
+
+	if (theNetAgainPending && TheGameLogic != NULL)
+	{
+		if (TheGameLogic->isInGame() && !TheGameLogic->isInShellGame())
+		{
+			if (!theNetAgainCleared)
+			{
+				TheMessageStream->appendMessage( GameMessage::MSG_CLEAR_GAME_DATA );
+				theNetAgainCleared = TRUE;
+				DEBUG_LOG(("CONTROL: netagain clears the match at frame %u\n", TheGameLogic->getFrame()));
+			}
+		}
+		else
+		{
+			theNetAgainPending = FALSE;
+			DEBUG_LOG(("CONTROL: netagain starts '%s'\n", TheGlobalData->m_mapName.str()));
+			extern void GameEngine_startNetGame( void );
+			GameEngine_startNetGame();
+		}
 	}
 
 	updateLockstep();

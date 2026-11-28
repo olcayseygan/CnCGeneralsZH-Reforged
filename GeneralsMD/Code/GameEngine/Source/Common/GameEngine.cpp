@@ -1090,6 +1090,15 @@ static void startAutoNetGame( void )
 }
 
 /** -----------------------------------------------------------------------------------------------
+ * The same door, for -control's "netagain": a second -netgame match in the same process, on the
+ * same slot list and seed, once the first is cleared.  A test route for what a match leaves behind.
+ */
+void GameEngine_startNetGame( void )
+{
+	startAutoNetGame();
+}
+
+/** -----------------------------------------------------------------------------------------------
  * Initialize the game engine by initializing the GameLogic and GameClient.
  */
 void GameEngine::init( void ) {} /// @todo: I changed this to take argc & argv so we can parse those after the GDF is loaded.  We need to rethink this immediately as it is a nasty hack

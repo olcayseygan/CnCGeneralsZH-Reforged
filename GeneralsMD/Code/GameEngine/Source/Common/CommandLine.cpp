@@ -2569,8 +2569,9 @@ Int parseStartShrouded(char *args[], int num)
 }
 
 /* -daynight: the skirmish lobby's day and night cycle for an -autoskirmish run, written onto
-	 TheSkirmishGameInfo so the replay's header carries DN=1.  A network game, -netgame included, takes
-	 only the host's options string, so the switch never reaches its logic. */
+	 TheSkirmishGameInfo so the replay's header carries DN=1.  A network game takes only the host's
+	 options string; -netgame builds that string on every copy alike, so there it is the room's box
+	 (LANAPI::StartAutomatedGame), and a lobby game never reads it. */
 Int parseDayNight(char *args[], int num)
 {
 	if (TheWritableGlobalData)
@@ -2583,7 +2584,8 @@ Int parseDayNight(char *args[], int num)
 /* -gamespeed <percent>: the skirmish lobby's game speed for an -autoskirmish run, in percent of retail's
 	 pace and taken to the nearest of PLAYER_GAME_SPEED_PERCENTS (100, 125, 150, 200).  The game time
 	 each tick advances: the match still ticks LOGICFRAMES_PER_SECOND times a second, its CRC differs per
-	 speed, and the replay carries the speed (GS=).  A -netgame run always plays the native speed.  Not
+	 speed, and the replay carries the speed (GS=).  A -netgame run plays it as its room's speed (SP=),
+	 and without it a LAN room's retail pace (LANAPI::StartAutomatedGame).  Not
 	 -turbo, which fast-forwards a drawing run as fast as it goes. */
 Int parseGameSpeed(char *args[], int num)
 {

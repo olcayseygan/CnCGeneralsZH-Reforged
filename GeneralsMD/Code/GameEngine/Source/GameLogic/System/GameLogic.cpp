@@ -1441,7 +1441,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
       m_supplyPileLimit = TheGameInfo->getSupplyPileLimit();
       /* Only the game's own options decide it: the lobby box, or a network game's and a replay's DN
          from the host's string.  -daynight reaches it as TheSkirmishGameInfo's box for an
-         -autoskirmish run and nowhere else, so it is dead in a network game. */
+         -autoskirmish run and as every copy's own string in a -netgame, never in a lobby game. */
       m_dayNight = TheGameInfo->getDayNight();
     }
     else

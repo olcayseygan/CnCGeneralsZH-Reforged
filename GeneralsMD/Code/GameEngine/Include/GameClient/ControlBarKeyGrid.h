@@ -117,7 +117,7 @@ extern const Int KEY_GRID_RIDER_PLACES[ 11 ];
 	* fills goes on in the next row the order names.
 	*
 	* A set that builds nothing: ControlBar_commandPlaces for everything but the passengers, then the
-	* passengers on KEY_GRID_RIDER_PLACES.  One with a skill (a special power, a weapon to fire or switch,
+	* passengers on KEY_GRID_RIDER_PLACES and, past those, the last free places back from N.  One with a skill (a special power, a weapon to fire or switch,
 	* a hijack and the like, by command type), or with a unit or an upgrade to make and no attack move (the
 	* owner's of 2026-11-28): the pinned and fixed buttons and A, C, V kept as above; the units it trains on
 	* the fewest top rows that hold them, a column at a time from the left; the skills a family at a time

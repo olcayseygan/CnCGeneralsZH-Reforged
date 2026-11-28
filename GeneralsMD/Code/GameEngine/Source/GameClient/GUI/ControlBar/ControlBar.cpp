@@ -596,10 +596,20 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 				continue;
 			while( next < RIDER_PLACES && used[ KEY_GRID_RIDER_PLACES[ next ] ] )
 				next++;
-			if( next >= RIDER_PLACES )
-				break;
-			places[ slot ] = KEY_GRID_RIDER_PLACES[ next ];
-			used[ KEY_GRID_RIDER_PLACES[ next ] ] = TRUE;
+			if( next < RIDER_PLACES )
+			{
+				places[ slot ] = KEY_GRID_RIDER_PLACES[ next ];
+				used[ KEY_GRID_RIDER_PLACES[ next ] ] = TRUE;
+				continue;
+			}
+			// past the corner's places (a fighting transport keeps only five of them: A, C, V held, S, D, X
+			// its orders), the last free place back from N, so an eight-seat Battle Bus shows every rider
+			for( Int place = COMMAND_PLACE_COUNT - 1; place >= 0 && places[ slot ] < 0; place-- )
+				if( !used[ place ] )
+				{
+					places[ slot ] = place;
+					used[ place ] = TRUE;
+				}
 		}
 		return fights;
 	}

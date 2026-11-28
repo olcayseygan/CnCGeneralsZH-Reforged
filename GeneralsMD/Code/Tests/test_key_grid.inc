@@ -232,6 +232,22 @@ TEST(key_grid_places_riders_from_the_corner)
 	for( Int i = 0; i < 10; i++ )
 		CHECK_EQ( places[ i ], expected[ i ] );
 	CHECK_EQ( places[ 10 ], (Int)COMMAND_PLACE_Z );
+
+	// a Battle Bus of eight: a fighting transport keeps five corner places (A C V held, S D X its orders),
+	// so N B H G F, then the last free places back from N, Y T R; every rider on a key, none on A C V
+	KeyGridSlot bus[ SLOTS ];
+	for( Int i = 0; i < SLOTS; i++ )
+		bus[ i ] = i < 8 ? rider : humvee[ 7 ];
+	bus[ 8 ] = evacuate;
+	bus[ 9 ] = attackMove;
+	bus[ 10 ] = guard;
+	bus[ 11 ] = stop;
+	CHECK( ControlBar_keyGridPlaces( bus, SLOTS, places ) );
+	static const Int BUS[ 8 ] = { COMMAND_PLACE_N, COMMAND_PLACE_B, COMMAND_PLACE_H, COMMAND_PLACE_G, COMMAND_PLACE_F,
+		COMMAND_PLACE_Y, COMMAND_PLACE_T, COMMAND_PLACE_R };
+	for( Int i = 0; i < 8; i++ )
+		CHECK_EQ( places[ i ], BUS[ i ] );
+	CHECK_EQ( places[ 8 ], (Int)COMMAND_PLACE_Z );
 }
 
 /* A factory (the owner's of 2026-11-28): its upgrades on a row of their own along Z, up a row when it

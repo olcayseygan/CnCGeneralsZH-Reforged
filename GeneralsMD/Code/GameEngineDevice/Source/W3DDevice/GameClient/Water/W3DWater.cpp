@@ -2851,6 +2851,36 @@ Int WaterRenderObjClass::init(Real waterLevel, Real dx, Real dy, SceneClass *par
 		}
 
 		REF_PTR_RELEASE(material);
+
+		// The sky writes no depth: it stands for the infinitely far, and its faces are only a box round
+		// the camera.  Written, every Direct3D 11 pass that reads the scene's depth took the box for a
+		// wall; the chain's ambient occlusion shaded a grey triangle into the sky round a corner of it
+		// whenever a cinematic looked up (the Baikonur launch, USA01).  The box still tests depth, so
+		// the world in front hides it as before; only a draw further off than its walls (8.4 times 750
+		// units) could now land on it.
+		MeshModelClass *model = mesh->Get_Model();
+		if (model)
+		{
+			for (Int pass = 0; pass < model->Get_Pass_Count(); ++pass)
+			{
+				if (model->Has_Shader_Array(pass))
+				{
+					for (Int poly = 0; poly < model->Get_Polygon_Count(); ++poly)
+					{
+						ShaderClass shader = model->Get_Shader(poly, pass);
+						shader.Set_Depth_Mask(ShaderClass::DEPTH_WRITE_DISABLE);
+						model->Set_Shader(poly, shader, pass);
+					}
+				}
+				else
+				{
+					ShaderClass shader = model->Get_Single_Shader(pass);
+					shader.Set_Depth_Mask(ShaderClass::DEPTH_WRITE_DISABLE);
+					model->Set_Single_Shader(shader, pass);
+				}
+			}
+			REF_PTR_RELEASE(model);
+		}
 	}
 
 	m_riverTexture=WW3DAssetManager::Get_Instance()->Get_Texture(TheWaterTransparency->m_standingWaterTexture.str()); 

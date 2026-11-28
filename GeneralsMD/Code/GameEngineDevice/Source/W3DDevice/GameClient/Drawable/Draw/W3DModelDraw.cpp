@@ -3246,6 +3246,49 @@ void ModelConditionInfo::WeaponBarrelInfo::setMuzzleFlashHidden(RenderObjClass *
 }
 
 //-------------------------------------------------------------------------------------------------
+// The Cold Fusion Reactor glow belongs to the control-rod animation. The HD meshes at distant
+// LODs can have shortened names, but share the retail glow bone. The Superweapon General's
+// extra glow plane has its own bone, attached directly to the root on the damaged model.
+static void setControlRodGlow(RenderObjClass& model, const ModelConditionFlags& conditions)
+{
+	const HTreeClass* tree = model.Get_HTree();
+	if (!tree)
+		return;
+
+	int glowBone = tree->Get_Bone_Index("POWER GLOW01");
+	if (!glowBone)
+		glowBone = tree->Get_Bone_Index("POWER GLOW01D");
+	if (!glowBone)
+		return;
+
+	const int planeBone = tree->Get_Bone_Index("PLANE01");
+	const bool hide = !conditions.test(MODELCONDITION_POWER_PLANT_UPGRADING)
+		&& !conditions.test(MODELCONDITION_POWER_PLANT_UPGRADED);
+	// Some HD rod attachments omit the glow mesh from their most distant level.
+	if (model.Class_ID() == RenderObjClass::CLASSID_HLOD && model.Get_LOD_Count() > 1)
+		static_cast<HLodClass&>(model).Set_Required_LOD_Bone(hide ? 0 : glowBone);
+	const int count = model.Get_Num_Sub_Objects();
+	for (int i = 0; i < count; ++i)
+	{
+		const int bone = model.Get_Sub_Object_Bone_Index(0, i);
+		if (bone != 0 && (bone == glowBone || bone == planeBone))
+		{
+			RenderObjClass* part = model.Get_Sub_Object(i);
+			part->Set_Hidden(hide);
+			part->Release_Ref();
+		}
+	}
+}
+
+void W3DModelDraw::applyConditionStateSubObjects(const ModelConditionInfo& state)
+{
+	if (m_renderObject && getDrawable()->isKindOf(KINDOF_FS_POWER)
+		&& state.m_modelName.startsWith("abpwrplant"))
+		setControlRodGlow(*m_renderObject, getDrawable()->getModelConditionFlags());	// the drawable's flags, not the state's: an alias or a transition carries other bits
+	doHideShowSubObjs(&state.m_hideShowVec);
+}
+
+//-------------------------------------------------------------------------------------------------
 void W3DModelDraw::doHideShowSubObjs(const std::vector<ModelConditionInfo::HideShowSubObjInfo>* vec)
 {
 	// a state's own hide/show can take in the projectile parts, so they are shown again after it
@@ -4313,7 +4356,7 @@ void W3DModelDraw::setModelState(const ModelConditionInfo* newState)
 		// ensure that any muzzle flashes from the *new* state, start out hidden...
 //		hideAllMuzzleFlashes(newState, m_renderObject);//moved to above
 		rebuildWeaponRecoilInfo(newState);
-		doHideShowSubObjs(&newState->m_hideShowVec);
+		applyConditionStateSubObjects(*newState);
 
 #if defined(_DEBUG) || defined(_INTERNAL)	//art wants to see buildings without flags as a test.
 		if (TheGlobalData->m_hideGarrisonFlags && draw->isKindOf(KINDOF_STRUCTURE))
@@ -4453,7 +4496,7 @@ void W3DModelDraw::setModelState(const ModelConditionInfo* newState)
 		// ensure that any muzzle flashes from the *previous* state, are hidden...
 //		hideAllMuzzleFlashes(m_curState, m_renderObject);// moved to above
 		
-		doHideShowSubObjs(&newState->m_hideShowVec);
+		applyConditionStateSubObjects(*newState);
 	}
 	hideAllHeadlights(m_hideHeadlights);
 

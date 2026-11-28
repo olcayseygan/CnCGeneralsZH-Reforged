@@ -558,8 +558,8 @@ static Bool posedPartsInView(RenderObjClass *robj, CameraClass *camera)
   * A model standing on a limit flipped as the camera only turned, so a level is left only past a
   * margin: a coarser one is taken once the area is LOD_SCREEN_SIZE_MARGIN under its limit, and the
   * level drawn is kept until the area is that much over the level's own, so a coarse level can
-  * draw 20% of area past the limit its art gives.  20% of the area is about 10% of the distance.  The level drawn, HLodClass::CurLod, is the only state
-  * per model.
+  * draw 20% of area past the limit its art gives.  20% of the area is about 10% of the distance.  The drawn level supplies the hysteresis.
+  * An active attachment can require a finer level.
   *
   * No level is drawn coarser than the coarsest that keeps the model whole (wholeLODFloor): a level the
   * art kit built without the model's body would show a roof floating over the ground.  The Full Detail
@@ -641,8 +641,10 @@ static void keepLODWhole(RenderObjClass *robj)
 	if (count < 2)
 		return;
 	const Int lowest = TheGlobalData->m_fullDetailAtDistance ? count - 1 : wholeLODFloor(hlod, count);
-	if (hlod->Get_LOD_Level() < lowest)
-		hlod->Set_LOD_Level(lowest);
+	const Int drawn = hlod->Get_LOD_Level();
+	const Int lod = hlod->Get_LOD_With_Required_Bone(std::max(drawn, lowest));
+	if (lod != drawn)
+		hlod->Set_LOD_Level(lod);
 }
 
 static void chooseLODByScreenSize(RenderObjClass *robj, CameraClass &camera)
@@ -666,10 +668,10 @@ static void chooseLODByScreenSize(RenderObjClass *robj, CameraClass &camera)
 	// level that keeps the model whole
 	const Int withRoom = std::max(lowest, coarsestLODHolding(hlod, count, area / (1.0f - LOD_SCREEN_SIZE_MARGIN)));
 	const Int stretched = std::max(lowest, coarsestLODHolding(hlod, count, area / (1.0f + LOD_SCREEN_SIZE_MARGIN)));
-	if (withRoom < drawn)
-		hlod->Set_LOD_Level(withRoom);
-	else if (stretched > drawn)
-		hlod->Set_LOD_Level(stretched);
+	const Int preferred = std::min(std::max(drawn, stretched), withRoom);	// stretched <= withRoom; C++14 has no std::clamp
+	const Int lod = hlod->Get_LOD_With_Required_Bone(preferred);
+	if (lod != drawn)
+		hlod->Set_LOD_Level(lod);
 }
 
 /** Visibility_Check's walk is a linked list of objects scattered over the heap, most of them off the

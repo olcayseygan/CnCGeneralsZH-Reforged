@@ -29910,6 +29910,43 @@ namespace {
 	}
 }
 
+#include "WW3D2/assetmgr.h"
+#include "WW3D2/hlod.h"
+#include "WWLib/ramfile.h"
+
+/* W3DModelDraw's Cold Fusion Reactor: the rod glow's bone is missing from a coarse level of some rebuilt
+	 models, and Set_Required_LOD_Bone pulls the level drawn up to the nearest finer one that has it. */
+TEST(reactor_glow_uses_the_nearest_detail_level_with_the_active_bone)
+{
+	CHECK( bootOnce() );
+	const UnsignedInt root[] = { 0 }, glow[] = { 1 };
+	const char *const part[] = { "NULL" };
+	const std::string tree = hierarchy( pivot( "ROOTTRANSFORM", -1, 0 ) + pivot( "POWER GLOW01", 0, 0 ), 2, "RODTREE" );
+	std::string bytes = tree + w3dChunk( 0x700, hlodHeader( "RODMODEL", "RODTREE", 3 )
+		+ hlodLevel( part, root, 1, 0.01f ) + hlodLevel( part, glow, 1, 0.1f ) + hlodLevel( part, glow, 1, 10000.0f ) );
+	RAMFileClass file( bytes.data(), static_cast<int>( bytes.size() ) );
+	WW3DAssetManager manager;
+	CHECK( manager.Load_3D_Assets( file ) );
+	RenderObjClass *model = manager.Create_Render_Obj( "RODMODEL" );
+	CHECK( model && model->Class_ID() == RenderObjClass::CLASSID_HLOD );
+	if( model && model->Class_ID() == RenderObjClass::CLASSID_HLOD )
+	{
+		HLodClass &rods = static_cast<HLodClass &>( *model );
+		CHECK_EQ( rods.Get_LOD_Count(), 3 );
+		const int glowBone = rods.Get_Bone_Index( "POWER GLOW01" );
+		CHECK_EQ( glowBone, 1 );
+		CHECK_EQ( rods.Get_LOD_With_Required_Bone( 0 ), 0 );
+		rods.Set_Required_LOD_Bone( glowBone );
+		CHECK_EQ( rods.Get_LOD_With_Required_Bone( 0 ), 1 );
+		CHECK_EQ( rods.Get_LOD_With_Required_Bone( 1 ), 1 );
+		CHECK_EQ( rods.Get_LOD_With_Required_Bone( 2 ), 2 );
+		rods.Set_Required_LOD_Bone( 0 );
+		CHECK_EQ( rods.Get_LOD_With_Required_Bone( 0 ), 0 );
+	}
+	if( model )
+		model->Release_Ref();
+}
+
 /* A Türkiye model is loose (the master, every player has it) and again in ReforgedTurkiye.big with
 	 its LODs, the full level a high-resolution rebuild.  The batch's copy is drawn only when it changes
 	 nothing the logic reads: the animations byte for byte, the hierarchy too but for WHEEL_[LR]<nn>

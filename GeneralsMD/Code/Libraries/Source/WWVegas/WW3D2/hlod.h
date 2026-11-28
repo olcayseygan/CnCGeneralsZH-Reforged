@@ -108,6 +108,9 @@ public:
 	/////////////////////////////////////////////////////////////////////////////
 	virtual void					Set_Max_Screen_Size(int lod_index, float size);
 	virtual float					Get_Max_Screen_Size(int lod_index) const;
+	// A visible part can be absent from a coarse LOD. Bone zero restores the authored LOD choices.
+	void Set_Required_LOD_Bone(int bone);
+	int Get_LOD_With_Required_Bone(int lod) const { WWASSERT(lod >= 0 && lod < LodCount); return lod + Lod[lod].RequiredBoneLodOffset; }
 	
 	virtual int						Get_Lod_Count(void) const;
 	virtual int						Get_Lod_Model_Count (int lod_index) const;
@@ -276,11 +279,12 @@ protected:
 	{
 	public:
 		ModelArrayClass(void) : MaxScreenSize(NO_MAX_SCREEN_SIZE), NonPixelCost(0.0f),
-			PixelCostPerArea(0.0f), BenefitFactor(0.0f) {}
+			PixelCostPerArea(0.0f), BenefitFactor(0.0f), RequiredBoneLodOffset(0) {}
 		float							MaxScreenSize;		// Maximum screen size for this LOD
 		float							NonPixelCost;		// Cost heuristics of LODS (w/o per-pixel cost)
 		float							PixelCostPerArea;	// PixelCostPerArea * area(normalized) + NonPixelCost = total Cost
 		float							BenefitFactor;		// BenefitFactor * area(normalized) = Benefit
+		int								RequiredBoneLodOffset;
 	};
 	
 	// Lod Render Objects, basically one of the LOD Models will be rendered. Typically

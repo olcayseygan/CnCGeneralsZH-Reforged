@@ -598,6 +598,7 @@ private:
 		UnsignedInt									askedFrame;					///< the logic frame of this slot's last ask
 	};
 	ProjectileShown								m_projectileShown[WEAPONSLOT_COUNT];	///< what doHideShowProjectileObjects last applied to each slot
+	void applyConditionStateSubObjects(const ModelConditionInfo& state);
 	void applyHideShowSubObjs(const std::vector<ModelConditionInfo::HideShowSubObjInfo>* vec);
 	void applySubObjectVec();
 	void forgetProjectileShown();

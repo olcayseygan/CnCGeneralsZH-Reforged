@@ -157,6 +157,8 @@ void AodDirector::reset( void )
 	m_nextWaveFrame = 0;
 	m_nextSpawnFrame = 0;
 	m_pending.clear();
+	m_nextWave = 0;
+	m_next.clear();
 	m_units.clear();
 	m_lives = AOD_LIVES;
 	m_over = OVER_NOT;
@@ -329,24 +331,36 @@ void AodDirector::pay( Player *seat, Int lane, Int amount )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The wave's units, drawn by points out of the kinds it has reached, the boss first on its wave.  One draw
-	  serves every lane: each seat meets the same units in the same order (the map is a mirror too). */
-void AodDirector::startWave( UnsignedInt now )
+/// a wave's kinds for a log line: "-1 0 0 3"
+static AsciiString kindsText( const std::vector<Int> &kinds )
 {
-	++m_wave;
-	Int points = Aod_wavePoints( m_wave );
-	m_pending.clear();
-	if( Aod_isBossWave( m_wave ) && m_boss != NULL )
-		m_pending.push_back( -1 );
+	AsciiString text, one;
+	for( UnsignedInt i = 0; i < kinds.size(); ++i )
+	{
+		one.format( i == 0 ? "%d" : " %d", kinds[i] );
+		text.concat( one );
+	}
+	return text;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A wave's units, drawn by points out of the kinds it has reached, the boss first on its wave.  One draw
+	  serves every lane: each seat meets the same units in the same order (the map is a mirror too). */
+void AodDirector::drawWave( Int wave, std::vector<Int> &kinds ) const
+{
+	Int points = Aod_wavePoints( wave );
+	kinds.clear();
+	if( Aod_isBossWave( wave ) && m_boss != NULL )
+		kinds.push_back( -1 );
 	/* Each unit one draw on the logic stream, weighted towards the dearer kinds as the waves go on
 		 (Aod_kindWeight), so a late wave is fewer, heavier units and not a crowd of one-point soldiers. */
 	while( points > 0 )
 	{
 		Int eligible[ 32 ], weights[ 32 ], count = 0, total = 0;
 		for( Int k = 0; k < Aod_kindCount() && count < 32; ++k )
-			if( m_kinds[k] != NULL && Aod_kind( k ).firstWave <= m_wave && Aod_kind( k ).points <= points )
+			if( m_kinds[k] != NULL && Aod_kind( k ).firstWave <= wave && Aod_kind( k ).points <= points )
 			{
-				weights[ count ] = Aod_kindWeight( k, m_wave );
+				weights[ count ] = Aod_kindWeight( k, wave );
 				total += weights[ count ];
 				eligible[ count++ ] = k;
 			}
@@ -356,9 +370,22 @@ void AodDirector::startWave( UnsignedInt now )
 		while( roll >= weights[ pick ] )
 			roll -= weights[ pick++ ];
 		const Int k = eligible[ pick ];
-		m_pending.push_back( k );
+		kinds.push_back( k );
 		points -= Aod_kind( k ).points;
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The wave drawn a wave ahead (update) comes out now; a save from before version 5 has none drawn, and the
+	  wave is drawn here as it was then. */
+void AodDirector::startWave( UnsignedInt now )
+{
+	++m_wave;
+	if( m_nextWave != m_wave )
+		drawWave( m_wave, m_next );
+	m_pending = m_next;
+	m_next.clear();
+	m_nextWave = 0;
 	// the stipend, with the catch-up for a seat whose lane leaked the last wave it finished
 	Int lowest = 0, highest = 0;
 	for( Int n = 0; n < (Int)m_paths.size(); ++n )
@@ -379,6 +406,25 @@ void AodDirector::startWave( UnsignedInt now )
 	DEBUG_LOG(( "HEADLESS AOD: frame %u wave %d of %d starts, %d units a lane for %d points%s, stipend %d to %d, lives %d\n", now, m_wave, (Int)AOD_WAVES,
 							(Int)m_pending.size(), Aod_wavePoints( m_wave ), Aod_isBossWave( m_wave ) && m_boss != NULL ? " with a boss" : "",
 							lowest, highest, m_lives ));
+	DEBUG_LOG(( "HEADLESS AOD KINDS: wave %d comes as %s\n", m_wave, kindsText( m_pending ).str() ));
+}
+
+//-------------------------------------------------------------------------------------------------
+Int AodDirector::countLeft( Int lane, Int kind ) const
+{
+	Int left = 0;
+	for( UnsignedInt i = 0; i < m_pending.size(); ++i )
+		left += m_pending[i] == kind ? 1 : 0;
+	for( UnsignedInt i = 0; i < m_units.size(); ++i )
+		left += m_units[i].wave == m_wave && m_units[i].lane == lane && m_units[i].kind == kind ? 1 : 0;
+	return left;
+}
+
+const ThingTemplate *AodDirector::kindTemplate( Int kind ) const
+{
+	if( kind < 0 )
+		return m_boss;
+	return kind < (Int)m_kinds.size() ? m_kinds[kind] : NULL;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -601,6 +647,14 @@ void AodDirector::update( void )
 		}
 		if( m_wave < AOD_WAVES && now >= m_nextWaveFrame )
 			startWave( now );
+	}
+	/* The next wave drawn a wave ahead, on the first frame and as each wave starts, so the HUD shows what comes; the
+		 same draw startWave made before 2026-11-28, one wave sooner on the stream. */
+	if( m_wave < AOD_WAVES && m_nextWave != m_wave + 1 )
+	{
+		m_nextWave = m_wave + 1;
+		drawWave( m_nextWave, m_next );
+		DEBUG_LOG(( "HEADLESS AOD KINDS: frame %u wave %d drawn as %s\n", now, m_nextWave, kindsText( m_next ).str() ));
 	}
 	/* The next unit out of every entry at once, while every lane is under its share of the cap: no lane gets
 		 its units sooner because another lane's are slow to die. */
@@ -938,10 +992,11 @@ void AodDirector::crc( Xfer *xfer )
 	  settled, which lanes are owed the catch-up, that the start money was set, and how far each walking
 	  unit has got and since when, and the reference's spots and its gun on each.  An older save had its
 	  money set already and is taken as settled up to its last wave; its units start their watch at the
-	  load; its reference sees every spot free and may build on one it holds. */
+	  load; its reference sees every spot free and may build on one it holds.
+	  Version 5 adds the next wave, drawn a wave ahead for the HUD; an older save draws it on its first frame. */
 void AodDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 4;
+	XferVersion currentVersion = 5;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1051,6 +1106,22 @@ void AodDirector::xfer( Xfer *xfer )
 		for( Int w = 0; w < m_wave && w <= AOD_WAVES; ++w )
 			for( Int n = 0; n < AOD_LANES_MOST; ++n )
 				m_settled[w][n] = TRUE;
+	}
+
+	if( version >= 5 )
+	{
+		xfer->xferInt( &m_nextWave );
+		UnsignedInt next = (UnsignedInt)m_next.size();
+		xfer->xferUnsignedInt( &next );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_next.resize( next );
+		for( UnsignedInt i = 0; i < next; ++i )
+			xfer->xferInt( &m_next[i] );
+	}
+	else if( xfer->getXferMode() == XFER_LOAD )
+	{
+		m_nextWave = 0;
+		m_next.clear();
 	}
 }
 

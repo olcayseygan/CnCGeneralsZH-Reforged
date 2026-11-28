@@ -4485,6 +4485,26 @@ GUI:RandomMapAod
 "Art of Defense"
 END
 
+GUI:AodLives
+"Lives"
+END
+
+GUI:AodWave
+"Wave"
+END
+
+GUI:AodNext
+"Next"
+END
+
+GUI:AodBoss
+"BOSS"
+END
+
+GUI:AodAir
+"AIR"
+END
+
 TOOLTIP:MapListCrowded
 "With more than eight players only the maps with a start position for every player are listed; the Random tab builds one for any number"
 END

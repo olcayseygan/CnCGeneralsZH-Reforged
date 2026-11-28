@@ -19103,6 +19103,26 @@ GUI:RandomMapAod
 "Art of Defense"
 END
 
+GUI:AodLives
+"Can"
+END
+
+GUI:AodWave
+"Dalga"
+END
+
+GUI:AodNext
+"Sonraki"
+END
+
+GUI:AodBoss
+"BOSS"
+END
+
+GUI:AodAir
+"HAVA"
+END
+
 TOOLTIP:MapListCrowded
 "Sekizden fazla oyuncuda yalnız her oyuncuya bir başlangıç noktası olan haritalar listelenir; Rastgele sekmesi her sayıya bir harita üretir"
 END

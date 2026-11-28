@@ -18,7 +18,9 @@ Twenty waves, each one the same for every lane: Technicals first, which reach th
 
 There is nothing to harvest: the map has no supplies and no oil. You start on 6,000, and every kill pays the player whose lane it died in about what the unit costs to build, 900 for a Paladin. Every wave also pays a small stipend as it starts, more to a player whose lane leaked the last wave so he can build back, and a lane that lets a whole wave through clean earns a tenth of its kills on top. Guns at the rim see into the trench and the waves see them back, so they trade fire; a cannon set a few cells back from the edge cannot see the floor at all.
 
-This is the prototype: no wave counter on screen yet. Saves from before this change still load; the new mode needs this build on every machine.
+A panel hangs at the top middle of the screen in your side's own tray steel, whichever layout and HUD width you play. The top row is the lives you share, the wave under way and what of it is still coming down your lane, a cameo for each kind with how many are left. The row under it is the next wave: its number, the seconds until it starts once the last of this one is out, and every kind it brings with the count for your lane, its rank chevron, its health as it arrives and a flying mark on the Comanches. A boss wave turns the next wave's cell red and puts BOSS on the Overlord with its health already multiplied. The preview is the wave itself: the game draws each wave one wave early and sends exactly that, so a seed's waves differ from the earlier builds and their replays no longer play.
+
+This is the prototype. Saves from before this change still load; the new mode needs this build on every machine.
 
 ## Key Grid: the command bar laid out like your keyboard
 

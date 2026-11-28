@@ -130,6 +130,19 @@ public:
 
 	Int getWave( void ) const { return m_wave; }
 	Int getLives( void ) const { return m_lives; }
+	Bool isOver( void ) const { return m_over != OVER_NOT; }
+	Int getLaneCount( void ) const { return (Int)m_paths.size(); }
+
+	/* For the HUD (AOD panel in InGameUI.cpp), read at the render's sync point and never written back.  The next
+		 wave is drawn a wave ahead (on the first frame, and as each wave starts), so what the panel shows is what
+		 comes: its kinds a lane, the next first, -1 the boss. */
+	Int getNextWave( void ) const { return m_nextWave; }		///< the wave getNextKinds is, 0 when none is drawn
+	const std::vector<Int> &getNextKinds( void ) const { return m_next; }
+	/// the frame the next wave starts, once the last of this one is out; 0 while it is still coming out
+	UnsignedInt getNextWaveFrame( void ) const { return m_pending.empty() ? m_nextWaveFrame : 0; }
+	/// the current wave's units of a kind (-1 the boss) still to come out of a lane or walking it
+	Int countLeft( Int lane, Int kind ) const;
+	const ThingTemplate *kindTemplate( Int kind ) const;		///< -1 the boss; NULL for a kind the data lacks
 
 protected:
 	virtual void crc( Xfer *xfer );
@@ -152,6 +165,7 @@ private:
 	Bool inExit( const Object *obj ) const;
 	Int nearestStop( const Object *obj, Int lane ) const;	///< the stop of its lane nearest a unit
 	Player *seatOfLane( Int lane ) const;		///< the seat on the start of that lane's sector, or NULL
+	void drawWave( Int wave, std::vector<Int> &kinds ) const;	///< a wave's units out of the logic stream
 	void startWave( UnsignedInt now );
 	void pay( Player *seat, Int lane, Int amount );
 	void lose( UnsignedInt now );
@@ -177,6 +191,8 @@ private:
 	UnsignedInt m_nextWaveFrame;
 	UnsignedInt m_nextSpawnFrame;
 	std::vector<Int> m_pending;					///< kinds still to come out on every lane this wave, the next first; -1 the boss
+	Int m_nextWave;											///< the wave m_next was drawn for, 0 for none (version 5)
+	std::vector<Int> m_next;						///< that wave's kinds, drawn a wave ahead for the HUD (version 5)
 	std::vector<Unit> m_units;					///< wave units walking
 	Int m_lives;
 	Int m_over;

@@ -482,6 +482,23 @@ struct Sample
 	bool dry;	// AIL_ex_set_3D_sample_dry
 	HeadEffect *head;	// our reference to the voice's head under AIL_3D_HEADPHONE, NULL otherwise
 	ULONGLONG silentEndMs;	// playing with no voice: when the sound it would have been is over
+	// What refreshSampleOutput last handed this voice, so the service thread's pass every 10 ms calls
+	// XAudio2 only for a value that moved.  Cleared with every new voice (freshVoice).
+	bool sent;
+	float sentVolume;
+	float sentRatio;
+	float sentCoefficient;
+	float sentGains[XAUDIO2_MAX_AUDIO_CHANNELS];
+};
+
+// A voice on its way out: stopped, flushed and destroyed by the service thread in that order, each
+// step a few mixer passes apart (serviceThreadMain).
+struct RetiredVoice
+{
+	IXAudio2SourceVoice *voice;
+	unsigned long long stoppedAtPass;	// g_enginePasses when Stop was called
+	ULONGLONG stoppedMs;	// GetTickCount64 then, for an engine whose passes are not counted
+	bool flushed;
 };
 
 struct StreamBuffer
@@ -543,7 +560,7 @@ struct Engine
 	HANDLE serviceThread;
 	volatile LONG serviceRunning;
 	std::vector<Sample *> samples;
-	std::vector<IXAudio2SourceVoice *> retiredVoices;
+	std::vector<RetiredVoice> retiredVoices;
 	std::vector<Stream *> streams;
 	Listener listener;
 	bool started;
@@ -564,6 +581,13 @@ S32 g_linearFalloff;	// AIL_ex_set_3D_linear_falloff
 // written by the game's thread with no lock, read by the service thread under it
 std::atomic<float> g_speedOfSound(0.0f);	// AIL_ex_set_3D_air
 std::atomic<bool> g_limiter(true);	// AIL_ex_set_limiter, read by MasterTap on XAudio2's thread
+// Mixer passes ended, counted on XAudio2's thread (EngineWatch).  A retired voice is flushed and
+// destroyed only once this has moved RETIRE_PASSES past its Stop (serviceThreadMain).
+std::atomic<unsigned long long> g_enginePasses(0);
+const unsigned long long RETIRE_PASSES = 2;
+// The same wait by the clock, three 10 ms passes, for when the count never moves (the callback
+// refused, or an engine that stopped calling it): a retired voice is flushed by whichever comes first.
+const ULONGLONG RETIRE_MS = 30;
 
 AILFILEOPENCB g_fileOpen;
 AILFILECLOSECB g_fileClose;
@@ -597,7 +621,13 @@ void applySpeakerGains(IXAudio2SourceVoice *voice, unsigned int sourceChannels, 
 }
 
 // Miles' pan, onto the front pair of whatever the master has.  A constant-power law: dead centre is
-// not two half-volume speakers.
+// not two half-volume speakers.  `gains` holds XAUDIO2_MAX_AUDIO_CHANNELS, zeroed by the caller.
+void panGains(float pan, float *gains)
+{
+	gains[0] = (float)sqrt(clampUnit(1.0f - pan));
+	gains[1] = (float)sqrt(clampUnit(pan));
+}
+
 void applyPan(IXAudio2SourceVoice *voice, unsigned int sourceChannels, float pan)
 {
 	if (voice == NULL || g_engine.master == NULL || g_engine.masterChannels < 2) {
@@ -605,8 +635,7 @@ void applyPan(IXAudio2SourceVoice *voice, unsigned int sourceChannels, float pan
 	}
 
 	float gains[XAUDIO2_MAX_AUDIO_CHANNELS] = { 0.0f };
-	gains[0] = (float)sqrt(clampUnit(1.0f - pan));
-	gains[1] = (float)sqrt(clampUnit(pan));
+	panGains(pan, gains);
 	applySpeakerGains(voice, sourceChannels, gains);
 }
 
@@ -624,14 +653,13 @@ const Speaker RING_51[] = { { -110.0f, 4 }, { -30.0f, 0 }, { 0.0f, 2 }, { 30.0f,
 const Speaker RING_71[] = { { -150.0f, 4 }, { -90.0f, 6 }, { -30.0f, 0 }, { 0.0f, 2 }, { 30.0f, 1 }, { 90.0f, 7 }, { 150.0f, 5 } };
 
 // A 3D sample on a surround master: the two speakers either side of its bearing share it at the
-// constant-power law of the stereo pan, the rest are silent.
-void applySurround(IXAudio2SourceVoice *voice, unsigned int sourceChannels, float side, float front)
+// constant-power law of the stereo pan, the rest are silent.  `gains` as panGains takes it.
+void surroundGains(float side, float front, float *gains)
 {
 	const Speaker *ring = g_engine.masterChannels >= 8 ? RING_71 : (g_engine.masterChannels >= 6 ? RING_51 : QUAD_RING);
 	const unsigned int count = g_engine.masterChannels >= 8 ? 7 : (g_engine.masterChannels >= 6 ? 5 : 4);
 	const float bearing = atan2f(side, front) * 180.0f / HALF_TURN_RADIANS;
 
-	float gains[XAUDIO2_MAX_AUDIO_CHANNELS] = { 0.0f };
 	for (unsigned int i = 0; i < count; ++i) {
 		const Speaker &from = ring[i];
 		const Speaker &to = ring[(i + 1) % count];
@@ -644,7 +672,6 @@ void applySurround(IXAudio2SourceVoice *voice, unsigned int sourceChannels, floa
 			break;
 		}
 	}
-	applySpeakerGains(voice, sourceChannels, gains);
 }
 
 // A head's two ears straight onto the master's first two speakers; the head has panned already.
@@ -706,6 +733,11 @@ void refreshSampleOutput(Sample *sample)
 		return;
 	}
 
+	// Only what moved since the last call reaches XAudio2 (Sample::sent): a 3D voice is refreshed
+	// every 10 ms, and nearly every pass changes nothing on it.
+	const bool fresh = !sample->sent;
+	sample->sent = true;
+
 	float volume = sample->volume;
 	float pan = sample->pan;
 	float doppler = 1.0f;
@@ -720,51 +752,76 @@ void refreshSampleOutput(Sample *sample)
 		side = spatial.side;
 		front = spatial.front;
 		surround = g_engine.masterChannels > 2;
-		const XAUDIO2_FILTER_PARAMETERS filter = { LowPassOnePoleFilter,
-			AIL_ex_one_pole_coefficient(spatial.cutoff, (float)g_engine.masterRate), 1.0f };
-		sample->voice->SetFilterParameters(&filter);
-		sample->voice->SetOutputFilterParameters(g_engine.master, &filter);
+		const float coefficient = AIL_ex_one_pole_coefficient(spatial.cutoff, (float)g_engine.masterRate);
+		if (fresh || coefficient != sample->sentCoefficient) {
+			const XAUDIO2_FILTER_PARAMETERS filter = { LowPassOnePoleFilter, coefficient, 1.0f };
+			sample->voice->SetFilterParameters(&filter);
+			sample->voice->SetOutputFilterParameters(g_engine.master, &filter);
+			sample->sentCoefficient = coefficient;
+		}
 		if (sample->head != NULL) {
 			sample->head->aim(side, front);
 		}
 	}
 
-	sample->voice->SetVolume(clampUnit(volume));
+	const float level = clampUnit(volume);
+	if (fresh || level != sample->sentVolume) {
+		sample->voice->SetVolume(level);
+		sample->sentVolume = level;
+	}
 	// a head's ears were put on the master when the voice was made (freshVoice)
-	if (surround && sample->head == NULL) {
-		applySurround(sample->voice, sample->format.nChannels, side, front);
-	} else if (sample->head == NULL) {
-		applyPan(sample->voice, sample->format.nChannels, pan);
+	if (sample->head == NULL && g_engine.master != NULL && g_engine.masterChannels >= 2) {
+		float gains[XAUDIO2_MAX_AUDIO_CHANNELS] = { 0.0f };
+		if (surround) {
+			surroundGains(side, front, gains);
+		} else {
+			panGains(pan, gains);
+		}
+		const size_t gainBytes = g_engine.masterChannels * sizeof(float);
+		if (fresh || memcmp(gains, sample->sentGains, gainBytes) != 0) {
+			applySpeakerGains(sample->voice, sample->format.nChannels, gains);
+			memcpy(sample->sentGains, gains, gainBytes);
+		}
 	}
 	if (sample->baseRate != 0) {
 		float ratio = (float)sample->rate / (float)sample->baseRate * doppler;
 		// written so a NaN fails the first test: SetFrequencyRatio takes one and the mixer thread faults
 		if (!(ratio >= XAUDIO2_MIN_FREQ_RATIO)) ratio = XAUDIO2_MIN_FREQ_RATIO;
 		if (!(ratio <= 4.0f)) ratio = 4.0f;
-		sample->voice->SetFrequencyRatio(ratio);
+		if (fresh || ratio != sample->sentRatio) {
+			sample->voice->SetFrequencyRatio(ratio);
+			sample->sentRatio = ratio;
+		}
 	}
 }
 
+// A stream's voice, at once: it has no callback, and DestroyVoice waits out the mixer's pass, so the
+// stream's buffers can go right after.  No FlushSourceBuffers first: DestroyVoice drops what is
+// queued anyway, and a flush is a reset of a voice the mixer may be in (retireVoice says why).
 void destroyVoice(IXAudio2SourceVoice **voice)
 {
 	if (*voice != NULL) {
 		(*voice)->Stop(0);
-		(*voice)->FlushSourceBuffers();
 		(*voice)->DestroyVoice();
 		*voice = NULL;
 	}
 }
 
-// A sample voice is not destroyed on the spot: the buffers still queued on it hold SampleData
-// references, and only OnBufferEnd gives them back, which a destroyed voice no longer calls.  It
-// is stopped and flushed here, and the service thread destroys it once the mixer has retired its
-// last buffer.  Under the lock.
+// A sample voice is not destroyed on the spot.  The buffers still queued on it hold SampleData
+// references that only OnBufferEnd gives back, and xaudio2_9.dll's resampler state is not safe
+// against a call that resets it while a worker is mixing the voice: crash 4815 faulted in the int16
+// resampler (+0x153B1) on a read position of 0xFFFFFFFF00000000, the high half of -1 and the low
+// half of 0, which the resampler's own write-back (never below -1) cannot produce; the field is a
+// 64-bit store at an offset of 4 mod 8 in the SRC object.  So the voice is only stopped here, which
+// silences it at the mixer's next pass, and the service thread flushes it once the mixer has run
+// RETIRE_PASSES passes since, and destroys it once its last buffer is back
+// (serviceThreadMain).  Under the lock.
 void retireVoice(Sample *sample)
 {
 	if (sample->voice != NULL) {
 		sample->voice->Stop(0);
-		sample->voice->FlushSourceBuffers();
-		g_engine.retiredVoices.push_back(sample->voice);
+		RetiredVoice retired = { sample->voice, g_enginePasses.load(), GetTickCount64(), false };
+		g_engine.retiredVoices.push_back(retired);
 		sample->voice = NULL;
 	}
 	// the chain keeps its own reference for as long as the voice lives
@@ -796,6 +853,7 @@ bool freshVoice(Sample *sample, const WAVEFORMATEX &format)
 {
 	retireVoice(sample);
 	sample->started = false;
+	sample->sent = false;
 	sample->format = format;
 	// no endpoint to play on: the sample plays in silence (AIL_start_sample)
 	if (g_engine.xaudio == NULL || g_engine.master == NULL) {
@@ -1085,7 +1143,12 @@ void serviceStream(Stream *stream, std::vector<AILSTREAMCB> *callbacks, std::vec
 		memset(&buffer, 0, sizeof(buffer));
 		buffer.AudioBytes = (UINT32)stored.bytes.size();
 		buffer.pAudioData = &stored.bytes[0];
-		stream->voice->SubmitSourceBuffer(&buffer);
+		// A refused buffer leaves the voice: kept in queued, it would make the pop above free the
+		// oldest buffer while the mixer still reads it.  Its audio is lost; the next pass tries again.
+		if (FAILED(stream->voice->SubmitSourceBuffer(&buffer))) {
+			stream->queued.pop_back();
+			break;
+		}
 		stream->framesSubmitted += (long long)(stored.bytes.size() / stream->voiceFormat.nBlockAlign);
 		stream->voice->GetState(&state);
 	}
@@ -1116,11 +1179,24 @@ DWORD WINAPI serviceThreadMain(LPVOID)
 
 		EnterCriticalSection(&g_engine.lock);
 		serviceOutput();
+		// Stopped RETIRE_PASSES mixer passes or RETIRE_MS ago, whichever came first: flushed, which hands its buffers back through
+		// OnBufferEnd at the next pass.  Flushed and empty: destroyed below, outside the lock.
+		const unsigned long long passes = g_enginePasses.load();
+		const ULONGLONG nowMs = GetTickCount64();
 		for (size_t i = 0; i < g_engine.retiredVoices.size(); ) {
+			RetiredVoice &retired = g_engine.retiredVoices[i];
+			if (!retired.flushed) {
+				if (passes - retired.stoppedAtPass >= RETIRE_PASSES || nowMs - retired.stoppedMs >= RETIRE_MS) {
+					retired.voice->FlushSourceBuffers();
+					retired.flushed = true;
+				}
+				++i;
+				continue;
+			}
 			XAUDIO2_VOICE_STATE state;
-			g_engine.retiredVoices[i]->GetState(&state);
+			retired.voice->GetState(&state);
 			if (state.BuffersQueued == 0) {
-				spentVoices.push_back(g_engine.retiredVoices[i]);
+				spentVoices.push_back(retired.voice);
 				g_engine.retiredVoices.erase(g_engine.retiredVoices.begin() + i);
 			} else {
 				++i;
@@ -1367,7 +1443,7 @@ class EngineWatch : public IXAudio2EngineCallback
 {
 public:
 	STDMETHOD_(void, OnProcessingPassStart)() {}
-	STDMETHOD_(void, OnProcessingPassEnd)() {}
+	STDMETHOD_(void, OnProcessingPassEnd)() { g_enginePasses.fetch_add(1); }
 	// on XAudio2's own thread, which may not destroy anything: the service thread does
 	STDMETHOD_(void, OnCriticalError)(HRESULT) { g_remakeOutput.store(true); }
 };
@@ -1436,7 +1512,7 @@ void closeOutput()
 		sample->silentEndMs = 0;
 	}
 	for (size_t i = 0; i < g_engine.retiredVoices.size(); ++i) {
-		g_engine.retiredVoices[i]->DestroyVoice();
+		g_engine.retiredVoices[i].voice->DestroyVoice();
 	}
 	g_engine.retiredVoices.clear();
 	for (size_t i = 0; i < g_engine.streams.size(); ++i) {
@@ -1479,7 +1555,10 @@ bool openMasterGuarded(UINT32 channels)
 				g_engine.xaudio = NULL;
 				return false;
 			}
-			g_engine.xaudio->RegisterForCallbacks(&g_engineWatch);
+			// without it no pass is counted, and retired voices go by the clock alone (RETIRE_MS)
+			if (FAILED(g_engine.xaudio->RegisterForCallbacks(&g_engineWatch))) {
+				OutputDebugStringA("miles_xaudio2: RegisterForCallbacks failed; no critical error or pass count from this engine\n");
+			}
 		}
 		g_engine.onPickedDevice = g_outputDevice[0] != 0 && SUCCEEDED(g_engine.xaudio->CreateMasteringVoice(&g_engine.master,
 			channels, XAUDIO2_DEFAULT_SAMPLERATE, 0, g_outputDevice, NULL, AudioCategory_GameEffects));

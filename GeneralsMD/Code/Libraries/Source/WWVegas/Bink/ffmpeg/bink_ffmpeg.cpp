@@ -247,7 +247,11 @@ void queueAudioFrame(Movie *movie, AVFrame *frame)
 	memset(&buffer, 0, sizeof(buffer));
 	buffer.AudioBytes = (UINT32)stored.size();
 	buffer.pAudioData = &stored[0];
-	movie->voice->SubmitSourceBuffer(&buffer);
+	// Refused (past XAUDIO2_MAX_QUEUED_BUFFERS, or a voice gone with its endpoint), the chunk is not
+	// the voice's: kept, the pop above would free the oldest chunk while the mixer still reads it.
+	if (FAILED(movie->voice->SubmitSourceBuffer(&buffer))) {
+		movie->audioQueued.pop_back();
+	}
 }
 #endif
 
@@ -564,9 +568,32 @@ int __stdcall BinkCopyToBuffer(HBINK handle, void *dest, int destpitch, unsigned
 	}
 
 	const AVPixelFormat destinationFormat = pixelFormatForSurface(flags);
-	const int width = (int)movie->pub.Width;
-	const int height = (int)movie->pub.Height;
-	const int copyHeight = (int)destheight < height ? (int)destheight : height;
+	const int bytesPerPixel = av_get_bits_per_pixel(av_pix_fmt_desc_get(destinationFormat)) / 8;
+	if (bytesPerPixel <= 0 || destpitch <= 0 || desty >= destheight) {
+		return 0;
+	}
+
+	// Never a byte outside the destination it was handed: destheight rows of destpitch bytes, the
+	// copy starting destx pixels into row desty.  The frame is cropped at the right and the bottom
+	// to fit, never scaled.  swscale's packed RGB writers work in whole groups of 8 pixels and
+	// libswscale/x86/yuv2rgb.c lets the last group run on while it stays inside the stride, counted
+	// from the plane pointer: with destx past 0 that is past the row, and past the buffer on the last
+	// row, so then the width leaves the group room too.
+	const int roomPixels = destpitch / bytesPerPixel - (int)destx;
+	if (roomPixels <= 0) {
+		return 0;
+	}
+	const int frameWidth = (int)movie->pub.Width;
+	const int frameHeight = (int)movie->pub.Height;
+	int width = frameWidth < roomPixels ? frameWidth : roomPixels;
+	if (destx > 0 && ((width + 7) & ~7) > roomPixels) {
+		width = roomPixels & ~7;
+	}
+	const int roomRows = (int)(destheight - desty);
+	const int height = frameHeight < roomRows ? frameHeight : roomRows;
+	if (width <= 0 || height <= 0) {
+		return 0;
+	}
 
 	if (movie->scaler == NULL || movie->scaledFormat != destinationFormat ||
 		movie->scaledWidth != width || movie->scaledHeight != height) {
@@ -583,12 +610,11 @@ int __stdcall BinkCopyToBuffer(HBINK handle, void *dest, int destpitch, unsigned
 		return 0;
 	}
 
-	const int bytesPerPixel = av_get_bits_per_pixel(av_pix_fmt_desc_get(destinationFormat)) / 8;
 	unsigned char *destinationBase = (unsigned char *)dest + (size_t)desty * destpitch + (size_t)destx * bytesPerPixel;
 	uint8_t *destinationPlanes[4] = { destinationBase, NULL, NULL, NULL };
 	int destinationStrides[4] = { destpitch, 0, 0, 0 };
 
-	sws_scale(movie->scaler, movie->frame->data, movie->frame->linesize, 0, copyHeight,
+	sws_scale(movie->scaler, movie->frame->data, movie->frame->linesize, 0, height,
 		destinationPlanes, destinationStrides);
 	return 1;
 }

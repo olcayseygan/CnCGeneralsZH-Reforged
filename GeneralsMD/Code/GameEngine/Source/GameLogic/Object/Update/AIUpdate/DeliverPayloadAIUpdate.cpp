@@ -267,7 +267,20 @@ void DeliverPayloadAIUpdate::deliverPayload(
 	//****************************************************
 	//THIS GETS CALLED VIA OBJECT CREATION LISTS ONLY!!!
 	//****************************************************
-	
+
+	// One line per run, so two mismatch dumps name the frame and the sender of a drop one machine flew
+	// and the other did not (a v4.4.0 LAN report on a custom map: a cargo plane and its dozer on one side
+	// only).  The producer is the OCL's source; none means a script's reinforcement.  Log only.
+	{
+		const Object *transport = getObject();
+		const Object *producer = TheGameLogic->findObjectByID( transport->getProducerID() );
+		const Player *owner = transport->getControllingPlayer();
+		DEBUG_LOG(( "DELIVER frame %u '%s' %u player %d from '%s' %u, to (%.0f,%.0f) target (%.0f,%.0f)\n", TheGameLogic->getFrame(),
+			transport->getTemplate()->getName().str(), (UnsignedInt)transport->getID(), owner ? owner->getPlayerIndex() : -1,
+			producer ? producer->getTemplate()->getName().str() : "script", (UnsignedInt)transport->getProducerID(),
+			moveToPos->x, moveToPos->y, targetPos->x, targetPos->y ));
+	}
+
 	if (m_deliverPayloadStateMachine)
 		m_deliverPayloadStateMachine->deleteInstance();
 	m_deliverPayloadStateMachine = NULL;

@@ -71,7 +71,23 @@ struct CRCPlayerEntry
 	UnsignedInt m_money;
 	Int m_skillPoints;
 	Int m_sciencePurchasePoints;
+	/* The rest of Player::crc, which the v4.3.2 reports split on with the three above equal: the battle
+		 plan bonuses (its kind-of masks left out), the lobby handicap and the talent count. */
+	Bool m_battlePlan;							///< FALSE: no bonuses, and the fields below are 0
+	Real m_armorScalar;
+	Real m_sightRangeScalar;
+	Int m_bombardment;
+	Int m_holdTheLine;
+	Int m_searchAndDestroy;
+	Real m_handicap;								///< 1 means none, and Player::crc then leaves it out
+	Int m_talents;
 };
+
+/* The partition section is every cell's shroud for every player, so a split there with the objects
+	 equal says only "someone sees something differently".  Each player's shroud levels are hashed in
+	 cell order, cut into bands of rows, and the first band that differs between two dumps names the
+	 player and the rows. */
+#define CRC_SHROUD_BANDS 16
 
 /// one run of a player's commands of one type on one frame (see CRCSnapshot::m_commands)
 struct CRCCommandEntry
@@ -92,6 +108,8 @@ struct CRCSnapshot
 	std::vector<CRCObjectEntry> m_objects;
 	UnsignedInt m_sectionCRC[ CRC_SECTION_COUNT ];	///< world CRC at the end of each CRCSection
 	std::vector<CRCPlayerEntry> m_players;					///< by player index
+	std::vector<UnsignedInt> m_shroudBands;					///< CRC_SHROUD_BANDS a player, by player index
+	Int m_shroudRowsPerBand;												///< partition cell rows in each band, 0 with no shroud recorded
 	/* The network commands logic executed after the previous snapshot and before this one, the inputs
 		 that made this world out of the last.  Two dumps whose CRCs part on a frame with the same
 		 digests ran the same orders differently (a logic split); different digests were given different
@@ -116,6 +134,9 @@ public:
 	void setLastObjectMotion( Real vx, Real vy, Real vz, Int payloadState );	///< velocity and payload state of the object addObject just recorded
 	void setSectionCRC( CRCSection section, UnsignedInt runningCRC );	///< record the world CRC at a section's end
 	void addPlayer( UnsignedInt money, Int skillPoints, Int sciencePurchasePoints );	///< record the next player's numbers
+	void setLastPlayerDetail( Bool battlePlan, Real armorScalar, Real sightRangeScalar, Int bombardment,
+														Int holdTheLine, Int searchAndDestroy, Real handicap, Int talents );	///< the rest of the player addPlayer just recorded
+	UnsignedInt *beginShroudBands( Int playerCount, Int rowsPerBand );	///< CRC_SHROUD_BANDS slots a player to fill; NULL before beginSnapshot
 	void endSnapshot( UnsignedInt totalCRC, UnsignedInt randomSeed );	///< close the slot being filled
 	void addCommand( UnsignedInt frame, Int player, Int type, UnsignedInt argHash );	///< one executed command, for the next snapshot
 

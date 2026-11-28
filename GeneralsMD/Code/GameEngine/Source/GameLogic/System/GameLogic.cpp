@@ -101,6 +101,7 @@
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/BattlePlanUpdate.h"
 #include "GameLogic/Module/DeliverPayloadAIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/CreateModule.h"
@@ -3317,7 +3318,7 @@ void GameLogic::writeMismatchDump( Int numPlayers, UnsignedInt crcFrame )
 	{
 		"objects",
 		"partition (logic random seed, shroud)",
-		"players (battle plans, skill points, science points, money)",
+		"players (battle plans, skill points, science points, money, handicap, talents)",
 		"AI (pathfinder, AI data, AI groups)",
 		"scripts (and the Direct Strike director on a lane map)",
 	};
@@ -3325,7 +3326,9 @@ void GameLogic::writeMismatchDump( Int numPlayers, UnsignedInt crcFrame )
 	for( Int s = 0; s < CRC_SECTION_COUNT; ++s )
 		fprintf( fp, "  0x%8.8X after %s\n", snap->m_sectionCRC[s], sectionNames[s] );
 
-	fprintf( fp, "\nPlayers on that frame:\n%7s %12s %12s %15s  %s\n", "player", "money", "skillPoints", "sciencePoints", "name" );
+	// plan is "-" without battle plan bonuses, else armor/sight scalars and the bombard/hold/search counts
+	fprintf( fp, "\nPlayers on that frame:\n%7s %12s %12s %15s %8s %7s %39s  %s\n",
+		"player", "money", "skillPoints", "sciencePoints", "handicap", "talents", "plan (armor sight bomb hold search)", "name" );
 	for( size_t i = 0; i < snap->m_players.size(); ++i )
 	{
 		const CRCPlayerEntry &p = snap->m_players[i];
@@ -3333,9 +3336,35 @@ void GameLogic::writeMismatchDump( Int numPlayers, UnsignedInt crcFrame )
 		AsciiString name;
 		if( player )
 			name.translate( player->getPlayerDisplayName() );
-		fprintf( fp, "%7d %12u %12d %15d  %s\n", (Int)i, p.m_money, p.m_skillPoints, p.m_sciencePurchasePoints, name.str() );
+		AsciiString plan( "-" );
+		if( p.m_battlePlan )
+			plan.format( "%.9g %.9g %d %d %d", p.m_armorScalar, p.m_sightRangeScalar, p.m_bombardment, p.m_holdTheLine, p.m_searchAndDestroy );
+		fprintf( fp, "%7d %12u %12d %15d %8.9g %7d %39s  %s\n", (Int)i, p.m_money, p.m_skillPoints, p.m_sciencePurchasePoints,
+			p.m_handicap, p.m_talents, plan.str(), name.str() );
 	}
 	fprintf( fp, "\n" );
+
+	/* The partition section is the shroud alone (PartitionCell::crc).  Each player's shroud levels in cell
+		 order, a hash per band of cell rows: the first band that differs between two dumps is the player and
+		 the rows that diverged, and the "all" column is that player's bands folded together. */
+	const Int shroudPlayers = (Int)( snap->m_shroudBands.size() / CRC_SHROUD_BANDS );
+	if( shroudPlayers > 0 )
+	{
+		fprintf( fp, "Shroud by player, %d cell rows a band (band b is rows b*%d on):\n%7s %10s  %s\n",
+			snap->m_shroudRowsPerBand, snap->m_shroudRowsPerBand, "player", "all", "bands, from cell row 0" );
+		for( Int p = 0; p < shroudPlayers; ++p )
+		{
+			const UnsignedInt *bands = &snap->m_shroudBands[ p * CRC_SHROUD_BANDS ];
+			UnsignedInt all = 2166136261u;
+			for( Int b = 0; b < CRC_SHROUD_BANDS; ++b )
+				all = ( all ^ bands[b] ) * 16777619u;
+			fprintf( fp, "%7d 0x%8.8X ", p, all );
+			for( Int b = 0; b < CRC_SHROUD_BANDS; ++b )
+				fprintf( fp, " %8.8X", bands[b] );
+			fprintf( fp, "\n" );
+		}
+		fprintf( fp, "\n" );
+	}
 
 	/* What the machine was told to do between the frame before and this one (CRCSnapshot::m_commands).
 		 Same lines in both dumps and a different world: the same orders ran differently.  A line that
@@ -6254,7 +6283,14 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 	xferCRC->xferAsciiString(&marker);
 	xferCRC->xferSnapshot( ThePartitionManager );
 	if (recordSnapshot)
+	{
 		m_crcSnapshots.setSectionCRC( CRC_SECTION_PARTITION, xferCRC->getCRC() );
+		// read only, beside the CRC: each player's shroud by bands of rows, so two dumps name who and where
+		const Int rowsPerBand = (ThePartitionManager->getCellCountY() + CRC_SHROUD_BANDS - 1) / CRC_SHROUD_BANDS;
+		UnsignedInt *bands = m_crcSnapshots.beginShroudBands( ThePlayerList->getPlayerCount(), rowsPerBand );
+		if (bands)
+			ThePartitionManager->getShroudBandCRCs( ThePlayerList->getPlayerCount(), CRC_SHROUD_BANDS, rowsPerBand, bands );
+	}
 	if (isInGameLogicUpdate())
 	{
 		CRCGEN_LOG(("CRC after partition manager for frame %d is 0x%8.8X\n", m_frame, xferCRC->getCRC()));
@@ -6285,6 +6321,11 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 			const Player *player = ThePlayerList->getNthPlayer( i );
 			m_crcSnapshots.addPlayer( player->getMoney()->countMoney(), player->getSkillPoints(),
 																player->getSciencePurchasePoints() );
+			const BattlePlanBonuses *plan = player->getBattlePlanBonuses();
+			m_crcSnapshots.setLastPlayerDetail( plan != NULL, plan ? plan->m_armorScalar : 0.0f, plan ? plan->m_sightRangeScalar : 0.0f,
+																					plan ? plan->m_bombardment : 0, plan ? plan->m_holdTheLine : 0,
+																					plan ? plan->m_searchAndDestroy : 0, player->getLobbyHandicap(),
+																					player->getTalentCount() );
 		}
 	}
 	if (isInGameLogicUpdate())

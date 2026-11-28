@@ -388,6 +388,7 @@ public:
 	void addShrouder( Int playerIndex );
 	void removeShrouder( Int playerIndex );
 	CellShroudStatus getShroudStatusForPlayer( Int playerIndex ) const;
+	const ShroudLevel &getShroudLevel( Int playerIndex ) const { return m_shroudLevel[playerIndex]; }	///< as crc() folds it in
 	Bool isAlwaysShrouded() const { return m_alwaysShrouded; }
 	void setAlwaysShrouded( Bool on ) { m_alwaysShrouded = on; }
 	void addAirLooker( Int playerIndex );
@@ -1632,6 +1633,11 @@ public:
 	/// return the PartitionCell located at cell coordinates (x,y).
 	PartitionCell *getCellAt(Int x, Int y);
 	const PartitionCell *getCellAt(Int x, Int y) const;
+
+	/** Read only, for the mismatch dump: each of the first playerCount players' shroud levels hashed in
+			cell order, one hash per band of rowsPerBand cell rows (the last band takes any rows left over),
+			into bandCRCs[player * bandCount + band].  One pass over the cells. */
+	void getShroudBandCRCs( Int playerCount, Int bandCount, Int rowsPerBand, UnsignedInt *bandCRCs ) const;
 
 	/// A convenience funtion to reveal shroud at some location 
 	// Queueing does not give you control of the timestamp to enforce the queue.  I own the delay, you don't.

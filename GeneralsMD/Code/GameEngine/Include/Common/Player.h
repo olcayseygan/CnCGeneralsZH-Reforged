@@ -591,6 +591,7 @@ public:
 	void changeBattlePlan( BattlePlanStatus plan, Int delta, const BattlePlanBonuses *bonus );
 	Int getNumBattlePlansActive() const { return m_bombardBattlePlans + m_holdTheLineBattlePlans + m_searchAndDestroyBattlePlans; }
 	Int getBattlePlansActiveSpecific( BattlePlanStatus plan ) const;
+	const BattlePlanBonuses *getBattlePlanBonuses() const { return m_battlePlanBonuses; }	///< NULL with no plan; read by the mismatch dump
 	void applyBattlePlanBonusesForObject( Object *obj ) const;	//New object or converted object gaining our current battle plan bonuses.
 	void removeBattlePlanBonusesForObject( Object *obj ) const; //Object left team
 	void applyBattlePlanBonusesForPlayerObjects( const BattlePlanBonuses *bonus ); //Battle plan bonuses changing, so apply to all of our objects!

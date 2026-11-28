@@ -41,6 +41,8 @@ void CRCSnapshotRing::clear( void )
 		for( Int s = 0; s < CRC_SECTION_COUNT; ++s )
 			m_snapshots[i].m_sectionCRC[s] = 0;
 		m_snapshots[i].m_players.clear();
+		m_snapshots[i].m_shroudBands.clear();
+		m_snapshots[i].m_shroudRowsPerBand = 0;
 		m_snapshots[i].m_commands.clear();
 	}
 	m_writeSlot = -1;
@@ -69,6 +71,8 @@ void CRCSnapshotRing::beginSnapshot( UnsignedInt frame )
 	for( Int s = 0; s < CRC_SECTION_COUNT; ++s )
 		snap.m_sectionCRC[s] = 0;
 	snap.m_players.clear();
+	snap.m_shroudBands.clear();
+	snap.m_shroudRowsPerBand = 0;
 	// the commands since the last snapshot belong to this one; swap so both vectors keep their capacity
 	snap.m_commands.swap( m_pendingCommands );
 	m_pendingCommands.clear();
@@ -126,8 +130,43 @@ void CRCSnapshotRing::addPlayer( UnsignedInt money, Int skillPoints, Int science
 	entry.m_money = money;
 	entry.m_skillPoints = skillPoints;
 	entry.m_sciencePurchasePoints = sciencePurchasePoints;
+	entry.m_battlePlan = FALSE;
+	entry.m_armorScalar = entry.m_sightRangeScalar = 0.0f;
+	entry.m_bombardment = entry.m_holdTheLine = entry.m_searchAndDestroy = 0;
+	entry.m_handicap = 1.0f;
+	entry.m_talents = 0;
 
 	m_snapshots[ m_writeSlot ].m_players.push_back( entry );
+}
+
+//-------------------------------------------------------------------------------------------------
+void CRCSnapshotRing::setLastPlayerDetail( Bool battlePlan, Real armorScalar, Real sightRangeScalar, Int bombardment,
+																					 Int holdTheLine, Int searchAndDestroy, Real handicap, Int talents )
+{
+	if( m_writeSlot < 0 || m_snapshots[ m_writeSlot ].m_players.empty() )
+		return;
+
+	CRCPlayerEntry &entry = m_snapshots[ m_writeSlot ].m_players.back();
+	entry.m_battlePlan = battlePlan;
+	entry.m_armorScalar = armorScalar;
+	entry.m_sightRangeScalar = sightRangeScalar;
+	entry.m_bombardment = bombardment;
+	entry.m_holdTheLine = holdTheLine;
+	entry.m_searchAndDestroy = searchAndDestroy;
+	entry.m_handicap = handicap;
+	entry.m_talents = talents;
+}
+
+//-------------------------------------------------------------------------------------------------
+UnsignedInt *CRCSnapshotRing::beginShroudBands( Int playerCount, Int rowsPerBand )
+{
+	if( m_writeSlot < 0 || playerCount <= 0 )
+		return NULL;
+
+	CRCSnapshot &snap = m_snapshots[ m_writeSlot ];
+	snap.m_shroudBands.assign( playerCount * CRC_SHROUD_BANDS, 0 );
+	snap.m_shroudRowsPerBand = rowsPerBand;
+	return &snap.m_shroudBands[0];
 }
 
 //-------------------------------------------------------------------------------------------------

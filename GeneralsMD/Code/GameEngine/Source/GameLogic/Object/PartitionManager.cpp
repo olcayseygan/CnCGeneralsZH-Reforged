@@ -6338,6 +6338,33 @@ void PartitionManager::crc( Xfer *xfer )
 }  // end crc
 
 // ------------------------------------------------------------------------------------------------
+void PartitionManager::getShroudBandCRCs( Int playerCount, Int bandCount, Int rowsPerBand, UnsignedInt *bandCRCs ) const
+{
+	playerCount = min( playerCount, (Int)MAX_PLAYER_COUNT );
+	for (Int i = 0; i < playerCount * bandCount; ++i)
+		bandCRCs[i] = 2166136261u;
+	if (m_cells == NULL || rowsPerBand <= 0 || bandCount <= 0)
+		return;
+
+	// m_cells is row after row, the order crc() walks
+	for (Int y = 0; y < m_cellCountY; ++y)
+	{
+		const Int band = min( y / rowsPerBand, bandCount - 1 );
+		for (Int x = 0; x < m_cellCountX; ++x)
+		{
+			const PartitionCell &cell = m_cells[y * m_cellCountX + x];
+			for (Int p = 0; p < playerCount; ++p)
+			{
+				const ShroudLevel &level = cell.getShroudLevel( p );
+				const UnsignedInt value = ((UnsignedInt)(UnsignedShort)level.m_currentShroud << 16) | (UnsignedShort)level.m_activeShroudLevel;
+				UnsignedInt &hash = bandCRCs[p * bandCount + band];
+				hash = (hash ^ value) * 16777619u;
+			}
+		}
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Xfer Method
 	* Version Info:
 	* 1: Initial version

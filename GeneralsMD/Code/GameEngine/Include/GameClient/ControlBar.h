@@ -1426,7 +1426,6 @@ protected:
 	Bool m_keyGridLayout;													///< see isKeyGridLayout
 	Bool m_keyGridTrayView;												///< the deck shows the chosen squad's build tray, not the commands
 	GameWindow *m_keyGridSwitchParent;						///< the switch's window, checked against the window manager before use
-	GameWindow *m_keyGridQueueButtons[ MAX_BUILD_QUEUE_BUTTONS ];	///< ButtonQueue01..09 as layoutKeyGrid found them
 	// getKeyGridPlaces' last answer and what it was worked out from: each slot's shown command and the
 	// selection's object; the same again is the same answer (asked a few times a frame)
 	mutable const CommandButton *m_keyGridPlacedCommands[ MAX_COMMANDS_PER_SET ];

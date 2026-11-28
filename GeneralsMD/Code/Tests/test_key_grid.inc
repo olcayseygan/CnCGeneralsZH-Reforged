@@ -70,7 +70,6 @@ TEST(key_grid_console_stands_where_the_mockup_has_it)
 	CHECK_EQ( kg.signals.lo.x, 11 );
 	CHECK_EQ( kg.signalKeys[ 2 ].lo.x, 99 );
 	CHECK_EQ( kg.signalKeys[ 0 ].lo.y, kg.shelf.lo.y + 10 );
-	CHECK_EQ( kg.queue[ 0 ].hi.y, kg.shelf.lo.y - 7 );
 	// no room on the spine under today's shelf: the squad switch stands on the head, left of the money
 	CHECK( kg.deckSwitch.lo.y >= kg.head.lo.y && kg.deckSwitch.hi.y <= kg.head.hi.y );
 	CHECK( kg.deckSwitch.hi.x <= kg.money.lo.x );

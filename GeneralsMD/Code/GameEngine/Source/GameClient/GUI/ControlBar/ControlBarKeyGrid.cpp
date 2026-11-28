@@ -119,11 +119,6 @@ void KeyGridLayoutForScreen( Int screenWidth, Int screenHeight, const IRegion2D 
 	const Real rowsRight = kx0 + STAGGER[ 2 ] + 100.0f * ( COMMAND_PLACE_COLUMNS - 1 ) + 90.0f + 10.0f;
 	put( &out->deck, sx0, 780, rowsRight, 1080 );
 	put( &out->rows, kx0 - 10.0f, 824, rowsRight, 1080 );
-
-	// the production queue climbs from the shelf's top at the left edge, as hudTray
-	for( Int i = 0; i < KEY_GRID_QUEUE_CELLS; i++ )
-		put( &out->queue[ i ], 6.0f + 80.0f * i, shelfTop - 66.0f, 83.0f + 80.0f * i, shelfTop - 7.0f );
-	put( &out->queueTray, 0, shelfTop - 74.0f, 8.0f + 80.0f * KEY_GRID_QUEUE_CELLS, shelfTop + 4.0f );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -391,7 +386,6 @@ static GameWindow *barWindow( const char *name )
 static const char *const s_toolWindow[ KEY_GRID_SHELF_KEYS ] = { "ButtonOptions", "ButtonPlaceBeacon", "ButtonIdleWorker", "PopupCommunicator" };
 static const Image *s_toolClassic[ KEY_GRID_SHELF_KEYS ][ 4 ];
 static const Image *s_toolWorn[ KEY_GRID_SHELF_KEYS ][ 2 ];		///< the Key Grid art a key wears, and its lit state
-static Bool s_queueImageCleared = FALSE;		///< the production queue's Classic well art is off under the console's tray
 
 static void wearToolArt( Int tool, const ControlBarSchemeManager *schemes )
 {
@@ -432,10 +426,6 @@ void ControlBar_restoreKeyGridKeys( void )
 		}
 		s_toolWorn[ tool ][ 0 ] = s_toolWorn[ tool ][ 1 ] = NULL;
 	}
-	GameWindow *queue = s_queueImageCleared ? barWindow( "ProductionQueueWindow" ) : NULL;
-	if( queue != NULL )
-		queue->winSetStatus( WIN_STATUS_IMAGE );
-	s_queueImageCleared = FALSE;
 }
 
 /// the frame's travel since layoutPanels put it (a minimised or sliding bar), which everything here follows
@@ -467,14 +457,6 @@ static IRegion2D folded( const IRegion2D &r )
 	out.lo.x = out.hi.x = r.lo.x;
 	out.lo.y = out.hi.y = r.hi.y;
 	return out;
-}
-
-/// the production queue's entries on the bar now: its tray ends after the last (QueueCap, QueueCell, QueueLast)
-static Int queueEntries( UnsignedInt shown, const GameWindow *queueParent )
-{
-	if( queueParent == NULL || const_cast< GameWindow * >( queueParent )->winIsHidden() )
-		return 0;
-	return MIN( (Int)shown, (Int)MAX_BUILD_QUEUE_BUTTONS );
 }
 
 static IRegion2D joined( const IRegion2D &a, const IRegion2D &b )
@@ -618,25 +600,10 @@ void ControlBar::layoutKeyGrid( void )
 	ControlBar_fitWindowTree( this, m_contextParent[ CP_OCL_TIMER ], moved( rows, d ) );
 	ControlBar_fitWindowTree( this, m_contextParent[ CP_BEACON ], moved( rows, d ) );
 
-	// a factory's queue on the shelf's top, nine cells left to right, on the console's own queue tray
-	// (drawKeyGridConsole) in place of the Classic well art
-	if( m_contextParent[ CP_BUILD_QUEUE ] != NULL )
-	{
-		placeWindowAt( m_contextParent[ CP_BUILD_QUEUE ], moved( kg.queueTray, d ) );
-		if( BitTest( m_contextParent[ CP_BUILD_QUEUE ]->winGetStatus(), WIN_STATUS_IMAGE ) )
-		{
-			m_contextParent[ CP_BUILD_QUEUE ]->winClearStatus( WIN_STATUS_IMAGE );
-			s_queueImageCleared = TRUE;
-		}
-		for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS; i++ )
-		{
-			AsciiString name;
-			name.format( "ButtonQueue%02d", i + 1 );
-			m_keyGridQueueButtons[ i ] = barWindow( name.str() );
-			if( i < KEY_GRID_QUEUE_CELLS )
-				placeWindowAt( m_keyGridQueueButtons[ i ], moved( kg.queue[ i ], d ) );
-		}
-	}
+	// a factory's queue stays where the Classic pass put it, in the right box over the portrait, as on
+	// Reforged.  It stood on a tray over the shelf once, under the production list (InGameUI's
+	// drawProductionList, drawn over the windows at the same left edge): a click took the hidden queue
+	// button and a right-click cancelled from the list
 
 	// no select army and idle unit keys (the owner's, 2026-11-27); their hotkeys are the command map's.
 	// The worker key stands on the shelf
@@ -699,12 +666,6 @@ void ControlBar::arrangeKeyGrid( void )
 		else
 			win->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON );
 	}
-
-	// the production queue's tray ends after its last entry: the empty buttons past it fold away
-	const Int entries = queueEntries( m_displayedQueueCount, m_contextParent[ CP_BUILD_QUEUE ] );
-	for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS && i < KEY_GRID_QUEUE_CELLS; i++ )
-		if( m_keyGridQueueButtons[ i ] != NULL )
-			placeWindowAt( m_keyGridQueueButtons[ i ], i < entries ? moved( kg.queue[ i ], d ) : folded( moved( kg.queue[ i ], d ) ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -729,11 +690,10 @@ WideChar ControlBar::keyGridLetter( const GameWindow *win ) const
 /// compose()'s numbers: the box slice's overhang above the box and past its right, the deck's top left
 /// (the spine's left less 44, y 760), the shelf's rise over its top and its right end's width, the run
 /// ShelfMid goes on under that end's faded edge, the shoulder's reach either side of the shelf's right,
-/// the spine's and shoulder's foot, the queue's rise and pitch
+/// the spine's and shoulder's foot
 static const Real KG_BOX_UP = 20.0f, KG_BOX_RIGHT = 12.0f, KG_DECK_X = 44.0f, KG_DECK_Y = 760.0f;
 static const Real KG_SHELF_UP = 8.0f, KG_SHELF_RIGHT = 40.0f, KG_FEATHER = 12.0f;
 static const Real KG_SHOULDER_IN = 152.0f, KG_SHOULDER_OUT = 8.0f, KG_SPINE_FOOT = 790.0f;
-static const Real KG_QUEUE_UP = 82.0f, KG_QUEUE_PITCH = 80.0f;
 
 static void steelPlate( const IRegion2D &r )
 {
@@ -782,9 +742,6 @@ void ControlBar::drawKeyGridConsole( void )
 	};
 	auto put = [ & ]( Int which, Real x, Real y ) { stretch( which, x, y, x + W( which ), y + H( which ) ); };
 
-	// the production queue's tray climbs from the shelf with one cell an entry shown
-	const Int queue = queueEntries( m_displayedQueueCount, m_contextParent[ CP_BUILD_QUEUE ] );
-
 	if( deck != NULL )
 	{
 		typedef ControlBarScheme S;
@@ -814,14 +771,6 @@ void ControlBar::drawKeyGridConsole( void )
 		const Real lw = W( S::KEY_GRID_SHELF_LEFT );
 		stretch( S::KEY_GRID_SHELF_MID, lw, sy, MAX( lw, sw - KG_SHELF_RIGHT ) + KG_FEATHER, sy + H( S::KEY_GRID_SHELF_MID ) );
 		put( S::KEY_GRID_SHELF_RIGHT, sw - KG_SHELF_RIGHT, sy );
-		if( queue > 0 )
-		{
-			const Real qy = stop - KG_QUEUE_UP;
-			put( S::KEY_GRID_QUEUE_CAP, 0.0f, qy );
-			for( Int i = 0; i < queue - 1; i++ )
-				put( S::KEY_GRID_QUEUE_CELL, 5.0f + KG_QUEUE_PITCH * i, qy );
-			put( S::KEY_GRID_QUEUE_LAST, 5.0f + KG_QUEUE_PITCH * ( queue - 1 ), qy );
-		}
 		// the right console from the area's right edge (drawPainting leaves the Reforged right piece off)
 		const Image *rightArt = piece( S::KEY_GRID_RIGHT );
 		if( rightArt != NULL )
@@ -1077,6 +1026,4 @@ void ControlBar::shutdownKeyGrid( void )
 	m_keyGridTrayView = FALSE;
 	m_keyGridPlacesKnown = FALSE;
 	m_keyGridPlacedOwner = NULL;
-	for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS; i++ )
-		m_keyGridQueueButtons[ i ] = NULL;
 }

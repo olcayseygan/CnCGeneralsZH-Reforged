@@ -19,7 +19,6 @@ void KeyGrid_glassForAspect( Real aspect, Int *width, Int *height );
 
 enum { KEY_GRID_SHELF_KEYS = 4 };			///< Options, Beacon, Worker, Chat, left to right on the shelf
 enum { KEY_GRID_SIGNAL_KEYS = 3 };		///< the smoke signal keys at the shelf's left
-enum { KEY_GRID_QUEUE_CELLS = 9 };		///< the production queue's cells over the shelf (MAX_BUILD_QUEUE_BUTTONS)
 
 /// the reference screen the mockups are drawn at; every rectangle below is these pixels times `scale`
 #define KEY_GRID_DESIGN_W 1920.0f
@@ -51,8 +50,6 @@ struct KeyGridRects
 	IRegion2D deck;													///< the deck's art: the spine's left at the head's top to the Z row's right at the foot
 	IRegion2D rows;													///< the three rows' backs, the click blocker over the keys
 	IRegion2D cells[ COMMAND_PLACE_COUNT ];	///< 90x72, 100 apart, rows 88 apart from y 830, A in by 25 and Z by 75
-	IRegion2D queue[ KEY_GRID_QUEUE_CELLS ];	///< 77x59 cells 80 apart along the shelf's top, from x 6
-	IRegion2D queueTray;										///< the tray under all nine
 };
 
 /** Fill `out` for a screen, the HudWidth `area` on it, a scale and the map's aspect (0 or less is

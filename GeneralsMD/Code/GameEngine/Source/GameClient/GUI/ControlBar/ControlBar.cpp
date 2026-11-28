@@ -2030,8 +2030,6 @@ ControlBar::ControlBar( void )
 	m_keyGridPlacedOwner = NULL;
 	m_keyGridPlacesFight = FALSE;
 	m_keyGridPlacesKnown = FALSE;
-	for( i = 0; i < MAX_BUILD_QUEUE_BUTTONS; i++ )
-		m_keyGridQueueButtons[ i ] = NULL;
 	for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
 	{
 		m_keyGridPlacedCommands[ i ] = NULL;

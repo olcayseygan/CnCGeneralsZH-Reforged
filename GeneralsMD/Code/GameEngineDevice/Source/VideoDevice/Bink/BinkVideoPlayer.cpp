@@ -54,6 +54,9 @@
 #include "Common/GameMemory.h"
 #include "Common/GlobalData.h"
 #include "Common/Registry.h"
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 //----------------------------------------------------------------------------
 //         Externals                                                     
@@ -95,8 +98,36 @@
 
 
 //----------------------------------------------------------------------------
-//         Private Functions                                               
+//         Private Functions
 //----------------------------------------------------------------------------
+
+/* One machine sent about thirty 0xC0000374 crashes with no stack during the EA logo, the sizzle
+	 or the shell map's load right after; one had a memory pool node overwritten with FF000000FF000000,
+	 opaque black pixels, and report 3866 a video surface locked at pitch 16 with its object written
+	 over the same way.  The process heap is walked before each frame's lock and after its unlock, and
+	 the first walk that finds it broken says which frame of which movie, at what pitch.  Capped so
+	 the in-match cameo videos stop paying once the startup movies are past; once broken, no more. */
+#if defined(_WIN32)
+static Int s_movieHeapChecks = 0;
+static Bool s_movieHeapBroken = FALSE;
+static const Int MOVIE_HEAP_CHECK_CAP = 4000;
+#endif
+
+static void movieHeapCheck( const char *when, Int frame, const AsciiString &name, Int width, Int height,
+	UnsignedInt pitch, UnsignedInt destWidth, UnsignedInt destHeight )
+{
+#if defined(_WIN32)
+	if ( s_movieHeapBroken || s_movieHeapChecks >= MOVIE_HEAP_CHECK_CAP )
+		return;
+	++s_movieHeapChecks;
+	if ( !HeapValidate( GetProcessHeap(), 0, NULL ) )
+	{
+		s_movieHeapBroken = TRUE;
+		DEBUG_LOG(( "HEAPCHECK corrupt %s movie frame %d (%s, %dx%d, locked pitch %u, dest %ux%u)\n",
+			when, frame, name.str(), width, height, pitch, destWidth, destHeight ));
+	}
+#endif
+}
 
 
 
@@ -290,6 +321,8 @@ VideoStreamInterface*	BinkVideoPlayer::open( AsciiString movieTitle )
 
 		DEBUG_LOG(("BinkVideoPlayer::createStream() - About to create stream\n"));
 		stream = createStream( handle );
+		if ( stream )
+			static_cast<BinkVideoStream*>( stream )->m_name = movieTitle;
 	}
 
 	return stream;	
@@ -338,7 +371,8 @@ void BinkVideoPlayer::initializeBinkWithMiles()
 //============================================================================
 
 BinkVideoStream::BinkVideoStream()
-: m_handle(NULL)
+: m_handle(NULL),
+	m_surfaceLogged(FALSE)
 {
 
 }
@@ -391,7 +425,21 @@ void BinkVideoStream::frameRender( VideoBuffer *buffer )
 {
 	if ( buffer )
 	{
+		const Int frame = (Int)m_handle->FrameNum;
+		const Int movieWidth = (Int)m_handle->Width;
+		const Int movieHeight = (Int)m_handle->Height;
+		movieHeapCheck( "before", frame, m_name, movieWidth, movieHeight, buffer->pitch(), buffer->width(), buffer->height() );
+
 		void *mem = buffer->lock();
+
+		if ( !m_surfaceLogged )
+		{
+			m_surfaceLogged = TRUE;
+			DEBUG_LOG(( "BinkVideoStream::frameRender - %s %dx%d locked pitch %u, dest %ux%u at %u,%u, texture %ux%u, format %d%s\n",
+				m_name.str(), movieWidth, movieHeight, buffer->pitch(), buffer->width(), buffer->height(),
+				buffer->xPos(), buffer->yPos(), buffer->textureWidth(), buffer->textureHeight(), (Int)buffer->format(),
+				mem == NULL ? ", lock refused" : "" ));
+		}
 
 		u32 flags;
 
@@ -414,15 +462,18 @@ void BinkVideoStream::frameRender( VideoBuffer *buffer )
 				break;
 
 			default:
+				if ( mem != NULL )
+					buffer->unlock();
 				return;
 		}
-		
+
 		if ( mem != NULL )
 		{
 
 			BinkCopyToBuffer ( m_handle, mem, buffer->pitch(), buffer->height(),
 													buffer->xPos(), buffer->yPos(), flags );
 			buffer->unlock();
+			movieHeapCheck( "after", frame, m_name, movieWidth, movieHeight, buffer->pitch(), buffer->width(), buffer->height() );
 		}
 	}
 

@@ -75,6 +75,8 @@ class BinkVideoStream : public VideoStream
 
 		HBINK					m_handle;														///< Bink streaming handle;
 		Char					*m_memFile;													///< Pointer to memory resident file
+		AsciiString		m_name;															///< movie title it was opened with, for the heap check's log line
+		Bool					m_surfaceLogged;										///< the first frame's locked pitch and size were logged
 																											
 		BinkVideoStream();																///< only BinkVideoPlayer can create these
 		virtual ~BinkVideoStream();												

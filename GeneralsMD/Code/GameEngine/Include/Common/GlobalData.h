@@ -678,6 +678,7 @@ public:
 	Bool m_dynamicMusic;							///< "DynamicMusic" in Options.ini: a skirmish's music follows the fight (MusicManager::update)
 	Bool m_legacySound;								///< "LegacySound" in Options.ini: retail's mix, none of the v3.4 processing (MilesAudioManager::applyLegacySound)
 	Bool m_muteInBackground;					///< "MuteInBackground" in Options.ini: silent while another window has the focus (WinMain's WM_ACTIVATE)
+	Bool m_incomeSound;								///< "IncomeSound" in Options.ini: MiscAudio's MoneyDepositSound plays on a deposit (Money::deposit); sound only, never the money
   Bool m_3DSoundPref;               ///< Whether user wants to use 3DSound or not
 
 	Bool m_animateWindows;						///< Should we animate window transitions?

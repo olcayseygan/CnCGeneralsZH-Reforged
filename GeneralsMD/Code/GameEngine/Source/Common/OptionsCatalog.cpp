@@ -99,6 +99,7 @@ static void set_m_masterVolume( Int value )
 OPTION_BOOL_ACCESSORS( m_dynamicMusic )
 OPTION_BOOL_ACCESSORS( m_legacySound )
 OPTION_BOOL_ACCESSORS( m_muteInBackground )
+OPTION_BOOL_ACCESSORS( m_incomeSound )
 // The missions' game speed, in percent of retail; Options.ini and the combo hold the index.  The
 // catalog loads before there is a game.  It is the game time a tick advances, fixed when a mission
 // starts, so the menu's Accept during a mission takes effect from the next one.
@@ -480,6 +481,14 @@ const OptionDef TheOptionCatalog[] =
 	{ "MuteInBackground",					OPT_WND( "CheckMuteInBackground" ), "GUI:MuteInBackground",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_muteInBackground, set_m_muteInBackground },
+
+	// The cash ding each time money comes in: a supply truck's drop, an oil derrick's tick, a hacker's
+	// pay (Money::deposit).  Off skips only the sound; the deposit, and the shared random stream the
+	// sound would have read without advancing, are untouched.  On by default, since off is what the
+	// fork added (a player's suggestion of 2026-11-28).  Read at each deposit.  On Options > Audio.
+	{ "IncomeSound",							OPT_WND( "CheckIncomeSound" ), "GUI:IncomeSound",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_incomeSound, set_m_incomeSound },
 
 	// With the move, attack move or guard key armed, a left drag over the ground spreads the
 	// selection along the line drawn instead of sending everyone to one point.  On Options > Controls.

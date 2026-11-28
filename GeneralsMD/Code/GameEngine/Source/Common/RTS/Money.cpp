@@ -46,6 +46,7 @@
 #include "Common/Money.h"
 
 #include "Common/GameAudio.h"
+#include "Common/GlobalData.h"
 #include "Common/MiscAudio.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
@@ -84,8 +85,9 @@ void Money::deposit(UnsignedInt amountToDeposit, Bool playSound)
 	AudioEventRTS event = TheAudio->getMiscAudio()->m_moneyDepositSound;
 	event.setPlayerIndex(m_playerIndex);
 
-	// Play a sound
-	if (playSound)
+	// Play a sound, unless this machine's player switched the ding off (Options > Audio).  Only the
+	// sound hangs on it: the money below is the same on every machine.
+	if (playSound && TheGlobalData->m_incomeSound)
 		TheAudio->addAudioEvent(&event);
 	
 	if (!m_unlimited)

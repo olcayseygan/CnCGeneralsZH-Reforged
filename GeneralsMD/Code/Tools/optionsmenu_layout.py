@@ -217,6 +217,7 @@ GROUP_LAYOUT = [
             combo("SpeakerType", "LabelSpeakerType", "ComboBoxSpeakerType"),
             check("MuteInBackground", "CheckMuteInBackground")]),
         ("GUI:OptionsHeadMix", [
+            check("IncomeSound", "CheckIncomeSound"),
             check("LegacySound", "CheckLegacySound", MORE),
             check("DynamicMusic", "CheckDynamicMusic", MORE)])]),
 
@@ -321,6 +322,8 @@ NEW_VIEWS = [
     ("CHECK", "CheckGridKeys", "GUI:GridKeys"),
     # the catalog's TerrainRelief row, Ground Relief (2026-11-27)
     ("CHECK", "CheckTerrainRelief", "GUI:TerrainRelief"),
+    # the catalog's IncomeSound row, the cash ding on a deposit (2026-11-28)
+    ("CHECK", "CheckIncomeSound", "GUI:IncomeSound"),
 ]
 
 # Renamed captions (the plan's renames and the two Turkish words the writing rule forced), and the
@@ -856,9 +859,9 @@ def selfcheck():
 
     # every row, fader and rail choice has its pane sentences in both languages, and its name
     stems = [row[0] for _page, groups in GROUP_LAYOUT for _h, rs in groups for row in rs] + RAIL_STEMS
-    # the plan's 118, Key Grid's Grid Keys and Ground Relief (2026-11-27)
-    if len(stems) != 120:
-        problems.append("%d settings on the screen, the plan's tooltip table holds 118, Grid Keys and Ground Relief" % len(stems))
+    # the plan's 118, Key Grid's Grid Keys and Ground Relief (2026-11-27), Income Sound (2026-11-28)
+    if len(stems) != 121:
+        problems.append("%d settings on the screen, the plan's tooltip table holds 118, Grid Keys, Ground Relief and Income Sound" % len(stems))
     for stem in stems:
         for table, language in ((keys, "Patch.str"), (turkish, "Turkish/Generals.str")):
             if "OPTIONTIP:%s" % stem not in table:

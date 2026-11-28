@@ -1245,6 +1245,7 @@ GlobalData::GlobalData()
 	m_dynamicMusic = FALSE;
 	m_legacySound = TRUE;		// retail's mix; this is the one row where on is the original
 	m_muteInBackground = TRUE;	// retail's: loseFocus on every deactivation
+	m_incomeSound = TRUE;		// retail's: the cash ding on every deposit
   m_3DSoundPref = false;
 
 	m_keyboardDefaultScrollFactor = m_keyboardScrollFactor = 0.5f;

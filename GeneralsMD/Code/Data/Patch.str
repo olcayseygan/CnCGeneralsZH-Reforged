@@ -808,6 +808,10 @@ TOOLTIP:MuteInBackground
 "Silences the game while another window has the focus. Off keeps it playing behind a browser or on a second monitor."
 END
 
+GUI:IncomeSound
+"Income Sound"
+END
+
 GUI:LegacySound
 "Legacy Sound"
 END
@@ -9400,6 +9404,10 @@ END
 
 OPTIONTIP:MuteInBackground
 "The game goes silent when you switch to another window."
+END
+
+OPTIONTIP:IncomeSound
+"The cash ding when a supply drop, an oil derrick or a hacker pays you."
 END
 
 OPTIONTIP:LegacySound

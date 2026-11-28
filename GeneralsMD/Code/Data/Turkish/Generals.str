@@ -15579,6 +15579,10 @@ TOOLTIP:MuteInBackground
 "Başka bir pencere öndeyken oyunu susturur. Kapalıyken oyun bir tarayıcının arkasında ya da ikinci monitörde de duyulur."
 END
 
+GUI:IncomeSound
+"Gelir Sesi"
+END
+
 GUI:LegacySound
 "Eski Ses"
 END
@@ -23583,6 +23587,10 @@ END
 
 OPTIONTIP:MuteInBackground
 "Başka bir pencereye geçince oyun susar."
+END
+
+OPTIONTIP:IncomeSound
+"İkmal, petrol kuyusu ya da hacker para getirdiğinde çalan kasa sesi."
 END
 
 OPTIONTIP:LegacySound

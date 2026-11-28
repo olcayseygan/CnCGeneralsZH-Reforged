@@ -32383,7 +32383,7 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 {
 	CHECK( bootOnce() );
 	CHECK( RandomMapGenerator::styleNamed( "aod" ) != 0 );
-	CHECK_EQ( RandomMapGenerator::aodFamilyCount(), 11 );
+	CHECK_EQ( RandomMapGenerator::aodFamilyCount(), 12 );
 	static const Int theSeats[] = { 1, 2, 4, 9 };
 	const Int perFamily = (Int)( sizeof( theSeats ) / sizeof( theSeats[0] ) );
 	const Int forcedCases = RandomMapGenerator::aodFamilyCount() * perFamily;
@@ -32583,10 +32583,11 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 						(Int)path.size(), path[k].x, path[k].y );
 				CHECK( !inExit( path[k] ) );
 			}
-			// stop to stop, which cuts every corner the lane walks round (the generator keeps 520 to 820 along it)
-			if( length <= 470.0f || length >= 850.0f )
+			/* stop to stop, which cuts every corner and wiggle the lane walks round (the generator keeps 520 to 820 along
+				it, and a wave walks the trench between two stops, not the chord) */
+			if( length <= 440.0f || length >= 850.0f )
 				printf( "  aod seats %d lane %d is %.0f cells long\n", clamped.m_numPlayers, n, length );
-			CHECK( length > 470.0f && length < 850.0f );
+			CHECK( length > 440.0f && length < 850.0f );
 			stops.push_back( path );
 
 			// the entry walks to the exit, and the lane is sealed: no start walks down into it
@@ -32785,7 +32786,7 @@ TEST(aod_variants_sheet_dump)
 	if( dir == NULL || dir[0] == 0 )
 		return;
 	CHECK( bootOnce() );
-	/* With ZH_AOD_VARIETY set as well, three seeds of every family at one and at four seats instead, aodv_<family>_<n>_
+	/* With ZH_AOD_VARIETY set as well, three seeds of every family at one, four and six seats instead, aodv_<family>_<n>_
 		<seats>p.ppm and variety.txt, for the second sheet (sheet2.py): what the seed changes within one family. */
 	const Bool variety = getenv( "ZH_AOD_VARIETY" ) != NULL;
 	std::string listPath = std::string( dir ) + ( variety ? "\\variety.txt" : "\\sheet.txt" );
@@ -32796,9 +32797,9 @@ TEST(aod_variants_sheet_dump)
 	static const Int theSeats[3] = { 1, 2, 4 };
 	for( Int f = 0; f < RandomMapGenerator::aodFamilyCount(); f++ )
 	{
-		for( Int c = 0; c < ( variety ? 6 : 3 ); c++ )
+		for( Int c = 0; c < ( variety ? 9 : 3 ); c++ )
 		{
-			const Int seats = variety ? ( c < 3 ? 1 : 4 ) : theSeats[c];
+			const Int seats = variety ? ( c < 3 ? 1 : c < 6 ? 4 : 6 ) : theSeats[c];
 			const Int seed = variety ? 3001 + f * 7 + ( c % 3 ) * 131 : 101 + f * 3 + c;
 			RandomMapGenerator::setAodFamilyForTests( f );
 			RandomMapSettings settings;

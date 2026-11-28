@@ -11161,11 +11161,13 @@ struct RMGAodShape
 	the next. side holds trench off the waves' way: a fork's other branch, a comb's bays.
 	The owner, 2026-11-28 later: "yollar oldukları yerde daire de çizebilirler", so "circles" winds a switchback
 	whose every run turns a near full circle where it is, round an island of plateau a bridge reaches. */
-enum { RMG_AOD_FAMILIES = 11 };
+enum { RMG_AOD_FAMILIES = 12, RMG_AOD_MIXED = 11 };
+/* "mixed" is a lane of two or three stretches of other families in a row (the owner, 2026-11-28: "karışımları da
+	olabilir hem kare hem daire vs"); a third of the seeds draw it (buildAod), the rest one family alone. */
 static const char *const theAodFamilies[RMG_AOD_FAMILIES] =
-	{ "switchback", "zigzag", "wide S", "wiggle", "hairpins", "terraces", "comb", "fork", "sawtooth", "loops", "circles" };
+	{ "switchback", "zigzag", "wide S", "wiggle", "hairpins", "terraces", "comb", "fork", "sawtooth", "loops", "circles", "mixed" };
 /// cells of lane walked between two bridges over it, each family's: fewer where the lane winds tight
-static const Real theAodBridgeEvery[RMG_AOD_FAMILIES] = { 150.0f, 150.0f, 170.0f, 170.0f, 190.0f, 150.0f, 150.0f, 130.0f, 150.0f, 190.0f, 110.0f };
+static const Real theAodBridgeEvery[RMG_AOD_FAMILIES] = { 150.0f, 150.0f, 170.0f, 170.0f, 190.0f, 150.0f, 150.0f, 130.0f, 150.0f, 190.0f, 110.0f, 140.0f };
 static Int theAodFamilyForTests = -1;		///< RandomMapGenerator::setAodFamilyForTests; -1, the seed's
 
 struct RMGAodPlan
@@ -11182,7 +11184,7 @@ static void rmgAodRepeats( Int family, std::vector<Int>& repeats )
 	{
 		{ 3, 4, 5, 6, 7, 8, 0, 0 }, { 3, 4, 5, 6, 7, 9, 11, 14 }, { 2, 3, 4, 0, 0, 0, 0, 0 }, { 5, 6, 7, 8, 10, 12, 14, 0 },
 		{ 3, 5, 7, 0, 0, 0, 0, 0 }, { 1, 2, 3, 4, 0, 0, 0, 0 }, { 3, 4, 5, 6, 7, 8, 0, 0 }, { 2, 3, 4, 5, 6, 0, 0, 0 },
-		{ 2, 3, 4, 5, 6, 7, 0, 0 }, { 3, 5, 7, 0, 0, 0, 0, 0 }, { 4, 3, 2, 0, 0, 0, 0, 0 },
+		{ 2, 3, 4, 5, 6, 7, 0, 0 }, { 3, 5, 7, 0, 0, 0, 0, 0 }, { 4, 3, 2, 0, 0, 0, 0, 0 }, { 3, 2, 0, 0, 0, 0, 0, 0 },
 	};
 	repeats.clear();
 	for( Int i = 0; i < 8 && theRepeats[family][i] > 0; i++ )
@@ -11217,7 +11219,7 @@ static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, Uns
 		return a + step * (Real)i + jitter;
 	};
 	// the waves draw less (a six-seat ring's wide S has no length to spare)
-	const Real least = family == 2 || family == 3 ? 0.85f : 0.65f;
+	const Real least = family == 2 ? 0.85f : family == 3 ? 0.6f : 0.65f;
 	auto reachOf = [&]( Int i ) -> Real { return s * ( least + ( 1.0f - least ) * rnd( i, 2 ) ); };
 	switch( family )
 	{
@@ -11267,12 +11269,17 @@ static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, Uns
 		{
 			/* The wiggle's crests broadened (the square root of the wave): its half waves are narrow, and a plain
 				wave's turns there are as sharp as a zigzag's. */
+			/* The seed shifts the wave's phase up to a third of a half wave and warps its spacing (t + w sin(2 pi m t) /
+				2 pi m, |w| under 0.6, so it still runs one way), so the crests stand unevenly and in other places. */
 			const Int points = 24 * k;
-			add( p, 0.0f, -s );
+			// the wide S warps less: on a six-seat ring it has no length to spare
+			const Real phase = ( rnd( 0, 10 ) - 0.5f ) * 0.66f * PI, warp = ( rnd( 0, 11 ) - 0.5f ) * ( family == 2 ? 0.6f : 1.2f );
+			const Real warpWaves = rnd( 0, 12 ) < 0.5f ? 1.0f : 2.0f;
 			for( Int i = 0; i <= points; i++ )
 			{
-				const Real t = (Real)i / (Real)points;
-				Real c = Cos( PI * (Real)k * t );
+				const Real t0 = (Real)i / (Real)points;
+				const Real t = t0 + warp * Sin( 2.0f * PI * warpWaves * t0 ) / ( 2.0f * PI * warpWaves );
+				Real c = Cos( PI * (Real)k * t + phase );
 				if( family == 3 )
 					c = c < 0.0f ? -sqrtf( -c ) : sqrtf( c );
 				// each crest its own reach, eased from one crest to the next across the crossing between them
@@ -11280,7 +11287,9 @@ static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, Uns
 				const Int wave = (Int)floorf( at );
 				const Real f = at - (Real)wave, ease = f * f * ( 3.0f - 2.0f * f );
 				const Real reach = reachOf( wave ) + ( reachOf( wave + 1 ) - reachOf( wave ) ) * ease;
-				add( p, a + ( b - a ) * t, -reach * c );
+				if( i == 0 )
+					add( p, 0.0f, -reach * c );
+				add( p, a + ( b - a ) * t0, -reach * c );
 			}
 			add( p, 1.0f, p.back().m_cellY );
 			break;
@@ -11294,22 +11303,30 @@ static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, Uns
 			const Real edge0 = 0.9f;
 			// each turn's place along the room drawn: up to an eighth of the runs' length in from the end
 			auto turnAt = [&]( Int j, Bool atHi ) -> Real { const Real in = 0.12f * rnd( j, 3 ) * ( hi0 - lo0 ); return atHi ? hi0 - in : lo0 + in; };
+			/* The seed spaces the runs unevenly (an inner run moved up to 0.15 of the spacing either way) and picks each
+				turn's kind: a half circle, bulging 0.03 to 0.07 of the room, on three of four of the loops' turns and two
+				of five of the hairpins', square on the rest. */
+			auto runV = [&]( Int j ) -> Real
+			{
+				const Real spacing = 2.0f * edge0 / (Real)( k - 1 );
+				return -edge0 + spacing * (Real)j + ( j > 0 && j + 1 < k ? ( rnd( j, 13 ) - 0.5f ) * 0.3f * spacing : 0.0f );
+			};
 			Real from = lo0;
 			add( p, 0.0f, -edge0 );
 			for( Int j = 0; j < k; j++ )
 			{
-				const Real v = -edge0 + 2.0f * edge0 * (Real)j / (Real)( k - 1 );
+				const Real v = runV( j );
 				const Bool down = ( j & 1 ) == 0;
 				const Real to = j + 1 < k ? turnAt( j, down ) : ( down ? hi0 : lo0 );
 				add( p, from, v );
 				add( p, to, v );
 				if( j + 1 < k )
 				{
-					const Real next = -edge0 + 2.0f * edge0 * (Real)( j + 1 ) / (Real)( k - 1 );
-					if( family == 9 )
+					const Real next = runV( j + 1 );
+					if( rnd( j, 14 ) < ( family == 9 ? 0.75f : 0.4f ) )
 					{
 						// a half circle round to the next run
-						const Real mid = 0.5f * ( v + next ), rv = 0.5f * ( next - v ), ru = 0.05f;
+						const Real mid = 0.5f * ( v + next ), rv = 0.5f * ( next - v ), ru = 0.03f + 0.04f * rnd( j, 15 );
 						for( Int q = 1; q < 12; q++ )
 						{
 							const Real th = PI * (Real)q / 12.0f;
@@ -11408,18 +11425,33 @@ static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, Uns
 			const Real radius = std::min( 26.0f, std::min( 0.3f * step * uCells, s * vCells - 20.0f ) );
 			const Real outRadius = std::min( 26.0f, std::min( 0.3f * step * uCells, ( ( 1.0f - s ) * vCells - 8.0f ) / 1.77f ) );
 			const Real gap = 40.0f * PI / 180.0f;
-			// runs stay even here (a moved run left too little room for its loop), but every loop's size is drawn
+			/* Runs stay even here (a moved run left too little room for its loop). The seed draws which runs and steps
+				get a loop (three of four, at least one), where it sits along its run or step, and its size. */
+			Bool runLoop[16], stepLoop[16], any = FALSE;
+			for( Int i = 0; i < 16; i++ )
+			{
+				runLoop[i] = i + 1 < k && radius >= 14.0f && rnd( i, 16 ) < 0.75f;
+				stepLoop[i] = i > 0 && i < k && outRadius >= 14.0f && rnd( i, 17 ) < 0.75f;
+				any = any || runLoop[i] || stepLoop[i];
+			}
+			if( !any )
+			{
+				if( outRadius >= 14.0f && k > 1 )
+					stepLoop[1] = TRUE;
+				else if( radius >= 14.0f && k > 1 )
+					runLoop[0] = TRUE;
+			}
 			Real v = -s;
 			add( p, 0.0f, v );
 			for( Int i = 0; i < k; i++ )
 			{
 				const Real u = a + step * (Real)i;
 				const Real outR = outRadius >= 14.0f ? std::max( 14.0f, outRadius * ( 0.75f + 0.25f * rnd( i, 6 ) ) ) : outRadius;
-			const Real runR = radius >= 14.0f ? std::max( 14.0f, radius * ( 0.75f + 0.25f * rnd( i, 7 ) ) ) : radius;
-				if( i > 0 && outR >= 14.0f )
+				const Real runR = radius >= 14.0f ? std::max( 14.0f, radius * ( 0.75f + 0.25f * rnd( i, 7 ) ) ) : radius;
+				if( i < 16 && stepLoop[i] )
 				{
-					// the step runs along u at v; the loop's side is outwards, the sign of v
-					const Real middle = u - 0.5f * step, out = v < 0.0f ? -1.0f : 1.0f;
+					// the step runs along u at v; the loop's side is outwards, the sign of v; anywhere from 0.35 to 0.65 of it
+					const Real middle = u - ( 0.65f - 0.3f * rnd( i, 19 ) ) * step, out = v < 0.0f ? -1.0f : 1.0f;
 					for( Int q = 0; q <= 28; q++ )
 					{
 						const Real t = -0.5f * PI - gap - ( 2.0f * PI - 2.0f * gap ) * (Real)q / 28.0f;
@@ -11428,14 +11460,17 @@ static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, Uns
 				}
 				add( p, u, v );
 				const Real dir = v < 0.0f ? 1.0f : -1.0f, side = 1.0f;
-				if( i + 1 < k && runR >= 14.0f )
+				if( i < 16 && runLoop[i] )
 				{
-					// the run's direction d is along v (dir), the loop's side n along u (side); the centre stands off the run
+					// the run's direction d is along v (dir), the loop's side n along u (side); the centre stands off the run,
+					// moved along it as far as leaves 6 cells to either end
+					const Real room = std::max( 0.0f, s * vCells - 6.0f - runR ) / vCells;
+					const Real along = ( rnd( i, 18 ) - 0.5f ) * 1.6f * room;
 					const Real centreU = u + side * runR * Cos( gap ) / uCells;
 					for( Int q = 0; q <= 28; q++ )
 					{
 						const Real t = -0.5f * PI - gap - ( 2.0f * PI - 2.0f * gap ) * (Real)q / 28.0f;
-						add( p, centreU + side * runR * Sin( t ) / uCells, dir * runR * Cos( t ) / vCells );
+						add( p, centreU + side * runR * Sin( t ) / uCells, along + dir * runR * Cos( t ) / vCells );
 					}
 				}
 				v = -v;
@@ -11444,13 +11479,46 @@ static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, Uns
 			add( p, 1.0f, v );
 			break;
 		}
+		case RMG_AOD_MIXED:	// mixed: k stretches (two or three) of other families one after the other along the room
+		{
+			/* Each stretch a family the seed picks (never the one before it), drawn with its own draws in its share of
+				the room and its own cells, so its turns and loops keep their size. A run straight across the room joins
+				two stretches, 20 cells clear of each. The fork, the comb, the hairpins and the loops stay out: a
+				fork's branch or a comb's bay at a joint, and runs the room's whole width, would meet the next stretch. */
+			static const Int theMix[7] = { 0, 1, 2, 3, 5, 8, 10 };
+			static const Int theMixK[7] = { 3, 3, 2, 4, 1, 3, 2 };
+			const Int parts = std::max( 2, std::min( 3, k ) );
+			const Real margin = 20.0f / uCells;
+			Int last = -1;
+			RMGAodPlan sub;
+			for( Int j = 0; j < parts; j++ )
+			{
+				Int pick = (Int)( hashCell( variety, j, 40 ) % 7U );
+				if( theMix[pick] == last )
+					pick = ( pick + 1 ) % 7;
+				last = theMix[pick];
+				const Real u0 = (Real)j / (Real)parts, u1 = (Real)( j + 1 ) / (Real)parts;
+				const Real lo = u0 + ( j > 0 ? margin : 0.0f ), hi = u1 - ( j + 1 < parts ? margin : 0.0f );
+				rmgAodPlan( theMix[pick], theMixK[pick], s, uCells * ( hi - lo ), vCells, hashCell( variety, j, 41 ), sub );
+				if( sub.path.empty() )
+					continue;
+				if( !p.empty() )
+				{
+					add( p, u0, p.back().m_cellY );
+					add( p, u0, sub.path[0].m_cellY );
+				}
+				for( UnsignedInt q = 0; q < sub.path.size(); q++ )
+					add( p, lo + sub.path[q].m_cellX * ( hi - lo ), sub.path[q].m_cellY );
+			}
+			break;
+		}
 	}
 	/* Every corner of a turn sharper than 60 degrees: kept square, cut at 45 degrees (a 90-degree turn becomes two of 45
 		with a diagonal between), or rounded, by the seed, cut 4 to 10 cells along each leg and never more than a third
 		of either. The smooth waves and the loops' half circles have no such corners, and the hairpins keep theirs
 		square: cut, their runs side by side on a four- or six-seat ring came too near at every turn. Worked in cells;
 		a draw keyed on the corner's place along the room, so a fork's two branches turn alike. */
-	if( family != 2 && family != 3 && family != 4 && family != 9 )
+	if( family != 2 && family != 3 && family != 4 && family != 9 && family != RMG_AOD_MIXED )
 	{
 		auto cornerize = [&]( std::vector<RMGPoint>& line )
 		{
@@ -11496,6 +11564,15 @@ static void rmgAodPlan( Int family, Int k, Real s, Real uCells, Real vCells, Uns
 		cornerize( p );
 		for( UnsignedInt n = 0; n < plan.side.size(); n++ )
 			cornerize( plan.side[n] );
+	}
+	// and on half the seeds the whole drawing turned over across the room, so it winds the other way first
+	if( rnd( 0, 21 ) < 0.5f )
+	{
+		for( UnsignedInt i = 0; i < p.size(); i++ )
+			p[i].m_cellY = -p[i].m_cellY;
+		for( UnsignedInt n = 0; n < plan.side.size(); n++ )
+			for( UnsignedInt i = 0; i < plan.side[n].size(); i++ )
+				plan.side[n][i].m_cellY = -plan.side[n][i].m_cellY;
 	}
 }
 
@@ -11816,8 +11893,10 @@ void RMGLayout::buildAod( void )
 		return 0;
 	};
 	// the seed's family, or the next one that fits, with the repeat and reach that come nearest the length
+	// a third of the seeds a mixed lane, the rest one of the eleven families alone
 	const Int seeded = theAodFamilyForTests >= 0 ? theAodFamilyForTests % RMG_AOD_FAMILIES
-		: (Int)( hashCell( seed + 71021U, 0, 0 ) % (UnsignedInt)RMG_AOD_FAMILIES );
+		: hashCell( seed + 71021U, 1, 0 ) % 3U == 0U ? (Int)RMG_AOD_MIXED
+		: (Int)( hashCell( seed + 71021U, 0, 0 ) % (UnsignedInt)( RMG_AOD_FAMILIES - 1 ) );
 	Int family = -1, chosenK = 4;
 	Real chosenS = 1.0f;
 	{

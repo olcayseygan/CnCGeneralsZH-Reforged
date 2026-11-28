@@ -1371,6 +1371,48 @@ static void runDirectorReplays( int argc, char **argv )
 		GetTickCount() - started, exitCode, replayPrefix));
 }
 
+// The game started without the launcher's -rk7, from Steam's Play button or a double click on the exe:
+// start the launcher instead, if this machine has one.  It is found where its own installer put it.
+// electron-builder's per-user NSIS install writes InstallLocation under HKCU\Software\<a GUID derived
+// from the launcher's appId, com.zhreforged.launcher>, and a one-click per-user install always lands in
+// %LOCALAPPDATA%\Programs\<its package name>, which is the fallback for a registry that lost the key.
+// Started detached with its own folder as working directory; the game then quits.  False when neither
+// place holds the exe or it would not start, and the caller shows its box.
+static Bool startLauncher( void )
+{
+	static const wchar_t LAUNCHER_EXE[] = L"ZHReforged.exe";
+	wchar_t folders[ 2 ][ MAX_PATH ];
+	DWORD size = sizeof( folders[ 0 ] );
+	if( RegGetValueW( HKEY_CURRENT_USER, L"Software\\93f7407c-3e81-52cb-a8d6-4b26c85bf592", L"InstallLocation",
+			RRF_RT_REG_SZ, NULL, folders[ 0 ], &size ) != ERROR_SUCCESS )
+		folders[ 0 ][ 0 ] = 0;
+	DWORD length = GetEnvironmentVariableW( L"LOCALAPPDATA", folders[ 1 ], MAX_PATH );
+	if( length == 0 || length >= MAX_PATH || wcscat_s( folders[ 1 ], L"\\Programs\\zhreforged-launcher" ) != 0 )
+		folders[ 1 ][ 0 ] = 0;
+
+	for( int index = 0; index < 2; ++index )
+	{
+		const wchar_t *folder = folders[ index ];
+		if( folder[ 0 ] == 0 )
+			continue;
+		wchar_t exe[ MAX_PATH ];
+		if( swprintf_s( exe, L"%s\\%s", folder, LAUNCHER_EXE ) < 0 || GetFileAttributesW( exe ) == INVALID_FILE_ATTRIBUTES )
+			continue;
+		wchar_t commandLine[ MAX_PATH + 2 ];
+		swprintf_s( commandLine, L"\"%s\"", exe );
+		STARTUPINFOW startup;
+		memset( &startup, 0, sizeof( startup ) );
+		startup.cb = sizeof( startup );
+		PROCESS_INFORMATION process;
+		if( !CreateProcessW( exe, commandLine, NULL, NULL, FALSE, 0, NULL, folder, &startup, &process ) )
+			continue;
+		CloseHandle( process.hThread );
+		CloseHandle( process.hProcess );
+		return TRUE;
+	}
+	return FALSE;
+}
+
 // WinMain ====================================================================
 /** Application entry point */
 //=============================================================================
@@ -1411,6 +1453,8 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			findEarlyCommandLineOption( L"-multiInstance" ) == NULL &&
 			!isUnattendedProcess())
 	{
+		if( startLauncher() )
+			return 0;
 		::MessageBoxA( NULL, "Please start Zero Hour Reforged from its launcher.", "Zero Hour Reforged", MB_OK | MB_ICONINFORMATION );
 		return 1;
 	}

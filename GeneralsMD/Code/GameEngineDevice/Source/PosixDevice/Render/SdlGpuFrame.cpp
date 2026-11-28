@@ -851,6 +851,9 @@ bool SdlGpuFrame::Submit_Flush(SDL_GPUCommandBuffer * commands)
 	size_t kept = 0;
 	for (size_t i = 0; i < FlushFences.size(); ++i) {
 		if (SDL_QueryGPUFence(GpuDevice, FlushFences[i])) {
+			// Signalled, so this returns at once; SDL's Vulkan backend hands a finished command buffer's
+			// upload buffers back only inside a wait, and without one they piled up until some later wait or shutdown.
+			SDL_WaitForGPUFences(GpuDevice, true, &FlushFences[i], 1);
 			SDL_ReleaseGPUFence(GpuDevice, FlushFences[i]);
 		} else {
 			FlushFences[kept++] = FlushFences[i];

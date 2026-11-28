@@ -1524,6 +1524,7 @@ The next split in that Air Force match was a paratrooper. Rangers ride in their 
 - Building from source no longer stops at a test your compiler cannot build: a test that gcc 16 refused is fixed, after Narfmeister found it, and Apple Clang 15 builds the game again.
 - Modern water runs on Linux with the same reflections as Windows: Legacy, SSR and Hybrid. Options gets a Water tab, hidden on Windows, with scene reflections, reflection detail, wave detail and refraction, all following the quality slider. The water's static mesh and the shoreline are worked out once and reused, which makes it faster. Classic water stays the default. Thanks to Shin-Aska, whose pull requests these are.
 - With Cloud Style on Volumetric, more than eight toxin or radiation fields at once keep their cloud look on Linux and Mac. The ninth turned flat. Thanks to Shin-Aska for the fix.
+- A long session on Vulkan no longer keeps eating memory. Texture and buffer uploads the graphics card has finished with are handed back as the game goes on; they used to stay held until the next full wait or until the game closed. Shin-Aska found and fixed it.
 - Thanks to ilyasakin, whose port this is.
 
 ## No more mods

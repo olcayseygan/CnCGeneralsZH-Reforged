@@ -97,6 +97,7 @@ struct KeyGridSlot
 	Int refs;			///< how many objects name the structure in their Prerequisites; 0 for a superweapon
 	Int mirror;		///< the place the real building of a GLA fake has on the real set, or -1
 	Int family;		///< KeyGridSkillFamily; left out of an initializer it is KEY_GRID_FAMILY_POWER
+	Int upgradesPower;	///< an upgrade button that names a special power (the MOAB): placed as a power, family POWER
 };
 
 /** The passengers' places on a set that builds nothing: along the Z row from N leftward, then along

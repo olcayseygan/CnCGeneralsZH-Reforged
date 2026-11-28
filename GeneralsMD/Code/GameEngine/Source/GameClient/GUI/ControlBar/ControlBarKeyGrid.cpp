@@ -246,6 +246,10 @@ static void keyGridSlotOf( const CommandButton *command, KeyGridSlot *slot )
 	slot->refs = 0;
 	slot->mirror = -1;
 	slot->family = KEY_GRID_FAMILY_POWER;
+	// the owner's of 2026-11-28: an upgrade that names a special power (the MOAB, the Daisy Cutter's)
+	// stands with the powers
+	slot->upgradesPower = ( slot->type == GUI_COMMAND_PLAYER_UPGRADE || slot->type == GUI_COMMAND_OBJECT_UPGRADE )
+		&& command->getSpecialPowerTemplate() != NULL;
 	if( slot->type == GUI_COMMAND_SWITCH_WEAPON || slot->type == GUI_COMMAND_TOGGLE_OVERCHARGE )
 		slot->family = KEY_GRID_FAMILY_MODE;
 	else if( slot->type == GUI_COMMAND_SPECIAL_POWER && command->getSpecialPowerTemplate() != NULL

@@ -455,6 +455,40 @@ TEST(key_grid_splits_skills_by_family)
 	CHECK_EQ( places[ 12 ], (Int)COMMAND_PLACE_R );
 	CHECK_EQ( places[ 1 ], (Int)COMMAND_PLACE_A );
 
+	// EA's own Strategy Center set, the MOAB (an upgrade that names the Daisy Cutter power) among them:
+	// the MOAB stands with the scan on the powers' row (D, past stop on S), the other five upgrades on Z
+	{
+		const KeyGridSlot moab = { GUI_COMMAND_PLAYER_UPGRADE, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1, KEY_GRID_FAMILY_POWER, 1 };
+		KeyGridSlot ea[ SLOTS ];
+		for( Int i = 0; i < SLOTS; i++ )
+			ea[ i ] = empty;
+		ea[ 0 ] = plan;			// Bombardment
+		ea[ 1 ] = scan;			// CIA Intelligence
+		ea[ 2 ] = plan;			// Hold the Line
+		ea[ 4 ] = plan;			// Search and Destroy
+		ea[ 5 ] = upgrade;	// Chemical Suits
+		ea[ 6 ] = moab;
+		ea[ 7 ] = upgrade;	// Composite Armor
+		ea[ 8 ] = upgrade;	// Advanced Training
+		ea[ 9 ] = upgrade;	// Drone Armor
+		ea[ 10 ] = stop;
+		ea[ 12 ] = upgrade;	// Supply Lines
+		ea[ 13 ] = sell;
+		CHECK( !ControlBar_keyGridPlaces( ea, SLOTS, places ) );
+		CHECK_EQ( places[ 0 ], (Int)COMMAND_PLACE_Q );
+		CHECK_EQ( places[ 2 ], (Int)COMMAND_PLACE_W );
+		CHECK_EQ( places[ 4 ], (Int)COMMAND_PLACE_E );
+		CHECK_EQ( places[ 1 ], (Int)COMMAND_PLACE_A );
+		CHECK_EQ( places[ 6 ], (Int)COMMAND_PLACE_D );
+		CHECK_EQ( places[ 10 ], (Int)COMMAND_PLACE_STOP );
+		CHECK_EQ( places[ 5 ], (Int)COMMAND_PLACE_Z );
+		CHECK_EQ( places[ 7 ], (Int)COMMAND_PLACE_X );
+		CHECK_EQ( places[ 8 ], (Int)COMMAND_PLACE_C );
+		CHECK_EQ( places[ 9 ], (Int)COMMAND_PLACE_V );
+		CHECK_EQ( places[ 12 ], (Int)COMMAND_PLACE_B );
+		CHECK_EQ( places[ 13 ], (Int)COMMAND_PLACE_SELL );
+	}
+
 	// a unit with two weapon modes and two one-shot weapons: modes Q W, the weapons down on the A row
 	// round A (held), S (stop) and D (attack move)
 	KeyGridSlot soldier[ SLOTS ];

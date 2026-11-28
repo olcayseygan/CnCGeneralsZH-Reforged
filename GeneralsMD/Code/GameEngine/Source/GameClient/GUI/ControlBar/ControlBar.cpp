@@ -477,7 +477,7 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 			pinned[ slot ] = rider ? -1 : slots[ slot ].pinned;
 			fights = fights || slots[ slot ].type == GUI_COMMAND_ATTACK_MOVE;
 			makes = makes || isUpgrade( slots[ slot ].type ) || slots[ slot ].type == GUI_COMMAND_UNIT_BUILD;
-			skills = skills || ( pinned[ slot ] < 0 && isSkill( types[ slot ] ) );
+			skills = skills || ( pinned[ slot ] < 0 && ( isSkill( types[ slot ] ) || slots[ slot ].upgradesPower ) );
 		}
 		Bool used[ COMMAND_PLACE_COUNT ] = { FALSE };
 		if( skills || ( makes && !fights ) )
@@ -507,8 +507,10 @@ Bool ControlBar_keyGridPlaces( const KeyGridSlot *slots, Int count, Int *places 
 				Int last = -1;
 				for( Int slot = 0; slot < count; slot++ )
 				{
-					const Bool wanted = family < 0 ? isUpgrade( types[ slot ] )
-						: isSkill( types[ slot ] ) && slots[ slot ].family == family;
+					// an upgrade to a power (the MOAB to the Daisy Cutter) stands with the powers, not the upgrades
+					const Bool powerUpgrade = isUpgrade( types[ slot ] ) && slots[ slot ].upgradesPower;
+					const Bool wanted = family < 0 ? isUpgrade( types[ slot ] ) && !powerUpgrade
+						: ( isSkill( types[ slot ] ) || powerUpgrade ) && slots[ slot ].family == family;
 					if( places[ slot ] >= 0 || !wanted )
 						continue;
 					for( Int row = first; row >= 0 && row < ROWS && places[ slot ] < 0; row += up ? -1 : 1 )

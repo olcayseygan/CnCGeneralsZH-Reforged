@@ -4482,7 +4482,11 @@ GUI:RandomMapAnyTemplate
 END
 
 GUI:RandomMapAod
-"Art of Defense"
+"Art of Defense (Work in Progress)"
+END
+
+GUI:RandomMapAodShort
+"Art of Defense (WIP)"
 END
 
 GUI:AodLives

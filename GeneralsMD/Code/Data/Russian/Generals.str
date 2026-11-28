@@ -22179,7 +22179,11 @@ GUI:RandomMapAnyTemplate
 END
 
 GUI:RandomMapAod
-"Art of Defense"
+"Art of Defense (в разработке)"
+END
+
+GUI:RandomMapAodShort
+"Art of Defense (в разр.)"
 END
 
 GUI:RandomMapSize

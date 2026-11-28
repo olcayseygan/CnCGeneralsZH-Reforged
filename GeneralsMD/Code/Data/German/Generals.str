@@ -20251,7 +20251,11 @@ GUI:RandomMapAnyTemplate
 END
 
 GUI:RandomMapAod
-"Art of Defense"
+"Art of Defense (in Arbeit)"
+END
+
+GUI:RandomMapAodShort
+"Art of Defense (in Arbeit)"
 END
 
 GUI:RandomMapSize

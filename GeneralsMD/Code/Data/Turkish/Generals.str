@@ -19100,7 +19100,11 @@ GUI:RandomMapAnyTemplate
 END
 
 GUI:RandomMapAod
-"Art of Defense"
+"Art of Defense (Geliştiriliyor)"
+END
+
+GUI:RandomMapAodShort
+"Art of Defense (Yapımda)"
 END
 
 GUI:AodLives

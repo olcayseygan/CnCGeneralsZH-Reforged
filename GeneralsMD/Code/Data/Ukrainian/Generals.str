@@ -21983,7 +21983,11 @@ GUI:RandomMapAnyTemplate
 END
 
 GUI:RandomMapAod
-"Art of Defense"
+"Art of Defense (у розробці)"
+END
+
+GUI:RandomMapAodShort
+"Art of Defense (у розр.)"
 END
 
 GUI:RandomMapSize

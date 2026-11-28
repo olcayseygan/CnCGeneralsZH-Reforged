@@ -224,6 +224,8 @@ static UnicodeString roomMapName( const AsciiString &map )
 		mapName = ModeNameWithVersion("GUI:DirectStrikeLower", "GUI:DirectStrikeVersion");
 	else if (IsApocalypseMap(map))
 		mapName = ModeNameWithVersion("GUI:ApocalypseLower", "GUI:ApocalypseVersion");
+	else if (IsAodMap(map))
+		mapName = TheGameText->fetch("GUI:RandomMapAod");
 	else if (md)
 		mapName = md->m_displayName;
 	else

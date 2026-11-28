@@ -18914,7 +18914,11 @@ GUI:RandomMapAnyTemplate
 END
 
 GUI:RandomMapAod
-"Art of Defense"
+"Art of Defense (en développement)"
+END
+
+GUI:RandomMapAodShort
+"Art of Defense (en dév.)"
 END
 
 GUI:RandomMapSize

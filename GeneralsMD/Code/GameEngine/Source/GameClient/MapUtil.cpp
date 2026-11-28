@@ -65,6 +65,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/FPUControl.h"
 #include "GameNetwork/GameInfo.h"
+#include "GameNetwork/GUIUtil.h"
 #include "GameNetwork/NetworkDefs.h"
 
 #ifdef _INTERNAL
@@ -804,6 +805,13 @@ static Bool generatedMapDisplayName( const MapCache& cache, const AsciiString& f
 	if (LaneGridColours( fname, &laneLine, &laneEdge ))
 	{
 		displayName = TheGameText->fetch( "GUI:DirectStrikeMap" );
+		return TRUE;
+	}
+	// nor an Art of Defense map, which the mode names with its Work in Progress mark, short: the room's map
+	// panel has three lines of a narrow column for it
+	if (IsAodMap( fname ))
+	{
+		displayName = TheGameText->fetch( "GUI:RandomMapAodShort" );
 		return TRUE;
 	}
 

@@ -1441,7 +1441,8 @@ static void fillTemplateList(void)
 	// the Art of Defense style, a row of its own: no shipped map behind it, the generator's aod ground
 	Bool found = FALSE;
 	{
-		const Int at = GadgetListBoxAddEntryText(theTemplateList, TheGameText->fetch("GUI:RandomMapAod"), color, -1, column);
+		// the short name: the picker's card under it has two short lines (Work in Progress abbreviated)
+		const Int at = GadgetListBoxAddEntryText(theTemplateList, TheGameText->fetch("GUI:RandomMapAodShort"), color, -1, column);
 		GadgetListBoxSetItemData(theTemplateList, (void *)(intptr_t)theTemplates.size(), at);
 		theTemplates.push_back(AsciiString(theAodRow));
 		if (theRandomTemplate == theAodRow)

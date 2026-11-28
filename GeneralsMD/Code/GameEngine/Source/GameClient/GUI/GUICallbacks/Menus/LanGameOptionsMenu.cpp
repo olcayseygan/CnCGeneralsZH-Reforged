@@ -1368,6 +1368,11 @@ void updateGameOptions( void )
 			// nor for an Apocalypse map; the mode is its name
 			mapDisplayName = ModeNameWithVersion("GUI:ApocalypseLower", "GUI:ApocalypseVersion");
 		}
+		else if (IsAodMap(TheLAN->GetMyGame()->getMap()))
+		{
+			// nor for an Art of Defense one
+			mapDisplayName = TheGameText->fetch("GUI:RandomMapAodShort");
+		}
 		else if (mapData && localSlot && localSlot->hasMap())
 		{
 			mapDisplayName.format(u"%ls", mapData->m_displayName.str());

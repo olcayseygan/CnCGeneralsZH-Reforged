@@ -1343,6 +1343,11 @@ void WOLDisplayGameOptions( void )
 		// nor for an Apocalypse map; the mode is its name
 		GadgetStaticTextSetText(textEntryMapDisplay, ModeNameWithVersion("GUI:ApocalypseLower", "GUI:ApocalypseVersion"));
 	}
+	else if (IsAodMap(theGame->getMap()))
+	{
+		// nor for an Art of Defense one
+		GadgetStaticTextSetText(textEntryMapDisplay, TheGameText->fetch("GUI:RandomMapAodShort"));
+	}
 	else if (md && localSlot && localSlot->hasMap())
 	{
 		GadgetStaticTextSetText(textEntryMapDisplay, md->m_displayName);

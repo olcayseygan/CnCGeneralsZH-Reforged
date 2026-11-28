@@ -980,7 +980,7 @@ static void drawPickedType( void )
 	std::vector< UnicodeString > facts;
 	UnicodeString style;
 	style.format( TheGameText->fetch( "GUI:RandomMapStyleOf" ).str(), md ? md->m_displayName.str()
-		: TheGameText->fetch( path == "style:aod" ? "GUI:RandomMapAod" : "GUI:RandomMapAnyTemplate" ).str() );
+		: TheGameText->fetch( path == "style:aod" ? "GUI:RandomMapAodShort" : "GUI:RandomMapAnyTemplate" ).str() );
 	facts.push_back( style );
 	UnicodeString size = TheGameText->fetch( sizes[ max( 0, min( (Int)ARRAY_SIZE( sizes ) - 1, RandomMapTabSize() ) ) ] );
 	size.concat( UIStyle::HEADER_JOINER );

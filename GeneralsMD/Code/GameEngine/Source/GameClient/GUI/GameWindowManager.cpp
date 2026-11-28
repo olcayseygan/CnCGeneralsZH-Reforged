@@ -278,7 +278,9 @@ void GameWindowManager::update( void )
 void GameWindowManager::linkWindow( GameWindow *window )
 {
 	GameWindow *lastModalWindow = NULL;
-	GameWindow *tmp = m_windowList;
+	// a new window files in behind every modal one, but not the modal head itself: a box made modal over a
+	// modal screen (Save/Load's overwrite question) stayed under the screen it asks about, unseen
+	GameWindow *tmp = m_modalHead && m_modalHead->window == window ? NULL : m_windowList;
 	while (tmp)
 	{
 		const ModalWindow *modal = m_modalHead;
@@ -319,6 +321,11 @@ void GameWindowManager::linkWindow( GameWindow *window )
 		if (window->m_next)
 		{
 			window->m_next->m_prev = window;
+		}
+		else
+		{
+			// behind the tail is the new tail, or the list's walks from the tail never reach it
+			m_windowTail = window;
 		}
 	}
 
@@ -576,9 +583,9 @@ void GameWindowManager::windowHiding( GameWindow *window )
 	if( m_keyboardFocus == window )
 		m_keyboardFocus = NULL;
 
-	// if this is the modal head, unset it
-	if( m_modalHead && m_modalHead->window == window )
-		winUnsetModal( window );
+	// off the modal stack wherever it sits: a box's answer that hides the screen under the box (Save/Load's
+	// overwrite Yes) hid a window that was not the head, and the hidden screen went on taking every click
+	m_modalHead = ModalStack_removeWindow( m_modalHead, window );
 
 	// if this is the captor, it shall no longer be
 	if( m_mouseCaptor == window )
@@ -1709,6 +1716,7 @@ Int GameWindowManager::winSetModal( GameWindow *window )
 			existing->next = m_modalHead;
 			m_modalHead = existing;
 		}
+		window->winBringToTop();
 		return WIN_ERR_OK;
 	}
 
@@ -1724,6 +1732,9 @@ Int GameWindowManager::winSetModal( GameWindow *window )
 	modal->window = window;
 	modal->next = m_modalHead;
 	m_modalHead = modal;
+
+	// the window taking every input is the one in front
+	window->winBringToTop();
 
 	return WIN_ERR_OK;
 

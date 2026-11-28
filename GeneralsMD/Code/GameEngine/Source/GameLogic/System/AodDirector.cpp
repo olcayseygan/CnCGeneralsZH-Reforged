@@ -875,7 +875,7 @@ void AodDirector::crc( Xfer *xfer )
 	  the book newMap began with.
 	  Version 4 adds the money's book: what got out of each lane in each wave, which waves each lane has
 	  settled, which lanes are owed the catch-up, that the start money was set, and how far each walking
-	  unit has got and since when, and the reference's gun on each of its spots.  An older save had its
+	  unit has got and since when, and the reference's spots and its gun on each.  An older save had its
 	  money set already and is taken as settled up to its last wave; its units start their watch at the
 	  load; its reference sees every spot free and may build on one it holds. */
 void AodDirector::xfer( Xfer *xfer )
@@ -963,6 +963,21 @@ void AodDirector::xfer( Xfer *xfer )
 			for( UnsignedInt s = 0; s < held; ++s )
 				xfer->xferObjectID( &m_refHeld[n][s] );
 		}
+		/* The spots themselves: found again on a load they read the ground as saved, and a dozer or a crater since
+			 frame 0 moves the list m_refHeld and m_refNextSpot index into. */
+		UnsignedInt lanes = (UnsignedInt)m_refSpots.size();
+		xfer->xferUnsignedInt( &lanes );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_refSpots.assign( lanes, std::vector<Coord3D>() );
+		for( UnsignedInt n = 0; n < lanes; ++n )
+		{
+			UnsignedInt spots = (UnsignedInt)m_refSpots[n].size();
+			xfer->xferUnsignedInt( &spots );
+			if( xfer->getXferMode() == XFER_LOAD )
+				m_refSpots[n].resize( spots );
+			for( UnsignedInt s = 0; s < spots; ++s )
+				xfer->xferCoord3D( &m_refSpots[n][s] );
+		}
 	}
 	else if( xfer->getXferMode() == XFER_LOAD )
 	{
@@ -981,7 +996,7 @@ void AodDirector::xfer( Xfer *xfer )
 //-------------------------------------------------------------------------------------------------
 void AodDirector::loadPostProcess( void )
 {
-	// the reference's spots are the map's: found again, the same ones, so the saved next spot points where it did
+	// a save before version 4 kept no spots: found again from the ground as it was saved (version 4 saves them)
 	if( m_active && m_refStarted && m_refSpots.empty() )
 		findReferenceSpots();
 }

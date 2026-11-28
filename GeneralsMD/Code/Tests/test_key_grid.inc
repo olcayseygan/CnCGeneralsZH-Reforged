@@ -426,11 +426,13 @@ TEST(key_grid_splits_skills_by_family)
 	const KeyGridSlot guard = { GUI_COMMAND_GUARD, COMMAND_GROUP_ABILITY, -1, KEY_GRID_ROLE_OTHER, 0, 0, -1 };
 	Int places[ SLOTS ];
 
-	// the Strategy Center: Bombardment, the scan, Hold the Line, Search and Destroy, six upgrades, stop, sell
+	// the Strategy Center: Bombardment, the scan, Hold the Line, Search and Destroy, six upgrades, stop,
+	// sell.  Bombardment counts as a power (keyGridSlotOf: OPTION_ONE, the owner's of 2026-11-28), so it
+	// stands with the scan on the powers' row, stop between them on S
 	KeyGridSlot center[ SLOTS ];
 	for( Int i = 0; i < SLOTS; i++ )
 		center[ i ] = empty;
-	center[ 0 ] = plan;
+	center[ 0 ] = scan;
 	center[ 1 ] = scan;
 	center[ 2 ] = plan;
 	center[ 3 ] = plan;
@@ -439,21 +441,21 @@ TEST(key_grid_splits_skills_by_family)
 	center[ 10 ] = stop;
 	center[ 11 ] = sell;
 	CHECK( !ControlBar_keyGridPlaces( center, SLOTS, places ) );
-	CHECK_EQ( places[ 0 ], (Int)COMMAND_PLACE_Q );
-	CHECK_EQ( places[ 2 ], (Int)COMMAND_PLACE_W );
-	CHECK_EQ( places[ 3 ], (Int)COMMAND_PLACE_E );
-	CHECK_EQ( places[ 1 ], (Int)COMMAND_PLACE_A );
-	static const Int CLIMB[ 6 ] = { COMMAND_PLACE_Z, COMMAND_PLACE_X, COMMAND_PLACE_C, COMMAND_PLACE_V, COMMAND_PLACE_B, COMMAND_PLACE_D };
+	CHECK_EQ( places[ 2 ], (Int)COMMAND_PLACE_Q );
+	CHECK_EQ( places[ 3 ], (Int)COMMAND_PLACE_W );
+	CHECK_EQ( places[ 0 ], (Int)COMMAND_PLACE_A );
+	CHECK_EQ( places[ 1 ], (Int)COMMAND_PLACE_D );
+	static const Int CLIMB[ 6 ] = { COMMAND_PLACE_Z, COMMAND_PLACE_X, COMMAND_PLACE_C, COMMAND_PLACE_V, COMMAND_PLACE_B, COMMAND_PLACE_F };
 	for( Int i = 0; i < 6; i++ )
 		CHECK_EQ( places[ 4 + i ], CLIMB[ i ] );
 	CHECK_EQ( places[ 10 ], (Int)COMMAND_PLACE_STOP );
 	CHECK_EQ( places[ 11 ], (Int)COMMAND_PLACE_SELL );
 
-	// four plans: the plans' row is Q alone, the scan still starts the next row
+	// a third plan: the plans' row is Q alone, the powers still start the next row
 	center[ 12 ] = plan;
 	ControlBar_keyGridPlaces( center, SLOTS, places );
-	CHECK_EQ( places[ 12 ], (Int)COMMAND_PLACE_R );
-	CHECK_EQ( places[ 1 ], (Int)COMMAND_PLACE_A );
+	CHECK_EQ( places[ 12 ], (Int)COMMAND_PLACE_E );
+	CHECK_EQ( places[ 0 ], (Int)COMMAND_PLACE_A );
 
 	// a unit with two weapon modes and two one-shot weapons: modes Q W, the weapons down on the A row
 	// round A (held), S (stop) and D (attack move)

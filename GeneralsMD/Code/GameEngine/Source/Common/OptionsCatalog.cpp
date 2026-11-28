@@ -215,13 +215,39 @@ unsigned msaaSamplesForLevel( Int level )
 }
 
 //-----------------------------------------------------------------------------
-static const Int TheFrameRateLimits[ FRAME_RATE_LIMIT_COUNT ] = { 0, 240, 144, 120, 60 };
+static const Int TheFrameRateLimits[ FRAME_RATE_LIMIT_COUNT ] = { 0, 240, 144, 120, 60, 180, 165 };
+// the combo box's order, entry to level: Off, 240, 180, 165, 144, 120, 60
+static const Int TheFrameRateLimitEntries[ FRAME_RATE_LIMIT_COUNT ] = { 0, 1, 5, 6, 2, 3, 4 };
 
 Int frameRateLimitForLevel( Int level )
 {
 	if( level <= 0 || level >= FRAME_RATE_LIMIT_COUNT )
 		return 0;
 	return TheFrameRateLimits[ level ];
+}
+
+static Bool isFrameRateLimit( const OptionDef& def )
+{
+	return strcmp( def.iniKey, "FrameRateLimit" ) == 0;
+}
+
+Int optionEntryForValue( const OptionDef& def, Int value )
+{
+	if( isFrameRateLimit( def ) )
+	{
+		for( Int entry = 0; entry < FRAME_RATE_LIMIT_COUNT; ++entry )
+			if( TheFrameRateLimitEntries[ entry ] == value )
+				return entry;
+		return 0;
+	}
+	return value - def.lo;
+}
+
+Int optionValueForEntry( const OptionDef& def, Int entry )
+{
+	if( isFrameRateLimit( def ) )
+		return entry >= 0 && entry < FRAME_RATE_LIMIT_COUNT ? TheFrameRateLimitEntries[ entry ] : 0;
+	return def.lo + entry;
 }
 
 //-----------------------------------------------------------------------------

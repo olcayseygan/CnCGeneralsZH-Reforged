@@ -11870,7 +11870,25 @@ TEST(frame_rate_limit_round_trips_through_options_ini)
 	CHECK_EQ( frameRateLimitForLevel( 2 ), 144 );
 	CHECK_EQ( frameRateLimitForLevel( 3 ), 120 );
 	CHECK_EQ( frameRateLimitForLevel( 4 ), 60 );
+	CHECK_EQ( frameRateLimitForLevel( 5 ), 180 );
+	CHECK_EQ( frameRateLimitForLevel( 6 ), 165 );
 	CHECK_EQ( frameRateLimitForLevel( FRAME_RATE_LIMIT_COUNT ), 0 );
+
+	// the box lists them fastest first, and an entry and its level map back onto each other
+	Int previous = 1000000;
+	for( Int entry = 1; entry < FRAME_RATE_LIMIT_COUNT; ++entry )
+	{
+		const Int level = optionValueForEntry( *def, entry );
+		CHECK_EQ( optionEntryForValue( *def, level ), entry );
+		CHECK( frameRateLimitForLevel( level ) < previous );
+		previous = frameRateLimitForLevel( level );
+	}
+	CHECK_EQ( optionValueForEntry( *def, 0 ), 0 );
+	CHECK_EQ( frameRateLimitForLevel( optionValueForEntry( *def, 2 ) ), 180 );
+	// every other enum row keeps entry = value - lo
+	const OptionDef *health = findOptionDef( "HealthBars" );
+	CHECK_EQ( optionValueForEntry( *health, 2 ), health->lo + 2 );
+	CHECK_EQ( optionEntryForValue( *health, health->lo + 2 ), 2 );
 
 	GlobalData *saved = TheWritableGlobalData;
 	TheWritableGlobalData = NEW GlobalData;

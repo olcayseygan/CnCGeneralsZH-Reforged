@@ -236,11 +236,17 @@ inline Int hotkeySchemeFor( Int layout, Bool gridKeys )
 	return layout == HUD_LAYOUT_GRID && gridKeys ? HOTKEY_SCHEME_GRID : HOTKEY_SCHEME_CLASSIC;
 }
 
-// The picture cap: off, 240, 144, 120 or 60 pictures a second.  Options.ini stores the level.
-enum { FRAME_RATE_LIMIT_COUNT = 5 };
+// The picture cap: off, 240, 180, 165, 144, 120 or 60 pictures a second, in that order in the combo
+// box.  Options.ini stores the level, and a level never moves: 180 and 165 came later as levels 5 and 6.
+enum { FRAME_RATE_LIMIT_COUNT = 7 };
 
 /** Pictures a second for a stored FrameRateLimit level.  0 is no cap. */
 extern Int frameRateLimitForLevel( Int level );
+
+/** A catalog combo box's entry for a stored value and back: value minus lo, except FrameRateLimit,
+	 whose box lists the rates fastest first while its levels keep the order they were added in. */
+extern Int optionEntryForValue( const OptionDef& def, Int value );
+extern Int optionValueForEntry( const OptionDef& def, Int entry );
 
 // The missions' game speed: 1.0x, 1.25x, 1.5x or 2.0x.  Options.ini stores the level, GlobalData the
 // percent (m_missionGameSpeedPercent).

@@ -1223,13 +1223,13 @@ static void fillCatalogWidgets( void )
 			{
 				GadgetComboBoxReset( widget );
 				const Int shownHi = rayTracedShadowsHidden( def ) ? (Int)SHADOW_QUALITY_HIGH : def.hi;
-				for( Int entry = def.lo; entry <= shownHi; ++entry )
+				for( Int entry = 0; entry <= shownHi - def.lo; ++entry )
 				{
 					AsciiString key;
-					key.format( "%s%d", def.labelKey, entry );
+					key.format( "%s%d", def.labelKey, optionValueForEntry( def, entry ) );
 					GadgetComboBoxAddEntry( widget, TheGameText->fetch( key ), entryColor );
 				}
-				GadgetComboBoxSetSelectedPos( widget, min( value, shownHi ) - def.lo );
+				GadgetComboBoxSetSelectedPos( widget, optionEntryForValue( def, min( value, shownHi ) ) );
 				break;
 			}
 
@@ -1302,7 +1302,7 @@ static void readCatalogWidgets( OptionPreferences &out )
 				// -1 is a combo box with nothing picked, which is not a value to write anywhere
 				if( selected < 0 )
 					continue;
-				value = clampOptionValue( def, def.lo + selected );
+				value = clampOptionValue( def, optionValueForEntry( def, selected ) );
 				// a stored Ray Traced shown as High where nothing traces stays the player's choice
 				if( rayTracedShadowsHidden( def ) && value == SHADOW_QUALITY_HIGH && def.get() > value )
 					continue;

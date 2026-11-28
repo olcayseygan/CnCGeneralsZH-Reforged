@@ -563,6 +563,14 @@ GUI:FrameRateLimit4
 "60 FPS"
 END
 
+GUI:FrameRateLimit5
+"180 FPS"
+END
+
+GUI:FrameRateLimit6
+"165 FPS"
+END
+
 TOOLTIP:FrameRateLimit
 "The most pictures a second the game draws, in a match and in the menus. A lower limit keeps the graphics card cooler and quieter and does not slow the game down. Off runs a match as fast as the machine draws and holds the menus at 60."
 END

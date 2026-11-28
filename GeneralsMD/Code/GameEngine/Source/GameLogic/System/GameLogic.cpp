@@ -7530,26 +7530,32 @@ void GameLogic::loadPostProcess( void )
 #endif
 
 	// a save from version 18 on gives the heap entry by entry, which is a heap already
-	const Bool sleepyFromSave = m_loadedSleepyPending;
+	Bool sleepyFromSave = m_loadedSleepyPending;
 	if( sleepyFromSave )
 	{
 		for( std::vector< std::pair< ObjectID, Int > >::const_iterator it = m_loadedSleepyOrder.begin(); it != m_loadedSleepyOrder.end(); ++it )
 		{
+			/* The index is the save's: one from another build, or a broken file, can name an object the load
+				 does not have, a module this object does not have, one with no update, or the same module twice
+				 (a second heap entry pointing at it after it dies).  None of that may be read, and none of it may
+				 throw either: the heap is half built here, every other module is off it, and the failed load's
+				 clear-out destroys a container whose rider's physics wakes on the DESTROYED status - "sleepy
+				 update module illegal index" (report 4724).  Such a save plays on from a heap rebuilt from the
+				 object list, as a save from before version 18 does. */
 			Object *owner = findObjectByID( it->first );
-			if( owner == NULL )
-				throw SC_INVALID_DATA;
-			// The index is the save's: one from another build, or a broken file, can name a module this
-			// object does not have, or one with no update. Refuse the save rather than read past the list.
-			BehaviorModule **modules = owner->getBehaviorModules();
+			BehaviorModule **modules = owner ? owner->getBehaviorModules() : NULL;
 			Int moduleCount = 0;
-			while( modules[ moduleCount ] )
+			while( modules && modules[ moduleCount ] )
 				++moduleCount;
-			if( it->second < 0 || it->second >= moduleCount )
-				throw SC_INVALID_DATA;
-			UpdateModulePtr u = (UpdateModulePtr)( modules[ it->second ]->getUpdate() );
-			// and the same module twice would leave a second heap entry pointing at it after it dies
+			UpdateModulePtr u = ( it->second >= 0 && it->second < moduleCount ) ? (UpdateModulePtr)( modules[ it->second ]->getUpdate() ) : NULL;
 			if( u == NULL || u->friend_getSleepySlot() != -1 )
-				throw SC_INVALID_DATA;
+			{
+				DEBUG_LOG(( "GameLogic::loadPostProcess - the save's sleepy heap names object %u module %d, which the load does not have; rebuilding the heap from the objects\n",
+					(UnsignedInt)it->first, it->second ));
+				clearSleepyUpdates();
+				sleepyFromSave = FALSE;
+				break;
+			}
 			appendSleepyUpdate( u );
 		}
 		m_loadedSleepyOrder.clear();

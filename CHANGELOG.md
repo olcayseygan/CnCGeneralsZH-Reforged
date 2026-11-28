@@ -30,6 +30,8 @@ A button keeps its spot from bar to bar. A Dozer, Worker or Istihkam lays its bu
 
 A selected factory's queue is back in the right-hand box over the portrait. It used to sit over the shelf on top of the base's production row, so the row hid it and a click could cancel the wrong unit from either one.
 
+On Key Grid, every passenger of a full Battle Bus or Troop Crawler now has a key of its own. Only five did before, and the rest could not be put out one at a time.
+
 The minimap's box takes each map's own shape at today's size. Tournament Desert, a tall map that left half of the old 322 by 232 glass black, gets a 239 by 313 glass with nothing wasted. The money sits on a column beside the map with the power standing in it as a meter, the signal keys, Options, beacon, idle worker and chat ride on a shelf over the map,. The select army and idle unit buttons and the build tabs are gone from this layout; their keys still work. Select all, matching units, the command center and the idle worker move to J, U, M and I, deploy to K, follow to L and the held key for a line of walls to O, and Key Grid keeps its keys in a file of its own, so what you set for Classic and Red Alert Style stays as it is.
 
 Pick a squad by its number and a switch appears on the column. Press it or Ctrl+Tab and the key rows show the squad's build tray in place of the commands, each unit on a letter that builds it into the squad; leave the squad and the commands come back.

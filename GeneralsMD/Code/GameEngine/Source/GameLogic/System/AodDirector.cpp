@@ -230,7 +230,10 @@ void AodDirector::newMap( Bool loadingSaveGame )
 			DEBUG_LOG(( "HEADLESS AOD: no '%s' template in the data, the waves come without it\n", Aod_kind( k ).name ));
 	}
 	m_boss = TheThingFactory->findTemplate( Aod_bossName(), FALSE );
-	m_exitFX = TheFXListStore != NULL ? TheFXListStore->findFXList( "FX_ParticleUplinkDeathInitial" ) : NULL;
+	// the mode's own exit flare (FXListReforged.ini); the uplink's death as before on data without it
+	m_exitFX = TheFXListStore != NULL ? TheFXListStore->findFXList( "FX_AodExit" ) : NULL;
+	if( m_exitFX == NULL && TheFXListStore != NULL )
+		m_exitFX = TheFXListStore->findFXList( "FX_ParticleUplinkDeathInitial" );
 
 	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 		if( isSeat( ThePlayerList->getNthPlayer( i ) ) )

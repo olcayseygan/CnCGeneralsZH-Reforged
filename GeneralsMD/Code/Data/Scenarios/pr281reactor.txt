@@ -1,0 +1,25 @@
+# PR 281 proof: the Cold Fusion Reactor's glow waits for Control Rods. Row y 380 is the plain reactor,
+# row y 475 the Superweapon General's; in each row the west one (x 1250) buys the rods at 11 s and the
+# east one (x 1330) is spawned after that order, so it never gets them. Cinema/pr281reactor.txt takes
+# the before frames at 8 to 10 s (west reactors only) and the after frames at 50 s on.
+#
+#   generals.exe -win -borderless -xres 1920 -yres 1080 -quickstart -noshellmap -observer -multiInstance
+#     -map "Maps\Tournament Desert\Tournament Desert.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 5 -maxframes 1950
+#     -scenario pr281reactor -cinema pr281reactor -logPrefix pr281_
+
+30    spawn         0  AmericaPowerPlant           1   1250 380
+30    spawn         0  SupW_AmericaPowerPlant      1   1250 475
+30    spawn         0  AmericaInfantryRanger       6   1600 560 18
+40    move          0  AmericaInfantryRanger       1000 560
+150   spawn         0  AmericaVehicleHumvee        3   1650 300 30
+160   move          0  AmericaVehicleHumvee        950 300
+330   shiftupgrade  0  AmericaPowerPlant           Upgrade_AmericaAdvancedControlRods
+330   shiftupgrade  0  SupW_AmericaPowerPlant      SupW_Upgrade_AmericaAdvancedControlRods
+360   spawn         0  AmericaPowerPlant           1   1330 380
+360   spawn         0  SupW_AmericaPowerPlant      1   1330 475
+360   tally         0  AmericaPowerPlant
+1300  move          0  AmericaInfantryRanger       1600 560
+1360  move          0  AmericaVehicleHumvee        1650 300
+1650  tally         0  AmericaPowerPlant
+1650  tally         0  SupW_AmericaPowerPlant

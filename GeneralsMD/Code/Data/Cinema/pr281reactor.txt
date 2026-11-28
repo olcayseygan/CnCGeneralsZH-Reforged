@@ -1,0 +1,14 @@
+# PR 281 proof, with Scenarios/pr281reactor.txt. The 10 s frame and the 52 s frame are the same
+# camera: before, the rods are ordered but still building and no reactor glows; after, the west
+# reactors (upgraded) glow and the east ones (never upgraded) stay dark. Front row the plain reactor
+# (yellow-green panel), back row the Superweapon General's (blue). Zoom 1 here is 1.29 absolute.
+# The list's clock runs through the load: shots before about 9 s fire on the loading picture.
+9.5   cut     1290 478 0.6 0 -14
+10.0  shot
+48.0  cut     1290 428 1.0 0 -12
+50.0  shot
+50.5  cut     1290 385 0.6 0 -14
+51.0  shot
+51.5  cut     1290 478 0.6 0 -14
+52.0  shot
+58.0  end

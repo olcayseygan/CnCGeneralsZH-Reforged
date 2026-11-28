@@ -1,0 +1,35 @@
+# Direct Strike proof of the general's own units on a plot (players' reports of 2026-11-28). The Infantry
+# General's Troop Crawler and the Toxin General's Combat Cycle and Angry Mob come with their men, rider and
+# mob on the plot, held with them ("held on its plot with N riding along"); his Mini Gunner is made Veteran,
+# so his first rank bought is Elite at 75 percent; the Technical is two slots wide and moves (made as a
+# chassis, refused onto taken slots); the Toxin General has his
+# toxin shells and Anthrax Beta from the start. Read the DIRECTSTRIKE PLACE, DIRECTSTRIKE VETERANCY,
+# DIRECTSTRIKE MOVE, DIRECTSTRIKE SELL and "from the start" lines. The Helix's Battle Bunker room is in
+# directstrike_cargo.txt's DIRECTSTRIKE UNIT UPGRADE line ("room for passengers 0 of 5").
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionChinaInfantryGeneral
+#     -side 1 FactionGLAToxinGeneral -seed 1 -maxframes 2400 -scenario directstrike_generals
+#     -logPrefix directstrike_generals_
+#
+# The frames below are this file's 30 Hz frames, which the drill scales by the game speed.
+
+30    lanecash   0  20000
+30    lanecash   1  20000
+30    lanetier   0  1 2
+30    lanetier   0  1 3
+30    lanetier   1  1 2
+30    laneplace  0  Infa_ChinaVehicleTroopCrawler   0 0
+30    laneplace  0  Infa_ChinaInfantryMiniGunner    6 0
+30    laneplace  1  Chem_GLAVehicleTechnical        0 0
+30    laneplace  1  Chem_GLAVehicleCombatBike       4 0
+30    laneplace  1  Chem_GLAInfantryAngryMobNexus   8 0
+# the Mini Gunner made Veteran: Elite next, then Heroic, then refused
+60    lanevet    0  0 6 0
+60    lanevet    0  0 6 0
+60    lanevet    0  0 6 0
+# the Technical, two slots wide, moved four rows back; then onto the Combat Cycle's slots, refused
+120   lanemove   1  0 0 0 0 4
+120   lanemove   1  0 0 4 4 0
+# the Mob sold with its men after the first wave
+1500  lanesell   1  0 8 0

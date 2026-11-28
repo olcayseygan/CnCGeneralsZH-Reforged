@@ -511,6 +511,8 @@ private:
 	void passOwnBuildings( Object *obj, Int team ) const;
 	Bool setAbility( Player *player, const Int *args, Int argCount );
 	void refillJets( void );
+	/// a plot unit left unheld to make its men, rider or Mob is held with them once they are there
+	void holdSettled( UnsignedInt now );
 	/// a wave's jet copy waits off the map with its seat's squadron instead of marching
 	void joinSquadron( const PlotUnit &u, UnsignedInt now );
 	void updateJets( UnsignedInt now );

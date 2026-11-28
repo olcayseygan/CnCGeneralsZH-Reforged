@@ -53,8 +53,11 @@
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/HackInternetAIUpdate.h"
 #include "GameLogic/Module/JetAIUpdate.h"
+#include "GameLogic/Module/OpenContain.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
+#include "GameLogic/Module/SpawnBehavior.h"
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
+#include "GameLogic/Module/TransportContain.h"
 #include "GameLogic/Module/SubObjectsUpgrade.h"
 #include "GameLogic/Module/UpgradeModule.h"
 #include "GameLogic/Locomotor.h"
@@ -599,6 +602,23 @@ static const ThingTemplate *plotTemplateOf( const ThingTemplate *tmpl )
 	return tmpl;
 }
 
+/// the roster entry a unit of the template stands for: its own, or the one it is a build variation of (a
+/// Technical is bought as GLAVehicleTechnical and made as one of its three chassis)
+static const DirectStrikeRosterItem *rosterItemOf( const DirectStrikeRosterItem *roster, Int count, const ThingTemplate *tmpl )
+{
+	for( Int i = 0; i < count; ++i )
+		if( roster[ i ].thing == tmpl )
+			return &roster[ i ];
+	for( Int i = 0; tmpl != NULL && i < count; ++i )
+	{
+		const std::vector<AsciiString> &variations = roster[ i ].thing->getBuildVariations();
+		for( size_t k = 0; k < variations.size(); ++k )
+			if( variations[ k ] == tmpl->getName() )
+				return &roster[ i ];
+	}
+	return NULL;
+}
+
 Int DirectStrike_damagePercent( const char *damager, Bool victimStructure, Bool victimInfantry )
 {
 	for( Int i = 0; i < (Int)( sizeof( DAMAGE_SCALES ) / sizeof( DAMAGE_SCALES[ 0 ] ) ); ++i )
@@ -771,6 +791,11 @@ Int DirectStrike_abilitiesOf( const ThingTemplate *tmpl, DirectStrikeAbility *ou
 {
 	if( tmpl == NULL )
 		return 0;
+	// a template made as one of its build variations has the buttons of what is made (the Technical's chassis)
+	const std::vector<AsciiString> &variations = tmpl->getBuildVariations();
+	const ThingTemplate *built = variations.empty() ? NULL : TheThingFactory->findTemplate( variations[ 0 ], FALSE );
+	if( built != NULL )
+		tmpl = built;
 	return abilitiesOfSet( tmpl, TheCommandStore->findCommandSet( tmpl->friend_getCommandSetString() ), out, maxItems );
 }
 
@@ -937,6 +962,24 @@ void DirectStrikeDirector::newMap( Bool loadingSaveGame )
 				Player *player = ThePlayerList->getNthPlayer( m_seatPlayer[ t ][ s ] );
 				player->getMoney()->init();
 				player->getMoney()->deposit( DIRECTSTRIKE_START_MONEY, FALSE );
+
+				// what the Toxin general's Command Center grants free (its GrantUpgradeCreate), Direct Strike
+				// having none: his toxin shells and Anthrax Beta, which his deck does not sell (GLA_UPGRADES)
+				AsciiString tag;
+				if( laneSide( player, &tag ) == 2 && tag == "Chem" )
+				{
+					const char *const FREE[] = { "Upgrade_GLAToxinShells", "Upgrade_GLAAnthraxBeta" };
+					for( Int k = 0; k < (Int)( sizeof( FREE ) / sizeof( FREE[ 0 ] ) ); ++k )
+					{
+						const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( FREE[ k ] );
+						if( upgrade != NULL && !player->hasUpgradeComplete( upgrade ) )
+						{
+							player->addUpgrade( upgrade, UPGRADE_STATUS_COMPLETE );
+							DEBUG_LOG(( "DIRECTSTRIKE: player %d %s has '%s' from the start, as from his Command Center\n", player->getPlayerIndex(),
+													tag.str(), upgrade->getUpgradeName().str() ));
+						}
+					}
+				}
 
 				for( Int t2 = 0; t2 < DIRECTSTRIKE_TEAMS; ++t2 )
 					for( Int s2 = 0; s2 < DIRECTSTRIKE_SEATS; ++s2 )
@@ -1174,11 +1217,20 @@ static Object *airTargetFor( const Object *jet, const Region3D &map )
 	return best;
 }
 
-/// the footprint's widest extent in whole slots
+/// the footprint's widest extent in whole slots; for a template built as one of its build variations (the
+/// Technical, whose own geometry is a placeholder) the widest of them, as any of them may be what is made
 Int DirectStrikeDirector::sizeFor( const ThingTemplate *tmpl )
 {
 	const GeometryInfo &geom = tmpl->getTemplateGeometryInfo();
-	return DirectStrike_slotsFor( max( geom.getMajorRadius(), geom.getMinorRadius() ) );
+	Int size = DirectStrike_slotsFor( max( geom.getMajorRadius(), geom.getMinorRadius() ) );
+	const std::vector<AsciiString> &variations = tmpl->getBuildVariations();
+	for( size_t i = 0; i < variations.size(); ++i )
+	{
+		const ThingTemplate *built = TheThingFactory->findTemplate( variations[ i ], FALSE );
+		if( built != NULL && built != tmpl )
+			size = max( size, sizeFor( built ) );
+	}
+	return size;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1274,10 +1326,7 @@ const char *DirectStrikeDirector::whyNotPlace( const Player *player, const Thing
 	// on the side's roster, its tier open, and no second hero
 	DirectStrikeRosterItem roster[ DIRECTSTRIKE_ROSTER_MAX ];
 	const Int listed = DirectStrike_roster( player, roster, DIRECTSTRIKE_ROSTER_MAX );
-	const DirectStrikeRosterItem *item = NULL;
-	for( Int i = 0; i < listed && item == NULL; ++i )
-		if( roster[ i ].thing == tmpl )
-			item = &roster[ i ];
+	const DirectStrikeRosterItem *item = rosterItemOf( roster, listed, tmpl );
 	if( item == NULL )
 		return "not on the side's roster";
 	if( item->tier > m_techLevel[ team ][ seat ] )
@@ -1306,13 +1355,38 @@ const char *DirectStrikeDirector::whyNotPlace( const Player *player, const Thing
 }
 
 //-------------------------------------------------------------------------------------------------
-/// a unit on a plot, or riding with one: held where it was put, unable to fire, unhurt and unpicked
-static void holdOnPlot( Object *obj )
+/// a unit on a plot, or riding with one: held where it was put, unable to fire, unhurt and unpicked;
+/// with held FALSE all of it but the hold, for a unit still making what it comes with (madeWhatItMakes)
+static void holdOnPlot( Object *obj, Bool held = TRUE )
 {
-	obj->setDisabled( DISABLED_HELD );
+	if( held )
+		obj->setDisabled( DISABLED_HELD );
 	obj->setStatus( MAKE_OBJECT_STATUS_MASK2( OBJECT_STATUS_NO_ATTACK, OBJECT_STATUS_UNATTACKABLE ) );
 	if( obj->getBodyModule() )
 		obj->getBodyModule()->setIndestructible( TRUE );
+}
+
+/** The unit has made what it comes with, which it does on its own updates and a held object gets none: a
+	  transport's InitialPayload (a Troop Crawler's men, a Combat Cycle's rider) and a spawner's men (the Angry
+	  Mob's), read off its template's modules.  The players' reports of 2026-11-28: a Crawler stood empty on
+	  its plot and a Mob nexus alone, because the hold went on before their first update. */
+static Bool madeWhatItMakes( const Object *obj )
+{
+	const ModuleInfo &info = obj->getTemplate()->getBehaviorModuleInfo();
+	for( Int i = 0; i < info.getCount(); ++i )
+	{
+		const ModuleData *data = info.getNthData( i );
+		const TransportContainModuleData *transport = dynamic_cast<const TransportContainModuleData *>( data );
+		const ContainModuleInterface *contain = obj->getContain();
+		if( transport != NULL && transport->m_initialPayload.count > 0 && contain != NULL
+				&& (Int)contain->getContainCount() < min( transport->m_initialPayload.count, (Int)contain->getContainMax() ) )
+			return FALSE;
+		const SpawnBehaviorModuleData *spawner = dynamic_cast<const SpawnBehaviorModuleData *>( data );
+		const SpawnBehaviorInterface *spawn = obj->getSpawnBehaviorInterface();
+		if( spawner != NULL && spawn != NULL && spawn->getSlaveCount() < spawner->m_spawnNumberData )
+			return FALSE;
+	}
+	return TRUE;
 }
 
 /** A wave copy, a passenger or a jet sent out: DIRECTSTRIKE_COPY_HEALTH_PERCENT of its template's health, full
@@ -1397,8 +1471,9 @@ Bool DirectStrikeDirector::placeUnit( Player *player, const ThingTemplate *tmpl,
 	owner->setActive();
 	TheAI->pathfinder()->addObjectToPathfindMap( obj );
 
-	// held where it was put, unable to fire, unhurt and unpicked, whatever the ground round it is
-	holdOnPlot( obj );
+	// held where it was put, unable to fire, unhurt and unpicked, whatever the ground round it is; one that
+	// makes its men or rider on its own first updates is held with them once they are there (holdSettled)
+	holdOnPlot( obj, madeWhatItMakes( obj ) );
 
 	PlotUnit entry;
 	entry.id = obj->getID();
@@ -1410,7 +1485,7 @@ Bool DirectStrikeDirector::placeUnit( Player *player, const ThingTemplate *tmpl,
 	entry.size = size;
 	entry.cost = cost;
 	entry.sent = FALSE;
-	entry.veterancy = LEVEL_REGULAR;
+	entry.veterancy = obj->getVeterancyLevel();		// the rank it is made at: the Infantry General's men start Veteran
 	entry.veterancyPaid = 0;
 	entry.upgradesPaid = 0;
 	m_plotUnits.push_back( entry );
@@ -1418,9 +1493,10 @@ Bool DirectStrikeDirector::placeUnit( Player *player, const ThingTemplate *tmpl,
 		m_heroBought[ team ][ seat ] = TRUE;
 	TheDirectStrikeStats->onPlace( player, tmpl, cost );
 
-	DEBUG_LOG(( "DIRECTSTRIKE PLACE: frame %u player %d '%s' at column %d row %d size %d on plot %s%d%s at (%.0f,%.0f) for %d, %u left\n", now,
+	DEBUG_LOG(( "DIRECTSTRIKE PLACE: frame %u player %d '%s' at column %d row %d size %d on plot %s%d%s at (%.0f,%.0f) for %d, %u left, made as '%s' at rank %d%s\n", now,
 							(Int)player->getPlayerIndex(), tmpl->getName().str(), col, row, size, TEAM_NAME[ team ], seat + 1,
-							isJet( tmpl ) ? ", a jet" : "", pos.x, pos.y, cost, player->getMoney()->countMoney() ));
+							isJet( tmpl ) ? ", a jet" : "", pos.x, pos.y, cost, player->getMoney()->countMoney(), obj->getTemplate()->getName().str(),
+							entry.veterancy, obj->isDisabledByType( DISABLED_HELD ) ? "" : ", held once it has made what it comes with" ));
 	return TRUE;
 }
 
@@ -1782,7 +1858,7 @@ Bool DirectStrikeDirector::garrison( Player *player, const Int *args, Int argCou
 	p.id = man->getID();
 	p.thing = tmpl;
 	p.cost = cost;
-	p.veterancy = LEVEL_REGULAR;
+	p.veterancy = man->getVeterancyLevel();		// the rank he is made at, as a plot unit's
 	p.veterancyPaid = 0;
 	m_plotUnits[ index ].passengers.push_back( p );
 	DEBUG_LOG(( "DIRECTSTRIKE GARRISON: frame %u '%s' carries %d passengers, %d of %d places taken\n", TheGameLogic->getFrame(),
@@ -1833,8 +1909,10 @@ Bool DirectStrikeDirector::buyUnitUpgrade( Player *player, const Int *args, Int 
 	cargoOf( obj, &cargo );
 	for( size_t i = 0; i < cargo.size(); ++i )
 		holdOnPlot( cargo[ i ] );
-	DEBUG_LOG(( "DIRECTSTRIKE UNIT UPGRADE: frame %u '%s' has %d upgrades, %d riding along held\n", TheGameLogic->getFrame(),
-							obj->getTemplate()->getName().str(), (Int)u.upgrades.size(), (Int)cargo.size() ));
+	Int used = 0, most = 0;
+	getPassengerRoom( index, &used, &most );
+	DEBUG_LOG(( "DIRECTSTRIKE UNIT UPGRADE: frame %u '%s' has %d upgrades, %d riding along held, room for passengers %d of %d\n", TheGameLogic->getFrame(),
+							obj->getTemplate()->getName().str(), (Int)u.upgrades.size(), (Int)cargo.size(), used, most ));
 	return TRUE;
 }
 
@@ -1877,8 +1955,12 @@ void DirectStrikeDirector::getPassengerRoom( Int plotIndex, Int *used, Int *most
 	ContainModuleInterface *contain = obj != NULL ? obj->getContain() : NULL;
 	*used = 0;
 	*most = 0;
-	// no room where the garrison order takes nobody: an Overlord without its bunker, a Troop Crawler
-	if( contain == NULL || !contain->isPassengerAllowedToFire() )
+	/* No room where the garrison order takes nobody: an Overlord without its bunker, a Troop Crawler.  Asked
+		 for an infantryman, as garrison asks with the man: the plain question names nobody, and a Helix
+		 answers it no even with its Battle Bunker on (HelixContain lets only a rider or infantry fire), so the
+		 HUD never offered its seats.  OpenContain's own answer is the infantryman's for every transport. */
+	OpenContain *open = contain != NULL ? contain->asOpenContain() : NULL;
+	if( contain == NULL || !( open != NULL ? open->OpenContain::isPassengerAllowedToFire() : contain->isPassengerAllowedToFire() ) )
 		return;
 	// the places the game's own pips count: slots, not men (a big passenger takes more than one), and
 	// an Overlord's bunker in place of the carrier; the same sum for a container that hides its pips
@@ -2275,7 +2357,11 @@ void DirectStrikeDirector::useAbilities( UnsignedInt now )
 		Object *victim = ai->getCurrentVictim();
 		if( victim != NULL && ( victim->isEffectivelyDead() || player->getRelationship( victim->getTeam() ) != ENEMIES ) )
 			victim = NULL;
-		const ThingTemplate *tmpl = plotTemplateOf( obj->getTemplate() );	// the switches are the plot unit's
+		// the switches are the plot unit's roster entry's: a Technical's chassis answers to GLAVehicleTechnical
+		const ThingTemplate *made = plotTemplateOf( obj->getTemplate() );
+		DirectStrikeRosterItem roster[ DIRECTSTRIKE_ROSTER_MAX ];
+		const DirectStrikeRosterItem *item = rosterItemOf( roster, DirectStrike_roster( player, roster, DIRECTSTRIKE_ROSTER_MAX ), made );
+		const ThingTemplate *tmpl = item != NULL ? item->thing : made;
 
 		// a Hacker switched to the internet hack (off by default) stays where he came out and hacks for cash
 		// for his whole life, instead of marching to switch the enemy's buildings off
@@ -2324,7 +2410,7 @@ void DirectStrikeDirector::useAbilities( UnsignedInt now )
 		}
 
 		DirectStrikeAbility list[ DIRECTSTRIKE_ABILITIES_MAX ];
-		const Int listed = used ? 0 : abilitiesOfSet( tmpl, TheCommandStore->findCommandSet( obj->getCommandSetString() ), list, DIRECTSTRIKE_ABILITIES_MAX );
+		const Int listed = used ? 0 : abilitiesOfSet( made, TheCommandStore->findCommandSet( obj->getCommandSetString() ), list, DIRECTSTRIKE_ABILITIES_MAX );
 		for( Int pass = 0; pass < 2 && !used; ++pass )
 			for( Int a = 0; a < listed && !used; ++a )
 			{
@@ -2355,6 +2441,7 @@ void DirectStrikeDirector::update( void )
 	adoptStrays( now );
 	pruneCopies();
 	refillJets();
+	holdSettled( now );
 
 	for( Int t = 0; t < DIRECTSTRIKE_TEAMS; ++t )
 	{
@@ -2490,6 +2577,31 @@ void DirectStrikeDirector::adoptStrays( UnsignedInt now )
 								obj->getTemplate()->getName().str(), id, TEAM_NAME[ team ], seat + 1, (Int)parent, obj->isSelectable() ? 1 : 0, obj->getContainedBy() != NULL ? "riding inside it" : "on foot", dieFrame ));
 	}
 	m_strayWatch = (ObjectID)next;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A plot unit placeUnit left unheld, so that its own updates make its Crawler's men, its Combat Cycle's
+	  rider or its Mob, is held once they are there, and everything riding with it or made by it with it: held,
+	  unhurt and unpicked as the unit is, so selling and moving it take them along (cargoOf).  Asked of the
+	  object every frame, so a match loaded from a save in between holds it the same way. */
+void DirectStrikeDirector::holdSettled( UnsignedInt now )
+{
+	for( size_t i = 0; i < m_plotUnits.size(); ++i )
+	{
+		Object *obj = TheGameLogic->findObjectByID( m_plotUnits[ i ].id );
+		if( obj == NULL || obj->isDisabledByType( DISABLED_HELD ) || !madeWhatItMakes( obj ) )
+			continue;
+		holdOnPlot( obj );
+		std::vector<Object *> cargo;
+		cargoOf( obj, &cargo );
+		for( size_t k = 0; k < cargo.size(); ++k )
+		{
+			holdOnPlot( cargo[ k ] );
+			cargo[ k ]->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNSELECTABLE ) );
+		}
+		DEBUG_LOG(( "DIRECTSTRIKE PLACE: frame %u '%s' %d held on its plot with %d riding along or made by it\n", now,
+								obj->getTemplate()->getName().str(), (Int)obj->getID(), (Int)cargo.size() ));
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

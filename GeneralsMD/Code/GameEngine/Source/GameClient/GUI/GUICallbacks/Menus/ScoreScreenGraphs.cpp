@@ -71,6 +71,7 @@
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
 #include "GameLogic/ApocalypseDirector.h"
+#include "GameLogic/AodDirector.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/VictoryConditions.h"
 #include "GameNetwork/GameInfo.h"
@@ -786,11 +787,16 @@ static UnsignedInt matchEndFrame( void )
 	return s_endFrame;
 }
 
-/// "Survived 24:10": to the fall, or to the match's end for one still standing
+static Int s_aodSurvived = -1;		///< an Art of Defense match: the waves every seat held alike; -1 for any other
+
+/// "Survived 24:10": to the fall, or to the match's end for one still standing; "Waves survived: 23" in Art of Defense
 static UnicodeString survivedText( UnsignedInt fell )
 {
 	UnicodeString text;
-	text.format( fetchText( "GUI:ApocalypseSurvived" ), clockText( fell != SCORE_STILL_STANDING ? fell : matchEndFrame() ).str() );
+	if( s_aodSurvived >= 0 )
+		text.format( fetchText( "GUI:AodSurvived" ), s_aodSurvived );
+	else
+		text.format( fetchText( "GUI:ApocalypseSurvived" ), clockText( fell != SCORE_STILL_STANDING ? fell : matchEndFrame() ).str() );
 	return text;
 }
 
@@ -3060,6 +3066,9 @@ void ScoreScreenGraphsInit( GameWindow *backdrop )
 	pickFonts();
 	s_campaign = FALSE;		// until ScoreScreenGraphsSinglePlayer says the rows are a mission's
 	s_apocalypse = TheApocalypseDirector != NULL && TheApocalypseDirector->isActive();
+	// Art of Defense has no winner either (the owner, 2026-11-28): every verdict is the waves the seats held
+	s_aodSurvived = TheAodDirector != NULL && TheAodDirector->isActive() ? TheAodDirector->getWavesSurvived() : -1;
+	s_apocalypse = s_apocalypse || s_aodSurvived >= 0;
 	s_subtitleKey = NULL;
 	readMatchEnd();
 

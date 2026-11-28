@@ -76,6 +76,7 @@
 #include "Common/SkirmishBattleHonors.h"
 #include "Common/ThingFactory.h"
 #include "GameLogic/ApocalypseDirector.h"
+#include "GameLogic/AodDirector.h"
 #include "GameLogic/FPUControl.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/ScriptEngine.h"
@@ -2009,8 +2010,8 @@ void populatePlayerInfo( Player *player, Int pos)
 
 	if ( screenType == SCORESCREEN_SKIRMISH && player->isLocalPlayer() )
 	{
-		// Apocalypse has no win or loss to count (the owner, 2026-11-23)
-		if (TheApocalypseDirector != NULL && TheApocalypseDirector->isActive())
+		// Apocalypse has no win or loss to count (the owner, 2026-11-23), nor has Art of Defense (2026-11-28)
+		if ((TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) || (TheAodDirector != NULL && TheAodDirector->isActive()))
 			return;
 		if (TheGameInfo->isSandbox() || !(TheVictoryConditions->isLocalAlliedDefeat() || TheVictoryConditions->isLocalAlliedVictory()))
 		{

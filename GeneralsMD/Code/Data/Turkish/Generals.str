@@ -19123,6 +19123,14 @@ GUI:AodAir
 "HAVA"
 END
 
+GUI:AodSurvived
+"Dayanılan dalga: %d"
+END
+
+GUI:AodHeldOut
+"%s %d dalga dayandı"
+END
+
 TOOLTIP:MapListCrowded
 "Sekizden fazla oyuncuda yalnız her oyuncuya bir başlangıç noktası olan haritalar listelenir; Rastgele sekmesi her sayıya bir harita üretir"
 END

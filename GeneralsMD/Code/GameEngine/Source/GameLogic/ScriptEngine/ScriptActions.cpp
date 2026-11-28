@@ -75,6 +75,7 @@
 #include "GameLogic/AI.h"
 #include "GameLogic/AISkirmishPlayer.h"
 #include "GameLogic/ApocalypseDirector.h"
+#include "GameLogic/AodDirector.h"
 #include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -156,9 +157,15 @@ static void noteView( Bool applies, LogicThread::ViewEffect effect )
 	* someone watching, the multiplayer scripts' defeat voice and failure music stay quiet.  Those scripts
 	* follow the local player.  Only the sound and the subtitle are skipped: the script engine's own
 	* state (the speech it is testing, the current track) is set as before on every machine. */
+/// Apocalypse and Art of Defense (the owner, 2026-11-28): no winner and no defeat, only how long the seats held
+static Bool noDefeatMode( void )
+{
+	return ( TheApocalypseDirector != NULL && TheApocalypseDirector->isActive() ) || ( TheAodDirector != NULL && TheAodDirector->isActive() );
+}
+
 static Bool apocalypseLocalFallen( void )
 {
-	return TheApocalypseDirector != NULL && TheApocalypseDirector->isActive() && TheVictoryConditions != NULL
+	return noDefeatMode() && TheVictoryConditions != NULL
 		&& ( TheVictoryConditions->isLocalDefeat() || TheVictoryConditions->isLocalAlliedDefeat() );
 }
 
@@ -291,9 +298,9 @@ void ScriptActions::doDefeat( void )
 	if (!m_suppressNewWindows)
 	{
 		const Player *localPlayer = ThePlayerList->getLocalPlayer();
-		// Apocalypse has no defeat: its end is Game Over for every seat
+		// Apocalypse and Art of Defense have no defeat: their end is Game Over for every seat
 		Bool showObserverWindow = localPlayer->isPlayerObserver() || TheScriptEngine->hasShownMPLocalDefeatWindow()
-			|| TheApocalypseDirector->isActive();
+			|| noDefeatMode();
 		LogicThread::callAfterTick( [showObserverWindow]{
 			m_messageWindow = TheWindowManager->winCreateFromScript(showObserverWindow ? "Menus/ObserverQuit.wnd" : "Menus/Defeat.wnd");
 		} );
@@ -313,8 +320,8 @@ void ScriptActions::doLocalDefeat( void )
 	TheGameLogic->closeWindows();
 	if (!m_suppressNewWindows)
 	{
-		// a seat fallen in Apocalypse gets no Defeated window: the message line says how long it held
-		if(!TheVictoryConditions->amIObserver() && !TheApocalypseDirector->isActive())
+		// a seat fallen in Apocalypse or Art of Defense gets no Defeated window: the message line says how long it held
+		if(!TheVictoryConditions->amIObserver() && !noDefeatMode())
 			LogicThread::callAfterTick( []{ m_messageWindow = TheWindowManager->winCreateFromScript("Menus/LocalDefeat.wnd"); } );
 	}
 	if(TheCampaignManager)

@@ -80,21 +80,59 @@ const char *Aod_bossName( void ) { return "ChinaTankOverlord"; }
 	 (-aodreference, three sides at 1, 2 and 4 seats, two logic seeds): at 300% the whole budget let the wave 5 boss
 	 through on every one-seat run, at 225% on four of six, at 150% on three of six, and half the budget never
 	 stopped it. */
-Int Aod_bossHealthPercent( Int wave ) { return 50 + 20 * wave; }
+/// the wave the formulas read: 1 at the least, AOD_WAVE_MOST at the most
+static Int formulaWave( Int wave )
+{
+	return max( 1, min( wave, (Int)AOD_WAVE_MOST ) );
+}
+
+/* Past AOD_GROWTH_WAVES the waves keep their points near AOD_POINTS_MOST and grow stronger instead, AOD_STRENGTH_PER_WAVE
+	 percent a wave, linear so it never overflows: 180% at wave 30, 340% at 50, 740% at 100, 3940% at 500. */
+Int Aod_waveStrengthPercent( Int wave )
+{
+	const Int w = formulaWave( wave );
+	return w <= AOD_GROWTH_WAVES ? 100 : 100 + AOD_STRENGTH_PER_WAVE * ( w - AOD_GROWTH_WAVES );
+}
+
+/* The boss's share to wave 20 as it was, 50 + 20w; past it wave 20's 450% grows with the waves' strength: 810% at 30,
+	 1530% at 50, 3330% at 100. */
+Int Aod_bossHealthPercent( Int wave )
+{
+	const Int w = formulaWave( wave );
+	return ( 50 + 20 * min( w, (Int)AOD_GROWTH_WAVES ) ) * Aod_waveStrengthPercent( w ) / 100;
+}
+
+Int Aod_unitHealthPercent( Int wave, Bool boss )
+{
+	return boss ? Aod_bossHealthPercent( wave ) : Aod_waveStrengthPercent( wave );
+}
+
+Int Aod_wavePay( Int wave, Int amount )
+{
+	return amount * Aod_waveStrengthPercent( wave ) / 100;
+}
+
 Bool Aod_isBossWave( Int wave ) { return wave > 0 && wave % AOD_BOSS_EVERY == 0; }
 
 /* 6 + 4w + w*w/3 on the first batches let China's and the GLA's whole-budget reference defences fall between
-	 waves 7 and 12 (America's held to 16); this curve is a quarter lighter by wave 10. */
+	 waves 7 and 12 (America's held to 16); this curve is a quarter lighter by wave 10.  Past wave 20 (166 points,
+	 about 24 units a lane) it levels off towards AOD_POINTS_MOST, so a wave stays within the walking cap:
+	 175 at 21, 216 at 30, 241 at 50, 254 at 100, 263 at 500. */
 Int Aod_wavePoints( Int wave )
 {
-	return 6 + 3 * wave + wave * wave / 4;
+	const Int w = formulaWave( wave );
+	if( w <= AOD_GROWTH_WAVES )
+		return 6 + 3 * w + w * w / 4;
+	const Int at20 = 6 + 3 * AOD_GROWTH_WAVES + AOD_GROWTH_WAVES * AOD_GROWTH_WAVES / 4;
+	return at20 + ( AOD_POINTS_MOST - at20 ) * ( w - AOD_GROWTH_WAVES ) / ( w - AOD_GROWTH_WAVES + 10 );
 }
 
 /* A kind's weight in a wave's draw: even to wave 3, then leaning a point's worth more every wave towards the dear
-	 ones: at wave 10 a Paladin (9 points) is drawn 5.7 times as often as a Rebel for its weight, at wave 20 7.2. */
+	 ones: at wave 10 a Paladin (9 points) is drawn 5.7 times as often as a Rebel for its weight, at wave 20 7.2.
+	 The lean stops growing at wave 100, where it hardly moves any more. */
 Int Aod_kindWeight( Int kind, Int wave )
 {
-	return 10 + 2 * Aod_kind( kind ).points * max( 0, wave - 3 );
+	return 10 + 2 * Aod_kind( kind ).points * max( 0, min( wave, 100 ) - 3 );
 }
 
 Int Aod_waveRank( Int wave )
@@ -164,15 +202,8 @@ void AodDirector::reset( void )
 	m_over = OVER_NOT;
 	m_spawnTurn = 0;
 	m_spawned = m_kills = m_leaks = 0;
-	for( Int w = 0; w <= AOD_WAVES; ++w )
-	{
-		m_waveLeaks[w] = 0;
-		for( Int n = 0; n < AOD_LANES_MOST; ++n )
-		{
-			m_laneLeaked[w][n] = m_paidKills[w][n] = m_paidStipend[w][n] = 0;
-			m_settled[w][n] = FALSE;
-		}
-	}
+	m_books.clear();
+	m_survived = 0;
 	for( Int n = 0; n < AOD_LANES_MOST; ++n )
 		m_catchUp[n] = FALSE;
 	m_cashSet = FALSE;
@@ -386,14 +417,15 @@ void AodDirector::startWave( UnsignedInt now )
 	m_pending = m_next;
 	m_next.clear();
 	m_nextWave = 0;
-	// the stipend, with the catch-up for a seat whose lane leaked the last wave it finished
+	// the stipend, with the catch-up for a seat whose lane leaked the last wave it finished, both as strong as the wave
+	WaveBook &started = book( m_wave );
 	Int lowest = 0, highest = 0;
 	for( Int n = 0; n < (Int)m_paths.size(); ++n )
 	{
-		const Int stipend = AOD_STIPEND + ( m_catchUp[n] ? AOD_CATCHUP_PER_POINT * Aod_wavePoints( m_wave ) : 0 );
+		const Int stipend = Aod_wavePay( m_wave, AOD_STIPEND + ( m_catchUp[n] ? AOD_CATCHUP_PER_POINT * Aod_wavePoints( m_wave ) : 0 ) );
 		pay( seatOfLane( n ), n, stipend );
-		if( m_wave <= AOD_WAVES && n < AOD_LANES_MOST )
-			m_paidStipend[m_wave][n] = stipend;
+		if( n < AOD_LANES_MOST )
+			started.paidStipend[n] = stipend;
 		lowest = n == 0 ? stipend : min( lowest, stipend );
 		highest = max( highest, stipend );
 		// the economy table's money column (econ.py): paid so far (with the start money under the reference), spent by it, in the bank
@@ -403,9 +435,9 @@ void AodDirector::startWave( UnsignedInt now )
 									seat != NULL ? (Int)seat->getMoney()->countMoney() : 0 ));
 	}
 	m_nextSpawnFrame = now;
-	DEBUG_LOG(( "HEADLESS AOD: frame %u wave %d of %d starts, %d units a lane for %d points%s, stipend %d to %d, lives %d\n", now, m_wave, (Int)AOD_WAVES,
+	DEBUG_LOG(( "HEADLESS AOD: frame %u wave %d starts, %d units a lane for %d points%s, strength %d%%, stipend %d to %d, lives %d\n", now, m_wave,
 							(Int)m_pending.size(), Aod_wavePoints( m_wave ), Aod_isBossWave( m_wave ) && m_boss != NULL ? " with a boss" : "",
-							lowest, highest, m_lives ));
+							Aod_waveStrengthPercent( m_wave ), lowest, highest, m_lives ));
 	DEBUG_LOG(( "HEADLESS AOD KINDS: wave %d comes as %s\n", m_wave, kindsText( m_pending ).str() ));
 }
 
@@ -431,26 +463,41 @@ const ThingTemplate *AodDirector::kindTemplate( Int kind ) const
 /** A wave is settled in a lane once all of it is out and the last of it there is dead or gone: a lane that
 	  let none through pays its seat the clean wave's bonus, one that leaked earns its seat the catch-up on
 	  the next stipend.  alive counts each wave's units still walking each lane. */
-void AodDirector::settleWaves( UnsignedInt now, const Int alive[][ AOD_LANES_MOST ] )
+void AodDirector::settleWaves( UnsignedInt now, const std::vector<Int> &alive )
 {
 	const Int lanes = min( (Int)m_paths.size(), (Int)AOD_LANES_MOST );
-	for( Int w = 1; w <= m_wave && w <= AOD_WAVES; ++w )
+	for( Int w = 1; w <= m_wave; ++w )
 	{
 		if( w == m_wave && !m_pending.empty() )
 			continue;		// still coming out
+		WaveBook &b = book( w );
 		for( Int n = 0; n < lanes; ++n )
 		{
-			if( m_settled[w][n] || alive[w][n] > 0 )
+			const UnsignedInt at = (UnsignedInt)( w * AOD_LANES_MOST + n );
+			if( b.settled[n] || ( at < alive.size() && alive[at] > 0 ) )
 				continue;
-			m_settled[w][n] = TRUE;
-			const Bool clean = m_laneLeaked[w][n] == 0;
-			const Int bonus = clean ? AOD_CLEAN_PER_POINT * Aod_wavePoints( w ) : 0;
+			b.settled[n] = TRUE;
+			const Bool clean = b.leaked[n] == 0;
+			const Int bonus = clean ? Aod_wavePay( w, AOD_CLEAN_PER_POINT * Aod_wavePoints( w ) ) : 0;
 			pay( seatOfLane( n ), n, bonus );
 			m_catchUp[n] = !clean;
 			DEBUG_LOG(( "HEADLESS AOD PAY: frame %u wave %d lane %d settled, %d leaked; kills %d stipend %d bonus %d\n", now, w, n + 1,
-									m_laneLeaked[w][n], m_paidKills[w][n], m_paidStipend[w][n], bonus ));
+									b.leaked[n], b.paidKills[n], b.paidStipend[n], bonus ));
 		}
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+AodDirector::WaveBook &AodDirector::book( Int wave )
+{
+	const UnsignedInt w = (UnsignedInt)max( 0, wave );
+	if( w >= m_books.size() )
+	{
+		WaveBook none;
+		memset( &none, 0, sizeof( none ) );
+		m_books.resize( w + 1, none );
+	}
+	return m_books[w];
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -480,8 +527,10 @@ Object *AodDirector::spawn( Int kind, Int lane )
 	const Int rank = Aod_waveRank( m_wave );
 	if( rank > LEVEL_REGULAR && obj->getExperienceTracker() != NULL )
 		obj->getExperienceTracker()->setVeterancyLevel( (VeterancyLevel)rank, FALSE );
-	if( kind < 0 && obj->getBodyModule() != NULL )
-		obj->getBodyModule()->setMaxHealth( obj->getBodyModule()->getMaxHealth() * (Real)Aod_bossHealthPercent( m_wave ) / 100.0f, FULLY_HEAL );
+	// the boss's share, or past wave 20 the wave's strength (Aod_unitHealthPercent; 100 for a plain unit to wave 20)
+	const Int health = Aod_unitHealthPercent( m_wave, kind < 0 );
+	if( health != 100 && obj->getBodyModule() != NULL )
+		obj->getBodyModule()->setMaxHealth( obj->getBodyModule()->getMaxHealth() * (Real)health / 100.0f, FULLY_HEAL );
 	team->setActive();
 	TheAI->pathfinder()->addObjectToPathfindMap( obj );
 	if( obj->getAI() != NULL )
@@ -503,10 +552,19 @@ Object *AodDirector::spawn( Int kind, Int lane )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The match ends for every seat alike: no lives left, or a reference run's waves all seen off.  Nobody wins; the
+	* verdict is the waves held (getWavesSurvived), every one before the wave under way, or all of them for a
+	* reference run that stopped with nothing walking. */
 void AodDirector::lose( UnsignedInt now )
 {
-	m_over = OVER_LOST;
-	DEBUG_LOG(( "HEADLESS AOD: frame %u lost at wave %d, %u leaks, %u kills\n", now, m_wave, m_leaks, m_kills ));
+	const Bool stopped = m_lives > 0;
+	m_over = stopped ? OVER_WON : OVER_LOST;
+	m_survived = stopped ? m_wave : max( 0, m_wave - 1 );
+	if( stopped )
+		DEBUG_LOG(( "HEADLESS AOD: frame %u won, the reference run stops after wave %d, lives %d, %u leaks, %u kills\n", now, m_wave, m_lives, m_leaks, m_kills ));
+	else
+		DEBUG_LOG(( "HEADLESS AOD: frame %u lost at wave %d, %u leaks, %u kills\n", now, m_wave, m_leaks, m_kills ));
+	DEBUG_LOG(( "HEADLESS AOD SURVIVED: frame %u %d waves\n", now, m_survived ));
 	logWaves( now );
 	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 	{
@@ -519,13 +577,15 @@ void AodDirector::lose( UnsignedInt now )
 //-------------------------------------------------------------------------------------------------
 void AodDirector::logWaves( UnsignedInt now ) const
 {
+	// the last 200 waves at the most, so the line fits the log's buffer
 	AsciiString line, one;
-	for( Int w = 1; w <= m_wave && w <= AOD_WAVES; ++w )
+	const Int first = max( 1, m_wave - 199 );
+	for( Int w = first; w <= m_wave; ++w )
 	{
-		one.format( " %d", m_waveLeaks[w] );
+		one.format( " %d", w < (Int)m_books.size() ? m_books[w].leaks : 0 );
 		line.concat( one );
 	}
-	DEBUG_LOG(( "HEADLESS AOD WAVES: frame %u lives lost to waves 1..%d:%s; lives %d\n", now, m_wave, line.str(), m_lives ));
+	DEBUG_LOG(( "HEADLESS AOD WAVES: frame %u lives lost to waves %d..%d:%s; lives %d\n", now, first, m_wave, line.str(), m_lives ));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -554,10 +614,7 @@ void AodDirector::update( void )
 	// the dead come off the list and pay, the ones that got out leak, the idle are sent on down their lane
 	const UnsignedInt retarget = AOD_RETARGET_SECONDS * second;
 	Int walking[ AOD_LANES_MOST ] = { 0 };
-	Int alive[ AOD_WAVES + 1 ][ AOD_LANES_MOST ];
-	for( Int w = 0; w <= AOD_WAVES; ++w )
-		for( Int n = 0; n < AOD_LANES_MOST; ++n )
-			alive[w][n] = 0;
+	std::vector<Int> alive( (UnsignedInt)( m_wave + 1 ) * AOD_LANES_MOST, 0 );		// wave * AOD_LANES_MOST + lane
 	UnsignedInt kept = 0;
 	for( UnsignedInt i = 0; i < m_units.size(); ++i )
 	{
@@ -568,10 +625,12 @@ void AodDirector::update( void )
 		if( obj == NULL || obj->isEffectivelyDead() )
 		{
 			++m_kills;
+			// as strong as its wave: past wave 20 a kill pays the wave's strength share of the points
 			const Int points = unit.kind < 0 ? 4 * Aod_wavePoints( max( 1, unit.wave ) ) / 10 : Aod_kind( unit.kind ).points;
-			pay( seatOfLane( unit.lane ), unit.lane, AOD_KILL_PAY_PER_POINT * points );
-			if( unit.wave >= 0 && unit.wave <= AOD_WAVES && unit.lane < AOD_LANES_MOST )
-				m_paidKills[unit.wave][unit.lane] += AOD_KILL_PAY_PER_POINT * points;
+			const Int earned = Aod_wavePay( unit.wave, AOD_KILL_PAY_PER_POINT * points );
+			pay( seatOfLane( unit.lane ), unit.lane, earned );
+			if( unit.wave >= 0 && unit.lane < AOD_LANES_MOST )
+				book( unit.wave ).paidKills[unit.lane] += earned;
 			continue;
 		}
 		if( inExit( obj ) )
@@ -579,11 +638,12 @@ void AodDirector::update( void )
 			const Int cost = unit.kind < 0 ? AOD_BOSS_LEAK : 1;
 			++m_leaks;
 			m_lives -= cost;
-			if( unit.wave >= 0 && unit.wave <= AOD_WAVES )
+			if( unit.wave >= 0 )
 			{
-				m_waveLeaks[unit.wave] += cost;
+				WaveBook &b = book( unit.wave );
+				b.leaks += cost;
 				if( unit.lane < AOD_LANES_MOST )
-					++m_laneLeaked[unit.wave][unit.lane];
+					++b.leaked[unit.lane];
 			}
 			if( m_leaks <= 3 || m_leaks % 10 == 0 || unit.kind < 0 )
 				DEBUG_LOG(( "HEADLESS AOD: frame %u '%s' %d of wave %d got out of lane %d at (%.0f,%.0f), lives %d\n", now,
@@ -624,8 +684,8 @@ void AodDirector::update( void )
 			}
 		}
 		++walking[unit.lane];
-		if( unit.wave >= 0 && unit.wave <= AOD_WAVES && unit.lane < AOD_LANES_MOST )
-			++alive[unit.wave][unit.lane];
+		if( unit.wave >= 0 && unit.wave <= m_wave && unit.lane < AOD_LANES_MOST )
+			++alive[ (UnsignedInt)( unit.wave * AOD_LANES_MOST + unit.lane ) ];
 		m_units[kept++] = unit;
 	}
 	m_units.resize( kept );
@@ -638,19 +698,20 @@ void AodDirector::update( void )
 
 	if( m_pending.empty() )
 	{
-		if( m_wave >= AOD_WAVES && m_units.empty() )
+		/* The waves never end; a -aodreference run alone (a dev aid, dead in a network game) stops once its
+			 AOD_REFERENCE_WAVES are seen off, so a batch of them ends as it did when wave 20 was the win. */
+		const Bool referenceDone = m_refPercent > 0 && m_wave >= AOD_REFERENCE_WAVES;
+		if( referenceDone && m_units.empty() )
 		{
-			m_over = OVER_WON;
-			DEBUG_LOG(( "HEADLESS AOD: frame %u won, every wave seen off, lives %d, %u leaks, %u kills\n", now, m_lives, m_leaks, m_kills ));
-			logWaves( now );
+			lose( now );
 			return;
 		}
-		if( m_wave < AOD_WAVES && now >= m_nextWaveFrame )
+		if( !referenceDone && now >= m_nextWaveFrame )
 			startWave( now );
 	}
 	/* The next wave drawn a wave ahead, on the first frame and as each wave starts, so the HUD shows what comes; the
 		 same draw startWave made before 2026-11-28, one wave sooner on the stream. */
-	if( m_wave < AOD_WAVES && m_nextWave != m_wave + 1 )
+	if( m_nextWave != m_wave + 1 )
 	{
 		m_nextWave = m_wave + 1;
 		drawWave( m_nextWave, m_next );
@@ -993,10 +1054,13 @@ void AodDirector::crc( Xfer *xfer )
 	  unit has got and since when, and the reference's spots and its gun on each.  An older save had its
 	  money set already and is taken as settled up to its last wave; its units start their watch at the
 	  load; its reference sees every spot free and may build on one it holds.
-	  Version 5 adds the next wave, drawn a wave ahead for the HUD; an older save draws it on its first frame. */
+	  Version 5 adds the next wave, drawn a wave ahead for the HUD; an older save draws it on its first frame.
+	  Version 6: the waves never end, so every wave's book (lives lost, leaks and settling per lane) goes at the end
+	  as long as the waves have run, with the waves held; an older save's fixed books for waves 0..20 are read
+	  where they lay, and its waves held reckoned from its wave. */
 void AodDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 5;
+	XferVersion currentVersion = 6;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1036,9 +1100,12 @@ void AodDirector::xfer( Xfer *xfer )
 			m_units[i].wave = 0;
 		}
 	}
-	if( version >= 2 )
-		for( Int w = 0; w <= AOD_WAVES; ++w )
-			xfer->xferInt( &m_waveLeaks[w] );
+	// before version 6 the books were fixed at waves 0..20 and lay in two places (version 6 keeps them at the end)
+	if( version < 6 && xfer->getXferMode() == XFER_LOAD )
+		book( OLD_WAVE_SLOTS - 1 );
+	if( version >= 2 && version < 6 )
+		for( Int w = 0; w < OLD_WAVE_SLOTS; ++w )
+			xfer->xferInt( &m_books[w].leaks );
 
 	if( version >= 3 )
 	{
@@ -1056,12 +1123,13 @@ void AodDirector::xfer( Xfer *xfer )
 
 	if( version >= 4 )
 	{
-		for( Int w = 0; w <= AOD_WAVES; ++w )
-			for( Int n = 0; n < AOD_LANES_MOST; ++n )
-			{
-				xfer->xferInt( &m_laneLeaked[w][n] );
-				xfer->xferBool( &m_settled[w][n] );
-			}
+		if( version < 6 )
+			for( Int w = 0; w < OLD_WAVE_SLOTS; ++w )
+				for( Int n = 0; n < AOD_LANES_MOST; ++n )
+				{
+					xfer->xferInt( &m_books[w].leaked[n] );
+					xfer->xferBool( &m_books[w].settled[n] );
+				}
 		for( Int n = 0; n < AOD_LANES_MOST; ++n )
 			xfer->xferBool( &m_catchUp[n] );
 		xfer->xferBool( &m_cashSet );
@@ -1103,9 +1171,9 @@ void AodDirector::xfer( Xfer *xfer )
 			m_units[i].since = TheGameLogic->getFrame();
 		}
 		m_cashSet = TRUE;
-		for( Int w = 0; w < m_wave && w <= AOD_WAVES; ++w )
+		for( Int w = 0; w < m_wave && w < OLD_WAVE_SLOTS; ++w )
 			for( Int n = 0; n < AOD_LANES_MOST; ++n )
-				m_settled[w][n] = TRUE;
+				m_books[w].settled[n] = TRUE;
 	}
 
 	if( version >= 5 )
@@ -1123,6 +1191,30 @@ void AodDirector::xfer( Xfer *xfer )
 		m_nextWave = 0;
 		m_next.clear();
 	}
+
+	if( version >= 6 )
+	{
+		xfer->xferInt( &m_survived );
+		UnsignedInt books = (UnsignedInt)m_books.size();
+		xfer->xferUnsignedInt( &books );
+		if( xfer->getXferMode() == XFER_LOAD )
+		{
+			m_books.clear();
+			if( books > 0 )
+				book( (Int)books - 1 );
+		}
+		for( UnsignedInt w = 0; w < books; ++w )
+		{
+			xfer->xferInt( &m_books[w].leaks );
+			for( Int n = 0; n < AOD_LANES_MOST; ++n )
+			{
+				xfer->xferInt( &m_books[w].leaked[n] );
+				xfer->xferBool( &m_books[w].settled[n] );
+			}
+		}
+	}
+	else if( xfer->getXferMode() == XFER_LOAD )
+		m_survived = m_over == OVER_WON ? m_wave : max( 0, m_wave - 1 );
 }
 
 //-------------------------------------------------------------------------------------------------

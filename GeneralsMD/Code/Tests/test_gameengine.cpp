@@ -32967,7 +32967,7 @@ TEST(aod_mixed_fit_rate)
 
 TEST(aod_waves_grow_mix_their_kinds_and_bring_a_boss_every_fifth)
 {
-	for( Int wave = 1; wave < AOD_WAVES; wave++ )
+	for( Int wave = 1; wave < AOD_GROWTH_WAVES; wave++ )
 	{
 		CHECK( Aod_wavePoints( wave + 1 ) > Aod_wavePoints( wave ) );
 		CHECK( Aod_isBossWave( wave ) == ( wave % 5 == 0 ) );
@@ -33004,4 +33004,48 @@ TEST(aod_waves_grow_mix_their_kinds_and_bring_a_boss_every_fifth)
 	CHECK_EQ( AOD_KILL_PAY_PER_POINT * 9, 900 );
 	CHECK( AOD_START_CASH >= AOD_KILL_PAY_PER_POINT * ( Aod_wavePoints( 1 ) + Aod_wavePoints( 2 ) + Aod_wavePoints( 3 ) ) );
 	CHECK( AOD_CLEAN_PER_POINT * 5 <= AOD_KILL_PAY_PER_POINT );
+}
+
+TEST(aod_wave_formulas_keep_growing_in_range_past_wave_twenty)
+{
+	// waves 1 to 20 as they were before the waves became endless
+	for( Int wave = 1; wave <= AOD_GROWTH_WAVES; wave++ )
+	{
+		CHECK_EQ( Aod_wavePoints( wave ), 6 + 3 * wave + wave * wave / 4 );
+		CHECK_EQ( Aod_bossHealthPercent( wave ), 50 + 20 * wave );
+		CHECK_EQ( Aod_waveStrengthPercent( wave ), 100 );
+		CHECK_EQ( Aod_unitHealthPercent( wave, FALSE ), 100 );
+		CHECK_EQ( Aod_wavePay( wave, 900 ), 900 );
+	}
+	// past it every formula grows or holds, never shrinks, and stays in range; the points level off under the cap
+	for( Int wave = 1; wave < 500; wave++ )
+	{
+		CHECK( Aod_wavePoints( wave + 1 ) >= Aod_wavePoints( wave ) );
+		CHECK( Aod_wavePoints( wave ) > 0 && Aod_wavePoints( wave ) <= AOD_POINTS_MOST );
+		CHECK( Aod_waveStrengthPercent( wave + 1 ) >= Aod_waveStrengthPercent( wave ) );
+		CHECK( Aod_bossHealthPercent( wave + 1 ) > Aod_bossHealthPercent( wave ) );
+		CHECK( Aod_waveRank( wave + 1 ) >= Aod_waveRank( wave ) && Aod_waveRank( wave ) <= LEVEL_HEROIC );
+		CHECK( Aod_isBossWave( wave ) == ( wave % AOD_BOSS_EVERY == 0 ) );
+		CHECK( Aod_wavePay( wave + 1, 900 ) >= Aod_wavePay( wave, 900 ) );
+		for( Int k = 0; k < Aod_kindCount(); k++ )
+			CHECK( Aod_kindWeight( k, wave ) > 0 && Aod_kindWeight( k, wave ) <= 10000 );
+	}
+	CHECK_EQ( Aod_waveRank( 18 ), (Int)LEVEL_HEROIC );
+	CHECK_EQ( Aod_wavePoints( 21 ), 175 );
+	CHECK_EQ( Aod_wavePoints( 30 ), 216 );
+	CHECK_EQ( Aod_wavePoints( 50 ), 241 );
+	CHECK_EQ( Aod_wavePoints( 100 ), 254 );
+	CHECK_EQ( Aod_waveStrengthPercent( 30 ), 180 );
+	CHECK_EQ( Aod_waveStrengthPercent( 50 ), 340 );
+	CHECK_EQ( Aod_waveStrengthPercent( 100 ), 740 );
+	CHECK_EQ( Aod_bossHealthPercent( 30 ), 810 );
+	CHECK_EQ( Aod_bossHealthPercent( 100 ), 3330 );
+	// at the formulas' last wave nothing a wave pays or a boss's health overflows: the dearest pay a wave carries
+	// is the boss kill, a catch-up stipend and a clean bonus, each at AOD_POINTS_MOST
+	const Int most = AOD_WAVE_MOST;
+	CHECK( Aod_wavePay( most, AOD_KILL_PAY_PER_POINT * ( 4 * AOD_POINTS_MOST / 10 ) ) > 0 );
+	CHECK( Aod_wavePay( most, AOD_STIPEND + AOD_CATCHUP_PER_POINT * AOD_POINTS_MOST ) > 0 );
+	CHECK( Aod_bossHealthPercent( most ) > Aod_bossHealthPercent( most - 1 ) );
+	CHECK_EQ( Aod_wavePoints( most * 10 ), Aod_wavePoints( most ) );
+	CHECK_EQ( Aod_bossHealthPercent( most * 10 ), Aod_bossHealthPercent( most ) );
 }

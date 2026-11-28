@@ -34,8 +34,10 @@
 // again at its next stop.  One that reaches the AOD_Exit area has got out: it goes in a flare and costs
 // the seats a life, a boss more, out of the lives they share.  A kill pays the seat whose lane it died
 // in; every wave pays every seat a stipend as it starts, more to a seat that leaked, and a bonus for a wave
-// its lane let none of through (AOD_START_CASH and on).  Twenty lives a seat.  No lives left: every seat
-// is out.  Every wave seen off: the seats win.
+// its lane let none of through (AOD_START_CASH and on).  Twenty lives a seat.  The waves never stop and
+// nobody wins or loses (the owner, 2026-11-28: "kazanma yok bunda da kaybetme de şu kadar wave dayandı
+// olacak. sınırsız wave sayısı olacak"): no lives left ends the match for every seat alike, and what it
+// says is how many waves they held.
 //
 // Pure logic state, fed only by the map, the frame and the logic random stream.  Nothing here reads
 // the client.
@@ -60,7 +62,16 @@ class Player;
 
 enum
 {
-	AOD_WAVES = 20,							///< waves to see off for the win
+	/* The waves never end.  Up to AOD_GROWTH_WAVES they grow as they always did (more points, dearer kinds,
+		 ranks up to heroic at 18); past it their points level off towards AOD_POINTS_MOST, so a wave stays within
+		 the walking cap, and every unit comes AOD_STRENGTH_PER_WAVE percent stronger a wave: health, and the pay
+		 a kill and a stipend bring with it.  The formulas take the wave clamped to AOD_WAVE_MOST, where nothing
+		 overflows (test_gameengine aod_wave_formulas_*). */
+	AOD_GROWTH_WAVES = 20,
+	AOD_POINTS_MOST = 266,				///< what a wave's points level off at: 166 at wave 20, 216 at 30, 241 at 50, 254 at 100
+	AOD_STRENGTH_PER_WAVE = 8,		///< percent of health and pay a wave adds past AOD_GROWTH_WAVES: 180 at 30, 340 at 50, 740 at 100
+	AOD_WAVE_MOST = 9999,					///< the wave the formulas stop growing at
+	AOD_REFERENCE_WAVES = 30,			///< a -aodreference run (a dev aid) stops once this many are seen off, so its batches end
 	AOD_LIVES = 20,							///< leaks the seats can take together, for every seat
 	AOD_BOSS_EVERY = 5,					///< every fifth wave brings a boss at its head
 	AOD_BOSS_LEAK = 5,						///< lives a boss costs when it leaks
@@ -103,6 +114,12 @@ extern const AodKind &Aod_kind( Int kind );
 /// The boss's template, and its health on that wave as a share of the template's, percent.
 extern const char *Aod_bossName( void );
 extern Int Aod_bossHealthPercent( Int wave );
+/// Past AOD_GROWTH_WAVES every wave unit's health and the pay that comes with it, percent; 100 up to it.
+extern Int Aod_waveStrengthPercent( Int wave );
+/// A wave unit's health as it comes out, percent of its template's at its rank: the boss's share, or the wave's strength.
+extern Int Aod_unitHealthPercent( Int wave, Bool boss );
+/// An amount of money a wave pays, scaled by its strength.
+extern Int Aod_wavePay( Int wave, Int amount );
 /// The points wave (1 on) is worth on one lane; every lane gets the same wave.
 extern Int Aod_wavePoints( Int wave );
 /// A kind's weight in that wave's draw: even early, leaning to the dearer kinds as the waves go on.
@@ -124,11 +141,11 @@ public:
 	/// Called once the map's objects are in: on when the map names what the mode needs.
 	void newMap( Bool loadingSaveGame );
 	Bool isActive( void ) const { return m_active; }
-	/// Every wave seen off and nothing left walking: the seats have won.
-	Bool hasWon( void ) const { return m_active && m_over == OVER_WON; }
 	void update( void );
 
 	Int getWave( void ) const { return m_wave; }
+	/// The waves the seats held: every one before the wave under way (the match's verdict, there is no winner)
+	Int getWavesSurvived( void ) const { return m_over != OVER_NOT ? m_survived : m_wave > 1 ? m_wave - 1 : 0; }
 	Int getLives( void ) const { return m_lives; }
 	Bool isOver( void ) const { return m_over != OVER_NOT; }
 	Int getLaneCount( void ) const { return (Int)m_paths.size(); }
@@ -150,7 +167,17 @@ protected:
 	virtual void loadPostProcess( void );
 
 private:
-	enum { OVER_NOT = 0, OVER_WON, OVER_LOST };
+	enum { OVER_NOT = 0, OVER_WON, OVER_LOST };		///< OVER_WON: a save from before the waves were endless, or a reference run stopped
+	enum { OLD_WAVE_SLOTS = 21 };			///< waves 0..20, the fixed books a save before version 6 carries
+	/// one wave's book, kept for every wave started (version 6; a fixed 21 before)
+	struct WaveBook
+	{
+		Int leaks;													///< lives lost to its units
+		Int leaked[ AOD_LANES_MOST ];				///< its units that got out of each lane
+		Bool settled[ AOD_LANES_MOST ];			///< its last unit in each lane gone, its bonus paid or not
+		Int paidKills[ AOD_LANES_MOST ];		///< what it paid each lane's seat, for the log alone; not saved
+		Int paidStipend[ AOD_LANES_MOST ];
+	};
 	struct Unit
 	{
 		ObjectID id;
@@ -170,7 +197,8 @@ private:
 	void pay( Player *seat, Int lane, Int amount );
 	void lose( UnsignedInt now );
 	void logWaves( UnsignedInt now ) const;
-	void settleWaves( UnsignedInt now, const Int alive[][ AOD_LANES_MOST ] );
+	void settleWaves( UnsignedInt now, const std::vector<Int> &alive );	///< alive: a wave's units walking a lane, wave * AOD_LANES_MOST + lane
+	WaveBook &book( Int wave );							///< that wave's book, the books grown to it
 	// the reference defence (-aodreference <percent>, a skirmish dev aid, dead in any network game)
 	void referenceDefence( UnsignedInt now );
 	void findReferenceSpots( void );
@@ -198,13 +226,10 @@ private:
 	Int m_over;
 	Int m_spawnTurn;										///< unused since version 2 (every lane gets each unit at once); kept in the save
 	UnsignedInt m_spawned, m_kills, m_leaks;
-	Int m_waveLeaks[ AOD_WAVES + 1 ];		///< lives lost to each wave's units
-	Int m_laneLeaked[ AOD_WAVES + 1 ][ AOD_LANES_MOST ];	///< units of each wave that got out of each lane
-	Bool m_settled[ AOD_WAVES + 1 ][ AOD_LANES_MOST ];		///< each wave's last unit in each lane gone, its bonus paid or not
+	std::vector<WaveBook> m_books;			///< every wave's book, wave 0 the first (version 6)
+	Int m_survived;											///< the waves held, set as the match ends (version 6)
 	Bool m_catchUp[ AOD_LANES_MOST ];		///< the lane leaked the last wave it finished: its next stipend carries the catch-up
 	Bool m_cashSet;											///< the seats' start money set
-	// what each wave paid each lane's seat, for the log alone; not saved
-	Int m_paidKills[ AOD_WAVES + 1 ][ AOD_LANES_MOST ], m_paidStipend[ AOD_WAVES + 1 ][ AOD_LANES_MOST ];
 
 	// the reference defence's book, per lane; a dev aid, saved (version 3), its spots found again on a load
 	Int m_refPercent;

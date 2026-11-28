@@ -4505,6 +4505,14 @@ GUI:AodAir
 "AIR"
 END
 
+GUI:AodSurvived
+"Waves survived: %d"
+END
+
+GUI:AodHeldOut
+"%s held out, waves survived: %d"
+END
+
 TOOLTIP:MapListCrowded
 "With more than eight players only the maps with a start position for every player are listed; the Random tab builds one for any number"
 END

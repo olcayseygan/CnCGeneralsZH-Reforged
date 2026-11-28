@@ -12078,6 +12078,8 @@ void InGameUI::drawDirectorBroadcast( void )
 			held.format( u"%d:%02d", seconds / 60, seconds % 60 );
 			defeatWord.format( TheGameText->fetch( "GUI:ApocalypseSurvived" ), held.str() );
 		}
+		else if( TheAodDirector != NULL && TheAodDirector->isActive() )
+			defeatWord.format( TheGameText->fetch( "GUI:AodSurvived" ), TheAodDirector->getWavesSurvived() );		// no defeat in Art of Defense either
 		DisplayString *word = broadcastText( "bannerdefeated", defeatWord, BROADCAST_WORDS,
 			broadcastPoints( BROADCAST_BANNER_WORD_POINTS ), TRUE );
 		TheObserverCamera.addBroadcast( drawBroadcastBanner( word, BROADCAST_DEFEAT, BROADCAST_INK, title, under, foot, defeatShown ) );
@@ -12262,8 +12264,7 @@ static void aodKindCells( std::vector<AodCell> &cells, Int wave, const std::vect
 
 		// its health as it comes, its rank and the boss's share in
 		Real hp = thing->calcMaxHealth( TRUE ) * TheGlobalData->m_healthBonus[ rank >= 0 && rank < LEVEL_COUNT ? rank : 0 ];
-		if( cell.alarm )
-			hp = hp * (Real)Aod_bossHealthPercent( wave ) / 100.0f;
+		hp = hp * (Real)Aod_unitHealthPercent( wave, cell.alarm ) / 100.0f;
 		if( hp > 0.0f )
 		{
 			text.format( u"%d", REAL_TO_INT( hp + 0.5f ) );
@@ -12457,7 +12458,7 @@ static Int drawAodPanel( Int top, const AsciiString &fontName )
 	{
 		head.runs.clear();
 		head.alarm = Aod_isBossWave( wave );
-		number.format( u"%d/%d", wave, (Int)AOD_WAVES );
+		number.format( u"%d", wave );
 		aodRun( head, TheGameText->fetch( "GUI:AodWave" ), word, AOD_SMALL_POINTS );
 		aodRun( head, number, head.alarm ? alarmNumber : white, AOD_NUMBER_POINTS );
 		now.push_back( head );

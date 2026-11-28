@@ -193,8 +193,9 @@ void VictoryConditions::update( void )
 		// the match is decided only once nobody is left standing
 		if (ISSET(APOCALYPSE) && alive != NULL)
 			multipleAlliances = true;
-		// in Art of Defense the seats are one alliance too, and win only once the director says every wave is seen off
-		if (ISSET(AOD) && alive != NULL && !TheAodDirector->hasWon())
+		// in Art of Defense the seats are one alliance too and the waves never end: nobody wins, the match is
+		// decided once the director has put every seat out (no lives left)
+		if (ISSET(AOD) && alive != NULL)
 			multipleAlliances = true;
 
 		if (!multipleAlliances)
@@ -233,6 +234,11 @@ void VictoryConditions::update( void )
 					UnicodeString held;
 					held.format( u"%d:%02d", seconds / 60, seconds % 60 );
 					defeated.format( TheGameText->fetch( "GUI:ApocalypseHeldOut" ), p->getPlayerDisplayName().str(), held.str() );
+				}
+				else if ( ISSET(AOD) )
+				{
+					// Art of Defense has no defeat either (the owner, 2026-11-28): the waves the seats held
+					defeated.format( TheGameText->fetch( "GUI:AodHeldOut" ), p->getPlayerDisplayName().str(), TheAodDirector->getWavesSurvived() );
 				}
 				else
 					defeated.format( TheGameText->fetch( "GUI:PlayerHasBeenDefeated" ), p->getPlayerDisplayName().str() );

@@ -661,14 +661,30 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 // over them.  The ends of the ramp stay exactly the two tiles.
 // TERRAIN_RELIEF_DEPTH is the world units the 0 to 1 height stands for; TERRAIN_RELIEF_SLOPE the
 // slope, in height per texel, that a full red or green stands for (TerrainRelief::SLOPE_RANGE).
+// A texel drawn wider than a pixel shows the top level's one and two texel grass blades, and the rims
+// round every grass tuft on snow, several pixels wide as worms and pits: the wheel's closest zoom
+// draws a texel over two or three pixels.  At the match's own height a pixel covers more than one
+// texel everywhere on screen, and that is the relief the owner kept on 2026-11-28.  So below
+// TERRAIN_RELIEF_FOOTPRINT texels a pixel the sample's footprint is widened, by
+// TERRAIN_RELIEF_SPREAD texels for each texel it falls short, and the closer the zoom the more of
+// the fine relief is left out.  At or above it the sample is the plain one.
 #define TERRAIN_RELIEF_DEPTH "0.35"
 #define TERRAIN_RELIEF_SLOPE "0.25"
+#define TERRAIN_RELIEF_FOOTPRINT "1.0"
+#define TERRAIN_RELIEF_SPREAD "3.0"
 #define TERRAIN_RELIEF_FUNCTIONS \
 	"Texture2D TerrainRelief : register(t10);\n" \
 	"\n" \
 	"float3 terrain_relief_texel(float2 uv)\n" \
 	"{\n" \
-	"    float3 relief = (TerrainRelief.Sample(Sampler0, uv).rgb * 255.0 - 128.0) / 127.0;\n" \
+	"    uint width, height;\n" \
+	"    TerrainRelief.GetDimensions(width, height);\n" \
+	"    float2 across = ddx(uv);\n" \
+	"    float2 down = ddy(uv);\n" \
+	"    float texels = max(length(across * float2(width, height)), length(down * float2(width, height)));\n" \
+	"    float wanted = " TERRAIN_RELIEF_FOOTPRINT " + " TERRAIN_RELIEF_SPREAD " * (" TERRAIN_RELIEF_FOOTPRINT " - texels);\n" \
+	"    float widen = max(1.0, wanted / max(texels, 1e-6));\n" \
+	"    float3 relief = (TerrainRelief.SampleGrad(Sampler0, uv, across * widen, down * widen).rgb * 255.0 - 128.0) / 127.0;\n" \
 	"    return float3(relief.rg * " TERRAIN_RELIEF_SLOPE ", 0.5 + 0.5 * relief.b);\n" \
 	"}\n" \
 	"\n" \

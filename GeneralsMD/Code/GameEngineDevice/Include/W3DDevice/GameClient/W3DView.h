@@ -256,7 +256,7 @@ public:
 	/// a picture that stepped the scripted camera itself (W3DDisplay's script fast branch) skipped update():
 	/// the next update starts the scripted clock afresh instead of paying that time again
 	static void resyncScriptedClock(void);
-	virtual void forceCameraConstraintRecalc(void) { calcCameraConstraints(); }
+	virtual void forceCameraConstraintRecalc(void) { m_scriptedConstraintValid = false; calcCameraConstraints(); }
 	virtual void applyCameraConstraint( void );
 
 	virtual void setGuardBandBias( const Coord2D *gb ) { m_guardBandBias.x = gb->x; m_guardBandBias.y = gb->y; }
@@ -371,6 +371,9 @@ private:
 	Region2D m_cameraConstraint;										///< m_pos should be constrained to be within this area
 	Bool m_cameraConstraintValid;										///< if f, recalc cam constraints
 	IRegion2D m_cameraConstraintOpen;								///< the open view (screen less interface) the constraint was built for
+	Region2D m_scriptedConstraint;									///< where scripted moves took the camera, kept across rebuilds retail never made
+	Bool m_scriptedConstraintValid;									///< if f, no scripted move has widened the constraint since retail would have dropped it
+	void widenCameraConstraintForScript( const Coord3D &pos );	///< let a scripted move's position stand
 	Bool m_recalcCamera;														///< if t, rebuild the camera transform in the next render update
 	Bool m_isometricApplied;												///< the camera was last built isometric; the option differing rebuilds it
 

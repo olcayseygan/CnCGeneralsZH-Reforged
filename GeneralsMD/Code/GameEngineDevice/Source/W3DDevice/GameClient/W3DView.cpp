@@ -251,6 +251,8 @@ W3DView::W3DView()
 	m_cameraConstraint.hi.x = m_cameraConstraint.hi.y = 0.0f;
 	m_cameraConstraintValid = false;
 	m_cameraConstraintOpen.lo.x = m_cameraConstraintOpen.lo.y = m_cameraConstraintOpen.hi.x = m_cameraConstraintOpen.hi.y = 0;
+	m_scriptedConstraint = m_cameraConstraint;
+	m_scriptedConstraintValid = false;
 
 	//Enhancements from CNC3 WST 4/15/2003. JSC Integrated 5/20/03.
 	m_CameraArrivedAtWaypointOnPathFlag = false;	// Scripts for polling camera reached targets
@@ -725,6 +727,14 @@ static IRegion2D cameraOpenView( Int originX, Int originY, Int width, Int height
 	return open;
 }
 
+static void widenRegion( Region2D &region, const Region2D &by )
+{
+	region.lo.x = minf( region.lo.x, by.lo.x );
+	region.hi.x = maxf( region.hi.x, by.hi.x );
+	region.lo.y = minf( region.lo.y, by.lo.y );
+	region.hi.y = maxf( region.hi.y, by.hi.y );
+}
+
 void W3DView::applyCameraConstraint( void )
 {
 	// the freecam owns the camera and is held to no constraint, as in setCameraTransform
@@ -766,6 +776,8 @@ void W3DView::calcCameraConstraints()
 			// A fixed margin follows the map rather than shrinking with zoom or camera angle.
 			m_cameraConstraint = cameraBoundaryFromMap(mapRegion, (Real)TheGlobalData->m_cameraBoundaryMargin);
 			m_cameraConstraintValid = true;
+			if (m_scriptedConstraintValid)
+				widenRegion( m_cameraConstraint, m_scriptedConstraint );
 			return;
 		}
 		
@@ -859,6 +871,11 @@ void W3DView::calcCameraConstraints()
 		// a map smaller than the view on an axis centres on it
 		m_cameraConstraint = cameraBoundaryFromReach( mapRegion, reach );
 		m_cameraConstraintValid = true;
+		/* Retail rebuilt the limits only on a zoom or a new map, so a scripted move's widening (below, in
+			 moveAlongWaypointPath) stood until then.  The fork also rebuilds them when the bar comes or goes,
+			 and a cinematic's letterbox lifting dropped the widening and pulled the camera back in. */
+		if (m_scriptedConstraintValid)
+			widenRegion( m_cameraConstraint, m_scriptedConstraint );
 	}
 }
 
@@ -1420,6 +1437,7 @@ void W3DView::init( void )
 	m_2DCamera->Set_Clip_Planes( 0.995f, 2.0f );
 
 	m_cameraConstraintValid = false;
+	m_scriptedConstraintValid = false;
 
 	m_scrollAmountCutoff = TheGlobalData->m_scrollAmountCutoff;
 
@@ -2105,8 +2123,10 @@ void W3DView::update(void)
 	// frame while the unit moved every logic frame, twice as often at 60 ticks a second, put the camera
 	// a frame behind on every second one, a 2:1 judder. With smooth motion on it aims at the drawable's blended position as well, except
 	// on a picture a whole tick behind, which captured nothing and would find a stale one.
+	// The steps count game time, as a scripted move's do: the unit moves GAME_SPEED_PERCENT of retail's
+	// way each wall second, and a pull counted on the wall alone fell behind it and let it slide off.
 	const Bool smoothLock = TheSmoothMotionActive && TheSmoothMotionAlpha < 1.0f;
-	const Real lockSteps = (Real)waypointElapsedMs / (Real)CAMERA_STEP_MSEC;
+	const Real lockSteps = (Real)waypointElapsedMs * scriptedRate / (Real)CAMERA_STEP_MSEC;
 	auto perStep = [lockSteps](Real f) -> Real { return 1.0f - powf(1.0f - f, lockSteps); };
 	if (lockSteps > 0.0f && cameraLock != INVALID_ID)
 	{
@@ -3312,6 +3332,7 @@ void W3DView::setHeightAboveGround(Real z)
 
 	stopDoingScriptedCamera();
 	m_cameraConstraintValid = false; // recalc it.
+	m_scriptedConstraintValid = false;
 	m_recalcCamera = true;
 }
 
@@ -3327,6 +3348,7 @@ void W3DView::setZoom(Real z)
 
 	stopDoingScriptedCamera();
 	m_cameraConstraintValid = false; // recalc it.
+	m_scriptedConstraintValid = false;
 	m_recalcCamera = true;
 }
 
@@ -3348,6 +3370,7 @@ void W3DView::setZoomToHeight( Real heightAboveGround )
 
 	stopDoingScriptedCamera();
 	m_cameraConstraintValid = false; // recalc it.
+	m_scriptedConstraintValid = false;
 	m_recalcCamera = true;
 }
 
@@ -3864,6 +3887,7 @@ void W3DView::initHeightForMap( void )
 	m_cameraOffset.y = -(m_cameraOffset.z / tan(TheGlobalData->m_cameraPitch * (PI / 180.0)));
 	m_cameraOffset.x = -(m_cameraOffset.y * tan(TheGlobalData->m_cameraYaw * (PI / 180.0)));
 	m_cameraConstraintValid = false;	// possible ground level change invalidates cam constraints
+	m_scriptedConstraintValid = false;
 	m_recalcCamera = true;
 
 }
@@ -4615,10 +4639,7 @@ void W3DView::moveAlongWaypointPath(Int milliseconds)
 		setPosition(&pos);
 		// Note - assuming that the scripter knows what he is doing, we adjust the constraints so that
 		// the scripted action can occur.
-		m_cameraConstraint.lo.x = minf(m_cameraConstraint.lo.x, pos.x);
-		m_cameraConstraint.hi.x = maxf(m_cameraConstraint.hi.x, pos.x);
-		m_cameraConstraint.lo.y = minf(m_cameraConstraint.lo.y, pos.y);
-		m_cameraConstraint.hi.y = maxf(m_cameraConstraint.hi.y, pos.y);
+		widenCameraConstraintForScript(pos);
 		return;
 	}
 
@@ -4724,11 +4745,25 @@ void W3DView::moveAlongWaypointPath(Int milliseconds)
 	setPosition(&result);
 	// Note - assuming that the scripter knows what he is doing, we adjust the constraints so that
 	// the scripted action can occur.
-	m_cameraConstraint.lo.x = minf(m_cameraConstraint.lo.x, result.x);
-	m_cameraConstraint.hi.x = maxf(m_cameraConstraint.hi.x, result.x);
-	m_cameraConstraint.lo.y = minf(m_cameraConstraint.lo.y, result.y);
-	m_cameraConstraint.hi.y = maxf(m_cameraConstraint.hi.y, result.y);
+	widenCameraConstraintForScript(result);
 
+}
+
+// ------------------------------------------------------------------------------------------------
+/** Retail's widening, remembered apart so a rebuild retail never made (the bar coming or going) keeps it;
+	* the rebuilds retail did make, on a zoom or a new map, still drop it. */
+// ------------------------------------------------------------------------------------------------
+void W3DView::widenCameraConstraintForScript( const Coord3D &pos )
+{
+	Region2D at;
+	at.lo.x = at.hi.x = pos.x;
+	at.lo.y = at.hi.y = pos.y;
+	if (m_scriptedConstraintValid)
+		widenRegion( m_scriptedConstraint, at );
+	else
+		m_scriptedConstraint = at;
+	m_scriptedConstraintValid = true;
+	widenRegion( m_cameraConstraint, at );
 }
 
 

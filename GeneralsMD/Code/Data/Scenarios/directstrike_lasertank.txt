@@ -1,0 +1,28 @@
+# Direct Strike proof that the Laser general's power-hungry tanks fight (2026-11-28, B15): the Laser
+# general fields four Laser Tanks (Lazr_AmericaTankCrusader, EnergyProduction -1, KindOf POWERED), China
+# four Battlemasters, nothing else. A Direct Strike seat builds no power plant, so before the fix the
+# seat browned out on the first tank and every Laser Tank stood disabled (DISABLED_UNDERPOWERED).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmericaLaserGeneral -side 1 FactionChina
+#     -seed 1 -maxframes 6000 -scenario directstrike_lasertank -logPrefix directstrike_lasertank_
+#
+# Passes on KILLXP lines with a Lazr_AmericaTankCrusader killer and the Battlemasters' tallied health
+# falling. Before the fix no Laser Tank kills anything: the Battlemasters walk through at full health
+# and shell the watch tower down.
+
+20    lanecash   0  5000
+20    lanecash   1  5000
+30    laneplace  0  Lazr_AmericaTankCrusader  0 0
+30    laneplace  0  Lazr_AmericaTankCrusader  3 0
+30    laneplace  0  Lazr_AmericaTankCrusader  6 0
+30    laneplace  0  Lazr_AmericaTankCrusader  9 0
+30    laneplace  1  ChinaTankBattleMaster     0 0
+30    laneplace  1  ChinaTankBattleMaster     3 0
+30    laneplace  1  ChinaTankBattleMaster     6 0
+30    laneplace  1  ChinaTankBattleMaster     9 0
+3000  tally   1  ChinaTankBattleMaster
+3600  tally   1  ChinaTankBattleMaster
+4200  tally   1  ChinaTankBattleMaster
+4800  tally   1  ChinaTankBattleMaster
+5400  tally   1  ChinaTankBattleMaster

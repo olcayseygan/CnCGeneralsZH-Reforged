@@ -51,8 +51,18 @@
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
 
+#include "GameLogic/DirectStrikeDirector.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+
+//-----------------------------------------------------------------------------
+// A Direct Strike seat builds no power plant, so a power-hungry unit (the Laser general's tanks, the
+// Avenger) would be browned out from the moment it is placed.  The mode has no power economy: every
+// seat counts as fully powered, the same way the infinite-power cheat does.
+static Bool powerIsFree( void )
+{
+	return TheDirectStrikeDirector != NULL && TheDirectStrikeDirector->isActive();
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -91,7 +101,7 @@ Real Energy::getEnergySupplyRatio() const
 		return 0.0f;
 	}
 
-	if( m_owner->hasCheat( CHEAT_INFINITE_POWER ) && m_energyProduction < m_energyConsumption )
+	if( ( m_owner->hasCheat( CHEAT_INFINITE_POWER ) || powerIsFree() ) && m_energyProduction < m_energyConsumption )
 		return 1.0f;
 
 	if (m_energyConsumption == 0)
@@ -108,7 +118,7 @@ Bool Energy::hasSufficientPower(void) const
 		//Power sabotaged, therefore no power.
 		return FALSE;
 	}
-	if( m_owner->hasCheat( CHEAT_INFINITE_POWER ) )
+	if( m_owner->hasCheat( CHEAT_INFINITE_POWER ) || powerIsFree() )
 		return TRUE;
 	return m_energyProduction >= m_energyConsumption;
 }

@@ -15246,6 +15246,10 @@ GUI:ResolutionNote0
 "Monitör bu modu destekliyor"
 END
 
+GUI:GraphicsDeviceRemovedHint
+"Ekran kartın şu anki grafik ayarlarına yetişemedi. Oyunu yeniden başlat, Seçenekler > Grafik'te Hız / Kalite'yi Düşük'e çek ve Ortam Gölgeleme'yi kapat. Yine olursa ekran kartı sürücünü güncelle."
+END
+
 GUI:FullscreenScaling
 "Ekrana Sığdırma"
 END

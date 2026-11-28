@@ -89,6 +89,7 @@
 #include "WW3D2/dx11runtime.h"
 #if defined(_WIN32)
 #include "dx11post.h"	//DX11Post_Set_Bloom; the library is not built off Windows
+#include "dx11device.h"	//adapterIsIntegrated: the device's adapter and its memory
 #endif
 #include "d3d8shadertranslate.h"
 #include "dx8caps.h"
@@ -4099,6 +4100,46 @@ ChipsetType chipsetForPresets(ChipsetType detected, Bool overridden)
 	return detected;
 }
 
+#if defined(_WIN32)
+/* Whether the Direct3D 11 device draws on an integrated GPU: the driver says its memory is the processor's
+	 (UnifiedMemoryArchitecture), or the adapter has 512 MB or less of its own (an Intel UHD reports 128, an AMD
+	 APU its BIOS carve-out, WARP none).  Crash reports 5051-5053 and 5071-5073 were such adapters hanging
+	 under High and above until Windows removed the device.  No Direct3D 11 device (-d3d9) answers no. */
+static Bool adapterIsIntegrated( void )
+{
+	DX11DeviceClass *dx11 = Direct3D11_Is_Active() ? Direct3D11_Device() : NULL;
+	ID3D11Device *device = dx11 != NULL ? dx11->Get_Device() : NULL;
+	if (device == NULL)
+		return FALSE;
+
+	D3D11_FEATURE_DATA_D3D11_OPTIONS2 options;
+	memset( &options, 0, sizeof( options ) );
+	const Bool unified = SUCCEEDED( device->CheckFeatureSupport( D3D11_FEATURE_D3D11_OPTIONS2, &options, sizeof( options ) ) )
+		&& options.UnifiedMemoryArchitecture;
+
+	Bool described = FALSE;
+	DXGI_ADAPTER_DESC desc;
+	memset( &desc, 0, sizeof( desc ) );
+	IDXGIDevice *dxgiDevice = NULL;
+	if (SUCCEEDED( device->QueryInterface( __uuidof( IDXGIDevice ), reinterpret_cast<void **>( &dxgiDevice ) ) ))
+	{
+		IDXGIAdapter *adapter = NULL;
+		if (SUCCEEDED( dxgiDevice->GetAdapter( &adapter ) ))
+		{
+			described = SUCCEEDED( adapter->GetDesc( &desc ) );
+			adapter->Release();
+		}
+		dxgiDevice->Release();
+	}
+
+	const Bool integrated = unified || (described && desc.DedicatedVideoMemory <= (SIZE_T)512 * 1024 * 1024);
+	DEBUG_LOG(( "ADAPTER for the detail rating: %u MB of its own, %u MB shared, unified memory %d: %s\n",
+		(UnsignedInt)( desc.DedicatedVideoMemory / ( 1024 * 1024 ) ), (UnsignedInt)( desc.SharedSystemMemory / ( 1024 * 1024 ) ),
+		(Int)unified, integrated ? "integrated, rated Low" : "dedicated" ));
+	return integrated;
+}
+#endif
+
 Bool testMinimumRequirements(ChipsetType *videoChipType, CpuType *cpuType, Int *cpuFreq, Int *numRAM, Real *intBenchIndex, Real *floatBenchIndex, Real *memBenchIndex)
 {
 	return W3DShaderManager::testMinimumRequirements(videoChipType,cpuType,cpuFreq,numRAM,intBenchIndex,floatBenchIndex,memBenchIndex);
@@ -4110,7 +4151,14 @@ Bool W3DShaderManager::testMinimumRequirements(ChipsetType *videoChipType, CpuTy
 	{
 		// Decision 2 for the GPU: a device the chipset table cannot place counts as meeting every preset
 		// (chipsetForPresets), on every platform.
-		*videoChipType = chipsetForPresets(getChipset(), TheGlobalData != NULL && TheGlobalData->m_chipSetType != DC_UNKNOWN);
+		const Bool overridden = TheGlobalData != NULL && TheGlobalData->m_chipSetType != DC_UNKNOWN;
+		*videoChipType = chipsetForPresets(getChipset(), overridden);
+#if defined(_WIN32)
+		// An integrated GPU is rated below every LODPreset (all ask a GF3 or better), so a first launch
+		// picks Low.  Only a launch with no IdealStaticGameLOD saved asks; a saved rating or preset stands.
+		if (!overridden && adapterIsIntegrated())
+			*videoChipType = DC_TNT2;
+#endif
 	}
 
 	if (cpuType)

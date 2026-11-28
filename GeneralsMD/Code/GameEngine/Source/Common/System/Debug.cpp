@@ -1073,14 +1073,39 @@ void ReleaseCrash(const char *reason)
 // The 2003 text sent the player to forums at generals.ea.com that no longer exist, and never said
 // that a report had just been written or where. Name the file instead, and the reason: a modded INI
 // file that stops the game at startup is named there, file and line, and is the player's to fix.
-	char buff[ 4096 ];
 	Int reasonLength = reason ? (Int)strlen(reason) : 0;
 	while( reasonLength > 0 && (reason[reasonLength - 1] == '\n' || reason[reasonLength - 1] == '\r') )
 		--reasonLength;	// an INI reason ends in a newline
-	_snprintf(buff, ARRAY_SIZE(buff), "You have encountered a serious error and the game has to close.\n\n%.*s%sA crash report was written to:\n%s\n\nPlease include that file when you report the problem.",
-		reasonLength, reasonLength ? reason : "", reasonLength ? "\n\n" : "", curbuf);
-	buff[ARRAY_SIZE(buff) - 1] = 0;
-	::MessageBox(NULL, buff, "Technical Difficulties...", MB_OK|MB_SYSTEMMODAL|MB_ICONERROR);
+	// Each piece in its own code page: a reason may carry a translated line as UTF-8 (the graphics
+	// device's removal does) and goes as ANSI when it is not valid UTF-8; the crash file's path is the
+	// user data folder in the ANSI code page, which a Turkish user name makes invalid UTF-8.
+	WCHAR wide[ 4096 ];
+	Int used = 0;
+	auto append = [&]( const char *text, Int length, UINT codePage )
+	{
+		const Int room = (Int)ARRAY_SIZE(wide) - 1 - used;
+		if( length <= 0 || room <= 0 )
+			return;
+		Int written = ::MultiByteToWideChar( codePage, codePage == CP_UTF8 ? MB_ERR_INVALID_CHARS : 0, text, length, wide + used, room );
+		if( written <= 0 && codePage == CP_UTF8 )
+			written = ::MultiByteToWideChar( CP_ACP, 0, text, length, wide + used, room );
+		if( written > 0 )
+			used += written;
+	};
+	static const char head[] = "You have encountered a serious error and the game has to close.\n\n";
+	static const char reportLine[] = "A crash report was written to:\n";
+	static const char tail[] = "\n\nPlease include that file when you report the problem.";
+	append( head, (Int)strlen(head), CP_ACP );
+	if( reasonLength > 0 )
+	{
+		append( reason, reasonLength, CP_UTF8 );
+		append( "\n\n", 2, CP_ACP );
+	}
+	append( reportLine, (Int)strlen(reportLine), CP_ACP );
+	append( curbuf, (Int)strlen(curbuf), CP_ACP );
+	append( tail, (Int)strlen(tail), CP_ACP );
+	wide[ used ] = 0;
+	::MessageBoxW(NULL, wide, L"Technical Difficulties...", MB_OK|MB_SYSTEMMODAL|MB_ICONERROR);
 
 
 #endif

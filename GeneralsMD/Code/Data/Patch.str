@@ -451,6 +451,10 @@ GUI:ResolutionNote0
 "Monitor supports this mode"
 END
 
+GUI:GraphicsDeviceRemovedHint
+"Your graphics card could not keep up with the current graphics settings. Start the game again, open Options > Graphics, move Performance / Quality to Low and turn off Ambient Occlusion. If it happens again, update your graphics driver."
+END
+
 GUI:FullscreenScaling
 "Fullscreen Fit"
 END

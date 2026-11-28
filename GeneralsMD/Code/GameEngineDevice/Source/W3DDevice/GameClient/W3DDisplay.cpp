@@ -3272,9 +3272,12 @@ AGAIN:
 					const long removedReason = Direct3D11_Device_Removed_Reason();
 					if( removedReason != 0 )
 					{
-						char reason[ 256 ];
-						snprintf( reason, ARRAY_SIZE(reason), "Graphics device removed at frame %d (DXGI reason 0x%08X): the graphics driver reset or the graphics card stopped responding",
-							TheGameLogic->getFrame(), (UnsignedInt)removedReason );
+						/* Mostly an integrated GPU hanging under High or above (reports 5051-5053, 5071-5073), so
+							 the box tells the player what to change, in his language (UTF-8; ReleaseCrash shows it). */
+						char reason[ 1024 ];
+						snprintf( reason, ARRAY_SIZE(reason), "Graphics device removed at frame %d (DXGI reason 0x%08X): the graphics driver reset or the graphics card stopped responding\n\n%s",
+							TheGameLogic->getFrame(), (UnsignedInt)removedReason,
+							TheGameText ? WideCharAsUtf8( TheGameText->fetch( "GUI:GraphicsDeviceRemovedHint" ).str() ).str() : "" );
 						ReleaseCrash( reason );
 					}
 				}

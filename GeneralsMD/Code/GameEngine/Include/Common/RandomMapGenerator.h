@@ -128,6 +128,16 @@ public:
 		picking the kind of map, Medium for that many players. Every peer derives the same settings and
 		so stages the same name and bytes. */
 	static RandomMapSettings quickMatchSettings( Int matchSeed, Int numPlayers );
+
+	/** The Art of Defense style's lane families (RMGLayout::buildAod): how many, each one's name, the one an
+		aod map's settings came out with (-1 for any other map), and its theme in words, ground and hour. */
+	static Int aodFamilyCount( void );
+	static const char *aodFamilyName( Int family );
+	static Int aodFamilyOf( const RandomMapSettings& settings );
+	static AsciiString aodThemeName( Int seed );
+	/** For the tests and the variants sheet alone: build every aod map with this family first, -1 the seed's.
+		Nothing else may call it: the family is not in the map's name. */
+	static void setAodFamilyForTests( Int family );
 };
 
 /** Generate the map and its preview and keep both in memory under a path in the

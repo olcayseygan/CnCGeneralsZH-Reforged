@@ -1238,6 +1238,7 @@ public:
 	std::vector<RMGObject> m_objects;
 	std::vector< std::pair<Int, Int> > m_waypointLinks;	///< waypointID to waypointID, for WaypointsList
 	std::vector<RMGArea> m_areas;		///< named areas past the lakes and the base perimeters (buildLane)
+	Int m_aodFamily;					///< an Art of Defense map's lane family (buildAod), -1 on any other
 
 	/// The blend table the BlendTileData chunk carries; entry 0 is the "no blend" default.
 	struct RMGBlend
@@ -11107,7 +11108,11 @@ void RMGLayout::buildApocalypse( void )
 	                        a wave unit in it has got out */
 #define RMG_AOD_FLOOR			24.0f	///< height bytes of a lane's floor
 #define RMG_AOD_HIGH			62.0f	///< and of the plateau: 38 bytes, 24 world units, over the floor
-#define RMG_AOD_FACE			1.6f	///< cells a trench wall rises over: 24 bytes a cell, 15 world units, a cliff
+/* Cells a trench wall rises over: 30 bytes a cell, 19 world units, a cliff twice the pathfinder's 9.8. At 1.6
+	cells, 24 bytes, a wall turned to some angles of a five- or six-way mirror left a cell or two walkable. */
+#define RMG_AOD_FACE			1.25f
+#define RMG_AOD_APEX			24.0f	///< cells of flat at every turn of a family whose legs would meet in a point
+#define RMG_AOD_SLIVER			2.0f	///< cells: plateau less than twice this wide between two trenches goes down to the floor
 #define RMG_AOD_RUN_HALF		5.5f	///< cells from a lane's middle to its wall along a run north or south
 #define RMG_AOD_STEP_HALF		3.5f	///< and along a run east between two of them: the narrow places
 #define RMG_AOD_BAND_MARGIN		14.0f	///< cells a run turns short of its band's edge
@@ -11144,6 +11149,208 @@ struct RMGAodShape
 	Int m_cells;			///< the playable square's side
 };
 
+/* The lane's shape, one of RMG_AOD_FAMILIES the seed picks (the owner, 2026-11-28: "çeşitli yol varyasyonları
+	üret"). A family draws the lane in its own frame, u from 0 at the entry to 1 at the end of the winding and v
+	across the lane's room from -1 to 1, with a repeat count k and a reach s across; buildAod lays that frame over
+	the band (one seat) or the sector (a ring), tries each k and s, and keeps the one whose lane comes nearest
+	RMG_AOD_LANE_LENGTH with every stretch of trench clear of every other. A family no k or s fits gives way to
+	the next. side holds trench off the waves' way: a fork's other branch, a comb's bays. */
+enum { RMG_AOD_FAMILIES = 10 };
+static const char *const theAodFamilies[RMG_AOD_FAMILIES] =
+	{ "switchback", "zigzag", "wide S", "wiggle", "hairpins", "terraces", "comb", "fork", "sawtooth", "loops" };
+static Int theAodFamilyForTests = -1;		///< RandomMapGenerator::setAodFamilyForTests; -1, the seed's
+
+struct RMGAodPlan
+{
+	std::vector<RMGPoint> path;							///< m_cellX is u, m_cellY is v
+	std::vector< std::vector<RMGPoint> > side;
+};
+
+/// the repeat counts a family tries; its reach across is tried at 1, 0.8 and 0.6 of the room
+static void rmgAodRepeats( Int family, std::vector<Int>& repeats )
+{
+	static const Int theRepeats[RMG_AOD_FAMILIES][8] =
+	{
+		{ 3, 4, 5, 6, 7, 8, 0, 0 }, { 3, 4, 5, 6, 7, 9, 11, 14 }, { 2, 3, 4, 0, 0, 0, 0, 0 }, { 5, 6, 7, 8, 10, 12, 14, 0 },
+		{ 3, 5, 7, 0, 0, 0, 0, 0 }, { 1, 2, 3, 4, 0, 0, 0, 0 }, { 3, 4, 5, 6, 7, 8, 0, 0 }, { 2, 3, 4, 5, 6, 0, 0, 0 },
+		{ 2, 3, 4, 5, 6, 7, 0, 0 }, { 3, 5, 7, 0, 0, 0, 0, 0 },
+	};
+	repeats.clear();
+	for( Int i = 0; i < 8 && theRepeats[family][i] > 0; i++ )
+		repeats.push_back( theRepeats[family][i] );
+}
+
+/* flat: RMG_AOD_APEX cells in u. Two straight legs meeting at a sharp point leave a wedge of plateau between
+	them too thin to build on, its tip a sliver that buildAod cuts away; so a family whose legs meet at a point
+	(zigzag, sawtooth, the fork's branches) runs a flat stretch that long at every turn instead. */
+static void rmgAodPlan( Int family, Int k, Real s, Real flat, RMGAodPlan& plan )
+{
+	plan.path.clear();
+	plan.side.clear();
+	std::vector<RMGPoint>& p = plan.path;
+	auto add = [&]( std::vector<RMGPoint>& line, Real u, Real v ) { const RMGPoint q = { u, v }; line.push_back( q ); };
+	const Real a = 0.06f, b = 0.94f;
+	const Real half = 0.5f * std::min( flat, 0.5f * ( b - a ) / (Real)std::max( 1, k ) );		///< half an apex flat, in u
+	switch( family )
+	{
+		default:
+		case 0:		// switchback: runs across the room at even steps along it, the steps the narrow places
+		case 6:		// comb: the same, with a dead-end bay off the middle of every run
+		{
+			Real v = -s;
+			add( p, 0.0f, v );
+			for( Int i = 0; i < k; i++ )
+			{
+				const Real u = a + ( b - a ) * (Real)i / (Real)( k - 1 );
+				add( p, u, v );
+				v = -v;
+				add( p, u, v );
+				if( family == 6 )
+				{
+					// a bay a third of the way to the next run, off whichever side has room
+					const Real gap = ( b - a ) / (Real)( k - 1 ), out = ( i + 1 < k ? 0.33f : -0.33f ) * gap;
+					std::vector<RMGPoint> bay;
+					add( bay, u, 0.0f );
+					add( bay, u + out, 0.0f );
+					plan.side.push_back( bay );
+				}
+			}
+			add( p, 1.0f, v );
+			break;
+		}
+		case 1:		// zigzag: straight legs from one side of the room to the other, a short flat at every turn
+		{
+			Real v = -s;
+			add( p, 0.0f, v );
+			add( p, a + half, v );
+			for( Int i = 1; i <= k; i++ )
+			{
+				v = -v;
+				const Real u = a + ( b - a ) * (Real)i / (Real)k;
+				add( p, u - half, v );
+				if( i < k )
+					add( p, u + half, v );
+			}
+			add( p, 1.0f, v );
+			break;
+		}
+		case 2:		// wide S, and 3, wiggle: a smooth wave across the room, k half waves
+		case 3:
+		{
+			/* The wiggle's crests broadened (the square root of the wave): its half waves are narrow, and a plain
+				wave's turns there are as sharp as a zigzag's. */
+			const Int points = 24 * k;
+			add( p, 0.0f, -s );
+			for( Int i = 0; i <= points; i++ )
+			{
+				const Real t = (Real)i / (Real)points;
+				Real c = Cos( PI * (Real)k * t );
+				if( family == 3 )
+					c = c < 0.0f ? -sqrtf( -c ) : sqrtf( c );
+				add( p, a + ( b - a ) * t, -s * c );
+			}
+			add( p, 1.0f, p.back().m_cellY );
+			break;
+		}
+		case 4:		// hairpins: k long runs up and down the room's length, side by side, turned square
+		case 9:		// loops: the same turned round
+		{
+			// here the reach is how far along the room the runs go; they stand side by side right across it
+			const Real lo = 0.5f - ( family == 9 ? 0.4f : 0.44f ) * s, hi = 0.5f + ( family == 9 ? 0.4f : 0.44f ) * s;
+			// the outermost runs a tenth in from the room's sides, clear of the starts on a six-seat ring
+			const Real edge0 = 0.9f;
+			add( p, 0.0f, -edge0 );
+			for( Int j = 0; j < k; j++ )
+			{
+				const Real v = -edge0 + 2.0f * edge0 * (Real)j / (Real)( k - 1 );
+				const Bool down = ( j & 1 ) == 0;
+				add( p, down ? lo : hi, v );
+				add( p, down ? hi : lo, v );
+				if( j + 1 < k )
+				{
+					const Real next = -edge0 + 2.0f * edge0 * (Real)( j + 1 ) / (Real)( k - 1 );
+					if( family == 9 )
+					{
+						// a half circle round to the next run
+						const Real mid = 0.5f * ( v + next ), rv = 0.5f * ( next - v ), ru = 0.05f, edge = down ? hi : lo;
+						for( Int q = 1; q < 12; q++ )
+						{
+							const Real th = PI * (Real)q / 12.0f;
+							add( p, edge + ( down ? ru : -ru ) * Sin( th ), mid - rv * Cos( th ) );
+						}
+					}
+					add( p, down ? hi : lo, next );
+				}
+			}
+			add( p, 1.0f, p.back().m_cellY );
+			break;
+		}
+		case 5:		// terraces: a staircase across the room and back, k times, every step a short run and a turn
+		{
+			/* Four steps up, a flat across the top, four down, a flat across the bottom: the top and bottom treads a
+				whole apex flat long, so the last riser up and the first down stand that far apart. */
+			Real u = a, v = -s;
+			add( p, 0.0f, v );
+			add( p, u, v );
+			const Real apex = 2.0f * half;
+			const Real du = std::max( 0.0f, ( b - a ) - (Real)( 2 * k - 1 ) * apex ) / (Real)( 6 * k + 1 ), dv = 0.5f * s;
+			for( Int i = 0; i < 8 * k; i++ )
+			{
+				const Bool top = ( i % 8 ) == 4, bottom = i > 0 && ( i % 8 ) == 0;
+				u += top || bottom ? apex : du;
+				add( p, u, v );
+				v += ( ( i / 4 ) & 1 ) ? -dv : dv;
+				add( p, u, v );
+			}
+			add( p, 1.0f, v );
+			break;
+		}
+		case 7:		// fork: two branches round an island, each in battlements, the waves sent down one
+		{
+			/* Square battlements and not a zigzag: a branch has half the room to wind in, and a zigzag that dense
+				turns in points (the first build gave way on every ring). */
+			const Real split = 0.1f, join = 0.9f, span = join - split - 0.06f, step = 0.5f * span / (Real)k;
+			const Real low = 0.12f, high = 0.25f + 0.75f * s;
+			add( p, 0.0f, 0.0f );
+			add( p, split, 0.0f );
+			std::vector<RMGPoint> other;
+			add( other, split, 0.0f );
+			for( Int i = 0; i < k; i++ )
+			{
+				const Real u = split + 0.03f + 2.0f * step * (Real)i;
+				const Real us[4] = { u, u + step, u + step, u + 2.0f * step }, vs[4] = { high, high, low, low };
+				for( Int c = 0; c < 4; c++ )
+				{
+					add( p, us[c], vs[c] );
+					add( other, us[c], -vs[c] );
+				}
+			}
+			add( p, join, 0.0f );
+			add( other, join, 0.0f );
+			add( p, 1.0f, 0.0f );
+			plan.side.push_back( other );
+			break;
+		}
+		case 8:		// sawtooth: a long slant across, a short run straight back, again
+		{
+			// a flat before the run back and one after it, so neither of the slant's ends meets it in a point
+			add( p, 0.0f, -s );
+			add( p, a, -s );
+			for( Int i = 1; i <= k; i++ )
+			{
+				const Real u = a + ( b - a ) * (Real)i / (Real)k;
+				add( p, u - 2.0f * half, s );
+				add( p, u, s );
+				add( p, u, -s );
+				if( i < k )
+					add( p, u + 2.0f * half, -s );
+			}
+			add( p, 1.0f, -s );
+			break;
+		}
+	}
+}
+
 static RMGAodShape rmgAodShape( Int seed, Int players )
 {
 	RMGAodShape shape;
@@ -11153,9 +11360,9 @@ static RMGAodShape rmgAodShape( Int seed, Int players )
 	shape.m_inner = shape.m_span = shape.m_rim = 0.0f;
 	if( shape.m_lanes == 1 )
 	{
-		// four runs on 300 cells: about 700 cells of lane, as long as a ring map's (on 284 with three, 460)
+		// a band 196 cells deep on 340, room for the lane families to wind as far as on a ring map
 		shape.m_runs = 4;
-		shape.m_cells = 300;
+		shape.m_cells = 340;
 		shape.m_band = (Real)shape.m_cells - 2.0f * shape.m_strip;
 		return shape;
 	}
@@ -11228,8 +11435,8 @@ void RMGLayout::buildAod( void )
 		return p;
 	};
 
-	/* The seats: one, on the strip south of the band; more, one on the rim of each sector, past its lane's
-		arcs on the side away from where its lane comes in, the dock between it and the arcs. */
+	/* The seats: one, on the strip south of the band; more, one on the rim where its sector meets the next,
+		between two lanes' rooms, the dock in from it. */
 	std::vector<RMGPoint> docks;
 	for( Int i = 0; i < players; i++ )
 	{
@@ -11240,7 +11447,7 @@ void RMGLayout::buildAod( void )
 			docks.push_back( dock );
 			continue;
 		}
-		const Real a = 0.5f * ( 0.5f * shape.m_span + 0.5f * sector );
+		const Real a = 0.5f * sector;
 		const Real r = shape.m_rim - 28.0f;
 		m_starts.push_back( turned( polar( r, a ), sector * (Real)i ) );
 		docks.push_back( turned( polar( r - 16.0f, a ), sector * (Real)i ) );
@@ -11281,97 +11488,247 @@ void RMGLayout::buildAod( void )
 		}
 	}
 
-	/* Lane 0, as points half a cell apart with the half-width there, and the spots of its waypoints; the
-		other lanes are it turned into their sectors.
-
-		One seat: in at the west edge somewhere in the band, east to the first run, north or south to near the
-		band's far side, east along a narrow run to the next, back the other way, and from the last run east
-		out of the map. Each run turns at its own depth.
-
-		Ring: in at the rim on one side of the sector, in to the outermost arc, along it to the sector's other
-		side, a narrow step in, back along the next arc, and so on, then from the innermost arc straight into
-		the pit. An arc wanders in and out a little on the way. */
-	struct AodSample { Real x, y, half; };
-	std::vector<AodSample> lane;
-	std::vector<RMGPoint> laneSpots;
-	Real way = 0.0f, sinceSpot = 0.0f;
-	// one stretch, a straight one or an arc (from and to in polar, radius and angle off the sector's middle)
-	auto stretch = [&]( Real x1, Real y1, Real x2, Real y2, Real halfWidth, Bool wander, Bool spot, Bool arc )
+	/* Lane 0, as points half a cell apart with the half-width there, and the spots of its waypoints; the other
+		lanes are it turned into their sectors. The family's frame is laid over the band, u running east from the
+		west edge's entry to the exit strip and v north and south across the band; or over the sector, u running
+		in from the rim to the innermost radius and v round the sector's middle, so a stretch across the room is
+		an arc. A straight stretch of 15 to 40 cells is a narrow place. One seat's lane runs on out of the east
+		edge; a ring's runs from its end straight into the pit. */
+	struct AodSample { Real x, y, half, at; };		///< at: cells along the waves' way (a side: where it hangs off it)
+	const Real rOut = shape.m_rim - 8.0f, rIn = shape.m_inner, roomAngle = 0.35f * sector;
+	const Real bandMid = shape.m_strip + 0.5f * shape.m_band, bandReach = 0.5f * shape.m_band - RMG_AOD_BAND_MARGIN;
+	const Real eastEnd = side - 0.5f * RMG_AOD_EXIT;
+	const Real apexFlat = RMG_AOD_APEX / ( ring ? rOut - rIn : eastEnd - RMG_AOD_ENTRY_IN );		///< rmgAodPlan's flat, in u
+	auto frame =[&]( Real u, Real v ) -> RMGPoint
 	{
-		const Real length = arc ? 0.5f * ( x1 + x2 ) * fabsf( y2 - y1 ) + fabsf( x2 - x1 )
-			: ring ? sqrtf( ( polar( x2, y2 ).m_cellX - polar( x1, y1 ).m_cellX ) * ( polar( x2, y2 ).m_cellX - polar( x1, y1 ).m_cellX )
-				+ ( polar( x2, y2 ).m_cellY - polar( x1, y1 ).m_cellY ) * ( polar( x2, y2 ).m_cellY - polar( x1, y1 ).m_cellY ) )
-			: sqrtf( ( x2 - x1 ) * ( x2 - x1 ) + ( y2 - y1 ) * ( y2 - y1 ) );
-		const Int steps = std::max( 1, (Int)( length / 0.5f ) );
-		for( Int s = 1; s <= steps; s++ )
+		if( !ring )
 		{
-			const Real t = (Real)s / (Real)steps;
-			Real u = x1 + ( x2 - x1 ) * t, v = y1 + ( y2 - y1 ) * t;
-			if( wander )
-				u += RMG_AOD_WOBBLE * 4.0f * t * ( 1.0f - t ) * fractalNoise( m_perm, v * ( ring ? 2.7f : 0.04f ) + 13.1f, x1 * 0.05f + 3.3f, 2 );
-			const RMGPoint p = ring ? polar( u, v ) : RMGPoint{ u, v };
-			const AodSample sample = { p.m_cellX, p.m_cellY, halfWidth };
-			lane.push_back( sample );
-			if( !spot )
-				continue;
-			way += length / (Real)steps;
-			sinceSpot += length / (Real)steps;
-			if( s == steps || sinceSpot >= RMG_AOD_WAYPOINT_EVERY )
-			{
-				laneSpots.push_back( p );
-				sinceSpot = 0.0f;
-			}
+			const RMGPoint q = { RMG_AOD_ENTRY_IN + u * ( eastEnd - RMG_AOD_ENTRY_IN ), bandMid + v * bandReach };
+			return q;
 		}
+		return polar( rOut - u * ( rOut - rIn ), v * roomAngle );
 	};
-	if( !ring )
+	// lane 0 laid from a plan: its samples, its stops if asked for, and the length of the waves' way, cells
+	auto layLane = [&]( const RMGAodPlan& plan, std::vector<AodSample>& out, std::vector<RMGPoint> *spotsOut ) -> Real
 	{
-		const Real low = shape.m_strip + RMG_AOD_BAND_MARGIN, top = shape.m_strip + shape.m_band - RMG_AOD_BAND_MARGIN, depth = top - low;
-		Real y = low + depth * ( 0.3f + 0.4f * hashUnit( seed + 71005U, 0, 0 ) );
-		Bool north = ( hashCell( seed + 71007U, 0, 0 ) & 1U ) != 0;
-		const RMGPoint entry = { RMG_AOD_ENTRY_IN, y };
-		laneSpots.push_back( entry );
-		stretch( entry.m_cellX, y, -RMG_AOD_ENTRY_IN, y, RMG_AOD_RUN_HALF, FALSE, FALSE, FALSE );	// the trench on out of the west edge
-		Real x = RMG_AOD_ENDS;
-		stretch( entry.m_cellX, y, x, y, RMG_AOD_RUN_HALF, FALSE, TRUE, FALSE );
-		const Real gap = ( side - 2.0f * RMG_AOD_ENDS ) / (Real)( shape.m_runs - 1 );
-		for( Int run = 0; run < shape.m_runs; run++ )
+		out.clear();
+		if( spotsOut != NULL )
+			spotsOut->clear();
+		Real along = 0.0f, sinceSpot = 0.0f;
+		auto spot = [&]( const RMGPoint& q, Bool last )
 		{
-			// to its far side, short of it by up to a quarter of the band
-			const Real shortBy = 0.25f * depth * hashUnit( seed + 71009U, 0, run );
-			const Real turnAt = north ? top - shortBy : low + shortBy;
-			// the run north or south wanders east and west: x is the coordinate it wanders in
-			stretch( x, y, x, turnAt, RMG_AOD_RUN_HALF, TRUE, TRUE, FALSE );
-			y = turnAt;
-			north = !north;
-			const Real nextX = run + 1 < shape.m_runs ? x + gap : side - 0.5f * RMG_AOD_EXIT;
-			stretch( x, y, nextX, y, run + 1 < shape.m_runs ? RMG_AOD_STEP_HALF : RMG_AOD_RUN_HALF, FALSE, TRUE, FALSE );
-			x = nextX;
-		}
-		stretch( x, y, side + RMG_AOD_ENTRY_IN, y, RMG_AOD_RUN_HALF, FALSE, FALSE, FALSE );	// and out of the east edge
-	}
-	else
-	{
-		Real a = -0.5f * shape.m_span;
-		Real r = shape.m_inner + RMG_AOD_ROW * (Real)( RMG_AOD_ARCS - 1 );
-		laneSpots.push_back( polar( shape.m_rim - 8.0f, a ) );
-		stretch( shape.m_rim - 8.0f, a, shape.m_rim + 2.0f, a, RMG_AOD_RUN_HALF, FALSE, FALSE, FALSE );	// a dead end in the mountain's foot
-		stretch( shape.m_rim - 8.0f, a, r, a, RMG_AOD_RUN_HALF, FALSE, TRUE, FALSE );
-		for( Int arc = 0; arc < RMG_AOD_ARCS; arc++ )
+			// no stop in the one seat's exit strip but the last
+			if( spotsOut != NULL && ( last || ring || q.m_cellX < side - RMG_AOD_EXIT - 2.0f ) )
+				spotsOut->push_back( q );
+		};
+		auto add = [&]( const RMGPoint& q, Real halfWidth, Real at )
 		{
-			const Real end = ( a < 0.0f ? 0.5f : -0.5f ) * shape.m_span * ( 0.9f + 0.1f * hashUnit( seed + 71009U, 0, arc ) );
-			stretch( r, a, r, end, RMG_AOD_RUN_HALF, TRUE, TRUE, TRUE );
-			a = end;
-			if( arc + 1 < RMG_AOD_ARCS )
+			const AodSample sample = { q.m_cellX, q.m_cellY, halfWidth, at };
+			out.push_back( sample );
+		};
+		// a line of the frame; a side's samples carry where along the way it hangs, from at0 to at1
+		auto walk = [&]( const std::vector<RMGPoint>& line, Bool onWay, Real at0, Real at1 )
+		{
+			std::vector<Real> lengths;
+			Real lineLength = 0.0f;
+			for( UnsignedInt i = 1; i < line.size(); i++ )
 			{
-				stretch( r, a, r - RMG_AOD_ROW, a, RMG_AOD_STEP_HALF, FALSE, TRUE, FALSE );
-				r -= RMG_AOD_ROW;
+				// over eight chords, so an arc counts its curve
+				Real l = 0.0f;
+				RMGPoint prev = frame( line[i - 1].m_cellX, line[i - 1].m_cellY );
+				for( Int c = 1; c <= 8; c++ )
+				{
+					const Real t = (Real)c / 8.0f;
+					const RMGPoint q = frame( line[i - 1].m_cellX + ( line[i].m_cellX - line[i - 1].m_cellX ) * t,
+						line[i - 1].m_cellY + ( line[i].m_cellY - line[i - 1].m_cellY ) * t );
+					l += sqrtf( ( q.m_cellX - prev.m_cellX ) * ( q.m_cellX - prev.m_cellX ) + ( q.m_cellY - prev.m_cellY ) * ( q.m_cellY - prev.m_cellY ) );
+					prev = q;
+				}
+				lengths.push_back( l );
+				lineLength += l;
 			}
+			Real done = 0.0f;
+			for( UnsignedInt i = 1; i < line.size(); i++ )
+			{
+				const Real l = lengths[i - 1];
+				const Int steps = std::max( 1, (Int)( l / 0.5f ) );
+				const Real halfWidth = l >= 15.0f && l < 40.0f ? RMG_AOD_STEP_HALF : RMG_AOD_RUN_HALF;
+				for( Int s = 1; s <= steps; s++ )
+				{
+					const Real t = (Real)s / (Real)steps;
+					const RMGPoint q = frame( line[i - 1].m_cellX + ( line[i].m_cellX - line[i - 1].m_cellX ) * t,
+						line[i - 1].m_cellY + ( line[i].m_cellY - line[i - 1].m_cellY ) * t );
+					const Real here = done + l * t;
+					add( q, halfWidth, onWay ? along + here : at0 + ( at1 - at0 ) * ( lineLength > 0.0f ? here / lineLength : 0.0f ) );
+					if( !onWay )
+						continue;
+					sinceSpot += l / (Real)steps;
+					const Bool last = s == steps && i + 1 == line.size();
+					if( sinceSpot >= RMG_AOD_WAYPOINT_EVERY || last )
+					{
+						spot( q, last && !ring );
+						sinceSpot = 0.0f;
+					}
+				}
+				done += l;
+			}
+			if( onWay )
+				along += lineLength;
+		};
+		const RMGPoint entry = frame( plan.path[0].m_cellX, plan.path[0].m_cellY );
+		spot( entry, FALSE );
+		// the trench on out of the west edge, or into the mountain's foot: a dead end the waves come out of
+		for( Real o = 0.5f; o <= 12.0f; o += 0.5f )
+			add( ring ? polar( rOut + o, plan.path[0].m_cellY * roomAngle ) : RMGPoint{ entry.m_cellX - o, entry.m_cellY }, RMG_AOD_RUN_HALF, 0.0f );
+		walk( plan.path, TRUE, 0.0f, 0.0f );
+		const UnsignedInt wayEnd = out.size();
+		// the sides, each hung off the way where it meets it
+		for( UnsignedInt n = 0; n < plan.side.size(); n++ )
+		{
+			const RMGPoint from = frame( plan.side[n].front().m_cellX, plan.side[n].front().m_cellY );
+			const RMGPoint to = frame( plan.side[n].back().m_cellX, plan.side[n].back().m_cellY );
+			Real at0 = 0.0f, at1 = 0.0f, d0 = 1.0e9f, d1 = 1.0e9f;
+			for( UnsignedInt i = 0; i < wayEnd; i++ )
+			{
+				const Real e0 = ( out[i].x - from.m_cellX ) * ( out[i].x - from.m_cellX ) + ( out[i].y - from.m_cellY ) * ( out[i].y - from.m_cellY );
+				const Real e1 = ( out[i].x - to.m_cellX ) * ( out[i].x - to.m_cellX ) + ( out[i].y - to.m_cellY ) * ( out[i].y - to.m_cellY );
+				if( e0 < d0 ) { d0 = e0; at0 = out[i].at; }
+				if( e1 < d1 ) { d1 = e1; at1 = out[i].at; }
+			}
+			// a bay (its far end on no way) hangs from its near end alone
+			if( d1 > 4.0f )
+				at1 = at0;
+			walk( plan.side[n], FALSE, at0, at1 );
+		}
+		const RMGPoint last = frame( plan.path.back().m_cellX, plan.path.back().m_cellY );
+		if( !ring )
+		{
+			for( Real o = 0.5f; o <= 2.0f * RMG_AOD_EXIT; o += 0.5f )
+				add( RMGPoint{ last.m_cellX + o, last.m_cellY }, RMG_AOD_RUN_HALF, along + o );	// and out of the east edge
+			return along;
 		}
 		// into the pit, a stop half way and one in it, so the one before the last stands well out of it
-		stretch( r, a, 3.0f, a, RMG_AOD_RUN_HALF, FALSE, FALSE, FALSE );
-		way += r - 3.0f;
-		laneSpots.push_back( polar( std::max( RMG_AOD_PIT + 10.0f, 0.5f * r ), a ) );
-		laneSpots.push_back( polar( 3.0f, a ) );
+		const Real a = plan.path.back().m_cellY * roomAngle;
+		for( Real r = rIn - 0.5f; r >= 3.0f; r -= 0.5f )
+			add( polar( r, a ), RMG_AOD_RUN_HALF, along + rIn - r );
+		along += rIn - 3.0f;
+		if( spotsOut != NULL )
+		{
+			spotsOut->push_back( polar( std::max( RMG_AOD_PIT + 10.0f, 0.5f * rIn ), a ) );
+			spotsOut->push_back( polar( 3.0f, a ) );
+		}
+		return along;
+	};
+	/* Whether a laid lane 0 will do: about as long as RMG_AOD_LANE_LENGTH, every two stretches of trench that
+		are not one after the other with a strip of plateau between them, every start clear of it, and on a ring
+		every neighbour's lane (lane 0 turned) twenty cells off it but in the pit. Every fourth sample. */
+	// 0 when it fits, else why not: 1 too short, 2 too long, 3 two stretches too near, 4 a start, 5 a neighbour
+	auto fits = [&]( const std::vector<AodSample>& s, Real length ) -> Int
+	{
+		if( length < 520.0f )
+			return 1;
+		if( length > 820.0f )
+			return 2;
+		const Real clear = 2.0f * ( RMG_AOD_RUN_HALF + RMG_AOD_FACE ) + 4.0f;
+		for( UnsignedInt i = 0; i < s.size(); i += 4 )
+		{
+			for( UnsignedInt j = i + 4; j < s.size(); j += 4 )
+			{
+				const Real dx = s[i].x - s[j].x, dy = s[i].y - s[j].y;
+				if( fabsf( s[i].at - s[j].at ) > 3.0f * clear && dx * dx + dy * dy < clear * clear )
+					return 3;
+			}
+			for( UnsignedInt k = 0; k < m_starts.size(); k++ )
+			{
+				const Real dx = s[i].x - m_starts[k].m_cellX, dy = s[i].y - m_starts[k].m_cellY;
+				if( dx * dx + dy * dy < ( RMG_AOD_START_FLAT + 8.0f ) * ( RMG_AOD_START_FLAT + 8.0f ) )
+					return 4;
+			}
+			if( !ring )
+				continue;
+			const Real ri = sqrtf( ( s[i].x - half ) * ( s[i].x - half ) + ( s[i].y - half ) * ( s[i].y - half ) );
+			if( ri < rIn - 2.0f )
+				continue;
+			for( Int turnBy = -1; turnBy <= 1; turnBy += 2 )
+			{
+				for( UnsignedInt j = 0; j < s.size(); j += 4 )
+				{
+					const RMGPoint p = { s[j].x, s[j].y };
+					const RMGPoint q = turned( p, sector * (Real)turnBy );
+					const Real dx = s[i].x - q.m_cellX, dy = s[i].y - q.m_cellY;
+					const Real rq = sqrtf( ( q.m_cellX - half ) * ( q.m_cellX - half ) + ( q.m_cellY - half ) * ( q.m_cellY - half ) );
+					if( rq >= rIn - 2.0f && dx * dx + dy * dy < 20.0f * 20.0f )
+						return 5;
+				}
+			}
+		}
+		return 0;
+	};
+	// the seed's family, or the next one that fits, with the repeat and reach that come nearest the length
+	const Int seeded = theAodFamilyForTests >= 0 ? theAodFamilyForTests % RMG_AOD_FAMILIES
+		: (Int)( hashCell( seed + 71021U, 0, 0 ) % (UnsignedInt)RMG_AOD_FAMILIES );
+	Int family = -1, chosenK = 4;
+	Real chosenS = 1.0f;
+	{
+		RMGAodPlan plan;
+		std::vector<AodSample> trial;
+		std::vector<Int> repeats;
+		for( Int f = 0; f < RMG_AOD_FAMILIES && family < 0; f++ )
+		{
+			const Int candidate = ( seeded + f ) % RMG_AOD_FAMILIES;
+			rmgAodRepeats( candidate, repeats );
+			Real best = 1.0e9f;
+			Int why[6] = { 0, 0, 0, 0, 0, 0 };
+			for( UnsignedInt r = 0; r < repeats.size(); r++ )
+			{
+				/* The reach that brings the lane to the length: it grows with the reach, so halve the gap eight
+					times between 0.15 and 1, then try that reach and two a little either side of it. */
+				Real lo = 0.15f, hi = 1.0f;
+				for( Int step = 0; step < 8; step++ )
+				{
+					const Real mid = 0.5f * ( lo + hi );
+					rmgAodPlan( candidate, repeats[r], mid, apexFlat, plan );
+					if( layLane( plan, trial, NULL ) < RMG_AOD_LANE_LENGTH )
+						lo = mid;
+					else
+						hi = mid;
+				}
+				const Real reaches[3] = { 0.5f * ( lo + hi ), std::max( 0.15f, 0.5f * ( lo + hi ) - 0.08f ), std::min( 1.0f, 0.5f * ( lo + hi ) + 0.08f ) };
+				for( Int t = 0; t < 3; t++ )
+				{
+					rmgAodPlan( candidate, repeats[r], reaches[t], apexFlat, plan );
+					const Real length = layLane( plan, trial, NULL );
+					if( fabsf( length - RMG_AOD_LANE_LENGTH ) >= best )
+						continue;
+					const Int reason = fits( trial, length );
+					++why[reason];
+					if( reason == 0 )
+					{
+						best = fabsf( length - RMG_AOD_LANE_LENGTH );
+						family = candidate;
+						chosenK = repeats[r];
+						chosenS = reaches[t];
+					}
+				}
+			}
+			if( family < 0 )
+				DEBUG_LOG(( "random map: aod %s lanes do not fit %d seats: %d too short, %d too long, %d crowd themselves, %d a start, %d a neighbour\n",
+					theAodFamilies[candidate], players, why[1], why[2], why[3], why[4], why[5] ));
+		}
+		if( family < 0 )
+		{
+			DEBUG_LOG(( "random map: aod seed %d found no lane that fits; the switchback as it comes\n", m_settings.m_seed ));
+			family = 0;
+		}
+	}
+	m_aodFamily = family;
+	std::vector<AodSample> lane;
+	std::vector<RMGPoint> laneSpots;
+	Real way = 0.0f;
+	{
+		RMGAodPlan plan;
+		rmgAodPlan( family, chosenK, chosenS, apexFlat, plan );
+		way = layLane( plan, lane, &laneSpots );
 	}
 	// every lane: lane 0 turned into its sector
 	std::vector<AodSample> samples;
@@ -11384,7 +11741,7 @@ void RMGLayout::buildAod( void )
 		{
 			const RMGPoint p = { lane[s].x, lane[s].y };
 			const RMGPoint q = n == 0 ? p : turned( p, angle );
-			const AodSample sample = { q.m_cellX, q.m_cellY, lane[s].half };
+			const AodSample sample = { q.m_cellX, q.m_cellY, lane[s].half, lane[s].at };
 			samples.push_back( sample );
 		}
 		for( UnsignedInt s = 0; s < laneSpots.size(); s++ )
@@ -11415,6 +11772,46 @@ void RMGLayout::buildAod( void )
 			}
 		}
 	}
+	/* A sliver of plateau between two stretches of trench (the tip of the wedge inside a sharp turn) has a crest
+		that climbs gently along it from the tip, a ramp out of the lane on every map whose turns are acute. Every
+		strip of plateau narrower than RMG_AOD_SLIVER cells goes down to the floor: the wedge ends in a blunt face
+		where it is already full height, a cliff. An opening of the plateau by a disc, read on height vertices. */
+	{
+		std::vector<UnsignedByte> plateau( cells ), core( cells, 0 );
+		for( Int i = 0; i < cells; i++ )
+			plateau[i] = nearPath[i] > 0.0f ? 1 : 0;
+		const Int reach = (Int)RMG_AOD_SLIVER;
+		const Real reach2 = RMG_AOD_SLIVER * RMG_AOD_SLIVER;
+		for( Int y = reach; y < m_height - reach; y++ )
+			for( Int x = reach; x < m_width - reach; x++ )
+			{
+				Bool all = plateau[cellIndex( x, y )] != 0;
+				for( Int oy = -reach; oy <= reach && all; oy++ )
+					for( Int ox = -reach; ox <= reach && all; ox++ )
+						if( (Real)( ox * ox + oy * oy ) <= reach2 && !plateau[cellIndex( x + ox, y + oy )] )
+							all = FALSE;
+				core[cellIndex( x, y )] = all ? 1 : 0;
+			}
+		Int slivers = 0;
+		for( Int y = reach; y < m_height - reach; y++ )
+			for( Int x = reach; x < m_width - reach; x++ )
+			{
+				const Int i = cellIndex( x, y );
+				if( !plateau[i] )
+					continue;
+				Bool kept = FALSE;
+				for( Int oy = -reach; oy <= reach && !kept; oy++ )
+					for( Int ox = -reach; ox <= reach && !kept; ox++ )
+						if( (Real)( ox * ox + oy * oy ) <= reach2 && core[cellIndex( x + ox, y + oy )] )
+							kept = TRUE;
+				if( kept )
+					continue;
+				heights[i] = RMG_AOD_FLOOR;
+				nearPath[i] = -0.5f;
+				++slivers;
+			}
+		DEBUG_LOG(( "random map: aod %d height points of plateau slivers brought down to the floor\n", slivers ));
+	}
 	m_heights.assign( cells, (UnsignedByte)RMG_AOD_HIGH );
 	for( Int i = 0; i < cells; i++ )
 		m_heights[i] = (UnsignedByte)(Int)( std::max( 0.0f, std::min( 255.0f, heights[i] ) ) + 0.5f );
@@ -11440,8 +11837,7 @@ void RMGLayout::buildAod( void )
 		name.format( "Player_%d_Start", i + 1 );
 		addWaypoint( name, m_starts[i].m_cellX, m_starts[i].m_cellY );
 		reserveSite( m_starts[i].m_cellX, m_starts[i].m_cellY, 20.0f );
-		name.format( "SupplyDock %d", i + 1 );
-		addObject( "SupplyDock", name.str(), docks[i].m_cellX, docks[i].m_cellY, docks[i].m_cellX > m_starts[i].m_cellX ? PI : 0.0f );
+		// no supply dock: a seat lives on what its kills and the waves pay (the owner, 2026-11-28; AodDirector.h)
 	}
 	{
 		RMGArea exit;
@@ -11541,8 +11937,9 @@ void RMGLayout::buildAod( void )
 		}
 	}
 
-	DEBUG_LOG(( "random map: aod %d lanes, %s, %d cells, each lane %.0f cells long, arcs sweep %.2f, %d props\n",
-		shape.m_lanes, ring ? "a ring into the middle" : "west edge to east", m_settings.m_playableCells, lengths[0], shape.m_span, propID - 1 ));
+	DEBUG_LOG(( "random map: aod %d lanes, %s, %d cells, %s lanes (%d, %.1f) %.0f cells long, theme %s, %d props\n",
+		shape.m_lanes, ring ? "a ring into the middle" : "west edge to east", m_settings.m_playableCells, theAodFamilies[family],
+		chosenK, chosenS, lengths[0], RandomMapGenerator::aodThemeName( m_settings.m_seed ).str(), propID - 1 ));
 
 	buildBlends();
 }
@@ -11564,6 +11961,7 @@ void RMGLayout::build( const RandomMapSettings& settings, Bool skeleton )
 
 	m_settings = settings;
 	RandomMapGenerator::clampSettings( m_settings );
+	m_aodFamily = -1;
 	m_lockCarves = FALSE;
 	m_padsKeepOffWays = FALSE;
 	m_wayDistance.clear();
@@ -12638,6 +13036,34 @@ UnsignedInt RandomMapGenerator::fingerprint( const RandomMapSettings& settings )
 	crc.computeCRC( &mapBytes[0], (Int)mapBytes.size() );
 
 	return crc.get();
+}
+
+Int RandomMapGenerator::aodFamilyCount( void ) { return RMG_AOD_FAMILIES; }
+
+const char *RandomMapGenerator::aodFamilyName( Int family )
+{
+	return family >= 0 && family < RMG_AOD_FAMILIES ? theAodFamilies[family] : "";
+}
+
+Int RandomMapGenerator::aodFamilyOf( const RandomMapSettings& settings )
+{
+	RMGLayout layout;
+	layout.build( settings );
+	return layout.m_aodFamily;
+}
+
+AsciiString RandomMapGenerator::aodThemeName( Int seed )
+{
+	static const char *const theGrounds[RMG_BIOME_COUNT] = { "temperate", "desert", "winter", "steppe" };
+	static const char *const theHours[4] = { "morning", "afternoon", "evening", "night" };
+	AsciiString name;
+	name.format( "%s, %s", theGrounds[rmgBiomeFor( seed )], theHours[rmgTimeOfDayFor( seed ) - TIME_OF_DAY_FIRST] );
+	return name;
+}
+
+void RandomMapGenerator::setAodFamilyForTests( Int family )
+{
+	theAodFamilyForTests = family;
 }
 
 Bool RandomMapGenerator::isPlayable( const RandomMapSettings& settings )

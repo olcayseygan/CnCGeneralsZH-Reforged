@@ -32250,22 +32250,38 @@ TEST(apocalypse_waves_build_to_a_peak_with_a_theme)
 	last stop in the AOD_Exit area (the east edge's strip for one seat, the pit in the middle for more),
 	every stop on ground the pathfinder walks, the entry walking to the exit, no start walking down into a
 	lane (the seats only shoot into it from the rim), the lanes long and apart, and the map a mirror: every
-	lane as long and its stops as far from the middle as lane 1's. One to six seats, nine asked for six. */
+	lane as long and its stops as far from the middle as lane 1's. Every lane family (each forced in turn) at one,
+	two, four and six seats, nine asked for six; and the seed alone at three and five. */
 TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 {
 	CHECK( bootOnce() );
 	CHECK( RandomMapGenerator::styleNamed( "aod" ) != 0 );
-	static const Int theSeats[] = { 1, 2, 3, 4, 5, 9 };
-	for( Int c = 0; c < (Int)( sizeof( theSeats ) / sizeof( theSeats[0] ) ); c++ )
+	CHECK_EQ( RandomMapGenerator::aodFamilyCount(), 10 );
+	static const Int theSeats[] = { 1, 2, 4, 9 };
+	const Int perFamily = (Int)( sizeof( theSeats ) / sizeof( theSeats[0] ) );
+	const Int cases = RandomMapGenerator::aodFamilyCount() * perFamily + 2;
+	for( Int c = 0; c < cases; c++ )
 	{
-		const Int seed = c + 1;
+		const Bool forced = c < cases - 2;
+		const Int family = forced ? c / perFamily : -1;
+		const Int seats = forced ? theSeats[c % perFamily] : ( c == cases - 2 ? 3 : 5 );
+		const Int seed = 11 + c;
+		RandomMapGenerator::setAodFamilyForTests( family );
 		RandomMapSettings settings;
 		settings.m_seed = seed;
-		settings.m_numPlayers = theSeats[c];
+		settings.m_numPlayers = seats;
 		settings.m_style = RandomMapGenerator::styleNamed( "aod" );
 		RandomMapSettings clamped = settings;
 		RandomMapGenerator::clampSettings( clamped );
-		CHECK_EQ( clamped.m_numPlayers, std::min( theSeats[c], 6 ) );
+		CHECK_EQ( clamped.m_numPlayers, std::min( seats, 6 ) );
+		const Int got = RandomMapGenerator::aodFamilyOf( settings );
+		/* By design the fork gives way on a six-seat ring: each branch has half of a sixth of the plateau, too
+			narrow for battlements that make the lane long enough. Every other family fits every seat count. */
+		const Bool byDesign = forced && clamped.m_numPlayers == 6 && strcmp( RandomMapGenerator::aodFamilyName( family ), "fork" ) == 0;
+		if( forced && got != family )
+			printf( "  aod family %s gave way to %s at %d seats%s\n", RandomMapGenerator::aodFamilyName( family ),
+				RandomMapGenerator::aodFamilyName( got ), clamped.m_numPlayers, byDesign ? ", by design" : "" );
+		CHECK( !forced || got == family || byDesign );
 		CHECK( RandomMapGenerator::isPlayable( settings ) );
 		std::vector<char> bytes;
 		RandomMapGenerator::generate( settings, bytes );
@@ -32417,7 +32433,51 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 			flood( cellOf( path[0] ), seen );
 			CHECK( seen[cellOf( path.back() )] );
 			for( size_t s = 0; s < starts.size(); s++ )
+			{
+				if( seen[cellOf( starts[s] )] )
+				{
+					printf( "  aod %s at %d seats: start %d walks down into lane %d\n", RandomMapGenerator::aodFamilyName( got ),
+						clamped.m_numPlayers, (Int)s + 1, n );
+					// where: the walk from the start down to the nearest floor cell (height under 30), its wall cells shown
+					std::vector<Int> from( W * H, -1 );
+					std::vector<Int> queue( 1, cellOf( starts[s] ) );
+					from[queue[0]] = queue[0];
+					Int floorCell = -1;
+					for( size_t head = 0; head < queue.size() && floorCell < 0; head++ )
+					{
+						const Int x = queue[head] % W, y = queue[head] / W;
+						const Int nx[4] = { x - 1, x + 1, x, x }, ny[4] = { y, y, y - 1, y + 1 };
+						for( Int k = 0; k < 4 && floorCell < 0; k++ )
+						{
+							if( nx[k] < b || ny[k] < b || nx[k] >= W - b - 1 || ny[k] >= H - b - 1 )
+								continue;
+							const Int c = ny[k] * W + nx[k];
+							if( from[c] >= 0 || cliff( c ) )
+								continue;
+							from[c] = queue[head];
+							queue.push_back( c );
+							if( theRMGParse.m_heights[c] < 30 )
+								floorCell = c;
+						}
+					}
+					for( Int c = floorCell, shown = 0; c >= 0 && from[c] != c && shown < 8; c = from[c] )
+					{
+						if( theRMGParse.m_heights[c] >= 56 )
+							continue;
+						printf( "    climbs at cell %d,%d height %d span %.1f\n", c % W - b, c / W - b, (Int)theRMGParse.m_heights[c], RMGCellSpan( c % W, c / W ) );
+						if( shown == 0 && getenv( "ZH_AOD_WINDOW" ) != NULL )
+							for( Int oy = 3; oy >= -3; oy-- )
+							{
+								printf( "     " );
+								for( Int ox = -3; ox <= 3; ox++ )
+									printf( " %3d", (Int)theRMGParse.m_heights[c + oy * W + ox] );
+								printf( "\n" );
+							}
+						++shown;
+					}
+				}
 				CHECK( !seen[cellOf( starts[s] )] );
+			}
 		}
 		CHECK_EQ( lanes, clamped.m_numPlayers );
 		// a mirror: every lane has lane 1's stops, each as far from the middle as lane 1's
@@ -32445,6 +32505,88 @@ TEST(an_aod_map_walks_every_lane_from_its_entry_to_the_exit)
 						CHECK( dx * dx + dy * dy > 400.0f );
 					}
 	}
+	RandomMapGenerator::setAodFamilyForTests( -1 );
+}
+
+/** Not a check: with ZH_AOD_SHEET_DIR set, every lane family at one, two and four seats drawn from above, a cell a
+	pixel (aod_<family>_<seats>p.ppm: the lane's floor dark, plateau by height, mountain pale, stops red, starts
+	white), and sheet.txt naming each with its theme, for the variants sheet (C:\zhr-proofs\aod\sheet.py). */
+TEST(aod_variants_sheet_dump)
+{
+	const char *dir = getenv( "ZH_AOD_SHEET_DIR" );
+	if( dir == NULL || dir[0] == 0 )
+		return;
+	CHECK( bootOnce() );
+	std::string listPath = std::string( dir ) + "\\sheet.txt";
+	FILE *list = fopen( listPath.c_str(), "w" );
+	CHECK( list != NULL );
+	if( list == NULL )
+		return;
+	static const Int theSeats[3] = { 1, 2, 4 };
+	for( Int f = 0; f < RandomMapGenerator::aodFamilyCount(); f++ )
+	{
+		for( Int c = 0; c < 3; c++ )
+		{
+			const Int seed = 101 + f * 3 + c;
+			RandomMapGenerator::setAodFamilyForTests( f );
+			RandomMapSettings settings;
+			settings.m_seed = seed;
+			settings.m_numPlayers = theSeats[c];
+			settings.m_style = RandomMapGenerator::styleNamed( "aod" );
+			std::vector<char> bytes;
+			RandomMapGenerator::generate( settings, bytes );
+			const Int got = RandomMapGenerator::aodFamilyOf( settings );
+			if( bytes.empty() )
+				continue;
+			parseGeneratedMap( bytes );
+			const Int W = theRMGParse.m_width, b = theRMGParse.m_border, P = theRMGParse.m_boundaryX;
+			std::vector<UnsignedByte> rgb( P * P * 3 );
+			for( Int y = 0; y < P; y++ )
+				for( Int x = 0; x < P; x++ )
+				{
+					const Int h = theRMGParse.m_heights[( y + b ) * W + x + b];
+					UnsignedByte r, g, bl;
+					if( h < 34 ) { r = 92; g = 72; bl = 52; }							// a lane's floor
+					else if( h < 56 ) { r = 120; g = 110; bl = 96; }					// its walls
+					else if( h < 75 ) { const Int t = ( h - 56 ) * 3; r = (UnsignedByte)( 150 + t ); g = (UnsignedByte)( 160 + t ); bl = (UnsignedByte)( 105 + t ); }
+					else { r = 205; g = 205; bl = 210; }									// the mountain
+					const Int o = ( ( P - 1 - y ) * P + x ) * 3;		// north up
+					rgb[o] = r; rgb[o + 1] = g; rgb[o + 2] = bl;
+				}
+			auto dot = [&]( const Coord3D& at, Int radius, UnsignedByte r, UnsignedByte g, UnsignedByte bl )
+			{
+				const Int cx = (Int)( at.x / MAP_XY_FACTOR ), cy = (Int)( at.y / MAP_XY_FACTOR );
+				for( Int y = cy - radius; y <= cy + radius; y++ )
+					for( Int x = cx - radius; x <= cx + radius; x++ )
+						if( x >= 0 && y >= 0 && x < P && y < P )
+						{
+							const Int o = ( ( P - 1 - y ) * P + x ) * 3;
+							rgb[o] = r; rgb[o + 1] = g; rgb[o + 2] = bl;
+						}
+			};
+			for( size_t i = 0; i < theRMGParse.m_waypointNames.size(); i++ )
+			{
+				if( theRMGParse.m_waypointNames[i].startsWith( "Player_" ) )
+					dot( theRMGParse.m_waypointPositions[i], 4, 255, 255, 255 );
+				else if( theRMGParse.m_waypointNames[i].startsWith( "AOD_" ) )
+					dot( theRMGParse.m_waypointPositions[i], 1, 230, 40, 30 );
+			}
+			char name[64];
+			snprintf( name, sizeof( name ), "aod_%d_%dp.ppm", f, theSeats[c] );
+			std::string path = std::string( dir ) + "\\" + name;
+			FILE *out = fopen( path.c_str(), "wb" );
+			if( out != NULL )
+			{
+				fprintf( out, "P6\n%d %d\n255\n", P, P );
+				fwrite( &rgb[0], 1, rgb.size(), out );
+				fclose( out );
+			}
+			fprintf( list, "%s|%s|%d|%s\n", name, RandomMapGenerator::aodFamilyName( got ), theSeats[c],
+				RandomMapGenerator::aodThemeName( seed ).str() );
+		}
+	}
+	fclose( list );
+	RandomMapGenerator::setAodFamilyForTests( -1 );
 }
 
 TEST(aod_waves_grow_mix_their_kinds_and_bring_a_boss_every_fifth)

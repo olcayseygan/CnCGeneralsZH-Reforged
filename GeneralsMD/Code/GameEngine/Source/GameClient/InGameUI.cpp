@@ -36,7 +36,6 @@
 #endif
 #include "Lib/Clock.h"
 #include "Lib/WideCharFns.h"
-#include <wctype.h>
 
 #define DEFINE_SHADOW_NAMES
 
@@ -11511,7 +11510,7 @@ static UnicodeString windowCapitals( const UnicodeString &text )
 {
 	UnicodeString capitals;
 	for( Int index = 0; index < text.getLength(); index++ )
-		capitals.concat( (WideChar)towupper( (wint_t)text.getCharAt( index ) ) );
+		capitals.concat( (WideChar)WideCharToUpper( text.getCharAt( index ) ) );
 	return capitals;
 }
 

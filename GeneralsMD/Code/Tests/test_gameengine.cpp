@@ -2483,14 +2483,14 @@ TEST(force_fire_is_the_attack_key_and_nothing_else)
 /* HotKey.cpp: a label's '&' letter and the key a Turkish keyboard types meet on one map key. */
 TEST(hotkey_names_fold_turkish_letters_and_case)
 {
-	CHECK_STR( HotKeyManager::nameOf( L'B' ).str(), "b" );
-	CHECK_STR( HotKeyManager::nameOf( L'b' ).str(), "b" );
-	CHECK( HotKeyManager::nameOf( 0x0130 ) == HotKeyManager::nameOf( L'i' ) );	// İptal against the i key
-	CHECK( HotKeyManager::nameOf( 0x0131 ) == HotKeyManager::nameOf( L'I' ) );
+	CHECK_STR( HotKeyManager::nameOf( u'B' ).str(), "b" );
+	CHECK_STR( HotKeyManager::nameOf( u'b' ).str(), "b" );
+	CHECK( HotKeyManager::nameOf( 0x0130 ) == HotKeyManager::nameOf( u'i' ) );	// İptal against the i key
+	CHECK( HotKeyManager::nameOf( 0x0131 ) == HotKeyManager::nameOf( u'I' ) );
 	CHECK( HotKeyManager::nameOf( 0x015E ) == HotKeyManager::nameOf( 0x015F ) );	// Ş ş
 	CHECK( HotKeyManager::nameOf( 0x00C7 ) == HotKeyManager::nameOf( 0x00E7 ) );	// Ç ç
 	CHECK( HotKeyManager::nameOf( 0x011E ) == HotKeyManager::nameOf( 0x011F ) );	// Ğ ğ
-	CHECK( HotKeyManager::nameOf( 0x015E ) != HotKeyManager::nameOf( L'^' ) );	// not its low byte
+	CHECK( HotKeyManager::nameOf( 0x015E ) != HotKeyManager::nameOf( u'^' ) );	// not its low byte
 }
 
 /* HotKey.cpp, Hotkeys_*: the options menu's Hotkeys page writes Hotkeys.ini the way the launcher does.
@@ -9197,14 +9197,14 @@ TEST(capitals_reach_turkish_and_cyrillic_letters)
 {
 	GlobalData *saved = TheWritableGlobalData;
 	TheWritableGlobalData = NEW GlobalData;
-	const UnicodeString words( u"ordu seç, şiğ öü ı зіґ" );
+	const UnicodeString words( u"ordu se\u00e7, \u015fi\u011f \u00f6\u00fc \u0131 \u0437\u0456\u0491" );
 	TheWritableGlobalData->m_textLanguage = TEXT_LANGUAGE_TURKISH;
-	CHECK( UIStyle::capitals( words ) == UnicodeString( u"ORDU SEÇ, ŞİĞ ÖÜ I ЗІҐ" ) );
+	CHECK( UIStyle::capitals( words ) == UnicodeString( u"ORDU SE\u00c7, \u015e\u0130\u011e \u00d6\u00dc I \u0417\u0406\u0490" ) );
 	// a map's name is English whatever the language, so its i stays plain
 	CHECK( UIStyle::nameCapitals( UnicodeString( u"Twilight Flame" ) ) == UnicodeString( u"TWILIGHT FLAME" ) );
 	TheWritableGlobalData->m_textLanguage = TEXT_LANGUAGE_ENGLISH;
-	CHECK( UIStyle::capitals( words ) == UnicodeString( u"ORDU SEÇ, ŞIĞ ÖÜ I ЗІҐ" ) );
-	CHECK( UIStyle::capitals( UnicodeString( u"ß ÷" ) ) == UnicodeString( u"ß ÷" ) );
+	CHECK( UIStyle::capitals( words ) == UnicodeString( u"ORDU SE\u00c7, \u015eI\u011e \u00d6\u00dc I \u0417\u0406\u0490" ) );
+	CHECK( UIStyle::capitals( UnicodeString( u"\u00df \u00f7" ) ) == UnicodeString( u"\u00df \u00f7" ) );
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;
 }

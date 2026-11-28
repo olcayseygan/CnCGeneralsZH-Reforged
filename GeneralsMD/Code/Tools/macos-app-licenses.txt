@@ -23,6 +23,7 @@ milesaudiomanager     game
 onlineconnection      game
 posixd3d9             game
 posixdevice           game
+postprocess           game
 sdl3shadercompile     game
 sdldevice             game
 sdlinput              game

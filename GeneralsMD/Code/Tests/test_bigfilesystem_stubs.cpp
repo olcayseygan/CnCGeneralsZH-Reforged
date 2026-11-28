@@ -35,6 +35,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <strings.h>
 
 #include "Common/Debug.h"
 #include "Common/FileSystem.h"
@@ -77,6 +78,17 @@ void INI::load(AsciiString, INILoadType, Xfer *) { unreachable("INI::load"); }
 
 FileSystem *TheFileSystem = NULL;
 File *FileSystem::openFile(const Char *, Int) { unreachable("FileSystem::openFile"); return NULL; }
+// FileSystem.cpp's list, which this test does not compile; keep the two in step.
+static const char *const RetailLanguages[] = { "english", "german", "german2", "french", "spanish", "italian",
+	"korean", "chinese", "brazilian", "polish", "russian" };
+Bool FileSystem::isRetailLanguage(const char *language)
+{
+	for (Int i = 0; i < (Int)(sizeof(RetailLanguages) / sizeof(RetailLanguages[0])); ++i) {
+		if (strcasecmp(language, RetailLanguages[i]) == 0)
+			return TRUE;
+	}
+	return FALSE;
+}
 
 // GameDataGone (Common/Debug.h): an archive read failed because its drive went away.  Every archive this
 // test opens is on the local install and stays there, so that never happens here.

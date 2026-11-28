@@ -3009,6 +3009,10 @@ void Object::setTriggerAreaFlagsForChangeInPosition()
 	Int i;
 	for (i=0; i<m_numTriggerAreasActive; i++)
 	{
+		// A load whose area name the map no longer has stores NULL (getTriggerAreaByName in xfer); crash
+		// report 4742 died here on one.  Left alone, as compares against a real area never match it.
+		if (m_triggerInfo[i].pTrigger == NULL)
+			continue;
 		if (!m_triggerInfo[i].pTrigger->pointInTrigger(m_iPos))
 		{
 			m_triggerInfo[i].isInside = false;
